@@ -276,7 +276,13 @@ namespace DeNelle.Settings
             // times, so no watchdog ceiling may judge it stuck. The 180s ceiling force-released
             // this hold after 507s on the owner's device (F8 seq 4679) and the world ran under a
             // screen that still said PAUSED. Release is owned by Resume/OnDisable/OnDestroy below.
-            _hold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu);
+            // WO-1369: the REQUIRED liveness probe. ⛔ It asks "does this controller still exist
+            // and can it still process Resume", NEVER "how long has the player been paused" - an
+            // eight-minute pause with a live controller is legitimate and must be untouched
+            // (that is the WO-1353 regression). Resume/OnDisable/OnDestroy remain the normal
+            // step-outs; this is the net for the paths none of them can reach.
+            _hold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu,
+                () => this != null && isActiveAndEnabled);
             _paused = true;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
                 $"PAUSE MENU -> WorldHold taken. Outstanding: [{WorldHold.Describe()}]. " +

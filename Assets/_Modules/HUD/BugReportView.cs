@@ -88,9 +88,40 @@ namespace DeNelle.HUD
             // the watchdog can name this view if one ever does.
             _prevTimeScale = Time.timeScale;
             // WO-1360: PLAYER-OWNED. The player is typing; a form has no code-owned duration.
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("bug-report-form");
+            // WO-1369: the REQUIRED liveness probe. ⛔ It is deliberately NOT the PanelHandle's
+            // `_canvasRoot != null && !_closing` probe: the hold is taken HERE, in Awake, while
+            // _canvasRoot is not assigned until OpenRoutine has finished an asynchronous clean-frame
+            // capture several frames later - so that expression would answer FALSE at acquire time
+            // and the watchdog would kill a perfectly good form on its first tick. The honest
+            // liveness question for THIS hold is whether the component that will dispose it in
+            // OnDestroy still exists and can still run.
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
+                "bug-report-form", () => this != null && isActiveAndEnabled);
 
             StartCoroutine(OpenRoutine());
+        }
+
+        /// <summary>
+        /// ⛔ WO-1369 (the seven-hold audit, PARTIAL #2): this view had NO OnDisable, so a form
+        /// deactivated without Close() kept the PLAYER-OWNED 'bug-report-form' hold - and a
+        /// merely-disabled component never receives OnDestroy, so nothing else would ever have
+        /// released it. A disabled view also cannot run <see cref="CloseRoutine"/> or submit, so
+        /// there is no state in which keeping the freeze is correct.
+        /// </summary>
+        private void OnDisable()
+        {
+            Guard.Try("BugReport", "view disabled with the world hold live", () =>
+            {
+                var hold = _worldHold;
+                _worldHold = null;
+                if (hold == null) return;
+                hold.Dispose();
+                FlowTrace.Warn("BugReport",
+                    "bug-report form DISABLED while it still held the world clock. A disabled view " +
+                    "gets no OnGUI, no coroutine and no OnDestroy, so it could never have released " +
+                    "the freeze itself (WO-1369). Released here; the form's own OnDestroy step-out " +
+                    "is idempotent and still runs.");
+            });
         }
 
         private void OnDestroy()

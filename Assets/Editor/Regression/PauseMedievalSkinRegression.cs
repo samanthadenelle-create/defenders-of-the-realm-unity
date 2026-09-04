@@ -18,7 +18,10 @@ namespace DeNelle.Editor.Regression
                 Require(pause, "\"Settings\"");
                 Require(pause, "\"Quit to Title\"");
                 Require(pause, "MedievalUiSkin.ApplyButton(resume, primary: true)");
-                Require(pause, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu)");
+                Require(pause, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu,");
+                // WO-1369: the probe argument is REQUIRED, and it must be a liveness test on the
+                // controller - never a duration test (that is the WO-1353 regression).
+                Require(pause, "() => this != null && isActiveAndEnabled");
                 Forbid(pause, "BuildButtonColumn(body");
 
                 string skin = File.ReadAllText("Assets/_Modules/Core/UI/MedievalUiSkin.cs");

@@ -135,6 +135,7 @@
 // =============================================================================
 
 using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
@@ -266,6 +267,51 @@ namespace DeNelle.Core.UI
             /// pause reports one line rather than one per watchdog tick.</summary>
             internal bool OpenReported;
 
+            // -----------------------------------------------------------------
+            //  THE LIVENESS PROBE (WO-1369). THE ONLY THING THAT REPLACES THE CEILING.
+            // -----------------------------------------------------------------
+            //  A PlayerOwned hold has no deadline, so the ONE question left that can be
+            //  asked about it safely is "DOES ITS OWNER STILL EXIST?" - never "is this
+            //  too old". Those are different questions and only one of them is answerable
+            //  without guessing at human behaviour: a legitimate eight-minute pause with a
+            //  live PauseController must be untouched (that is the WO-1353/WO-1360
+            //  regression this must not re-create), while a death screen whose view was
+            //  destroyed 18 ms after the acquire is orphaned the instant the view dies.
+            //
+            //  It is REQUIRED at construction and THROWS on null - the OverTimeEffects.cs
+            //  (WO-1330) shape - so a PlayerOwned hold cannot be built without saying how
+            //  to test whether its owner is still there. Forgetting is made IMPOSSIBLE
+            //  rather than merely remembered.
+            // -----------------------------------------------------------------
+            internal Func<bool> OwnerAlive;
+
+            /// <summary>Set once a probe has thrown, so a broken probe reports once rather than
+            /// once per watchdog tick. A throwing probe is treated as ALIVE.</summary>
+            internal bool ProbeFaultReported;
+
+            /// <summary>Answers the probe, defensively. A null probe (only reachable for a bounded
+            /// beat, which is never asked) and a throwing probe both read as ALIVE: the failure
+            /// mode of this call must never be "unfreeze the world under a live modal".</summary>
+            internal bool AskOwnerAlive()
+            {
+                var probe = OwnerAlive;
+                if (probe == null) return true;
+                try { return probe(); }
+                catch (Exception ex)
+                {
+                    if (!ProbeFaultReported)
+                    {
+                        ProbeFaultReported = true;
+                        FlowTrace.Warn("Pause",
+                            $"WorldHold liveness probe for '{Reason}' THREW ({ex.GetType().Name}: " +
+                            $"{ex.Message}). Treating the owner as ALIVE - unfreezing the world on the " +
+                            "strength of an exception is the worse failure. Fix the probe: it must be a " +
+                            "null-tolerant existence test, e.g. '() => view != null'.");
+                    }
+                    return true;
+                }
+            }
+
             private bool _released;
 
             internal Handle(string reason, float acquiredUnscaled)
@@ -283,6 +329,11 @@ namespace DeNelle.Core.UI
 
             /// <summary>True while this particular hold is still outstanding.</summary>
             public bool IsHeld => !_released;
+
+            /// <summary>Does this hold's OWNER still exist? Always true for a bounded beat (the
+            /// ceiling judges those); the declared probe's answer for a player-owned hold.
+            /// Exposed so an oracle can assert the orphan case without reaching into internals.</summary>
+            public bool OwnerStillAlive => AskOwnerAlive();
 
             public void Dispose()
             {
@@ -365,24 +416,64 @@ namespace DeNelle.Core.UI
         /// decides when the hold ends (WO-1360).</para>
         ///
         /// <para>Removing the ceiling removes ONE net, not all of them. What still catches this
-        /// hold: <see cref="ReleaseAllForSceneLoad"/> (a scene change drops every hold  -  quit to
-        /// title cannot land frozen), <see cref="ForceReleaseAll"/> on teardown paths, the
-        /// zero-holds drift watchdog once it IS released, and  -  the one that actually matters  - 
-        /// the owning UI's own OnDisable/OnDestroy step-out. A player-owned hold whose UI can die
-        /// without disposing is a real hole; the owner closes it, not a timer.</para>
+        /// hold: <see cref="ReleaseAllForSceneLoad"/> (WIRED to SceneManager.sceneLoaded by
+        /// <c>WireSceneLoadRelease</c> below - a single-mode scene change drops every hold, so quit
+        /// to title cannot land frozen), <see cref="ForceReleaseAll"/> on teardown paths, the
+        /// zero-holds drift watchdog once it IS released, the owning UI's own OnDisable/OnDestroy
+        /// step-out, and - WO-1369, the one that catches the case none of the others can - the
+        /// REQUIRED <paramref name="isOwnerAlive"/> probe, polled by the watchdog every tick.</para>
+        ///
+        /// <para>THE PROBE IS REQUIRED AND THROWS ON NULL, deliberately - the
+        /// <c>OverTimeEffects</c> (WO-1330) shape. WO-1369: 'game-over' was acquired by a screen
+        /// that DELEGATED its release to an <c>EndStateView</c> it did not own; the modal arbiter
+        /// destroyed that view 18 ms later, and with no ceiling and no probe the world sat at
+        /// timeScale 0.00 for 2 m 07 s until the OS killed the app. The hold could not be asked the
+        /// only question that would have saved it. Now it cannot be constructed without an answer
+        /// to that question.</para>
+        ///
+        /// <para>WHAT A GOOD PROBE LOOKS LIKE: a null-tolerant EXISTENCE test on the object that
+        /// can actually die - <c>() =&gt; view != null</c>, <c>() =&gt; _itemPicker != null</c>,
+        /// <c>() =&gt; this != null &amp;&amp; isActiveAndEnabled</c>. This is the SAME concept
+        /// <see cref="PanelHandle"/> already carries as its <c>IsOpen</c> probe; reuse that
+        /// expression rather than inventing a second liveness idea. It must ask "does its owner
+        /// still exist", NEVER "has enough time passed" - a legitimate eight-minute pause with a
+        /// live owner must be untouched (WO-1353/WO-1360). <c>() =&gt; true</c> is not a probe, it
+        /// is the hole with a lambda around it, and WorldHoldLivenessRegression rejects it.</para>
         /// </summary>
-        public static Handle AcquirePlayerOwned(string reason)
+        /// <param name="reason">Named in every trace line. This is what a future capture reads.</param>
+        /// <param name="isOwnerAlive">REQUIRED existence test for this hold's owner. See above.</param>
+        /// <exception cref="ArgumentNullException">If no liveness probe is supplied.</exception>
+        public static Handle AcquirePlayerOwned(string reason, Func<bool> isOwnerAlive)
         {
-            return AcquireKind(reason, 0f, 0f, HoldKind.PlayerOwned);
+            return AcquireKind(reason, 0f, 0f, HoldKind.PlayerOwned, RequireProbe(reason, isOwnerAlive));
         }
 
         /// <summary>
         /// <see cref="AcquirePlayerOwned"/> at a scale other than 0  -  a player-owned state that
-        /// slows the world rather than stopping it. Same rules: no ceiling, must be asked for.
+        /// slows the world rather than stopping it. Same rules: no ceiling, must be asked for, and
+        /// the liveness probe is REQUIRED.
         /// </summary>
-        public static Handle AcquirePlayerOwnedScale(string reason, float scale)
+        /// <exception cref="ArgumentNullException">If no liveness probe is supplied.</exception>
+        public static Handle AcquirePlayerOwnedScale(string reason, float scale, Func<bool> isOwnerAlive)
         {
-            return AcquireKind(reason, scale, 0f, HoldKind.PlayerOwned);
+            return AcquireKind(reason, scale, 0f, HoldKind.PlayerOwned, RequireProbe(reason, isOwnerAlive));
+        }
+
+        /// <summary>
+        /// The gate that makes forgetting IMPOSSIBLE rather than merely remembered (WO-1330 shape).
+        /// No default, no null, no overload that omits it - so the NEXT call site, written by a
+        /// seat who does not know the argument is load-bearing, cannot compile without one.
+        /// </summary>
+        private static Func<bool> RequireProbe(string reason, Func<bool> isOwnerAlive)
+        {
+            if (isOwnerAlive == null)
+                throw new ArgumentNullException(nameof(isOwnerAlive),
+                    "WorldHold.AcquirePlayerOwned('" + (reason ?? "unnamed") + "') requires a LIVENESS " +
+                    "PROBE. A player-owned hold has no ceiling, so 'does its owner still exist' is the " +
+                    "only question left that can safely end it - see WO-1369, where 'game-over' pinned " +
+                    "the world clock at 0.00 for 2m07s because nothing could ask. Pass a null-tolerant " +
+                    "existence test on the object that can actually die, e.g. '() => view != null'.");
+            return isOwnerAlive;
         }
 
         /// <summary>
@@ -414,13 +505,15 @@ namespace DeNelle.Core.UI
         /// decides whether elapsed time may judge this hold stuck  -  see <see cref="HoldKind"/>.
         /// Private on purpose: the public surface makes the unbounded case a named request.
         /// </summary>
-        private static Handle AcquireKind(string reason, float scale, float maxUnscaledSeconds, HoldKind kind)
+        private static Handle AcquireKind(string reason, float scale, float maxUnscaledSeconds,
+                                          HoldKind kind, Func<bool> isOwnerAlive = null)
         {
             float want = Mathf.Max(0f, scale);
             var handle = new Handle(reason, Time.unscaledTime)
             {
                 Scale = want,
                 Kind = kind,
+                OwnerAlive = isOwnerAlive,
                 MaxSeconds = kind == HoldKind.PlayerOwned
                     ? 0f
                     : (maxUnscaledSeconds > 0f ? maxUnscaledSeconds : CosmeticHoldSeconds),
@@ -472,7 +565,10 @@ namespace DeNelle.Core.UI
                     $"WorldHold '{handle.Reason}' is PLAYER-OWNED: the player decides when it ends, " +
                     "so NO watchdog ceiling applies and it will never be force-released for being " +
                     $"old. It names itself once after {PlayerOwnedReportSeconds:F0}s so a capture can " +
-                    "still read it. Its release is owned by the UI that took it (WO-1360).");
+                    "still read it. Its release is owned by the UI that took it (WO-1360), and " +
+                    "WO-1369 adds the net that catches an owner which dies without releasing: a " +
+                    "REQUIRED liveness probe, polled every watchdog tick. The hold ends the moment " +
+                    "that probe answers false - never because time passed.");
 
             return handle;
         }
@@ -748,6 +844,29 @@ namespace DeNelle.Core.UI
                 // screen). It still names itself ONCE so sec.12 has data to read.
                 if (s_holds[i].Kind == HoldKind.PlayerOwned)
                 {
+                    // WO-1369 - THE ORACLE, AND THE ONE QUESTION A CEILING COULD NEVER ASK.
+                    // "Does its owner still exist?", every tick, never "is this too old". An
+                    // orphaned player-owned hold is force-released ON THE FRAME ITS OWNER DIES;
+                    // a live owner is untouched at any age, which is what keeps the eight-minute
+                    // pause (WO-1353/WO-1360) legitimate. Both halves matter and both are pinned
+                    // by WorldHoldLivenessRegression.
+                    if (!s_holds[i].AskOwnerAlive())
+                    {
+                        FlowTrace.Fail("Pause",
+                            $"ORPHANED PLAYER-OWNED HOLD: '{s_holds[i].Reason}' (scale " +
+                            $"{s_holds[i].Scale:F2}) has been outstanding for {age:F1}s and its " +
+                            "LIVENESS PROBE now answers FALSE - the owner that was going to release " +
+                            "it NO LONGER EXISTS. Force-releasing. This is NOT a ceiling and age is " +
+                            "not why: a player-owned hold with a live owner is never dropped. Read " +
+                            "this as the lead - whoever took this hold delegated its release to an " +
+                            "object something else destroyed (the WO-1369 'game-over' shape: the " +
+                            "modal arbiter killed the EndStateView carrying the Retry delegate, and " +
+                            "the world sat at timeScale 0.00 for 2m07s until the OS killed the app). " +
+                            $"Outstanding before this release: [{Describe()}].");
+                        s_holds.RemoveAt(i);
+                        continue;
+                    }
+
                     if (!s_holds[i].OpenReported && age >= PlayerOwnedReportSeconds)
                     {
                         s_holds[i].OpenReported = true;

@@ -1282,6 +1282,7 @@ namespace DeNelle.Core.State
             EnsureZoneGraph(s);
             ClearEquipPrefs();                                // WO-860 Part A1 — see below.
             ClearProgressionPrefs();                          // WO-1220 — see below.
+            ClearHarvestPrefs();                              // WO-1371 — see below.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
@@ -1426,6 +1427,289 @@ namespace DeNelle.Core.State
         /// which is exactly how this store stayed invisible to the reset for so long.
         /// </summary>
         public const string TalentPrefKey = "dotr-talents-v1";
+
+        // =====================================================================
+        //  WO-1371 — the HARVEST stores that live outside the save envelope
+        // =====================================================================
+
+        /// <summary>
+        /// WO-1371 — the ONE authority for ResourceCollector's three PlayerPrefs key prefixes.
+        /// <c>ResourceCollector</c> (DeNelle.Village) now aliases these rather than declaring its
+        /// own copies: the collector and the reset must never be able to drift onto two different
+        /// key spellings, which is exactly how this store stayed invisible to the reset.
+        /// </summary>
+        public const string CollectorPendingPrefPrefix    = "dotr.collector.pending.";
+        public const string CollectorHpPrefPrefix         = "dotr.collector.hp.";
+        public const string CollectorLastAccrualPrefPrefix = "dotr.collector.lastaccrual.";
+
+        /// <summary>
+        /// WO-1371 — <c>ResourceBuildingState</c>'s level prefix (DeNelle.Village), named here for
+        /// the same single-authority reason as the collector prefixes above.
+        /// </summary>
+        public const string ResourceBuildingLevelPrefPrefix = "dotr.resbuilding.level.";
+
+        /// <summary>
+        /// WO-1371 — the INDEX of every building id a collector has ever persisted state under.
+        ///
+        /// <para>The collector keys are <c>prefix + arbitrary building id</c>, and PlayerPrefs has
+        /// no key enumeration, so the <see cref="ProgressionPrefKeys"/> fixed-array pattern does
+        /// not extend to them. <see cref="ResourceCollector"/> appends its id here on every save,
+        /// which makes the key space ENUMERABLE without inventing a second source of truth about
+        /// which buildings exist. Comma-separated; ids contain no commas.</para>
+        /// </summary>
+        public const string CollectorKnownIdsPrefKey = "dotr.collector.ids";
+
+        /// <summary>The three per-building collector prefixes, in one place for the reset and its
+        /// oracle to share.</summary>
+        public static readonly string[] CollectorPrefPrefixes =
+        {
+            CollectorPendingPrefPrefix,
+            CollectorHpPrefPrefix,
+            CollectorLastAccrualPrefPrefix,
+        };
+
+        /// <summary>WO-1371 — record <paramref name="buildingId"/> in the enumerable index so a
+        /// New Game can find and delete its keys. Idempotent; called from the collector's save.</summary>
+        public static void RegisterCollectorId(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return;
+            string raw = PlayerPrefs.GetString(CollectorKnownIdsPrefKey, string.Empty);
+            foreach (var existing in raw.Split(','))
+                if (string.Equals(existing, buildingId, StringComparison.Ordinal)) return;
+            PlayerPrefs.SetString(CollectorKnownIdsPrefKey,
+                string.IsNullOrEmpty(raw) ? buildingId : raw + "," + buildingId);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>
+        /// WO-1371 — every building id whose collector keys may exist: the persisted index UNION
+        /// the authored Collector catalog. The index alone is complete for anything this build
+        /// wrote; the catalog covers a device whose keys predate the index.
+        /// </summary>
+        public static List<string> KnownCollectorIds()
+        {
+            var ids = new List<string>();
+            void Add(string id)
+            {
+                if (string.IsNullOrEmpty(id)) return;
+                for (int i = 0; i < ids.Count; i++)
+                    if (string.Equals(ids[i], id, StringComparison.Ordinal)) return;
+                ids.Add(id);
+            }
+
+            foreach (var id in PlayerPrefs.GetString(CollectorKnownIdsPrefKey, string.Empty).Split(','))
+                Add(id);
+
+            // Never let a catalog hiccup abort the reset — a missing id costs one uncleared key,
+            // a throw here would cost the whole New Game (§12: log it, never swallow it).
+            Guard.Try("Save", "enumerate collector catalog ids", () =>
+            {
+                foreach (var e in DeNelle.Core.Catalog.CatalogRegistry.OfType(
+                             DeNelle.Core.Catalog.CatalogType.Collector))
+                {
+                    if (e == null) continue;
+                    string bid = e.repo != null && !string.IsNullOrEmpty(e.repo.collectorBuildingId)
+                        ? e.repo.collectorBuildingId
+                        : e.id;
+                    Add(bid);
+                }
+            });
+            return ids;
+        }
+
+        /// <summary>
+        /// WO-1371 — New Game must not inherit the previous save's COLLECTOR FILL.
+        ///
+        /// THE BUG THIS FIXES (owner felt-test 2026-09-04, "how did i manage to acquire 3000 stone
+        /// when this game is about 25 minutes old"): a game started at 09:44:43 banked 14,089
+        /// resources eleven seconds later — <c>collect building=farm +7500 Food</c>,
+        /// <c>lumbermill +5760 Wood</c>, <c>forge +829 Iron</c>. The measured honest rate that
+        /// morning was ~0.58/s, so 14,089 is ~6.7 HOURS of accrual on an 11-second-old game. The
+        /// fill was INHERITED: <c>register id=farm pending=7500/7500</c> was logged a full minute
+        /// BEFORE the new game began.
+        ///
+        /// Collector pending/HP/last-accrual persist in PlayerPrefs OUTSIDE the save envelope
+        /// (ResourceCollector's own three prefixes), so <see cref="ResetToNewGame"/> wiped ~60
+        /// GameState fields — including <c>LastHarvestClaimMs = 0</c>, whose own comment says
+        /// "reseed the accrual clock on next load (no haul)" — while the haul arrived anyway
+        /// through a door the reset had never heard of. This is the FOURTH instance of that exact
+        /// shape (WO-860 equip, WO-1019 hot-swap bar, WO-1220 talents, now this).
+        ///
+        /// <para>WHAT THE NEW-GAME STATE IS, and why: pending 0, HP full, and the accrual stamp
+        /// DELETED rather than written. Deleting is what "reseed to now" MEANS for this store —
+        /// <c>ResourceCollector.LoadState</c> reads an absent stamp as 0, and <c>CatchUpAway</c>'s
+        /// documented fresh-collector arm then seeds it to now and back-fills NOTHING. Writing a
+        /// timestamp here would instead hand the collector a window it must reason about.</para>
+        ///
+        /// <para>Also clears the <c>dotr.resbuilding.level.*</c> keys, which is why the owner's
+        /// fresh town had a farm CAPACITY of 7500 instead of the base figure: the inherited LEVEL
+        /// raised the cap that the inherited fill then filled.</para>
+        ///
+        /// <para>THE LIVE HALF is not here. Instances already in memory hold pending/HP/level and
+        /// would write them straight back out on the next save — that half rides
+        /// <see cref="NewGameStarted"/>, to which <c>ResourceCollector</c> subscribes
+        /// (it zeroes live collectors and calls <c>ResourceBuildingState.ResetAll</c>, which also
+        /// reaches <c>TechTree.ResetAll</c>). Same two-half shape as WO-1220.</para>
+        ///
+        /// DeleteKey on an absent key is a documented no-op, so this is safe + idempotent.
+        /// </summary>
+        private static void ClearHarvestPrefs()
+        {
+            var ids = KnownCollectorIds();
+            int deleted = 0;
+            foreach (var id in ids)
+            {
+                foreach (var prefix in CollectorPrefPrefixes)
+                {
+                    string key = prefix + id;
+                    if (PlayerPrefs.HasKey(key)) { PlayerPrefs.DeleteKey(key); deleted++; }
+                }
+                string levelKey = ResourceBuildingLevelPrefPrefix + id;
+                if (PlayerPrefs.HasKey(levelKey)) { PlayerPrefs.DeleteKey(levelKey); deleted++; }
+            }
+            if (PlayerPrefs.HasKey(CollectorKnownIdsPrefKey))
+            {
+                PlayerPrefs.DeleteKey(CollectorKnownIdsPrefKey);
+                deleted++;
+            }
+            PlayerPrefs.Save();
+            FlowTrace.Step("Save",
+                $"ResetToNewGame: cleared {deleted} stale harvest PlayerPrefs key(s) across {ids.Count} " +
+                "collector id(s) (dotr.collector.pending/hp/lastaccrual.* + dotr.resbuilding.level.*) - " +
+                "a new game starts with an EMPTY collector and a base-level cap, never the previous " +
+                "save's 14,089-resource fill (WO-1371).");
+        }
+
+        // =====================================================================
+        //  WO-1371 — THE NEW-GAME PREF-STORE LEDGER (the class, not the instance)
+        // =====================================================================
+
+        /// <summary>How <see cref="ResetToNewGame"/> treats one out-of-envelope store.</summary>
+        public enum NewGamePrefDisposition
+        {
+            /// <summary>The reset deletes it. Oracle-enforced: poison it, reset, assert gone.</summary>
+            ClearedByReset = 0,
+            /// <summary>Deliberately survives a New Game (identity / preference). Asserted PRESENT.</summary>
+            DeliberatelyCarried = 1,
+            /// <summary>KNOWN GAP - found by the WO-1371 audit, not yet addressed. Reported, not
+            /// asserted, so the list can carry the truth instead of only the finished work.</summary>
+            NotYetCleared = 2,
+        }
+
+        /// <summary>One PlayerPrefs-backed store that a New Game has an opinion about.</summary>
+        public sealed class NewGamePrefStore
+        {
+            /// <summary>Exact key, or the key PREFIX when <see cref="PerId"/> is true.</summary>
+            public string Key;
+            /// <summary>True when the real key is <see cref="Key"/> + an arbitrary id.</summary>
+            public bool PerId;
+            public NewGamePrefDisposition Disposition;
+            /// <summary>Why it has that disposition. A store is not exempt because nobody noticed
+            /// it; it is exempt because a reason is written here.</summary>
+            public string Why;
+        }
+
+        /// <summary>
+        /// WO-1371 — EVERY persistence store that lives OUTSIDE the save envelope, with what a New
+        /// Game does about it.
+        ///
+        /// <para>⭐ THIS LIST IS THE POINT OF THE TICKET. Four separate "a new game inherited X"
+        /// defects have now shipped (WO-860 equip, WO-1019 hot-swap bar, WO-1220 talents, WO-1371
+        /// collector fill) and each was fixed as an INSTANCE, so the fifth was always going to
+        /// ship too. <c>ResetToNewGameFullClearRegression</c> Case 1 sweeps GameState FIELDS by
+        /// reflection and says so in its own words - "this store is not one" - which is precisely
+        /// the blind spot. <c>NewGamePrefStoreSweepRegression</c> sweeps THIS list instead, so the
+        /// class becomes checkable: adding a row is all it takes to bring a store under the
+        /// oracle.</para>
+        ///
+        /// <para>⚠ The <see cref="NewGamePrefDisposition.NotYetCleared"/> rows are the WO-1371
+        /// audit's OTHER findings, recorded rather than fixed - fixing 13 stores in the collector's
+        /// pass would have been scope creep, and losing the list would have been worse. Each is a
+        /// candidate ticket; move a row to <see cref="NewGamePrefDisposition.ClearedByReset"/> in
+        /// the same change that clears it and the oracle starts enforcing it.</para>
+        /// </summary>
+        public static readonly NewGamePrefStore[] NewGamePrefStores =
+        {
+            new NewGamePrefStore { Key = TalentPrefKey, PerId = false,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1220 - Wisdom + unlocked talent nodes; a new Ranger inherited a Mage's tree" },
+            new NewGamePrefStore { Key = CollectorPendingPrefPrefix, PerId = true,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1371 - the 14,089-resource inherited collector fill" },
+            new NewGamePrefStore { Key = CollectorHpPrefPrefix, PerId = true,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1371 - a new town's collectors must not start pre-damaged" },
+            new NewGamePrefStore { Key = CollectorLastAccrualPrefPrefix, PerId = true,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1371 - deleted, not stamped: an absent stamp is what makes CatchUpAway seed to now and back-fill nothing" },
+            new NewGamePrefStore { Key = ResourceBuildingLevelPrefPrefix, PerId = true,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1371 - the inherited LEVEL is why a fresh farm had a 7500 cap instead of base" },
+            new NewGamePrefStore { Key = CollectorKnownIdsPrefKey, PerId = false,
+                Disposition = NewGamePrefDisposition.ClearedByReset,
+                Why = "WO-1371 - the index of the above; it is rebuilt on the first save of the new game" },
+
+            new NewGamePrefStore { Key = "dotr-settings-master-volume", PerId = false,
+                Disposition = NewGamePrefDisposition.DeliberatelyCarried,
+                Why = "setting - audio preference survives a New Game (same rule as the GameState settings carve-outs)" },
+            new NewGamePrefStore { Key = "dotr-settings-quality-tier", PerId = false,
+                Disposition = NewGamePrefDisposition.DeliberatelyCarried,
+                Why = "setting - device performance preference" },
+            new NewGamePrefStore { Key = "dotr-settings-screen-shake", PerId = false,
+                Disposition = NewGamePrefDisposition.DeliberatelyCarried,
+                Why = "setting - accessibility preference" },
+            new NewGamePrefStore { Key = "dotr-account-id-v1", PerId = false,
+                Disposition = NewGamePrefDisposition.DeliberatelyCarried,
+                Why = "identity - the account outlives any one save, like BoundWallet" },
+            new NewGamePrefStore { Key = "dotr-referral-code", PerId = false,
+                Disposition = NewGamePrefDisposition.DeliberatelyCarried,
+                Why = "social identity - reset() never touches the social fields" },
+
+            // ── KNOWN GAPS (WO-1371 audit, 2026-09-04). NOT fixed in this pass. ──────────
+            new NewGamePrefStore { Key = "dotr-arena-wins", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "arena W/L ledger persists outside GameState.Arena, which IS reset - the two disagree on a New Game" },
+            new NewGamePrefStore { Key = "dotr-arena-losses", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared, Why = "as dotr-arena-wins" },
+            new NewGamePrefStore { Key = "dotr-arena-streak", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared, Why = "as dotr-arena-wins" },
+            new NewGamePrefStore { Key = "dotr-arena-purse", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "carried arena winnings - a currency a new game did not earn" },
+            new NewGamePrefStore { Key = "dotr-camp-cleared-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "per-camp cleared flag - a new game opens on a pre-cleared world map" },
+            new NewGamePrefStore { Key = "dotr-camp-claimed-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared, Why = "as dotr-camp-cleared-" },
+            new NewGamePrefStore { Key = "dotr-camp-secured-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared, Why = "as dotr-camp-cleared-" },
+            new NewGamePrefStore { Key = "dotr-camp-recipe-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "recipes learned from camps - inherited unlocks" },
+            new NewGamePrefStore { Key = "dotr-raid-cleared-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "per-raid cleared flag; GameState.RaidCooldowns IS reset, so these disagree" },
+            new NewGamePrefStore { Key = "dotr-raid-owner-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared, Why = "as dotr-raid-cleared-" },
+            new NewGamePrefStore { Key = "dotr-raid-crystalday-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "per-raid daily crystal gate - a new game may start already spent" },
+            new NewGamePrefStore { Key = "dotr-node-discovered-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "map discovery outside GameState.Zones, which IS force-reseeded (WO-164)" },
+            new NewGamePrefStore { Key = "dotr-dungeon-portal-discovered-", PerId = true,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "dungeon portal discovery - inherited exploration" },
+            new NewGamePrefStore { Key = "dotr-harvest-last-active", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "a second harvest clock beside GameState.LastHarvestClaimMs, which IS zeroed" },
+            new NewGamePrefStore { Key = "dotr-daily-quests-v1", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "daily-quest progress; with -gates-visited-v1 and -day1-done-v1 beside it" },
+            new NewGamePrefStore { Key = "dotr-cosmetics-v1", PerId = false,
+                Disposition = NewGamePrefDisposition.NotYetCleared,
+                Why = "owned cosmetics - MAY be a deliberate carry (entitlements); needs an owner ruling, which is why it is not silently exempted" },
+        };
 
         // =====================================================================
         //  Backend Delta Sync — JSON + Neon (Mobile-Optimised)

@@ -1545,7 +1545,7 @@ namespace DeNelle.Editor
                 // ---- DIRECTION 1: the player-owned hold survives, arbitrarily long. ----
                 DeNelle.Core.UI.WorldHold.ResetForTests();
                 var pause = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
-                    DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                    DeNelle.Core.UI.WorldHold.ReasonPauseMenu, () => true);
                 if (!Mathf.Approximately(Time.timeScale, 0f))
                     failures.Add("[player-owned] the pause hold never froze the clock, so this case is " +
                                  "not testing what it claims to.");
@@ -1615,7 +1615,7 @@ namespace DeNelle.Editor
                 // ---- DIRECTION 4: a player-owned hold is still dropped by the paths that MUST ----
                 // ---- drop it. Removing the ceiling removes one net, not all of them.          ----
                 DeNelle.Core.UI.WorldHold.ResetForTests();
-                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu, () => true);
                 DeNelle.Core.UI.WorldHold.ReleaseAllForSceneLoad("wo1360-next-scene");
                 if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
                     failures.Add("[player-owned] a scene load did not drop the player-owned hold (count " +
@@ -1625,7 +1625,7 @@ namespace DeNelle.Editor
                                  "frozen scene with no menu left to resume it.");
 
                 DeNelle.Core.UI.WorldHold.ResetForTests();
-                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu, () => true);
                 DeNelle.Core.UI.WorldHold.ForceReleaseAll("wo1360-teardown");
                 if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
                     failures.Add("[player-owned] ForceReleaseAll did not drop the player-owned hold. " +

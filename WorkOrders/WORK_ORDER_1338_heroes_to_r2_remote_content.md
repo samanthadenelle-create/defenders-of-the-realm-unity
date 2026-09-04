@@ -1,6 +1,6 @@
 # WORK ORDER 1338 - Move the hero bodies and atlases to R2 remote content
 
-**Status:** FIXED 2026-09-03 - SHIPPED and INSTALLED in `2026.09.03.353742`. APK 506 MB -> 457 MB; `Resources/Heroes` 101.8 MB -> 22 MB. Gates `COMPILE_GATE_OK` + `REGRESSION_OK 354/354` (0 red); all five hero bundles and this build's catalog verified **HTTP 200** on R2 by HEAD, not by marker. AWAITING OWNER FELT-VERIFY (check hero art on class-select); PO closes.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T17:22:42, build 2026.09.04.354315). PRIOR STATUS: FIXED 2026-09-03 - SHIPPED and INSTALLED in `2026.09.03.353742`. APK 506 MB -> 457 MB; `Resources/Heroes` 101.8 MB -> 22 MB. Gates `COMPILE_GATE_OK` + `REGRESSION_OK 354/354` (0 red); all five hero bundles and this build's catalog verified **HTTP 200** on R2 by HEAD, not by marker. AWAITING OWNER FELT-VERIFY (check hero art on class-select); PO closes.
 **Silo / Lane:** Core / content delivery (Addressables + R2)
 **Type:** EXISTING pipeline, content family never migrated
 **Minted:** 2026-09-03 (CLI) - ⚠ RETROACTIVELY. See the provenance note below.

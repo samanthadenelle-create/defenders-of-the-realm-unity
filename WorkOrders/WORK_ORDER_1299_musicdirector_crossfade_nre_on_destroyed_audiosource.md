@@ -1,6 +1,6 @@
 # WORK ORDER 1299 — `MusicDirector.CrossfadeTo` throws NRE on an AudioSource destroyed under an in-flight UniTask
 
-**Status:** FIXED — `CrossfadeTo` now Unity-null-guards `fadeIn`/`clip` before the native writes, primes the source inside `Guard.Try`, and re-checks the source every fade iteration; every bail clears `_fading` and emits a `FlowTrace.Warn`. See `WORK_ORDER_1299_musicdirector_crossfade_nre_on_destroyed_audiosource.RESULT.md`.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:33:29, build 2026.09.04.354315). PRIOR STATUS: FIXED — `CrossfadeTo` now Unity-null-guards `fadeIn`/`clip` before the native writes, primes the source inside `Guard.Try`, and re-checks the source every fade iteration; every bail clears `_fading` and emits a `FlowTrace.Warn`. See `WORK_ORDER_1299_musicdirector_crossfade_nre_on_destroyed_audiosource.RESULT.md`.
 **Source:** F8 capture seq **4364** (`kind=exception`). Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §3.
 **Silo:** Audio (`DeNelle.Audio`) — no gameplay dependencies, safe parallel lane (CLAUDE.md §9)
 **Severity:** P3 — an unobserved exception at teardown. Not a blocker, but it is a one-line class of bug

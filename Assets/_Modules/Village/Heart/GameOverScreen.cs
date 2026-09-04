@@ -86,7 +86,17 @@ namespace DeNelle.Village
         {
             if (Instance == this) Instance = null;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            Unhook();   // WO-1369: a DDOL hero outlives this singleton on a domain-reload teardown
             ReleaseWorldHold("game-over screen host DESTROYED while the death freeze was held");
+        }
+
+        /// <summary>WO-1369: a merely-DISABLED component gets no OnDestroy and cannot process
+        /// Retry, so it must step out here too. This screen is a DDOL singleton and was ENABLED
+        /// for the whole 2m07s freeze, so OnDisable is not what caught the P0 - it is the cheap
+        /// half of the pair, closed for the same reason WO-1360 closed PauseController's.</summary>
+        private void OnDisable()
+        {
+            ReleaseWorldHold("game-over screen host DISABLED while the death freeze was held");
         }
 
         // =====================================================================
@@ -106,6 +116,27 @@ namespace DeNelle.Village
 
         private WorldHold.Handle _worldHold;
 
+        // =====================================================================
+        //  WO-1369 - THE HOLD IS BOUND TO THE OBJECT THAT CAN ACTUALLY DIE.
+        // ---------------------------------------------------------------------
+        //  P0, owner's device 2026-09-04: this screen acquired the PLAYER-OWNED 'game-over'
+        //  hold and then DELEGATED its release to a delegate (OnRetry) living on an
+        //  EndStateView it does not own. PanelManager's single-modal arbiter destroyed that
+        //  view 18 ms later; all three release paths were downstream of "the player pressed
+        //  the button", the button was gone, and the world clock sat at 0.00 for 2 m 07 s
+        //  until the OS killed the app.
+        //
+        //  This class is a DontDestroyOnLoad singleton, so OnDestroy is not a net here and
+        //  OnDisable would not have been either (the component was enabled the whole time).
+        //  The only thing that CAN die is the view - so the hold now names it: the field
+        //  below is the probe's subject, and Update watches it every frame.
+        // =====================================================================
+
+        /// <summary>The end-state view THIS screen raised. Unity-null the moment anything
+        /// destroys it (the arbiter, a replacement end-state, a scene load), which is exactly
+        /// the liveness question the hold's probe asks.</summary>
+        private EndStateView _deathView;
+
         /// <summary>The ONE step-out for the death freeze. Idempotent - every exit calls it.</summary>
         private void ReleaseWorldHold(string why)
         {
@@ -113,9 +144,38 @@ namespace DeNelle.Village
             _worldHold = null;
             if (hold == null) return;
             hold.Dispose();
+            _deathView = null;
             FlowTrace.Step("EndState",
                 $"game-over world hold released - {why}. Live holds now [{WorldHold.Describe()}], " +
                 $"timeScale {Time.timeScale:F2}.");
+        }
+
+        /// <summary>
+        /// WO-1369 - THE OWNED STEP-OUT FOR AN ABANDONED DEATH SCREEN.
+        ///
+        /// <para>WorldHold's liveness probe is the GLOBAL net and it force-releases with a
+        /// FlowTrace.Fail (correct: an orphaned hold anywhere is a defect). This is the LOCAL
+        /// one, and it must exist too, because it does the half the arbiter cannot: it also
+        /// clears <see cref="_shown"/>. Without that reset a second death is silently swallowed -
+        /// <c>Show</c>'s first line returns early forever - which is the secondary defect in the
+        /// same capture.</para>
+        ///
+        /// <para>⛔ It asks "is my view gone", NEVER "how long has this been up". A death screen
+        /// the player leaves on-screen for ten minutes is legitimate and must be untouched.</para>
+        /// </summary>
+        private void PollDeathViewLiveness()
+        {
+            if (_worldHold == null) return;
+            if (_deathView != null) return;
+            FlowTrace.Warn("EndState",
+                "game-over END-STATE VIEW IS GONE while the death freeze was still held. The view " +
+                "carrying the Retry delegate was destroyed by something this screen does not own " +
+                "(the modal arbiter, a replacement end-state, or a scene load), so the hold's only " +
+                "release path died with it - WO-1369's P0. Releasing here and re-arming _shown so " +
+                "the NEXT death is not swallowed too.");
+            _shown = false;
+            ReleaseWorldHold("the end-state view carrying Retry was destroyed without firing");
+            DeathTrace.TimeScaleRestored("GameOverScreen.PollDeathViewLiveness (view abandoned)");
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -128,10 +188,31 @@ namespace DeNelle.Village
             // F8-15: freeze STEP-OUT on the scene-swap restore path (raid-evac / route out of the
             // paused defeat screen re-runs time here). Pairs with GameOverScreen.Show's freeze.
             DeathTrace.TimeScaleRestored("GameOverScreen.OnSceneLoaded('" + scene.name + "')");
-            _heart = null;
-            _hero = null;
+            Unhook();
             ClearCustomActions(); // WO-320: don't let a caller retry/leave action survive the scene swap
             if (IsDefeatScene(scene.name)) Hook();
+        }
+
+        /// <summary>
+        /// WO-1369 - THE MISSING HALF OF <see cref="Hook"/>, matching HeroDeathEndState.Unhook.
+        ///
+        /// <para>CAPTURED DEFECT: this used to be a bare <c>_heart = null; _hero = null;</c>. The
+        /// hero is DontDestroyOnLoad and is CARRIED into composed dungeons, so nulling the
+        /// reference dropped our handle on the object WITHOUT removing our delegate from its
+        /// event - and <c>HeroHealth.OnDeath</c> kept calling <see cref="ShowHeroFell"/> in every
+        /// scene the hero walked into afterwards. That is how the hub defeat screen fired inside
+        /// <c>dg_folks_granary</c>, a composed DUNGEON it has no business owning, raising TWO
+        /// end-states 9 ms apart for one death and orphaning the world hold.</para>
+        ///
+        /// <para>Unsubscribe FIRST, then drop the reference. The reverse order is unfixable: once
+        /// the field is null there is nothing left to unsubscribe from.</para>
+        /// </summary>
+        private void Unhook()
+        {
+            if (_heart != null) _heart.OnHeartDestroyed -= ShowHeartFell;
+            if (_hero != null) _hero.OnDeath -= ShowHeroFell;
+            _heart = null;
+            _hero = null;
         }
 
         private void Hook()
@@ -152,6 +233,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1369, FIRST: Update runs at timeScale 0, which is exactly why this check works
+            // when nothing else in the death flow does. If the view that owns Retry has been
+            // destroyed, the freeze has no way out and must end now.
+            PollDeathViewLiveness();
+
             // Late-resolve hero/heart if they spawned after this bootstrap. DEF-136:
             // FindAnyObjectByType is a scene-wide search; running it every frame churns
             // on mobile. Throttle to once per ~0.5s and stop once both refs resolve.
@@ -166,10 +252,41 @@ namespace DeNelle.Village
 
         // DEF-141 / WO-235 locked canon copy for Heartwood (root) destruction.
         // "THE ROOT WENT SILENT" replaces the retired "HEART OF ELARION HAS FALLEN".
-        private void ShowHeartFell() => Show(
+        private void ShowHeartFell()
+        {
+            if (!GateHandlerToDefeatScene("heart-fell")) return;
+            Show(
             "THE ROOT WENT SILENT",
             "The root went silent.\nThe dark poured in where the light had been,\nbut Elarion remembers those who rise again.",
             isHeartDestroyed: true);
+        }
+
+        /// <summary>
+        /// WO-1369 - THE HANDLER RE-ASKS THE QUESTION THE SUBSCRIPTION ALREADY ANSWERED.
+        ///
+        /// <para>Belt to <see cref="Unhook"/>'s braces. <see cref="Hook"/> only subscribes inside a
+        /// defeat scene, but the delegate rides a DontDestroyOnLoad hero across every scene
+        /// boundary in the game, so the gate that authorised the subscription was evaluated in a
+        /// DIFFERENT SCENE from the one the handler fires in. On 2026-09-04 that gap put the hub
+        /// defeat screen inside a composed dungeon (<c>dg_folks_granary</c>): the two existing
+        /// stand-downs cover arena and overworld, and NEITHER covers a dungeon.</para>
+        ///
+        /// <para>Unhook alone would have been enough for the captured case. This is here because
+        /// a subscription is a promise made at one moment about a condition that keeps changing,
+        /// and the cheap re-check is what makes the handler true rather than merely well-wired.</para>
+        /// </summary>
+        private bool GateHandlerToDefeatScene(string context)
+        {
+            string active = SceneManager.GetActiveScene().name;
+            if (IsDefeatScene(active)) return true;
+            FlowTrace.Warn("EndState",
+                $"hub game-over ({context}) STAND-DOWN: the active scene '{active}' is NOT a hub " +
+                "defeat scene, so this hub-defense screen must not fire here. The delegate reached " +
+                "us on a DontDestroyOnLoad hero that walked out of the hub - WO-1369's dungeon " +
+                "case. Standing down and unhooking so it cannot fire again from this scene.");
+            Unhook();
+            return false;
+        }
 
         /// <summary>
         /// WO-320: scene-agnostic defeat panel. Any scene (e.g. Defend-the-Tower) can
@@ -204,6 +321,11 @@ namespace DeNelle.Village
 
         private void ShowHeroFell()
         {
+            // WO-1369, FIRST GATE: is this even a scene this screen owns? See
+            // GateHandlerToDefeatScene - the arena and overworld stand-downs below are
+            // scene-SPECIFIC exclusions and neither of them covers a composed dungeon.
+            if (!GateHandlerToDefeatScene("hero-fell")) return;
+
             // DOUBLE DEATH SCREEN (owner F8 2026-07-12, DeathTrace proof: 'YOU HAVE
             // FALLEN' by GameOverScreen.Show + 'Defeat' by BattleArenaHud in one death):
             // while a BattleArena fight owns the death, ITS loss flow (Regroup sting +
@@ -261,19 +383,38 @@ namespace DeNelle.Village
             // F8-15 death forensic window: the hub game-over PAUSES time here — anything queued
             // after this (respawn coroutine, warps) freezes until Retry. Freeze STEP-IN: records
             // the pending freeze so DeathTrace.PollFreezeStuck self-reports if it is never restored.
-            // WO-1360: PLAYER-OWNED. The death screen ends when the player taps Retry, which can
-            // be hours (or a backgrounded app). A ceiling here would unfreeze the world behind a
-            // Game Over card. Release stays paired to Retry / sceneLoaded / OnDestroy below.
-            _worldHold = WorldHold.AcquirePlayerOwned(HoldReason);
-            DeathTrace.TimeScaleFroze("GameOverScreen.Show",
-                $"'{title}' in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry/sceneLoaded");
-
             // WO-B: the ONE shared Obsidian end-state template renders the screen
             // (real EventSystem buttons — EndStateView ensures one; the old manual
             // hit-test overlay is retired). Primary = Try Again -> OnRetry().
             FlowTrace.Step("EndState",
                 $"hub game-over ({(isHeartDestroyed ? "heart-fell" : "hero-fell")}) in '{_defeatScene}' -> shared end-state.");
-            EndStateView.Show(EndStateVM.FromGameOver(isHeartDestroyed, title, body, OnRetry));
+
+            // ⛔ WO-1369 — ORDER IS LOAD-BEARING: BUILD THE VIEW, *THEN* TAKE THE HOLD.
+            // The hold's liveness probe reads _deathView, so the subject of the probe must
+            // exist before the probe can be asked. Taking the hold first (which is what this
+            // code did until today) means the probe's very first answer is "my owner is null",
+            // and it also means a Show that FAILS to build a view leaves a freeze behind with
+            // nothing on screen — the exact 2m07s shape, arrived at from the other direction.
+            _deathView = EndStateView.Show(EndStateVM.FromGameOver(isHeartDestroyed, title, body, OnRetry));
+            if (_deathView == null)
+            {
+                _shown = false;
+                FlowTrace.Fail("EndState",
+                    "hub game-over could NOT build its end-state view, so NO world hold was taken. " +
+                    "The death screen is missing (that is its own defect) but the world is not " +
+                    "frozen behind a card that never drew - WO-1369.");
+                return;
+            }
+
+            // WO-1360: PLAYER-OWNED. The death screen ends when the player taps Retry, which can
+            // be hours (or a backgrounded app). A ceiling here would unfreeze the world behind a
+            // Game Over card. Release stays paired to Retry / sceneLoaded / OnDisable / OnDestroy.
+            // WO-1369: and the REQUIRED liveness probe names the object that can actually die -
+            // the view, not this DDOL singleton, which is never destroyed and was enabled for the
+            // entire freeze. Same expression EndStateView hands PanelManager: "is it still there".
+            _worldHold = WorldHold.AcquirePlayerOwned(HoldReason, () => _deathView != null);
+            DeathTrace.TimeScaleFroze("GameOverScreen.Show",
+                $"'{title}' in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry/sceneLoaded");
         }
 
         /// <summary>The single end-state action: unpause and rerun the fight — the

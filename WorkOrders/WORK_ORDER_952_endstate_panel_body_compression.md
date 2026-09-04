@@ -330,3 +330,59 @@ The pre-existing `UI_GEOMETRY_FAIL x16` (WO-941 RumorBoard/RealmMap) baseline ma
 finding this newly-captured canvas surfaces - triage it, do not baseline it.
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `UICaptureLaunch.cs:526,548` — geometry fix landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.
+
+---
+
+## 2026-09-04 — THE SECOND REFLOW LEVER: THE NARRATIVE STRIP (edit-only agent, NOT gated)
+
+`Assets/Editor/Regression/EndStateBodyFitRegression.cs` ran RED and proved the defect is **wider
+than the capture**. The full failure set (`Builds/wave-regression3.log:110516-110524`) is **8 cases,
+not one**: **3, 4, 5 and 6 spoils rows on BOTH `2340x1080` and `1920x1080`**, all pinned at
+`MaxPanelHalf`, `need=496/578px` against `well=472px`, `scale=0.952/0.817`, **2 columns**. The
+owner's device (2670x1200) was the *lucky* surface — its 1376px body column can carry a 3rd column,
+so the August column lever saved it. The two commonest landscape surfaces cannot: a 3rd column needs
+`3 x 420 = 1260px` of legibility floor and they have **1206px** and **990px**.
+
+**The lever taken (neither clamp nor band minimum moved):** the emblem (64px), the star rating (72px)
+and the Time line (48px) are each ONE SMALL CENTRED ELEMENT on a ~1000-1400px wide band — three
+bands and two gaps, **202px of well**, to draw a crest, three stars and five characters. They now
+lay out **SIDE BY SIDE in ONE band as tall as the tallest of them (72px)** when, and only when, the
+stacked body does not fit the well the clamp allows. **Nothing is scaled down** — every element keeps
+its authored fixed size; the three simply stop each paying for a row of their own.
+
+- `EndStateView.NarrativeStripAt(vm, canvasH, cols)` — the decision. **ESCALATION ONLY** (asks the
+  STACKED budget, exactly like the column lever, so any panel that already fits keeps its shipped
+  layout) and **WIDTH-GATED** (`MinStripCellPx = 216 + 2x24 = 264px`, derived from the star
+  cluster's own fixed `2 x StarSpacingPx + StarSizePx`). Compact banners are refused outright, so
+  the wave-clear path is untouched.
+- `RequiredBodyPxAt(vm, canvasH, cols, strip)` gained the flag; `BuildBody` reads the SAME
+  `SpoilColumns` -> `NarrativeStripAt` pair, so the solve and the layout cannot disagree about the
+  band count. `ProbeFit` reports it as `FitResult.NarrativeStripMerged`, so the oracle measures the
+  shipped decision.
+- New instrumentation (§12): `[Flow:EndState] narrative bands REFLOWED to a N-cell STRIP: ... cost
+  {stacked}px stacked and {strip}px side by side, against a {wellCeiling}px well ceiling at N spoils
+  column(s) (cell {px}px vs a 264px floor)`. The existing `geometry:`, `COMPRESSED to fit` and
+  `solved to an EXACT fit` lines are untouched and still the acceptance evidence.
+
+**The arithmetic, all four oracle surfaces x 1-6 rows = 24 cases, every one `scale = 1.000`:**
+
+| surface | rows | cols | strip | need | well | panel frac |
+|---|---|---|---|---|---|---|
+| Seeker 2670x1200 | 3 / 4 | 2 | no | 496 | 496 | 0.879 |
+| Seeker 2670x1200 | 5 / 6 | **3** | no | 496 | 496 | 0.879 |
+| 2340x1080 | 3 / 4 | 2 | **yes** | 496 -> **348** | 348 | 0.747 |
+| 2340x1080 | 5 / 6 | 2 | **yes** | 578 -> **430** | 430 | 0.874 |
+| 1920x1080 | 3 / 4 | 2 | **yes** | 496 -> **348** | 348 | 0.747 |
+| 1920x1080 | 5 / 6 | 2 | **yes** | 578 -> **430** | 430 | 0.874 |
+| portrait 1080x1920 | 1-6 | 1 | no | 414-824 | = need | 0.38-0.67 |
+
+Nothing is pinned at the clamp any more. **The Seeker cases are bit-for-bit what shipped** (the
+oracle's Case 1 "the 4-row victory must still solve at 2 columns" and the 5-row 3-column reflow both
+hold), and portrait stays single-column, un-stripped, as WO-894 ruled.
+
+**NOT DONE HERE (edit-only seat):** no gate, no regression run, no capture. To close: re-run
+`DataRegression.RunAll` (the suite must go green **without the oracle being touched** — it is
+unmodified), then `UICaptureLaunch.RunCaptureHeadless` and OPEN the PNGs, because a geometry solve
+that fits is not proof the strip READS right. The one thing arithmetic cannot answer is whether
+crest / stars / time side by side is the composition the owner wants — that is a felt call on a
+screenshot, and it is the reason the capture half of this WO still matters.

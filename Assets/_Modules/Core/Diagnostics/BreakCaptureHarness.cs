@@ -251,7 +251,56 @@ namespace DeNelle.Core.Diagnostics
                 DialogueEventBus.Fired -= OnProgressEvent;
             }
             catch { }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // ⛔ WO-1369 (the seven-hold audit, GUILTY #2): this used to end at the catch above,
+            // so the 'f8-note-capture' PLAYER-OWNED hold survived the harness. Since WO-1360 took
+            // the ceiling off, a destroyed harness mid-note left the world frozen forever with no
+            // note box on screen and nothing that could ever commit it.
+            CancelFlagNote("the capture harness was DESTROYED with a note still open");
+#endif
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>⛔ WO-1369: the note box lives in <c>OnGUI</c>, and OnGUI does not run on a
+        /// DISABLED component - so a harness disabled mid-note can never reach CommitFlag and the
+        /// hold has no exit. A merely-disabled component also never gets OnDestroy. This is the
+        /// step-out for that path.</summary>
+        void OnDisable()
+        {
+            CancelFlagNote("the capture harness was DISABLED with a note still open");
+        }
+
+        /// <summary>
+        /// THE ESCAPE PATH (WO-1369). Before today the ONLY way out of note mode was CommitFlag,
+        /// reachable only from inside OnGUI - i.e. only while the harness was alive, enabled and
+        /// drawing. Every other outcome stranded the freeze.
+        ///
+        /// <para>Deliberately NOT a Commit: an abandoned note is not a bug report, and writing a
+        /// blank 'flagged' record for a teardown would pollute the queue the owner reads. It
+        /// releases the clock and SAYS SO (CLAUDE.md §12 - a swallowed failure is forbidden).
+        /// Idempotent, and safe to call when no note is open.</para>
+        /// </summary>
+        void CancelFlagNote(string why)
+        {
+            if (!_noteMode && _worldHold == null) return;
+            try
+            {
+                bool hadNote = _noteMode;
+                _noteMode = false;
+                _noteBuffer = "";
+                var hold = _worldHold;
+                _worldHold = null;
+                hold?.Dispose();
+                DeNelle.Core.UI.WorldHold.RestoreIfDrifted("F8 note cancelled");
+                if (hadNote)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("BreakCapture",
+                        $"F8 note capture CANCELLED - {why}. The world hold is released and the " +
+                        "typed line is discarded (a teardown is not a bug report). The clean-frame " +
+                        "screenshot taken when F8 was pressed is still on disk.");
+            }
+            catch { }
+        }
+#endif
 
         // ---- error / exception capture ----------------------------------------
         void OnLog(string condition, string stack, LogType type)
@@ -534,13 +583,21 @@ namespace DeNelle.Core.Diagnostics
             // WO-1360: PLAYER-OWNED. The owner is typing a bug note; a ceiling here would resume
             // the game under the note box, which is exactly the input-steals-the-hero failure the
             // freeze exists to prevent.
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("f8-note-capture");
+            // WO-1369: the REQUIRED liveness probe. The note box is drawn in OnGUI, which does not
+            // run on a disabled or destroyed component - so a harness that goes away mid-note can
+            // NEVER commit, and before today nothing could notice: OnDestroy did not dispose this
+            // hold and there was no cancel path at all. The probe asks the only question that
+            // matters ("can this note box still be committed?") and the watchdog force-releases the
+            // moment the answer is no. ⛔ Never make this a duration test - the owner is typing.
+            // ORDER: _noteMode is latched BEFORE the acquire, because it is what the probe reads.
+            _noteMode = true;
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
+                "f8-note-capture", () => this != null && isActiveAndEnabled && _noteMode);
             if (observedScale <= 0f)
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("BreakCapture",
                     "F8 pressed while the world was ALREADY frozen (timeScale 0 — another owner, " +
                     "e.g. PauseController's background auto-pause). Restoring to 1 on commit instead " +
                     "of re-arming the freeze.");
-            _noteMode = true;
 #else
             // WO-839 §3 release-safety: the typed-note flow (freeze + IMGUI text field) is
             // compiled OUT of non-development players. F8 still captures — it routes through

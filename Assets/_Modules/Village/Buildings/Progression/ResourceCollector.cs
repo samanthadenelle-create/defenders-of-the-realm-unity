@@ -6,6 +6,7 @@
 using UnityEngine;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
 using DeNelle.Core.World;
 using DeNelle.Village;
 
@@ -18,8 +19,12 @@ namespace DeNelle.Village.Buildings.Progression
     [DisallowMultipleComponent]
     public sealed class ResourceCollector : MonoBehaviour, IDamageableStructure, ISiegeLootTarget, IHarvestSource
     {
-        private const string PendingPrefsPrefix = "dotr.collector.pending.";
-        private const string HpPrefsPrefix = "dotr.collector.hp.";
+        // WO-1371 - the key SPELLINGS now live in DeNelle.Core (GameStateService), because
+        // ResetToNewGame has to delete exactly these keys and a key restated in two files is this
+        // repo's most repeated defect. Aliased as consts here so every use site below is unchanged
+        // and there is still only ONE authority for the string.
+        private const string PendingPrefsPrefix = GameStateService.CollectorPendingPrefPrefix;
+        private const string HpPrefsPrefix = GameStateService.CollectorHpPrefPrefix;
 
         /// <summary>
         /// WO-859 - per-collector LAST-ACCRUAL stamp (unix ms), the whole basis of away/offline
@@ -29,7 +34,7 @@ namespace DeNelle.Village.Buildings.Progression
         /// carries only ~7 significant digits, which would quantise the stamp to ~100-second
         /// buckets and make every catch-up wrong by up to two minutes.
         /// </summary>
-        private const string LastAccrualPrefsPrefix = "dotr.collector.lastaccrual.";
+        private const string LastAccrualPrefsPrefix = GameStateService.CollectorLastAccrualPrefPrefix;
 
         /// <summary>
         /// WO-859 overflow guard (NOT the design cap - capacity is the cap). Purely so a
@@ -689,6 +694,12 @@ namespace DeNelle.Village.Buildings.Progression
             PlayerPrefs.SetFloat(HpPrefsPrefix + _buildingId, _hp);
             PlayerPrefs.SetString(LastAccrualPrefsPrefix + _buildingId,
                 _lastAccrualMs.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+            // WO-1371 - the three keys above are `prefix + arbitrary building id`, and PlayerPrefs
+            // has no key enumeration, so a New Game could not find them to delete them (that is
+            // how the owner's 11-second-old game banked 14,089 inherited resources). Recording the
+            // id here makes the key space ENUMERABLE at its ONE write seam - so the index can
+            // never name a key that was not actually written.
+            GameStateService.RegisterCollectorId(_buildingId);
             PlayerPrefs.Save();
         }
 
@@ -714,6 +725,71 @@ namespace DeNelle.Village.Buildings.Progression
             SaveState();
             StepChanged?.Invoke(this);   // health/broken state moved — let the fill/damage views re-read
             FlowTrace.Step("Harvest", $"collector '{_buildingId}' HP reset to full on fresh placement (stale persisted damage cleared)");
+        }
+
+        // =====================================================================
+        //  WO-1371 — the LIVE half of the New Game reset
+        // =====================================================================
+
+        /// <summary>
+        /// WO-1371 — clearing the PlayerPrefs is only half a reset. A collector already in memory
+        /// holds pending/HP/stamp in FIELDS and writes them straight back out on its next save
+        /// (OnDisable, or any Accrue), which would restore the very fill
+        /// <c>GameStateService.ClearHarvestPrefs</c> just deleted. This is the other half — the
+        /// same two-half shape WO-1220 established for the talent store.
+        ///
+        /// <para>Subscribed STATICALLY, at BeforeSceneLoad, so the hook exists whether or not a
+        /// collector happens to be alive when "Start New" is pressed. A static handler on a static
+        /// event needs no unsubscribe (the "subscribers MUST unsubscribe" note on
+        /// <see cref="GameStateService.NewGameStarted"/> guards INSTANCE handlers, which this is
+        /// deliberately not).</para>
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InstallNewGameHook()
+        {
+            GameStateService.NewGameStarted -= OnNewGameStarted;
+            GameStateService.NewGameStarted += OnNewGameStarted;
+            FlowTrace.Step("Harvest",
+                "collector New Game hook installed - a reset now zeroes LIVE collectors as well as " +
+                "their PlayerPrefs (WO-1371).");
+        }
+
+        private static void OnNewGameStarted()
+        {
+            // Inactive included: a parked DDOL fallback is still holding a pending figure it would
+            // persist the moment it is re-enabled.
+            var live = FindObjectsByType<ResourceCollector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < live.Length; i++) live[i]?.ResetForNewGame();
+
+            // ⭐ WO-1371 - ResourceBuildingState.ResetAll had ZERO CALLERS despite its own summary
+            // saying "used by a New Game / dev reset", which is why the owner's fresh town had a
+            // farm CAPACITY of 7500 instead of base: the inherited LEVEL raised the cap the
+            // inherited fill then filled. It also reaches TechTree.ResetAll, unreachable for the
+            // same reason. This is that call site.
+            ResourceBuildingState.ResetAll();
+
+            FlowTrace.Step("Harvest",
+                $"New Game: zeroed {live.Length} live collector(s) and reset every resource-building " +
+                "level + tech node. Pending is 0 and the away stamp is re-seeded, so the first " +
+                "collector status of the new game must read pending=0 (WO-1371).");
+        }
+
+        /// <summary>WO-1371 — this collector's New Game state: nothing pending, full HP, and a
+        /// FRESH away clock (stamped to now, so <see cref="CatchUpAway"/> back-fills nothing on the
+        /// next load). Writes through <see cref="SaveState"/> so memory and prefs agree.</summary>
+        internal void ResetForNewGame()
+        {
+            int oldSteps = FilledSteps;
+            double before = _pending;
+            _pending = 0.0;
+            _hp = _maxHp;
+            _broken = false;
+            _lastAccrualMs = TimeSource.NowUnixMs();
+            SaveState();
+            RaiseStepChangedIfMoved(oldSteps);
+            FlowTrace.Step("Harvest",
+                $"New Game: collector '{_buildingId}' pending {before:F0} -> 0, HP restored, away " +
+                "clock re-seeded to now (nothing to back-fill).");
         }
     }
 }

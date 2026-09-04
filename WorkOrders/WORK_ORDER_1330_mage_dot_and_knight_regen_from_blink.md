@@ -1,6 +1,6 @@
 # WORK ORDER 1330 - A mage DoT and a knight regen, with art matched from the Blink library
 
-**Status:** FIXED (edit-only lane; NOT gated, NOT committed) - one shared OverTimeEngine now carries every over-time effect; mage.wither (DoT) and knight.ironblood (regen) are that engine with the sign flipped, three shared tunables registered, and both VFX keys deliberately left OPEN for the owner tag.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:37:41, build 2026.09.04.354315). PRIOR STATUS: FIXED (edit-only lane; NOT gated, NOT committed) - one shared OverTimeEngine now carries every over-time effect; mage.wither (DoT) and knight.ironblood (regen) are that engine with the sign flipped, three shared tunables registered, and both VFX keys deliberately left OPEN for the owner tag.
 **Silo / Lane:** Abilities / combat status effects / VFX matching
 **Type:** EXISTING mechanics, MISSING abilities
 **Minted:** 2026-09-02 (CLI) from an owner ruling with explicit creative latitude.

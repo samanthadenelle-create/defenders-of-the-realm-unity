@@ -2,7 +2,7 @@
 
 # WORK ORDER 1320 — Pi rewarded ads, behind the EXISTING IAdService seam
 
-**Status:** FIXED — implemented by 0eb82ac1a `feat(pi): rewarded ads behind the existing seam + sign-in environment fallback`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:37:23, build 2026.09.04.354315). PRIOR STATUS: FIXED — implemented by 0eb82ac1a `feat(pi): rewarded ads behind the existing seam + sign-in environment fallback`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Monetization / Pi
 **Minted:** 2026-09-02 (CLI) on owner instruction, from fetched Pi SDK docs.
 **Severity:** P1 feature. Contains one LATENT P0 defect (see below) that must be fixed regardless.

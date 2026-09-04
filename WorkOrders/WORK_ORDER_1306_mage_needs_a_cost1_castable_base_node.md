@@ -1,6 +1,6 @@
 # WORK ORDER 1306 — The mage needs a cost-1 castable base node (retention)
 
-**Status:** FIXED — owner ruled 2026-09-02 ("mirror the knight" + "the blm needs to get some healing , like drain to stay balanced (early)"); `mage.t1n3` re-authored into the cost-1 root **Siphon Ward**, granting the drainshot `mage.siphon`, with the return rate remote-tunable as `combat.drainReturnPct` (default 100 = today). See the `.RESULT.md`.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T17:23:04, build 2026.09.04.354315). PRIOR STATUS: FIXED — owner ruled 2026-09-02 ("mirror the knight" + "the blm needs to get some healing , like drain to stay balanced (early)"); `mage.t1n3` re-authored into the cost-1 root **Siphon Ward**, granting the drainshot `mage.siphon`, with the return rate remote-tunable as `combat.drainReturnPct` (default 100 = today). See the `.RESULT.md`.
 **Silo:** Progression / Hero identity
 **Minted:** 2026-09-02 (CLI), from a collision between two of the owner's own rulings.
 

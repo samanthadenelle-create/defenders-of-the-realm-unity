@@ -1,6 +1,6 @@
 # WORK ORDER 1302 — `DependencyClosureTrace` reports every Synty shader-graph material as a `dep MISS`
 
-**Status:** FIXED — `DependencyClosureTrace` now asks the SHADER for its texture properties and classifies each by token instead of probing two hardcoded URP/Lit names, so Synty shader-graph albedo slots verify clean while normal/emission/mask-only materials are still reported as a `dep MISS`. See `WORK_ORDER_1302_dependency_closure_trace_synty_shadergraph_false_positive.RESULT.md`.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:33:28, build 2026.09.04.354315). PRIOR STATUS: FIXED — `DependencyClosureTrace` now asks the SHADER for its texture properties and classifies each by token instead of probing two hardcoded URP/Lit names, so Synty shader-graph albedo slots verify clean while normal/emission/mask-only materials are still reported as a `dep MISS`. See `WORK_ORDER_1302_dependency_closure_trace_synty_shadergraph_false_positive.RESULT.md`.
 **Source:** F8 captures seq **4355, 4356, 4357, 4358, 4365, 4366, 4367, 4368, 4371, 4372, 4373, 4374, 4375**
 (13 captures across three sessions). Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §6.
 **Silo:** Core Addressables diagnostics

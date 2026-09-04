@@ -1,6 +1,6 @@
 # WORK ORDER 1294 — Blink Skill Identity, Three-Slot Hot-Swap, and Troop Portraits
 
-**Status:** FIXED (data + oracle landed 2026-09-02; NOT closed - needs the owner felt test and the
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T17:23:13, build 2026.09.04.354315). PRIOR STATUS: FIXED (data + oracle landed 2026-09-02; NOT closed - needs the owner felt test and the
 section-9 screenshots, which headless cannot capture)  
 **Owner ruling:** 2026-09-01  
 **Program:** Complete medieval UI reskin  

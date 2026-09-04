@@ -166,6 +166,13 @@ namespace DeNelle.Village.UI
         private readonly TextMeshProUGUI[] _launcherBadges = new TextMeshProUGUI[4];
         private bool _categoryNavigationCommitted;
         private RectTransform _railBand;            // non-null only while the rail is PINNED
+        // WO-1368 — the drawer's OWN scroll content. The queue VERBS live here, never in the
+        // browse list (see RenderQueueDrawer).
+        private RectTransform _drawerContent;
+        // WO-1368 — the row factory's current parent. Null => the browse list (_listContent).
+        // Set for the duration of a drawer render so AddQueueRow &c. can be reused verbatim
+        // instead of being forked into a second, drift-prone copy.
+        private RectTransform _rowParent;
         private GameObject _queueDrawer;
         private Button _queueDrawerToggle;
         private bool _queueDrawerOpen;
@@ -299,6 +306,8 @@ namespace DeNelle.Village.UI
             for (int i = 0; i < _launcherBadges.Length; i++) _launcherBadges[i] = null;
             _categoryNavigationCommitted = false;
             _railBand = null;
+            _drawerContent = null;
+            _rowParent = null;
             _queueDrawer = null;
             _queueDrawerToggle = null;
             _queueDrawerOpen = false;
@@ -907,7 +916,32 @@ namespace DeNelle.Village.UI
             ElarionUiKit.ClampMinTouch(_slotButton);
         }
 
-        /// <summary>Optional right-side home for queue inspection and crew purchasing.</summary>
+        /// <summary>
+        /// The opt-in home for queue inspection AND queue ADMINISTRATION.
+        ///
+        /// <para>⛔ WO-1368 — THE MONEY PATH LIVED NOWHERE FOR THREE DAYS. Commit 486cd7b17
+        /// (2026-09-01) removed the only call to <see cref="AddQueueRow"/> — the method that builds
+        /// <c>Finish Now</c>, <c>Ad</c>, <c>Cancel</c> and <c>Move up</c> — and moved queue actions
+        /// to "the explicit header Queue drawer". But this drawer held only the DISPLAY-ONLY rail
+        /// and the Buy-Builder offer, and <see cref="MountRail"/>'s own comment says the rail's
+        /// cards are raycast-off because "every action lives on the rows". The rows it deferred to
+        /// were deleted in the same change, so the crystal sink and the rewarded-ad surface were
+        /// both unreachable while <c>queueRows=2</c> was being logged correctly all morning.
+        /// (Owner, on the production candidate: "i dont see the watch ad or pay crtystals to
+        /// complete early stuff".)</para>
+        ///
+        /// <para>⭐ The 2026-08-31 ruling this drawer exists for — "tower browsing leads; queue
+        /// administration is OPT-IN" — is UNCHANGED and is why the verbs are not simply put back
+        /// inline: inline queue rows made the browse list overflow at landscape height. The verbs
+        /// return HERE, behind the QUEUE affordance, which is where <see cref="MountRail"/> already
+        /// said they lived. <c>ManageQueueDrawerRegression</c> is re-pointed to pin that shape —
+        /// rows drawer-only AND present — rather than to pin their absence.</para>
+        ///
+        /// <para>LAYOUT: heading / scrolling queue list / Buy-Builder offer. The rail is the FIRST
+        /// ROW of that list rather than a fixed band, reusing the proven demoted-rail pattern
+        /// (<see cref="RenderList"/>): it keeps its full fixed <see cref="QueueRailView.Height"/>,
+        /// scrolls with the rows, and cannot overprint the row beneath it at any well height.</para>
+        /// </summary>
         private void BuildQueueDrawer(RectTransform well)
         {
             if (well == null) return;
@@ -935,10 +969,23 @@ namespace DeNelle.Village.UI
                 new Vector2(0.70f, 0.70f), new Vector2(0.97f, 0.99f), ToggleQueueDrawer);
             ElarionUiKit.ClampMinTouch(hide);
 
-            _railBand = MakeZone(drawer, "Drawer_QueueRail",
-                new Vector2(0.035f, 0.40f), new Vector2(0.965f, 0.74f));
+            // WO-1368: the rail no longer owns a fixed band of its own — it is mounted as the
+            // first row of the list below (see RenderQueueDrawer), so the 200px of card art can
+            // never eat the space the ACTION rows need. _railBand stays null, which is what makes
+            // the legacy pinned path (RenderRail) inert.
+            _railBand = null;
+            var drawerList = MakeZone(drawer, "Drawer_QueueList",
+                new Vector2(0.02f, 0.30f), new Vector2(0.98f, 0.86f));
+            var drawerScroll = ElarionUiKit.MakeScrollZone(drawerList, spacing: 8f, padding: 10);
+            _drawerContent = drawerScroll != null ? drawerScroll.content : null;
+            if (_drawerContent == null)
+                FlowTrace.Fail("Manage",
+                    "queue drawer MakeScrollZone returned no content - the queue ROWS have no build " +
+                    "site, which is exactly the WO-1368 defect (Finish Now / Ad / Cancel / Move up " +
+                    "unreachable). The rail alone carries no actions.");
+
             BuildSlotRow(MakeZone(drawer, "Drawer_SlotOffer",
-                new Vector2(0.035f, 0.04f), new Vector2(0.965f, 0.35f)));
+                new Vector2(0.035f, 0.03f), new Vector2(0.965f, 0.27f)));
 
             _queueDrawer.SetActive(false);
         }
@@ -949,8 +996,14 @@ namespace DeNelle.Village.UI
             if (_queueDrawer != null) _queueDrawer.SetActive(_queueDrawerOpen);
             if (_operationalListBand != null) _operationalListBand.SetActive(!_queueDrawerOpen);
             if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(!_queueDrawerOpen);
-            if (_queueDrawerOpen) RenderRail();
-            FlowTrace.Step("Manage", "queue drawer " + (_queueDrawerOpen ? "expanded" : "collapsed"));
+            // WO-1368: hiding the browse band while the drawer is open STILL holds, and now holds
+            // for a stronger reason than when it was written. The drawer is a full-body workspace
+            // (anchors 0.02-0.84 of the well) and it now carries DESTRUCTIVE and PAID verbs; a
+            // browse list left actionable underneath an opaque panel is a mis-tap surface. Opt-in
+            // is preserved by the QUEUE affordance, not by leaving both surfaces alive at once.
+            if (_queueDrawerOpen) RenderQueueDrawer();
+            FlowTrace.Step("Manage", "queue drawer " + (_queueDrawerOpen ? "expanded" : "collapsed") +
+                " (rows " + (_queueDrawerOpen ? (_vm != null ? _vm.QueueRows.Count : 0) : 0) + ")");
         }
 
         private void BuildNotice(RectTransform band)
@@ -1014,9 +1067,14 @@ namespace DeNelle.Village.UI
                 RenderRail();
                 BuildTabs();
                 RenderList();
+                // WO-1368 — AFTER RenderList, which clears the tick/progress cells. The drawer's
+                // rows register their own countdown cells and must survive that clear.
+                if (_queueDrawerOpen) RenderQueueDrawer();
                 Canvas.ForceUpdateCanvases();
                 if (_listContent != null)
                     UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_listContent);
+                if (_drawerContent != null)
+                    UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_drawerContent);
                 ApplyOperationalMedievalSkin();
             });
             FlushNotice();
@@ -1157,8 +1215,83 @@ namespace DeNelle.Village.UI
         {
             // PINNED path only. When the well could not afford a 200px pinned band (see the budget
             // in BuildChrome) the rail rides the scroll list instead and RenderList mounts it.
+            // WO-1368: inside the drawer _railBand is null by construction, so this is inert there
+            // and RenderQueueDrawer owns the rail. Kept because the demoted/pinned split is still
+            // real for the browse list.
             if (!_railPinned || _railBand == null) return;
             MountRail(_railBand, forceRebuild: false);
+        }
+
+        /// <summary>
+        /// ⛔ WO-1368 — THE BUILD SITE FOR THE QUEUE VERBS. This is the only caller of
+        /// <see cref="AddQueueRow"/>, and it is deliberately DRAWER-ONLY: the 2026-08-31 ruling
+        /// keeps the browse list free of queue rows, and this method keeps the verbs from having
+        /// nowhere at all to be built (the three-day state in which <c>Finish Now</c> and
+        /// <c>Ad</c> existed in code and rendered nowhere).
+        ///
+        /// <para>Called AFTER <see cref="RenderList"/> in <see cref="Render"/>, because RenderList
+        /// clears <c>_tickCells</c> / <c>_progressCells</c> — rows built before it would keep their
+        /// buttons but silently lose their countdowns.</para>
+        /// </summary>
+        private void RenderQueueDrawer()
+        {
+            if (_drawerContent == null || _vm == null) return;
+
+            for (int i = _drawerContent.childCount - 1; i >= 0; i--)
+            {
+                var child = _drawerContent.GetChild(i).gameObject;
+                if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
+            }
+
+            // Redirect the shared row factory at the drawer for the length of this build. The
+            // alternative — a second set of row builders — is the duplicated-state defect that
+            // produced this ticket in the first place.
+            _rowParent = _drawerContent;
+            try
+            {
+                var channel = ManageScreenVM.ChannelOf(_vm.Tab);
+
+                // The rail leads as the FIRST ROW: a status glance (ruling §7, display-only) above
+                // the rows that carry every action.
+                MountRail(MakeRowHost("Drawer_QueueRail", _railBandPx), forceRebuild: true);
+
+                AddSectionHeader("IN QUEUE - " + BuildTimerService.ChannelWord(channel).ToUpperInvariant());
+                if (_vm.QueueRows.Count == 0)
+                    AddNoteRow("Nothing is queued on this line. Start an upgrade to see it here.");
+                else
+                    for (int i = 0; i < _vm.QueueRows.Count; i++) AddQueueRow(_vm.QueueRows[i]);
+
+                MakeRowHost("DrawerTailSpacer", ListTailPx);
+            }
+            finally
+            {
+                // Restored in a finally so a throw inside a row build can never leave the BROWSE
+                // list pointed at the drawer — that would silently move every later row.
+                _rowParent = null;
+            }
+
+            // §12 — the acceptance evidence for this ticket. It names the BUILD SITE and the
+            // controls, not just the VM's row count: queueRows tracked the real job count
+            // perfectly all morning while no verb existed, so a count alone proves nothing.
+            int finishable = 0, adOffers = 0, cancellable = 0;
+            for (int i = 0; i < _vm.QueueRows.Count; i++)
+            {
+                var r = _vm.QueueRows[i];
+                if (r == null || r.IsStackHeader) continue;
+                if (r.FinishPrice > 0) finishable++;
+                if (r.AdAvailable && DeNelle.Core.FeatureFlags.RewardedAdSkip) adOffers++;
+                if (r.CanCancel) cancellable++;
+            }
+            FlowTrace.Step("Manage", string.Format(
+                "queue drawer BUILT {0} row(s) into Drawer_QueueList: FinishNow={1} Ad={2} Cancel={3} " +
+                "(rewardedAdSkip={4}). Zero rows with a non-empty queue, or zero FinishNow on a " +
+                "priced job, is the WO-1368 defect returning.",
+                _vm.QueueRows.Count, finishable, adOffers, cancellable,
+                DeNelle.Core.FeatureFlags.RewardedAdSkip));
+            if (_vm.QueueRows.Count > 0 && finishable == 0 && adOffers == 0 && cancellable == 0)
+                FlowTrace.Warn("Manage",
+                    "queue drawer built rows but NOT ONE carries a verb - Finish Now, Ad and Cancel " +
+                    "are all withheld by the VM. The money path is unreachable from this screen.");
         }
 
         /// <summary>
@@ -1247,12 +1380,16 @@ namespace DeNelle.Village.UI
             else if (_vm.Tab == ManageTab.Buildings)
                 AddActionNoteRow("Need another town structure?", "Open build", OpenTownBuilder);
 
-            // Queue inspection and queue actions live in the explicit header Queue drawer.
-            // Repeating the same jobs inline beneath the upgrade catalogue made the browse
-            // destination overflow at landscape height and contradicted the approved Manage
-            // hierarchy: upgrades are the primary task; queue management is opt-in. The
-            // persistent three-line strip still exposes busy capacity at a glance, while the
-            // drawer owns the full authoritative QueueRailView when requested.
+            // ⛔ NO QUEUE ROWS HERE, AND THE VERBS ARE NOT MISSING — THEY ARE IN THE DRAWER.
+            // Queue inspection and queue actions live in the explicit header Queue drawer
+            // (RenderQueueDrawer). Repeating the same jobs inline beneath the upgrade catalogue
+            // made the browse destination overflow at landscape height and contradicted the
+            // approved Manage hierarchy: upgrades are the primary task; queue management is
+            // opt-in. WO-1368: this sentence was true when it was written and the drawer it
+            // pointed at contained NO ROWS for three days, so the money path (Finish Now / Ad)
+            // could not be reached at all. The drawer now builds the rows; if you are here
+            // because a verb is missing, read RenderQueueDrawer, do not re-add rows to this list
+            // (ManageQueueDrawerRegression fails the build if you do).
 
             if (!string.IsNullOrEmpty(_vm.RepairOfferText))
                 AddActionNoteRow(_vm.RepairOfferText, "Repair", () => { _vm.RepairAll(); FlushNotice(); });
@@ -1662,7 +1799,11 @@ namespace DeNelle.Village.UI
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(LayoutElement));
             var rt = (RectTransform)go.transform;
-            rt.SetParent(_listContent, false);
+            // WO-1368: ONE row factory, two destinations. _rowParent is non-null only for the
+            // duration of RenderQueueDrawer, so the browse list is the default and cannot be
+            // reached by accident; the drawer reuses every row builder verbatim rather than
+            // forking a second copy that would drift.
+            rt.SetParent(_rowParent != null ? _rowParent : _listContent, false);
             var le = go.GetComponent<LayoutElement>();
             // BOTH the LayoutElement AND sizeDelta — the scroll column has childControlHeight off,
             // so a row that only sets one of them collapses to zero.
@@ -1860,12 +2001,20 @@ namespace DeNelle.Village.UI
             int clusterIdx = 0;
             Vector2 slotMin, slotMax;
 
-            // RELEASE BLOCKER GATE (2026-08-07): the "Ad" control is NEVER CONSTRUCTED while
-            // FeatureFlags.RewardedAdSkip is OFF (the shipping state - no ad SDK is wired anywhere
-            // in the project). Absent, not present-and-disabled. The VM and BuildTimerService gate
-            // on the same flag; this is the build site, so it is the one that guarantees absence.
-            // Its slot is RESERVED by the even split (it simply is not counted while the flag is
-            // off), never drawn "disabled".
+            // THE "Ad" CONTROL IS NEVER CONSTRUCTED while FeatureFlags.RewardedAdSkip is OFF —
+            // absent, not present-and-disabled. The VM and BuildTimerService gate on the same
+            // flag; this is the build site, so it is the one that guarantees absence. Its slot is
+            // RESERVED by the even split (it simply is not counted while the flag is off).
+            //
+            // ⚠ CORRECTED 2026-09-04 (WO-1368 §15). The 2026-08-07 version of this comment called
+            // the flag OFF and claimed the project contained no ad SDK at all. BOTH HALVES ARE
+            // FALSE: FeatureFlags.RewardedAdSkip is declared defaultOn:true, and LevelPlay /
+            // ironSource is integrated (canon records real, if tiny, ad revenue). A seat trusting
+            // it would go hunting for a flag that is already on. If `Ad` is absent while a job is
+            // queued, the flag is NOT the suspect — BuildTimerService.CanWatchAdToSkip ALSO
+            // requires AdGateService.IsOffered(BuildSkipPlacementId) and a non-null
+            // RewardedAdManager.Instance with IsAdReady, and either can withhold r.AdAvailable
+            // while Finish Now renders perfectly. That gap is REPORTED, not widened here.
             if (wantAd)
             {
                 ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);

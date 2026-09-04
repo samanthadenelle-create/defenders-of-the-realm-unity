@@ -659,6 +659,22 @@ namespace DeNelle.Editor
             // --- raid arena shape: footprint is a real fraction of the plane (the 2.4% square can never return), the spire is reachable by the HERO's seam, navmesh present ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-arena-shape suite", () => { if (!DeNelle.Editor.Regression.RaidArenaShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-arena-shape] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "reset-full-clear suite", () => { if (!DeNelle.Editor.Regression.ResetToNewGameFullClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[reset-full-clear] " + r); });
+            // WO-1371 — the OTHER axis. reset-full-clear sweeps GameState FIELDS and says in its own
+            // comments that a PlayerPrefs store "is not one"; this sweeps those stores, which is where
+            // the 14,089-resource inherited collector fill lived while that suite ran green.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "newgame-pref-sweep suite", () => { if (!DeNelle.Editor.Regression.NewGamePrefStoreSweepRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[newgame-pref-sweep] " + r); });
+            // WO-1370 — the HARVEST RESULT modal's copy (name beside its own figure, loss named, agreement).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-result-copy suite", () => { if (!DeNelle.Editor.Regression.HarvestResultCopyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-result-copy] " + r); });
+
+            // WO-1369 (P0 freeze) + WO-952 - registered by the lead 2026-09-04. The implementing
+            // agent authored these three and was rate-limited before registering them; the
+            // registry meta-oracle caught all three as unregistered, which is exactly the WO-973
+            // failure ("an oracle sat unregistered and never ran") working as designed.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "worldhold-liveness suite", () => { if (!DeNelle.Editor.Regression.WorldHoldLivenessRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[worldhold-liveness] " + r); });
+
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "gameover-lifecycle suite", () => { if (!DeNelle.Editor.Regression.GameOverScreenLifecycleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gameover-lifecycle] " + r); });
+
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "endstate-body-fit suite", () => { if (!DeNelle.Editor.Regression.EndStateBodyFitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[endstate-body-fit] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cathedral-cumulative suite", () => { if (!DeNelle.Editor.Regression.CathedralCumulativeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cathedral-cumulative] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-equip-hub suite", () => { if (!DeNelle.Editor.Regression.HeroEquipHudHubRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-equip-hub] " + r); });
             // The gear lane FOLDED shield-improvement + defense-cap into this one file rather

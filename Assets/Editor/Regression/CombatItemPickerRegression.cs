@@ -14,7 +14,11 @@ namespace DeNelle.Editor.Regression
                 string hud = File.ReadAllText("Assets/_Modules/HUD/Kit/HudKitController.cs");
                 Require(hud, "Register(\"itemSlot\"");
                 Require(hud, "SetCaption(\"ITEM\")");
-                Require(hud, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker)");
+                Require(hud, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker,");
+                // WO-1369: the trailing comma is load-bearing - it pins that the REQUIRED
+                // liveness probe argument is still passed, not just that a hold is taken.
+                Require(hud, "() => this != null && _itemPicker != null");
+                Require(hud, "private void OnDisable()");
                 Require(hud, "Gameplay is paused while you choose.");
                 Require(hud, "HudCommands.HasPotion && c.HpCooldownRemaining <= 0f");
                 Require(hud, "HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f");

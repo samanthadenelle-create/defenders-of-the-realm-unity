@@ -2,7 +2,7 @@
 
 # WORK ORDER 1322 — A signed-in Pi player is still forced through the wallet gate
 
-**Status:** FIXED — implemented by de5bb13a5 `fix(pi): the wallet gate, the SKR storefront, and the overlapping action bar` (body §WO-1322). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:37:23, build 2026.09.04.354315). PRIOR STATUS: FIXED — implemented by de5bb13a5 `fix(pi): the wallet gate, the SKR storefront, and the overlapping action bar` (body §WO-1322). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Onboarding / Auth / Pi
 **Minted:** 2026-09-02 (CLI) from an owner felt-test in REAL Pi Browser.
 **Severity:** P0 for the Pi channel — Pi sign-in works and then the game demands a Solana wallet anyway.

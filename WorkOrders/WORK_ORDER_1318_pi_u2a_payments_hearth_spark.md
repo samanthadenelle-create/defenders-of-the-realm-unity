@@ -2,7 +2,7 @@
 
 # WORK ORDER 1318 — Pi U2A payments, one SKU (Hearth Spark), on the EXISTING purchase seam
 
-**Status:** FIXED — implemented by 3336b3a84 `feat(pi): U2A payments on the existing purchase rail -- one SKU (WO-1318)`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:37:22, build 2026.09.04.354315). PRIOR STATUS: FIXED — implemented by 3336b3a84 `feat(pi): U2A payments on the existing purchase rail -- one SKU (WO-1318)`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Web / Pi / Monetization
 **Minted:** 2026-09-02 (CLI) from the owner's direct instruction + her product and pricing rulings.
 **Severity:** P1 feature — first revenue path on Pi.

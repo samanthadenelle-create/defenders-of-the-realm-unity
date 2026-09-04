@@ -186,7 +186,11 @@ namespace VfxParade
         {
             _savedTimeScale = Time.timeScale;
             // WO-1360: PLAYER-OWNED. Curation runs at a human's pace, not the code's.
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("vfx-parade-curation");
+            // WO-1369: the REQUIRED liveness probe - "is the curation tool still here", never a
+            // duration test (curation runs at a human's pace). OnDisable/OnDestroy remain the
+            // normal step-outs; this catches a teardown neither of them reaches.
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
+                "vfx-parade-curation", () => this != null && isActiveAndEnabled);
             SpawnCurrent();
         }
 

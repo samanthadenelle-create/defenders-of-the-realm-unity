@@ -204,7 +204,12 @@ namespace DeNelle.Village.UI
             if (vm.HoldWorld)
                 // WO-1360: PLAYER-OWNED. The end-state card is the decision node  -  it stands until
                 // the player chooses. No elapsed-time ceiling may judge it stuck.
-                view._worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("wave-results");
+                // WO-1369: the liveness probe is the SAME expression the arbiter already gets
+                // above (`() => view != null`) - one liveness concept, not two. If any modal
+                // destroys this view without its Dispose running, the watchdog force-releases on
+                // the next tick instead of pinning the world clock at 0.
+                view._worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
+                    "wave-results", () => view != null);
 
             // P23 (HUD_OBSIDIAN A4.6): the end-state is the DECISION NODE — while it is
             // up the posture is hostile(postbattle) and the HUD kit stands down.
@@ -1026,12 +1031,39 @@ namespace DeNelle.Village.UI
         /// line count depends on the real column width, which depends on it.</summary>
         private static float RequiredBodyPx(EndStateVM vm, float canvasH)
         {
+            int cols = SpoilColumns(vm, canvasH);
+            return RequiredBodyPxAt(vm, canvasH, cols, NarrativeStripAt(vm, canvasH, cols));
+        }
+
+        /// <summary>The same budget at an EXPLICIT column count. Split out for WO-952: the column
+        /// solver has to ask "what would the body need at 2 columns / at 3?" and
+        /// <see cref="RequiredBodyPx"/> above asks the solver back, which would recurse. Every
+        /// caller that does not care keeps the one-line form.
+        ///
+        /// <para><paramref name="strip"/> is the SECOND reflow lever (WO-952, 2026-09-04): the
+        /// emblem / stars / time bands laid SIDE BY SIDE in one strip instead of stacked. Same
+        /// recursion reason as <paramref name="cols"/> — <see cref="NarrativeStripAt"/> decides by
+        /// asking this method what the stacked budget costs, so it cannot be asked back.</para></summary>
+        private static float RequiredBodyPxAt(EndStateVM vm, float canvasH, int cols, bool strip)
+        {
             float px = 0f; int n = 0;
-            if (vm.Emblem != null) { px += EmblemPx; n++; }
-            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH, PanelWidthFracFor(vm)); n++; }
-            if (vm.Stars >= 0) { px += StarsPx; n++; }
-            if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
-            int spoilBands = SpoilBandCount(vm, canvasH);
+            if (strip)
+            {
+                // ONE band, as tall as the TALLEST element it seats — nothing is shrunk, the
+                // three just stop each paying for their own row. NarrativeStripPx is the same
+                // number BuildBody stamps the band at.
+                float stripPx = NarrativeStripPx(vm);
+                if (stripPx > 0f) { px += stripPx; n++; }
+                if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH, PanelWidthFracFor(vm)); n++; }
+            }
+            else
+            {
+                if (vm.Emblem != null) { px += EmblemPx; n++; }
+                if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH, PanelWidthFracFor(vm)); n++; }
+                if (vm.Stars >= 0) { px += StarsPx; n++; }
+                if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
+            }
+            int spoilBands = SpoilBandCountAt(vm, cols);
             // The SEPARATOR band (owner F8 2026-09-02: the subtitle sat straight on the row
             // grid). Budgeted as a real band so the solve and BuildBody count the SAME thing —
             // an unbudgeted spacer is the desync class this file keeps re-learning.
@@ -1040,6 +1072,182 @@ namespace DeNelle.Village.UI
             if (n > 1) px += BandGapPx * (n - 1);
             return px;
         }
+
+        // ── NARRATIVE STRIP (WO-952 REOPEN #2, 2026-09-04) ───────────────────────────────
+        // THE SECOND REFLOW LEVER, and the one that saves the surfaces the column lever cannot.
+        //
+        // The oracle proved the defect is WIDER than the capture: at 2340x1080 and 1920x1080 the
+        // post-scale canvas is 869 ref px, so the pinned well is 0.740 x (2 x 0.47 x 869) - 132 =
+        // 472 px — and THREE spoils rows already need 496. The column lever cannot help there:
+        // the body column is 1206 px (2340) and 990 px (1920), and a third column needs 3 x 420 =
+        // 1260 px of legibility floor. Both surfaces cap at 2 columns and pin at the clamp.
+        //
+        // So take the height from the axis that is paying for a whole row to say very little. The
+        // emblem (64 px), the star rating (72 px) and the Time line (48 px) are each ONE SMALL
+        // CENTRED ELEMENT on a 990-1376 px wide band — three rows and two gaps, 202 px of well,
+        // to draw a crest, three stars and five characters. Laid SIDE BY SIDE they cost ONE band
+        // of 72 px: 202 -> 72 px, and not one element is smaller than it was. That is the whole
+        // point — the clamp may not move (0.47 against a 0.50 centre already spans the documented
+        // 0.03..0.97; more clips the top edge, the 2026-07-08 defect) and the bands may not shrink
+        // (sub-content-size bands ARE the defect), so the content has to occupy the space
+        // differently. 3/4 rows: 496 -> 348 px. 5/6 rows: 578 -> 430 px. Both clear 472 unpinned.
+        //
+        // ⛔ ESCALATION ONLY, exactly like the column lever: a panel that already fits keeps the
+        // layout it shipped with. The Seeker's 4-row victory (496 = 496, 2 columns) and its 5-row
+        // gear drop (3 columns, 496 = 496) are bit-for-bit unchanged, and the compact wave-clear
+        // banner never enters here at all.
+
+        /// <summary>The strip band's height: the TALLEST of the elements it seats, so every one of
+        /// them keeps its own authored fixed size (<see cref="EmblemPx"/> / <see cref="StarsPx"/> /
+        /// <see cref="TimePx"/>). 0 when the VM carries none of them.</summary>
+        private static float NarrativeStripPx(EndStateVM vm)
+        {
+            float px = 0f;
+            if (vm == null) return px;
+            if (vm.Emblem != null) px = Mathf.Max(px, EmblemPx);
+            if (vm.Stars >= 0) px = Mathf.Max(px, StarsPx);
+            if (vm.TimeSeconds >= 0f) px = Mathf.Max(px, TimePx);
+            return px;
+        }
+
+        /// <summary>How many elements the strip would seat — the emblem, the star rating and the
+        /// Time line. Below two there is nothing to merge and the strip is refused.</summary>
+        private static int NarrativePartCount(EndStateVM vm)
+        {
+            if (vm == null) return 0;
+            int n = 0;
+            if (vm.Emblem != null) n++;
+            if (vm.Stars >= 0) n++;
+            if (vm.TimeSeconds >= 0f) n++;
+            return n;
+        }
+
+        /// <summary>Legibility floor for ONE strip cell, in reference px. DERIVED, not picked: the
+        /// widest thing the strip seats is the star cluster, whose centres are fixed at
+        /// -<see cref="StarSpacingPx"/> / 0 / +<see cref="StarSpacingPx"/> with a
+        /// <see cref="StarSizePx"/> bbox, i.e. 2 x 80 + 56 = 216 ref px — plus 24 px of clear on
+        /// each side so the cluster never touches the emblem or the Time line. The Time line
+        /// ("Time  12:34" at FontLabel 40) measures well under that and carries FitSingleLine as
+        /// its own backstop. In PORTRAIT the body column is ~692 px against a 3-cell requirement
+        /// of 792, so portrait never strips — which is correct twice over: portrait has 1204 px of
+        /// well and never needed it.</summary>
+        private const float MinStripCellPx = 216f + 2f * 24f;   // 264
+
+        /// <summary>Would this screen lay its narrative bands as a strip? Answered the same way
+        /// the column lever is: only when the STACKED body genuinely does not fit the well the
+        /// clamp allows, and only while the width can seat the cells legibly.</summary>
+        private static bool NarrativeStripAt(EndStateVM vm, float canvasH, int cols)
+        {
+            if (vm == null || vm.Compact) return false;
+            int parts = NarrativePartCount(vm);
+            if (parts < 2) return false;   // nothing to merge
+            // WIDTH-GATED, never height-driven: the strip is legal only where the cells clear
+            // their floor. This is what keeps portrait single-file.
+            if (SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm)) < parts * MinStripCellPx) return false;
+            // ESCALATION ONLY: ask the STACKED budget, so a panel that fits keeps its layout.
+            return RequiredBodyPxAt(vm, canvasH, cols, false) > MaxBodyWellPx(canvasH);
+        }
+
+        // -- WO-952 REOPEN: THE BODY WELL THE CLAMP ACTUALLY ALLOWS -----------------------
+        /// <summary>
+        /// The MOST body-well pixels this screen can ever have, in reference px: the panel pinned
+        /// at <see cref="MaxPanelHalf"/>, minus the CTA band, through the same body law
+        /// <see cref="PanelHalfHeight"/> inverts. This is the number the panel solve silently ran
+        /// into on the owner's device, and until now nothing could ASK for it.
+        ///
+        /// <para>MEASURED, F8 seq 4680 (2026-09-04, SM02G4061955851, post-scale canvas 965 px):
+        /// panel 907 px = frac 0.94, pinned exactly at the ceiling; well = 0.740 x 907 - 132 =
+        /// 540 px against a need of 578 px, so every band compressed to 0.933.</para>
+        /// </summary>
+        private static float MaxBodyWellPx(float canvasH)
+        {
+            return BodyFracOfPanel * (2f * MaxPanelHalf * canvasH) - ElarionUiKit.CanonCtaHeight;
+        }
+
+        /// <summary>The most columns this screen's WIDTH can legibly carry. Derived, never picked:
+        /// each column must clear <see cref="MinSpoilColumnPx"/>. Hard-capped at
+        /// <see cref="MaxSpoilColumns"/> because past three a reward plate stops reading as a line
+        /// item and starts reading as a tile grid.</summary>
+        private static int MaxSpoilColumnsByWidth(EndStateVM vm, float canvasH)
+        {
+            float bodyPx = SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm));
+            int fit = Mathf.FloorToInt(bodyPx / MinSpoilColumnPx);
+            return Mathf.Clamp(fit, 1, MaxSpoilColumns);
+        }
+
+        /// <summary>What the fit solve resolves to for a VM at a given canvas height. Diagnostics
+        /// and oracles only - it changes nothing.</summary>
+        public struct FitResult
+        {
+            /// <summary>Body pixels the VM's bands demand (BuildBody's <c>totalPx</c>).</summary>
+            public float NeedPx;
+            /// <summary>Body-well pixels the solved panel actually offers (BuildBody's <c>wellH</c>).</summary>
+            public float WellPx;
+            /// <summary>Solved panel height in reference px.</summary>
+            public float PanelPx;
+            /// <summary>Panel height as a fraction of the screen (0.94 = pinned at the clamp).</summary>
+            public float PanelFrac;
+            /// <summary>The uniform band compression BuildBody would apply. 1 = no compression;
+            /// below <c>0.995</c> is the FlowTrace.Fail this screen has shipped twice.</summary>
+            public float Scale;
+            /// <summary>Spoils columns the solver chose.</summary>
+            public int Columns;
+            /// <summary>Spoils bands at that column count.</summary>
+            public int SpoilBands;
+            /// <summary>True while the panel is pinned at <see cref="MaxPanelHalf"/> - the state in
+            /// which the well can no longer grow to meet the need.</summary>
+            public bool PinnedAtClamp;
+            /// <summary>True when the emblem / stars / time bands were reflowed into ONE side-by-side
+            /// strip - the second WO-952 lever, taken only where the columns cannot save the fit
+            /// (see <see cref="NarrativeStripAt"/>).</summary>
+            public bool NarrativeStripMerged;
+        }
+
+        /// <summary>
+        /// ⭐ THE ORACLE SEAM (WO-952 REOPEN, 2026-09-04). Answers "would this VM compress?" from
+        /// THE SAME functions the live screen solves with - <see cref="SpoilColumns"/>,
+        /// <see cref="RequiredBodyPxAt"/>, <see cref="PanelHalfHeight"/> and Bind's own well
+        /// derivation - so an oracle cannot pass while the screen fails.
+        ///
+        /// <para>⛔ IT MUST NOT RE-DERIVE THE ARITHMETIC. A suite that recomputes the band budget
+        /// is duplicated state and will drift exactly the way this WO's first "DONE" did: the
+        /// August close rested on an audit, the <c>COMPRESSED</c>-absence oracle it specced was
+        /// never written, and the recurrence reached the owner's eyes instead of a gate's.</para>
+        ///
+        /// <para>⚠ The subtitle line count is WIDTH-dependent, so a caller measuring a specific
+        /// device must drive <c>ElarionUiKit.SetSurfaceOverride(w, h)</c> first (editor-only) -
+        /// otherwise <see cref="PostScaleCanvasWidth"/> resolves the harness's own aspect.</para>
+        /// </summary>
+        public static FitResult ProbeFit(EndStateVM vm, float canvasH)
+        {
+            var r = new FitResult();
+            if (vm == null || canvasH < 100f) return r;
+            r.Columns    = SpoilColumns(vm, canvasH);
+            r.SpoilBands = SpoilBandCountAt(vm, r.Columns);
+            r.NarrativeStripMerged = NarrativeStripAt(vm, canvasH, r.Columns);
+            r.NeedPx     = RequiredBodyPxAt(vm, canvasH, r.Columns, r.NarrativeStripMerged);
+
+            float half = PanelHalfHeight(vm, canvasH);
+            r.PanelPx   = 2f * half * canvasH;
+            r.PanelFrac = r.PanelPx / canvasH;
+            r.PinnedAtClamp = Mathf.Approximately(half, MaxPanelHalf);
+
+            // Bind's OWN well derivation, verbatim (see the geometry pass): the CTA comes off in
+            // PIXELS, never as a fraction - that unit mix-up is the 2026-08-05 defect.
+            float ctaBandH = ElarionUiKit.CanonCtaHeight / Mathf.Max(1f, r.PanelPx);
+            float bodyFloor = CtaBandY0 + ctaBandH + CtaGapY;
+            r.WellPx = (BodyTopY - bodyFloor) * r.PanelPx;
+
+            // BuildBody's own line.
+            r.Scale = r.WellPx > 1f && r.NeedPx > r.WellPx ? r.WellPx / r.NeedPx : 1f;
+            return r;
+        }
+
+        /// <summary>The compression floor BuildBody fails below. Exposed so the oracle asserts
+        /// against the SHIPPED threshold rather than a copy of it (see the epsilon note in
+        /// BuildBody: 0.995 exists so a 0.9997 float residue from the self-fitting solve is not
+        /// reported as a clamp).</summary>
+        public const float CompressFailBelowFrac = 0.995f;
 
         // ── SPOILS COLUMNS (WO-894, orchestrator ruling — a DELIBERATE, DOCUMENTED deviation
         //    from the WO's §2 wireframe, which draws spoils as one vertical list) ──────────
@@ -1081,8 +1289,60 @@ namespace DeNelle.Village.UI
         private static int SpoilColumns(EndStateVM vm, float canvasH)
         {
             if (vm == null || vm.Compact || vm.Spoils.Count < 2) return 1;
-            return SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm)) * 0.5f >= MinSpoilColumnPx ? 2 : 1;
+
+            int widthCap = MaxSpoilColumnsByWidth(vm, canvasH);
+            if (widthCap < 2) return 1;
+
+            // THE STARTING SHAPE IS UNCHANGED. Two columns is the WO-894 ruling and every panel
+            // that fits today keeps the exact layout it has - a 4-row arena victory still solves
+            // at 2 columns, 638 px, scale 1.000. Nothing reflows unless it has to.
+            int cols = 2;
+
+            // -- WO-952 REOPEN (owner F8 seq 4680): REFLOW, DO NOT SHRINK ------------------
+            // A GEAR DROP adds the 5th spoils row. At 2 columns that row cannot share a band, so
+            // the grid goes 2 bands -> 3 (+64 px of row, +18 px of gap) and the body needs 578 px.
+            // The panel solve answers by growing... into MaxPanelHalf, where it pins at frac 0.94
+            // and the well stops at 540 px. BuildBody then does the only thing left to it and
+            // compresses EVERY band to 0.933 - below its own content size, which is precisely
+            // what the fixed-px band law exists to prevent.
+            //
+            // The lever is NOT the clamp. MaxPanelHalf is 0.47 against a 0.50 centre, i.e. the
+            // documented 0.03..0.97 span; raising it puts the top edge at the screen edge, which
+            // is the 2026-07-08 clipping defect this file already paid for once (see the WO-894
+            // ruling on the 0.53 centre, ~line 155). The lever is the axis we have MOST of: at
+            // 2670x1200 the body column is 1376 ref px, so a third column is 459 px - clear of the
+            // 420 px legibility floor by 9%. Five rows at 3 columns is 2 bands again, need drops
+            // 578 -> 496 px, and the panel solves UNCLAMPED at 638 px, scale 1.000.
+            //
+            // Escalate ONLY when the body genuinely does not fit, and only as far as the width
+            // floor allows. In PORTRAIT the floor gives widthCap == 1 and none of this runs, so
+            // portrait stays single-column exactly as ruled.
+            float wellCap = MaxBodyWellPx(canvasH);
+            // Asked on the STACKED budget (strip:false) on purpose: the column lever moves
+            // first, so the Seeker's gear-drop victory keeps the 3-column layout WO-952 gave it
+            // rather than silently swapping to a strip. Only where width caps the columns does
+            // the strip lever get its turn (NarrativeStripAt).
+            while (cols < widthCap && RequiredBodyPxAt(vm, canvasH, cols, false) > wellCap)
+                cols++;
+
+            if (cols > 2)
+                FlowTrace.Step("EndState",
+                    $"spoils grid REFLOWED to {cols} columns: {vm.Spoils.Count} rows needed " +
+                    $"{RequiredBodyPxAt(vm, canvasH, 2, false):0}px at 2 columns against a " +
+                    $"{wellCap:0}px well ceiling (the panel is clamped at {MaxPanelHalf:0.##} of " +
+                    $"half-screen), and reflow to {cols} brings it to " +
+                    $"{RequiredBodyPxAt(vm, canvasH, cols, false):0}px. Reflowing is the fix; compressing " +
+                    "every band below its own content size is the defect (WO-952).");
+
+            return cols;
         }
+
+        /// <summary>⛔ THE CEILING ON REFLOW. Two columns is the WO-894 ruling and three is the
+        /// WO-952 escape hatch for a gear-drop arena victory; a fourth is not a layout, it is a
+        /// tile grid, and a reward line item stops reading as a line item in it. The WIDTH floor
+        /// (<see cref="MinSpoilColumnPx"/>) usually binds first - this is the cap for the day
+        /// somebody builds a wider panel and it does not.</summary>
+        private const int MaxSpoilColumns = 3;
 
         /// <summary>THE ONE spoils band plan — (first index, how many cells) per band, top to
         /// bottom. Both the panel SOLVE (via <see cref="SpoilBandCount"/>) and the LAYOUT (via
@@ -1121,8 +1381,15 @@ namespace DeNelle.Village.UI
         /// <summary>How many BANDS the spoils occupy — the number the panel solve must budget.</summary>
         private static int SpoilBandCount(EndStateVM vm, float canvasH)
         {
+            return SpoilBandCountAt(vm, SpoilColumns(vm, canvasH));
+        }
+
+        /// <summary>Band count at an EXPLICIT column count - the recursion-free form the WO-952
+        /// column solver asks its "what would this cost at N columns?" question through.</summary>
+        private static int SpoilBandCountAt(EndStateVM vm, int cols)
+        {
             if (vm == null || vm.Spoils.Count == 0) return 0;
-            return SpoilBandPlan(vm, SpoilColumns(vm, canvasH)).Count;
+            return SpoilBandPlan(vm, cols).Count;
         }
 
         /// <summary>Stack the VM's content top-down inside the body zone. F8-35: bands are
@@ -1269,8 +1536,17 @@ namespace DeNelle.Village.UI
             // (pixel height, builder) bands, top to bottom.
             var bands = new List<(float px, Action<RectTransform> build)>();
 
-            if (vm.Emblem != null)
-                bands.Add((EmblemPx, host =>
+            // THE TWO REFLOW LEVERS, resolved ONCE and in the SAME ORDER the panel solve resolved
+            // them (RequiredBodyPx): columns first, then the narrative strip. Both are asked of
+            // the shared solvers, never re-derived here - a layout that disagrees with the solve
+            // about how many bands exist is the desync class this file is a monument to.
+            int spoilCols = SpoilColumns(vm, _canvasH);
+            bool strip = NarrativeStripAt(vm, _canvasH, spoilCols);
+
+            // The three narrative builders, hoisted out of the band list so the STACKED path and
+            // the STRIP path seat literally the same elements - the only difference is whether
+            // each gets its own band or a cell of one shared band.
+            Action<RectTransform> buildEmblem = vm.Emblem == null ? null : (Action<RectTransform>)(host =>
                 {
                     var go = new GameObject("Emblem", typeof(Image));
                     go.transform.SetParent(host, false);
@@ -1283,7 +1559,7 @@ namespace DeNelle.Village.UI
                     rt.anchorMax = new Vector2(0.62f, 0.96f);
                     rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
                     Track(go, 0.10f, 0.7f);   // emblem pops from smaller — the hero beat
-                }));
+                });
 
             // F8 flag_04 ("death panel elements overlap"): this band was a FIXED 1.1 weight
             // (one line) while the death message wraps to ~3 lines — TMP renders overflow
@@ -1293,8 +1569,10 @@ namespace DeNelle.Village.UI
             // grows the panel by the same estimate) and auto-shrink as the last-resort
             // guard so the copy can NEVER escape its rect (§1.14: text never overlaps
             // siblings) if the estimate is ever short.
-            if (!string.IsNullOrEmpty(vm.Subtitle))
-                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle, _canvasH, PanelWidthFracFor(vm)), host =>
+            float subtitlePx = string.IsNullOrEmpty(vm.Subtitle)
+                ? 0f
+                : SubLinePx * SubtitleLines(vm.Subtitle, _canvasH, PanelWidthFracFor(vm));
+            Action<RectTransform> buildSubtitle = string.IsNullOrEmpty(vm.Subtitle) ? null : (Action<RectTransform>)(host =>
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
@@ -1308,13 +1586,12 @@ namespace DeNelle.Village.UI
                     ElarionUiKit.FitBlock(l);
                     l.raycastTarget = false;
                     Track(l.gameObject, 0.14f, 1f);
-                }));
+                });
 
-            if (vm.Stars >= 0)
-                bands.Add((StarsPx, host => BuildStarRow(host, vm.Stars)));
+            Action<RectTransform> buildStars = vm.Stars < 0 ? null : (Action<RectTransform>)(host =>
+                BuildStarRow(host, vm.Stars));
 
-            if (vm.TimeSeconds >= 0f)
-                bands.Add((TimePx, host =>
+            Action<RectTransform> buildTime = vm.TimeSeconds < 0f ? null : (Action<RectTransform>)(host =>
                 {
                     var l = ElarionUiKit.Label(host, "Time  " + FormatTime(vm.TimeSeconds), 0f, 1f,
                         ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
@@ -1322,12 +1599,69 @@ namespace DeNelle.Village.UI
                     ElarionUiKit.FitSingleLine(l);   // §1.14 — the time line never spills its own row
                     l.raycastTarget = false;
                     Track(l.gameObject, 0.20f, 1f);
-                }));
+                });
+
+            // ── THE BANDS, IN ORDER ──────────────────────────────────────────────────────
+            // STACKED (the shipped shape, unchanged): emblem / subtitle / stars / time.
+            // STRIP  (WO-952 escalation): [emblem | stars | time] / subtitle - ONE band as tall
+            // as the tallest element, split into equal cells. Nothing is scaled down; the three
+            // simply stop each paying for a row of their own. See NarrativeStripAt.
+            if (strip)
+            {
+                var parts = new List<Action<RectTransform>>();
+                if (buildEmblem != null) parts.Add(buildEmblem);
+                if (buildStars != null) parts.Add(buildStars);
+                if (buildTime != null) parts.Add(buildTime);
+                float stripPx = NarrativeStripPx(vm);
+                // What the same elements cost STACKED, so the trace states the saving as a
+                // measured number rather than a claim.
+                float stackedPx = (vm.Emblem != null ? EmblemPx : 0f)
+                                + (vm.Stars >= 0 ? StarsPx : 0f)
+                                + (vm.TimeSeconds >= 0f ? TimePx : 0f)
+                                + BandGapPx * Mathf.Max(0, parts.Count - 1);
+                float cellPx = parts.Count > 0
+                    ? SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm)) / parts.Count
+                    : 0f;
+                if (parts.Count > 0 && stripPx > 0f)
+                {
+                    bands.Add((stripPx, host =>
+                    {
+                        for (int i = 0; i < parts.Count; i++)
+                        {
+                            // Equal cells, left to right in the SAME order the stack read top to
+                            // bottom, so the reveal (emblem 0.10s -> stars 0.18s -> time 0.20s)
+                            // still sweeps in reading order.
+                            var cell = MakeZone(host, "StripCell" + i,
+                                                i / (float)parts.Count, 0f,
+                                                (i + 1) / (float)parts.Count, 1f);
+                            int ci = i;
+                            Guard.Try("EndState", "narrative strip cell " + ci, () => parts[ci](cell));
+                        }
+                    }));
+                    FlowTrace.Step("EndState",
+                        $"narrative bands REFLOWED to a {parts.Count}-cell STRIP: emblem/stars/time " +
+                        $"cost {stackedPx:0}px stacked and {stripPx:0}px side by side, against a " +
+                        $"{MaxBodyWellPx(_canvasH):0}px well ceiling at {spoilCols} spoils column(s) " +
+                        $"(cell {cellPx:0}px vs a {MinStripCellPx:0}px floor). Reflowing is the fix; " +
+                        "compressing every band below its own content size is the defect (WO-952).");
+                }
+            }
+            else if (buildEmblem != null)
+            {
+                bands.Add((EmblemPx, buildEmblem));
+            }
+
+            if (buildSubtitle != null) bands.Add((subtitlePx, buildSubtitle));
+
+            if (!strip)
+            {
+                if (buildStars != null) bands.Add((StarsPx, buildStars));
+                if (buildTime != null) bands.Add((TimePx, buildTime));
+            }
 
             // Spoils: one band per ROW of the grid (2 columns in landscape, 1 in portrait).
             // SpoilBandCount is the same function RequiredBodyPx budgeted with, so the panel
             // solve and the layout can never disagree about how many bands there are.
-            int spoilCols = SpoilColumns(vm, _canvasH);
             float spoilBodyPx = SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm));
             var spoilPlan = SpoilBandPlan(vm, spoilCols);
             // ONE font size for EVERY wide row on this screen, solved before any of them is built
@@ -1375,7 +1709,7 @@ namespace DeNelle.Village.UI
             // landing on target. Fail below 0.995 (a real clamp lands far below that: the
             // 8-row damage report measured 0.71, the F8-35 case 0.36); log the exact fit as a
             // Step so the number is still on the record.
-            const float CompressFailBelow = 0.995f;
+            const float CompressFailBelow = CompressFailBelowFrac;   // WO-952: ONE number, named once
             if (scale < CompressFailBelow)
                 FlowTrace.Fail("EndState",
                     $"body rows COMPRESSED to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} " +
@@ -1422,15 +1756,23 @@ namespace DeNelle.Village.UI
             int inBand = Mathf.Clamp(count, 1, Mathf.Min(cols, remaining));
             bool fullWidth = inBand == 1;
 
+            // WO-952: A SHORT TAIL BAND SPLITS THE FULL WIDTH BETWEEN THE CELLS IT ACTUALLY HAS,
+            // never cols-many slots with the spare ones left blank. This is the SAME rule the lone
+            // capstone above already follows ("an empty cell reads as a reward that failed to
+            // load"), generalised - it only becomes reachable now that a grid can be 3 wide and a
+            // tail can therefore hold 2 of 3. At cols <= 2 a short band is always inBand == 1, so
+            // every existing layout is bit-for-bit unchanged.
+            int slots = Mathf.Max(1, inBand);
+
             for (int c = 0; c < inBand; c++)
             {
                 int itemIdx = first + c;
                 // Cells split the band evenly with NO explicit gutter: each plate is already
                 // inset 0.06 of its own cell, so two neighbours leave ~2x6% of clear space
                 // between them. One less constant, and the single-column look is unchanged.
-                float x0 = fullWidth ? 0f : c / (float)cols;
-                float x1 = fullWidth ? 1f : (c + 1) / (float)cols;
-                float cellPx = fullWidth ? bodyWidthPx : bodyWidthPx / cols;
+                float x0 = fullWidth ? 0f : c / (float)slots;
+                float x1 = fullWidth ? 1f : (c + 1) / (float)slots;
+                float cellPx = fullWidth ? bodyWidthPx : bodyWidthPx / slots;
                 var cell = MakeZone(host, "SpoilCell" + itemIdx, x0, 0f, x1, 1f);
                 int captured = itemIdx;
                 // Stagger stays keyed to the ITEM index, so the reveal still sweeps in reading

@@ -2004,7 +2004,12 @@ namespace DeNelle.HUD.Kit
             // it too early. The detector is NOT weakened — see the null-build branch below, which
             // still routes a genuinely blank picker through the same verify.
             // WO-1360: PLAYER-OWNED. The picker is open until the player picks or backs out.
-            _itemPickerHold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker);
+            // WO-1369: the REQUIRED liveness probe is the SAME expression already registered with
+            // PanelManager four lines up (`() => _itemPicker != null`) - one liveness concept for
+            // this picker, not two that can disagree. It also covers the case OnDisable cannot: a
+            // picker canvas destroyed by something other than CloseItemPicker.
+            _itemPickerHold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker,
+                () => this != null && _itemPicker != null);
             _itemPicker = ElarionUiKit.BuildObsidianModal("CombatItemPicker", "CHOOSE AN ITEM",
                 new Vector2(0.25f, 0.18f), new Vector2(0.75f, 0.82f), CloseItemPicker,
                 sortingOrder: 31500);
@@ -3984,6 +3989,22 @@ namespace DeNelle.HUD.Kit
                     return images[i];
             }
             return null;
+        }
+
+        /// <summary>
+        /// ⛔ WO-1369 (the seven-hold audit, PARTIAL #1): this controller had NO OnDisable, so the
+        /// PLAYER-OWNED 'combat-item-picker' hold survived a HUD that was deactivated rather than
+        /// destroyed - and a merely-disabled component never receives OnDestroy. Since WO-1360 took
+        /// the ceiling off, that stranded the world clock at 0 with no picker anyone could answer.
+        ///
+        /// <para>Closing the picker here is the CORRECT behaviour, not just the safe one: a
+        /// disabled HUD cannot drive the picker's buttons, so leaving its canvas up would be a
+        /// modal nothing owns. <see cref="CloseItemPicker"/> is idempotent, so this costs nothing
+        /// when no picker is open.</para>
+        /// </summary>
+        private void OnDisable()
+        {
+            CloseItemPicker();
         }
 
         private void OnDestroy()
