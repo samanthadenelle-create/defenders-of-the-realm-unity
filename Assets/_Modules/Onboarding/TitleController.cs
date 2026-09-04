@@ -204,7 +204,11 @@ namespace DeNelle.Onboarding
                 BuildTitleTextBlock(_canvas.transform);
 
             BuildButtonColumn(_canvas.transform);
+#if !GOOGLE_PLAY
+            // WO-1363: the badge and its copy are compiled OUT of the Play artifact, not
+            // hidden at runtime - a runtime guard still leaves the literal in the binary.
             BuildSkrBadge(_canvas.transform);
+#endif
 
             FlowTrace.Step("Onboarding",
                 $"Title menu built (uGUI) — art={( _backdropArtLoaded ? "loaded" : "MISSING (text fallback)")} " +
@@ -330,11 +334,15 @@ namespace DeNelle.Onboarding
             }
         }
 
+#if !GOOGLE_PLAY
         /// <summary>"POWERED WITH SKR" grant badge (owner 2026-07-04, ff.skrpreview). Gated OFF by
         /// default so normal players never see it; the grant-recording build flips ff.skrpreview ON
         /// (menu / PlayerPrefs / ?skrpreview=1). One tap opens the read-only, clearly-labeled
         /// <see cref="DeNelle.Core.UI.SkrShowcasePanel"/> — branding + honest value-prop, NO wallet call.
-        /// A small gold pill high-center over the art so it reads on camera without crowding the menu.</summary>
+        /// A small gold pill high-center over the art so it reads on camera without crowding the menu.
+        /// <para>WO-1363: EXCLUDED FROM THE GOOGLE PLAY VARIANT AT COMPILE TIME. The badge label and
+        /// the trace line are string literals; a `#if` around the CALL alone would still leave them in
+        /// global-metadata.dat, so the whole method is inside the guard.</para></summary>
         private static void BuildSkrBadge(Transform parent)
         {
             // ?skrpreview=1 (WebGL) is picked up here so the grant build needs no rebuild to flip on.
@@ -352,6 +360,7 @@ namespace DeNelle.Onboarding
 
             FlowTrace.Step("Onboarding", "Title: 'Powered with SKR' grant badge shown top-left (ff.skrpreview ON).");
         }
+#endif
 
         /// <summary>True when persisted progress exists — a chosen hero or a completed
         /// onboarding. Gates the Continue button (fresh installs have nothing to resume).</summary>

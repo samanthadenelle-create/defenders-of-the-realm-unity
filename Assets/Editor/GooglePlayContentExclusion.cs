@@ -153,7 +153,66 @@ namespace DeNelle.Editor
             new[] { "Assets/Resources/Data/Canonical/canon-strings.json", "Assets/StreamingAssets/Data/Canonical/canon-strings.json" },
             new[] { "Assets/Resources/Data/Canonical/en.json", "Assets/StreamingAssets/Data/Canonical/en.json" },
             new[] { "Assets/Resources/Data/Canonical/packs.json", "Assets/StreamingAssets/Data/Canonical/packs.json" },
+            // WO-1363: previously NOT handled at all, and both are compiled into the player via
+            // Resources. siege-stakes.json carries an "_comment" naming SKR; ad-placements.json
+            // carries "Crystals are the SKR on-ramp" in two authoring notes. ad-placements.json
+            // has NO StreamingAssets twin (verified 2026-09-04) - a one-element row is legal and
+            // the mirror-equality check skips it.
+            new[] { "Assets/Resources/Data/Canonical/siege-stakes.json", "Assets/StreamingAssets/Data/Canonical/siege-stakes.json" },
+            new[] { "Assets/Resources/Data/Canonical/ad-placements.json" },
         };
+
+        // =====================================================================
+        //  WO-1363 - THE RULE THAT REPLACES THE PER-KEY ALLOWLIST
+        // ---------------------------------------------------------------------
+        //  A hardcoded 3-key rewrite ("_nightMarketNote", "storeBuyWalletRequiredCta",
+        //  "swap.poweredBy") is DUPLICATED STATE, and it drifted inside three days:
+        //  canon-strings "_storePiSkinNote" was authored 2026-09-02 carrying "Solana
+        //  Mobile's governance token" and shipped straight past it, as did seven
+        //  "storeBalance*" values ending in " SKR" and every "packs.N._shelfNote".
+        //
+        //  So the rewrite is now a SWEEP of every string value in every mirrored
+        //  catalog, and there are exactly three outcomes per offending value:
+        //    1. the key starts with '_'  -> it is an AUTHORING NOTE that no surface
+        //       renders; the whole value is replaced with a neutral note. Drift cannot
+        //       outrun this: a note authored tomorrow is covered the day it lands.
+        //    2. the key is in PlayNeutralStringReplacements -> that Play copy is used.
+        //    3. neither -> THE BUILD FAILS, naming the file and the key.
+        //  (3) is the point. A new crypto string in player-facing copy stops the Play
+        //  build with a name to fix, instead of being silently shipped by an allowlist
+        //  that nobody remembered to extend.
+        // =====================================================================
+
+        private const string PlayNeutralNoteText = "Google Play store presentation.";
+
+        /// <summary>
+        /// Play-neutral copy for the PLAYER-FACING keys that carry a forbidden token in their
+        /// authored (Seeker) value. Keyed by the leaf property name, which is unique across the
+        /// mirrored catalogs (en.json's keys are flat dotted strings, e.g. "swap.title").
+        /// Every value here is ASCII and preserves the {0} placeholders of the original.
+        /// </summary>
+        private static readonly Dictionary<string, string> PlayNeutralStringReplacements =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                // canon-strings.json - the store balance readout (the SKR rail does not exist here)
+                { "storeBalanceAfter",             "Balance after: {0}" },
+                { "storeBalanceNoWallet",          "Sign in to see your balance" },
+                { "storeBalanceBoundAddress",      "Balance: account bound - authorize" },
+                { "storeBalanceBoundIdentity",     "Balance: identity bound - authorize" },
+                { "storeBalanceChecking",          "Balance: reading account..." },
+                { "storeBalanceUnavailable",       "Balance: unavailable in this build" },
+                { "storeBalanceValue",             "Balance: {0}" },
+                { "storeCommerceOpeningWallet",    "[WAIT] Opening checkout - usually under 2 seconds" },
+                { "storeCommerceAwaitingApproval", "[ACTION] Awaiting your approval - approve or cancel in the store prompt" },
+                { "storeBuyWalletRequired",        "Packs over {0} need a signed-in account, so what you buy stays yours if you reinstall or change phones. Sign in to buy this one - anything {0} and under you can buy right now." },
+                { "storeBuyWalletRequiredCta",     "Continue" },
+                // en.json
+                { "heroSelect.subtitle",           "Choose your champion" },
+                { "swap.title",                    "Store service" },
+                { "swap.poweredBy",                "Store service" },
+                { "swap.statusConnect",            "Sign in to continue." },
+                { "swap.statusSigning",            "Sending for approval..." },
+            };
 
         private static readonly string[] PlayNeutralUxmlPaths =
         {
@@ -249,6 +308,16 @@ namespace DeNelle.Editor
                                 pricing?.Property("skr")?.Remove();
                             }
                         }
+
+                        // WO-1363: the per-file blocks above are the NAMED, pinned rewrites. This
+                        // sweep is the rule behind them - it walks EVERY string value in the
+                        // catalog and leaves no token-bearing copy behind, whether or not anyone
+                        // remembered to name the key. It runs last so the named rewrites above are
+                        // already clean and it finds nothing to do on them.
+                        int swept = NeutralizeForbiddenStrings(root, file, string.Empty);
+                        if (swept > 0)
+                            Debug.Log($"{LogTag} PLAY_NEUTRAL_TOKEN_SWEEP - {file}: neutralised {swept} token-bearing string(s).");
+
                         File.WriteAllText(path, root.ToString(Formatting.Indented) + Environment.NewLine);
                         JObject.Parse(File.ReadAllText(path));
                     }
@@ -277,6 +346,67 @@ namespace DeNelle.Editor
                 Debug.LogError($"{LogTag} PLAY_NEUTRAL_REWRITE_FAIL - {ex.Message}");
                 throw new BuildFailedException($"Play-neutral catalog rewrite failed: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// WO-1363. Recursively neutralises every STRING VALUE that carries a forbidden token.
+        /// Returns how many values were rewritten. Throws <see cref="BuildFailedException"/> -
+        /// deliberately failing the Play build - on a player-facing key with no mapped neutral
+        /// copy, because that is a NEW crypto string that no human has ruled on yet. Object keys
+        /// are not rewritten (pricing rails such as "usdc"/"sol"/"skr" are REMOVED by the packs
+        /// block above, which is the correct treatment for a schema key).
+        /// </summary>
+        private static int NeutralizeForbiddenStrings(JToken node, string file, string keyPath)
+        {
+            int changed = 0;
+            if (node is JObject obj)
+            {
+                foreach (JProperty property in obj.Properties().ToArray())
+                    changed += NeutralizeForbiddenStrings(property.Value, file,
+                        string.IsNullOrEmpty(keyPath) ? property.Name : keyPath + "." + property.Name);
+                return changed;
+            }
+            if (node is JArray array)
+            {
+                for (int i = 0; i < array.Count; i++)
+                    changed += NeutralizeForbiddenStrings(array[i], file, keyPath + "[" + i + "]");
+                return changed;
+            }
+
+            var value = node as JValue;
+            if (value == null || value.Type != JTokenType.String) return 0;
+            string text = value.Value<string>();
+            if (!ContainsForbiddenAuthoringToken(text)) return 0;
+
+            string[] segments = keyPath.Split('.');
+            string leaf = segments[segments.Length - 1];
+
+            // The map is consulted on the FULL path first: en.json's keys are FLAT dotted strings
+            // ("heroSelect.subtitle", "swap.title"), so a leaf-only lookup misses every one of them
+            // and would fail the build on copy this file already knows how to neutralise.
+            if (PlayNeutralStringReplacements.TryGetValue(keyPath, out string neutral) ||
+                PlayNeutralStringReplacements.TryGetValue(leaf, out neutral))
+            {
+                value.Value = neutral;
+                return 1;
+            }
+
+            // ANY '_'-prefixed segment marks the whole subtree as an authoring note - not just the
+            // leaf. "_REMOVED_2026_08_07.reward.crystals.small" in ad-placements.json is a note
+            // whose LEAF is "small"; a leaf-only test would have failed the build on it.
+            if (segments.Any(s => s.StartsWith("_", StringComparison.Ordinal)))
+            {
+                // No surface renders a '_'-prefixed key, so the whole value goes - this is the
+                // branch that drift cannot outrun.
+                value.Value = PlayNeutralNoteText;
+                return 1;
+            }
+
+            throw new BuildFailedException(
+                $"{LogTag} PLAY_NEUTRAL_UNMAPPED_TOKEN - {file} key '{keyPath}' carries a forbidden " +
+                "token and has no Play-neutral replacement. This is NEW player-facing crypto copy: add " +
+                "a neutral value to GooglePlayContentExclusion.PlayNeutralStringReplacements (or rename " +
+                "the key with a leading '_' if it is an authoring note). Refusing to ship it.");
         }
 
         private static bool ContainsForbiddenAuthoringToken(string value)
@@ -312,6 +442,9 @@ namespace DeNelle.Editor
         {
             foreach (string[] pair in PlayNeutralMirrorPairs)
             {
+                // WO-1363: a one-element row is a catalog with no StreamingAssets twin
+                // (ad-placements.json). There is nothing to compare, not a mismatch.
+                if (pair.Length < 2) continue;
                 byte[] left = File.ReadAllBytes(pair[0]);
                 byte[] right = File.ReadAllBytes(pair[1]);
                 if (!left.SequenceEqual(right))

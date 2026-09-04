@@ -180,7 +180,20 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-seventh pass): main line next free = **1377**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-eighth pass): main line next free = **1378**.
+> *(CLI minted **WO-1377** on a finding the WO-1363 purge surfaced and could not fix:
+> ⛔ **GUARDING STRING LITERALS CANNOT DRIVE `solana` / `jupiter` / `usdc` TO ZERO, BECAUSE IL2CPP
+> METADATA CARRIES TYPE AND MEMBER NAMES TOO.** Still shipping in `DeNelle.Core` as IDENTIFIERS,
+> unreachable by any `#if` on a string: `IJupiterService`, `CoreServices.Jupiter` / `RegisterJupiter`
+> / `UnregisterJupiter`, `FeatureFlags.JupiterSwap`, `SwapToken.USDC`, `PaymentChannel.SolanaDappStore`,
+> `SkinAuthMode.SolanaWallet`. ⭐ **This is the ceiling on WO-1363** - the purge took 24 shipping
+> token-bearing literals down to 2, and the artifact scan will STILL find these. The fix is
+> structural: move `Assets/_Modules/Core/Web3/*` into the `!GOOGLE_PLAY`-constrained `DeNelle.Web3`
+> and rename two enum members - cross-assembly, and ⚠ `PaymentChannel` may be save-serialised
+> (grep found no obvious persistence, but that is NOT PROVEN safe and a renamed enum member in a
+> save is data loss). Bumped 1377 -> 1378 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-seventh pass): main line next free = **1377**.
 > *(CLI minted **WO-1374 / 1375 / 1376** for the owner's ⭐ **NORTH STAR MAP** -
 > `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md`. She ruled ***"these findings take presedence"*** and
 > ***"this is the north star map"***, so that document **outranks every earlier ruling including her

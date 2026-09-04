@@ -89,6 +89,18 @@ namespace DeNelle.Core.Platform
     /// (for a "stake N more to reach X" nudge), and the CUMULATIVE unlocked rewards. Read-only view.</summary>
     public sealed class StakeStanding
     {
+        /// <summary>
+        /// The fallback display symbol, resolved at COMPILE time per channel (WO-1363). It used to
+        /// be an inline literal in three places, so "SKR" reached the Google Play artifact's
+        /// global-metadata.dat even though this whole surface is unreachable there. The Seeker /
+        /// dApp build is unchanged.
+        /// </summary>
+#if GOOGLE_PLAY
+        public const string DefaultCurrencySymbol = "pts";
+#else
+        public const string DefaultCurrencySymbol = "SKR";
+#endif
+
         /// <summary>The player's active native SKR stake this standing was resolved from.</summary>
         public long ActiveStake { get; }
         /// <summary>Display currency symbol (from the table, e.g. "SKR").</summary>
@@ -109,7 +121,7 @@ namespace DeNelle.Core.Platform
             StakeTier nextTier, IReadOnlyList<StakeReward> unlocked, IReadOnlyList<StakeTier> allTiers)
         {
             ActiveStake = activeStake < 0 ? 0 : activeStake;
-            CurrencySymbol = string.IsNullOrEmpty(currencySymbol) ? "SKR" : currencySymbol;
+            CurrencySymbol = string.IsNullOrEmpty(currencySymbol) ? DefaultCurrencySymbol : currencySymbol;
             CurrentTier = currentTier;
             NextTier = nextTier;
             UnlockedRewards = unlocked ?? Array.Empty<StakeReward>();
@@ -147,7 +159,7 @@ namespace DeNelle.Core.Platform
         public const long DemoMockStakeSkr = 1_000_000L;
 
         private static List<StakeTier> _tiers;
-        private static string _currencySymbol = "SKR";
+        private static string _currencySymbol = StakeStanding.DefaultCurrencySymbol;
 
         /// <summary>
         /// The active stake reader. DEFAULTS to <see cref="UnavailableStakeQuery"/> (no live wallet =

@@ -95,6 +95,25 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
+        /// The connect CTA label, resolved at COMPILE time per channel (WO-1363). "Connect Wallet"
+        /// is an audit token: a runtime ternary on <see cref="IsGooglePlayPresentation"/> still
+        /// compiles the literal into the Play artifact's global-metadata.dat, where a policy
+        /// reviewer's `strings` pass finds it. The editor presentation override is preserved on
+        /// non-Play builds, where BOTH labels legitimately exist.
+        /// </summary>
+        private static string ConnectCtaLabel
+        {
+            get
+            {
+#if GOOGLE_PLAY
+                return "Continue with Google";
+#else
+                return IsGooglePlayPresentation ? "Continue with Google" : "Connect Wallet";
+#endif
+            }
+        }
+
+        /// <summary>
         /// Show the login surface, then run <paramref name="onContinue"/> once the player
         /// gets in (wallet connect / guest). Always presents; the caller decides when to
         /// call it in the boot flow.
@@ -337,7 +356,7 @@ namespace DeNelle.Onboarding
             _status.raycastTarget = false;
 
             _connectWallet = ElarionUiKit.BuildObsidianButton(body,
-                IsGooglePlayPresentation ? "Continue with Google" : "Connect Wallet",
+                ConnectCtaLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.54f), OnConnectWallet);
             MedievalUiSkin.ApplyButton(_connectWallet, primary: true);

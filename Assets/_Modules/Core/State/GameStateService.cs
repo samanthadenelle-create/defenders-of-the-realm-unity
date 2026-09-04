@@ -2184,7 +2184,13 @@ namespace DeNelle.Core.State
                 Debug.LogError(
                     "[Sync] Backend auth ENFORCED but no real wallet signer is available " +
                     "(signing is stubbed) — ABORTING sync (fail-closed; refusing to send unauthed). " +
+                    // WO-1363: the provider's name is an audit token in a literal that ships in
+                    // every artifact. The Play build names no provider; nothing else changes.
+#if GOOGLE_PLAY
+                    "Connect a real signing account to sign.");
+#else
                     "Connect a real wallet (SolanaWalletProvider) to sign.");
+#endif
                 return false;
             }
 

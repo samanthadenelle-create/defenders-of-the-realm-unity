@@ -17,6 +17,16 @@ namespace DeNelle.Core
     /// <summary>Static, literal port of <c>src/lib/constants.ts</c>.</summary>
     public static class Constants
     {
+        // ── WO-1363: EXCLUDED FROM THE GOOGLE PLAY VARIANT AT COMPILE TIME ──────────────
+        // These four are `const string` in an assembly that ALWAYS ships, so they land in
+        // IL2CPP global-metadata.dat whether or not anything reads them - and the USDC mint
+        // below is one of the exact values WO-1362 measured inside the Sep-1 Play AAB.
+        // MEASURED 2026-09-04: `grep -rn "Constants.Usdc|Constants.Sol|Constants.AdminAddress|
+        // Constants.ProjectVaultAddress" Assets --include=*.cs` returns ZERO hits - nothing in
+        // the tree reads any of them, on either channel, so the guard removes no behaviour.
+        // They stay for the Seeker/dApp build because the Week-7 Wallet work is specced against
+        // them; if that never lands they should simply be deleted.
+#if !GOOGLE_PLAY
         /// <summary>Admin Solana wallet.</summary>
         public const string AdminAddress = "BwBB9LUS3Nmxqgc41xNbGUygsUVQniv9PdngiycicjJV";
 
@@ -28,6 +38,7 @@ namespace DeNelle.Core
 
         /// <summary>USDC SPL-token mint.</summary>
         public const string Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+#endif
 
         /// <summary>
         /// Number of tower build slots in the village (TOWER_SLOTS from

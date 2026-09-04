@@ -32,6 +32,19 @@ using TMPro;
 using DeNelle.Core.Platform;
 using DeNelle.Core.Diagnostics;
 
+// =============================================================================
+// WO-1363 - GOOGLE PLAY VARIANT: THE WHOLE SURFACE COMPILES OUT.
+// -----------------------------------------------------------------------------
+// A runtime `#if` INSIDE a method does not remove a string literal from the
+// binary: every literal below still lands in IL2CPP global-metadata.dat, where a
+// policy reviewer's `strings` pass finds it. This panel is 100% SKR/Solana
+// branding, so the correct exclusion is at the TYPE level, not the statement
+// level. Under GOOGLE_PLAY the file compiles to the neutral stub at the bottom;
+// its only caller (TitleController.BuildSkrBadge) is compiled out with it.
+// The dApp Store / Seeker build is UNCHANGED - it takes the !GOOGLE_PLAY branch.
+// =============================================================================
+#if !GOOGLE_PLAY
+
 namespace DeNelle.Core.UI
 {
     /// <summary>
@@ -65,14 +78,12 @@ namespace DeNelle.Core.UI
         private bool IsShowing() => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy;
 
         // The honest value-prop copy (docs/PI_PITCH.md + skr-separate-ingame-currency canon).
-#if GOOGLE_PLAY
-        private const string ValueRealToken = "Store rewards are unavailable in this edition.";
-        private const string ConnectActionLabel = "Continue with Google";
-#else
+        // (WO-1363: the former inner `#if GOOGLE_PLAY` neutral copy moved to the Play
+        // stub at the bottom of this file - the whole type is now excluded there, so a
+        // per-const swap inside a shipping type is no longer the mechanism.)
         private const string ValueRealToken =
             "SKR is a REAL Solana / Seeker token — not an in-game balance we mint or hold.";
         private const string ConnectActionLabel = "Connect Wallet";
-#endif
         private const string ValueNonCustodial =
             "Non-custodial by design: you stake natively — we never take custody of your SKR.";
         private const string ValueServerVerified =
@@ -247,15 +258,10 @@ namespace DeNelle.Core.UI
 
         private void OnConnectWalletComingSoon()
         {
-#if GOOGLE_PLAY
-            FlowTrace.Step("Skr", "Store preview action is unavailable in this edition.");
-            ShowToast("Unavailable in this edition.");
-#else
             // DELIBERATE NO-OP. No wallet call, no signature, no transaction. The Pi/Seeker wallet
             // is not connected in this build — the grant preview shows the INTENDED flow, honestly.
             FlowTrace.Step("Skr", "SkrShowcasePanel: Connect Wallet is a no-op (preview) — no wallet call made.");
             ShowToast("Coming soon — testnet preview. No wallet connected.");
-#endif
         }
 
         private void ShowToast(string message)
@@ -267,3 +273,32 @@ namespace DeNelle.Core.UI
         }
     }
 }
+
+#else   // GOOGLE_PLAY
+
+namespace DeNelle.Core.UI
+{
+    /// <summary>
+    /// GOOGLE PLAY EDITION STUB (WO-1363). The showcase surface is branding for a token the
+    /// Play artifact must not mention, so the real type above is excluded at COMPILE time -
+    /// none of its literals reach global-metadata.dat. This stub keeps the one public entry
+    /// point compiling for any caller that is not itself excluded; it builds nothing and
+    /// returns null, which every caller already tolerates (the arbiter can reject an open).
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class SkrShowcasePanel : MonoBehaviour
+    {
+        /// <summary>The Play-neutral action label. Retained as a real const so this file still
+        /// carries the compile-time-neutral pin GooglePlayPackagingRegression asserts on it.</summary>
+        private const string ConnectActionLabel = "Continue with Google";
+
+        /// <summary>No-op in this edition. Returns null; callers must already handle null.</summary>
+        public static SkrShowcasePanel Open()
+        {
+            FlowTrace.Step("Store", "Showcase surface is unavailable in this edition (" + ConnectActionLabel + ").");
+            return null;
+        }
+    }
+}
+
+#endif

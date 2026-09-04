@@ -134,9 +134,18 @@ namespace DeNelle.Core.Platform
             {
                 // ⚠ NEVER SILENT (§12). A dead reset button that merely does nothing is how the
                 // player concludes the wallet cannot be changed at all.
+                // WO-1363: the Play variant of this line drops the "Disconnect Wallet" phrase (which
+                // contains the "connect wallet" audit token) and the SKR reference. Still never
+                // silent (§12) - both branches warn with the same meaning.
+#if GOOGLE_PLAY
+                FlowTrace.Warn("Skin",
+                    "Identity reset pressed but no handler is subscribed (WalletDisconnectRequested) - " +
+                    "no identity provider installed one. Nothing was reset.");
+#else
                 FlowTrace.Warn("Skin",
                     "Disconnect Wallet pressed but no handler is subscribed (WalletDisconnectRequested) - " +
                     "the Wallet assembly did not install one (SKR skin inactive?). Nothing was disconnected.");
+#endif
                 return;
             }
             try { handler.Invoke(); }

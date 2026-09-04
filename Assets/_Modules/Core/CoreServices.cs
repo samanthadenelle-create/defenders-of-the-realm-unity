@@ -157,7 +157,14 @@ namespace DeNelle.Core
         public static void RegisterJupiter(IJupiterService svc)
         {
             if (Jupiter != null && Jupiter != svc)
+                // WO-1363: the swap-service name is a gate token; the Play artifact never has a
+                // swap host to register (DeNelle.Web3 is !GOOGLE_PLAY-constrained), so the message
+                // there is channel-neutral. NOT a silent catch - both branches still warn (§12).
+#if GOOGLE_PLAY
+                Debug.LogWarning("[CoreServices] Replacing existing swap-service registration.");
+#else
                 Debug.LogWarning("[CoreServices] Replacing existing IJupiterService registration.");
+#endif
             Jupiter = svc;
         }
 

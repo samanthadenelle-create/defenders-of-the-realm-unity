@@ -69,7 +69,7 @@ namespace DeNelle.Core.UI.Mvvm
         // -- Projected read-only data -------------------------------------------
 
         public bool HasStake { get; private set; }
-        public string CurrencySymbol { get; private set; } = "SKR";
+        public string CurrencySymbol { get; private set; } = StakeStanding.DefaultCurrencySymbol;
         /// <summary>"Active Stake:  N SKR" (N is 0 when un-staked).</summary>
         public string ActiveStakeText { get; private set; }
         public bool HasTier { get; private set; }
@@ -81,7 +81,7 @@ namespace DeNelle.Core.UI.Mvvm
 
         private void Project(StakeStanding standing)
         {
-            string sym = standing != null ? standing.CurrencySymbol : "SKR";
+            string sym = standing != null ? standing.CurrencySymbol : StakeStanding.DefaultCurrencySymbol;
             CurrencySymbol = sym;
             long stake = standing != null ? standing.ActiveStake : 0;
             HasStake = standing != null && standing.HasStake;

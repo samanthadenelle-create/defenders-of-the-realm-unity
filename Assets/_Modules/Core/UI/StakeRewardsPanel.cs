@@ -60,6 +60,15 @@ namespace DeNelle.Core.UI
         private const string StakeNativeLine =
             "Stake natively at Stake.solanamobile - rewards apply automatically. We never hold your SKR.";
 #endif
+
+        // WO-1363: the empty-state line is a COMPILE-TIME const per channel. It used to be an
+        // inline literal at the call site, so "Stake SKR natively..." reached global-metadata.dat
+        // in the Play artifact even though the surface is unreachable there.
+#if GOOGLE_PLAY
+        private const string NoRewardsYetLine = "No rewards are available in this edition.";
+#else
+        private const string NoRewardsYetLine = "Stake SKR natively to unlock your first reward.";
+#endif
         private const string SmallThankYouLine =
             "A small thank-you for staking - modest perks, never pay-to-win.";
 
@@ -190,7 +199,7 @@ namespace DeNelle.Core.UI
 
             if (rewards == null || rewards.Count == 0)
             {
-                ElarionUiKit.Label(well, "Stake SKR natively to unlock your first reward.", 0.40f, 0.60f,
+                ElarionUiKit.Label(well, NoRewardsYetLine, 0.40f, 0.60f,
                     ElarionUi.ParchmentDim, 18, TextAlignmentOptions.Center, 0.06f, 0.94f);
                 return;
             }

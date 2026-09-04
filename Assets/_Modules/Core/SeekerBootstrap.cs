@@ -139,7 +139,12 @@ namespace DeNelle.Core
             if (string.IsNullOrEmpty(deviceModel)) return false;
             string m = deviceModel.ToLowerInvariant();
             return m.Contains("seeker")
+#if !GOOGLE_PLAY
+                // WO-1363: the vendor string is a shipping literal. The Play artifact keeps
+                // "seeker"/"osom"/"saga", which already identify every device in this product
+                // line, so the quality tier still resolves correctly on the hardware.
                 || m.Contains("solana")
+#endif
                 || m.Contains("osom")
                 || m.Contains("saga");
         }
