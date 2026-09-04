@@ -3843,6 +3843,69 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// WO-1359 - present an OWNER-AUTHORED EMBLEM on a round action slot.
+        /// <para>
+        /// <see cref="StyleAsRoundMedallion"/> builds the medallion out of three kit layers: a dark
+        /// socket face, a round STENCIL that aspect-fills whatever icon it is handed, and the gold
+        /// four-point bezel on top. That is exactly right for a bare glyph. It is exactly WRONG for
+        /// art that already IS a medallion: the owner's emblems ship with their own socket, their
+        /// own gold ring and four diamond points that stand proud of the circle, so the kit would
+        /// draw a second ring around hers, clip her points off at the stencil, and stretch a 386x411
+        /// emblem into a square. Three ways of damaging finished art in one call.
+        /// </para>
+        /// <para>
+        /// So when authored art resolves, the kit steps back: its own face and bezel stop drawing,
+        /// the stencil stops clipping and opens to the full medallion bounds, and the icon keeps its
+        /// aspect. Nothing is renamed, re-parented or destroyed - only enabled/disabled and
+        /// re-anchored - so the FTUE's by-name lookups and the slot's tap contract are untouched,
+        /// and a slot with no authored art never reaches here and looks exactly as it did.
+        /// </para>
+        /// </summary>
+        public static void PresentAuthoredEmblem(ActionSlotHandle slot)
+        {
+            if (slot == null || slot.root == null || slot.icon == null) return;
+
+            var bounds = slot.root.transform.Find("MedallionBounds");
+            if (bounds != null)
+            {
+                // The kit's own socket + ring: hidden, not removed. Her emblem carries both.
+                HideChildGraphic(bounds, "MedallionFace");
+                HideChildGraphic(bounds, "CanonicalBezel");
+                HideChildGraphic(bounds, "GoldRim");
+            }
+            // ⛔ slot.frame is NOT hidden here, and must not be: BuildActionSlot makes it the
+            // Button's targetGraphic, so disabling the Image disables the raycast and the face
+            // stops taking taps. StyleAsRoundMedallion already took it to alpha 0 while leaving it
+            // enabled, which is exactly the invisible-but-tappable state we want. The bar is the
+            // most-tapped surface in the game; nothing here may cost it a touch target.
+
+            var maskTr = slot.icon.rectTransform.parent as RectTransform;
+            if (maskTr != null && maskTr.name == "RoundIconMask")
+            {
+                var mask = maskTr.GetComponent<Mask>();
+                if (mask != null) mask.enabled = false;      // stop clipping the four diamond points
+                var maskImage = maskTr.GetComponent<Image>();
+                if (maskImage != null) maskImage.enabled = false;
+                maskTr.anchorMin = Vector2.zero;             // the 14% inset was room for the bezel
+                maskTr.anchorMax = Vector2.one;
+                maskTr.offsetMin = Vector2.zero;
+                maskTr.offsetMax = Vector2.zero;
+            }
+
+            slot.icon.preserveAspect = true;   // never distort supplied art
+            slot.icon.color = Color.white;     // never tint it either
+            slot.icon.raycastTarget = false;
+        }
+
+        private static void HideChildGraphic(Transform parent, string childName)
+        {
+            var tr = parent.Find(childName);
+            if (tr == null) return;
+            var img = tr.GetComponent<Image>();
+            if (img != null) img.enabled = false;
+        }
+
+        /// <summary>
         /// WO-867 TOUCH FLOOR for a slot whose VISUAL size is owned by an external layout pass.
         /// MEASURED shortfall (2340x1080 landscape, CanvasScaler 1080x1920 match 0.5 => 2119.6 x
         /// 978.3 reference units): the ActionRail area is 0.780..0.995 x / 0.040..0.420 y => 455.7
