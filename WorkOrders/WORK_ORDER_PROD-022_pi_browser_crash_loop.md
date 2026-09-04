@@ -1,6 +1,6 @@
 # WORK ORDER PROD-022 — Pi Browser (iPhone) crash-loops: Unity restarts every 30-60s, unprovoked
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Silo / Lane:** Lane 10 Build/Deploy/Perf + Content Delivery (R2/Addressables) · Pi/WebGL
 **Type:** EXISTING (built, now broken)
 **Minted:** 2026-09-02 (CLI) from a LIVE owner felt-test in REAL Pi Browser on iPhone.
