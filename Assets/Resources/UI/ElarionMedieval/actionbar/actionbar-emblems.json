@@ -1,0 +1,38 @@
+{
+ "_comment": "WO-1359 action-bar face emblems. DERIVED from the sheet's own alpha bounding boxes (islands segmented on alpha>=8, then every face given the SAME box - max island size + 4px pad - centred on its own box, so all five render at one scale). Rects are NORMALIZED 0..1 in Unity texture space (origin BOTTOM-LEFT), so they survive any maxTextureSize downscale. Regenerate with Elarion/UI/Re-slice Action Bar Emblems after dropping a new sheet; the NAME ORDER below is the sheet's left-to-right reading order and is the ONLY thing to edit if a future sheet re-orders. The bar looks each face up BY NAME, never by index.",
+ "sheet": "UI/ElarionMedieval/actionbar/actionbar-emblems",
+ "sourceWidth": 1983,
+ "sourceHeight": 793,
+ "faces": {
+  "build": {
+   "x": 0.019919,
+   "y": 0.247793,
+   "width": 0.194655,
+   "height": 0.518285
+  },
+  "talk": {
+   "x": 0.213313,
+   "y": 0.24401,
+   "width": 0.194655,
+   "height": 0.518285
+  },
+  "hero": {
+   "x": 0.403933,
+   "y": 0.244641,
+   "width": 0.194655,
+   "height": 0.518285
+  },
+  "journey": {
+   "x": 0.595058,
+   "y": 0.242119,
+   "width": 0.194655,
+   "height": 0.518285
+  },
+  "manage": {
+   "x": 0.787443,
+   "y": 0.244641,
+   "width": 0.194655,
+   "height": 0.518285
+  }
+ }
+}

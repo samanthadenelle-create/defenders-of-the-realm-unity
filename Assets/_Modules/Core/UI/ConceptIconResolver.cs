@@ -54,6 +54,15 @@ namespace DeNelle.Core.UI
             /// this false when the field is missing.
             /// </summary>
             [JsonProperty("override")] public bool Override;
+            /// <summary>
+            /// WO-1359 — OPTIONAL authored-art address: a Resources sprite path
+            /// ("UI/ElarionMedieval/actionbar/face-build", no extension), tried BEFORE
+            /// <see cref="Role"/>/<see cref="Name"/>. This is the drop-in seam for owner-supplied
+            /// art: the file appears, the icon changes, and NOTHING in C# is edited. When the file
+            /// is absent the row falls through to the pack art exactly as before, so a row can be
+            /// authored ahead of the PNG landing and the HUD keeps today's appearance until it does.
+            /// </summary>
+            [JsonProperty("path")] public string Path;
         }
 
         /// <summary>The parsed concept-icons.json root.</summary>
@@ -86,6 +95,18 @@ namespace DeNelle.Core.UI
             if (!_map.TryGetValue(key, out var icon) || icon == null)
                 return null; // unmapped -> caller fallback (no spam: misses are expected/normal)
 
+            // WO-1359 — authored art wins, when it is actually there. A row may name a Resources
+            // path for art the owner has not handed over yet; a missing file is NOT a failure, it
+            // falls through to the pack art below so the surface renders exactly as it does today.
+            // A missing icon must never become a missing button.
+            var authored = LoadAuthored(icon.Path);
+            if (authored != null) return authored;
+
+            // A row may carry ONLY an authored path (a face whose art the pack never had). Calling
+            // the catalog with a null role reaches Dictionary.TryGetValue(null) and THROWS, so the
+            // path-only row is answered here, not there.
+            if (string.IsNullOrEmpty(icon.Role)) return null;
+
             var sprite = RpgUiCatalog.Get(icon.Role, icon.Name);
             if (sprite == null)
                 FlowTrace.Throttle("Icon", "miss-art:" + key, 5f,
@@ -93,6 +114,70 @@ namespace DeNelle.Core.UI
                     " but the pack art is absent — caller keeps glyph fallback");
             return sprite;
         }
+
+        /// <summary>
+        /// WO-1359 - the sprite for <paramref name="conceptId"/> ONLY when it comes from that row's
+        /// authored <c>path</c> (the owner's own art), never from the pack fallback. Callers that
+        /// dress owner art differently from kit art need to know WHICH answered; asking
+        /// <see cref="Resolve"/> cannot tell them, because it deliberately returns either.
+        /// </summary>
+        public static Sprite ResolveAuthored(string conceptId)
+        {
+            if (string.IsNullOrEmpty(conceptId)) return null;
+            EnsureLoaded();
+            if (_map == null) return null;
+            IconRef icon;
+            if (!_map.TryGetValue(conceptId.Trim().ToLowerInvariant(), out icon) || icon == null)
+                return null;
+            return LoadAuthored(icon.Path);
+        }
+
+        // ── WO-1359: the authored-art side door ──────────────────────────────
+        // Resources.Load is cheap but not free and these run per HUD build, so the answer is
+        // cached BOTH ways: a hit caches the sprite, a miss caches the null. The miss cache is
+        // the important half — every face on the bar asks once per HUD rebuild for art that may
+        // legitimately not exist yet, and an uncached miss would re-walk Resources every time.
+        private static readonly Dictionary<string, Sprite> _authored =
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The sprite at a Resources <paramref name="path"/>, or null when the row names
+        /// no path or the file is not there (yet). Never throws.</summary>
+        private static Sprite LoadAuthored(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            string key = path.Trim();
+            if (key.Length == 0) return null;
+            Sprite cached;
+            if (_authored.TryGetValue(key, out cached)) return cached;
+
+            Sprite loaded = null;
+            try
+            {
+                // "<sheet>#<face>" is a NAMED slice of an owner-authored sheet; anything else is a
+                // plain Resources sprite. Both miss the same way - null, traced, caller falls back.
+                loaded = SpriteSheetSlices.IsSheetAddress(key)
+                    ? SpriteSheetSlices.Resolve(key)
+                    : Resources.Load<Sprite>(key);
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Throttle("Icon", "authored-throw:" + key, 30f,
+                    "authored icon path '" + key + "' threw on load (" + e.GetType().Name +
+                    ") — falling back to the pack art");
+            }
+            _authored[key] = loaded;
+            if (loaded == null)
+                FlowTrace.Throttle("Icon", "authored-absent:" + key, 30f,
+                    "authored icon '" + key + "' is not present — falling back to the pack art " +
+                    "(this is the EXPECTED state until the art is dropped in; the surface is unchanged)");
+            else
+                FlowTrace.Once("Icon", "authored-hit:" + key, "authored icon '" + key + "' resolved");
+            return loaded;
+        }
+
+        /// <summary>Editor/regression hook: forget the authored-path cache so a suite (or a fresh
+        /// art drop in the editor) re-reads Resources instead of a stale null.</summary>
+        public static void ClearAuthoredCache() { _authored.Clear(); }
 
         /// <summary>
         /// First non-null <see cref="Resolve"/> across the ordered candidate ids — lets a caller
@@ -142,6 +227,12 @@ namespace DeNelle.Core.UI
             string key = conceptId.Trim().ToLowerInvariant();
             if (!_map.TryGetValue(key, out var icon) || icon == null || !icon.Override)
                 return null; // unmapped or not opted-in -> caller keeps its own art
+
+            // WO-1359 — same authored-art precedence as Resolve, so an override row and a plain
+            // row can never disagree about which file is the icon.
+            var authoredOvr = LoadAuthored(icon.Path);
+            if (authoredOvr != null) return authoredOvr;
+            if (string.IsNullOrEmpty(icon.Role)) return null;   // path-only row; see Resolve
 
             var sprite = RpgUiCatalog.Get(icon.Role, icon.Name);
             if (sprite == null)

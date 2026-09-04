@@ -326,6 +326,15 @@ namespace DeNelle.Core.UI
             return ConceptIconResolver.ResolveAny(ids);
         }
 
+        /// <summary>WO-1359 - the OWNER-AUTHORED sprite for a concept, or null when only the kit's
+        /// pack art answers. A caller that must dress supplied art differently from kit art (the
+        /// calm dock's emblems, which arrive as complete medallions) asks this first, then falls
+        /// back to <see cref="Icon"/>. Null-safe; the caller always keeps its fallback.</summary>
+        public static Sprite AuthoredIcon(string conceptId)
+        {
+            return ConceptIconResolver.ResolveAuthored(conceptId);
+        }
+
         /// <summary>
         /// The node/cell state in ONE call: base slot sprite + the semantic tint (with the canonical
         /// per-state alpha centralised here — the old per-panel magic literals). Rarity etc. blend

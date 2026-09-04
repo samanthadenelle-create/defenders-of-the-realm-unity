@@ -252,7 +252,8 @@
   },
   "talk": {
    "role": "icons",
-   "name": "icon_talk"
+   "name": "icon_talk",
+   "path": "UI/ElarionMedieval/actionbar/actionbar-emblems#talk"
   },
   "tree": {
    "role": "icons",
@@ -358,6 +359,25 @@
   "shield bash": {
    "role": "abilities",
    "name": "knight_shield_bash"
+  },
+  "build": {
+   "path": "UI/ElarionMedieval/actionbar/actionbar-emblems#build"
+  },
+  "hero": {
+   "role": "icons",
+   "name": "icon_sword",
+   "path": "UI/ElarionMedieval/actionbar/actionbar-emblems#hero"
+  },
+  "journey": {
+   "role": "icons",
+   "name": "icon_compass",
+   "path": "UI/ElarionMedieval/actionbar/actionbar-emblems#journey"
+  },
+  "manage": {
+   "role": "icons",
+   "name": "icon_shield",
+   "path": "UI/ElarionMedieval/actionbar/actionbar-emblems#manage"
   }
- }
+ },
+ "_actionBarFaceNote": "WO-1359 action-bar faces: 'path' is an OPTIONAL sprite address tried BEFORE role/name. It is either a plain Resources sprite path or '<sheet Resources path>#<face name>' - a NAME-KEYED slice of an owner-authored sheet, cut by SpriteSheetSlices from the normalized rects in the sheet's sibling actionbar-emblems.json manifest (itself derived from the sheet's own alpha bounding boxes). The key here equals the face caption lower-cased and the manifest is keyed by the same name, so re-ordering a sheet can never hand MANAGE the JOURNEY emblem. If the art or the manifest is missing the row falls through to the role/name pack art and the bar renders exactly as it did before - a missing icon is never a missing button."
 }

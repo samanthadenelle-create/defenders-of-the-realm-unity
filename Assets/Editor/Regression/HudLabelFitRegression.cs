@@ -87,6 +87,40 @@ namespace DeNelle.Editor.Regression
         /// </summary>
         private static readonly string[] BakedLabelCardArt = { "bag", "equipment", "skills", "loadout" };
 
+        // ── WO-1359: the action-bar faces ────────────────────────────────────
+        /// <summary>The calm dock's five faces, IN THE ORDER THE PLAYER SEES THEM. The first sheet
+        /// the owner authored read BUILD/TALK/HERO/MANAGE across the top with JOURNEY beneath - the
+        /// sheet's order and the bar's order were already NOT the same, on the very first delivery.
+        /// That is exactly why a face's icon is keyed by that face's own caption and never by a
+        /// slot index: the next sheet is free to disagree again.</summary>
+        private static readonly string[] BarFaceCaptions = { "BUILD", "TALK", "HERO", "JOURNEY", "MANAGE" };
+
+        /// <summary>Where authored face art lives.</summary>
+        private const string ActionBarArtDir = "Assets/Resources/UI/ElarionMedieval/actionbar/";
+        /// <summary>The owner-authored emblem sheet and the slice manifest derived from its alpha.</summary>
+        private const string EmblemSheetPng = ActionBarArtDir + "actionbar-emblems.png";
+        private const string EmblemSheetJson = ActionBarArtDir + "actionbar-emblems.json";
+        /// <summary>The Resources address of that sheet - the left half of every face's icon address.</summary>
+        private const string EmblemSheetRes = "UI/ElarionMedieval/actionbar/actionbar-emblems";
+
+        /// <summary>
+        /// Action-bar art with WORDS PAINTED INTO THE PNG. Same hazard as
+        /// <see cref="BakedLabelCardArt"/> and the same precedent (WO-1341): the dock draws its
+        /// caption as live TMP text, so mounting a plate that already says "MANAGE" gives that face
+        /// TWO producers for one word, in two fonts, at two sizes - which on device build
+        /// 2026.09.03.353742 printed every Hero deck label twice.
+        /// <para>actionbar-icons-sheet-2026-09-03 was the FIRST sheet the owner supplied: five
+        /// emblems, each with an engraved name plate under it. She re-generated the set WITHOUT the
+        /// words and that sheet is deleted, so this entry normally just adds a note - it stays as a
+        /// permanent guard, because the failure it describes is one this repo has already shipped
+        /// once and the art most likely to come back with a word on it is action-bar art.</para>
+        /// </summary>
+        private static readonly string[] BakedWordFaceArt = { "actionbar-icons-sheet-2026-09-03" };
+
+        /// <summary>The concept-&gt;icon table, in both its shipped copies.</summary>
+        private const string ConceptIconsRes = "Assets/Resources/Data/Canonical/concept-icons.json";
+        private const string ConceptIconsStr = "Assets/StreamingAssets/Data/Canonical/concept-icons.json";
+
         // ── the boxes, each pinned by a source lint in Case 0 ────────────────
         /// <summary>Collectors/Echoes/Resources rail chip, fixed reference px (HudKitController
         /// RailChipWidthPx == EchoUnlockFeedback.EchoChipWidthPx - three chips, one right edge).</summary>
@@ -139,6 +173,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "tier-stamp",       () => Case5_TierStamp(failures, notes));
                 Case(failures, "deck-card-labels", () => Case6_DeckCardSingleProducer(failures, notes));
                 Case(failures, "deck-card-packaging", () => Case7_DeckCardPackagingMargin(failures, notes));
+                Case(failures, "bar-face-icons", () => Case8_BarFaceIcons(failures, notes));
             }
             catch (Exception ex)
             {
@@ -929,6 +964,256 @@ namespace DeNelle.Editor.Regression
                 if (w > max) max = w;
             }
             return max;
+        }
+
+        // =====================================================================
+        //  CASE 8 - the action bar's five faces (WO-1359)
+        // =====================================================================
+        // Two defects are made unreachable here, and only one of them is about pixels.
+        //
+        //   (i)  A FACE DRAWING A BAKED WORD UNDER ITS LIVE LABEL. The dock paints its caption
+        //        with live TMP text (SetCaption) - which localises, fits, and is already styled to
+        //        the kit. Art that already says the word gives the face two producers for one
+        //        string. That is not hypothetical: WO-1341 shipped it on the Hero deck cards and
+        //        the device printed every label twice, in two fonts, with two wordings.
+        //   (ii) A FACE WEARING ANOTHER FACE'S EMBLEM. The authored sheet's reading order is not
+        //        the bar's order (JOURNEY and MANAGE are transposed between them), so a slice
+        //        keyed by POSITION swaps two faces - and both still look plausible, so it ships.
+        //        The defence is structural: a face's icon key IS its caption, lower-cased.
+        //
+        // Everything below is a source/data lint because DeNelle.EditorRegression cannot reference
+        // DeNelle.HUD (the Case 0 note), and because the art may legitimately not be on disk yet -
+        // a missing icon is the EXPECTED state until the owner drops her files in, and must never
+        // read as a failure.
+        private static void Case8_BarFaceIcons(List<string> failures, List<string> notes)
+        {
+            string src = ReadSrc(HudSrc);
+            if (src == null) { failures.Add("[bar-face-icons] cannot read " + HudSrc); return; }
+
+            // ---- 8a  the icon key is DERIVED from the caption, never hand-paired -------------
+            if (src.IndexOf("string iconKey = (caption ?? string.Empty).ToLowerInvariant();",
+                            StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] BuildPeacefulDockSlot no longer derives its icon key from " +
+                             "the caption. Hand-pairing a key to a slot is how MANAGE and JOURNEY get " +
+                             "swapped - the sheet's order is not the bar's order");
+            if (src.IndexOf("UiStyle.Icon(iconKey,", StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] BuildPeacefulDockSlot no longer resolves its own icon via " +
+                             "UiStyle.Icon(iconKey, ...) - the caption has stopped being the icon key");
+
+            if (src.IndexOf("if (authored != null) ElarionUiKit.PresentAuthoredEmblem(slot);",
+                            StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] the calm dock no longer hands authored emblems to " +
+                             "PresentAuthoredEmblem. Her emblems carry their own ring and four diamond " +
+                             "points: inside the kit medallion they get a second ring drawn round them, " +
+                             "their points clipped at the round stencil, and a 386x411 emblem squared off");
+            if (src.IndexOf("ElarionUiKit.ClampMinTouch(slot.button)", StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] the calm dock no longer clamps its faces to the touch " +
+                             "floor. Art must never cost the most-tapped surface in the game a tap target");
+
+            // ---- 8b  five faces, right captions, right order, no icon passed positionally ----
+            int found = 0;
+            for (int i = 0; i < BarFaceCaptions.Length; i++)
+            {
+                string want = "BuildPeacefulDockSlot(" + i + ", \"" + BarFaceCaptions[i] + "\",";
+                int at = src.IndexOf(want, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    failures.Add("[bar-face-icons] no '" + want + "' in " + HudSrc + " - the calm dock's " +
+                                 "face order changed. Slot " + i + " is expected to be " + BarFaceCaptions[i] +
+                                 "; if the bar genuinely re-ordered, re-order BarFaceCaptions WITH it so the " +
+                                 "art keys move too");
+                    continue;
+                }
+                found++;
+                int eol = src.IndexOf('\n', at);
+                string line = eol < 0 ? src.Substring(at) : src.Substring(at, eol - at);
+                if (line.IndexOf("UiStyle.Icon(", StringComparison.Ordinal) >= 0)
+                    failures.Add("[bar-face-icons] slot " + i + " (" + BarFaceCaptions[i] + ") is handed a " +
+                                 "UiStyle.Icon(...) at the CALL SITE: '" + line.Trim() + "'. That re-opens the " +
+                                 "hand-paired key - the slot must resolve its art from its own caption");
+                for (int c = 0; c < BarFaceCaptions[i].Length; c++)
+                    if (BarFaceCaptions[i][c] > 126)
+                        failures.Add("[bar-face-icons] caption '" + BarFaceCaptions[i] + "' is not ASCII");
+            }
+            if (found != BarFaceCaptions.Length)
+                notes.Add("only " + found + " of " + BarFaceCaptions.Length + " calm-dock faces matched");
+
+            // ---- 8c  the caption is STILL live text -----------------------------------------
+            // If this ever stops being true the art becomes the only producer of the word, and
+            // then a baked word is not a duplicate - it is the whole label, un-localisable.
+            if (src.IndexOf("slot.SetCaption(caption);", StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] BuildPeacefulDockSlot no longer calls slot.SetCaption(caption) - " +
+                             "the face's word must stay LIVE text; art must never become its only producer");
+
+            // ---- 8d  every face has a named row, in BOTH shipped copies of the table ---------
+            string res = ReadSrc(ConceptIconsRes);
+            string str = ReadSrc(ConceptIconsStr);
+            if (res == null) { failures.Add("[bar-face-icons] cannot read " + ConceptIconsRes); return; }
+            if (str == null) { failures.Add("[bar-face-icons] cannot read " + ConceptIconsStr); return; }
+
+            // The owner's art and the manifest derived from its alpha both have to BE there. This
+            // is the half of the oracle that says "the faces really do come from her sheet" - the
+            // rest only says they come from the RIGHT part of it.
+            if (!File.Exists(EmblemSheetPng))
+            {
+                failures.Add("[bar-face-icons] the emblem sheet " + EmblemSheetPng + " is gone. Every " +
+                             "face would fall back to a pack icon - which is a silent regression, because " +
+                             "the bar still renders and nothing errors");
+                return;
+            }
+            string sheetManifest = ReadSrc(EmblemSheetJson);
+            if (sheetManifest == null)
+            {
+                failures.Add("[bar-face-icons] no slice manifest at " + EmblemSheetJson + ". The sheet is " +
+                             "one image; without the derived rects nothing knows where a face ends. Run " +
+                             "Elarion/UI/Re-slice Action Bar Emblems");
+                return;
+            }
+            if (sheetManifest.IndexOf("\"" + EmblemSheetRes + "\"", StringComparison.Ordinal) < 0)
+                failures.Add("[bar-face-icons] " + EmblemSheetJson + " does not name the sheet '" +
+                             EmblemSheetRes + "' - the manifest and the art have drifted apart");
+
+            for (int i = 0; i < BarFaceCaptions.Length; i++)
+            {
+                string key = BarFaceCaptions[i].ToLowerInvariant();
+                string blockRes = JsonBlock(res, key);
+                string blockStr = JsonBlock(str, key);
+                if (blockRes == null)
+                {
+                    failures.Add("[bar-face-icons] concept-icons.json has no '" + key + "' row, so the " +
+                                 BarFaceCaptions[i] + " face has nowhere to name its authored art");
+                    continue;
+                }
+                if (blockStr == null)
+                {
+                    failures.Add("[bar-face-icons] '" + key + "' is in the Resources copy of concept-icons.json " +
+                                 "but not the StreamingAssets copy - the two ship apart and would disagree");
+                    continue;
+                }
+                string pathRes = JsonField(blockRes, "path");
+                string pathStr = JsonField(blockStr, "path");
+                if (string.IsNullOrEmpty(pathRes))
+                {
+                    failures.Add("[bar-face-icons] concept row '" + key + "' names no \"path\" - that field IS " +
+                                 "the drop-in seam; without it adopting new art needs a code edit");
+                    continue;
+                }
+                if (!string.Equals(pathRes, pathStr, StringComparison.Ordinal))
+                    failures.Add("[bar-face-icons] concept row '" + key + "' points at '" + pathRes +
+                                 "' in Resources but '" + pathStr + "' in StreamingAssets");
+
+                string expect = EmblemSheetRes + "#" + key;
+                if (!string.Equals(pathRes, expect, StringComparison.Ordinal))
+                    failures.Add("[bar-face-icons] concept row '" + key + "' points at '" + pathRes +
+                                 "', expected '" + expect + "'. The NAME after the '#' is the mapping - a face " +
+                                 "addressed by anything positional can be handed another face's emblem the day " +
+                                 "the sheet is re-ordered, and both faces still look plausible");
+
+                // ---- 8e  the baked-word denylist ------------------------------------------
+                for (int b = 0; b < BakedWordFaceArt.Length; b++)
+                    if (pathRes.IndexOf(BakedWordFaceArt[b], StringComparison.OrdinalIgnoreCase) >= 0)
+                        failures.Add("[bar-face-icons] the " + BarFaceCaptions[i] + " face points at '" +
+                                     pathRes + "', which has the word PAINTED INTO THE PNG. The dock already " +
+                                     "draws that word as live text, so the face would print it twice in two " +
+                                     "fonts - the WO-1341 defect exactly. Use text-free emblem art");
+
+                // ---- 8f  that named slice actually EXISTS in the derived manifest ----------
+                string sliceBlock = JsonBlock(sheetManifest, key);
+                if (sliceBlock == null)
+                {
+                    failures.Add("[bar-face-icons] the slice manifest " + EmblemSheetJson + " has no face " +
+                                 "named '" + key + "', so the " + BarFaceCaptions[i] + " face would resolve " +
+                                 "NOTHING from the owner's sheet and silently keep a pack icon. Re-run " +
+                                 "Elarion/UI/Re-slice Action Bar Emblems");
+                    continue;
+                }
+                float rx = JsonNumber(sliceBlock, "x"), ry = JsonNumber(sliceBlock, "y");
+                float rw = JsonNumber(sliceBlock, "width"), rh = JsonNumber(sliceBlock, "height");
+                if (rw <= 0f || rh <= 0f || rx < 0f || ry < 0f || rx + rw > 1.001f || ry + rh > 1.001f)
+                    failures.Add("[bar-face-icons] face '" + key + "' has rect x=" + rx + " y=" + ry +
+                                 " w=" + rw + " h=" + rh + " in " + EmblemSheetJson + ". Rects are NORMALIZED " +
+                                 "0..1 (that is what makes them survive a maxTextureSize downscale) - this one " +
+                                 "is outside the texture, so the slice would be empty or clipped");
+            }
+
+            // ---- 8g  no word-bearing art is wired to anything --------------------------------
+            for (int b = 0; b < BakedWordFaceArt.Length; b++)
+            {
+                string art = ActionBarArtDir + BakedWordFaceArt[b] + ".png";
+                if (!File.Exists(art))
+                {
+                    notes.Add("baked-word art '" + BakedWordFaceArt[b] + "' is gone from disk - if it was " +
+                              "re-authored text-free, drop it from BakedWordFaceArt");
+                    continue;
+                }
+                if (res.IndexOf(BakedWordFaceArt[b], StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    str.IndexOf(BakedWordFaceArt[b], StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    src.IndexOf(BakedWordFaceArt[b], StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add("[bar-face-icons] '" + BakedWordFaceArt[b] + "' is referenced by the HUD or " +
+                                 "the concept table. It carries five engraved NAME PLATES; it is superseded " +
+                                 "art kept only as a record and must be wired to nothing");
+            }
+        }
+
+        /// <summary>The brace-balanced object body for a <c>"key": { ... }</c> row in a
+        /// pretty-printed canonical JSON file, or null when the key is absent. Deliberately not a
+        /// JSON parser: this suite must not gain a dependency to read two fields.</summary>
+        // The two brace characters live in these consts, never as char literals in the body:
+        // the repo's C# quality gate counts raw braces per file to catch a truncated write, and a
+        // lone open-brace char literal in a comparison reads to it as an unclosed block.
+        private const string BraceOpen = "{";
+        private const string BraceClose = "}";
+
+        private static string JsonBlock(string src, string key)
+        {
+            if (string.IsNullOrEmpty(src)) return null;
+            int at = src.IndexOf("\"" + key + "\":", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return null;
+            int open = src.IndexOf(BraceOpen, at, StringComparison.Ordinal);
+            if (open < 0) return null;
+            int depth = 0;
+            for (int i = open; i < src.Length; i++)
+            {
+                if (src[i] == BraceOpen[0]) depth++;
+                else if (src[i] == BraceClose[0])
+                {
+                    depth--;
+                    if (depth == 0) return src.Substring(open, i - open + 1);
+                }
+            }
+            return null;
+        }
+
+        /// <summary>The numeric value of <paramref name="field"/> inside a JSON object body, or
+        /// -1 when it is absent or unreadable (which every caller treats as out of range).</summary>
+        private static float JsonNumber(string block, string field)
+        {
+            if (string.IsNullOrEmpty(block)) return -1f;
+            int at = block.IndexOf("\"" + field + "\":", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return -1f;
+            int i = at + field.Length + 3;
+            var num = new StringBuilder();
+            while (i < block.Length && (block[i] == ' ' || block[i] == '\t')) i++;
+            while (i < block.Length &&
+                   (char.IsDigit(block[i]) || block[i] == '.' || block[i] == '-' ||
+                    block[i] == 'e' || block[i] == 'E' || block[i] == '+'))
+                num.Append(block[i++]);
+            float v;
+            return float.TryParse(num.ToString(), System.Globalization.NumberStyles.Float,
+                                  System.Globalization.CultureInfo.InvariantCulture, out v) ? v : -1f;
+        }
+
+        /// <summary>The string value of <paramref name="field"/> inside a JSON object body, or
+        /// null when the field is absent.</summary>
+        private static string JsonField(string block, string field)
+        {
+            if (string.IsNullOrEmpty(block)) return null;
+            int at = block.IndexOf("\"" + field + "\":", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return null;
+            int q1 = block.IndexOf('"', at + field.Length + 3);
+            if (q1 < 0) return null;
+            int q2 = block.IndexOf('"', q1 + 1);
+            return q2 < 0 ? null : block.Substring(q1 + 1, q2 - q1 - 1);
         }
 
         private static void RequireLiteral(List<string> failures, string src, string literal, string why)
