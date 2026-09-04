@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "The three starter guardian pets. Sourced from the React v1 repo: src/modules/pets/petData.ts (PETS, petAttack, petHp, PET_HUNT_SPEED, PET_ATTACK_RANGE, PET_ATTACK_CD, BOND_STAGES, PET_PERKS, PET_PERK_DESC) and src/lib/aggression.ts (petMaxHp — per-species bond-scaled HP). bondRanks 0-4 mirror the five BOND_STAGES; the rank-0 row carries no perk. Per-species combat values (huntSpeed/attackRange/attackCd) and the bond-scaled maxHp curve are canonical from v1. attackDamage is petAttack(rank) = 9 + rank*5, same for all species. deploySlots: home posts ring The Heart at radius 11 (petPost() in petData.ts: angle = i/3 * 2PI + 0.5).",
+  "_comment": "The three starter guardian pets. Sourced from the React v1 repo: src/modules/pets/petData.ts (PETS, petAttack, petHp, PET_HUNT_SPEED, PET_ATTACK_RANGE, PET_ATTACK_CD, BOND_STAGES, PET_PERKS, PET_PERK_DESC) and src/lib/aggression.ts (petMaxHp  -  per-species bond-scaled HP). bondRanks 0-4 mirror the five BOND_STAGES; the rank-0 row carries no perk. Per-species combat values (huntSpeed/attackRange/attackCd) and the bond-scaled maxHp curve are canonical from v1. attackDamage is petAttack(rank) = 9 + rank*5, same for all species. deploySlots: home posts ring The Heart at radius 11 (petPost() in petData.ts: angle = i/3 * 2PI + 0.5).",
   "deployRadius": 11,
   "pets": [
     {

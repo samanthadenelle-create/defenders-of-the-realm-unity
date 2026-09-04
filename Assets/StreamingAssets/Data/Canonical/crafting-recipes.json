@@ -1,15 +1,15 @@
 {
-  "_comment": "Canonical crafting data for the v2 Unity dungeon crafting system (Workstream C). Defines the collectible ingredient items and the recipes a crafting pedestal can fulfil. DATA ONLY — DeNelle.Dungeons hydrates the crafting pedestal, the ingredient pickups and the crafting UI from this. The Healer's Cottage ships ONE recipe: the torch. Loaded the same way as lore-fragments.json / healers-cottage.json (Newtonsoft.Json, StreamingAssets/Data/Canonical, via UniTask).",
+  "_comment": "Canonical crafting data for the v2 Unity dungeon crafting system (Workstream C). Defines the collectible ingredient items and the recipes a crafting pedestal can fulfil. DATA ONLY  -  DeNelle.Dungeons hydrates the crafting pedestal, the ingredient pickups and the crafting UI from this. The Healer's Cottage ships ONE recipe: the torch. Loaded the same way as lore-fragments.json / healers-cottage.json (Newtonsoft.Json, StreamingAssets/Data/Canonical, via UniTask).",
   "_sources": {
-    "design": "defenders-unity/docs/dungeon-3d-healers-cottage-design.md (the cottage is a healer's workshop — herbs, oil, resin, cloth)",
+    "design": "defenders-unity/docs/dungeon-3d-healers-cottage-design.md (the cottage is a healer's workshop  -  herbs, oil, resin, cloth)",
     "layoutSpec": "defenders-unity/docs/dungeons-3d-unity-layout-spec.md (the crafting shard pedestal in the Hidden Vault)",
-    "owner": "defenders-unity/docs/qa/owner-acceptance-checklist.md (Dungeon — lantern & crafting: GAP — craft a torch, recipe + items needed, legible)"
+    "owner": "defenders-unity/docs/qa/owner-acceptance-checklist.md (Dungeon  -  lantern & crafting: GAP  -  craft a torch, recipe + items needed, legible)"
   },
   "_schemaNotes": {
     "ingredients": "Collectible crafting materials. 'id' keys the pickup placements + recipe entries. 'glyph' is a single-char UI stand-in until item icon art lands. 'tint' is an RRGGBB hex used by the scene builder for the pickup mote.",
     "recipes": "Each recipe lists the ingredients (by id) and counts the pedestal needs. A recipe is craftable once the inventory holds at least every listed count.",
-    "ingredientPlacements": "Where each ingredient pickup is dropped in the Healer's Cottage. position is X east(+)/west(-), Y up, Z south(+)/north(-) — same convention as healers-cottage.json.",
-    "pedestal": "The crafting pedestal placement — replaces the §5.4 'crafting shard pedestal' placeholder primitive in the Hidden Vault."
+    "ingredientPlacements": "Where each ingredient pickup is dropped in the Healer's Cottage. position is X east(+)/west(-), Y up, Z south(+)/north(-)  -  same convention as healers-cottage.json.",
+    "pedestal": "The crafting pedestal placement  -  replaces the §5.4 'crafting shard pedestal' placeholder primitive in the Hidden Vault."
   },
   "version": 2,
   "ingredients": [

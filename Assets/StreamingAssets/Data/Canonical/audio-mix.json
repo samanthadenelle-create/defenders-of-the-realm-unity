@@ -1,16 +1,16 @@
 {
   "version": 1,
   "tracks": {
-    "title":   { "source": "title.mp3",   "defaultVolume": 0.60, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Title screen + opening cinematic. Moderate — supports the 14-line narrative without competing." },
+    "title":   { "source": "title.mp3",   "defaultVolume": 0.60, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Title screen + opening cinematic. Moderate  -  supports the 14-line narrative without competing." },
     "village": { "source": "village.mp3", "defaultVolume": 0.40, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Long-session exploration music. Soft so players aren't fatigued." },
-    "dungeon": { "source": "dungeon.mp3", "defaultVolume": 0.25, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Very soft — ambient only. Footsteps + NPC bubbles + sound design sit above it." },
-    "battle":  { "source": "battle.mp3",  "defaultVolume": 0.70, "loop": true,  "fadeInMs": 600,  "fadeOutMs": 600,  "notes": "ATB Last Stand combat. Drives tension. Quick crossfade — combat is a moment, not a state." },
+    "dungeon": { "source": "dungeon.mp3", "defaultVolume": 0.25, "loop": true,  "fadeInMs": 1200, "fadeOutMs": 1000, "notes": "Very soft  -  ambient only. Footsteps + NPC bubbles + sound design sit above it." },
+    "battle":  { "source": "battle.mp3",  "defaultVolume": 0.70, "loop": true,  "fadeInMs": 600,  "fadeOutMs": 600,  "notes": "ATB Last Stand combat. Drives tension. Quick crossfade  -  combat is a moment, not a state." },
     "victory": { "source": "victory.mp3", "defaultVolume": 0.70, "loop": false, "fadeInMs": 200,  "fadeOutMs": 800,  "notes": "Plays once on battle win. Hard fade-in (celebratory beat), gentle fade-out into next state." },
-    "defeat":  { "source": "defeat.mp3",  "defaultVolume": 0.50, "loop": false, "fadeInMs": 1500, "fadeOutMs": 1500, "notes": "Plays once on battle loss. Softer than victory — let the loss land slowly." }
+    "defeat":  { "source": "defeat.mp3",  "defaultVolume": 0.50, "loop": false, "fadeInMs": 1500, "fadeOutMs": 1500, "notes": "Plays once on battle loss. Softer than victory  -  let the loss land slowly." }
   },
   "transitions": [
     { "from": "title",   "to": "village", "pattern": "crossfade", "ms": 1200, "rationale": "Soft transition into long-session music" },
-    { "from": "village", "to": "dungeon", "pattern": "crossfade", "ms": 1200, "rationale": "Mood shift — quieter, sets the dungeon's quiet-stakes register" },
+    { "from": "village", "to": "dungeon", "pattern": "crossfade", "ms": 1200, "rationale": "Mood shift  -  quieter, sets the dungeon's quiet-stakes register" },
     { "from": "village", "to": "battle",  "pattern": "crossfade", "ms": 600,  "rationale": "Combat ramp-up; tension rising fast" },
     { "from": "dungeon", "to": "battle",  "pattern": "crossfade", "ms": 600,  "rationale": "Same" },
     { "from": "battle",  "to": "victory", "pattern": "hard-cut",  "ms": 200,  "rationale": "Celebratory beat needs the cut to land. No mush." },

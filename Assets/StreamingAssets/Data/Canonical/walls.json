@@ -44,5 +44,5 @@
       "meshGate":     "kaykit/medieval/walls/wall_straight_gate.gltf"
     }
   ],
-  "notes": "Square perimeter — halfSize is half the length of one side; total perimeter = 8 * halfSize. Four cardinal gates (N/E/S/W). Ported from React src/modules/village/walls/constants.ts."
+  "notes": "Square perimeter  -  halfSize is half the length of one side; total perimeter = 8 * halfSize. Four cardinal gates (N/E/S/W). Ported from React src/modules/village/walls/constants.ts."
 }

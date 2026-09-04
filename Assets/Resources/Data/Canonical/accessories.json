@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "Accessories catalog v1 — rings and amulets. No 3D mesh attachment; bonuses applied on equip as additive modifiers to the hero's stat chain. damageMult is additive (0.08 = +8% on top of weapon chain). defense is additive (0.05 = +5% DR stacked after armor). hpBonus is a flat HP add. VFX driven by ArmorVfxMap using the accessory's rarity band (rim-light/glow on hero mesh — no swing trail). Sold exclusively at the Jeweler (Sable Vey). iconPath = ItemIcons/<id> (transparent-background PNG, 512x512). Pricing: same rarity-tiered formula as weapons/armor (crystals gate rare+). Priced crystals-primary at higher tiers because accessories are Sable's specialty — aether/crystal work.",
+  "_note": "Accessories catalog v1  -  rings and amulets. No 3D mesh attachment; bonuses applied on equip as additive modifiers to the hero's stat chain. damageMult is additive (0.08 = +8% on top of weapon chain). defense is additive (0.05 = +5% DR stacked after armor). hpBonus is a flat HP add. VFX driven by ArmorVfxMap using the accessory's rarity band (rim-light/glow on hero mesh  -  no swing trail). Sold exclusively at the Jeweler (Sable Vey). iconPath = ItemIcons/<id> (transparent-background PNG, 512x512). Pricing: same rarity-tiered formula as weapons/armor (crystals gate rare+). Priced crystals-primary at higher tiers because accessories are Sable's specialty  -  aether/crystal work.",
   "accessories": [
     {
       "id": "ring_iron",

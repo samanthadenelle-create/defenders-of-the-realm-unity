@@ -1,0 +1,137 @@
+{
+  "_comment": "Data-driven REWARDED-AD HOOK config for Defenders of the Realm / Echoes of Elarion. Drives the thin AdGateService interpreter (WORK_ORDER_ad_generator.md sec.A). Owner data-first style: WHERE/WHEN an ad offer appears + WHAT it grants is DATA here, not hardcoded branches. The existing RewardedAdManager (Assets/_Modules/Village/Monetization/RewardedAdManager.cs) is the SDK seam (ShowAdInternal); this file replaces its single fixed 480s cooldown + implicit reward with a placement/reward TABLE.",
+  "_status": "LIVE CONFIG as of WO-1120 (2026-08-21). This file now HAS an interpreter: Assets/_Modules/Village/Monetization/AdPlacementCatalog.cs parses it and screens every reward against _LAW_1 at load (an illegal reward is DROPPED from the table, so no placement can reach it), and AdGateService.cs owns the cooldown / dailyCap / hardDailyCap ledger and the grant. Every number below is now BEHAVIOUR, not commentary - editing one changes the game. It is still gated shut in play by requiresFlag RewardedAdSkip (ff.rewardedadskip, default OFF), which is a PO decision and not this file's. HISTORY: from 2026-08-07 until WO-1120 the file was SPEC ONLY - nothing under Assets/**.cs read a byte of it, so the caps and cooldowns authored here had no effect whatsoever.",
+  "_sources": {
+    "sdkSeam": "Assets/_Modules/Village/Monetization/RewardedAdManager.cs (ShowAdInternal stub); the provider-agnostic seam is DeNelle.Core.Ads.IAdService",
+    "covenant": "docs/monetization-v2-spec.md sec.5.3 - convenience is TIME-SAVING only, never combat-power; the same covenant binds ad rewards",
+    "rulings": "WORK_ORDER_912_ad_revenue_free_path.md sec.9 (owner ruled D1/D2/D4/D5/D7/D8 on 2026-08-07) + sec.9.3 (the policy shield)"
+  },
+  "_schema": {
+    "placement": "{ id (string, unique, stable key the call-site passes), enabled (bool), surface (enum: store|harvest|build|defeat|daily|tree), rewardId (FK->rewards[].id), cooldownSeconds (int, per-placement; overrides global), dailyCap (int, max grants/placement/local-day, 0=unlimited), requiresFlag (FeatureFlags name or empty), prompt { headline, body, cta } (localizable strings shown on the offer button/modal), priority (int, higher wins when two placements compete for one surface) }",
+    "reward": "{ id (string, unique), kind (enum: currency|timeskip|harvest|buff|cosmeticTrial), grant (object shaped by kind), description (string, player-facing), maxStack (int, how many unclaimed grants may queue, 0=apply-immediately) }",
+    "global": "{ defaultCooldownSeconds, hardDailyCap (sum across ALL placements), adProvider (stub|unityads|levelplay), respectDoNotSell (bool) }"
+  },
+  "_LAW_1_NO_PREMIUM_CURRENCY": "★ NO AD REWARD MAY EVER GRANT CRYSTALS, OR ANY CURRENCY BOUGHT WITH REAL MONEY. ★ This is not a balance preference, it is the thing that keeps the ad account alive. WO-912 sec.9.3: AdMob forbids rewards 'directly convertible into direct monetary items' and Unity forbids incentivising with 'anything of value'; our reward passes ONLY because minutes off a build timer cannot be transferred, traded, sold or cashed out. Crystals are the SKR on-ramp - the moment an ad pays them out, the reward becomes arguably convertible and the policy protection evaporates along with the covenant. Enforced by AdPlacementCovenantRegression case [no-premium-grant], which is a HARD FAIL, not a warning.",
+  "_LAW_2_TIMESKIP_HAS_ONE_AUTHORITY": "The timeskip amount is BuildTimerConfig.adSkipSeconds (Assets/_Modules/Core/Catalog/BuildTimerConfig.cs:92, currently 600s = 10 min). The number below is a MIRROR for the spec's readability and is pinned equal to it by regression. Change the config, never this file alone - a second copy of a number is how the two drift and nobody notices.",
+  "_LAW_3_AD_UNIT_IDS": "Every enabled placement carries the LevelPlay adUnitId it maps to. These are NOT secrets - they ship inside the APK and are visible to anyone who unpacks it - but they ARE the join between a dashboard and this repo, and an unrecorded join is one that drifts the first time somebody creates a unit and forgets to tell anyone. Recorded here so the mapping is reviewable in a diff. Per owner ruling D5 remote config (Neon + the existing api/ rail) may OVERRIDE these at runtime, so a unit can be swapped without shipping a build; these are the defaults and the record, not a hardcode. Pinned by AdPlacementCovenantRegression case [ad-unit-mapped].",
+  "version": 2,
+  "global": {
+    "defaultCooldownSeconds": 480,
+    "hardDailyCap": 7,
+    "adProvider": "levelplay",
+    "respectDoNotSell": true,
+    "covenantLine": "Ads are always optional. You are never required to watch one. Ever.",
+    "_hardDailyCapNote": "7 is the sum of the authored placement caps (build 3 + harvest 3 + daily 1). The retention-first 2026-08-21 pass cut build skips from 10 to 3 per four-hour window so ads help a session without becoming the progression loop."
+  },
+  "rewards": [
+    {
+      "id": "reward.build.timeskip",
+      "kind": "timeskip",
+      "grant": {
+        "service": "BuildTimerService",
+        "kind": "skip-seconds",
+        "seconds": 600
+      },
+      "description": "Take 10 minutes off this job",
+      "maxStack": 0,
+      "_note": "REPLACES reward.build.skip1, which granted { kind: 'instant-build', count: 1 } - a FULL completion. That contradicted the design WO-912 is built on: the near-miss math in D1 (a ~2h build needing 10 watches and still finishing 20 min short) only works if a watch buys MINUTES. An instant finish also hands away for free exactly what crystals are sold for. Non-convertible either way, so the policy shield held - but the economy did not. seconds MUST equal BuildTimerConfig.adSkipSeconds; see _LAW_2."
+    },
+    {
+      "id": "reward.coins.small",
+      "kind": "currency",
+      "grant": {
+        "currency": "coins",
+        "amount": 250
+      },
+      "description": "+250 coins",
+      "maxStack": 0,
+      "_note": "UNREACHABLE IN V1 - no enabled placement references it. Kept as vocabulary. Coins are a SOFT currency with no purchase path, so it does not trip _LAW_1; it is parked by D4 (ads stay on queue timers for V1), not by policy."
+    },
+    {},
+    {
+      "id": "reward.harvest.doubler",
+      "kind": "harvest",
+      "grant": {
+        "service": "HarvestBoostService",
+        "multiplier": 2,
+        "durationSeconds": 3600
+      },
+      "description": "Double passive harvest for 1 hour",
+      "maxStack": 1,
+      "_note": "LIVE (owner reversed D4 on 2026-08-07). Legal under _LAW_1 by construction: it grants a RATE for a duration, not a currency, so there is nothing here that could be converted to money. service RE-POINTED 2026-08-21 (WO-1120/WO-1119) from OfflineHarvestService to HarvestBoostService, which is the boost's one owner; OfflineHarvestService is now a CONSUMER of it, not the holder. multiplier is capped at HarvestBoostService.MaxMultiplier (2.0) on the way in, and a second grant EXTENDS THE DURATION rather than multiplying - authoring 4.0 here would silently become 2.0, not 4x. VERSION B ONLY: the multiplier scales the RATE and every cap stays where it is, so this pays TIME, never AMOUNT. Crystals are never boosted."
+    },
+    {
+      "id": "reward.daily.chest",
+      "kind": "currency",
+      "grant": {
+        "currency": "coins",
+        "amount": 500
+      },
+      "description": "Daily bonus chest: +500 coins",
+      "maxStack": 0,
+      "_note": "REPLACES the deleted reward.daily.bonusChest, which paid 500 coins AND +100 CRYSTALS nested in a 'bonus' object. The coin half is kept at its full original value so the chest still reads as a chest; the crystal half is gone permanently under _LAW_1 and is NOT a scope decision that can be reversed - it is the difference between a reward with no path to money and one with a path to money. Coins are a soft currency with no purchase route, so 500 of them is not a policy problem at any amount."
+    }
+  ],
+  "_REMOVED_2026_08_07": {
+    "reward.crystals.small": "DELETED. +150 crystals. Violated _LAW_1 outright - it paid the SKR on-ramp currency for watching an ad, which is precisely the convertibility AdMob and Unity prohibit. It was ENABLED in this file while WO-912 was preparing to tell Unity in writing that no ad reward can reach money. Never re-add.",
+    "reward.daily.bonusChest": "DELETED. +500 coins AND +100 crystals. Same violation, hidden in a 'bonus' sub-object - which is exactly why the regression walks grants RECURSIVELY rather than checking the top-level currency field.",
+    "reward.revive.freeContinue": "DELETED. Retired with its placement by owner ruling D7 (2026-08-07): a battle-continue is COMBAT POWER, and the covenant is convenience-only. This is the one deletion that is about the game rather than the ad network.",
+    "place.store.crystals": "DELETED. Carried reward.crystals.small - see above.",
+    "place.defeat.continue": "DELETED. Owner ruling D7 - retire. It also carried requiresFlag 'overworldencounter', so it would have armed itself the moment that flag went on."
+  },
+  "placements": [
+    {
+      "id": "place.build.skip",
+      "enabled": true,
+      "surface": "build",
+      "adUnitId": "2ibxid58jat3sxyd",
+      "_adUnitDashboardName": "rewarded_build_skip_android",
+      "_adUnitNameNote": "THE ONE INCONSISTENT NAME. The other two units are named after their placement id; this one follows a <format>_<purpose>_<platform> convention I suggested before checking what the game already called the placement. Matching the placement id is better - it gives 1:1 attribution between LevelPlay revenue and our telemetry with no mapping table to drift - so this unit should be renamed to 'place.build.skip' in the dashboard. Renaming does NOT change the adUnitId, so nothing here needs editing when it happens; delete this note instead.",
+      "rewardId": "reward.build.timeskip",
+      "cooldownSeconds": 480,
+      "dailyCap": 3,
+      "requiresFlag": "RewardedAdSkip",
+      "priority": 15,
+      "prompt": {
+        "headline": "Speed It Up",
+        "body": "Watch a short clip to take 10 minutes off this job.",
+        "cta": "Watch"
+      },
+      "_note": "THE ONLY V1 PLACEMENT (owner rulings D4 + D7, 2026-08-07). Copy changed from 'Finish Now' / 'Skip this build instantly' because that promised an instant completion the reward no longer grants - and 'Finish Now' is the CRYSTAL button's name (WO-898). Two different things must not share a label. requiresFlag added: this was empty, so a wired interpreter would have offered ads while ff.rewardedadskip was OFF and every other path refuses them. cooldown 300 -> 480 to match RewardedAdManager.CooldownSeconds. dailyCap is 3, matching BuildTimerConfig.adSkipsPerWindow after the retention-first 2026-08-21 pass (this line previously read 'dailyCap 5 -> 10', which was left behind when the cap was cut and is corrected here). The two caps are ANDed by BuildTimerService.CanWatchAdToSkip, never merged: this one is per LOCAL DAY, adSkipsPerWindow is the owner's FOUR-HOUR ROLLING window (ruling 2026-08-06), and they are different rulings answering different questions."
+    },
+    {
+      "id": "place.harvest.doubler",
+      "enabled": true,
+      "surface": "harvest",
+      "adUnitId": "imk56dcdi5mym2wq",
+      "rewardId": "reward.harvest.doubler",
+      "cooldownSeconds": 3600,
+      "dailyCap": 3,
+      "requiresFlag": "RewardedAdSkip",
+      "priority": 20,
+      "prompt": {
+        "headline": "Double Your Harvest",
+        "body": "The echoes work twice as fast for an hour.",
+        "cta": "Watch & Double"
+      },
+      "_note": "ENABLED 2026-08-07 - owner REVERSED D4 (\"can you do harvest doubler, its simple and im the only tester so its good\"). Legal under _LAW_1: the grant is a rate multiplier for a duration, not a currency. Note this is the ONE placement whose reward can stack with itself over time (maxStack 1), so its 3600s cooldown is doing real work - do not shorten it without re-checking the offline-harvest economy."
+    },
+    {
+      "id": "place.daily.chest",
+      "enabled": true,
+      "surface": "daily",
+      "adUnitId": "it6izgx1flbj5rce",
+      "rewardId": "reward.daily.chest",
+      "cooldownSeconds": 0,
+      "dailyCap": 1,
+      "requiresFlag": "RewardedAdSkip",
+      "priority": 25,
+      "prompt": {
+        "headline": "Daily Bonus",
+        "body": "Claim today's bonus - one free watch a day.",
+        "cta": "Claim"
+      },
+      "_note": "ENABLED 2026-08-07 - owner reversed D4 alongside the harvest doubler. Points at reward.daily.chest (500 coins), NOT the deleted reward.daily.bonusChest (500 coins + 100 CRYSTALS). Enabling the placement was the owner's scope call; dropping the crystals was not a scope call and is not reversible - see _LAW_1. dailyCap 1 + cooldown 0 is correct here: the cap IS the gate for a once-a-day claim."
+    }
+  ]
+}

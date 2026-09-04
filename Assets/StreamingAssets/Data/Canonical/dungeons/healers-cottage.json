@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical layout for the first 3D dungeon — The Healer's Cottage (D1). EXPANDED per docs/dungeons-3d-unity-layout-spec.md §9: 3 levels, 12 rooms (§9.1 ground 6, §9.2 upper 2, §9.3 underground 4). The opener of 'The Healer's Garden' questline. Five lore stones (Alduin's journal entries 1-4 + the redacted Hidden-Vault draft), two checkpoint shrines, four scripted ATB encounters, one mini-boss, three treasure chests. DATA ONLY — DungeonController hydrates the scene from this. Lore prose + Bryn's line + the mini-boss spec are canon-verbatim from docs/dungeon-3d-healers-cottage-design.md — never paraphrase. Coordinates match Assets/Editor/DungeonSceneBuilder.cs.",
+  "_comment": "Canonical layout for the first 3D dungeon  -  The Healer's Cottage (D1). EXPANDED per docs/dungeons-3d-unity-layout-spec.md §9: 3 levels, 12 rooms (§9.1 ground 6, §9.2 upper 2, §9.3 underground 4). The opener of 'The Healer's Garden' questline. Five lore stones (Alduin's journal entries 1-4 + the redacted Hidden-Vault draft), two checkpoint shrines, four scripted ATB encounters, one mini-boss, three treasure chests. DATA ONLY  -  DungeonController hydrates the scene from this. Lore prose + Bryn's line + the mini-boss spec are canon-verbatim from docs/dungeon-3d-healers-cottage-design.md  -  never paraphrase. Coordinates match Assets/Editor/DungeonSceneBuilder.cs.",
   "_sources": {
     "layoutSpec": "defenders-unity/docs/dungeons-3d-unity-layout-spec.md (§9 expanded Healer's Cottage)",
     "design": "defenders-unity/docs/dungeon-3d-healers-cottage-design.md (§4 room beats, lore prose, mini-boss)",
@@ -8,8 +8,8 @@
   },
   "_schemaNotes": {
     "coordinates": "X east(+)/west(-), Z south(+)/north(-), Y up. Levels: ground Y=0, upper Y=6, underground Y=-6. ~4u wall/floor cells. The Keeper enters the Garden Approach (SW, ground).",
-    "wallKind": "'solid' (collidable run) | 'doorway' (collidable frame, walk-through gap, wires room-to-room via leadsTo) | 'illusory' (renders as a normal wall but the scene builds NO collider — the Keeper walks through into the secret room named by leadsTo).",
-    "roomKind": "'entry' | 'standard' | 'checkpoint' | 'reward' | 'boss'. Random encounters never fire in 'checkpoint' or 'boss' rooms. v1 gates random encounters OFF (disableRandomEncounters) — the Cottage uses scripted, room-placed fights only.",
+    "wallKind": "'solid' (collidable run) | 'doorway' (collidable frame, walk-through gap, wires room-to-room via leadsTo) | 'illusory' (renders as a normal wall but the scene builds NO collider  -  the Keeper walks through into the secret room named by leadsTo).",
+    "roomKind": "'entry' | 'standard' | 'checkpoint' | 'reward' | 'boss'. Random encounters never fire in 'checkpoint' or 'boss' rooms. v1 gates random encounters OFF (disableRandomEncounters)  -  the Cottage uses scripted, room-placed fights only.",
     "loreFragments": "lore stone bodies key into data/lore-fragments.json under the same id. Reading all five advances the 'healers-garden' questline one beat."
   },
   "version": 2,

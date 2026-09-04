@@ -2,20 +2,20 @@
   "_comment": "Canonical Realm Map data for Defenders of the Realm. The Realm Map is the region-progression overworld: the village (Elarion) is the home base; each region is a fog-shrouded node the player discovers (gate met) then clears (one-time main objective done). Mirrors the shape the React v1 regions system uses (src/contracts/region.ts RegionDef + src/state/slices/regionsSlice.ts RegionProgress) so both engines read the same source of truth. Realm Map is a later-week / v1.1 feature; this file is authored ahead of the Unity port of the regions system.",
   "_sources": {
     "designDoc": "defenders-of-the-realm/docs/map-content-dungeons-design.md (§2 The Realm Map)",
-    "regionsSpec": "defenders-of-the-realm/docs/realms-spec.md (Wintermere zone reference only — 'realm' there is the social-group system, NOT this map)",
+    "regionsSpec": "defenders-of-the-realm/docs/realms-spec.md (Wintermere zone reference only  -  'realm' there is the social-group system, NOT this map)",
     "regionContract": "defenders-of-the-realm/src/contracts/region.ts (RegionDef, RegionGate, RegionId, RegionState)",
     "regionRunContract": "defenders-of-the-realm/src/contracts/region-run.ts (ActiveRegionRun, RegionRunResult)",
-    "regionsSlice": "defenders-of-the-realm/src/state/slices/regionsSlice.ts (RegionProgress — the v9→v10 save migration seed)",
-    "regionCatalog": "defenders-of-the-realm/src/modules/realm/region-content/index.ts + thornwood.ts (ALL_REGIONS — authored RegionDef catalog, the verbatim source for ids/titles/biomes/gates/rewards)",
-    "mapLayout": "defenders-of-the-realm/src/modules/realm/realm-map-layout.ts (AVALON_POINT, REGION_POINTS — verbatim node coordinates)",
+    "regionsSlice": "defenders-of-the-realm/src/state/slices/regionsSlice.ts (RegionProgress  -  the v9→v10 save migration seed)",
+    "regionCatalog": "defenders-of-the-realm/src/modules/realm/region-content/index.ts + thornwood.ts (ALL_REGIONS  -  authored RegionDef catalog, the verbatim source for ids/titles/biomes/gates/rewards)",
+    "mapLayout": "defenders-of-the-realm/src/modules/realm/realm-map-layout.ts (AVALON_POINT, REGION_POINTS  -  verbatim node coordinates)",
     "biomeElements": "defenders-of-the-realm/src/assets/biomeElements.ts (Element taxonomy + BIOME_ELEMENTS palette)",
-    "narrativeBible": "defenders-unity/docs/narrative-bible.md (Avalon, the Withering, the Wound — canon)"
+    "narrativeBible": "defenders-unity/docs/narrative-bible.md (Avalon, the Withering, the Wound  -  canon)"
   },
   "_schemaNotes": {
-    "regionDef": "Each entry in `regions` mirrors React's RegionDef exactly: id, title, biome, propSet, waveCount, elementBias, gate, clearReward. The Unity loader can deserialize a region entry straight into a RegionDef record. Extra fields (description, mapPoint, mapOrder, dungeonRegion) are additive map metadata not present on RegionDef — a typed loader should treat them as optional.",
+    "regionDef": "Each entry in `regions` mirrors React's RegionDef exactly: id, title, biome, propSet, waveCount, elementBias, gate, clearReward. The Unity loader can deserialize a region entry straight into a RegionDef record. Extra fields (description, mapPoint, mapOrder, dungeonRegion) are additive map metadata not present on RegionDef  -  a typed loader should treat them as optional.",
     "gate": "RegionGate is a discriminated union on `kind`: 'bestWave' { value:int } unlocks when the player has cleared >= value village waves; 'regionCleared' { regionId } unlocks when a prerequisite region is cleared. This is the exact union from src/contracts/region.ts.",
     "state": "RegionState ('locked'|'discovered'|'cleared'|'threatened') is DERIVED at runtime from RegionProgress, never stored in this file. 'threatened' is a transient Weekly-Realm-Threat overlay only.",
-    "progressLedger": "`progressLedger` documents the persisted RegionProgress shape (two flat maps discovered/cleared keyed by region id). It is the v10 save-migration seed (emptyRegionProgress() => { discovered:{}, cleared:{} }). It is NOT authored content — it is here so the Unity SaveSchema/loader knows the persisted shape."
+    "progressLedger": "`progressLedger` documents the persisted RegionProgress shape (two flat maps discovered/cleared keyed by region id). It is the v10 save-migration seed (emptyRegionProgress() => { discovered:{}, cleared:{} }). It is NOT authored content  -  it is here so the Unity SaveSchema/loader knows the persisted shape."
   },
   "version": 1,
   "homeBase": {
@@ -104,12 +104,12 @@
     }
   ],
   "withering": {
-    "_comment": "The Withering is the creeping corruption that seeps from the Wound. On the Realm Map it is a corrupted border around the parchment's edge — atmospheric only, never a punishing timer (the cozy covenant forbids FOMO countdowns). Later it becomes the visual home of the Weekly Realm Threat event.",
+    "_comment": "The Withering is the creeping corruption that seeps from the Wound. On the Realm Map it is a corrupted border around the parchment's edge  -  atmospheric only, never a punishing timer (the cozy covenant forbids FOMO countdowns). Later it becomes the visual home of the Weekly Realm Threat event.",
     "edgeBorder": true,
     "weeklyRealmThreat": false
   },
   "progressLedger": {
-    "_comment": "Documents the persisted RegionProgress shape (regionsSlice.ts). NOT authored content — this is the runtime save shape, shown here so the Unity SaveSchema/loader matches it. emptyRegionProgress() is the v9→v10 migration seed.",
+    "_comment": "Documents the persisted RegionProgress shape (regionsSlice.ts). NOT authored content  -  this is the runtime save shape, shown here so the Unity SaveSchema/loader matches it. emptyRegionProgress() is the v9→v10 migration seed.",
     "_shape": "{ discovered: Record<regionId, true>, cleared: Record<regionId, true> }",
     "discovered": {},
     "cleared": {}

@@ -4,7 +4,7 @@
   "areas": [
     {
       "id": "goldfields",
-      "note": "East, near castle — the gentle onboarding ground. Small arena, low level, orc warband.",
+      "note": "East, near castle  -  the gentle onboarding ground. Small arena, low level, orc warband.",
       "center": { "x": 260, "z": 0 },
       "radius": 190,
       "families": [
@@ -17,7 +17,7 @@
     },
     {
       "id": "stoneback",
-      "note": "West uplands — a step up. Orc warband with a chance of a skeleton band; med arena.",
+      "note": "West uplands  -  a step up. Orc warband with a chance of a skeleton band; med arena.",
       "center": { "x": -260, "z": 0 },
       "radius": 190,
       "families": [
@@ -31,7 +31,7 @@
     },
     {
       "id": "mirewood",
-      "note": "South toward the Wound — corrupted. Skeletons common, trolls appear; med arena, bigger troop.",
+      "note": "South toward the Wound  -  corrupted. Skeletons common, trolls appear; med arena, bigger troop.",
       "center": { "x": 0, "z": -260 },
       "radius": 190,
       "families": [
@@ -45,7 +45,7 @@
     },
     {
       "id": "ashwood",
-      "note": "North front line — the deadliest ground. Trolls lead, skeletons support; LARGE arena, largest troop.",
+      "note": "North front line  -  the deadliest ground. Trolls lead, skeletons support; LARGE arena, largest troop.",
       "center": { "x": 0, "z": 260 },
       "radius": 190,
       "families": [
@@ -58,5 +58,5 @@
       "seedBudget": 26
     }
   ],
-  "notes": "Geotagged spawn AREAS (WO-606 V1). Each area is a circle footprint (center xz + radius) in world space; a world position resolves to the containing area (nearest center on overlap). Only authored areas spawn -> moat/water/seam/non-play belong to no area = no spawns (composes with the navmesh moat carve). families[] is a weighted pool; on a draw the chosen family fills the composition's role slots (tank/dps/healer counts) with its Tank/Warrior(dps)/Mage(healer) archetype ids (Tripo roster). levelRange sets enemy level (higher farther out) and feeds the existing 'threat' int; arenaPreset is forwarded as a string (BattleArena geometry has no size param yet — later hook); seedBudget is the progression knob (chunk-composer WO-479) that scales count/level. Center/radius/weights are OWNER-TUNABLE. Skeleton/troll enemy DEFS+models are a fast-follow (see WORK_ORDER_606 note) — until statted they build with EnemyFactory fallbacks; orc-* ids are proven."
+  "notes": "Geotagged spawn AREAS (WO-606 V1). Each area is a circle footprint (center xz + radius) in world space; a world position resolves to the containing area (nearest center on overlap). Only authored areas spawn -> moat/water/seam/non-play belong to no area = no spawns (composes with the navmesh moat carve). families[] is a weighted pool; on a draw the chosen family fills the composition's role slots (tank/dps/healer counts) with its Tank/Warrior(dps)/Mage(healer) archetype ids (Tripo roster). levelRange sets enemy level (higher farther out) and feeds the existing 'threat' int; arenaPreset is forwarded as a string (BattleArena geometry has no size param yet  -  later hook); seedBudget is the progression knob (chunk-composer WO-479) that scales count/level. Center/radius/weights are OWNER-TUNABLE. Skeleton/troll enemy DEFS+models are a fast-follow (see WORK_ORDER_606 note)  -  until statted they build with EnemyFactory fallbacks; orc-* ids are proven."
 }

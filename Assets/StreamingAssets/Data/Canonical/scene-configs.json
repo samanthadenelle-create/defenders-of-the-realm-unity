@@ -1,6 +1,6 @@
-{
+﻿{
   "version": 1,
-  "_note": "Scene-generation config — the data contract that determines WHAT scene the base-scene factory generates (WO-454; canon: docs/WORK_ORDER_454_faction_base_scene_generator.md). A base IS a scene: player stronghold, enemy outpost, garrison — all generated from one of these configs. ownership=Player => buildable/owned, no garrison; ownership=Enemy => faction garrison + boss. The generator (StructureFactory/CastleHubBuilder + GridWall + WaveManager-composition + EnemyFactory) consumes these; the config is the ONLY delta between scene types. Dual-copy (Resources copy wins at load via CanonicalJson; keep StreamingAssets in sync).",
+  "_note": "Scene-generation config  -  the data contract that determines WHAT scene the base-scene factory generates (WO-454; canon: docs/WORK_ORDER_454_faction_base_scene_generator.md). A base IS a scene: player stronghold, enemy outpost, garrison  -  all generated from one of these configs. ownership=Player => buildable/owned, no garrison; ownership=Enemy => faction garrison + boss. The generator (StructureFactory/CastleHubBuilder + GridWall + WaveManager-composition + EnemyFactory) consumes these; the config is the ONLY delta between scene types. Dual-copy (Resources copy wins at load via CanonicalJson; keep StreamingAssets in sync).",
   "_schema": {
     "id": "stable config id",
     "displayName": "player-facing name",
@@ -10,13 +10,13 @@
     "wallTier": "Wood | Iron | ReinforcedSteel",
     "baseRadius": "perimeter HALF-EXTENT (m). THE ARENA SIZE: RaidBaseGenerator builds the outer ring to exactly this. Raid tiers target ~20/50/60% of the 140m RaidGround plane (radius = 70 * sqrt(fraction)) = 31 / 49 / 54m. Clamped to 63m (RaidNavBake.GroundScale).",
     "wallSegmentsPerSide": "MINIMUM wall panels per side (forced ODD so the gate centres). Sets the granularity + the gate width; baseRadius sets the size. The generator ADDS panels when needed so none is stretched past 3m.",
-    "centralBuilding": "structures-catalog id of THE SPIRE at centre — the RAID OBJECTIVE. Destroying it WINS the raid (RaidSpire; HP 1200/2200/3500 by difficulty). Its visualPrefabPath is the spire art.",
-    "towers": "[{ type: structures-catalog id, count }] — the TURRET TYPE PALETTE, weighted by count. HOW MANY turrets is archerTowerCount + mageTowerCount; WHAT each one is comes from here, and its range/damage/fireRate/element/art come from that structures-catalog row.",
+    "centralBuilding": "structures-catalog id of THE SPIRE at centre  -  the RAID OBJECTIVE. Destroying it WINS the raid (RaidSpire; HP 1200/2200/3500 by difficulty). Its visualPrefabPath is the spire art.",
+    "towers": "[{ type: structures-catalog id, count }]  -  the TURRET TYPE PALETTE, weighted by count. HOW MANY turrets is archerTowerCount + mageTowerCount; WHAT each one is comes from here, and its range/damage/fireRate/element/art come from that structures-catalog row.",
     "props": "{ set: [structures-catalog ids], count }",
-    "garrison": "ENEMY only — { composition:[{enemyId,count}], baseEnemyLevel (absolute FLOOR), levelOffset (relative to PLAYER level), difficultyMultiplier, boss }. Generator computes enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset) so outposts scale with the player but never below the floor (always a meaningful fight).",
+    "garrison": "ENEMY only  -  { composition:[{enemyId,count}], baseEnemyLevel (absolute FLOOR), levelOffset (relative to PLAYER level), difficultyMultiplier, boss }. Generator computes enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset) so outposts scale with the player but never below the floor (always a meaningful fight).",
     "themeColor": "faction banner/accent hex",
-    "recommendedClearTime": "seconds — 3-star clear threshold (fast = mastery)",
-    "twoStarTime": "seconds — 2-star threshold (~1.3x the 3-star). Above this but a clear = 1 star",
+    "recommendedClearTime": "seconds  -  3-star clear threshold (fast = mastery)",
+    "twoStarTime": "seconds  -  2-star threshold (~1.3x the 3-star). Above this but a clear = 1 star",
     "oneStarTime": "any clear earns at least 1 star (no upper bound)",
     "rewardMultiplier": "loot/reward scalar for this raid tier",
     "raidCooldownSeconds": "WO-728 / owner ruling 2026-08-21, rationale corrected by WO-1134 - seconds this camp stays UN-RAIDABLE after a clear. Regular 14400 (4h) / Hard 28800 (8h) / Extreme 43200 (12h). 0 or absent falls back to the identical difficulty table in RaidCooldownService. THIS IS A PACING KNOB. It is NO LONGER THE CRYSTAL BOUND - THE UTC DAY IS. This entry used to say 'THIS NUMBER IS THE CRYSTAL BOUND, NOT A PACING KNOB' and '12h = ~2 clears/day = ~242 crystals/day'; both are now wrong, the second by 2x. Under the WO-1134 daily ruling a camp pays crystals on the FIRST clear of each UTC day ONLY (RaidClaimService.CrystalsPaidToday); further clears the same day pay reduced ORDINARY resources and ZERO crystals, so an Extreme camp pays 121 crystals/day, not ~242, and this window now bounds only within-day repeats that pay no crystals anyway. Crystals are still the one unbounded faucet in principle (RaidScoring.ComputeLoot pays FOOD and CRYSTALS ONLY - zero wood, zero iron - so the raid loop cannot fund its own troop costs); the day stamp is what bounds them now, and the day stamp is the lever to retune, NOT these hours. The 12h number itself is UNCHANGED and still an owner ruling. Crystals buy instant-finish, so SHORTENING these still defunds the timer ladder the game is paced by. Do not retune from how a single play session feels; a play session is not a day. The window is measured on the SERVER-ANCHORED clock (TimeSource), never the device clock.",
@@ -25,9 +25,9 @@
     "towerPlacementStyle": "Cardinal (mid-side, 4) | OverlappingFire (corners + mid-side crossfire)",
     "archerTowerCount": "Watchtower_Archer_* turrets placed. archer+mage is the TOTAL turret count (4 / 7 / 10 by tier); ~60% go on the wall line, the rest guard the spire so neither the approach nor the objective is safe.",
     "mageTowerCount": "Watchtower_Mage_* turrets placed (see archerTowerCount).",
-    "difficulty": "Regular | Hard | Extreme — drives the SPIRE HP (1200/2200/3500) and the arena-wide tower DPS budget (12/16/20), which caps what the most-covered point in the arena can take.",
-    "eliteCount": "elite garrison units. CONSUMED by RaidGarrisonSpawner.ExpandComposition (WO-932) — appends N copies of the heaviest composition unit (or boss).",
-    "shardDropChance": "0..1 chance of a shard drop (3-star-only gating applied later by scoring — not geometry)"
+    "difficulty": "Regular | Hard | Extreme  -  drives the SPIRE HP (1200/2200/3500) and the arena-wide tower DPS budget (12/16/20), which caps what the most-covered point in the arena can take.",
+    "eliteCount": "elite garrison units. CONSUMED by RaidGarrisonSpawner.ExpandComposition (WO-932)  -  appends N copies of the heaviest composition unit (or boss).",
+    "shardDropChance": "0..1 chance of a shard drop (3-star-only gating applied later by scoring  -  not geometry)"
   },
   "configs": [
     {
@@ -105,7 +105,7 @@
       "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.0,
-      "raidCooldownSeconds": 14400, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
+      "raidCooldownSeconds": 14400, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04  -  Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
       "entranceCount": 2,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "Cardinal",
@@ -170,7 +170,7 @@
       "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.5,
-      "raidCooldownSeconds": 28800, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
+      "raidCooldownSeconds": 28800, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04  -  Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
       "entranceCount": 1,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "OverlappingFire",
@@ -227,7 +227,7 @@
       "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 2.2,
-      "raidCooldownSeconds": 43200, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
+      "raidCooldownSeconds": 43200, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04  -  Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
       "entranceCount": 1,
       "interiorWallLayers": 1,
       "towerPlacementStyle": "OverlappingFire",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "WeaponSkill -> animation-cycle mapping. The OWNER GOAL: animation is determined by JOB TYPE + WEAPON-SKILL, so each class skill plays its matching swing/cast instead of one generic Cast trigger. KEYS: 'class' is the abilities.json class id (mage|knight|ranger|cleric; Wizard art folder == mage, Healer art folder == cleric). 'skill' is the weaponskill name from Resources/HudIcons/<Class>/ (the per-class skill icon set the HUD shows). 'slot' (q/w/e/r) ties the skill to the abilities.json ability that fires it (this is what the runtime actually casts today — the skill name is the design label for that slot). RUNTIME CONTRACT: 'trigger' is the canonical AnimParams verb the ActorAnimator must fire (Cast|Attack|WindUp|Victory|Block). 'combo' (>=0) is the Combo int set BEFORE an Attack trigger so a multi-clip class (Knight) plays a DIFFERENT swing per skill via the Attack0/1/2 states the HeroAnimatorFactory builds. 'clip' is the Assets/Action FBX basename the factory should bind to that state. 'clipExists'=true means the FBX is present today; false means MISSING -> 'fallbackClip' (an existing clip) is used until art lands. This file is the SINGLE source the HeroAnimatorFactory reads to build per-skill states AND the runtime (HeroAbilities / BattleController) reads to pick the right trigger+combo per cast. Dual-copy: Resources copy WINS at load; keep StreamingAssets copy in sync.",
+  "_comment": "WeaponSkill -> animation-cycle mapping. The OWNER GOAL: animation is determined by JOB TYPE + WEAPON-SKILL, so each class skill plays its matching swing/cast instead of one generic Cast trigger. KEYS: 'class' is the abilities.json class id (mage|knight|ranger|cleric; Wizard art folder == mage, Healer art folder == cleric). 'skill' is the weaponskill name from Resources/HudIcons/<Class>/ (the per-class skill icon set the HUD shows). 'slot' (q/w/e/r) ties the skill to the abilities.json ability that fires it (this is what the runtime actually casts today  -  the skill name is the design label for that slot). RUNTIME CONTRACT: 'trigger' is the canonical AnimParams verb the ActorAnimator must fire (Cast|Attack|WindUp|Victory|Block). 'combo' (>=0) is the Combo int set BEFORE an Attack trigger so a multi-clip class (Knight) plays a DIFFERENT swing per skill via the Attack0/1/2 states the HeroAnimatorFactory builds. 'clip' is the Assets/Action FBX basename the factory should bind to that state. 'clipExists'=true means the FBX is present today; false means MISSING -> 'fallbackClip' (an existing clip) is used until art lands. This file is the SINGLE source the HeroAnimatorFactory reads to build per-skill states AND the runtime (HeroAbilities / BattleController) reads to pick the right trigger+combo per cast. Dual-copy: Resources copy WINS at load; keep StreamingAssets copy in sync.",
   "_notes": {
     "knight": "Knight has the RICHEST clip set (10+ melee swings) -> full per-skill coverage achievable now. Each skill maps to a distinct Attack combo index; HeroAnimatorFactory must be extended from 3 Attack states to 4 (one per skill) OR reuse 3 + 1 cast-style for Charge.",
     "ranger": "2026-08-16 (owner defect: 'the ranger has no firing animation'): the ranger NO LONGER falls back to the static aim pose. 'Archery Shot Away' (Assets/Action/Archery Shot Away.fbx, clip 'archery-shotaway', Humanoid animationType 3) was already imported and bound to NOTHING; it is now the ranger's Attack + Cast + CastUpper motion in Ranger.controller, so every ranger skill (no spellCastClips -> all four slots use the generic Cast) looses an arrow. Ranger_Aim_Idle is demoted to the FALLBACK only. STILL A GAP: there is exactly ONE bow clip, so aimed-shot / rapid-fire / volley cannot be told apart yet -- those rows keep clipExists:false and now fall back to the real shot instead of the pose. Pinned by RangerBowFireRegression (RANGER_BOW_FIRE_OK).",
@@ -122,7 +122,7 @@
       "class": "knight", "abilityId": "knight.emberbrand-throw", "skill": "Emberbrand Throw", "slot": "w",
       "trigger": "Cast", "combo": -1,
       "clip": "Combat_Spell_MagicalMoves_SpellCast_04", "clipExists": false, "fallbackClip": "Combat_Spell_Fireball",
-      "_note": "WO-614 dot — burning brand throw. Shares the fireball cast (owner pick 2026-07-11: Magic Spell cast 04)."
+      "_note": "WO-614 dot  -  burning brand throw. Shares the fireball cast (owner pick 2026-07-11: Magic Spell cast 04)."
     },
     {
       "class": "knight", "abilityId": "knight.mending-salve", "skill": "Mending Salve", "slot": "e",
@@ -134,61 +134,61 @@
       "class": "knight", "abilityId": "knight.oathmend", "skill": "Oathmend", "slot": "e",
       "trigger": "Cast", "combo": -1,
       "clip": "Combat_Spell_MagicalMoves_SpellCast_02", "clipExists": false, "fallbackClip": "Combat_Spell_Two_Hand_Spell_Casting",
-      "_note": "WO-614 healOverTime — heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
+      "_note": "WO-614 healOverTime  -  heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
     },
     {
       "class": "knight", "abilityId": "knight.second-wind", "skill": "Second Wind", "slot": "e",
       "trigger": "Cast", "combo": -1,
       "clip": "Combat_Spell_MagicalMoves_SpellCast_02", "clipExists": false, "fallbackClip": "Combat_Spell_Two_Hand_Spell_Casting",
-      "_note": "WO-614 heal — heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
+      "_note": "WO-614 heal  -  heal cast (owner pick 2026-07-11: Magic Spell Cast 02)."
     },
     {
       "class": "knight", "abilityId": "knight.wardens-roar", "skill": "Warden's Roar", "slot": "e",
       "trigger": "Cast", "combo": -1,
       "clip": "Signature_Taunt", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 taunt — the dedicated Signature_Taunt shout clip."
+      "_note": "WO-614 taunt  -  the dedicated Signature_Taunt shout clip."
     },
     {
       "class": "knight", "abilityId": "knight.shield-bash", "skill": "Shield Slam", "slot": "w",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Sword_And_Shield_Slash", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 melee signature — sword-and-shield slash. combo -1 (documentary binding; the combo states are owned by the 4 canonical knight rows above)."
+      "_note": "WO-614 melee signature  -  sword-and-shield slash. combo -1 (documentary binding; the combo states are owned by the 4 canonical knight rows above)."
     },
     {
       "class": "knight", "abilityId": "knight.suppressing-volley", "skill": "Suppressing Volley", "slot": "r",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Standing_Melee_Attack_360_High", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 melee cleave — 360 high spin reads as a sweeping volley."
+      "_note": "WO-614 melee cleave  -  360 high spin reads as a sweeping volley."
     },
     {
       "class": "knight", "abilityId": "knight.sweeping-cut", "skill": "Sweeping Cut", "slot": "w",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Outward_Slash", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 melee cleave — wide outward slash."
+      "_note": "WO-614 melee cleave  -  wide outward slash."
     },
     {
       "class": "knight", "abilityId": "knight.champions-combo", "skill": "Champion's Combo", "slot": "r",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Combo", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 multi-strike finisher — the dedicated combo swing."
+      "_note": "WO-614 multi-strike finisher  -  the dedicated combo swing."
     },
     {
       "class": "knight", "abilityId": "knight.eternal-aegis", "skill": "Eternal Aegis", "slot": "r",
       "trigger": "Cast", "combo": -1,
       "clip": "sword and shield power up", "clipExists": true, "fallbackClip": "Wizard_Spell_Cast",
-      "_note": "WO-614 big defensive — the power-up guard pose (maps to Combat_Spell_Two_Hand_Spell_Casting via the package clip table)."
+      "_note": "WO-614 big defensive  -  the power-up guard pose (maps to Combat_Spell_Two_Hand_Spell_Casting via the package clip table)."
     },
     {
       "class": "knight", "abilityId": "knight.ranged-poke", "skill": "Throwing Spear", "slot": "w",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Stabbing", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 ranged poke — stabbing thrust reads as a spear throw."
+      "_note": "WO-614 ranged poke  -  stabbing thrust reads as a spear throw."
     },
     {
       "class": "knight", "abilityId": "knight.snare-arrow", "skill": "Pinning Spear", "slot": "w",
       "trigger": "Attack", "combo": -1,
       "clip": "Combat_Weapon_WeaponSkill_Stabbing", "clipExists": true, "fallbackClip": "standing melee attack horizontal",
-      "_note": "WO-614 ranged snare — stabbing thrust reads as a pinning spear."
+      "_note": "WO-614 ranged snare  -  stabbing thrust reads as a pinning spear."
     }
   ]
 }

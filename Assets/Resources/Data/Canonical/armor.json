@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "_note": "WO-996: AUTHORITATIVE RUNTIME curated set (CanonicalJson Resources-first). StreamingAssets is the library superset. Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus = flat HP add. perk = passive descriptor string (gameplay effect wired in a future WO — data-only for now). job 'any' = all classes; 'knight'/'ranger'/'mage' = class-locked. PRICING: iron-primary for plate, food-primary for leather/cloth, crystals gate rare+. Tiered common floor -> legendary sink. Version 2: added 15 class-specific sets (5 per class) alongside the 5 universal entries.",
+  "_note": "WO-996: AUTHORITATIVE RUNTIME curated set (CanonicalJson Resources-first). StreamingAssets is the library superset. Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus = flat HP add. perk = passive descriptor string (gameplay effect wired in a future WO  -  data-only for now). job 'any' = all classes; 'knight'/'ranger'/'mage' = class-locked. PRICING: iron-primary for plate, food-primary for leather/cloth, crystals gate rare+. Tiered common floor -> legendary sink. Version 2: added 15 class-specific sets (5 per class) alongside the 5 universal entries.",
   "armor": [
     {
       "id": "armor_cloth",

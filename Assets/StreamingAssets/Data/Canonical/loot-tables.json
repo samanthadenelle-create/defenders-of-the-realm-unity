@@ -62,7 +62,7 @@
     },
 
     {
-      "_comment": "Phase-2 survival containers — BreakableContainer props in the outpost/dungeon chain roll these on break (ItemDropSystem.RollLines). Early-game GENEROUS so survival materials feel gatherable.",
+      "_comment": "Phase-2 survival containers  -  BreakableContainer props in the outpost/dungeon chain roll these on break (ItemDropSystem.RollLines). Early-game GENEROUS so survival materials feel gatherable.",
       "id": "crate-common",
       "source": "dungeon",
       "drops": [
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "_comment": "WO-556 ITEM 2/3 — the rare arena BOSS (BattleArena.BossEnemyId 'orc-warlord', ~5% of fights; model Orc_Necromancer). source 'boss' so ItemDropWatcher rolls the bossOnly gem lines. Ordinary mats always; the 3 crystal GEMS gated bossOnly at a LOW rate (the boss is the gem source now).",
+      "_comment": "WO-556 ITEM 2/3  -  the rare arena BOSS (BattleArena.BossEnemyId 'orc-warlord', ~5% of fights; model Orc_Necromancer). source 'boss' so ItemDropWatcher rolls the bossOnly gem lines. Ordinary mats always; the 3 crystal GEMS gated bossOnly at a LOW rate (the boss is the gem source now).",
       "id": "orc-warlord",
       "source": "boss",
       "drops": [
@@ -152,7 +152,7 @@
     },
 
     {
-      "_comment": "WO-749 — dungeon-only Hollow-family enemy drops for the ATB/cottage per-encounter loot roll (DungeonLootGrant.GrantEncounter, non-boss). Sources the 5 hollow commons the WO enumerates so a delve fight yields survival mats.",
+      "_comment": "WO-749  -  dungeon-only Hollow-family enemy drops for the ATB/cottage per-encounter loot roll (DungeonLootGrant.GrantEncounter, non-boss). Sources the 5 hollow commons the WO enumerates so a delve fight yields survival mats.",
       "id": "dungeon-hollow",
       "source": "dungeon",
       "drops": [
@@ -165,7 +165,7 @@
       ]
     },
     {
-      "_comment": "WO-749 — dungeon mini-boss drop: the 3 gem crystals + a healthy common payout. source 'boss' so the enemy path opens bossOnly lines; the encounter/chest resolver also passes includeBossOnly=true.",
+      "_comment": "WO-749  -  dungeon mini-boss drop: the 3 gem crystals + a healthy common payout. source 'boss' so the enemy path opens bossOnly lines; the encounter/chest resolver also passes includeBossOnly=true.",
       "id": "dungeon-miniboss",
       "source": "boss",
       "drops": [
@@ -177,7 +177,7 @@
       ]
     },
     {
-      "_comment": "WO-749 — deep-boss / deep-vault table: the ONLY source of the 5 LEGENDARY reforge components (gear-recipes.json), gated bossOnly at a LOW rate so a legendary weapon is a 5+ deep-delve payoff (epic by design). One heartwood_core is guaranteed so a deep-boss hoard can never be empty; all other master/legendary lines remain independent rolls.",
+      "_comment": "WO-749  -  deep-boss / deep-vault table: the ONLY source of the 5 LEGENDARY reforge components (gear-recipes.json), gated bossOnly at a LOW rate so a legendary weapon is a 5+ deep-delve payoff (epic by design). One heartwood_core is guaranteed so a deep-boss hoard can never be empty; all other master/legendary lines remain independent rolls.",
       "id": "dungeon-deepboss",
       "source": "boss",
       "drops": [
@@ -192,7 +192,7 @@
       ]
     },
     {
-      "_comment": "WO-749 — treasure-chest table (rewardKey resolver map target for the healers-cottage cellar/storage chests + the resolver default). Ember/essence + crystal shards + the 2 Master-gear components (quench_oil/heartwood_core).",
+      "_comment": "WO-749  -  treasure-chest table (rewardKey resolver map target for the healers-cottage cellar/storage chests + the resolver default). Ember/essence + crystal shards + the 2 Master-gear components (quench_oil/heartwood_core).",
       "id": "dungeon-chest",
       "source": "dungeon",
       "drops": [

@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11. v3 (WO-750, 2026-07-19): knight castHeal rebound to Mage Spell Cast 5 (f-ss-magespellcast-05) for Warden's Grace; skill1/skill2 sfxId filled (Swords_Clash); castHeal sfxImpact Heal. NOTE: the R-slot 'Jump into Slash Up' (atk_slashup) clip and R cast/impact SFX are NOT wired here — atk_slashup is attack-taxonomy (would trip the cast-keyword lint) and CastVariant 4 (Cast_r) is a hardcoded HeroAnimatorFactory.MocapSpellClips[4] pick, not registry-resolved; rebinding R to atk_slashup + adding R sfx requires a factory edit + re-bake (out of this data lane).",
+  "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11. v3 (WO-750, 2026-07-19): knight castHeal rebound to Mage Spell Cast 5 (f-ss-magespellcast-05) for Warden's Grace; skill1/skill2 sfxId filled (Swords_Clash); castHeal sfxImpact Heal. NOTE: the R-slot 'Jump into Slash Up' (atk_slashup) clip and R cast/impact SFX are NOT wired here  -  atk_slashup is attack-taxonomy (would trip the cast-keyword lint) and CastVariant 4 (Cast_r) is a hardcoded HeroAnimatorFactory.MocapSpellClips[4] pick, not registry-resolved; rebinding R to atk_slashup + adding R sfx requires a factory edit + re-bake (out of this data lane).",
   "vocabulary": {
     "locomotion": [
       "idle",
@@ -355,7 +355,7 @@
     },
     "mage": {
       "inherits": "humanoid",
-      "_comment": "WO-1329: Mage casting registry, wired for marquee spell binding. cast = fire spell (Spell_Fire_9, firespell_Cast). The vfxKey is owner-tagged verbatim (VfxManualPicks.json); do not pick or substitute. Unwired hooks awaiting owner tags: vfxProjectile (travel), vfxImpact (landing), sfxImpact (landing sound) — these are optional and the cast can remain silent-by-design until the owner tags them.",
+      "_comment": "WO-1329: Mage casting registry, wired for marquee spell binding. cast = fire spell (Spell_Fire_9, firespell_Cast). The vfxKey is owner-tagged verbatim (VfxManualPicks.json); do not pick or substitute. Unwired hooks awaiting owner tags: vfxProjectile (travel), vfxImpact (landing), sfxImpact (landing sound)  -  these are optional and the cast can remain silent-by-design until the owner tags them.",
       "cast": {
         "clip": "",
         "guid": "",
@@ -367,7 +367,7 @@
         "manual": true,
         "pickedUtc": "2026-09-04T00:00:00Z",
         "source": "wo-1329-marquee-bind",
-        "vfxNote": "WO-1329: cast-beat VFX only (firespell_Cast = Spell_Fire_9, marquee spell). Unwired optional hooks: vfxProjectile/vfxImpact/sfxImpact — awaiting owner tags if needed."
+        "vfxNote": "WO-1329: cast-beat VFX only (firespell_Cast = Spell_Fire_9, marquee spell). Unwired optional hooks: vfxProjectile/vfxImpact/sfxImpact  -  awaiting owner tags if needed."
       }
     },
     "ranger": {

@@ -992,17 +992,17 @@ namespace DeNelle.Editor
                 new LoreSpec {
                     Id = "journal-1", RoomId = "entrance-room",
                     AssetKey = "table_small.fbx",
-                    Title = "Alduin's journal — entry 1",
+                    Title = "Alduin's journal - entry 1",
                     Body = new[] {
                         "The folk came again today. The well at Carrow's edge is going bad. " +
-                        "Crystals work on the early signs but the late ones — I don't know yet. " +
+                        "Crystals work on the early signs but the late ones - I don't know yet. " +
                         "I came here to learn the green ways. I am still learning.",
                     },
                 },
                 new LoreSpec {
                     Id = "journal-2", RoomId = "main-room",
                     AssetKey = "table_long_decorated_A.fbx",
-                    Title = "Alduin's journal — entry 2",
+                    Title = "Alduin's journal - entry 2",
                     Body = new[] {
                         "The Folk who came from the village this week: Wren's boy, the miller's " +
                         "wife, the two children of Carrow. I told them what I had. The well is " +
@@ -1013,11 +1013,11 @@ namespace DeNelle.Editor
                 new LoreSpec {
                     Id = "journal-3", RoomId = "loft-bedroom",
                     AssetKey = "table_small_decorated_B.fbx",
-                    Title = "Alduin's journal — entry 3",
+                    Title = "Alduin's journal - entry 3",
                     Body = new[] {
                         "The dreams are back. The Wound, calling. I am not the same in the " +
                         "mornings. Mira would have known what to say. I miss her hands.",
-                        "If anyone reads this — I am going to the Wound. I am going to try one " +
+                        "If anyone reads this - I am going to the Wound. I am going to try one " +
                         "more thing. The Heart will hold while I am gone. The Heart always holds.",
                         "Forgive me.",
                     },
@@ -1025,7 +1025,7 @@ namespace DeNelle.Editor
                 new LoreSpec {
                     Id = "journal-4", RoomId = "workshop",
                     AssetKey = "table_small.fbx",
-                    Title = "Alduin's journal — entry 4 (the last one)",
+                    Title = "Alduin's journal - entry 4 (the last one)",
                     Body = new[] {
                         "I am going. The Wound is louder than the Heart now. I have left a thing " +
                         "in the cellar for whoever is next — a seed. Plant it at the Folk's " +
