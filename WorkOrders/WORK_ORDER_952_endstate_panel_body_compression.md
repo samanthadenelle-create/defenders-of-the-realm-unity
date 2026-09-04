@@ -1,6 +1,78 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** REOPENED 2026-09-04 - RECURRED ON HER DEVICE, on a DIFFERENT entry point. Was
+"DONE - audit-verified as shipped (2026-08-21 backlog audit)"; that close rested on an AUDIT, not on
+device evidence, which is the same shape as PROD-019's reopen ("closed on EDITOR-ONLY evidence;
+still broken on device").
+
+## 0. REOPEN - F8 seq 4680, her device, 2026-09-04T14:35:49Z
+
+```
+[Flow:EndState] body rows COMPRESSED to fit: need=578px well=540px scale=0.933
+  - the panel hit its screen-height clamp; every band is now below its own content size
+```
+`EndStateView.BuildBody` <- `Bind` <- `Show` <- **`BattleArenaHud.ShowResult`** <-
+`BattleArena.Resolve` <- `WatchToResolution`. Scene `Main_Castle_Overworld`, t=299.5s.
+Device `SM02G4061955851`, build on device = the 2026.09.04.354315 production candidate.
+Capture: `logs/f8-inbox/capture-device-20260904-093607-seq4680.md`.
+
+### Why this is NOT simply "the old bug is back"
+
+**It is a different call path with roughly twice the content.**
+
+| | Original (2026-08-10) | Now (2026-09-04) |
+|---|---|---|
+| Entry | `WaveCelebrationManager.WaveClearRoutine` | **`BattleArena.Resolve` -> `BattleArenaHud.ShowResult`** |
+| need | 276px | **578px** |
+| well | 249px | **540px** |
+| scale | 0.9 | **0.933** |
+
+So the wave-clear path may well be fixed; **the ARENA victory path is not**, and it carries a much
+bigger body. Do NOT assume one fix covers both - establish which paths still clamp before touching
+the solver.
+
+⚠ 0.933 is a REAL clamp, not float residue: the emitter's own threshold is
+`CompressFailBelow = 0.995f` (`EndStateView.cs:~1379`), added precisely to stop a 0.9997 hairline
+tripping a FAIL. 0.933 is well below it.
+
+### ⛔ AND THIS IS WHY NOBODY CAUGHT IT BEFORE HER
+
+**The `COMPRESSED`-absence oracle STILL DOES NOT EXIST.** `grep -rn "COMPRESSED" Assets/Editor/Regression/`
+returns **zero hits** (verified 2026-09-04). `KEY_FACTS.md` flagged this as an honest partial on
+2026-08-10 - *"WO-952 the geometry fix landed but its capture case + `COMPRESSED`-absence oracle do
+NOT exist"* - and the ticket was nevertheless marked DONE by the 08-21 audit. **The missing
+deliverable is the reason the recurrence reached her eyes instead of a gate's.**
+
+⛔ **The oracle is not optional this time.** A fix without it puts us right back here.
+
+### ⚠ WHAT THE SCREENSHOT DOES AND DOES NOT SHOW
+
+`logs/f8-inbox/device/SM02G4061955851/break_01_error.png` (09:35:50) shows the VICTORY! title and the
+panel frame drawn, with **the body area empty** and the world visible through it.
+
+⛔ **Do NOT record that as "the panel renders empty."** The harness screenshots ON the error, and the
+error fires from inside `BuildBody` - i.e. BEFORE the bands are added. The empty body is consistent
+with "not populated yet at capture time". **Whether the settled panel is empty, merely squashed, or
+fine is UNPROVEN from this capture**, and it is the first thing the next session must establish:
+split it into *data-empty* vs *built-but-invisible* vs *threw-and-skipped* (CLAUDE.md §12) with a
+capture taken AFTER layout settles. `UiSurfaceProbe` (WO-976) exists for exactly this and measures
+after settle.
+
+### Acceptance additions for the reopen
+
+- [ ] Which entry points still clamp - answered with captures, not inference (wave-clear vs arena).
+- [ ] A settled-state capture showing what the player actually sees. Quote it.
+- [ ] ⛔ The `COMPRESSED`-absence oracle EXISTS, is REGISTERED in `DataRegression`, and is **proven RED**
+      against today's 578/540 case before it goes green.
+- [ ] An EndState capture case in the UI-capture set at the device's real 2670x1200 - canon records
+      that the harness was geometry-blind until `7e05e6d3` and that **no EndState case is in the
+      capture set**, which is WO-952's other never-delivered half.
+
+---
+
+*(Original 2026-08-10 body follows, unrewritten per CLAUDE.md §15.)*
+
+**Status (original):** DONE - audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 952 → 953 in the same edit)
 **Silo:** Village/UI EndState — no overlap with any live lane
 **Origin:** the panel's OWN instrumentation net (FlowTrace.Fail), captured TWICE in one session by the
