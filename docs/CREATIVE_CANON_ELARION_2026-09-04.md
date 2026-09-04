@@ -146,6 +146,31 @@ rekindles every four hours. Stacks to three, so sleeping or working is not punis
 Economy map §3 (*do not add another currency*) is **not** violated and must not be read as licence to
 add one.
 
+### ✅ RULED 2026-09-04 — HEARTFIRE REPLACES THE PER-CAMP WALL
+
+> Owner, asked directly: **"Heartfire replaces the camp wall."**
+
+**One gate on WHEN you may raid, and it is Heartfire.** The per-camp `raidCooldownSeconds` lockout
+(4h / 8h / 12h) is **RETIRED as a gate**. Three expeditions is the limit; the player spends them
+wherever they like.
+
+⛔ **The once-per-UTC-day crystal stamp SURVIVES and is NOT part of this ruling.**
+`RaidClaimService.CrystalsPaidToday` is the monetisation guard, keyed on the UTC day rather than on the
+cooldown window, and it bounds the one unbounded faucet. It gates **what a clear PAYS**, not **whether
+you may go** — a different axis, and retiring it was never asked for.
+
+**Why this is safe, worked through rather than assumed:** the obvious worry is that a single gate makes
+re-clearing the easiest camp the optimal play. It does not, because camps carry an escalating
+`rewardMultiplier` (1.0 / 1.5 / 2.2 at `scene-configs.json:106,169,224`), so the best use of a charge is
+**the hardest camp you can actually beat**. The single gate turns camp choice into a real decision
+instead of a rotation forced by three staggered timers.
+
+⚠ **IMPLEMENTATION NOTE — this is a RETIREMENT, not a re-tune.** Do not shorten `raidCooldownSeconds`;
+that file's own authoring note explains at length why those hours are not the lever. Retire the gate,
+and record in `scene-configs.json` that the field is superseded rather than deleting it silently.
+
+<details><summary>Superseded: the three-gate analysis this ruling answered</summary>
+
 ### ⚠ CONFLICT — three gates would stack, and someone must rule
 
 Two pacing gates already ship, and Heartfire is a third:
@@ -162,6 +187,8 @@ daily crystal stamp is the monetisation guard. They only become punishing if a p
 by two at once with no third target available, so **the acceptance criterion is that a player holding
 Heartfire always has somewhere to spend it.** ⛔ Do NOT shorten `raidCooldownSeconds` to make room —
 that file's own authoring note explains at length why those hours are not the lever.
+
+</details>
 
 ---
 
