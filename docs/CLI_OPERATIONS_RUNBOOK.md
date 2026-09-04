@@ -186,10 +186,33 @@ character, no smart quotes.
 |---|---|
 | Windows player | `.\build-windows.ps1` |
 | Android APK | `.\overnight-apk-build.ps1` (full chain, **blocks** on R2) |
+| **Google Play AAB** | `.\google-play-aab-build.ps1` (full chain, **blocks** on R2 **and on size**) |
+| AAB size check only | `.\google-play-aab-build.ps1 -MeasureOnly` (bundletool, no build, no push) |
 | APK install to device | `.\install-apk-to-seeker.ps1 -Build:$false -Install:$true` |
 | WebGL | `.\build-webgl.ps1` / `.\build-webgl-isolated.ps1` |
 | WebGL serve locally | `.\serve-webgl.ps1` |
 | Morning ship chain | `.\morning-ship-chain.ps1` (**blocks** on R2) |
+
+> ### ⛔ THE AAB GOES THROUGH `google-play-aab-build.ps1`, NEVER A RAW `Unity.exe` LINE (WO-1365)
+> Until 2026-09-04 **no script invoked `BuildGooglePlayAab` at all** — the 2026-09-01 AAB came from a
+> hand-assembled command line with **no `-ExpectMarker`**, the AAB lane **never pushed R2** (it
+> resolves the same `.../Android/` remote catalog as the APK, and every build stamps a new version so
+> it asks for a **new content-hashed catalog** no previous push can cover — §16 occurrence five
+> waiting), and **nothing measured size** (31 MB appeared in two days with every marker green).
+> The wrapper closes all three. Markers, judged on a fresh log, never on the exit code:
+> `AAB_SIGNING_PREFLIGHT_OK` / `AAB_SIGNING_OK` / `AAB_SIGNING_FAIL` (exit 5 — a missing or incomplete
+> gitignored `keystore.properties` makes `ApplyReleaseSigning` fall back **silently to DEBUG
+> signing**, which Play rejects), `[AndroidBuild] SUCCEEDED` (asserted via `-ExpectMarker`),
+> `AAB_OK` / `AAB_STALE` / `AAB_FAILED_NO_AAB` (exit 1 — freshness, not existence),
+> `R2_PARITY_OK` / `R2_PARITY_FAILED` (exit 3 — delegated to `tools\r2-ship.ps1`, the one file; never
+> re-inline the push or the verify), `AAB_SIZE_OK <bytes> (<margin> under <ceiling>)` /
+> `AAB_SIZE_FAIL` / `AAB_SIZE_UNMEASURED` (exit 6), `AAB_DONE`. Status file: `Builds\aab-status.txt`.
+> Ceiling defaults to **500,000,000 bytes** — Play's base-module compressed-download limit on the
+> strict decimal reading. Google documents neither MB nor MiB and the difference is ~14 MB; do not
+> raise the default to the generous reading to make a build pass. Measured with Unity's own bundled
+> `bundletool-all-*.jar` + OpenJDK (`build-apks --mode=default` then `get-size total --modules=base`,
+> **MAX** binding), both located by searching the Hub — no install, no hardcoded editor version. The
+> ~1 GB `.apks` intermediate is deleted in a `finally`.
 
 ### ⛔ THE TESTER BUILD MUST BEHAVE LIKE PRODUCTION (owner ruling 2026-08-27)
 

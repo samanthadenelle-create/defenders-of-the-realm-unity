@@ -7,7 +7,7 @@
 // Output: <proj>/Builds/Android/DefendersOfTheRealm.apk
 //
 // Prerequisites:
-//   1. Unity Hub -> 6000.4.7f1 -> Add Modules -> "Android Build Support" (with
+//   1. Unity Hub -> 6000.4.8f1 -> Add Modules -> "Android Build Support" (with
 //      OpenJDK + Android SDK + NDK sub-modules). Without these the build aborts
 //      immediately with a Gradle error.
 //   2. The Seeker is ARM64-only — this script forces ARM64, IL2CPP, and the
@@ -18,7 +18,7 @@
 //   adb install -r Builds\Android\DefendersOfTheRealm.apk
 //
 // (adb ships with the Android module under
-//  C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\PlaybackEngines\
+//  C:\Program Files\Unity\Hub\Editor\6000.4.8f1\Editor\Data\PlaybackEngines\
 //      AndroidPlayer\SDK\platform-tools\adb.exe.)
 // =============================================================================
 

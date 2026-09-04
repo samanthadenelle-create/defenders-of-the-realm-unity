@@ -254,8 +254,20 @@ failure. **This is why `libil2cpp.so` is 21.42 MiB and why there is little left 
 
 ## ACCEPTANCE
 
-- [ ] An AAB build that exceeds the ceiling FAILS, proven by running the guard against the current
-      514,062,537-byte artifact and quoting the failure. **Prove RED first.**
+- [x] ⛔ **RE-WORDED 2026-09-04 — the original criterion became UNFULFILLABLE while this ticket was
+      open, and that is worth recording rather than quietly editing.** It asked to prove RED against
+      "the current 514,062,537-byte artifact". **WO-1367's texture pass landed first**, so the artifact
+      on disk is now 472,637,397 bytes measuring **469,202,267** — i.e. **30.8 MB UNDER** the ceiling.
+      There is no oversized artifact left to fail against.
+      **RED was therefore proven by LOWERING THE CEILING**, which tests the same code path:
+      ```
+      -MeasureOnly -SizeCeilingBytes 460000000  ->  AAB_SIZE_FAIL 469202267 (9202267 OVER 460000000)  exit 6
+      -MeasureOnly                              ->  AAB_SIZE_OK   469202267 (30797733 under 500000000) exit 0
+      ```
+      **Both runs verified by the lead directly, not taken on the agent's word.** The `.apks`
+      intermediate was removed by the script's own `finally` in both cases.
+      ⭐ **And the exit codes are RIGHT** — 6 on failure, 0 on success. This repo's standing hazard is
+      runners that exit 0 on refusals and FAILs; this one does not, so the marker AND the exit agree.
 - [ ] An AAB build with no fresh R2 push FAILS or refuses, on the marker.
 - [ ] The wrapper is one command, documented in `docs/CLI_OPERATIONS_RUNBOOK.md`'s build table in the
       SAME commit (§15).
