@@ -60,6 +60,35 @@ The concurrent P0 lane changed the raids section to say "Open Journey, then Raid
 iron (`guide-content.json:280`). **Build on that edit; do not revert it.** This lane replaces the
 *fiction*, and that fix was to the *direction* - both must survive.
 
+## §4b. ⛔ TWO RULINGS ADDED 2026-09-04, AFTER THIS TICKET WAS FIRST WRITTEN
+
+**1. The FTUE is ONE CONTINUOUS EVENT.** ⛔ There is no separate `LORE MOMENT` beat and `RAID TUTORIAL`
+beat. Canon §8.1 now carries a **nine-beat table** and the three free Footmen are the bridge - the
+grant is simultaneously the story moment and the economic unlock. ⭐ **Beat 3 - Corvin arriving with
+*"There's movement beyond the Heart."* - is the one that does the most work and the easiest to drop by
+accident.** It introduces the Guide mechanic, the premise and the reason to go in seven words.
+
+**2. The writing rule: QUESTIONS BEFORE ANSWERS** (canon §8.0). Every line here is held to it. A line
+that raises a question the player wants answered beats a line that answers one they never asked.
+⛔ **This outranks completeness - when in doubt, cut the second sentence.**
+
+## §4c. ⭐ THE NARRATIVE GATE - build the oracle, it is the point of the lane
+
+Canon §14. Author **`NarrativeGateRegression`**: walk the first-raid string path for a **fresh save**
+and assert each of these is answered by a surface the player reaches before or at the first victory,
+**without opening the Guide**:
+
+1. Why did I attack that place? 2. What did I bring home? 3. What should I spend it on?
+4. Why can't I raid forever? 5. What am I trying to reach next?
+
+⛔ **AND assert the SIXTH is NOT answered anywhere FTUE-reachable: *what actually happened to
+Elarion?*** That is the hook. A tooltip that helpfully explains the fall of the Realm has removed the
+reason to play the next chapter - the oracle exists to catch exactly that, from a future seat who
+thinks they are being helpful.
+
+⚠ **Prove it RED first.** Against the tree as it stands, questions **1, 3 and 5 have no answering
+string at all** - that is the honest first red and it must be observed, not assumed.
+
 ## §5. ACCEPTANCE
 
 - [ ] All four targets carry a name and a one-line description; no `description` field is empty

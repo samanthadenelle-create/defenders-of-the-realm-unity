@@ -279,6 +279,34 @@ any string that uses it** — flagged OPEN in §14.
 
 ## §8. THE COPY SET
 
+### ⛔ 8.0 THE WRITING RULE — QUESTIONS BEFORE ANSWERS (owner ruling 2026-09-04, BINDING on every line)
+
+> **Especially early.** A line that raises a question the player wants answered beats a line that
+> answers one they never asked.
+
+The worked example, because it is the difference between the two and it is not subtle. **Doran, at the
+Iron Bastion, must NOT say:**
+
+> ~~*"These stones use the ancient masonry technique employed by the third-age wardens of…"*~~
+> Owner's verdict on that draft: **straight into the sea.**
+
+He says:
+
+> **Doran:** *"I know this stone."*
+>
+> *(a beat)*
+>
+> **Doran:** *"I laid it."*
+
+⭐ **Four words, and the player starts the next raid.** No lore dump, no villain monologue, no
+encyclopedia — just a fact that should not be possible, sitting next to *"The Heart remembers no
+fortress here."* That is environmental storytelling, and it is the standard every memory line is held
+to. The same restraint is why **Aldwin's** *"…there's someone here"* works: it carries enormous
+implication and explains nothing.
+
+⛔ **This rule outranks completeness.** A writer who fills all 24 slots with explanations has failed the
+brief more thoroughly than one who leaves a line short. When in doubt, cut the second sentence.
+
 ### 8.1 Teaching the loop — the beats that do not exist today
 
 ⛔ **Nothing in the shipping game ever tells a player that raiding is how they get richer.** Verified
@@ -286,13 +314,34 @@ this session across the tutorial beats, `guide-content.json`, the daily quests a
 The Guide's opening line is *"Raids are where your trained troops earn their keep"* — a sentence about
 payroll — and it must be rewritten along with everything below.
 
-| Moment | String |
-|---|---|
-| Barracks completed | *Your Barracks stands ready. Elarion can now raise soldiers to venture beyond the Heart's protection.* |
-| First army granted | *Three Footmen answer the call. Your first company is ready to march.* |
-| First raid prompt | *Beyond the Heart lie hostile camps holding resources Elarion needs. Break their defences and bring those resources home.* |
-| Target screen | *Choose your target. Stronger footholds carry greater risk and richer spoils.* |
-| The loop, in six words | **Every victory opens the road farther.** |
+> ## ⛔ ONE CONTINUOUS EVENT. NOT A LORE SEQUENCE AND A TUTORIAL SEQUENCE.
+> Owner ruling 2026-09-04: **the FTUE teaches fiction and economy SIMULTANEOUSLY.** There is no
+> `LORE MOMENT` beat followed later by a `RAID TUTORIAL` beat. ⭐ **The three free Footmen are the
+> bridge** — the grant is both the story moment and the economic unlock, so the player learns fiction,
+> navigation, combat, the reward economy and the progression loop **in one unbroken run**.
+> **No encyclopedia required**, which is the entire test.
+
+| # | Beat | String |
+|---|---|---|
+| 1 | Barracks completes | *Your Barracks stands ready.* |
+| 2 | Three Footmen appear | *Three soldiers answer Elarion's call.* |
+| 3 | **Corvin arrives** ⭐ | **Corvin:** *"There's movement beyond the Heart."* |
+| 4 | Directed to Journey → Raids | *Beyond the Heart lie hostile camps holding resources Elarion needs.* |
+| 5 | Target card | **THE FORSAKEN CAMP** — *Scavengers are stripping an abandoned settlement beyond the Heart's reach.* |
+| 6 | Spend the first Heartfire | *(the charge is spent, and the spending is the lesson)* |
+| 7 | Fight, win, resources return | — |
+| 8 | Victory | **MEMORY RECLAIMED** — *The Heart remembers this place.* |
+| 9 | The economy, taught explicitly | *Recovered Gold, Wood and Iron strengthen Elarion and prepare your army to venture farther.* |
+| — | The loop, in six words | **Every victory opens the road farther.** |
+
+⭐ **Beat 3 is the one that does the most work and is easiest to cut by accident.** Corvin is *"the
+scout who ranged the far dark for Elarion and never came home"* — having him be the one to notice
+movement beyond the Heart introduces the Echo Guide mechanic, the premise, and the reason to go, in a
+single seven-word line. He is also the default Guide (WO-1380), so the player's first expedition is
+led by the Echo who already knows what is out there.
+
+⚠ **The first raid must be reachable within MINUTES of the Barracks completing**, not hours. That is
+what the free army exists for — economy map §2, *"one raid teaches the entire economy."*
 
 ### 8.2 Victory — a homecoming, not a receipt
 
@@ -440,7 +489,48 @@ the same sentence. This direction did not invent an identity; it named the one t
 
 ---
 
-## §14. ⚠ OPEN — not decided, and deliberately not guessed
+## §14. ⭐ THE FIVE QUESTIONS — the narrative gate (owner ruling 2026-09-04, BINDING)
+
+> The technical regressions are extensive and they prove the strings EXIST. **This gate proves the
+> build COMMUNICATES.** Owner: *"The interesting work after the gate is going to be seeing whether the
+> actual build feels like this canon rather than merely containing strings that describe it."*
+
+**Take a completely fresh account. After the first successful raid, and WITHOUT OPENING THE GUIDE, can
+the player answer these five?**
+
+| # | Question | Answered by |
+|---|---|---|
+| 1 | Why did I attack that place? | the premise + the target card (§1, §3) |
+| 2 | What did I bring home? | the victory screen showing EVERY non-zero currency (§8.2) |
+| 3 | What should I spend those resources on? | the explicit teaching line, FTUE beat 9 (§8.1) |
+| 4 | Why can't I immediately raid forever? | Heartfire, and its copy — not a timer refusal (§4) |
+| 5 | What am I trying to reach next? | the unlock ladder saying something opened (§3, economy map §4) |
+
+> **Reclaim territory → recover resources → strengthen Elarion and your army → Heartfire rekindles →
+> push farther.** If the build itself communicates that, the loop closes.
+> ⛔ **If the Guide has to explain any of the five, something UPSTREAM is not doing its job** — and the
+> fix is upstream, never a longer Guide entry.
+
+### ⛔ AND THE SIXTH QUESTION, WHICH THE PLAYER MUST **NOT** BE ABLE TO ANSWER
+
+> ## *What actually happened to Elarion?*
+
+**That is the hook, and it is protected.** ⛔ No FTUE beat, tooltip, guide entry, card description,
+season blurb or memory line may answer it. A seat that "helpfully" explains the fall of the Realm in a
+tooltip has removed the reason to play the next chapter.
+
+> **The economy gives them a reason to perform the next raid. The mystery gives them a reason to play
+> the next chapter.** Two different jobs, and only one of them is allowed to be satisfied.
+
+**How this is enforced, so it is a gate and not a wish:** a `NarrativeGateRegression` walks the
+first-raid string path for a fresh save and asserts each of the five answers is present on a surface
+the player reaches before or at that moment — and asserts that no FTUE-reachable string answers the
+sixth. ⚠ It must be proven RED first against the tree as it stands, where questions 1, 3 and 5 have no
+answering string at all.
+
+---
+
+## §15. ⚠ OPEN — not decided, and deliberately not guessed
 
 Per CLAUDE.md §11B, an unproven thing named as unproven is useful; an unproven thing stated as fact
 costs someone a day.
@@ -450,7 +540,13 @@ costs someone a day.
    string may use it until someone reads the code and says where it comes from.
 3. **The three-gate stack** (§4). Recommendation given; the acceptance criterion — *a player holding
    Heartfire always has somewhere to spend it* — needs owner sign-off.
-4. ~~Echo Guide selection: narrative-only at launch?~~ — **RULED: NARRATIVE ONLY at launch.** The
+4. ~~Echo Guide selection: narrative-only at launch?~~ — **RULED: NARRATIVE ONLY, and here is the
+   reason it is a hard fence rather than a scope preference** (owner 2026-09-04): *"The second Corvin
+   gives +8% scouting loot and Doran gives +5% stone, players stop choosing whose memories they want
+   and start choosing the spreadsheet answer."* ⛔ **A buff does not add to the feature — it REPLACES
+   it.** The whole value of the Guide is that it makes exploration personal; the moment one is
+   mathematically correct, the choice is over and the characters are furniture. **Let them be
+   characters first.** There is plenty of time to add mechanics once players care who they are. The
    direction is explicit that differences start narrative *"so we don't explode scope"*. ⛔ A Guide
    grants NO mechanical bonus in V1; adding one later is a deliberate design decision, never a quiet
    one. This also keeps §6's scope discipline consistent — flavour wins, scope stays dead.

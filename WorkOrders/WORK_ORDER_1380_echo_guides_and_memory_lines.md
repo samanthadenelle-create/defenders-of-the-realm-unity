@@ -47,6 +47,36 @@ Nobody has to explain why that is frightening.
   recognition system that fires for two Guides and stays silent for four does not read as depth; it
   reads as broken, and it teaches the player to stop noticing.
 
+## §4b. ⛔ THE WRITING RULE - QUESTIONS BEFORE ANSWERS (canon §8.0, added 2026-09-04)
+
+**Every one of the 24 lines is held to this, and it outranks completeness.** The worked example, from
+the owner, is the difference between the two:
+
+⛔ **NOT** *"These stones use the ancient masonry technique employed by the third-age wardens of..."*
+Her verdict on that draft: **straight into the sea.**
+
+✅ **Doran, at the Iron Bastion:**
+> *"I know this stone."*
+>
+> *(a beat)*
+>
+> *"I laid it."*
+
+⭐ **Four words, and the player starts the next raid.** It sits next to the target card's *"The Heart
+remembers no fortress here"* and produces a fact that should not be possible - no lore dump, no villain
+monologue, no explanation. **When in doubt, cut the second sentence.** A writer who fills all 24 slots
+with explanations has failed this ticket more thoroughly than one who leaves a line short.
+
+## §4c. ⛔ WHY "NARRATIVE ONLY" IS A HARD FENCE, NOT A SCOPE PREFERENCE
+
+Owner, 2026-09-04: *"The second Corvin gives +8% scouting loot and Doran gives +5% stone, players stop
+choosing whose memories they want and start choosing the spreadsheet answer."*
+
+**A buff does not ADD to this feature - it REPLACES it.** The value of the Guide is that it makes
+exploration personal; the moment one Guide is mathematically correct, the choice is over and the
+characters become furniture. **Let them be characters first.** Mechanics can come later, once players
+care who they are.
+
 ## §5. ⚠ BLOCKED SUB-ITEM - do not guess it
 
 Canon §7 ends with **Aldwin:** *"...there's someone here."* The illustrative version addressed the
