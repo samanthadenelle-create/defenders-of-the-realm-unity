@@ -477,6 +477,30 @@
 > — run `tools/android/patch-solana-sdk.ps1` before ANY APK build. Android stripping is at **Low**;
 > **WO-848 open** to restore Medium.
 >
+> > ### BOTH HALVES OF THE LINE ABOVE ARE NOW FALSE (verified at source 2026-09-04)
+> > *(Body left unrewritten per CLAUDE.md 15 - this is the banner, not a rewrite. It reads as an
+> > operational instruction, which is why it needs one: a seat following it loses time to a script
+> > that errors and to a lever it believes is unpulled.)*
+> >
+> > 1. **`tools/android/patch-solana-sdk.ps1` IS NO LONGER NEEDED AND WOULD ERROR.** The SDK is
+> >    **embedded**, not a git URL: `Packages/manifest.json:3` reads
+> >    `"com.solana.unity_sdk": "file:com.solana.unity_sdk"`, and `Library/PackageCache/*solana*`
+> >    does not exist, so the script hits its `if (-not $pkg)` guard and exits 2. Both patches are
+> >    permanently applied in-tree (commit `97e01b00e`).
+> > 2. **ANDROID MANAGED STRIPPING IS AT *MEDIUM*, NOT LOW.**
+> >    `Assets/Editor/MobileSettings.cs:216-222` raises it Low -> Medium. **Do NOT "verify" this by
+> >    reading `ProjectSettings.asset`** - its `managedStrippingLevel:` map lists only `WebGL: 4`
+> >    (`:891-893`), because `MobileSettings` applies Android **at build time via the PlayerSettings
+> >    API**, not as persisted state. *The absence of an Android row is not "unset".* I nearly
+> >    misread it that way.
+> >    **And the lever is already spent:** `Assets/link.xml` carries `preserve="all"` on **every**
+> >    runtime assembly, deliberately - Newtonsoft deserialises every catalog by reflection and the
+> >    cross-asmdef bridges resolve by name (183 files under `Assets/_Modules` use reflection APIs;
+> >    **zero** `[Preserve]` attributes). That list is load-bearing and correct; narrowing it is the
+> >    classic works-in-editor / silently-empty-in-build failure. It is also why `libil2cpp.so` is
+> >    21.42 MiB and why stripping has little left to win. **WO-848 is not the size lever it looks
+> >    like** - the size lever is texture import settings (WO-1367).
+>
 > **`WaveDataTest` has NO open ruling** — the owner closed it 07-30 (smart composition); both tests now
 > assert EMPTY batches and a re-add FAILS. Any doc calling it "an open owner ruling" is stale.
 > **The 08-01 thread below is SUPERSEDED.**
