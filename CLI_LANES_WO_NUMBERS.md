@@ -180,7 +180,43 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-second pass): main line next free = **1369**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-fifth pass): main line next free = **1372**.
+> *(CLI minted **WO-1371** - ⛔ **A NEW GAME INHERITS THE PREVIOUS SAVE'S COLLECTOR FILL.** Owner:
+> *"how did i manage to acquire 3000 stone when this game is about 25 minutes old"*. **11 seconds
+> after a new game** the log reads `collector status -> full=2/3 maxFill=100% pending=14089`, then
+> `collect building=farm +7500 Food`, `lumbermill +5760 Wood`, `forge +829 Iron`,
+> `collect-all total-banked=14089`. Food IS the visible Stone slot (WO-1163/1212), so she was handed
+> 7500 stone, capped at 3000, and the rest silently lost. ⭐ MEASURED PROOF IT WAS NOT EARNED: the
+> honest post-reset rate is pending 29->58->87->116->145->174 over 5 minutes = ~0.58/s, so 14,089
+> represents **~6.7 HOURS** of accrual. `GameStateService.ResetToNewGame` resets `s.Resources`,
+> `SiloResources`, `LastHarvestClaimMs` and `EchoLanes` (`:1156`, `:1223`, `:1249`, `:1259`) but
+> **never touches collector fill**. Bumped 1371 -> 1372 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-fourth pass): main line next free = **1371**.
+> *(CLI minted **WO-1370** off her screen: the HARVEST RESULT modal cannot be read. Owner, verbatim:
+> ***"this screenshot now shows i have 3000 of what? I cannot tell what its trying to convey"***.
+> `HarvestOverflowModal.cs:55-60` emits three INDEPENDENT lines from a per-resource loop written for
+> a LIST, so with one resource it reads: `Stone` / `Collected: 0 of 90 | Uncollected: 90` / blank /
+> `Storage: 3000 / 3000...` / blank / `Each uncollected amount was not added to storage.` The number
+> 3000 is three lines from the word Stone and carries no unit; "Each" implies a list that is not
+> there; and `0 of 90` + `Uncollected: 90` state ONE fact twice. ⛔ This is the screen that tells the
+> player she LOST 90 stone, and it never uses the word lost. Bumped 1370 -> 1371 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-third pass): main line next free = **1370**.
+> *(CLI minted **WO-1369** - ⛔ **P0 HARD FREEZE, ROOT-CAUSED, AND IT IS A REGRESSION WO-1360
+> SHIPPED YESTERDAY.** Owner: *"everything completely froze. I had to kill app to exit"*.
+> **`WorldHold RELEASE 'game-over'` appears ZERO times in a 1.23M-line device buffer** - acquired
+> 09:38:25.063 when the hero died, never released, `effective timeScale 0.00` for **2m07s** until the
+> OS force-killed the app (`Destroy timeout of remove-task -> Killing 28972`). The owner that should
+> release it is GONE: two HeroDeath end-states are raised **9ms apart** (`retry` then `respawn`) and
+> the first is *"destroyed WITHOUT firing its primary action"*, the second closes via
+> `CloseFromArbiter`. ⛔ AND NOTHING RESCUES IT because WO-1360 converted `game-over` to
+> **PLAYER-OWNED**, whose own trace line says *"NO watchdog ceiling applies and it will never be
+> force-released for being old"* - the exact safety net that would have caught this. WO-1360's commit
+> body warned that *"removing the ceiling exposes the hole it had been papering over"* and closed that
+> hole for `PauseController` ONLY. Bumped 1369 -> 1370 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-second pass): main line next free = **1369**.
 > *(CLI minted **WO-1368** live off her device while she played: **the Manage/Queues screen builds
 > ZERO queue ROWS, so there is no Finish Now and no Watch Ad on a queued job.** Owner: *"i dont see
 > the watch ad or pay crtystals to complete early stuff"*. ⭐ PROVING LINE, same session, same

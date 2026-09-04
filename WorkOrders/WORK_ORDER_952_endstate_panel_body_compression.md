@@ -1,8 +1,8 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** READY TO IMPLEMENT - ⛔ **P0. THE VICTORY PANEL RENDERS EMPTY ON HER DEVICE** (owner
-confirmed 2026-09-04, *"screenshot bug"*). REOPENED, and the severity is NOT the 7% compression the
-log line describes. Was
+**Status:** READY TO IMPLEMENT - REOPENED 2026-09-04. **P1: a GEAR DROP tips the arena victory panel
+past its screen-height clamp and squashes every band to 93.3%.** ⛔ **The "renders empty" escalation
+is WITHDRAWN - see §0a. The lead over-read the owner's words; the body was never proven empty.** Was
 "DONE - audit-verified as shipped (2026-08-21 backlog audit)"; that close rested on an AUDIT, not on
 device evidence, which is the same shape as PROD-019's reopen ("closed on EDITOR-ONLY evidence;
 still broken on device").
@@ -47,7 +47,75 @@ deliverable is the reason the recurrence reached her eyes instead of a gate's.**
 
 ⛔ **The oracle is not optional this time.** A fix without it puts us right back here.
 
-### ⛔ OWNER CONFIRMED 2026-09-04: THE EMPTY BODY IS THE BUG, NOT A CAPTURE ARTIFACT
+### ⛔ §0a. THE "EMPTY PANEL" ESCALATION IS WITHDRAWN. THE LEAD GOT THIS WRONG.
+
+**What happened:** the lead showed the owner `break_01_error.png`, described the body as empty, and
+she replied ***"screenshot bug"***. The lead read that as *"confirmed, the panel renders empty"* and
+escalated the ticket to P0 on it. **Asked directly which she meant, she answered: the SCREENSHOT is
+misleading - it caught the panel mid-fade-in.**
+
+⛔ **Two words are not a confirmation, and "owner statements are ground truth" does not license
+inventing which statement she made.** The correct move was to ask before escalating; the escalation
+cost a P0 framing and pointed an RCA at a defect that does not exist.
+
+**And the mechanism proves her right** (all READ at source):
+- `BreakCaptureHarness.cs:1071` calls `ScreenCapture.CaptureScreenshot` **synchronously inside the
+  log handler** - which, for this line, runs inside `BuildBody`.
+- `EndStateView.cs:957` sets `rootGroup.alpha = 0f`; `:2214-2216` `Track()` sets every body element
+  to `alpha = 0f` with staggered reveals - emblem 0.10s, subtitle 0.14s, time 0.20s, spoils rows
+  `0.25 + i*0.05`, **CTA at 0.58s** (`:952`).
+- The scrim is a **sibling** of `chrome.root` (`:152`), so it is at full opacity on frame 0.
+
+**So the capture is a ~0.05s frame of a 0.78s staged entrance.** A blank body there is the animation
+working. ⭐ **That is a REAL and GENERAL defect - every F8 screenshot of an animated panel is taken
+mid-animation and is misleading - but it is a HARNESS defect, and it is now WO-1369, not this ticket.**
+
+Positive evidence the reveal completed: `AutoDismissAfter` is a coroutine on the same `EndStateView`
+MonoBehaviour and it fired at t+20.021s, so that object's coroutines were running, so `RevealRoutine`
+reached `cg.alpha = 1f` (`:2253`). INFERRED, but from a mechanism read end to end.
+
+### ⭐ §0b. THE REAL DEFECT, PROVEN: A GEAR DROP TIPS THE PANEL PAST THE CLAMP
+
+Verified at source by the lead, not relayed:
+
+| | gear | spoils | panel | body need vs well | dismissed in |
+|---|---|---|---|---|---|
+| 07:47 victory | `-` | 4 | 638px frac 0.661 | 496 = 496 ✓ | 1.99s |
+| 07:48 victory | `-` | 4 | 638px frac 0.661 | 496 = 496 ✓ | 2.04s |
+| **09:35 victory** | **Emberglass Staff** | **5** | **907px frac 0.94** | **578 > 540** ✗ | **20.02s** |
+| wave-clears | - | 3 | 638px frac 0.661 | 340 = 340 ✓ | 1.4-1.6s |
+
+`MaxPanelHalf = 0.47f` (`EndStateView.cs:236`, applied `:391`) caps the panel at **0.94 of screen
+height**. The failing panel sits at **frac 0.94 exactly - pinned at the ceiling** - so the well cannot
+grow to meet a 578px need and every band compresses to 0.933.
+
+⛔ **THE TRIGGER IS THE GEAR DROP.** It adds the 5th spoils row. Four rows fit; five do not.
+**The wave-clear path is CLEAN** (`need=340 well=340 scale=1`) - the 2026-08-10 fix holds, and this
+is arena-with-gear only.
+
+### ⚠ §0c. THE 20 SECONDS - WHAT IT DOES AND DOES NOT MEAN
+
+Measured from the kernel touch-boost oracle (`libPowerHal ... lock_user:touch_boost`, which fires on
+physical touch regardless of app handling):
+
+```
+09:35:49 -> 09:36:09  (20.0s, the failing panel)   touch events: 0
+07:48:09 -> 07:48:12  ( 2.0s, the working panel)   touch events: 20
+```
+
+She never touched the glass, and the panel exited on `EndStateView`'s own 20s auto-dismiss
+(`BattleArena.cs:2636` passes no timeout -> `BattleArenaHud.cs:80` default 20f -> `EndStateVM.cs:222`
+-> `EndStateView.cs:2100-2104`), which fires the SAME `return-home` primary.
+
+⚠ **Do NOT read this as a second defect.** The CTA was built correctly and identically on both panels
+(`CTA 'Continue' ... box 360x132px ... band==132px`), and the most economical explanation is that she
+saw something wrong and stopped to report it - which is exactly what she did. **NOT PROVEN either
+way, and deliberately not ticketed.**
+
+⭐ **Nothing was lost:** `GrantWinReward` ran at 09:35:49 BEFORE the panel - `+60 XP, +33 wood,
++15 iron`, `TryGrantArenaGear: weapon 'tripo_staff_a' ADDED TO INVENTORY`.
+
+### (superseded) WHAT THE LEAD FIRST CLAIMED THE OWNER CONFIRMED
 
 Owner, on being shown `break_01_error.png`: ***"screenshot bug"***.
 
