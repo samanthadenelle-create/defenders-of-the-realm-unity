@@ -93,6 +93,52 @@ split it into *data-empty* vs *built-but-invisible* vs *threw-and-skipped* (CLAU
 capture taken AFTER layout settles. `UiSurfaceProbe` (WO-976) exists for exactly this and measures
 after settle.
 
+### ⭐ DEVICE EVIDENCE PULLED LIVE 2026-09-04 09:41 - the window SURVIVED
+
+⛔ **NOT A SOFTLOCK.** A live `adb screencap` at 09:40:10 shows her back in normal combat (Orc Raider
+35/130, Thrain Lv2). Something dismissed the panel. **Establishing WHAT dismissed it is load-bearing**
+- see the watchdog line below, because if the watchdog rescued her then Continue never fired and the
+reward grant may have been skipped.
+Live shot: `logs/f8-inbox/device/live-20260904-094010.png`.
+
+**Artifacts saved before the ring buffer could evict them** (memory `logcat-ring-buffer-destroys-evidence`
+- the buffer held **47,853 `Flow:` lines**, `[Flow:EnemyAggro]` alone 13,369, so this window had
+minutes to live):
+- `logs/device/full-buffer-094110.log` - 1,111,915 lines, the whole buffer
+- `logs/device/endstate-window-20260904.log` - 14,424 lines, 09:35:40-09:36:39, stack noise stripped
+
+**The proving lines:**
+
+```
+09:35:49.828 [Flow:BattleArena] Resolve: battle ended, victory summary shown - home return is
+             DEFERRED until Continue (watchdog armed). NOT yet returned; 'FADE IN: home arrival'
+             proves arrival.
+09:38:25.074 [Flow:EndState] 'YOU HAVE FALLEN' destroyed WITHOUT firing its primary action -
+             EndStateView.Show - REPLACED by a new end-state 'YOU HAVE FALLEN'. That action is now
+             abandoned. If it was an arena home-return, the player is stranded until BattleArena's
+             watchdog fires.
+09:38:25.081 [Flow:EndState] ... - CloseFromArbiter (another modal opened over this end-state).
+09:38:25.070 [Flow:EndState] title band left AS BUILT: reserving the frame's 64px top border on a
+             451px panel leaves only 0.012 of panel (min 0.05) - a crushed title renders zero glyphs
+09:38:25.079 [Flow:EndState] ... on a 370px panel leaves only -0.025 of panel
+```
+
+⭐ **TWO LEADS THE COMPRESSION LINE WAS HIDING:**
+
+1. **End-states are being DESTROYED AND REPLACED WITHOUT FIRING THEIR PRIMARY ACTION**, by
+   `EndStateView.Show` (a second end-state opening) and by `CloseFromArbiter` (another modal opening
+   over it - `PanelManager` is a single-modal arbiter that closes the prior panel). The panel's own
+   instrumentation names the consequence: *"If it was an arena home-return, the player is stranded
+   until BattleArena's watchdog fires."* **If the victory panel is replaced the same way, an empty
+   frame is exactly what a replaced-but-still-drawn panel would look like.**
+2. **The panel geometry is already degenerate before the body is considered** - panels built at
+   **451px** and **370px**, with the title band computing to **0.012** and **-0.025** of panel
+   against a 0.05 minimum. ⚠ A NEGATIVE fraction. If the same arithmetic runs on the body bands,
+   *built-but-invisible* becomes the leading hypothesis and the 0.933 compression is incidental.
+
+⛔ **Neither is proven yet** - both are candidates raised by captured lines, and an RCA agent is
+working the split. **Do not fix from this section.**
+
 ### Acceptance additions for the reopen
 
 - [ ] Which entry points still clamp - answered with captures, not inference (wave-clear vs arena).
