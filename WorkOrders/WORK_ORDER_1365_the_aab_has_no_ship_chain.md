@@ -144,6 +144,62 @@ an architecture problem. Establish that before anyone proposes PAD.**
 `Assets/Resources/VFX/_Shared/` (the 2026-08-06 gitignored-art fix). It is now roughly four times
 that. **Worth an explicit look** - that mirror was a correctness fix, not a licence to grow.
 
+### ⭐ THE AUTHORITATIVE PLAY LIMITS - fetched live 2026-09-04, cited
+
+⛔ **`docs/GOOGLE_PLAY_READINESS_AUDIT_2026-08-30.md`'s headline "200 MB, THE CONSOLE REFUSES THE
+UPLOAD" IS STALE.** The current base-module ceiling is **500 MB**. Any 150 MB / 200 MB figure - from
+a blog, StackOverflow, an LLM, or our own audit - is dead. Do not act on one.
+
+| Limit | Value | Source |
+|---|---|---|
+| **Base module compressed download** | **500 MB** | `support.google.com/googleplay/android-developer/answer/9859372`; `developer.android.com/guide/app-bundle/faq` (page updated 2026-07-28) |
+| Total download for ONE device (base + config APKs) | 4 GB | `developer.android.com/guide/app-bundle` |
+| Individual feature module | 500 MB | support 9859372 |
+| Individual asset pack (any delivery mode) | 1.5 GB | support 9859372 - Google publishes ONE per-pack cap, not per-mode |
+| All modules + install-time asset packs | 4 GB | support 9859372 |
+| On-demand / fast-follow packs, cumulative | 30 GB | support 9859372 |
+| Total app | 34 GB | support 9859372 |
+| Max asset packs per bundle | 100 | support 9859372 |
+| User-facing "large app" warning | 200 MB | **non-blocking dialog on mobile data - NOT a ceiling** |
+
+- **Enforced at UPLOAD, by Play Console**, not at review: *"as calculated by Play Console upon
+  uploading your app bundle"* + *"If the Play Console finds any of the possible downloads ... to be
+  more than the maximum size limits, you will get an error."*
+- ⚠ **`bundletool` is "a similar (but not identical) calculation"** to the Console's, in Google's own
+  words. Treat our measurement as a close estimate, never as the Console's verdict.
+- ⚠ **MIN vs MAX: NOT DOCUMENTED.** *"any of the possible downloads"* implies the worst case, so
+  **treat MAX as binding**. Stated as the inference it is.
+- minSdk only affects size rules **above 1 GB** (API 21+ required there). Irrelevant to us at
+  minSdk 26.
+- If Texture Compression Format Targeting is ever adopted, **the limits apply separately per
+  texture format** - relevant if WO-1367's ASTC pass ever grows a second format.
+
+### ⛔ THE MB-vs-MiB AMBIGUITY IS REAL, WORTH ~14 MB, AND DELIBERATELY NOT RESOLVED
+
+**No Google page defines whether "500MB" is 500,000,000 or 524,288,000 bytes.** Neither the Console
+help page nor any `developer.android.com` page writes "MiB", "mebibyte", or a byte count. Searched
+and reported **NOT FOUND** rather than inferred - an inferred ceiling is the expensive kind of wrong.
+
+| Reading | Ceiling | Our 510,523,099 B | Verdict |
+|---|---|---|---|
+| 500 MB decimal | 500,000,000 | +10.5 MB | **OVER** |
+| 500 MiB binary | 524,288,000 | -13.8 MB | UNDER |
+
+⭐ **DO NOT TRY TO SETTLE THIS, AND DO NOT SHIP ON THE FAVOURABLE READING.** WO-1367's texture pass
+projects ~26.9 MB of headroom, which clears **both** readings with margin. Engineering to the
+generous interpretation of an undocumented unit is a guess with a submission attached.
+*(If it ever must be settled empirically: an internal-testing-track upload triggers the check at
+upload and the Console names the exact overage. That is an outward-facing action and needs the
+owner's word.)*
+
+### MEASURED: base module == whole app, so splits will not save us
+
+`get-size total --modules=base` and `get-size total` return the **identical** MIN,MAX
+(510,443,276 / 510,523,099) because `BundleConfig.pb` declares modules `{base}` only - there are no
+asset packs. And MIN/MAX differ by just **79,823 bytes**, because our payload lives in `assets/`,
+which is **never split by density or language**. ⛔ **Conclusion: device-configuration splitting has
+essentially nothing to give here. The bytes have to actually leave the artifact.**
+
 ### ⛔ TWO CODE-SIZE LEVERS - both smaller than they look. Do not chase these first.
 
 **R8 / ProGuard is switched OFF entirely** (`Library/Bee/Android/Prj/IL2CPP/Gradle/launcher/build.gradle:68`

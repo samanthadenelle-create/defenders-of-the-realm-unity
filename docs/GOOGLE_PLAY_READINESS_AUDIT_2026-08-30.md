@@ -1,5 +1,28 @@
 # Google Play readiness audit - 2026-08-30
 
+> ## STALE 2026-09-04 - THE 200 MB CEILING IN THIS DOCUMENT IS WRONG. IT IS 500 MB.
+>
+> *(Banner only; the body is a dated audit and is left unrewritten per CLAUDE.md 15.)*
+>
+> This audit's RED #1 - "493 MiB vs a 200 MB limit; THE CONSOLE REFUSES THE UPLOAD" - was true
+> against a limit Google has since raised. Verified live 2026-09-04 at
+> `support.google.com/googleplay/android-developer/answer/9859372` and
+> `developer.android.com/guide/app-bundle/faq` (page updated 2026-07-28): the **base-module
+> compressed download limit is 500 MB**. `docs/releases/GOOGLE_PLAY_RC_2026-08-30.md:3-5` already
+> declared it superseded this document on current-state conclusions; this banner records the proof.
+>
+> **200 MB is now only a NON-BLOCKING user warning** - above it, users on mobile data see a dialog
+> about app size. It is not a ceiling and it does not block upload.
+>
+> **The audit was right that size is the gate, and right for the wrong reason.** The measured
+> position today (`bundletool get-size total`, 2026-09-04) is
+> **510,443,276-510,523,099 bytes against 500 MB** - over on a decimal reading, under on a binary
+> one, and Google documents neither unit. See `WorkOrders/WORK_ORDER_1365_the_aab_has_no_ship_chain.md`
+> for the full limits table and `WORK_ORDER_1367_rpgui_android_texture_pass.md` for the fix.
+>
+> Do not act on any 150 MB or 200 MB ceiling figure - from this file, a blog, StackOverflow or an LLM.
+
+
 Evidence: the REAL artifact Builds/Android/EchoesOfElarion-GooglePlay.aab (517,307,020 bytes,
 built 14:49) - merged manifest, global-metadata.dat, dependencies.pb.
 
