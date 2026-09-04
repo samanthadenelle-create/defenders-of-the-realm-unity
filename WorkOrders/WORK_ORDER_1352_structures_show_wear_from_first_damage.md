@@ -1,6 +1,6 @@
 # WORK ORDER 1352 - Structures show wear from the first point of damage
 
-**Status:** FIXED 2026-09-03 - shipped in `2026.09.03.353999` and installed on the Seeker. A SCUFF rung
+**Status:** FIXED 2026-09-03 - shipped in `2026.09.03.353999` and installed on the Seeker. A SCUFF rung FOLLOW-UP ALSO ON HER DEVICE 2026-09-03: the tell was one channel short BY CONSTRUCTION (the gloss ramp interpolated from t=0 at step 1 against a hardcoded 1f endpoint, so smoothness could not move whatever was authored). Now four front-loaded rungs, step 1 dropping albedo 20% AND killing the specular sheen. The 'second renderer' was the tower's lock-on laser - her tower was never half-tinted, but the beam would have been darkened as masonry if first damaged mid-raid. Body-mesh whitelist plus all-or-nothing abstention.
 added below smolder inside the EXISTING owner (`StructureDamageVisuals`): albedo x0.88 / x0.77 / x0.66
 with smoothness x1.00 / x0.70 / x0.40 across 100%-83.3%-66.7%-50% HP, handing off to the unchanged
 smolder -> fire ladder. Gates `COMPILE_GATE_OK` + `REGRESSION_OK 358/358`.
