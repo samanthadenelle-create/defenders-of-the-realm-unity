@@ -174,6 +174,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "deck-card-labels", () => Case6_DeckCardSingleProducer(failures, notes));
                 Case(failures, "deck-card-packaging", () => Case7_DeckCardPackagingMargin(failures, notes));
                 Case(failures, "bar-face-icons", () => Case8_BarFaceIcons(failures, notes));
+                Case(failures, "raids-locked-face", () => Case9_RaidsLockedFace(failures, notes));
             }
             catch (Exception ex)
             {
@@ -1253,6 +1254,177 @@ namespace DeNelle.Editor.Regression
                 map[t.Substring(1, keyEnd - 1)] = Unescape(rest.Substring(1, valEnd - 1));
             }
             return map;
+        }
+
+        // =====================================================================
+        // CASE 9  [raids-locked-face]  THE LOCKED JOURNEY RAIDS CARD MOUNTS THE
+        //         OWNER'S LOCKED ART, AND THE WORDS ON IT STAY LIVE.
+        // ---------------------------------------------------------------------
+        // WO-1357 shipped the locked state; the owner then supplied the face for
+        // it (cards/raids-locked.png, 2026-09-03): a war camp gone dark behind a
+        // stone-and-steel padlock, with the right ~45% left as an EMPTY plate.
+        //
+        // THE PLATE IS EMPTY ON PURPOSE AND THAT IS THE WHOLE POINT OF THIS CASE.
+        // The reason this card is shut is DYNAMIC - "Build a Barracks to raid" /
+        // "Rebuild your lost Barracks to raid" / "Raids are turned off in this
+        // build" - so it can only be live TMP text. Two of her earlier exports
+        // carried a generic line baked into exactly that plate; she was offered
+        // the choice and chose the wordless re-generate. Bake a line back in and
+        // this is WO-1341 again: one string, two producers, in two fonts, saying
+        // two different things - the defect that printed every Hero deck label
+        // twice on device build 2026.09.03.353742.
+        //
+        // HOW IT IS HONEST: 9b and 9c OPEN THE PNG. Case 6 can only lint source
+        // (it bans art keys it already knows are bad); this one measures the
+        // delivered pixels, so a face re-delivered WITH words fails without
+        // anybody having to remember to add its key to a list. 9c then asks the
+        // question the source cannot answer at all - this plate is near-black, so
+        // does the live text still READ on it - as a WCAG contrast ratio.
+        //
+        // PROVEN RED: with 'LockedArtKey = "raids-locked"' changed to ArtKey's
+        // own value (i.e. the locked state falling back to the unlocked camp),
+        // 9a fails with "the Journey RAIDS card declares no LockedArtKey".
+        private const string RaidsLockedKey = "raids-locked";
+        /// <summary>The illustrated card's text plate, copied from
+        /// PlayerDeckWorkspace.TextPlateX0(true) and the title/purpose anchors around it.</summary>
+        private const float PlateX0 = 0.49f, PlateX1 = 0.96f, PlateY0 = 0.20f, PlateY1 = 0.86f;
+        /// <summary>Fraction of plate pixels allowed to be light enough to be a glyph.
+        /// <para>CALIBRATED, not guessed. The delivered face measures 0.0017 - the padlock rim
+        /// clipping the plate's left edge, and nothing else. Baking one parchment-toned line
+        /// across the same plate measures 0.0077 at 28px, 0.0139 at 40px and 0.0278 at 72px on
+        /// this 1416px-wide card, and a title+subtitle pair measures 0.0255. 0.006 sits 3.5x
+        /// above the clean face and below the SMALLEST line anyone would author, so it catches a
+        /// re-delivery with words on it without tripping on the art that is there.</para></summary>
+        private const float PlateInkCeiling = 0.006f;
+        /// <summary>WCAG AA for large text. The title is 36px and the reason is FontMicro, so
+        /// this is the floor for BOTH, deliberately not the 3.0 large-text relaxation.</summary>
+        private const float ContrastFloor = 4.5f;
+
+        private static void Case9_RaidsLockedFace(List<string> failures, List<string> notes)
+        {
+            string deck = ReadSrc(DeckSrc);
+            if (deck == null) { failures.Add("[raids-locked-face] cannot read " + DeckSrc); return; }
+
+            // ---- 9a  the wiring: locked face selected, unlocked face untouched --------------
+            if (deck.IndexOf("LockedArtKey = \"" + RaidsLockedKey + "\"", StringComparison.Ordinal) < 0)
+                failures.Add("[raids-locked-face] the Journey RAIDS card declares no LockedArtKey = \"" +
+                             RaidsLockedKey + "\" in " + DeckSrc + " - the owner's locked face is not " +
+                             "mounted and the card falls back to the inviting camp behind a [ LOCKED ] badge");
+            if (deck.IndexOf("ArtKey = \"raids\"", StringComparison.Ordinal) < 0)
+                failures.Add("[raids-locked-face] the Journey RAIDS card lost 'ArtKey = \"raids\"' - the " +
+                             "UNLOCKED face is the path that already works and this ticket may not touch it");
+            if (deck.IndexOf("!available && !string.IsNullOrEmpty(spec.LockedArtKey)", StringComparison.Ordinal) < 0)
+                failures.Add("[raids-locked-face] " + DeckSrc + " no longer gates the locked face on " +
+                             "!available, so a locked-state PNG can reach an UNLOCKED card");
+            if (deck.IndexOf("(available || authoredLockFace) ? Color.white", StringComparison.Ordinal) < 0)
+                failures.Add("[raids-locked-face] the authored locked face is being gray-washed again by " +
+                             "the IllustratedCardSurface tint. That art is ALREADY the darkened locked " +
+                             "scene; washing it costs the live text its contrast, and locked-ness is " +
+                             "carried by the padlock, the word badge and the remedy line - never by hue " +
+                             "(the owner is red/green colourblind)");
+            if (deck.IndexOf("colors.disabledColor = authoredLockFace", StringComparison.Ordinal) < 0)
+                failures.Add("[raids-locked-face] colors.disabledColor no longer spares the authored " +
+                             "locked face. button.interactable is false on a locked card, so the " +
+                             "Selectable multiplies the art by disabledColor - that is the SECOND wash " +
+                             "and it undoes the first one being dropped");
+
+            // ---- 9b/9c  the delivered pixels: empty plate, and text that reads on it --------
+            string png = CardArtDir + RaidsLockedKey + ".png";
+            if (!File.Exists(png))
+            { failures.Add("[raids-locked-face] the owner's locked face is missing from disk: " + png); return; }
+            if (!File.Exists(png + ".meta"))
+                failures.Add("[raids-locked-face] " + png + " has no .meta, so Unity will import it with " +
+                             "DEFAULT settings - not a Sprite, no tight mesh - and Resources.Load<Sprite> " +
+                             "returns null at runtime. Clone quests.png.meta (textureType 8, spriteMode 1, " +
+                             "spriteMeshType 1, alphaIsTransparency 1) with a fresh guid");
+
+            float ink, lum;
+            if (!MeasurePlate(png, out ink, out lum))
+            { failures.Add("[raids-locked-face] cannot decode " + png); return; }
+
+            if (ink > PlateInkCeiling)
+                failures.Add("[raids-locked-face] the text plate of " + RaidsLockedKey + ".png is " +
+                             (ink * 100f).ToString("F1") + "% light pixels (ceiling " +
+                             (PlateInkCeiling * 100f).ToString("F1") + "%) - that plate is supposed to be " +
+                             "EMPTY. Words baked there collide with the LIVE title and lock reason " +
+                             "PlayerDeckWorkspace draws over it, which is the WO-1341 double-label defect. " +
+                             "Re-generate the art without the words; the reason line is dynamic and can " +
+                             "never be baked");
+
+            Contrast(failures, "card title", lum, 0.831f, 0.686f, 0.216f);      // ElarionUi.Gold
+            Contrast(failures, "lock reason", lum, 0.78f, 0.74f, 0.66f);        // ElarionUi.ParchmentDim
+            Contrast(failures, "locked badge", lum, 0.953f, 0.918f, 0.827f);    // ElarionUi.Parchment
+
+            notes.Add("raids locked face: plate " + (ink * 100f).ToString("F2") + "% ink, mean luminance " +
+                      lum.ToString("F4") + " - live title and reason render over authored art");
+        }
+
+        /// <summary>WCAG 2.x contrast of one authored sRGB text colour against the measured plate.</summary>
+        private static void Contrast(List<string> failures, string what, float plateLum,
+                                     float r, float g, float b)
+        {
+            float textLum = 0.2126f * Linear(r) + 0.7152f * Linear(g) + 0.0722f * Linear(b);
+            float hi = Math.Max(textLum, plateLum), lo = Math.Min(textLum, plateLum);
+            float ratio = (hi + 0.05f) / (lo + 0.05f);
+            if (ratio < ContrastFloor)
+                failures.Add("[raids-locked-face] the " + what + " reads at only " + ratio.ToString("F2") +
+                             ":1 against the locked card's plate (floor " + ContrastFloor.ToString("F1") +
+                             ":1). The plate is near-black art, so this is the check that the live words " +
+                             "are still legible on it - raise the text tone or lighten the plate, do not " +
+                             "lower this floor");
+        }
+
+        private static float Linear(float c)
+        {
+            return c <= 0.04045f ? c / 12.92f : (float)Math.Pow((c + 0.055f) / 1.055f, 2.4);
+        }
+
+        /// <summary>Decode the card PNG and measure its TEXT PLATE only: the fraction of pixels
+        /// light enough to be a glyph, and the mean relative luminance the live text sits on.
+        /// Reads the file bytes, so the importer's isReadable setting is irrelevant.</summary>
+        private static bool MeasurePlate(string path, out float inkFraction, out float meanLuminance)
+        {
+            inkFraction = 0f; meanLuminance = 0f;
+            Texture2D tex = null;
+            try
+            {
+                tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!tex.LoadImage(File.ReadAllBytes(path))) return false;
+                int w = tex.width, h = tex.height;
+                if (w < 8 || h < 8) return false;
+                var px = tex.GetPixels32();
+
+                // GetPixels32 is bottom-left origin and the plate fractions are UV, so they map
+                // straight across with no flip.
+                int x0 = Mathf.Clamp(Mathf.RoundToInt(PlateX0 * w), 0, w - 1);
+                int x1 = Mathf.Clamp(Mathf.RoundToInt(PlateX1 * w), x0 + 1, w);
+                int y0 = Mathf.Clamp(Mathf.RoundToInt(PlateY0 * h), 0, h - 1);
+                int y1 = Mathf.Clamp(Mathf.RoundToInt(PlateY1 * h), y0 + 1, h);
+
+                long total = 0, light = 0;
+                double acc = 0.0;
+                for (int y = y0; y < y1; y++)
+                {
+                    int row = y * w;
+                    for (int x = x0; x < x1; x++)
+                    {
+                        var c = px[row + x];
+                        total++;
+                        float l = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+                        // 90/255: above every shadow tone in this plate, below any legible glyph
+                        // the authoring tool would have painted onto it.
+                        if (l >= 90f) light++;
+                        acc += 0.2126f * Linear(c.r / 255f) + 0.7152f * Linear(c.g / 255f) +
+                               0.0722f * Linear(c.b / 255f);
+                    }
+                }
+                if (total == 0) return false;
+                inkFraction = (float)((double)light / total);
+                meanLuminance = (float)(acc / total);
+                return true;
+            }
+            catch { return false; }
+            finally { if (tex != null) UnityEngine.Object.DestroyImmediate(tex); }
         }
 
         private static string Unescape(string s)

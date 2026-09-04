@@ -209,3 +209,214 @@ ship scripts, `PackStore.cs`, `VfxManualPicks.json`, `WorldHold.cs`, scenes) unt
 4. **One question for you:** should a barracks that is still *under construction* unlock raids?
    Today it does (unchanged), because the structure and its record exist the moment it is
    placed. Say the word and it becomes finished-only.
+
+---
+
+# FOLLOW-UP - 2026-09-03 (later the same day): the owner's LOCKED face for the RAIDS card
+
+**Status:** DONE (edit-only; the lead gates, builds and commits)
+**Silo:** HUD / Raids
+**Files:** `Assets/_Modules/HUD/PlayerDeckWorkspace.cs`,
+`Assets/Editor/Regression/HudLabelFitRegression.cs`,
+`Assets/Resources/UI/ElarionMedieval/cards/raids-locked.png` (+ new `.meta`)
+
+*No new WO number was minted: this is the same card, the same ruling, the same day. The
+lock predicate, the reason strings and `PostureSignals` are UNTOUCHED - WO-1357 shipped
+and is on the owner's device.*
+
+## F1. What landed
+
+The owner supplied art for the LOCKED state only:
+`Assets/Resources/UI/ElarionMedieval/cards/raids-locked.png`, 1416x742 RGBA, aspect 1.91,
+alpha bbox (3,7)-(1410,736). A dark war camp on the LEFT, a stone-and-steel padlock
+medallion at centre-left, and the right ~45% left as a deliberately EMPTY plate.
+
+Before this follow-up the Journey panel rendered `[ LOCKED ] / RAIDS / "Rebuild your lost
+Barracks to raid"` over a plate with no illustration, while QUESTS beside it showed its
+artwork. Now the locked card carries her face and QUESTS' treatment.
+
+## F2. Why the plate is empty - and why it must stay that way
+
+The reason the card is shut is DYNAMIC (never had a Barracks / lost one / flag off), so it
+can only be live TMP text. Two earlier exports carried a generic line baked into exactly
+that plate; the owner was offered the choice and chose the wordless re-generate so the live
+copy wins. That is settled.
+
+It is also the WO-1341 defect class: the Hero deck printed every label twice because the
+words were painted into the PNGs. So the guard is not a comment - see F8, case 9b, which
+OPENS the file and measures the plate.
+
+## F3. Where it is mounted
+
+| What | Where |
+|---|---|
+| `Card.LockedArtKey` field (new) | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:27-37` |
+| Locked-face selection in `BuildCard` | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:123-142` |
+| Gray-wash dropped for an authored locked face (surface) | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:157-165` |
+| Gray-wash dropped for it again (`colors.disabledColor`) | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:187-192` |
+| `LockedArtKey = "raids-locked"` on the Journey RAIDS card | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:610-620` |
+| Importer settings for the new PNG | `Assets/Resources/UI/ElarionMedieval/cards/raids-locked.png.meta` |
+
+The art key is chosen in ONE place:
+
+    bool authoredLockFace = !available && !string.IsNullOrEmpty(spec.LockedArtKey);
+    string artKey = authoredLockFace ? spec.LockedArtKey : spec.ArtKey;
+
+Everything downstream (`Resources.Load`, `ResolveArtFit`, the fit cache) reads `artKey`, so
+`"raids"` and `"raids-locked"` are separate cache entries and cannot cross-contaminate.
+If the locked sprite fails to load, a `FlowTrace.Warn` names it and the card falls back to
+`ArtKey` - never silently, because an inviting camp behind a `[ LOCKED ]` badge is a lie.
+
+Precedent followed: `quests.png` is mounted through the same illustrated-card branch, and
+`cards/troops-locked` already establishes the `-locked` art-key naming
+(`ManageScreenPanel.cs:696`).
+
+**The unlocked path is untouched.** With `available == true`, `authoredLockFace` is false,
+`artKey == spec.ArtKey`, the surface colour is `Color.white` as before and `disabledColor`
+takes its original literal. The diff is reachable only while the card is locked.
+
+## F4. Two things this follow-up deliberately changed, and why
+
+1. **`.meta` authored, not left to Unity.** The delivery arrived without one. A default
+   import is not a Sprite and has no tight mesh, so `Resources.Load<Sprite>` returns null at
+   runtime and the card would have rendered empty again. The meta is a byte-for-byte clone of
+   `quests.png.meta` (`textureType: 8`, `spriteMode: 1`, `spriteMeshType: 1` Tight,
+   `alphaIsTransparency: 1`, `isReadable: 0`) with a fresh guid
+   `c10b81658d1240fd88d270d462ff1970`. Verified: `diff` against `quests.png.meta` with the
+   guid line removed is EMPTY.
+2. **The runtime gray tint is dropped for an authored locked face, in both places.** A locked
+   illustrated card was washed twice - once on `IllustratedCardSurface`
+   (`.48,.48,.50,.82`) and once by the Selectable, which multiplies `targetGraphic` (the art)
+   by `colors.disabledColor` (`.46,.46,.48,.82`) because `button.interactable` is false. That
+   wash is the stand-in for "no locked art exists". Her face IS the darkened, padlocked scene,
+   and washing it again only costs the live text contrast on a near-black plate. The owner is
+   red/green colourblind, so locked-ness never rested on hue anyway: it reads from the padlock
+   (shape), the `[ LOCKED ]` badge and the remedy line (words). Both washes still apply to
+   every card that has no `LockedArtKey`.
+
+## F5. The fit machinery - measured route, NO table row
+
+`PlayerDeckWorkspace.MeasureArtFit` derives the packaging margin from the sprite's
+alpha-built tight mesh, with `OpaqueMargins` as the fallback for exports whose margin is
+opaque. Measured off the delivered file, Case-7 style (alpha <= 8 is transparent, mean
+channel >= 170 is pale packaging):
+
+    alpha margin  L3 T7 R6 B6      ink margin  L3 T7 R6 B6      (1416x742)
+    transparentMargin = TRUE  ->  opaqueMargin = FALSE  ->  no row wanted
+
+So the alpha route owns this card and **no `OpaqueMargins` row was added**, which is what
+that table's own comment demands ("a row is a claim that the PNG's border pixels are
+packaging"). `HudLabelFitRegression` Case 7 already walks every PNG in the card directory
+that the deck source mentions, so `raids-locked` is now inside its sweep for free and will
+FAIL if a future re-export loses its alpha.
+
+Either mesh outcome is correct here: a 3px margin resolved gives `Corrected = true` and a
+~0.6% zoom under a `RectMask2D`; a mesh that snaps back to the full rect gives `IdentityFit`
+and renders 1:1 with a 3px transparent edge. Neither crops artwork.
+
+## F6. Contrast finding - the live text READS on this plate
+
+Measured over the illustrated card's text plate (x 0.49..0.96, y 0.20..0.86 - the band the
+title and reason occupy), WCAG 2.x relative luminance:
+
+    mean plate luminance   0.0051  (near-black, as expected)
+    light-pixel fraction   0.0017  (0.17% - the padlock rim clipping the plate's left edge)
+
+    ElarionUi.Gold         (title, 36px)         9.05 : 1
+    ElarionUi.ParchmentDim (lock reason)        10.21 : 1
+    ElarionUi.Parchment    ([ LOCKED ] badge)   15.91 : 1
+
+All three clear WCAG AA (4.5:1) with a wide margin - comfortably, because the plate is dark
+and every deck text tone is light. **No colour change is needed and none was guessed at.**
+This holds only because the double gray wash was dropped (F4.2); with it, the art under the
+text was being lifted toward mid-gray and the ratios would have collapsed.
+
+## F7. Lock medallion does NOT overlap the live text
+
+Column-luminance profile of the delivered face: the illustration and medallion occupy roughly
+x 0.00..0.50, and inside the title/purpose bands the only pixels above the glyph threshold sit
+in x **0.489..0.540** - the medallion's outer rim just kissing the plate's left edge, 0.17% and
+0.11% of those bands respectively. Both live labels are CENTRED in the 0.49..0.96 plate
+(centre 0.725), and "RAIDS" at 36px plus a one-line reason at FontMicro come nowhere near
+x 0.54. No overlap at the current card size (2-column grid, half-cell each).
+
+## F8. The oracle - `HudLabelFitRegression` Case 9 `[raids-locked-face]`
+
+Extended the existing suite (`DataRegression.cs` is fenced; `HudLabelFitRegression` already
+owns the deck-card precedent as Cases 6 and 7). Registered at
+`Assets/Editor/Regression/HudLabelFitRegression.cs:176`; body appended near the end of the
+same file.
+
+**9a - the wiring (source lint, 5 assertions).** `LockedArtKey = "raids-locked"` is declared;
+`ArtKey = "raids"` still is (the unlocked path may not be collateral damage); the locked face
+is gated on `!available`; and NEITHER wash may come back
+(`(available || authoredLockFace) ? Color.white`, `colors.disabledColor = authoredLockFace`).
+
+**9b - the plate is EMPTY (opens the PNG).** Decodes the file with `Texture2D.LoadImage`, so
+`isReadable: 0` is irrelevant, and measures the fraction of plate pixels light enough to be a
+glyph. This is the honest half: Case 6 can only ban art keys somebody already knew were bad,
+whereas this fails on a re-delivery with words on it that nobody has listed yet.
+
+**9c - the live text still reads.** Computes WCAG contrast of `Gold`, `ParchmentDim` and
+`Parchment` against the measured plate luminance, floor 4.5:1. This is the check the source
+cannot make at all.
+
+### The ink ceiling is CALIBRATED, not guessed
+
+Ran the measurement against the delivered face and against the same face with a parchment-toned
+line baked back into the plate at several sizes:
+
+| plate content | light-pixel fraction |
+|---|---|
+| **delivered (clean)** | **0.0017** |
+| baked line, 28px | 0.0077 |
+| baked line, 40px | 0.0139 |
+| baked line, 72px | 0.0278 |
+| baked title + subtitle | 0.0255 |
+
+`PlateInkCeiling = 0.006` sits 3.5x above the clean face and below the smallest line anyone
+would author on a 1416px-wide card. *(A first draft used 0.02 and a 28px bake slipped under it
+at 0.0077 - the loose ceiling was caught by running the mutation, not by reading the number.)*
+
+### PROVEN RED - the mutations
+
+Ran a harness replicating Case 9's exact predicates and thresholds against the live tree and
+against mutated copies:
+
+    9a live tree          GREEN
+    9a mutant: LockedArtKey = "raids-locked" -> null
+                          RED  -> "the Journey RAIDS card declares no LockedArtKey"
+    9a mutant: (available || authoredLockFace) ? Color.white -> available ? Color.white
+                          RED  -> "the authored locked face is being gray-washed again"
+    9b live tree          GREEN  ink 0.0017 <= 0.0060
+    9b mutant: bake "Unlock to access raid battles" into the plate at 28px
+                          RED  -> ink 0.0077 > 0.0060
+    9c live tree          GREEN  9.05 / 10.21 / 15.91 vs floor 4.50
+
+The 9a "no LockedArtKey" mutation is the headline one: it is exactly the state of the tree
+before this follow-up, and the case names the card from the source.
+
+## F9. Gate evidence (edit-only)
+
+| File | Brace / NUL check |
+|---|---|
+| `Assets/_Modules/HUD/PlayerDeckWorkspace.cs` | BALANCED clean |
+| `Assets/Editor/Regression/HudLabelFitRegression.cs` | BALANCED clean |
+
+All added lines are ASCII-only (verified against the diff). No Unity gate, no build, no
+commit - the lead owns all three. No `.unity` scene touched. No `DataRegression.cs` edit.
+`PostureSignals`, `RaidCapabilityHudBridge`, the lock predicate and the reason strings are
+untouched. The owner's PNG was not recoloured, restyled or re-edited.
+
+**For the lead:** `raids-locked.png` and `raids-locked.png.meta` are UNTRACKED - stage both
+by explicit path with the two `.cs` files, or the build ships a null sprite.
+
+## F10. For the owner (PO felt-verify + close)
+
+1. On a save with no barracks: open Journey. RAIDS now shows the dark war camp and the stone
+   padlock on the left, with `[ LOCKED ]`, `RAIDS` and `Build a Barracks to raid` as live text
+   on the right - same left-art / right-text shape as QUESTS beside it.
+2. Build a barracks: RAIDS returns to its normal face and opens as before.
+3. The card is no longer dimmed by the engine on top of the art. If it now reads as *less*
+   locked than you want, say so and the badge/plate gets more weight - the fix will not be a
+   darker tint.

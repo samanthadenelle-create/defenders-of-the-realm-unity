@@ -26,6 +26,16 @@ namespace DeNelle.HUD
             public string Purpose;
             public string Concept;
             public string ArtKey;
+            /// <summary>
+            /// WO-1357 follow-up (owner art delivery 2026-09-03) - the card face to mount while
+            /// <see cref="Available"/> is false. Null means "there is no dedicated locked face",
+            /// and the card keeps <see cref="ArtKey"/> in both states, which is what every other
+            /// card in the deck does. A card that DOES supply one is declaring that the locked
+            /// state is AUTHORED art (padlock + darkened scene), so the runtime gray tint is
+            /// dropped for it - see BuildCard. The plate in that art must stay text-free: title
+            /// and reason are live TMP, exactly as WO-1341 settled.
+            /// </summary>
+            public string LockedArtKey;
             public Func<bool> Available;
             /// <summary>
             /// WO-1357 — the SPECIFIC reason this card is locked, evaluated at render. Null
@@ -113,8 +123,26 @@ namespace DeNelle.HUD
             button.interactable = available;
             MedievalUiSkin.ApplyButton(button, primary: available);
             var cardImage = button.GetComponent<Image>();
-            var illustratedCard = string.IsNullOrEmpty(spec.ArtKey) ? null :
-                Resources.Load<Sprite>("UI/ElarionMedieval/cards/" + spec.ArtKey);
+            // WO-1357 follow-up: a card may ship a SECOND, authored face for its locked state
+            // (cards/raids-locked.png - war camp gone dark behind a stone padlock). It is
+            // selected here and ONLY here, so the unlocked path below is byte-for-byte the path
+            // that already works; the locked branch is the only thing that changes.
+            bool authoredLockFace = !available && !string.IsNullOrEmpty(spec.LockedArtKey);
+            string artKey = authoredLockFace ? spec.LockedArtKey : spec.ArtKey;
+            var illustratedCard = string.IsNullOrEmpty(artKey) ? null :
+                Resources.Load<Sprite>("UI/ElarionMedieval/cards/" + artKey);
+            if (authoredLockFace && illustratedCard == null)
+            {
+                // Never silently fall through to the unlocked face - that would show an inviting
+                // camp behind a [ LOCKED ] badge. Say so, and let the ArtKey fallback happen with
+                // the failure on the record.
+                FlowTrace.Warn("HUD", "deck card '" + spec.Title + "' locked face '" +
+                    spec.LockedArtKey + "' did not load - falling back to '" + spec.ArtKey + "'");
+                authoredLockFace = false;
+                artKey = spec.ArtKey;
+                illustratedCard = string.IsNullOrEmpty(artKey) ? null :
+                    Resources.Load<Sprite>("UI/ElarionMedieval/cards/" + artKey);
+            }
             var cardFrame = illustratedCard != null ? illustratedCard :
                 Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
             if (cardImage != null && cardFrame != null)
@@ -128,14 +156,21 @@ namespace DeNelle.HUD
                     // sprite gets NO correction and renders 1:1; a margined one gets exactly its
                     // own margin removed, per edge, seated inside a native rectangular mask so
                     // the packaging pixels are never displayed or mutated.
-                    var fit = ResolveArtFit(spec.ArtKey, illustratedCard);
+                    var fit = ResolveArtFit(artKey, illustratedCard);
                     cardImage.sprite = null;
                     cardImage.color = Color.clear;
                     if (fit.Corrected && button.GetComponent<RectMask2D>() == null)
                         button.gameObject.AddComponent<RectMask2D>();
+                    // The gray wash is the stand-in for "this card has no locked art". When the
+                    // card HAS an authored locked face it is already the darkened, padlocked
+                    // scene, and washing it again only costs the live text its contrast against a
+                    // near-black plate. The owner is red/green colourblind, so locked-ness never
+                    // rested on the tint anyway: it reads from the padlock, the "[ LOCKED ]" word
+                    // badge and the remedy line - shape and words, not hue.
+                    Color lockedTint = new Color(.48f, .48f, .50f, .82f);
                     var artSurface = ElarionUiKit.AddImage(button.transform, "IllustratedCardSurface",
                         fit.AnchorMin, fit.AnchorMax,
-                        available ? Color.white : new Color(.48f, .48f, .50f, .82f), false);
+                        (available || authoredLockFace) ? Color.white : lockedTint, false);
                     artSurface.transform.SetAsFirstSibling();
                     var artImage = artSurface.GetComponent<Image>();
                     artImage.sprite = illustratedCard;
@@ -151,7 +186,12 @@ namespace DeNelle.HUD
                     colors.highlightedColor = new Color(1.08f, 1.04f, .90f, 1f);
                     colors.selectedColor = colors.highlightedColor;
                     colors.pressedColor = new Color(.82f, .76f, .64f, 1f);
-                    colors.disabledColor = new Color(.46f, .46f, .48f, .82f);
+                    // button.interactable is false on a locked card, so the Selectable multiplies
+                    // targetGraphic (the art) by disabledColor. That is the SECOND wash, and it
+                    // would undo the one dropped above - an authored locked face renders at full
+                    // value in both places or in neither.
+                    colors.disabledColor = authoredLockFace
+                        ? Color.white : new Color(.46f, .46f, .48f, .82f);
                     colors.colorMultiplier = 1f;
                     colors.fadeDuration = .08f;
                     button.colors = colors;
@@ -569,6 +609,15 @@ namespace DeNelle.HUD
                         // see a way to start a raid"). Locked-with-a-reason teaches the next goal.
                         new Card { Title = "Raids", Purpose = "Choose a camp and deploy your army", Concept = "raid",
                             ArtKey = "raids",
+                            // Owner art delivery 2026-09-03. cards/raids-locked.png is the war
+                            // camp gone dark behind a stone-and-steel padlock, with the right
+                            // ~45% left as an EMPTY plate ON PURPOSE: the reason this card is
+                            // shut is DYNAMIC (never had a Barracks / lost one / flag off), so
+                            // it has to be live text. The owner was shown a version with the
+                            // line baked in and chose the wordless re-generate so the live copy
+                            // wins. Never re-deliver this face with words on it - that is the
+                            // WO-1341 double-label defect, and HudLabelFitRegression pins it.
+                            LockedArtKey = "raids-locked",
                             Available = () => PostureSignals.RaidCapable,
                             LockReason = () => PostureSignals.RaidLockCopy(PostureSignals.RaidLock),
                             Open = RaidEntryGate.RequestOpen }
