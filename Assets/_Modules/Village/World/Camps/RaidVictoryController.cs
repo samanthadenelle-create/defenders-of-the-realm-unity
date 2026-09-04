@@ -276,11 +276,159 @@ namespace DeNelle.Village.World.Camps
             // catches - can never skip the settlement.
             ReconcileArmy(result);
 
+            // STEP 3.7 (WO-1375) - COUNT THE WIN. The escalation ladder
+            // (PROGRAM_RAID_ECONOMY_2026-09-04 section 4: target 2 after 3 victories, target 3
+            // after 10, the Iron Bastion after 20) had NO input in the tree - nothing counted
+            // raid wins. RaidClaimService's per-camp flags cannot answer it (clearing one camp
+            // twice adds nothing to a SET) and EverCompletedRaid is a bool a RETREAT also sets.
+            // Incremented here, once, AFTER the _handled latch above, because this is the one
+            // de-duplicated settle seam - a second writer is the ladder skipping a tier.
+            int victories = RecordVictory();
+
+            // STEP 3.8 (WO-1374) - REPORT THE DAILY QUEST. The only ticker for combat.raid.*
+            // was EnemyOutpost.cs:703 (the OuterWorld outpost), so clearing a baked raid camp
+            // did not advance "Break a camp - clear 1 enemy outpost" - the daily whose own label
+            // describes exactly what the player just did. Same event id and same shape as that
+            // call site; DailyQuestService.Report prefix-matches, so this ONE report advances
+            // both combat.raid.single and combat.raid.double, and there is exactly one of it.
+            Guard.Try("Raid", "report combat.raid daily",
+                () => DeNelle.Core.Quests.DailyQuestService.Instance?.Report(QuestRaidEventId, 1));
+
+            // STEP 3.9 (WO-1375 / section 6) - PUBLISH TO THE SEASON PASS. Outcome-typed, never
+            // an XP amount: the +50/+25/+25/+100 table resolves inside BattlePassService, behind
+            // the one door owner ruling Q4 closed. ArenaOutcomeRelay's raid overload is
+            // arity-separated from the arena one (4+ args vs at most 3), so this cannot bind to
+            // the wrong publish. firstClear is the repeatClear read taken BEFORE ClaimBase -
+            // re-deriving it now would report every clear as a repeat, because MarkClaimed has
+            // already flipped the flag. Publish is Guard.Try'd inside the relay and an absent
+            // handler is traced there, so a build with no battle pass loses nothing; this Guard
+            // covers the argument marshalling on this side.
+            Guard.Try("Raid", "publish raid outcome to the season pass", () =>
+                DeNelle.Commerce.ArenaOutcomeRelay.Publish(
+                    true,
+                    result != null ? result.Stars : 0,
+                    result != null ? result.DestructionPct : 0f,
+                    !repeatClear,
+                    configId));
+
+            // WO-1374 — FUNNEL STEP 4 ("first raid won") and the ARM for step 5 ("raid
+            // reward spent"). Placed AFTER the grant on purpose: a win that credited
+            // nothing has not produced a reward for the player to spend, and arming step 5
+            // before the money lands would let an unrelated spend complete the funnel.
+            // Guarded so an analytics throw can never cost the player their victory screen.
+            Guard.Try("Funnel", "raid won",
+                () => DeNelle.Core.Analytics.RaidFunnel.RaidWon(configId, result != null ? result.Stars : 0));
+
             // STEP 4 — show the victory screen + route home (anti-soft-lock). The shared
             // Obsidian EndState template owns the presentation, the ONE primary action
             // (Return to Castle -> ReturnHome), the EventSystem, and the auto-dismiss
             // softlock guard (fed the same _autoReturnSeconds so the timing is unchanged).
-            ShowVictoryScreen(configId, joined, result, loot);
+            ShowVictoryScreen(configId, joined, result, loot, victories);
+        }
+
+        /// <summary>DailyQuests Report() id - the SAME literal EnemyOutpost.cs:112 uses, because
+        /// the two raid surfaces must tick ONE channel. Report() prefix-matches, so this single
+        /// id advances both <c>combat.raid.single</c> and <c>combat.raid.double</c>.</summary>
+        private const string QuestRaidEventId = "combat.raid";
+
+        // =====================================================================
+        //  THE VICTORY COUNTER (WO-1375) - the ladder's missing input
+        // =====================================================================
+
+        /// <summary>
+        /// Increments and persists <c>GameState.RaidVictories</c>, running the ONE-SHOT
+        /// claim-flag backfill first so a veteran never restarts at 0. Returns the new count,
+        /// or 0 when there is no state to write (reported, never silent). Called from
+        /// <c>HandleVictory</c> only, after the <c>_handled</c> latch.
+        /// </summary>
+        private int RecordVictory()
+        {
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null)
+            {
+                FlowTrace.Fail("Raid", "VICTORY COUNT LOST - no loaded GameState, so this win was not " +
+                                       "counted toward the section-4 unlock ladder. The raid is unaffected.");
+                return 0;
+            }
+
+            BackfillVictoriesFromClaims(state);
+            state.RaidVictories++;
+            svc.Save();
+            FlowTrace.Step("Raid", $"VICTORY COUNT - raids won on this save: {state.RaidVictories} " +
+                                   "(monotonic; the input to the section-4 escalation ladder). Persisted.");
+            return state.RaidVictories;
+        }
+
+        /// <summary>
+        /// ONE-SHOT: seed <c>RaidVictories</c> for a save that predates the counter, from the
+        /// evidence a veteran's wins actually left behind - the per-camp
+        /// <see cref="RaidClaimService"/> claim flags.
+        ///
+        /// <para>WHY IT IS HERE AND NOT IN <c>SaveMigrator</c>: the claim set lives in
+        /// PlayerPrefs, not on the save wire, so a migrator step would have nothing to read.
+        /// This runs where <c>RaidClaimService</c> is visible and latches on the persisted
+        /// <c>RaidVictoriesBackfilled</c> flag, so it runs exactly once per save and can never
+        /// inflate the count.</para>
+        ///
+        /// <para>IT IS A FLOOR, NOT A RECONSTRUCTION, AND THAT IS STATED RATHER THAN HIDDEN.
+        /// One claimed camp proves at least one win, so all three claimed seeds 3. Repeat clears
+        /// were never recorded anywhere and cannot be recovered - a veteran who farmed a single
+        /// camp fifty times seeds 1. The under-count is fail-open (it delays a tier unlock, never
+        /// revokes one) and self-heals from the next win onward.</para>
+        ///
+        /// <para>THE CAMP IDS ARE READ, NOT TYPED - they come from the scene-config catalog, so
+        /// a fourth camp (the Iron Bastion, whose scene is baked and not yet switched on) is
+        /// counted the day it is registered, with no edit to this file.</para>
+        ///
+        /// <para>Internal rather than private so the sibling ladder lane can force the seed
+        /// before its FIRST read of the count, without a duplicate backfill of its own.</para>
+        /// </summary>
+        internal static void BackfillVictoriesFromClaims(DeNelle.Core.State.GameState state)
+        {
+            if (state == null || state.RaidVictoriesBackfilled) return;
+            state.RaidVictoriesBackfilled = true;
+
+            int seeded = 0;
+            Guard.Try("Raid", "backfill raid victories from claim flags", () =>
+            {
+                foreach (string id in KnownRaidConfigIds())
+                    if (RaidClaimService.IsClaimed(id)) seeded++;
+            });
+
+            if (seeded > state.RaidVictories) state.RaidVictories = seeded;
+
+            FlowTrace.Step("Raid", $"VICTORY COUNT BACKFILL (one-shot) - {seeded} claimed camp(s) found in " +
+                                   $"the persisted claim set; RaidVictories seeded to {state.RaidVictories}. " +
+                                   "This is a FLOOR: repeat clears were never recorded and cannot be recovered, " +
+                                   "so a heavy farmer may seed low. Fail-open (a tier unlocks later, never " +
+                                   "sooner) and self-healing from the next win. The latch is now set.");
+        }
+
+        /// <summary>
+        /// Every raid config id this build knows about, read from the scene-config catalog -
+        /// never a hand-typed list, because a copied list is the duplicated state this repo's
+        /// most expensive bugs are made of. An empty result is WARNED, never silently treated as
+        /// "no claims".
+        /// </summary>
+        private static System.Collections.Generic.List<string> KnownRaidConfigIds()
+        {
+            var ids = new System.Collections.Generic.List<string>();
+            Guard.Try("Raid", "enumerate raid config ids", () =>
+            {
+                foreach (var cfg in SceneConfigCatalog.All)
+                {
+                    if (cfg == null || string.IsNullOrEmpty(cfg.id) || string.IsNullOrEmpty(cfg.sceneName)) continue;
+                    if (!cfg.sceneName.StartsWith("RaidBase", System.StringComparison.OrdinalIgnoreCase)) continue;
+                    ids.Add(cfg.id);
+                }
+            });
+
+            if (ids.Count == 0)
+                FlowTrace.Warn("Raid", "victory-count backfill: the scene-config catalog yielded NO RaidBase_* " +
+                                       "configs, so the claim scan has nothing to read and this save seeds 0. " +
+                                       "Fail-open (the ladder simply starts counting from this win), never a lockout.");
+            return ids;
         }
 
         // =====================================================================
@@ -312,8 +460,14 @@ namespace DeNelle.Village.World.Camps
         // bank the trace read "credited 0/500" while the screen still advertised "+500 crystals",
         // which is the same "I raided and got nothing" unfalsifiability one layer up. The sibling
         // ChallengeOutpostVictoryController already does this; the raid path did not.
-        private int  _crystalsCredited;
-        private int  _foodCredited;
+        // WO-1374 - THE WHOLE CREDITED BASKET, not two of its five axes. This used to be
+        // _crystalsCredited + _foodCredited only, and those two ints were the only thing the
+        // victory screen was ever handed - so the screen could not report wood, iron or gold
+        // even after GrantLoot started measuring all five (dw/di/dg were computed at :410-411
+        // and thrown away). Raids pay all five (PROGRAM_RAID_ECONOMY_2026-09-04 section 1), so
+        // the player was told about two fifths of the payout. Still the MEASURED delta, never
+        // the requested amount - that is the WO-978 contract, unchanged and now widened.
+        private ResourceCost _credited;
         private bool _rewardShort;
 
         /// <summary>
@@ -392,7 +546,7 @@ namespace DeNelle.Village.World.Camps
 
             if (loot.IsZero) return;
 
-            _crystalsCredited = 0; _foodCredited = 0; _rewardShort = false;
+            _credited = default(ResourceCost); _rewardShort = false;
 
             var eco = EconomyService.Instance;
             if (eco != null)
@@ -403,7 +557,7 @@ namespace DeNelle.Village.World.Camps
                 eco.Grant(loot);
                 int dw = eco.Wood - w0, df = eco.Food - f0, di = eco.Iron - i0,
                     dc = eco.Crystals - c0, dg = eco.Coins - g0;
-                _crystalsCredited = dc; _foodCredited = df;
+                _credited = new ResourceCost(wood: dw, food: df, iron: di, crystals: dc, coins: dg);
                 _rewardShort = dw < loot.Wood || df < loot.Food || di < loot.Iron
                             || dc < loot.Crystals || dg < loot.Coins;
                 LogCredit("EconomyService", loot, dw, df, di, dc, dg);
@@ -421,7 +575,9 @@ namespace DeNelle.Village.World.Camps
                 if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
                 if (loot.Food != 0) gs.AddFood(loot.Food);
                 int dcF = state.Resources.Crystals - c0, dfF = state.Resources.Food - f0;
-                _crystalsCredited = dcF; _foodCredited = dfF;
+                // This fallback route has NO wood/iron/gold mover, so those axes are genuinely
+                // zero credited - the basket says so rather than leaving them unset.
+                _credited = new ResourceCost(food: dfF, crystals: dcF);
                 // This route has no wood/iron/gold mover, so those axes are dropped outright —
                 // that counts as short for the player-facing caveat, not just for the log.
                 _rewardShort = dcF < loot.Crystals || dfF < loot.Food
@@ -588,7 +744,7 @@ namespace DeNelle.Village.World.Camps
         // =====================================================================
 
         private void ShowVictoryScreen(string configId, string joinedCompanionName,
-                                       RaidResult result, ResourceCost loot)
+                                       RaidResult result, ResourceCost loot, int victories)
         {
             try
             {
@@ -599,12 +755,25 @@ namespace DeNelle.Village.World.Camps
                 // WO-771.6: the win now carries stars + %-destruction + the loot breakdown.
                 // WO-978 follow-up: show the CREDITED amounts, never the requested ones. At a
                 // capped bank these differ, and the screen is what the player believes.
+                // WO-1374 - the WHOLE CREDITED BASKET goes to the screen now. The retired call
+                // handed it two ints (_crystalsCredited, _foodCredited) and the screen rendered
+                // the second one under the label "Stone" - a currency retired as a balance
+                // (GameState.cs:59 records the removal in-code). Wood, iron and gold were
+                // measured in GrantLoot and then dropped on the floor. Still CREDITED, never
+                // requested: at a capped town bank those differ and the screen is what the
+                // player believes (the WO-978 contract).
                 var vm = EndStateVM.FromRaidVictory(
                     joinedCompanionName, ReturnHome, _autoReturnSeconds,
                     result != null ? result.Stars : -1,
                     result != null ? result.DestructionPercent : -1,
                     result != null ? result.ElapsedSeconds : -1f,
-                    _crystalsCredited, _foodCredited);
+                    _credited,
+                    // The unlock line is a HAND-OFF, not a decision made here: this file knows
+                    // the win count, and the sibling ladder lane knows what that count unlocks.
+                    // Null until that lane fills it, and the VM renders nothing for null. The
+                    // target NAMES it will use are CREATIVE_CANON_ELARION_2026-09-04 section 3
+                    // ("The Broken Garrison"), never the superseded "Ironwatch Garrison" pass.
+                    ResolveUnlockLine(victories));
 
                 if (_rewardShort && vm != null)
                 {
@@ -627,6 +796,28 @@ namespace DeNelle.Village.World.Camps
                 FlowTrace.Fail("Raid", "victory screen build threw — returning home directly: " + e.Message);
                 ReturnHome();
             }
+        }
+
+        /// <summary>
+        /// The optional "X unlocked" line for the victory screen, given the new victory count.
+        ///
+        /// <para>DELIBERATELY NULL TODAY, AND THAT IS NOT AN OVERSIGHT. The section-4 thresholds
+        /// (3 / 10 / 20) and the gate they open are the sibling ladder lane's to own; naming a
+        /// target here would fork the ladder across two files, which is the duplicated state
+        /// that makes this repo's most expensive bugs. This seam exists so that lane fills in
+        /// ONE method body and nothing else in the victory path moves - the count is already
+        /// computed, the VM already carries the field, and the screen already renders it.</para>
+        ///
+        /// <para>Traced, so the absence is OBSERVABLE: a player crossing a threshold and seeing
+        /// no line must be distinguishable in a capture from a player who crossed nothing.</para>
+        /// </summary>
+        private static string ResolveUnlockLine(int victories)
+        {
+            FlowTrace.Step("Raid", $"UNLOCK LINE: victories={victories}; no ladder gate is wired into this " +
+                                   "seam yet, so the victory screen announces no unlock. The count is " +
+                                   "persisted and correct - only the announcement is unowned (section-4 " +
+                                   "thresholds belong to the ladder lane, not to this file).");
+            return null;
         }
 
         private void ReturnHome()

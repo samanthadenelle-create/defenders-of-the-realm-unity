@@ -235,6 +235,19 @@ namespace DeNelle.Village.Arena
             }
 
             FlowTrace.Step("Arena", "herald interacted -> opening Path A camp-select (RaidSelectionScreen)");
+            // ⛔ WO-1374 — DO NOT ADD A RaidCapable CHECK HERE. This call site is the one
+            // WO-1374 was minted against: WO-1357 taught the Journey card to lock
+            // gracefully when the player has no Barracks, and this NPC door walked straight
+            // past it, handing a camp list to a player who cannot raid.
+            //
+            // The gate now lives INSIDE RaidSelectionScreen.Open(), which is the single
+            // door every raid entry passes through, and it refuses with copy that names the
+            // missing thing (PostureSignals.RaidLockCopy). Fixing it at this call site
+            // instead would have closed this door and left the next one to rediscover the
+            // same bug - and a second predicate on a second surface is precisely what
+            // WO-1357's header forbids by name, because two checks drift and the drift is
+            // the defect. If the herald ever needs to LOOK locked in the world, that is a
+            // read of PostureSignals.RaidCapable for the PROMPT, never a second refusal.
             DeNelle.Village.Hero.RaidSelectionScreen.Open();
             // Dismiss the world "Enter Arena" prompt the instant the list opens so it can't
             // linger over the camp-select. The proximity loop's AnyArenaScreenOpen gate

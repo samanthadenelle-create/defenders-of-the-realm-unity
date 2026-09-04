@@ -605,6 +605,43 @@ namespace DeNelle.Core.State
         /// <summary>Monotonic item-possession history; spending an ingredient never erases discovery.</summary>
         public List<string> EverAcquiredItemIds = new List<string>();
 
+        // -- WO-1375 / PROGRAM_RAID_ECONOMY section 4 -- the RAID VICTORY COUNTER ------
+        /// <summary>
+        /// MONOTONIC count of raids this save has WON. The input the escalation ladder does
+        /// not have yet: PROGRAM_RAID_ECONOMY_2026-09-04 section 4 unlocks target 2 after 3
+        /// victories, target 3 after 10 and the Iron Bastion after 20, and nothing in the tree
+        /// counted wins. Distinct from <see cref="EverCompletedRaid"/> (a first-raid BOOL that
+        /// any exit sets, including a retreat or a death) and from the per-camp
+        /// <c>RaidClaimService</c> claim flags (a SET of "have I ever taken THIS camp", which
+        /// cannot answer "how many wins do I have" because re-clearing one camp twice adds
+        /// nothing to it).
+        ///
+        /// <para>ONE WRITER: <c>DeNelle.Village.World.Camps.RaidVictoryController.HandleVictory</c>,
+        /// after its <c>_handled</c> latch — the same de-duplicated settle seam the loot grant,
+        /// the daily-quest report and the Season publish fire from. A second writer would
+        /// double-count a win, which is exactly the ladder skipping a tier.</para>
+        ///
+        /// <para>Additive default-on-read, NO schema bump (nullable on the wire; absent -> this
+        /// initializer). An existing save is BACKFILLED once from the claim flags rather than
+        /// defaulted — see <see cref="RaidVictoriesBackfilled"/> — because a veteran loading 0
+        /// would have the ladder taken away from them.</para>
+        /// </summary>
+        public int RaidVictories = 0;
+
+        /// <summary>
+        /// Latch for the ONE-SHOT backfill of <see cref="RaidVictories"/> from the persisted
+        /// per-camp claim flags. It exists because the claim set lives in PlayerPrefs, NOT on
+        /// the save wire, so a <c>SaveMigrator</c> step physically cannot see it — the backfill
+        /// has to run on the Village side where <c>RaidClaimService</c> is visible, and it needs
+        /// its own persisted "already done" mark so it cannot run twice and inflate the count.
+        ///
+        /// <para>The backfill is deliberately a FLOOR, not a reconstruction: one claimed camp
+        /// proves at least one win, so a veteran with all three camps claimed seeds 3. It cannot
+        /// recover repeat clears (nothing ever recorded them), and that under-count is recorded
+        /// here rather than guessed at. Additive default-on-read, no schema bump.</para>
+        /// </summary>
+        public bool RaidVictoriesBackfilled = false;
+
         public bool MarkEverAcquired(string itemId)
         {
             if (string.IsNullOrEmpty(itemId)) return false;

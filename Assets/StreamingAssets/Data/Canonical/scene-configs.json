@@ -64,7 +64,8 @@
     },
     {
       "id": "raider_camp_small",
-      "displayName": "Small Raider Camp",
+      "displayName": "The Forsaken Camp",
+      "description": "Scavengers strip an abandoned settlement the Heart can no longer reach.",
       "sceneName": "RaidBase_raider_camp_small",
       "ownership": "Enemy",
       "faction": "orc",
@@ -104,18 +105,20 @@
       "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.0,
-      "raidCooldownSeconds": 14400,
+      "raidCooldownSeconds": 14400, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
       "entranceCount": 2,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "Cardinal",
       "archerTowerCount": 3,
       "mageTowerCount": 1,
       "eliteCount": 0,
-      "shardDropChance": 0.0
+      "shardDropChance": 0.0,
+      "unlockVictories": 0
     },
     {
       "id": "fortified_garrison",
-      "displayName": "Fortified Garrison",
+      "displayName": "The Broken Garrison",
+      "description": "Its soldiers still guard their post, though no living commander remains to give the order.",
       "sceneName": "RaidBase_fortified_garrison",
       "ownership": "Enemy",
       "faction": "mixed",
@@ -167,21 +170,80 @@
       "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.5,
-      "raidCooldownSeconds": 28800,
+      "raidCooldownSeconds": 28800, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
       "entranceCount": 1,
       "interiorWallLayers": 0,
       "towerPlacementStyle": "OverlappingFire",
       "archerTowerCount": 5,
       "mageTowerCount": 2,
       "eliteCount": 1,
-      "shardDropChance": 0.0
+      "shardDropChance": 0.0,
+      "unlockVictories": 3
     },
     {
       "id": "mage_enclave",
-      "displayName": "Mage Enclave",
+      "displayName": "The Veiled Enclave",
+      "description": "Something inside has learned to bend fractured memories into magic.",
       "sceneName": "RaidBase_mage_enclave",
       "ownership": "Enemy",
       "faction": "hollow",
+      "difficulty": "Extreme",
+      "wallTier": "ReinforcedSteel",
+      "baseRadius": 54,
+      "wallSegmentsPerSide": 13,
+      "centralBuilding": "tower_arcane_spire",
+      "towers": [
+        {
+          "type": "tower_arcane_spire",
+          "count": 2
+        }
+      ],
+      "props": {
+        "set": [],
+        "count": 0
+      },
+      "garrison": {
+        "composition": [
+          {
+            "enemyId": "hollow-acolyte",
+            "count": 7
+          },
+          {
+            "enemyId": "orc-shaman",
+            "count": 5
+          },
+          {
+            "enemyId": "hollow-warrior",
+            "count": 7
+          }
+        ],
+        "baseEnemyLevel": 6,
+        "difficultyMultiplier": 1.3,
+        "boss": "necromancer",
+        "levelOffset": 3
+      },
+      "themeColor": "#7a5fb0",
+      "recommendedClearTime": 180,
+      "twoStarTime": 150,
+      "oneStarTime": 0,
+      "rewardMultiplier": 2.2,
+      "raidCooldownSeconds": 43200, "_raidCooldownSecondsSuperseded": "WO-1379 2026-09-04 — Heartfire replaces the per-camp wall. Field retained for data integrity; not consulted at runtime.",
+      "entranceCount": 1,
+      "interiorWallLayers": 1,
+      "towerPlacementStyle": "OverlappingFire",
+      "archerTowerCount": 7,
+      "mageTowerCount": 3,
+      "eliteCount": 3,
+      "shardDropChance": 0.2,
+      "unlockVictories": 10
+    },
+    {
+      "id": "iron_bastion",
+      "displayName": "The Iron Bastion",
+      "description": "The Heart remembers no fortress here.",
+      "sceneName": "RaidBase_IronBastion",
+      "ownership": "Enemy",
+      "faction": "mixed",
       "difficulty": "Extreme",
       "wallTier": "ReinforcedSteel",
       "baseRadius": 54,
@@ -229,7 +291,8 @@
       "archerTowerCount": 7,
       "mageTowerCount": 3,
       "eliteCount": 3,
-      "shardDropChance": 0.2
+      "shardDropChance": 0.2,
+      "unlockVictories": 20
     }
   ]
 }

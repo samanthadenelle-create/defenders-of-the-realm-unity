@@ -10,8 +10,8 @@
 // overrideSorting, above the world-HUD band) + tap-outside Scrim + a framed
 // dark-glass panel + a Header. The RAIDS banner heads the panel (Resources.Load,
 // null-safe — decorative; the panel works without it). A scrollable grid of raid
-// cards is built from SceneConfigCatalog.All, filtered to the 3 flagship enemy
-// raids (raider_camp_small / fortified_garrison / mage_enclave).
+// cards is built from SceneConfigCatalog.All, filtered to the 4 flagship enemy
+// raids (raider_camp_small / fortified_garrison / mage_enclave / iron_bastion).
 //
 // Each card reads SceneConfigDef: displayName (gold serif), difficulty (a colour-
 // tinted badge: green/yellow/red = Regular/Hard/Extreme), recommendedClearTime
@@ -65,7 +65,7 @@ namespace DeNelle.Village.Hero
         public static bool IsScreenOpen { get; private set; }
 
         // Card pixel height in the scroll list (tall plaque — banner + badge + time + reward).
-        // Three flagship camps must fit in the first fold at the shortest supported
+        // Four flagship camps must fit in the first fold at the shortest supported
         // landscape height. Scrolling remains available for future catalog growth.
         private const float CardHeightPx = 142f;
         private const float CardGapPx    = 12f;
@@ -81,6 +81,61 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open()
         {
+            // =============================================================
+            // WO-1374 — THE CAPABILITY GATE, AND IT IS FIRST FOR TWO REASONS.
+            // =============================================================
+            // (1) THE ARENA HERALD BYPASS. WO-1357 taught the Journey card to read
+            //     PostureSignals.RaidCapable and lock gracefully - but the Arena Herald
+            //     in the world calls THIS method directly (ArenaHeraldSpawner.OpenArena),
+            //     and nothing on that path ever asked the question. So the front door was
+            //     locked and a side door stood open: a player with no Barracks could walk
+            //     to the monument, tap Enter Arena, and be handed a camp list for a raid
+            //     they cannot start.
+            //
+            //     (!) THE FIX IS DELIBERATELY HERE AND NOT AT THE HERALD. Adding the check
+            //     to ArenaHeraldSpawner would fix the one caller we know about and leave
+            //     the next one to rediscover the bug - which is exactly how this one
+            //     survived WO-1357. Open() is the single door every raid entry passes
+            //     through (Herald, Journey card, HUD face, dev panel), so gating it here
+            //     closes the class rather than the instance.
+            //
+            // (2) THE REFUSAL MUST NAME WHAT IS ACTUALLY MISSING. Every refusal below this
+            //     point talks about troops and barracks slots, because until now the army
+            //     check was the ONLY check. A player whose real blocker was "raids are off
+            //     in this build" or "your Barracks was destroyed" was told to go train
+            //     troops - advice that cannot possibly work, given to someone who then
+            //     trains troops and finds the door still shut.
+            //
+            // ⛔ THIS READS THE ONE PREDICATE, IT DOES NOT WRITE A SECOND ONE.
+            // PostureSignals.RaidCapable / RaidLock are published by
+            // RaidCapabilityHudBridge and consumed identically by the bar face and the
+            // Journey card; RaidLockCopy is the ONE owner of the words. A hand-rolled
+            // StructureSingleton.IsBuilt("barracks") here would be the second check that
+            // WO-1357's header forbids by name - two checks drift, and the drift IS the
+            // defect. Both signals default to the open state, so a headless run, a
+            // pre-publish frame or an absent GameState can never false-block the door.
+            if (!DeNelle.Core.HudModel.PostureSignals.RaidCapable)
+            {
+                var lockReason = DeNelle.Core.HudModel.PostureSignals.RaidLock;
+                string lockCopy = DeNelle.Core.HudModel.PostureSignals.RaidLockCopy(lockReason);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "raid entry REFUSED at the capability gate: lock=" + lockReason +
+                    " -> \"" + (lockCopy ?? "(no copy)") + "\". This is the gate the Arena " +
+                    "Herald used to walk straight past (WO-1374).");
+                ElarionUiKit.ShowToast(
+                    // Never a generic "Locked": the copy names the missing thing AND the
+                    // remedy, because the owner is red/green colourblind and the tell has
+                    // to be words. The fallback can only be reached if a new lock reason is
+                    // added without copy, and it says so rather than pretending.
+                    lockCopy ?? ("Raids are unavailable right now (" + lockReason + ")."),
+                    ElarionUiKit.ToastTone.Info);
+                // ⛔ And NO training panel. The army redirect below is right when the
+                // blocker is troops; opening it here would send a player with no Barracks
+                // to train units they have nowhere to train, which is the exact
+                // wrong-advice failure this gate exists to stop.
+                return;
+            }
+
             // WO-813 SAFETY NET, upgraded to the FULL-ARMY gate (owner ruling: raids need a
             // full army counting ready + queued troops). This Village-side check is the
             // AUTHORITATIVE one — it recomputes via ArmyReadiness.Compute, the ONE readiness
@@ -163,6 +218,22 @@ namespace DeNelle.Village.Hero
 
             // VM FIRST — it resolves the flagship raids (fallback to all enemy raids) from
             // the catalog, so this View never touches SceneConfigCatalog.
+            // 2026-09-04 ESCALATION GATE - the View supplies both inputs the pure VM cannot
+            // reach for itself, and this is the ONLY place either is wired.
+            //
+            // (a) THE COUNTER. GameState.RaidVictories (GameState.cs:629) is the persisted
+            //     total, incremented once per win by RaidVictoryController.RecordVictory and
+            //     one-shot backfilled for saves that predate it. Read through the same
+            //     GameStateService.Instance?.State this screen already reads for army
+            //     readiness; a headless/stateless run yields 0, which locks the gated tiers
+            //     VISIBLY (with their reason) rather than silently opening them.
+            // (b) THE AVAILABILITY PROBE. SceneRouter.IsSceneInBuild is the public probe
+            //     already documented for raid CTAs ("False = toast under construction, never
+            //     a silent strand"). RaidBase_IronBastion is registered DISABLED, so it reads
+            //     false and its card carries a sentence instead of a dead tap.
+            RaidSelectionVM.VictoryCountProvider =
+                () => DeNelle.Core.State.GameStateService.Instance?.State?.RaidVictories ?? 0;
+            RaidSelectionVM.SceneAvailableProvider = DeNelle.Core.SceneRouter.IsSceneInBuild;
             _vm = RaidSelectionVM.CreateDefault(Close);
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin
@@ -272,6 +343,27 @@ namespace DeNelle.Village.Hero
                 DeNelle.Village.World.Camps.RaidCooldownService.RemainingSeconds(id);
             bool onCooldown = cooldownRemaining > 0d;
 
+            // 2026-09-04 — THE ESCALATION GATE. item.Locked / item.LockReason come from
+            // RaidSelectionVM.ResolveLock (authored unlockVictories, then scene availability).
+            // The ItemVM fields were always here; nothing read them, so every tier showed open.
+            //
+            // LOCKED WINS OVER COOLDOWN when both apply: a camp the player has not earned is
+            // not "recovering", and telling them to wait 12h for something they cannot enter
+            // at all is the wrong-advice failure the capability gate above exists to stop.
+            bool locked = item.Locked;
+            string lockCopy = item.LockReason;
+            if (locked && string.IsNullOrEmpty(lockCopy))
+            {
+                // Reachable only if a new lock path is added without copy. It SAYS so rather
+                // than pretending, and it leaves a trace - never a bare "Locked" (the owner is
+                // red/green colourblind; the words are the whole signal).
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "raid card '" + id + "' is LOCKED with no LockReason - a lock path was added " +
+                    "without player-facing copy. Showing a placeholder sentence.");
+                lockCopy = "This expedition is not available yet.";
+            }
+            bool dimmed = locked || onCooldown;
+
             // Card root: a Cell tile (LayoutElement-sized for the scroll layout) with a
             // difficulty-tinted inner rim, and a Button so the whole plaque taps.
             var card = new GameObject("RaidCard_" + id, typeof(Image), typeof(Button));
@@ -290,13 +382,13 @@ namespace DeNelle.Village.Hero
             var cardBtn = card.GetComponent<Button>();
             cardBtn.targetGraphic = cardImg;
             ElarionUiKit.StyleButtonColors(cardBtn);
-            MedievalUiSkin.ApplyButton(cardBtn, primary: !onCooldown);
+            MedievalUiSkin.ApplyButton(cardBtn, primary: !dimmed);
             var medievalCard = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
             if (medievalCard != null)
             {
                 cardImg.sprite = medievalCard;
                 cardImg.type = Image.Type.Simple;
-                cardImg.color = onCooldown
+                cardImg.color = dimmed
                     ? new Color(.46f, .46f, .48f, .86f)
                     : Color.white;
             }
@@ -354,23 +446,41 @@ namespace DeNelle.Village.Hero
             // on this very screen). So a recovering camp SAYS it is recovering and NAMES the
             // wait; the dimming below is decoration on top of a sentence that already stands
             // on its own in greyscale.
-            string bottomLine = onCooldown
-                ? DeNelle.Village.World.Camps.RaidCooldownService.DescribeState(id)
-                : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
+            string bottomLine = locked
+                ? lockCopy
+                : onCooldown
+                    ? DeNelle.Village.World.Camps.RaidCooldownService.DescribeState(id)
+                    : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
             var rewardLabel = ElarionUiKit.Label(card.transform,
                 bottomLine, 0.18f, 0.34f,
-                onCooldown ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
+                dimmed ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
                 22, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
             // §1.14 fit-never-truncate: "Recovering - raidable in 12h 45m" must never clip.
             ElarionUiKit.FitSingleLine(rewardLabel);
 
-            if (onCooldown)
+            // THE CANON LINE — one sentence of target copy under the reward/lock band
+            // (docs/CREATIVE_CANON_ELARION_2026-09-04.md §3 "Line on the target card"). It is
+            // authored per row in scene-configs.json description; absent = the band is simply
+            // not built, so every non-raid row and any future unauthored row stays correct.
+            string flavour = _vm.DescriptionFor(id);
+            if (!string.IsNullOrEmpty(flavour))
+            {
+                var flavourLabel = ElarionUiKit.Label(card.transform,
+                    flavour, 0.03f, 0.17f, ElarionUi.ParchmentDim,
+                    18, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f);
+                flavourLabel.raycastTarget = false;
+                // §1.14 fit-never-truncate: the longest authored line (The Broken Garrison,
+                // 92 chars) must shrink, not clip, at phone aspect.
+                ElarionUiKit.FitSingleLine(flavourLabel);
+            }
+
+            if (dimmed)
             {
                 // Decoration only — the sentence above is the signal. The card stays TAPPABLE
-                // on purpose: OnCardTapped answers with the refusal + the remaining time, which
-                // is strictly more useful than an inert button (and is what makes the state
-                // discoverable for a player who did not read the line).
+                // on purpose: OnCardTapped answers with the refusal (the remaining time, or the
+                // unlock requirement), which is strictly more useful than an inert button (and
+                // is what makes the state discoverable for a player who did not read the line).
                 cardImg.color = new Color(0.05f, 0.05f, 0.055f, 0.98f);
                 nameLabel.color = ElarionUi.ParchmentDim;
             }
@@ -390,6 +500,21 @@ namespace DeNelle.Village.Hero
                     "the card is on the grid but its def is missing from the catalog.");
                 ElarionUiKit.ShowToast("That raid is unavailable right now.",
                     ElarionUiKit.ToastTone.Danger);
+                return;
+            }
+
+            // 2026-09-04 — THE ESCALATION GATE, checked BEFORE the cooldown gate. An unearned
+            // camp is not "recovering"; answering with a recovery time would be advice that
+            // cannot possibly work. Never a silent no-op: the toast repeats the exact sentence
+            // already printed on the card, so the two can never drift.
+            string tapLock = _vm != null ? _vm.LockReasonFor(id) : null;
+            if (!string.IsNullOrEmpty(tapLock))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "raid card tap REFUSED - '" + id + "' is locked (needs " +
+                    _vm.UnlockVictoriesFor(id) + " victories; player has " + _vm.Victories +
+                    "). Told the player: \"" + tapLock + "\"");
+                ElarionUiKit.ShowToast(tapLock, ElarionUiKit.ToastTone.Info);
                 return;
             }
 

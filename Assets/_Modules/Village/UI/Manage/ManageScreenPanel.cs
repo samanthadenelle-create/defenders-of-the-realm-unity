@@ -1984,7 +1984,13 @@ namespace DeNelle.Village.UI
                 // wants without moving her finger. The verb reads "Finish Now" (not "Finish")
                 // because in the primary slot it is answering the question the previous tap asked;
                 // the cost line under it is unchanged and is what makes the second tap non-blind.
-                var fin = BuildTwoLineCta(row, "Finish Now", r.FinishCostText,
+                // WO-1372: the VERB is the VM's (r.FinishVerbText) - Finish Now on every channel
+                // that pays crystals, and the canon HIRE REINFORCEMENTS on a gold-priced training
+                // job (creative canon §6). The View still only renders; it does not decide currency.
+                // The literal below is a REAL fallback, not decoration: a row built by older code
+                // (or a future one that forgets the field) must not render a BLANK primary face.
+                string finishVerb = string.IsNullOrEmpty(r.FinishVerbText) ? "Finish Now" : r.FinishVerbText;
+                var fin = BuildTwoLineCta(row, finishVerb, r.FinishCostText,
                     r.CanAffordFinish ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
                     () => { _vm?.FinishNow(channel, jobId); FlushNotice(); });

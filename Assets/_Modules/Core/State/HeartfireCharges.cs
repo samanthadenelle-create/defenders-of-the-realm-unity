@@ -1,0 +1,385 @@
+// =============================================================================
+// HeartfireCharges - HEARTFIRE, the Heart's ability to sustain an expedition
+// beyond its own reach. WO-1379. THE PURE HALF: the pool, the regen arithmetic
+// and the words. No clock, no save, no scene, no UnityEngine.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Core   Namespace: DeNelle.Core.State
+//
+// Canon: docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4. That file rules the
+// fiction and the copy; this one only implements it. Do NOT restate the canon
+// here and do NOT invent a name it does not carry.
+//
+// =============================================================================
+//  (!) HEARTFIRE IS A CHARGE, NOT A CURRENCY. THIS IS THE WHOLE DESIGN.
+// =============================================================================
+// It is never earned, traded, stored, gifted or bought. There is NO wallet row,
+// NO ResourceType member, NO storage cap, NO vendor and NO price anywhere. The
+// economy map's "do not add another currency" ruling is NOT violated by this file
+// and must not be read as licence to add one.
+//
+//   IF THE IMPLEMENTATION EVER GROWS A BALANCE, IT IS WRONG.
+//
+// The distinction is mechanical, not decorative: a currency has a SOURCE the
+// player can influence (produce it, buy it, loot more of it) and a SINK that
+// competes with other sinks. Heartfire has exactly one source - the passage of
+// time - and exactly one sink - marching. Nothing the player does makes it arrive
+// faster, and nothing else can consume it. That is why it is safe, and it is what
+// HeartfireRegression's currency-lint exists to keep true.
+//
+// "RAID ORDERS" IS DEAD (canon section 4): the player is the ruler and nobody
+// issues them orders. But "MARCH" SURVIVES AS THE VERB - you spend Heartfire, you
+// march. "MARCH AGAIN" is a valid button. "MARCHES" is never a noun for the pool;
+// that was the FIRST-PASS name the owner superseded (canon section 2), and
+// implementing a superseded name is a defect, not a preference.
+//
+// =============================================================================
+//  WHY THE MATH IS PURE AND LIVES HERE
+// =============================================================================
+// Regeneration is LAZY: nothing ticks. The pool carries a count and the instant
+// the last charge landed, and a read reconciles the two against "now". That makes
+// the entire behaviour a total function of (charges, lastRegenUnixMs, now), which
+// is exactly what an oracle can drive with no save, no clock and no PlayMode -
+// the RaidCooldownService.DurationForDifficulty precedent, same reasoning.
+//
+// (!) THE CLOCK IS NOT READ HERE, AND THAT IS THE POINT. "now" is a PARAMETER.
+// The one caller that supplies it is DeNelle.Village.World.Camps.HeartfireService,
+// which reads the SERVER-ANCHORED seam TimeSource.NowUnixMs() and never
+// DateTime.UtcNow. A charge pool stamped off the device clock is refilled in ten
+// seconds by anyone who opens Settings > Date & Time, which makes the whole gate
+// optional. DeNelle.Core cannot see TimeSource (it lives in DeNelle.Village), and
+// that asymmetry is load-bearing rather than inconvenient: it makes reading the
+// wrong clock from this file impossible.
+//
+// BALANCE VALUES ARE TUNABLES, never literals (standing rule 2026-09-02). Both
+// numbers ride the EXISTING RemoteTunables rail with the shipped values as their
+// DEFAULTS, so a retune is a database flip and not a rebuild.
+//
+// ASCII only - every string below reaches a mobile font atlas.
+// =============================================================================
+
+using System;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ops;
+
+namespace DeNelle.Core.State
+{
+    /// <summary>
+    /// HEARTFIRE: a stacking pool of expedition charges. Pure arithmetic plus the
+    /// player-facing words. Never a currency (see the file header).
+    /// </summary>
+    public static class HeartfireCharges
+    {
+        /// <summary>FlowTrace system tag for the whole Heartfire lane.</summary>
+        public const string Sys = "Heartfire";
+
+        // =====================================================================
+        //  BALANCE - owner-ruled, and authored on the tunables rail
+        // =====================================================================
+
+        /// <summary>
+        /// SHIPPED default pool ceiling: 3 (canon section 4 - "Three charges ...
+        /// stacks to three, so sleeping or working is not punished").
+        /// <para>(!) ALIAS, NOT A COPY. The literal lives in
+        /// <see cref="RemoteTunables.RaidHeartfireMaxChargesDefault"/> because that is the
+        /// one file a tunable default may live in AND the only one the Command Center's
+        /// manifest generator can parse a default out of. This const exists so consumers
+        /// read a Heartfire word rather than a knob name; the compiler keeps them equal, so
+        /// the pair can never drift the way a hand-copied number would.</para>
+        /// </summary>
+        public const int MaxChargesDefault = RemoteTunables.RaidHeartfireMaxChargesDefault;
+
+        /// <summary>
+        /// SHIPPED default rekindle interval: 4 h in seconds (canon section 4 - "One
+        /// rekindles every four hours"). ALIAS of
+        /// <see cref="RemoteTunables.RaidHeartfireRegenSecondsDefault"/>, see
+        /// <see cref="MaxChargesDefault"/> for why that direction.
+        /// <para>(!) It is deliberately EQUAL to the shortest authored per-camp cooldown
+        /// (scene-configs.json raider_camp_small = 14400 s), which is what keeps the
+        /// three-gate stack honest: a rekindled charge always has at least one camp
+        /// that has finished recovering to spend it on. HeartfireRegression pins that
+        /// relation, so shortening one without the other goes red.</para>
+        /// </summary>
+        public const int RegenSecondsDefault = RemoteTunables.RaidHeartfireRegenSecondsDefault;
+
+        /// <summary>Hard sanity bound on the tunable - a table typo must never hand out
+        /// an unbounded pool, and must never zero the gate either.</summary>
+        public const int MaxChargesFloor = 1;
+        /// <summary>Hard sanity bound on the tunable (see <see cref="MaxChargesFloor"/>).</summary>
+        public const int MaxChargesCeiling = 9;
+        /// <summary>Hard sanity floor on the rekindle interval, in seconds. A zero or
+        /// negative interval would make the pool infinite, which is the one failure
+        /// this clamp exists to make impossible.</summary>
+        public const int RegenSecondsFloor = 60;
+
+        /// <summary>The LIVE pool ceiling (tunable, clamped). Read it; never re-type 3.</summary>
+        public static int MaxCharges
+        {
+            get
+            {
+                int v = RemoteTunables.Int(RemoteTunables.KeyRaidHeartfireMaxCharges);
+                if (v < MaxChargesFloor || v > MaxChargesCeiling)
+                {
+                    FlowTrace.Throttle(Sys, "badmax", 60f,
+                        "heartfire max charges tunable resolved " + v + ", outside " + MaxChargesFloor +
+                        ".." + MaxChargesCeiling + " - clamping. The pool is never unbounded and never zero.");
+                    v = v < MaxChargesFloor ? MaxChargesFloor : MaxChargesCeiling;
+                }
+                return v;
+            }
+        }
+
+        /// <summary>The LIVE rekindle interval in seconds (tunable, clamped).</summary>
+        public static double RegenSeconds
+        {
+            get
+            {
+                int v = RemoteTunables.Int(RemoteTunables.KeyRaidHeartfireRegenSeconds);
+                if (v < RegenSecondsFloor)
+                {
+                    FlowTrace.Throttle(Sys, "badregen", 60f,
+                        "heartfire regen tunable resolved " + v + "s, below the " + RegenSecondsFloor +
+                        "s floor - clamping. A non-positive interval would make Heartfire infinite.");
+                    v = RegenSecondsFloor;
+                }
+                return v;
+            }
+        }
+
+        // =====================================================================
+        //  THE POOL
+        // =====================================================================
+
+        /// <summary>
+        /// A Heartfire pool at rest: how many charges are lit, and the instant the
+        /// accrual window last advanced (unix-ms, from the server-anchored seam).
+        /// Dumb data - it judges nothing, exactly like RaidCooldownRecord.
+        /// </summary>
+        [Serializable]
+        public struct Pool
+        {
+            /// <summary>Charges currently lit. Never below 0, never above <see cref="MaxCharges"/>.</summary>
+            public int Charges;
+
+            /// <summary>
+            /// Unix-ms the accrual window last advanced. NOT "when the player last
+            /// raided": it advances by exactly one interval per charge granted, so the
+            /// remainder of a partial interval is CARRIED rather than discarded. A
+            /// player who checks in every 3h59m must still gain a charge on the hour.
+            /// </summary>
+            public double LastRegenUnixMs;
+
+            /// <summary>
+            /// True when the clock was server-anchored the last time this pool was
+            /// written. PURELY DIAGNOSTIC - nothing branches on it and nothing may
+            /// start to. A cold launch is ALWAYS unanchored, so the moment this flag
+            /// slows or refuses a rekindle it taxes every honest offline player on
+            /// every launch (the WO-1128 rule: refuse server-side, never punish
+            /// client-side).
+            /// </summary>
+            public bool ServerAnchored;
+
+            public Pool(int charges, double lastRegenUnixMs, bool serverAnchored)
+            {
+                Charges = charges;
+                LastRegenUnixMs = lastRegenUnixMs;
+                ServerAnchored = serverAnchored;
+            }
+        }
+
+        /// <summary>
+        /// A brand-new pool: FULL, stamped at <paramref name="nowUnixMs"/>. A player who
+        /// has never raided is not made to wait twelve hours for the feature to exist,
+        /// and a reinstall grants at most the same three charges an idle day would have.
+        /// </summary>
+        public static Pool NewFull(double nowUnixMs) => new Pool(MaxCharges, nowUnixMs, false);
+
+        // =====================================================================
+        //  THE ARITHMETIC - one total function, no side effects
+        // =====================================================================
+
+        /// <summary>
+        /// Reconcile <paramref name="pool"/> against <paramref name="nowUnixMs"/> and return
+        /// the pool as it stands. PURE: no clock, no save, no logging side effect on the
+        /// caller's state - which is what lets an oracle assert the whole regen table with
+        /// nothing loaded.
+        ///
+        /// <para>THE RULES, and each one is a case in HeartfireRegression:</para>
+        /// <list type="bullet">
+        /// <item>A pool already at the ceiling does not accrue, and its stamp is MOVED UP to
+        /// now - otherwise a player who was full for two days would bank a hidden backlog
+        /// and refill instantly after spending, which is a stacking pool with no ceiling.</item>
+        /// <item>Charges accrue in WHOLE intervals; the remainder is carried in the stamp.</item>
+        /// <item>Accrual is CLAMPED at the ceiling, and the stamp is set to now on the clamp,
+        /// for the same reason as the first rule.</item>
+        /// <item>A BACKWARDS clock RE-STAMPS to now (refuse, don't punish - the
+        /// RaidCooldownService.RemainingSeconds precedent). The player waits at most one
+        /// full interval, never longer, and never less: a rolled-back clock can therefore
+        /// never manufacture a charge.</item>
+        /// </list>
+        /// </summary>
+        /// <param name="pool">The pool as last written.</param>
+        /// <param name="nowUnixMs">"Now", supplied by the caller from the server-anchored seam.</param>
+        /// <param name="maxCharges">Pool ceiling (pass <see cref="MaxCharges"/> in production).</param>
+        /// <param name="regenSeconds">Rekindle interval (pass <see cref="RegenSeconds"/>).</param>
+        /// <param name="granted">How many charges this reconcile added. 0 is the common case.</param>
+        /// <returns>The reconciled pool. Never mutates the input.</returns>
+        public static Pool Regenerate(Pool pool, double nowUnixMs, int maxCharges,
+                                      double regenSeconds, out int granted)
+        {
+            granted = 0;
+
+            if (maxCharges < 1) maxCharges = 1;
+            if (regenSeconds <= 0d || double.IsNaN(regenSeconds)) regenSeconds = RegenSecondsDefault;
+
+            var next = pool;
+            if (next.Charges < 0) next.Charges = 0;
+            if (next.Charges > maxCharges) next.Charges = maxCharges;
+
+            // An unstamped pool (a fresh install, or a record that lost its stamp) is
+            // anchored at now rather than at the epoch - an epoch stamp would resolve to
+            // ~57 years of accrual and hand out a full pool via the accrual path, which
+            // would look identical to a working regen and hide a real bug forever.
+            if (next.LastRegenUnixMs <= 0d || double.IsNaN(next.LastRegenUnixMs))
+            {
+                next.LastRegenUnixMs = nowUnixMs;
+                return next;
+            }
+
+            if (next.Charges >= maxCharges)
+            {
+                // Full: no accrual, and no hidden backlog (see the doc comment).
+                next.LastRegenUnixMs = nowUnixMs;
+                return next;
+            }
+
+            double elapsedSeconds = (nowUnixMs - next.LastRegenUnixMs) / 1000d;
+
+            if (elapsedSeconds < 0d)
+            {
+                // REFUSE, DON'T PUNISH. The clock moved backwards since the stamp, which
+                // would otherwise read as a rekindle that keeps receding. Re-stamp to now:
+                // at most one full interval of waiting, never more, and never less - so a
+                // backwards clock can never shorten the wait or conjure a charge.
+                next.LastRegenUnixMs = nowUnixMs;
+                return next;
+            }
+
+            if (elapsedSeconds < regenSeconds) return next;   // the common path: nothing to do
+
+            int earned = (int)Math.Floor(elapsedSeconds / regenSeconds);
+            int room = maxCharges - next.Charges;
+            granted = earned < room ? earned : room;
+            next.Charges += granted;
+
+            next.LastRegenUnixMs = next.Charges >= maxCharges
+                ? nowUnixMs                                            // clamped: no backlog
+                : next.LastRegenUnixMs + granted * regenSeconds * 1000d;  // carry the remainder
+
+            return next;
+        }
+
+        /// <summary>
+        /// Seconds until the next charge lights, given an ALREADY-reconciled pool.
+        /// 0 when the pool is full (nothing is pending) - callers render "Heartfire is
+        /// full" for that case rather than a countdown to nothing.
+        /// </summary>
+        public static double SecondsToNextCharge(Pool pool, double nowUnixMs, int maxCharges,
+                                                 double regenSeconds)
+        {
+            if (maxCharges < 1) maxCharges = 1;
+            if (regenSeconds <= 0d || double.IsNaN(regenSeconds)) regenSeconds = RegenSecondsDefault;
+            if (pool.Charges >= maxCharges) return 0d;
+
+            double elapsedSeconds = (nowUnixMs - pool.LastRegenUnixMs) / 1000d;
+            if (elapsedSeconds < 0d) elapsedSeconds = 0d;          // backwards clock: a full wait
+            double remaining = regenSeconds - elapsedSeconds;
+            return remaining > 0d ? remaining : 0d;
+        }
+
+        /// <summary>
+        /// Spend one charge. Returns false (and leaves the pool untouched) when the pool is
+        /// empty - the ONE refusal, and the caller must say the Heart's sentence, never a
+        /// timer's. PURE: the caller persists and traces.
+        /// </summary>
+        public static bool TrySpend(Pool pool, out Pool spent)
+        {
+            spent = pool;
+            if (pool.Charges <= 0) return false;
+            spent.Charges = pool.Charges - 1;
+            // The stamp is NOT touched. Spending must not restart the accrual window, or a
+            // player who marches the instant a charge lands would silently lose the partial
+            // progress toward the next one - a punishment nobody authored.
+            return true;
+        }
+
+        // =====================================================================
+        //  THE WORDS - canon section 4. Copy lives here for the same reason
+        //  PostureSignals.RaidLockCopy does: ONE owner, so every surface and the
+        //  oracle read identical sentences.
+        // =====================================================================
+
+        /// <summary>The pool's proper name. Never "Raid Orders", never "Marches".</summary>
+        public const string Name = "Heartfire";
+
+        /// <summary>
+        /// The lit/spent row, TEXT-ENCODED so it survives greyscale. The owner is
+        /// red/green colourblind (memory owner-colorblind-delegate-visual-creative), so a
+        /// lit charge can never be "the orange one" - it is a filled bracket beside an
+        /// empty one. ASCII only.
+        /// <para>(!) The canonical mock draws three flames around the Heart symbol and
+        /// darkens a spent one. COLOUR AND ICON TREATMENT ARE THE OWNER'S CALL, NOT THE
+        /// IMPLEMENTER'S (WO-1379 section 4); this is the state model those visuals bind
+        /// to, and it reads correctly with no art at all.</para>
+        /// </summary>
+        public static string FlameRow(int charges, int maxCharges)
+        {
+            if (maxCharges < 1) maxCharges = 1;
+            if (charges < 0) charges = 0;
+            if (charges > maxCharges) charges = maxCharges;
+
+            var sb = new System.Text.StringBuilder(maxCharges * 4);
+            for (int i = 0; i < maxCharges; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(i < charges ? "[*]" : "[ ]");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>"Heartfire 2/3" - the count in words, for a badge that must fit.</summary>
+        public static string CountLabel(int charges, int maxCharges) =>
+            Name + " " + charges + "/" + maxCharges;
+
+        /// <summary>
+        /// The line UNDER the flames: what the Heart is doing. "Heartfire is full" when
+        /// nothing is pending, otherwise the rekindle countdown.
+        /// </summary>
+        public static string RekindleLine(int charges, int maxCharges, double secondsToNext)
+        {
+            if (charges >= maxCharges) return Name + " is full";
+            return Name + " rekindles in " + Clock(secondsToNext);
+        }
+
+        /// <summary>
+        /// THE REFUSAL. The whole point of the rename lives in this sentence: not "you may
+        /// not raid because TIMER", but the Heart is not ready to send you back yet
+        /// (canon section 4). It always names the wait, because a player told "no" with no
+        /// "when" cannot act on it (the RaidCooldownService.BlockedMessage precedent).
+        /// </summary>
+        public static string BlockedMessage(double secondsToNext) =>
+            "The Heart is not ready to send you back yet. " + Name + " rekindles in " + Clock(secondsToNext) + ".";
+
+        /// <summary>h:mm:ss (or m:ss under an hour). ASCII, zero-padded, no localisation.</summary>
+        public static string Clock(double seconds)
+        {
+            if (double.IsNaN(seconds) || seconds < 0d) seconds = 0d;
+            long total = (long)Math.Ceiling(seconds);
+            long h = total / 3600;
+            long m = (total % 3600) / 60;
+            long s = total % 60;
+            return h > 0
+                ? h + ":" + m.ToString("00") + ":" + s.ToString("00")
+                : m + ":" + s.ToString("00");
+        }
+    }
+}

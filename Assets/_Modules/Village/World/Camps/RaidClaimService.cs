@@ -142,10 +142,18 @@ namespace DeNelle.Village.World.Camps
         /// clear must pay zero crystals. False on the first clear of a new day — including on a
         /// base claimed long ago, which is the whole point of the ruling.
         ///
-        /// <para>WHY A DAY STAMP AND NOT THE CLAIM FLAG: crystals are the one unbounded faucet
-        /// in the game (RaidScoring.ComputeLoot pays FOOD and CRYSTALS only), and the cooldown
-        /// alone bounded them at ~2 clears/day. Under this stamp the SECOND clear of a day pays
-        /// none, so the DAY — not the cooldown — is now the crystal bound.</para>
+        /// <para>WHY A DAY STAMP AND NOT THE CLAIM FLAG: crystals were the one unbounded faucet
+        /// in the game, and the cooldown alone bounded them at ~2 clears/day. Under this stamp
+        /// the SECOND clear of a day pays none, so the DAY — not the cooldown — is now the
+        /// crystal bound.</para>
+        ///
+        /// <para>⚠ CORRECTED 2026-09-04 (WO-1374): this used to say
+        /// "RaidScoring.ComputeLoot pays FOOD and CRYSTALS only". It no longer does — that
+        /// method now also pays WOOD and IRON off the north-star map's performance ladder.
+        /// The day-stamp reasoning above is UNCHANGED and still correct, because the stamp
+        /// governs the crystal axis alone; only the parenthetical fact had gone stale. The
+        /// wood/iron axis is bounded by the repeat-clear multiplier below, not by this
+        /// stamp. GOLD is still not paid at all, by WO-1374's fence.</para>
         ///
         /// <para>Read this BEFORE <see cref="MarkCrystalsPaid"/>, exactly as
         /// <see cref="IsClaimed"/> is read before <c>MarkClaimed</c>: the stamp is written

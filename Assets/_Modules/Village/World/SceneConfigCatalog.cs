@@ -76,6 +76,38 @@ namespace DeNelle.Village
         // ── Identity ──────────────────────────────────────────────────────────
         public string id;
         public string displayName;
+
+        /// <summary>
+        /// The ONE line the raid card shows under the fortress name — the creative canon's
+        /// "Line on the target card" (docs/CREATIVE_CANON_ELARION_2026-09-04.md §3).
+        ///
+        /// <para>⚠ THIS FIELD DID NOT EXIST BEFORE 2026-09-04, in EITHER the class or the JSON.
+        /// The creative canon's implementation rule says to "fill the empty description field",
+        /// and it was not empty — it was ABSENT (measured this session: no `description` key on
+        /// any of the five rows in scene-configs.json, and no such field on this class). That is
+        /// why the target card had a slot and nothing in it. Recorded here rather than silently
+        /// fixed, per CLAUDE.md §15.</para>
+        ///
+        /// <para>⛔ Player-facing copy: it comes from the creative canon, never from an
+        /// implementer. ASCII only (the build TMP font has no glyph for smart punctuation).</para>
+        /// </summary>
+        public string description;
+
+        /// <summary>
+        /// How many raid VICTORIES the player must have banked before this target unlocks —
+        /// the escalation ladder in docs/PROGRAM_RAID_ECONOMY_2026-09-04.md §4
+        /// (Camp 1 = 0 / Camp 2 = 3 / Camp 3 = 10 / Iron Bastion = 20).
+        ///
+        /// <para>0 / absent = always available, which keeps every non-raid row (the player
+        /// outpost, Village2) unlocked with no authoring change.</para>
+        ///
+        /// <para>Authored HERE, in the same catalog that already authors
+        /// <see cref="raidCooldownSeconds"/>, rather than as a code literal or a second rail:
+        /// the pacing knobs for a camp live on the camp's row. <c>RaidSelectionVM</c> is
+        /// the only reader; it turns this into ItemVM.Locked + ItemVM.LockReason.</para>
+        /// </summary>
+        public int unlockVictories;
+
         public string sceneName;
         public string ownership;          // "Player" | "Enemy"
         public string faction;            // orc | hollow | troll | mixed | none

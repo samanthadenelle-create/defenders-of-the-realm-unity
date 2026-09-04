@@ -315,6 +315,12 @@ namespace DeNelle.Village
         public bool TrySpend(ResourceCost cost)
         {
             if (!CanAfford(cost)) return false;
+            // WO-1374 — FUNNEL STEP 5 ("raid reward spent"). Cheap and silent until armed:
+            // RaidFunnel.RewardSpent reads one PlayerPrefs int and returns unless a raid has
+            // actually been won since the step last fired, so this is safe on a spend path.
+            // Placed AFTER the affordability gate so a refused spend never counts as one.
+            DeNelle.Core.Diagnostics.Guard.Try("Funnel", "reward spent (economy)",
+                () => DeNelle.Core.Analytics.RaidFunnel.RewardSpent("EconomyService.TrySpend"));
             if (cost.Wood > 0 || cost.Iron > 0)
             {
                 var gs = GameStateService.Instance;

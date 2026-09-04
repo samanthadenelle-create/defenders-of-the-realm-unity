@@ -51,14 +51,21 @@ namespace DeNelle.Commerce
         private const string TraceSystem = "BattlePass";
 
         /// <summary>
-        /// The subscribed progression handler, installed at boot by the assembly that owns the
+        /// The subscribed arena progression handler, installed at boot by the assembly that owns the
         /// battle pass. Deliberately a single handler and not a multicast event: two things
         /// crediting season XP from one bout is a duplicated-state bug, not a feature.
         /// </summary>
         private static Action<bool, int, bool> _handler;
 
         /// <summary>
-        /// Installs the progression handler. Called once, at BeforeSceneLoad, by the assembly that
+        /// The subscribed raid progression handler, installed at boot by the assembly that owns the
+        /// battle pass. Deliberately a single handler: raid outcomes and arena outcomes are both
+        /// season progression sources, and duplicating either is a bug.
+        /// </summary>
+        private static Action<int, float, bool, string> _raidHandler;
+
+        /// <summary>
+        /// Installs the arena progression handler. Called once, at BeforeSceneLoad, by the assembly that
         /// owns the battle pass. The last registration wins.
         /// </summary>
         public static void RegisterHandler(Action<bool, int, bool> handler)
@@ -67,8 +74,21 @@ namespace DeNelle.Commerce
             FlowTrace.Step(TraceSystem, "ArenaOutcomeRelay: progression handler registered.");
         }
 
+        /// <summary>
+        /// Installs the raid progression handler. Called once, at BeforeSceneLoad, by the assembly that
+        /// owns the battle pass. The last registration wins.
+        /// </summary>
+        public static void RegisterRaidHandler(Action<int, float, bool, string> onRaidOutcome)
+        {
+            _raidHandler = onRaidOutcome;
+            FlowTrace.Step(TraceSystem, "ArenaOutcomeRelay: raid handler registered.");
+        }
+
         /// <summary>True when a progression service is listening in this build.</summary>
         public static bool HasHandler => _handler != null;
+
+        /// <summary>True when a raid progression service is listening in this build.</summary>
+        public static bool HasRaidHandler => _raidHandler != null;
 
         /// <summary>
         /// Publish one finished arena bout. The battle result itself is ALREADY recorded by the
@@ -92,6 +112,31 @@ namespace DeNelle.Commerce
 
             Guard.Try(TraceSystem, "publish arena outcome to the battle pass",
                       () => handler(win, streak, perfect));
+        }
+
+        /// <summary>
+        /// Publish one finished raid. The raid result itself is ALREADY recorded by the caller before
+        /// this runs - a throw or an absent handler here can never lose a raid reward.
+        /// </summary>
+        /// <param name="win">True on a victory.</param>
+        /// <param name="stars">The raid's star rating (0-3).</param>
+        /// <param name="destructionPct">Percentage destruction (0-100).</param>
+        /// <param name="firstClear">True if this is the first clear of this raid config.</param>
+        /// <param name="configId">The raid configuration ID (e.g. 'raider_camp_small').</param>
+        public static void Publish(bool win, int stars, float destructionPct, bool firstClear, string configId)
+        {
+            var handler = _raidHandler;
+            if (handler == null)
+            {
+                FlowTrace.Warn(TraceSystem, "ArenaOutcomeRelay.Publish(raid): NO raid handler is registered, " +
+                    "so no raid XP was credited. Two readings: (a) EXPECTED - this build excludes the " +
+                    "battle pass or raid progression; (b) DEFECT - registration did not run. The raid " +
+                    "itself is unaffected.");
+                return;
+            }
+
+            Guard.Try(TraceSystem, "publish raid outcome to the battle pass",
+                      () => handler(stars, destructionPct, firstClear, configId));
         }
     }
 }

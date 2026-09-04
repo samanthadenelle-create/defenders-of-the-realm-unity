@@ -91,6 +91,86 @@
             "key": "vfx.nightStoreAuraBurstRepeatSec",
             "kind": "int",
             "default": 0
+        },
+        {
+            "key": "raid.lootWoodBase",
+            "kind": "int",
+            "default": 1800
+        },
+        {
+            "key": "raid.lootIronBase",
+            "kind": "int",
+            "default": 1100
+        },
+        {
+            "key": "raid.lootFailPct",
+            "kind": "int",
+            "default": 18
+        },
+        {
+            "key": "raid.lootOneStarPct",
+            "kind": "int",
+            "default": 50
+        },
+        {
+            "key": "raid.lootTwoStarPct",
+            "kind": "int",
+            "default": 75
+        },
+        {
+            "key": "raid.lootThreeStarPct",
+            "kind": "int",
+            "default": 100
+        },
+        {
+            "key": "raid.lootPerfectPct",
+            "kind": "int",
+            "default": 110
+        },
+        {
+            "key": "raid.lootCoinsBaseCamp1",
+            "kind": "int",
+            "default": 2200
+        },
+        {
+            "key": "raid.lootCoinsBaseCamp2",
+            "kind": "int",
+            "default": 3100
+        },
+        {
+            "key": "raid.lootCoinsBaseCamp3",
+            "kind": "int",
+            "default": 4500
+        },
+        {
+            "key": "raid.lootCoinsBaseBastion",
+            "kind": "int",
+            "default": 6500
+        },
+        {
+            "key": "raid.lootCrystalsBase",
+            "kind": "int",
+            "default": 20
+        },
+        {
+            "key": "raid.lootCrystalsPerStar",
+            "kind": "int",
+            "default": 2
+        },
+        {
+            "key": "raid.starterArmySize",
+            "kind": "int",
+            "default": 3
+        },
+        {
+            "key": "raid.heartfireMaxCharges",
+            "kind": "int",
+            "default": 3
+        },
+        {
+            "key": "raid.heartfireRegenSeconds",
+            "kind": "int",
+            "default": 14400
         }
     ]
 }

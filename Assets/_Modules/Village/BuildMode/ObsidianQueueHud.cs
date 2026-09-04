@@ -297,7 +297,14 @@ namespace DeNelle.Village
             // land — a real SDK plus WO-912 server-side ad-window validation. The row falls back
             // to Instant-only, or renders nothing at all when there is no Instant either.
             bool adOk = DeNelle.Core.FeatureFlags.RewardedAdSkip && svc.CanWatchAdToSkip(job.StructureId);
-            if (price <= 0 && !adOk) return;
+
+            // LANE D: Hire mercenaries button for training jobs (gold skips time).
+            int hireGoldCost = 500;  // tunable default; would come from config in production
+            bool hireOk = job.JobKind == JobKind.TrainTroop &&
+                          svc.RemainingSeconds(DeNelle.Core.Jobs.ChannelId.Train, job.StructureId) > 0 &&
+                          GameStateService.Instance?.State?.Resources.Coins >= hireGoldCost;
+
+            if (price <= 0 && !adOk && !hireOk) return;
 
             var row = MakeRowHost("JobActions", ActionRowHeightPx);
             AddStretchLabel(row.transform, "   " + FormatJobTarget(job),
@@ -321,6 +328,15 @@ namespace DeNelle.Village
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                     new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
                     () => OnAdSkip(sid));
+                x += w + 0.02f;
+            }
+            if (hireOk)
+            {
+                float w = 0.20f;
+                ElarionUiKit.BuildObsidianButton(row.transform, hireGoldCost + "g",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Blue,
+                    new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
+                    () => OnHireMercenaries(job, hireGoldCost));
             }
         }
 
@@ -424,6 +440,19 @@ namespace DeNelle.Village
                 FlowTrace.Step("HUD",
                     "ObsidianQueueHud WatchAdToSkip '" + structureId + "' outcome=" + result);
             });
+        }
+
+        private static void OnHireMercenaries(BuildJobData job, int costGold)
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null) return;
+            bool ok = svc.TryHireMercenaries(job, costGold, out string failure);
+            if (ok)
+                ElarionUiKit.ShowToast("Mercenaries hired!", ElarionUiKit.ToastTone.Confirm);
+            else
+                ElarionUiKit.ShowToast(failure ?? "Can't hire mercenaries now.",
+                    ElarionUiKit.ToastTone.Danger);
+            FlowTrace.Step("HUD", "ObsidianQueueHud OnHireMercenaries '" + job.StructureId + "' ok=" + ok);
         }
 
         // ── public format helpers (regression + Refresh) ──────────────────────

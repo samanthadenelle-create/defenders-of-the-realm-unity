@@ -616,6 +616,8 @@ namespace DeNelle.Core.State
                 LastSiegeUnixMs = s.LastSiegeUnixMs,   // WO-1026 — siege cadence clock (SEPARATE from LastHarvestClaimMs by design — WO-1147)
                 EverCompletedRaid = s.EverCompletedRaid,   // WO-823 Phase E (v41) - has this save ever finished a raid; the ONE input to the first-raid soft gate
                 RaidCooldowns = s.RaidCooldowns != null ? new List<RaidCooldownRecord>(s.RaidCooldowns) : null,   // WO-728 — per-camp raid cooldown windows (additive default-on-read; NO schema bump)
+                RaidVictories = s.RaidVictories,                       // WO-1375 — monotonic raid WIN count; the one input to the PROGRAM_RAID_ECONOMY section-4 unlock ladder (additive default-on-read; NO schema bump)
+                RaidVictoriesBackfilled = s.RaidVictoriesBackfilled,   // WO-1375 — one-shot claim-flag backfill latch (the claim set is PlayerPrefs, so no migrator step can seed the count)
             };
         }
 
@@ -759,7 +761,14 @@ namespace DeNelle.Core.State
             // never a lockout; MigrateToV41 derives a better answer for real old saves
             // before this runs.
             if (p.EverCompletedRaid.HasValue) s.EverCompletedRaid = p.EverCompletedRaid.Value;
-            EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
+            // WO-1375 - the raid VICTORY COUNT and its one-shot backfill latch. Absent on an
+            // older wire -> keep GameState's 0 / false, which is precisely the state the
+            // Village-side backfill (RaidVictoryController.BackfillVictoriesFromClaims) then
+            // seeds from the per-camp claim flags. Never clamped here: SaveSchema.Validate
+            // already floored it through NonNegInt before this runs.
+            if (p.RaidVictories.HasValue) s.RaidVictories = (int)p.RaidVictories.Value;
+            if (p.RaidVictoriesBackfilled.HasValue) s.RaidVictoriesBackfilled = p.RaidVictoriesBackfilled.Value;
+            EnsureZoneGraph(s);                     // backfill a pre-v17 / empty save's zone graph
         }
 
         /// <summary>
@@ -1262,6 +1271,8 @@ namespace DeNelle.Core.State
             s.DefenseReports = new List<DeNelle.Core.Defense.DefenseOutcomeRecord>();   // WO-1026 — New Game: no attack history.
             s.LastSiegeUnixMs = 0;                            // WO-1026 — New Game: reseed the siege cadence clock on first evaluation (no retroactive assault).
             s.RaidCooldowns = new List<RaidCooldownRecord>();  // WO-728 — New Game: no camp is recovering, every raid is available. AUDIT NOTE: this line is what stops "Start New" inheriting the previous save's lockouts — exactly the Settlements defect found 2026-08-02 directly below.
+            s.RaidVictories = 0;                              // WO-1375 - New Game: no raid has been WON, so the section-4 unlock ladder starts at target 1 only.
+            s.RaidVictoriesBackfilled = true;                 // WO-1375 - New Game: there is nothing to backfill, and the latch is SET so the claim-flag seed can never run on a fresh save. This matters because RaidClaimService's claim flags live in PlayerPrefs, which "Start New" does NOT clear - without this line a new game on a veteran's DEVICE would inherit that device's claimed camps as victories. Same class of defect as the Settlements/RaidCooldowns audit notes below.
             s.EverCompletedRaid = false;                      // WO-823 Phase E (v41) - New Game: no raid has ever been finished, so the FIRST raid is softened to 3 deployable slots. RaidDeployController.ReconcileRaidEnd stamps it true at the first raid exit (victory, retreat OR hero death) and the full army cap applies from then on, permanently.
             s.EverBuiltStructureIds = new List<string>();     // WO-834 (v36) — New Game: nothing ever built. With StrategicPlacementMigrated=true (above) this makes every baked twin's surface gate CLOSED = the truly blank Build-Your-Own town; choosing Default Town clears the marker and the migration writer then grants the template ids.
             s.EverAcquiredItemIds = new List<string>();       // New Game: no item-discovery progression earned.

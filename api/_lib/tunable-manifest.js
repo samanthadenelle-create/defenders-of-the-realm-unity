@@ -86,8 +86,10 @@ const AREAS = [
     {
         id: 'misc',
         title: 'Misc',
-        blurb: 'Everything else that ships as a number: loading policy, retries, ' +
-               'trace volume. Change these only when chasing a bug.',
+        blurb: 'Everything else that ships as a number. Two very different kinds live ' +
+               'here: the RAID REWARD table, which is an ordinary balance curve you are ' +
+               'meant to move by feel, and the loading/retry/trace levers, which you ' +
+               'should only touch when chasing a bug. Each card says which it is.',
     },
 ];
 
@@ -253,6 +255,203 @@ const PRESENTATION = {
               'those glow continuously.',
         min: 0,
         max: 600,
+    },
+
+    // ---- WO-1374. THE RAID REWARD TABLE. These seven are ordinary balance dials,
+    // not bug-hunting levers, and they are the ones the north-star map expects to be
+    // moved by feel until a raid feels worth doing. They sit under Misc only because
+    // the four areas on this page are the four the owner named and none of them is
+    // "economy"; every card below says in its first sentence that it is a reward
+    // number, so it never reads as something you should leave alone.
+    'raid.lootWoodBase': {
+        area: 'misc',
+        label: 'Raid reward: wood for a perfect run',
+        what: 'How much WOOD a raid pays for a perfect result - three stars AND the camp ' +
+              'razed to nothing - on a first-tier camp. The game ships at 1800, which is ' +
+              'roughly two thirds of what four hours of your lumber camps produce, so a ' +
+              'raid is worth doing without making the collectors pointless. Anything less ' +
+              'than perfect pays a share of this, set by the five result dials below. ' +
+              'Harder camps multiply it again on top. Set it to 0 and raids stop paying ' +
+              'wood entirely, which is how the game behaved before.',
+        min: 0,
+        max: 1000000,
+    },
+    'raid.lootIronBase': {
+        area: 'misc',
+        label: 'Raid reward: iron for a perfect run',
+        what: 'The same as the wood dial above, for IRON. The game ships at 1100. It is a ' +
+              'separate number on purpose: wood and iron run out at different points in ' +
+              'the build tree, so which one a raid should favour is a real question and ' +
+              'this is where you answer it.',
+        min: 0,
+        max: 1000000,
+    },
+    'raid.lootFailPct': {
+        area: 'misc',
+        label: 'Raid reward: share paid for a LOSS',
+        what: 'What percentage of the wood and iron above a FAILED attack still pays. The ' +
+              'game ships at 18. It is deliberately not zero - a loss that pays nothing ' +
+              'makes a failed raid feel like twenty wasted minutes, and the player stops ' +
+              'trying. Raise it if losing feels too punishing; lower it if losing feels ' +
+              'like no loss at all.',
+        min: 0,
+        max: 1000,
+        risk: 'This is the dial that decides whether a wipe reads as "go again" or as ' +
+              '"never again". Worth changing in small steps.',
+    },
+    'raid.lootOneStarPct': {
+        area: 'misc',
+        label: 'Raid reward: share paid at 1 star',
+        what: 'What percentage of the wood and iron a ONE-STAR raid pays. The game ships ' +
+              'at 50 - half. These four star dials are the ladder that makes getting ' +
+              'better at raiding actually pay more.',
+        min: 0,
+        max: 1000,
+    },
+    'raid.lootTwoStarPct': {
+        area: 'misc',
+        label: 'Raid reward: share paid at 2 stars',
+        what: 'What percentage of the wood and iron a TWO-STAR raid pays. The game ships ' +
+              'at 75. The gap between this and the three-star dial is what decides whether ' +
+              'a player pushes for the full clear or settles for a safe two and leaves.',
+        min: 0,
+        max: 1000,
+    },
+    'raid.lootThreeStarPct': {
+        area: 'misc',
+        label: 'Raid reward: share paid at 3 stars',
+        what: 'What percentage of the wood and iron a THREE-STAR raid pays. The game ships ' +
+              'at 100, meaning three stars pays exactly the numbers in the two dials at the ' +
+              'top. Moving this re-scales every raid payout at once without touching those ' +
+              'numbers - the quick way to ask "is raiding paying a bit too much overall".',
+        min: 0,
+        max: 1000,
+    },
+    'raid.lootPerfectPct': {
+        area: 'misc',
+        label: 'Raid reward: share paid at 3 stars and 100 percent',
+        what: 'What percentage the very best result pays - three stars AND every building ' +
+              'in the camp destroyed. The game ships at 110, the only result that pays more ' +
+              'than the base. It is the reward for mastery rather than just winning. If the ' +
+              'extra ten percent is not worth the extra minutes of mopping up, this is where ' +
+              'you say so.',
+        min: 0,
+        max: 1000,
+    },
+
+    'raid.lootCoinsBaseCamp1': {
+        area: 'misc',
+        label: 'Raid reward: gold for a perfect run (Camp I)',
+        what: 'How much GOLD a raid pays for a perfect result - three stars AND the camp ' +
+              'razed to nothing - on the FIRST camp. The game ships at 2200. Gold buys ' +
+              'troops, troops win raids, raids pay gold: this is the dial that closes that ' +
+              'loop. It is sized so that one clean win pays for the squad you spent plus ' +
+              'about 550 over, which is what lets a player raid again straight away. ' +
+              'Anything less than perfect pays a share of it, set by the five result dials ' +
+              'above. It is also what any camp the game does not recognise pays. Set it to ' +
+              '0 and raids stop paying gold, which is how the game behaved before.',
+        min: 0,
+        max: 1000000,
+        risk: 'Harder camps do NOT multiply this - they have their own three dials below. ' +
+              'Changing this one changes the first camp and nothing else.',
+    },
+    'raid.lootCoinsBaseCamp2': {
+        area: 'misc',
+        label: 'Raid reward: gold for a perfect run (Camp II)',
+        what: 'The same as the Camp I gold dial, for the SECOND camp. The game ships at ' +
+              '3100, sized against the bigger squad that camp expects you to bring. It is ' +
+              'its own number rather than a multiple of Camp I because each camp has a ' +
+              'designed army cost, and the steps between them are what make unlocking a ' +
+              'harder raid feel like progress.',
+        min: 0,
+        max: 1000000,
+    },
+    'raid.lootCoinsBaseCamp3': {
+        area: 'misc',
+        label: 'Raid reward: gold for a perfect run (Camp III)',
+        what: 'The same again for the THIRD camp. The game ships at 4500. The reward is ' +
+              'sized against the army the player is EXPECTED to bring, never the one they ' +
+              'actually brought - otherwise attacking with nothing would be the best way ' +
+              'to make money.',
+        min: 0,
+        max: 1000000,
+    },
+    'raid.lootCoinsBaseBastion': {
+        area: 'misc',
+        label: 'Raid reward: gold for a perfect run (Iron Bastion)',
+        what: 'The same again for the Iron Bastion, the fourth and endless target. The ' +
+              'game ships at 6500. This dial does nothing yet - the Bastion map is built ' +
+              'but is not switched on in the game. It is here so the number is already a ' +
+              'dial on the day it is.',
+        min: 0,
+        max: 1000000,
+    },
+    'raid.lootCrystalsBase': {
+        area: 'misc',
+        label: 'Raid reward: crystals for a perfect run',
+        what: 'How many CRYSTALS a raid pays when the camp is razed to nothing, before the ' +
+              'per-star bonus below. The game ships at 20, so a perfect clear pays 26 - ' +
+              'down from the 55 it used to pay. This is the one raid reward that was ' +
+              'lowered on purpose: crystals skip build timers, so paying a lot of them out ' +
+              'of raids quietly makes the whole build tree shorter. Harder camps do not ' +
+              'multiply this either, for the same reason.',
+        min: 0,
+        max: 1000000,
+        risk: 'This dial sets how long the entire game takes to build through. Raising it ' +
+              'shortens every timer in the game by the back door.',
+    },
+    'raid.lootCrystalsPerStar': {
+        area: 'misc',
+        label: 'Raid reward: extra crystals per star',
+        what: 'Extra CRYSTALS on top of the dial above, per star earned. The game ships at ' +
+              '2, down from 10. Kept separate so you can decide whether a great raid should ' +
+              'pay more crystals or just more gold.',
+        min: 0,
+        max: 1000000,
+    },
+
+    'raid.starterArmySize': {
+        area: 'misc',
+        label: 'Free starter squad size',
+        what: 'How many Footmen a new player is given FREE the first time they have a ' +
+              'Barracks. The game ships at 3 - exactly what 1650 gold used to buy, which ' +
+              'was the wall standing between a new player and their first raid. It is ' +
+              'granted once per save and never again, so knocking a Barracks down and ' +
+              'rebuilding it does not hand out more troops. Set it to 0 to turn the free ' +
+              'squad off entirely.',
+        min: 0,
+        max: 10,
+        risk: 'This is the first ten minutes of the game. Raising it makes the first raid ' +
+              'easier to win; lowering it puts the wall back.',
+    },
+
+    'raid.heartfireMaxCharges': {
+        area: 'misc',
+        label: 'Heartfire: how many marches can be banked',
+        what: 'Heartfire is what the Heart spends to send you beyond its reach. One is used ' +
+              'per march. They build up while you are away and the game ships holding 3, so ' +
+              'a night asleep or a day at work leaves you with a full evening waiting rather ' +
+              'than one attack. Raise it to let a returning player do more in one sitting; ' +
+              'lower it to spread play across the day. It is not money - it cannot be bought, ' +
+              'sold or found, only waited for.',
+        min: 1,
+        max: 9,
+        risk: 'This is the shape of a session. Raising it lets a player clear everything at ' +
+              'once and then find nothing to do; lowering it can send them away with a ' +
+              'charge they cannot use.',
+    },
+
+    'raid.heartfireRegenSeconds': {
+        area: 'misc',
+        label: 'Heartfire: seconds to get one march back',
+        what: 'How long one Heartfire takes to come back. The game ships at 14400 - four ' +
+              'hours - which is the same wait as the quickest camp takes to recover, so ' +
+              'there is always somewhere to spend a fresh one.',
+        min: 60,
+        max: 86400,
+        risk: 'Do not raise this past the quickest camp cooldown (four hours) without ' +
+              'raising that too, or a player will be holding a march with nowhere to send ' +
+              'it. Lowering it makes raiding more frequent everywhere at once.',
     },
 
     // ---- the PROD-022 loading knobs. Not balance. They live under Misc because

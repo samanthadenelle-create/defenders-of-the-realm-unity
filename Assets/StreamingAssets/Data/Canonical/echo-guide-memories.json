@@ -1,0 +1,183 @@
+{
+  "_authoringNotes": [
+    "WO-1380 - Echo Guides. THE ECHO DOES NOT FIGHT. IT REMEMBERS.",
+    "Source of truth for the fiction: docs/CREATIVE_CANON_ELARION_2026-09-04.md section 7.",
+    "Six Echoes x four raid targets = EXACTLY 24 lines. Owner ruling 2026-09-04: ALL 24 SHIP OR",
+    "THE FEATURE DOES NOT. A recognition system that fires for two Guides and is silent for four",
+    "reads as broken and teaches the player to stop noticing. EchoGuideMemoryRegression counts",
+    "them and FAILS below 24.",
+    "SCOPE FENCE (owner-ruled, narrative only in V1): a Guide grants NO stat, NO yield and NO",
+    "combat effect. There is deliberately no bonus/multiplier/modifier field in this schema, and",
+    "EchoGuideMemoryRegression FAILS if one appears here or in the code that reads it.",
+    "echoId values are the STABLE roster ids from EchoRosterCatalog.cs (identity lives in that",
+    "CODE table, never in JSON). Never rename one - they key the persisted Guide choice.",
+    "targetId values are the live scene-config ids (raider_camp_small / fortified_garrison /",
+    "mage_enclave / iron_bastion). Verified against scene-configs.json 2026-09-04: all four ids",
+    "are present there, iron_bastion carrying sceneName RaidBase_IronBastion. Build Settings",
+    "membership for that scene is a ProjectSettings change owned by the raid-escalation lane and",
+    "is NOT proven here - if the Bastion is not yet enterable its four lines simply wait, which",
+    "is why they ship now rather than re-opening this authoring pass later. The 'aliases' list",
+    "lets the lookup resolve a raid scene name as well as an id, so no caller need know which.",
+    "Two lines are QUOTED VERBATIM from the creative canon and must not be reworded without a",
+    "canon update in the same commit: Corvin at the Forsaken Camp ('Wait. I have walked this",
+    "road.' - canon writes the contraction) and Aldwin at the Iron Bastion ('...there's someone",
+    "here.'). Aldwin's line deliberately carries NO player name: verified 2026-09-04 that this",
+    "game stores no player first name anywhere (see WO-1380 report).",
+    "ASCII only. Dual-copy: Assets/Resources/Data/Canonical/ AND",
+    "Assets/StreamingAssets/Data/Canonical/ must stay byte-identical; Resources wins at runtime."
+  ],
+  "schemaVersion": 1,
+  "defaultGuideEchoId": "echo-voidwing-raven",
+  "targets": [
+    {
+      "targetId": "raider_camp_small",
+      "displayName": "The Forsaken Camp",
+      "aliases": [
+        "RaidBase_raider_camp_small"
+      ]
+    },
+    {
+      "targetId": "fortified_garrison",
+      "displayName": "The Broken Garrison",
+      "aliases": [
+        "RaidBase_fortified_garrison"
+      ]
+    },
+    {
+      "targetId": "mage_enclave",
+      "displayName": "The Veiled Enclave",
+      "aliases": [
+        "RaidBase_mage_enclave"
+      ]
+    },
+    {
+      "targetId": "iron_bastion",
+      "displayName": "The Iron Bastion",
+      "aliases": [
+        "RaidBase_IronBastion"
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "echoId": "echo-voidwing-raven",
+      "targetId": "raider_camp_small",
+      "line": "Wait. I have walked this road. It ran to a market once, and it was safe."
+    },
+    {
+      "echoId": "echo-verdant-stag",
+      "targetId": "raider_camp_small",
+      "line": "The furrows are still under the weeds. Someone sowed this ground, and not long ago."
+    },
+    {
+      "echoId": "echo-stormcoil-serpent",
+      "targetId": "raider_camp_small",
+      "line": "Road? This was a defensive trench. They filled it in when they stopped being afraid."
+    },
+    {
+      "echoId": "echo-stonewarden-bear",
+      "targetId": "raider_camp_small",
+      "line": "These walls are stacked, not laid. Whoever raised them had no mason and no time."
+    },
+    {
+      "echoId": "echo-ember-phoenix",
+      "targetId": "raider_camp_small",
+      "line": "Cold hearths, every one. They banked the coals for morning, and morning did not come."
+    },
+    {
+      "echoId": "echo-frosthowl",
+      "targetId": "raider_camp_small",
+      "line": "The old light reached this far once. I can feel exactly where it stopped."
+    },
+    {
+      "echoId": "echo-voidwing-raven",
+      "targetId": "fortified_garrison",
+      "line": "This was the last waypost on my route. I turned back here, every single time."
+    },
+    {
+      "echoId": "echo-verdant-stag",
+      "targetId": "fortified_garrison",
+      "line": "Grass in the parade ground, knee high. Nothing has drilled here in a long season."
+    },
+    {
+      "echoId": "echo-stormcoil-serpent",
+      "targetId": "fortified_garrison",
+      "line": "The watch is still set. Nobody ever called them down. Somebody has to call them down."
+    },
+    {
+      "echoId": "echo-stonewarden-bear",
+      "targetId": "fortified_garrison",
+      "line": "That gatehouse is Elarion stone. Ours. Someone carried it a very long way."
+    },
+    {
+      "echoId": "echo-ember-phoenix",
+      "targetId": "fortified_garrison",
+      "line": "The forge is cold, but the quench barrel is full. They meant to come back to work."
+    },
+    {
+      "echoId": "echo-frosthowl",
+      "targetId": "fortified_garrison",
+      "line": "Elarion held this post once. The Heart does not remember letting it go."
+    },
+    {
+      "echoId": "echo-voidwing-raven",
+      "targetId": "mage_enclave",
+      "line": "The path here changes while you walk it. I mapped it three times and got three maps."
+    },
+    {
+      "echoId": "echo-verdant-stag",
+      "targetId": "mage_enclave",
+      "line": "This growth is wrong. It is remembering being a garden, over and over, badly."
+    },
+    {
+      "echoId": "echo-stormcoil-serpent",
+      "targetId": "mage_enclave",
+      "line": "No walls. No gates. They never needed any, and that is what should frighten you."
+    },
+    {
+      "echoId": "echo-stonewarden-bear",
+      "targetId": "mage_enclave",
+      "line": "None of this stone was ever quarried. Something remembered stone, and this came."
+    },
+    {
+      "echoId": "echo-ember-phoenix",
+      "targetId": "mage_enclave",
+      "line": "There is fire in there with nothing feeding it. Whatever that is, it is not a hearth."
+    },
+    {
+      "echoId": "echo-frosthowl",
+      "targetId": "mage_enclave",
+      "line": "Light, but not the old light. Something in there is wearing it."
+    },
+    {
+      "echoId": "echo-voidwing-raven",
+      "targetId": "iron_bastion",
+      "line": "There is no road to this place. There has never been a road to this place."
+    },
+    {
+      "echoId": "echo-verdant-stag",
+      "targetId": "iron_bastion",
+      "line": "Nothing grows on this ground. Not even the weeds that take everything else."
+    },
+    {
+      "echoId": "echo-stormcoil-serpent",
+      "targetId": "iron_bastion",
+      "line": "That curtain wall was built by someone who knew exactly how I would attack it."
+    },
+    {
+      "echoId": "echo-stonewarden-bear",
+      "targetId": "iron_bastion",
+      "line": "I laid the first stones of Elarion. Those are my courses. I never built this."
+    },
+    {
+      "echoId": "echo-ember-phoenix",
+      "targetId": "iron_bastion",
+      "line": "Someone banks a fire here. Someone eats here. It was lit this morning."
+    },
+    {
+      "echoId": "echo-frosthowl",
+      "targetId": "iron_bastion",
+      "line": "...there's someone here."
+    }
+  ]
+}

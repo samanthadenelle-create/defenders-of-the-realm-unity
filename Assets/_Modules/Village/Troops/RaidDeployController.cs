@@ -139,6 +139,38 @@ namespace DeNelle.Village
             // Clear any stale rally from a prior raid so it can't leak into this one.
             TroopRally.Clear();
 
+            // ── WO-1379: SPEND ONE HEARTFIRE. This is the raid ENTRY seam ────────────
+            // Canon docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4: you spend
+            // Heartfire, you march. "Raid Orders" is dead - the player is the ruler and
+            // nobody issues them orders - but MARCH survives as the verb.
+            //
+            // WHY HERE: every RaidBase_* entry funnels through this one static, whatever
+            // door the player came in by, and it is the mirror of ReconcileRaidEnd, which
+            // is already documented as the latched seam every raid EXIT funnels through.
+            // Guarded (a charge-accounting throw must never stop a raid from installing
+            // its controls) but never swallowed - Guard logs through FlowTrace.Fail.
+            //
+            // ⚠ THIS SPENDS; IT DOES NOT REFUSE, AND THAT IS A DELIBERATE, REPORTED GAP.
+            // By the time a RaidBase scene is loaded the player is already there, so
+            // refusing here would strand them in a scene with nothing to do - strictly
+            // worse than letting an over-spend through. The REFUSAL belongs one step
+            // earlier, at the same door that already refuses a camp on cooldown:
+            // RaidSelectionScreen.OnCardTapped (Village/Hero/RaidSelectionScreen.cs:457),
+            // which is outside this lane's file fence. Until that lands, an empty pool
+            // logs a Fail line naming exactly this, and the gate is observable rather
+            // than merely absent.
+            DeNelle.Core.Diagnostics.Guard.Try("Heartfire", "spend heartfire on raid entry", () =>
+            {
+                if (DeNelle.Village.World.Camps.HeartfireService.TrySpend(sceneName)) return;
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Heartfire",
+                    "a raid scene ('" + sceneName + "') was ENTERED with an EMPTY Heartfire pool. " +
+                    "The march is allowed to proceed on purpose - refusing inside an already-loaded " +
+                    "raid scene would strand the player - but this line means the entry gate did not " +
+                    "run at the door. Wire HeartfireService.HasCharge / BlockedMessage into " +
+                    "RaidSelectionScreen.OnCardTapped beside the RaidCooldownService.IsOnCooldown " +
+                    "check (WO-1379).");
+            });
+
             var go = new GameObject("RaidDeployController");
             go.AddComponent<RaidDeployController>();
             Debug.Log($"[RaidDeployController] self-installed in raid scene '{sceneName}'.");

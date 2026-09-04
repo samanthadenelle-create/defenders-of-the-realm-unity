@@ -87,3 +87,66 @@ Register each suite in `DataRegression` — an unregistered oracle never runs (t
 - ⛔ No new currency. The map §3 names this explicitly, and Voidshards are already a currency with no job.
 - ⛔ Do not raise crystals. They are timer compression and the curve is already too short.
 - ⛔ Do not build PvP (map §9).
+
+---
+
+## LANDED 2026-09-04 - THE UNBLOCKED HALF (edit-only lane; lead gates + commits)
+
+Everything below is correct under **BOTH** sides of the troop-cost fork, per this ticket's own
+"WHAT IS SAFE TO BUILD MEANWHILE" banner. Nothing here reads, writes or sizes a gold value.
+
+**1. Raids pay WOOD and IRON.** `RaidScoring.ComputeLoot` gained two trailing optional parameters
+(`woodBase`, `ironBase`, both defaulting to 0, so every pre-existing caller compiles AND pays exactly
+what it paid). They are scaled by the map's five-rung PERFORMANCE ladder in the new
+`RaidLootTunables` (fail 18% / 1* 50% / 2* 75% / 3* 100% / 3*+100% razed 110%), then by the camp's
+`rewardMultiplier`. Crystals and food keep their original arithmetic byte for byte.
+⛔ `ResourceCost.Coins` stays 0, and a regression case fails the build if it ever does not.
+
+> ⚠ **ONE AMBIGUITY IN THE MAP, RESOLVED IN THE OPEN AND NEEDING HER WORD.** §1's table is headed
+> *"perfect 3 stars / 100%"* and gives **1,800 wood**, while the ladder in the same section lists
+> **3 stars = 100%** AND **3 stars + 100% destruction = 110%**. Read strictly those cannot both be true
+> of 1,800. **Taken here as: 1,800 is the BASE, 3 stars pays 100% of it, a total razing pays 1,980.**
+> If she meant the other reading, it is two rows on the Command Center: `raid.lootWoodBase` 1636,
+> `raid.lootIronBase` 1000. No rebuild.
+
+**2. The free starter army.** `StarterArmyGrant` - a self-installing 0.5 s edge poll on the SAME
+`StructureSingleton.IsBuilt("barracks")` predicate every other raid surface reads. Grants 3 free
+Footmen through the one roster owner, latched on the monotonic `EverAcquiredItemIds` ledger under
+`grant.starter-army`, so **no save-schema bump and no migrator**. Once per save: a rebuilt Barracks
+never re-issues the squad.
+
+**3. The six-event funnel (map §11).** `DeNelle.Core.Analytics.RaidFunnel`, on the EXISTING
+`EventTracker` -> `/api/events/track` -> Neon rail. No second telemetry path. Each step latches per
+install (a funnel counts PLAYERS, not events). The 24h "gold nugget" is computed client-side, emitted
+as its own event, and **refuses to fire** on a missing stamp or a backwards device clock rather than
+fabricating a conversion. Wired at: `SceneRouter.GoRaid` (attempted + second-within-24h),
+`RaidVictoryController.HandleVictory` (won + arms spent), `BarracksProgression.GrantTrainedTroop`
+(trained), `StarterArmyGrant` (barracks unlocked), and **both** spend surfaces
+(`EconomyService.TrySpend`, `ResourceLedger.TrySpend`).
+
+**4. The four discoverability holes.**
+- Game Guide `raids`: "Open Raids from the HUD" -> **"Open Journey, then Raids"** (both canonical twins).
+- `combat.raid.single` / `.double` now carry `requiresFeature: "raids"`, and `DailyQuests.FeatureShipped`
+  resolves it from `PostureSignals.RaidCapable` - previously that switch returned a flat `true`, so
+  authoring the field alone would have looked fixed and changed nothing.
+- **The Arena Herald bypass is closed at the DOOR, not at the caller.** The capability gate now sits at
+  the top of `RaidSelectionScreen.Open()`, ahead of the army gate. Fixing `ArenaHeraldSpawner:238`
+  itself would have closed one door and left the next one to rediscover the bug - and a second
+  predicate on a second surface is what WO-1357's header forbids by name.
+- The refusal now names the ACTUAL blocker via `PostureSignals.RaidLockCopy` (no Barracks / destroyed
+  Barracks / raids off in this build) and does **not** open the training panel for a non-troop blocker.
+
+**8 TUNABLES** registered on the existing rail with the map's values as defaults, all sources in step
+(`RemoteTunables.Registry` + `TUNABLE_KEYS` + the generated manifest + the Command Center presentation
++ `docs/PROD022_TUNABLE_FLAGS.md` + `[tunable-defaults]`'s literals): `raid.lootWoodBase`,
+`raid.lootIronBase`, `raid.lootFailPct`, `raid.lootOneStarPct`, `raid.lootTwoStarPct`,
+`raid.lootThreeStarPct`, `raid.lootPerfectPct`, `raid.starterArmySize`.
+⛔ **No `raid.lootGoldBase`, deliberately** - registering one would silently pick the winner of the fork.
+
+**4 NEW SUITES**, registered in `DataRegression.RunAll`, distinct markers:
+`RAID_LOOT_CURRENCY_OK` / `RAID_FUNNEL_OK` / `STARTER_ARMY_OK` / `RAID_DISCOVERY_OK`.
+
+### STILL BLOCKED, UNCHANGED
+Gold rewards, `costGold`, troop pricing and everything under `Assets/_Modules/Village/Arena/**` were
+NOT touched. The gold fence is now an ASSERTION rather than a comment: `[raid-loot-currency]` case (D)
+sweeps all 44 star/destruction combinations and fails the build on a single coin.

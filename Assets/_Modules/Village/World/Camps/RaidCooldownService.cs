@@ -81,11 +81,20 @@ namespace DeNelle.Village.World.Camps
         //
         //  WHY, recorded here so nobody "optimises" it later:
         //
-        //  ⭑ WHY CRYSTALS NEED BOUNDING AT ALL. RaidScoring.ComputeLoot returns a
-        //    ResourceCost of FOOD and CRYSTALS and NOTHING ELSE — raids pay zero wood and
+        //  ⭑ WHY CRYSTALS NEEDED BOUNDING AT ALL. RaidScoring.ComputeLoot used to return a
+        //    ResourceCost of FOOD and CRYSTALS and NOTHING ELSE - raids paid zero wood and
         //    zero iron, while every troop costs wood + iron + food. So the raid loop
-        //    structurally cannot fund its own input, food is already capped by storage,
-        //    and CRYSTALS ARE THE ONE UNBOUNDED FAUCET IN THE GAME.
+        //    structurally could not fund its own input, food is already capped by storage,
+        //    and CRYSTALS WERE THE ONE UNBOUNDED FAUCET IN THE GAME.
+        //
+        //    (!) CORRECTED 2026-09-04 (WO-1374). THE PAST TENSE IS THE POINT: ComputeLoot
+        //    NOW ALSO PAYS WOOD AND IRON, off the north-star map's performance ladder
+        //    (docs/PROGRAM_RAID_ECONOMY_2026-09-04.md section 1), so "raids pay zero wood
+        //    and zero iron" is no longer true and a seat reading it as current would
+        //    mis-model the whole economy. Everything the cooldown does is UNCHANGED - the
+        //    wood/iron axis is bounded by the repeat-clear multiplier and this cooldown,
+        //    the crystal axis by the UTC day stamp below. GOLD is still not paid at all,
+        //    which is WO-1374's deliberate fence, not an oversight.
         //
         //  ⛔ THIS COOLDOWN IS NO LONGER THE CRYSTAL BOUND — THE UTC DAY IS (WO-1134).
         //    ⚠ THIS BLOCK USED TO SAY "THIS NUMBER IS THE CRYSTAL BOUND" AND "12 h = ~2

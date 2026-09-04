@@ -133,6 +133,14 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private TMP_Text _heartObjectiveLabel;
+
+        // WO-1379 HEARTFIRE - the flame row + rekindle line under the Heart of Elarion
+        // plate. Repainted from the Core posture rail (PostureSignals.SetHeartfire), the
+        // same cheap poll as the collectors chip; the View derives NOTHING.
+        private TMP_Text _heartfireLabel;
+        private int _heartfireLitPainted = -1;
+        private int _heartfireMaxPainted = -1;
+        private long _heartfireSecondsPainted = -1L;
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
@@ -1630,12 +1638,38 @@ namespace DeNelle.HUD.Kit
             // (ASCII name; the old "♥" heart glyph tofu'd on the build font.)
             _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "Heart of Elarion",
                 new Vector2(0.02f, 0.02f), new Vector2(0.99f, 0.98f));
+            // The objective line moves UP a band to make room for Heartfire beneath it.
+            // The plate's health + mana rows are hidden (below), so this band was empty
+            // furniture, not something being displaced.
             _heartObjectiveLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
-                "Prepare the realm for the next wave.", 0.08f, 0.48f,
+                "Prepare the realm for the next wave.", 0.34f, 0.58f,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
                 0.05f, 0.95f);
             _heartObjectiveLabel.enableAutoSizing = true;
             ElarionUiKit.FitSingleLine(_heartObjectiveLabel, 16f, 18f);
+
+            // ── WO-1379 HEARTFIRE ────────────────────────────────────────────────────
+            // Canon docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4 draws three flames
+            // around the Heart symbol with the rekindle timer beneath, so this is the one
+            // right home for it: the town HUD's Heart of Elarion plate, which is already
+            // occupied into calm(town) by hud-areas.json. No new widget id, no new
+            // occupancy row - and the player sees the count WITHOUT opening the raid grid,
+            // which is the acceptance criterion.
+            //
+            // ⛔ COLOUR AND ICON TREATMENT ARE THE OWNER'S CALL, NOT THE IMPLEMENTER'S
+            // (WO-1379 section 4). What is built here is the STATE MODEL and the words:
+            // "[*] [*] [ ]" for lit/spent and the rekindle line under it. That reads
+            // correctly in pure greyscale and with no art at all, which is the standard
+            // the owner's colourblindness sets (memory owner-colorblind-delegate-visual-
+            // creative) - a flame sprite and a dark/lit tint drop straight onto it later
+            // without changing a single predicate.
+            _heartfireLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
+                string.Empty, 0.04f, 0.32f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
+                0.05f, 0.95f);
+            _heartfireLabel.enableAutoSizing = true;
+            ElarionUiKit.FitBlock(_heartfireLabel);
+            RepaintHeartfire(force: true);
             if (_heartPlate.NameLabel != null)
             {
                 _heartPlate.NameLabel.fontSizeMin = 20f;
@@ -3951,6 +3985,10 @@ namespace DeNelle.HUD.Kit
                 }
             }
 
+            // WO-1379: the Heartfire flames under the Heart plate. Same cheap poll shape as
+            // the collector chip below - repaint only when the published values move.
+            RepaintHeartfire(force: false);
+
             // WO-900 §4: the ambient collector chip — the same cheap poll, on the same terms.
             // The Village publisher bumps Version at most twice a second, so this repaints only
             // when the collectors actually moved; nothing here derives any collector state.
@@ -3970,6 +4008,42 @@ namespace DeNelle.HUD.Kit
 
             // (WO-835: the Raids army-dim poll and the Map Onboarded poll that lived here
             // moved into HudActionBarModel — the View consumes its events above.)
+        }
+
+        /// <summary>
+        /// Paint the Heartfire flame row + rekindle line from the Core posture rail.
+        /// PURE PRESENTATION: every number and every word comes from
+        /// DeNelle.Core.State.HeartfireCharges via PostureSignals - this method decides
+        /// nothing, which is what keeps the HUD unable to disagree with the service about
+        /// whether a march is possible.
+        /// </summary>
+        private void RepaintHeartfire(bool force)
+        {
+            if (_heartfireLabel == null) return;
+
+            int lit = PostureSignals.HeartfireLit;
+            int max = PostureSignals.HeartfireMax;
+            long secs = (long)PostureSignals.HeartfireSecondsToNext;
+
+            if (!force && lit == _heartfireLitPainted && max == _heartfireMaxPainted &&
+                secs == _heartfireSecondsPainted) return;
+
+            bool countMoved = lit != _heartfireLitPainted || max != _heartfireMaxPainted;
+            _heartfireLitPainted = lit;
+            _heartfireMaxPainted = max;
+            _heartfireSecondsPainted = secs;
+
+            string flames = DeNelle.Core.State.HeartfireCharges.FlameRow(lit, max);
+            string line = DeNelle.Core.State.HeartfireCharges.RekindleLine(lit, max, secs);
+            _heartfireLabel.text = flames + "  " + DeNelle.Core.State.HeartfireCharges.Name +
+                                   "\n" + line;
+
+            // Only the COUNT is worth a line; the countdown moves every second and would
+            // otherwise be a per-second firehose in every capture (the lesson of the
+            // [Flow:Offset] ring-buffer eviction, memory logcat-ring-buffer-destroys-evidence).
+            if (force || countMoved)
+                FlowTrace.Step("HudKit", "heartfire painted -> " + flames + " (" + lit + "/" + max +
+                               "), line '" + line + "'");
         }
 
         private static string Cap(string s) =>

@@ -209,6 +209,78 @@ namespace DeNelle.Core.HudModel
         /// <summary>Raised when <see cref="RaidCapable"/> OR <see cref="RaidLock"/> changes.</summary>
         public static event Action RaidCapableChanged;
 
+        // ── WO-1379: HEARTFIRE rides the SAME rail, beside RaidCapable ───────
+        // Canon: docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4. "Raid Orders" is
+        // dead - the player is the ruler and nobody issues them orders. Heartfire is
+        // the Heart's ability to sustain an expedition beyond its own reach.
+        //
+        // ⛔ HEARTFIRE IS A CHARGE, NOT A CURRENCY. These three numbers are a DISPLAY
+        // MIRROR of DeNelle.Village.World.Camps.HeartfireService and nothing else: no
+        // wallet row, no ResourceType member, no storage cap, no vendor. Nothing may
+        // ever write a Heartfire value from a purchase, a reward or an economy path.
+        //
+        // WHY IT LIVES HERE rather than in a new rail: DeNelle.HUD may reference
+        // DeNelle.Core ONLY (CLAUDE.md §5), the Village service is the producer, and a
+        // Core static cannot go stale across a scene swap - the exact reasoning that put
+        // TalkAvailable here after the one-shot reflection hook rotted. A second rail
+        // would be a second thing to keep in step, which is the duplicated-state failure
+        // §2/§5/§16 keep warning about.
+
+        /// <summary>Heartfire charges lit right now (Village-published). Named "Lit", not
+        /// "Charges", so it can never be confused with the TYPE
+        /// DeNelle.Core.State.HeartfireCharges that owns the arithmetic. Defaults to the
+        /// ceiling so a headless or pre-publish scene never renders an empty Heart and
+        /// never implies a gate nobody has evaluated - the RaidCapable never-false-block
+        /// precedent, same direction.</summary>
+        public static int HeartfireLit { get; private set; } = HeartfireMaxDefault;
+
+        /// <summary>The pool ceiling as the producer last published it.</summary>
+        public static int HeartfireMax { get; private set; } = HeartfireMaxDefault;
+
+        /// <summary>Seconds until the next charge lights; 0 while the pool is full.</summary>
+        public static double HeartfireSecondsToNext { get; private set; }
+
+        /// <summary>
+        /// The pre-publish ceiling. ⛔ NOT a second authoring of the balance: the live
+        /// number is DeNelle.Core.State.HeartfireCharges.MaxCharges (tunable
+        /// raid.heartfireMaxCharges). This is only what the display shows in the frames
+        /// before Village has published anything at all.
+        /// </summary>
+        public const int HeartfireMaxDefault = 3;
+
+        /// <summary>Raised when any published Heartfire value changes.</summary>
+        public static event Action HeartfireChanged;
+
+        /// <summary>
+        /// Producer-only (DeNelle.Village.World.Camps.HeartfireService). Fires on a change
+        /// to the COUNTDOWN as well as the count, because the rekindle line under the
+        /// flames repaints from it - an early-return on the count alone would strand a
+        /// frozen timer on screen, which is the same defect SetRaidCapable's reason-only
+        /// change was written to avoid.
+        /// </summary>
+        public static void SetHeartfire(int charges, int max, double secondsToNext)
+        {
+            if (max < 1) max = 1;
+            if (charges < 0) charges = 0;
+            if (charges > max) charges = max;
+            if (double.IsNaN(secondsToNext) || secondsToNext < 0d) secondsToNext = 0d;
+
+            bool countMoved = HeartfireLit != charges || HeartfireMax != max;
+            // Whole-second granularity: the producer is polled, and repainting a text
+            // countdown more often than it can visibly change is pure garbage.
+            bool clockMoved = (long)HeartfireSecondsToNext != (long)secondsToNext;
+            if (!countMoved && !clockMoved) return;
+
+            HeartfireLit = charges;
+            HeartfireMax = max;
+            HeartfireSecondsToNext = secondsToNext;
+
+            if (countMoved)
+                FlowTrace.Step("HudKit", "heartfire -> " + charges + "/" + max +
+                               " (next in " + secondsToNext.ToString("F0") + "s)");
+            HeartfireChanged?.Invoke();
+        }
+
         /// <summary>
         /// Producer-only (Village RaidCapabilityHudBridge). The event fires on a
         /// REASON-only change too (NoBarracks -> BarracksLost never flips the bool, but the

@@ -410,6 +410,12 @@ namespace DeNelle.Village.World.Camps
             string echoName = EchoAutoDeployTrigger.ResolveEchoName();
             if (!string.IsNullOrEmpty(echoName)) echo.name = echoName;
 
+            // WO-1380 -- THE VOICE. The Echo that just came back from the expedition is the
+            // Guide the player chose, and this is the beat where it remembers the place it was
+            // taken to. Additive: the appearance lifecycle above is untouched, no second body
+            // is summoned, and a Guide with nothing to say simply says nothing.
+            SpeakGuideMemory(EchoGuideService.LastExpeditionTargetId, "post-battle return");
+
             // The WO-360 presentation, MOVED here from the outpost entry (see the file
             // header): this is where the player actually meets the Echo again.
             PlaySummonFlourish(echo.transform.position);
@@ -419,6 +425,55 @@ namespace DeNelle.Village.World.Camps
                 $"echo REAPPEAR: '{echo.name}' returned at {at} after the battle ({reason}). " +
                 $"bodies={LiveBodyCount}. This fires ONCE per session and never again.");
             return true;
+        }
+
+        /// <summary>
+        /// WO-1380 -- THE ECHO GUIDE'S VOICE, and the ONLY place it speaks.
+        /// <para/>
+        /// The Echo does not fight. It REMEMBERS: it recognises a fragment of the world that
+        /// existed before the Realm fell (creative canon 2026-09-04 sec.7). This method adds no
+        /// body, no lifecycle and no second spawner -- the appearance owner is still the three
+        /// transitions above. It reads the player's chosen Guide and the authored line for the
+        /// target, traces it, and surfaces it through the shared toast.
+        /// <para/>
+        /// SCOPE FENCE (owner ruling): narrative ONLY. Nothing here grants a stat, a yield or a
+        /// combat effect, and EchoGuideMemoryRegression fails if that ever changes.
+        /// <para/>
+        /// Returns the line that was spoken, or null when there is nothing authored for this
+        /// pairing (warned by the catalog -- never a silent blank).
+        /// </summary>
+        public static string SpeakGuideMemory(string targetIdOrSceneName, string reason)
+        {
+            if (string.IsNullOrEmpty(targetIdOrSceneName))
+            {
+                FlowTrace.Step("Echo",
+                    "guide memory skipped (" + reason + "): no expedition target recorded this session, " +
+                    "so the Echo has no place to remember. Nothing to do, not an error.");
+                return null;
+            }
+
+            var guide = EchoGuideService.SelectedGuide;
+            string line = EchoGuideService.MemoryLineFor(targetIdOrSceneName);
+            if (string.IsNullOrEmpty(line))
+            {
+                FlowTrace.Warn("Echo",
+                    "guide memory MISSING (" + reason + ") for guide=" +
+                    (guide != null ? guide.Id : "(none)") + " target=" + targetIdOrSceneName +
+                    ". A Guide standing at a target with nothing to say is the failure WO-1380 " +
+                    "rules against -- all 24 lines must ship.");
+                return null;
+            }
+
+            string speaker = guide != null && !string.IsNullOrEmpty(guide.DisplayName)
+                ? guide.DisplayName : "Your Echo";
+            FlowTrace.Step("Echo",
+                "guide memory (" + reason + "): " + speaker + " at " + targetIdOrSceneName + " -- \"" +
+                line + "\"");
+
+            Guard.Try("Echo", "show the guide memory toast", () =>
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(speaker + ": " + line,
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Info, 5.0f, 720, 640f, 132f));
+            return line;
         }
 
         /// <summary>

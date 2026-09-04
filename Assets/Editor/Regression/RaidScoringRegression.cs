@@ -96,11 +96,25 @@ namespace DeNelle.Editor
             if (!(lootFull.Food > lootHalf.Food && lootHalf.Food > lootNone.Food))
                 failures.Add($"ComputeLoot food not monotonic: none {lootNone.Food} <= half {lootHalf.Food} <= full {lootFull.Food}");
 
-            // Honesty: scene rewardMultiplier scales payout (Hard x1.5 / Extreme x2.2).
+            // Honesty: scene rewardMultiplier scales the FOOD payout (Hard x1.5 / Extreme x2.2).
+            //
+            // (!) CORRECTED 2026-09-04. This block used to assert the multiplier scaled
+            // CRYSTALS, and that assertion is now the defect. The north-star map
+            // (docs/PROGRAM_RAID_ECONOMY_2026-09-04.md section 1) rules crystals OUT of the
+            // camp multiplier: "Crystals are timer compression. If raids dump huge amounts
+            // of crystals, you accidentally accelerate the already-too-short progression
+            // curve." An escalating camp must pay more gold/wood/iron, never more
+            // instant-finish. So the case is INVERTED rather than deleted - it now fails if
+            // anyone re-applies the multiplier to crystals.
             var lootBase = RaidScoring.ComputeLoot(3, 1f, 40, 60, 15, 20, 1f);
             var lootHard = RaidScoring.ComputeLoot(3, 1f, 40, 60, 15, 20, 1.5f);
-            if (lootHard.Crystals < lootBase.Crystals * 1.4f)
-                failures.Add($"ComputeLoot x1.5 mult did not scale crystals: base {lootBase.Crystals} hard {lootHard.Crystals}");
+            if (lootHard.Food < lootBase.Food * 1.4f)
+                failures.Add($"ComputeLoot x1.5 mult did not scale food: base {lootBase.Food} hard {lootHard.Food}");
+            if (lootHard.Crystals != lootBase.Crystals)
+                failures.Add($"ComputeLoot applied the camp multiplier to CRYSTALS (x1 {lootBase.Crystals} " +
+                             $"vs x1.5 {lootHard.Crystals}). Crystals are timer compression and are ruled OUT " +
+                             "of the camp multiplier by the north-star map - a harder camp pays more gold, " +
+                             "wood and iron, never more instant-finish.");
             if (System.Math.Abs(RaidScoring.DefaultClockSeconds - 180f) > 0.01f)
                 failures.Add($"DefaultClockSeconds is {RaidScoring.DefaultClockSeconds}, expected 180 (UI/scorer honesty).");
 

@@ -425,6 +425,8 @@ namespace DeNelle.Editor
             if (!CoreSaveRegression.Run(out var coreSaveSmeReason)) failures.Add(coreSaveSmeReason); else log.AppendLine("[core-save-sme] " + coreSaveSmeReason);
             if (!BuildEconomyRegression.Run(out var buildEconReason)) failures.Add(buildEconReason); else log.AppendLine("[build-econ] " + buildEconReason);
             if (!ObsidianQueueRegression.Run(out var obsidianQueueReason)) failures.Add(obsidianQueueReason); else log.AppendLine("[obsidian-queue] " + obsidianQueueReason);
+            // --- LANE D: mercenary hire system (gold skips training time) ---
+            if (!BuildTimerMercenaryRegression.Run(out var mercenaryReason)) failures.Add(mercenaryReason); else log.AppendLine("[mercenary-hire] " + mercenaryReason);
             // --- WO-897: army composition musters the whole build-out onto the EXISTING Train queue
             //     (no second queue) and never silently drops what does not fit the five-per-line cap ---
             if (!ArmyMusterRegression.Run(out var armyMusterReason)) failures.Add(armyMusterReason); else log.AppendLine("[army-muster] " + armyMusterReason);
@@ -1244,6 +1246,17 @@ namespace DeNelle.Editor
             // every runtime file for a second PetDeployer.SummonAt caller.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-world-presence suite", () => { if (!DeNelle.Editor.Regression.EchoWorldPresenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-world-presence] " + r); });
 
+            // WO-1380: Echo Guides and the 24 memory lines. The Echo does not fight;
+            // it REMEMBERS. Six Echoes x four raid targets = the exact 24 lines the owner
+            // ruled ALL 24 ship or the feature does not. Narrative only; no Guide grants
+            // a stat, yield or combat effect in V1. Corvin at the Forsaken Camp, Aldwin
+            // at the Iron Bastion, Doran's double-recognition stonework — the three canon
+            // quotations must never be reworded. Player name = nil (verified no first-name
+            // field anywhere). Both JSON copies byte-identical. The Guide picker button
+            // must have a real band, not zero pixels. No second spawner; EchoWorldPresence
+            // remains sole appearance owner, and the Guide adds VOICE only.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-guide-memories suite", () => { if (!DeNelle.Editor.Regression.EchoGuideMemoryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-guide-memories] " + r); });
+
             // --- EQUIP DRAWER CONTENTS (WO-1061, 2026-08-22): the equip drawer listed NOTHING,
             // so the player could not change weapons — and an item the hero was WEARING was
             // absent from its own slot's list. Measures the ROW COUNT the drawer produces for
@@ -1304,6 +1317,7 @@ namespace DeNelle.Editor
             // is not a signal), and that the owner-ruled 4h/8h/12h + 5/20/45min numbers agree
             // between scene-configs.json and the code fallback table.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-cooldown suite", () => { if (!DeNelle.Editor.Regression.RaidCooldownRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-cooldown] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "heartfire suite", () => { if (!DeNelle.Editor.Regression.HeartfireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heartfire] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-budget-vfx-warm suite", () => { if (!DeNelle.Editor.Regression.SpawnBudgetAndVfxWarmRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-budget-vfx-warm] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });

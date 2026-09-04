@@ -272,8 +272,20 @@ Later, the line that stops the player thinking about gold:
 > person out there implies the Heart's memory is incomplete rather than merely distant. The player
 > stops thinking about 2,200 gold and starts wondering **who**.
 
-⚠ The illustrative line addressed the player by first name. **Verify the game knows it before writing
-any string that uses it** — flagged OPEN in §14.
+⚠ The illustrative line addressed the player by first name. **ANSWERED 2026-09-04 (WO-1380): THIS GAME
+KNOWS NO PLAYER FIRST NAME** — the only persisted `*name` field is `SaveSchema.cs:239`'s `petName`, and
+that names the starter Echo (`GameState.cs:290-297`, WO-277). The line ships **without** a name and is
+better for it. Full evidence + the regression that keeps a placeholder out: §14 item 2.
+
+⭐ **The 24 lines are AUTHORED and SHIPPING** (WO-1380): `Assets/Resources/Data/Canonical/
+echo-guide-memories.json` (+ its StreamingAssets twin). Six Echoes x four targets — the fourth,
+`iron_bastion`, **IS** authored in `Assets/Resources/Data/Canonical/scene-configs.json:241`
+(`sceneName` `RaidBase_IronBastion` at `:245`) and **IS** registered in `EditorBuildSettings`, with
+`enabled:0` pending a re-bake that adds a `HeroStartPoint_PlayerSpawn` marker — that scene entry's own
+authoring note at `:249` carries the measurement and the one-flag finish. So the target is
+forward-declared as *not yet playable*, never as *not yet declared*. ⛔ Reword a line **here first**:
+`EchoGuideMemoryRegression`
+pins Corvin's road, Doran's courses and Aldwin's closing beat verbatim, and FAILS below 24 lines.
 
 ---
 
@@ -536,8 +548,24 @@ Per CLAUDE.md §11B, an unproven thing named as unproven is useful; an unproven 
 costs someone a day.
 
 1. ~~Which Echo says *"…there's someone here"*~~ — **RULED: Aldwin.** See §7.
-2. **Does the game know the player's first name?** The illustrative line used it. **NOT VERIFIED** — no
-   string may use it until someone reads the code and says where it comes from.
+2. ~~**Does the game know the player's first name?**~~ — **ANSWERED: NO. IT DOES NOT, ANYWHERE**
+   (verified at source 2026-09-04, WO-1380). Aldwin's line therefore ships **without** a name, and
+   ⛔ **no shipped string may use one** until a name field is deliberately added.
+   - `SaveSchema.cs:239` — the persisted state holds **exactly one** `*name` field:
+     `[JsonProperty("petName")] public string PetName;`. `GameState.cs:290-297` documents it as *"the
+     player-chosen name for their **starter pet**, set in the tutorial's pet introduction (WO-277)"* —
+     it names the Echo, not the player.
+   - `PiSignInController.cs:74` `SignedInUsername` is a **Pi Network platform handle**, not a name the
+     player gave this game, and `PiSignInController.cs:19` (the `GOOGLE_PLAY` branch) hard-returns
+     `null` — on the Android/Seeker lane, which is the priority lane, it is always null.
+   - `LeaderboardService.cs:290,304-306` and `TownShowcaseClient.cs:14` read a `username` off **server
+     rows describing OTHER players**; neither is the local player's own name.
+   - The only local identity is `GameState.BoundWallet` — an address or guest id
+     (`GameStateService.cs:1663`), not a first name.
+   ⭐ **The line is stronger without it anyway:** *"...there's someone here."* does not need to know who
+   you are; it needs you to wonder who **they** are. `EchoGuideMemoryRegression` [canon] fails the build
+   if any memory line ever grows a `{0}` / `{name` / `{player` / `{first` placeholder, because with no
+   name to substitute, a placeholder renders as literal brace characters on the player's screen.
 3. **The three-gate stack** (§4). Recommendation given; the acceptance criterion — *a player holding
    Heartfire always has somewhere to spend it* — needs owner sign-off.
 4. ~~Echo Guide selection: narrative-only at launch?~~ — **RULED: NARRATIVE ONLY, and here is the

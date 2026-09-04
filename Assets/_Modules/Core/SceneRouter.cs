@@ -599,6 +599,17 @@ namespace DeNelle.Core
         public static void GoRaid(string sceneName)
         {
             FlowTrace.Step("SceneRouter", $"GoRaid name='{sceneName ?? "<null>"}' — hero carry armed as the pre-load hook.");
+
+            // WO-1374 — FUNNEL STEP 3 (and, on a return visit, step 6: "second raid
+            // attempted within 24h", which the north-star map calls the gold nugget).
+            // THIS is the right seam and the selection screen is not: opening a camp list
+            // and backing out is not an attempt, whereas reaching GoRaid means the player
+            // committed to the raid scene. It is also the SHARED contract every raid entry
+            // already funnels through (the Herald, the Journey card, the dev panel), so no
+            // future entry point can be added that quietly skips the measurement.
+            // Guarded: instrumentation must never be able to stop a scene load.
+            DeNelle.Core.Diagnostics.Guard.Try("Funnel", "raid attempted",
+                () => DeNelle.Core.Analytics.RaidFunnel.RaidAttempted(sceneName));
             // TIMING IS THE CONTRACT, not a detail. The carry is handed to LoadSceneWithFade as
             // its beforeLoad hook rather than run inline here, so it fires on the last line
             // before SceneManager.LoadSceneAsync — AFTER the IsSceneRegistered gate, the save

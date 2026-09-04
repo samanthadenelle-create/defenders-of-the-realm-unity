@@ -136,5 +136,61 @@ namespace DeNelle.Tests.EditMode
             Assert.AreEqual(40 + 3 * 15, full.Crystals);   // 85
             Assert.AreEqual(60 + 3 * 20, full.Food);        // 120
         }
+
+        // ── THE MISSING ARROW: troops -> raids -> GOLD ────────────────────────
+        // docs/PROGRAM_RAID_ECONOMY_2026-09-04.md section 1: "You currently have Gold ->
+        // troops but not troops -> raids -> gold. That arrow has to exist."
+        //
+        // RED FIRST, and in two different ways:
+        //   Loot_Gold_* cannot COMPILE against the previous tree - ComputeLoot had nine
+        //   parameters and no coinsBase, so gold was structurally zero on every path.
+        //   Loot_CampMultiplier_DoesNotReachCrystals DOES compile against it and fails on
+        //   the numbers: the old code returned (25 + 10*3) * 1.5 = 83, this build 55.
+
+        /// <summary>A 3-star Camp I clear pays the map's 2,200 gold; the 3-star rung is 100%.</summary>
+        [Test]
+        public void Loot_Gold_ThreeStar_PaysTheCampBase()
+        {
+            var loot = RaidScoring.ComputeLoot(3, 0.8f, 20, 60, 2, 20, 1f, 1800, 1100, 2200);
+            Assert.AreEqual(2200, loot.Coins);
+            Assert.AreEqual(1800, loot.Wood);
+            Assert.AreEqual(1100, loot.Iron);
+        }
+
+        /// <summary>A loss still pays gold - 18% of the base. A dead end is the defect.</summary>
+        [Test]
+        public void Loot_Gold_FailedAttack_StillPays()
+        {
+            var loot = RaidScoring.ComputeLoot(0, 0f, 20, 60, 2, 20, 1f, 1800, 1100, 2200);
+            Assert.AreEqual(396, loot.Coins);     // 18% of 2200
+            Assert.AreEqual(0, loot.Crystals);    // nothing razed
+            Assert.AreEqual(0, loot.Food);
+        }
+
+        /// <summary>
+        /// Gold carries its escalation in a PER-CAMP base, so the camp difficulty
+        /// multiplier must never touch it: x1.5 of 2,200 is 3,300, and the map's Camp II
+        /// number is 3,100.
+        /// </summary>
+        [Test]
+        public void Loot_CampMultiplier_DoesNotReachGold()
+        {
+            var flat = RaidScoring.ComputeLoot(3, 1f, 0, 0, 0, 0, 1f, 0, 0, 2200);
+            var hard = RaidScoring.ComputeLoot(3, 1f, 0, 0, 0, 0, 2.2f, 0, 0, 2200);
+            Assert.AreEqual(flat.Coins, hard.Coins);
+        }
+
+        /// <summary>
+        /// "Crystals are timer compression." An escalating camp raises gold, wood and iron -
+        /// never instant-finish. Food still carries the multiplier.
+        /// </summary>
+        [Test]
+        public void Loot_CampMultiplier_DoesNotReachCrystals()
+        {
+            var flat = RaidScoring.ComputeLoot(3, 1f, 25, 60, 10, 20, 1f);
+            var hard = RaidScoring.ComputeLoot(3, 1f, 25, 60, 10, 20, 1.5f);
+            Assert.AreEqual(flat.Crystals, hard.Crystals);
+            Assert.Greater(hard.Food, flat.Food);
+        }
     }
 }

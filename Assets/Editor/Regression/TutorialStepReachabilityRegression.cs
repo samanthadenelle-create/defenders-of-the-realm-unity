@@ -74,6 +74,34 @@
 //                          (the free-placement exemption), or a v32 zero-resource
 //                          founding cannot afford the thing the FTUE demands.
 //
+//   Case 7 [loop-taught]  WO-1378 (2026-09-04): the FTUE actually NAMES the raid loop.
+//                          MEASURED RED FIRST, on the shipping file before the edit:
+//                          grep -ci for "barracks", "raid", "army" and "troop" in
+//                          tutorial-steps.json returned 0, 0, 0 and 0. Nothing in the
+//                          first-time experience ever told a player that raiding is
+//                          how Elarion gets richer, and a loop the player has to
+//                          INFER is a loop most players never find - which is the
+//                          exact funnel the economy programme is measured on.
+//                          Asserts (a) all four tokens are present, (b) the canon 8.1
+//                          teaching beats exist and are CONTEXTUAL, oneShot and
+//                          non-pausing - a MANDATORY beat awaiting a Barracks the
+//                          player may never build would strand the FTUE forever, which
+//                          is worse than no tutorial - (c) each one's trigger is a
+//                          signal a LIVE emitter raises (a contextual beat cannot be
+//                          chained off another's dialogue.ended: TutorialFlow.cs
+//                          :1515-1523 returns before TryTriggerContextual at :1526,
+//                          and :2492 refuses while a hint is live), (d) the canon
+//                          dialogue records exist and still carry the canon SENTENCES
+//                          verbatim - this is a copy lane, so a paraphrase is the
+//                          defect - and (e) victory, LOST raid and MANUAL RETREAT
+//                          are THREE DISTINCT string sets in canon-strings.json, with
+//                          no superseded first-pass name ("FORCED RETREAT", "Skip
+//                          Training", "The Splinter Camp", "Ironwatch Garrison", "The
+//                          Ashen Enclave") anywhere in the three canonical files.
+//                          Merging the two failure screens throws away the reason the
+//                          map's generous 15-20 percent failure payout exists: you do
+//                          not lose the memory, you fail to reclaim it.
+//
 // Contextual (flowId "contextual") steps are NOT failed - they are hints, they never
 // gate, and one of them (inventory.gear_added:first) is a documented known-unwired
 // trigger. They are reported as notes so the gap stays visible.
@@ -135,6 +163,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "teach-present", () => Case3_TeachPresent(steps, failures, notes));
                     Case(failures, "refusal-loud", () => Case5_RefusalLoud(steps, failures, notes));
                     Case(failures, "arc-shape", () => Case6_ArcShape(steps, failures, notes));
+                    Case(failures, "loop-taught", () => Case7_LoopTaught(steps, failures, notes));
                 }
                 Case(failures, "arm-safety", () => Case4_ArmSafety(failures, notes));
             }
@@ -151,7 +180,9 @@ namespace DeNelle.Editor.Regression
                          "sits in a palette the player can open (and is free-placement exempt), every " +
                          "player-action step points at a real registered highlight, TutorialFlow refuses to " +
                          "arm in an enemy-owned hub, the build refusal is player-audible, and the WO-1012 " +
-                         "8-beat arc + 2c-bis nudge chain hold their shape" + noteStr;
+                         "8-beat arc + 2c-bis nudge chain hold their shape, and the FTUE names the raid " +
+                         "loop (Barracks -> army -> raid) in three non-blocking contextual beats whose " +
+                         "victory / lost-raid / manual-retreat copy stays three distinct screens" + noteStr;
                 return true;
             }
             reason = "tutorial-reach FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -821,6 +852,205 @@ namespace DeNelle.Editor.Regression
 
             notes.Add("arc-shape: " + n + "/" + ArcIds.Length + " beats verified in order; nudge chain past " +
                       "weapons->armor is an OWNER CREATIVE PIN (WO-1012 2c-bis) - do not author more without her sequence");
+        }
+
+        // =====================================================================
+        //  CASE 7 - the FTUE actually teaches the loop (WO-1378)
+        // =====================================================================
+
+        private const string CanonStringsRes = "Assets/Resources/Data/Canonical/canon-strings.json";
+        private const string CanonStringsSA  = "Assets/StreamingAssets/Data/Canonical/canon-strings.json";
+        private const string DialoguesRes    = "Assets/Resources/Data/Canonical/dialogue/dialogues.json";
+
+        /// <summary>The words whose ABSENCE was the measured defect. All four returned ZERO
+        /// occurrences in tutorial-steps.json before WO-1378.</summary>
+        private static readonly string[] LoopTokens = { "barracks", "raid", "army", "troop" };
+
+        /// <summary>
+        /// The canon 8.1 teaching beats and the shape they hold: id, trigger signal,
+        /// completion signal, intro dialogue id.
+        ///
+        /// TWO BEATS, NOT THE THREE MOMENTS THE CANON LISTS, AND THE REASON IS PINNED HERE
+        /// BECAUSE IT IS THE KIND OF THING A LATER SEAT WOULD "FIX" BACK INTO A DEAD BEAT:
+        /// contextual beats CANNOT be chained off one another. TutorialFlow.OnSignal
+        /// completes a live hint on its own dialogue.ended and RETURNS (TutorialFlow.cs
+        /// :1515-1523), so that raise never reaches TryTriggerContextual (:1526) - which
+        /// refuses outright while another hint is live anyway (:2492). A beat triggered on
+        /// "dialogue.ended:tut_ctx_raid_barracks" would never fire once.
+        ///
+        /// ⛔ EVERY TRIGGER BELOW MUST STAY A SIGNAL A LIVE EMITTER RAISES.
+        /// build.structure_placed:barracks comes from TutorialSignalAdapters.OnStructurePlaced;
+        /// panel.opened:JourneyDeck from TutorialCoreSignalAdapter's PanelRouter.PanelOpened
+        /// hook (the same family ctx_talents' route already relies on).
+        /// </summary>
+        private static readonly string[][] LoopBeats =
+        {
+            new[] { "ctx_raid_barracks", "build.structure_placed:barracks", "dialogue.ended:tut_ctx_raid_barracks", "tut_ctx_raid_barracks" },
+            new[] { "ctx_raid_first",    "panel.opened:JourneyDeck",        "dialogue.ended:tut_ctx_raid_first",    "tut_ctx_raid_first"    },
+        };
+
+        /// <summary>The canon 8.1 lines, each of which must survive somewhere in dialogues.json.
+        /// Keyed by nothing: the SENTENCE is the assertion, because this is a copy lane and a
+        /// paraphrase is the defect.</summary>
+        private static readonly string[] LoopLines =
+        {
+            "Your Barracks stands ready. Elarion can now raise soldiers to venture beyond the Heart's protection.",
+            "Three Footmen answer the call. Your first company is ready to march.",
+            "Beyond the Heart lie hostile camps holding resources Elarion needs. Break their defences and bring those resources home.",
+        };
+
+        /// <summary>The three outcome titles, which must stay three DIFFERENT sentences.</summary>
+        private static readonly string[][] OutcomeKeys =
+        {
+            new[] { "raidVictoryTitle", "MEMORY RECLAIMED" },
+            new[] { "raidDefeatTitle",  "THE HEART'S REACH FAILED" },
+            new[] { "raidRetreatTitle", "TACTICAL WITHDRAWAL" },
+        };
+
+        /// <summary>Names the creative direction's own author superseded (creative canon 2).
+        /// Shipping one of these is a defect, not a preference - so a revert is caught here.</summary>
+        private static readonly string[] SupersededNames =
+        {
+            "FORCED RETREAT", "Skip Training", "The Splinter Camp",
+            "Ironwatch Garrison", "The Ashen Enclave",
+        };
+
+        private static void Case7_LoopTaught(List<Step> steps, List<string> failures, List<string> notes)
+        {
+            // (a) The measured defect: the four words the FTUE never said.
+            string stepsRaw = ReadText(StepsRes, failures);
+            if (stepsRaw != null)
+                foreach (var token in LoopTokens)
+                    if (stepsRaw.IndexOf(token, StringComparison.OrdinalIgnoreCase) < 0)
+                        failures.Add("[loop-taught] tutorial-steps.json contains ZERO occurrences of '" + token +
+                                     "' - this is the exact state WO-1378 measured and fixed: the first-time " +
+                                     "experience never told a player that raiding is how Elarion gets richer, " +
+                                     "and a loop the player has to infer is a loop most players never find");
+
+            var byId = new Dictionary<string, Step>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in steps) if (!string.IsNullOrEmpty(s.Id) && !byId.ContainsKey(s.Id)) byId[s.Id] = s;
+
+            // (b)+(c) The beats exist, never gate, and form the authored chain.
+            foreach (var beat in LoopBeats)
+            {
+                string id = beat[0], trigger = beat[1], completion = beat[2], dialogue = beat[3];
+                if (!byId.TryGetValue(id, out var step))
+                {
+                    failures.Add("[loop-taught] teaching beat '" + id + "' is GONE from tutorial-steps.json - " +
+                                 "creative canon 8.1 authors Barracks -> first army -> first raid, and removing " +
+                                 "one link leaves the player at a dead end in the middle of the lesson");
+                    continue;
+                }
+
+                // THE SAFETY PROPERTY, AND THE REASON THIS CASE EXISTS AT ALL: these beats
+                // must NEVER become mandatory. Case 6 pins the mandatory chain to the eight
+                // founding beats, but that check would still pass if one of these REPLACED a
+                // founding beat rather than being added - and a mandatory step awaiting a
+                // Barracks the player may never build strands the FTUE forever.
+                if (!step.Contextual)
+                    failures.Add("[loop-taught] '" + id + "' is not flowId 'contextual' - it would become a " +
+                                 "MANDATORY beat awaiting a Barracks the player may never build, which strands " +
+                                 "the FTUE forever (the seq 632 can-never-complete class this suite exists for)");
+                if (step.PausePressure)
+                    failures.Add("[loop-taught] '" + id + "' sets pausePressure - a teaching nudge must never gate free play");
+                if (!step.OneShot)
+                    failures.Add("[loop-taught] '" + id + "' is not oneShot:true - a hint that repeats is nagging, not guidance");
+                if (!string.Equals(step.TriggerSignal, trigger, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[loop-taught] '" + id + "' triggers on '" + (step.TriggerSignal ?? "<none>") +
+                                 "' - the authored chain triggers it on '" + trigger + "'");
+                if (!string.Equals(step.Signal, completion, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[loop-taught] '" + id + "' completes on '" + (step.Signal ?? "<none>") +
+                                 "' - the authored chain completes it on '" + completion + "'");
+                if (!string.Equals(step.IntroDialogue, dialogue, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[loop-taught] '" + id + "' plays intro dialogue '" + (step.IntroDialogue ?? "<none>") +
+                                 "' - the canon line lives in '" + dialogue + "'");
+            }
+
+            // (d) The dialogue records the beats point at actually exist, and still carry the
+            //     canon sentences. This is a COPY lane: a paraphrase is the defect, so the
+            //     lines are asserted verbatim rather than by presence of a record alone.
+            string dlgRaw = ReadText(DialoguesRes, failures);
+            if (dlgRaw != null)
+            {
+                foreach (var beat in LoopBeats)
+                    if (dlgRaw.IndexOf("\"" + beat[3] + "\"", StringComparison.Ordinal) < 0)
+                        failures.Add("[loop-taught] dialogues.json has no record '" + beat[3] + "' - the beat would " +
+                                     "fire with nothing to say, and its completion signal (dialogue.ended:" + beat[3] +
+                                     ") could never be raised");
+
+                foreach (var line in LoopLines)
+                    if (dlgRaw.IndexOf(line, StringComparison.Ordinal) < 0)
+                        failures.Add("[loop-taught] the canon 8.1 line \"" + line + "\" is no longer in dialogues.json - " +
+                                     "creative canon rules fiction and copy, and these sentences are transcribed from it, " +
+                                     "not drafted here; a paraphrase is a silent revert of an owner-ruled string");
+            }
+
+            // (e) Three outcomes, three distinct screens, in BOTH canonical copies.
+            string canonRes = ReadText(CanonStringsRes, failures);
+            string canonSA = ReadText(CanonStringsSA, failures);
+            if (canonRes != null && canonSA != null && !string.Equals(canonRes, canonSA, StringComparison.Ordinal))
+                failures.Add("[loop-taught] canon-strings.json Resources and StreamingAssets copies DIFFER - " +
+                             "Resources wins at runtime, so a string added to only one copy is invisible on device");
+
+            if (canonRes != null)
+            {
+                JObject canon = null;
+                try { canon = JObject.Parse(canonRes); }
+                catch (Exception ex) { failures.Add("[loop-taught] canon-strings.json is not valid JSON: " + ex.Message); }
+
+                var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (canon != null)
+                    foreach (var pair in OutcomeKeys)
+                    {
+                        string key = pair[0], want = pair[1];
+                        string got = (string)canon[key];
+                        if (string.IsNullOrEmpty(got))
+                        {
+                            failures.Add("[loop-taught] canon-strings.json has no '" + key + "' - creative canon " +
+                                         "8.2/8.3 give a WON raid, a LOST raid and a MANUAL RETREAT their own screen, " +
+                                         "and the missing one cannot be substituted by another");
+                            continue;
+                        }
+                        if (!string.Equals(got, want, StringComparison.Ordinal))
+                            failures.Add("[loop-taught] '" + key + "' reads '" + got + "' - creative canon 8.2/8.3 " +
+                                         "authors '" + want + "'");
+                        if (seen.TryGetValue(got, out string other))
+                            failures.Add("[loop-taught] '" + key + "' and '" + other + "' carry the SAME sentence ('" + got +
+                                         "') - the two failure screens must never be merged: a lost raid and a retreat the " +
+                                         "player CHOSE are different things, and that distinction is what makes the map's " +
+                                         "15-20 percent failure payout diegetic (you do not lose the memory, you fail to " +
+                                         "reclaim it)");
+                        else seen[got] = key;
+                    }
+            }
+
+            // (f) No superseded first-pass name may return, in any of the three files.
+            var files = new List<string[]>
+            {
+                new[] { "tutorial-steps.json", stepsRaw },
+                new[] { "dialogues.json", dlgRaw },
+                new[] { "canon-strings.json", canonRes },
+            };
+            foreach (var pair in files)
+            {
+                string where = pair[0], body = pair[1];
+                if (body == null) continue;
+                foreach (var dead in SupersededNames)
+                    if (body.IndexOf(dead, StringComparison.OrdinalIgnoreCase) >= 0)
+                        failures.Add("[loop-taught] " + where + " contains the SUPERSEDED first-pass name '" + dead +
+                                     "' - creative canon 2 lists what the direction's own author replaced, and " +
+                                     "shipping one of those is a defect, not a preference");
+            }
+
+            notes.Add("loop-taught: the canon 8.1 beats are CONTEXTUAL by design - the mandatory chain stays the " +
+                      "eight founding beats (Case 6), so the raid lesson can never strand a player who has not built " +
+                      "a Barracks. TWO KNOWN GAPS, recorded rather than hidden. (1) ctx_raid_barracks triggers on " +
+                      "build.structure_placed:barracks (PLACEMENT) while the canon line says the Barracks STANDS " +
+                      "READY - the real completion edge is StarterArmyGrant's rising edge on StructureSingleton" +
+                      ".IsBuilt(\"barracks\"), which raises no tutorial signal today. (2) The canon's 'Barracks " +
+                      "completed' and 'first army granted' moments share one beat because contextual beats cannot be " +
+                      "chained. BOTH close the same way: an emitter for the barracks-completed and army-granted edges " +
+                      "in TutorialSignalAdapters, which is another lane's file");
         }
 
         // =====================================================================

@@ -88,12 +88,16 @@ namespace DeNelle.Village
         [SerializeField] private float _clockSeconds = DefaultClockSeconds;
 
         [Header("Loot (owner tunes by feel)")]
-        [Tooltip("Crystals granted at 100% destruction, before the per-star bonus.")]
-        [SerializeField] private int _lootCrystalsBase = 25;
+        // CRYSTALS MOVED OFF THIS COMPONENT. They were two serialized fields here paying
+        // base 25 + 3x10 = 55 at a perfect clear; the north-star map cuts that to 20-30 and
+        // every balance value is a TUNABLE (standing rule 2026-09-02), so they now live on
+        // the RemoteTunables rail beside wood/iron and are read in LootFor. Leaving the
+        // fields here as well would be two answers to one question - and this component is
+        // created by code (TryInstall -> new GameObject + AddComponent), so a serialized
+        // value here was never authored in a scene and never could be tuned without a
+        // rebuild anyway.
         [Tooltip("Food granted at 100% destruction, before the per-star bonus.")]
         [SerializeField] private int _lootFoodBase = 60;
-        [Tooltip("Extra crystals per earned star.")]
-        [SerializeField] private int _lootCrystalsPerStar = 10;
         [Tooltip("Extra food per earned star.")]
         [SerializeField] private int _lootFoodPerStar = 20;
 
@@ -401,25 +405,80 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Loot payout (crystals + food) scaled by destruction AND the star tier. At
-        /// 100% + 3 stars a raid pays the base + 3x the per-star bonus; a light raid
-        /// pays proportionally less. <paramref name="rewardMultiplier"/> is the
-        /// scene-config difficulty mult (Regular 1.0 / Hard 1.5 / Extreme 2.2) —
-        /// applied AFTER stars+destruction so the selection-card "xLoot" is honest.
-        /// Static + pure so a regression can assert the scaling with no scene.
+        /// Loot payout scaled by destruction AND the star tier.
+        /// <paramref name="rewardMultiplier"/> is the scene-config difficulty mult
+        /// (Regular 1.0 / Hard 1.5 / Extreme 2.2) — applied AFTER stars+destruction so the
+        /// selection-card "xLoot" is honest. Static + pure so a regression can assert the
+        /// scaling with no scene, no save and no network.
+        ///
+        /// <para><b>THREE AXES, DELIBERATELY DIFFERENT.</b></para>
+        /// <list type="bullet">
+        /// <item><b>Food</b> keeps its original shape exactly:
+        /// <c>base * destruction + perStar * stars</c>, times the camp multiplier.</item>
+        /// <item><b>Crystals</b> keep that same SHAPE but are no longer multiplied by
+        /// <paramref name="rewardMultiplier"/>, and their bases come down hard (map §1:
+        /// 20-30 at a perfect clear, against the 55 this build used to pay). The map's
+        /// reason is the whole ruling: <i>"Crystals are timer compression. If raids dump
+        /// huge amounts of crystals, you accidentally accelerate the already-too-short
+        /// progression curve."</i> Excluding them from the camp multiplier is the same
+        /// ruling applied to escalation - a harder camp pays more gold, wood and iron, not
+        /// more instant-finish. Crystals are the ONE reward that decreases.</item>
+        /// <item><b>Wood + iron</b> ride the north-star map's PERFORMANCE LADDER
+        /// (<c>docs/PROGRAM_RAID_ECONOMY_2026-09-04.md</c> section 1): a share of the base
+        /// chosen by RESULT — failed 15-20% / 1 star 50% / 2 stars 75% / 3 stars 100% /
+        /// 3 stars with 100% destruction 110%. The ladder is not the same function as the
+        /// crystals/food ramp and must not be collapsed into it: a linear ramp off
+        /// destruction pays a sloppy 80% clear nearly as well as a perfect one, which is
+        /// exactly the "getting better at raiding has no economic payoff" the map exists
+        /// to fix.</item>
+        /// </list>
+        ///
+        /// THE FORK IS CLOSED (commit 281902df0): troops cost
+        /// GOLD, they ALSO take time, and a second gold spend hires mercenaries to skip
+        /// the clock. So gold is PAID here now, off a PER-CAMP base
+        /// (<see cref="RaidLootTunables.CoinsBaseFor"/>), riding the SAME performance
+        /// ladder as wood and iron - the map's one explicitly named missing arrow:
+        /// <i>"You currently have Gold to troops but not troops to raids to gold. That
+        /// arrow has to exist."</i></para>
+        ///
+        /// <para>Gold is NOT multiplied by <paramref name="rewardMultiplier"/>. The map
+        /// publishes a DESIGNED gold target per camp (2,200 / 3,100 / 4,500 / 6,500), so
+        /// the escalation lives in the base; x1.5 of 2,200 is 3,300, not her 3,100.</para>
+        ///
+        /// <para>The three trailing parameters are LAST and default to 0, so every pre-existing
+        /// caller compiles unchanged AND pays exactly what it paid before — the old
+        /// four-argument shape is still a food-and-crystals-only payout, byte for byte.</para>
         /// </summary>
+        /// <param name="woodBase">Wood at a PERFECT run, before the ladder and the camp
+        /// multiplier. 0 = pay no wood (the pre-WO-1374 behaviour).</param>
+        /// <param name="ironBase">Iron at a PERFECT run, on the same terms.</param>
+        /// <param name="coinsBase">GOLD at a PERFECT run on THIS camp, before the ladder.
+        /// The camp multiplier is deliberately NOT applied to it. 0 = pay no gold.</param>
         public static ResourceCost ComputeLoot(int stars, float destructionPct,
             int crystalsBase, int foodBase, int crystalsPerStar, int foodPerStar,
-            float rewardMultiplier = 1f)
+            float rewardMultiplier = 1f, int woodBase = 0, int ironBase = 0, int coinsBase = 0)
         {
             float frac = Mathf.Clamp01(destructionPct);
             int st = Mathf.Clamp(stars, 0, 3);
             float mult = rewardMultiplier > 0f ? rewardMultiplier : 1f;
+            // CRYSTALS: the same shape as before, but NO camp multiplier. Escalating camps
+            // must raise gold/wood/iron, never timer compression (map section 1).
             int crystals = Mathf.RoundToInt(
-                (Mathf.Max(0, crystalsBase) * frac + Mathf.Max(0, crystalsPerStar) * st) * mult);
+                Mathf.Max(0, crystalsBase) * frac + Mathf.Max(0, crystalsPerStar) * st);
             int food = Mathf.RoundToInt(
                 (Mathf.Max(0, foodBase) * frac + Mathf.Max(0, foodPerStar) * st) * mult);
-            return new ResourceCost(food: food, crystals: crystals);
+
+            // WO-1374 — the construction axis. RaidLootTunables owns the ladder AND the
+            // clamps; nothing here re-derives a percentage, so there is exactly one answer
+            // to "what does a 2-star raid pay".
+            float ladder = RaidLootTunables.Fraction(st, frac);
+            int wood = Mathf.RoundToInt(Mathf.Max(0, woodBase) * ladder * mult);
+            int iron = Mathf.RoundToInt(Mathf.Max(0, ironBase) * ladder * mult);
+
+            // THE ARROW: troops -> raids -> gold. Same ladder, per-camp base, NO mult.
+            int coins = Mathf.RoundToInt(Mathf.Max(0, coinsBase) * ladder);
+
+            return new ResourceCost(wood: wood, food: food, iron: iron, crystals: crystals, coins: coins);
         }
 
         // =====================================================================
@@ -507,7 +566,9 @@ namespace DeNelle.Village
 
             // WO-932: one clock line for the Phase 0 probe matrix.
             FlowTrace.Step("Raid",
-                $"RAID CLOCK armed: {_clockSeconds:0}s · loot base crystals={_lootCrystalsBase} food={_lootFoodBase}.");
+                $"RAID CLOCK armed: {_clockSeconds:0}s | loot bases crystals={RaidLootTunables.CrystalsBase} " +
+                $"food={_lootFoodBase} wood={RaidLootTunables.WoodBase} iron={RaidLootTunables.IronBase} " +
+                $"gold={RaidLootTunables.CoinsBaseFor(ResolveCampConfigId())}.");
         }
 
         /// <summary>
@@ -638,8 +699,72 @@ namespace DeNelle.Village
         {
             if (result == null) return default(ResourceCost);
             float mult = ResolveRewardMultiplier();
-            return ComputeLoot(result.Stars, result.DestructionPct,
-                _lootCrystalsBase, _lootFoodBase, _lootCrystalsPerStar, _lootFoodPerStar, mult);
+            // WO-1374 — the wood/iron bases come off the REMOTE TUNABLE rail, not off a
+            // serialized field, because the owner sets this curve by feel and a serialized
+            // field is a 30-minute rebuild per opinion. No row / no network / no parse
+            // resolves to the shipping defaults (1800 / 1100), so an offline player is paid
+            // exactly what this build hardcodes.
+            int woodBase = RaidLootTunables.WoodBase;
+            int ironBase = RaidLootTunables.IronBase;
+            // THE ARROW (map's "troops -> raids -> gold"). The GOLD base is PER CAMP, so it
+            // is resolved from this raid's config id rather than from one global number -
+            // the map publishes a designed target per tier, sized at 125-140% of that
+            // tier's expected army replacement cost.
+            string campId = ResolveCampConfigId();
+            int coinsBase = RaidLootTunables.CoinsBaseFor(campId);
+            int crystalsBase = RaidLootTunables.CrystalsBase;
+            int crystalsPerStar = RaidLootTunables.CrystalsPerStar;
+            var loot = ComputeLoot(result.Stars, result.DestructionPct,
+                crystalsBase, _lootFoodBase, crystalsPerStar, _lootFoodPerStar, mult,
+                woodBase, ironBase, coinsBase);
+            FlowTrace.Step("Raid",
+                "loot settled: stars=" + result.Stars + " destruction=" +
+                result.DestructionPct.ToString("P0") + " ladder=" +
+                RaidLootTunables.Fraction(result.Stars, result.DestructionPct).ToString("P0") +
+                " mult=x" + mult.ToString("0.##") + " -> " + loot.Wood + "w " + loot.Iron + "i " +
+                loot.Food + "f " + loot.Crystals + "c " + loot.Coins + "g (bases w=" + woodBase +
+                " i=" + ironBase + " g=" + coinsBase + " camp='" + (campId ?? "(none)") +
+                "' c=" + crystalsBase + "+" + crystalsPerStar + "/star). Gold and crystals do " +
+                "NOT ride the camp multiplier - gold escalates through its per-camp base, and " +
+                "crystals are timer compression that a harder camp must not accelerate.");
+            return loot;
+        }
+
+        /// <summary>
+        /// THIS raid's scene-config id - the key the PER-CAMP GOLD table is looked up by
+        /// (<see cref="RaidLootTunables.CoinsBaseFor"/>). Prefers the garrison spawner's
+        /// authored id, falls back to matching the active scene name, and returns null when
+        /// neither resolves.
+        ///
+        /// <para>A null/unknown id is NOT silent: CoinsBaseFor logs it once by name and pays
+        /// the Camp I base, so the gold arrow can never be silently deleted for a camp
+        /// (CLAUDE.md section 12 - no silent failures). Guarded because the catalog is
+        /// legitimately absent in edit-mode unit tests.</para>
+        /// </summary>
+        public string ResolveCampConfigId()
+        {
+            string configId = null;
+            try
+            {
+                if (_spawner != null) configId = _spawner.ConfigId;
+                if (!string.IsNullOrEmpty(configId)) return configId;
+
+                string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                var def = SceneConfigCatalog.FindBySceneName(scene);
+                if (def != null && !string.IsNullOrEmpty(def.id)) return def.id;
+
+                FlowTrace.Warn("Raid",
+                    "raid config id UNRESOLVED - the spawner carried none and scene '" + scene +
+                    "' matched no scene-config row. The PER-CAMP GOLD base cannot be selected for " +
+                    "this raid and will fall back to Camp I.");
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Warn("Raid",
+                    "raid config id THREW while resolving the per-camp GOLD base: " +
+                    ex.GetType().Name + ": " + ex.Message + ". Falling back to Camp I.");
+            }
+            return null;
         }
 
         /// <summary>

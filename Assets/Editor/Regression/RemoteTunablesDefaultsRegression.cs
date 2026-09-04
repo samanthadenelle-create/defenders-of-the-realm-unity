@@ -114,12 +114,14 @@ namespace DeNelle.Editor.Regression
         //  PINNED FACTS. Every one is a literal.
         // ---------------------------------------------------------------------
 
-        /// <summary>The domain is EIGHTEEN knobs: eight PROD-022 mitigations, the WO-1306
-        /// balance knob, the three WO-1330 over-time levers, the two WO-1327 VFX
-        /// feel/perf clamps, and the four WO-1343 night-store aura knobs. Pinned as a
-        /// literal, not as Registry.Length - an oracle that measures the thing against
-        /// itself certifies nothing.</summary>
-        private const int ExpectedKnobCount = 18;
+        /// <summary>The domain is TWENTY-SIX knobs: eight PROD-022 mitigations, the
+        /// WO-1306 balance knob, the three WO-1330 over-time levers, the two WO-1327 VFX
+        /// feel/perf clamps, the four WO-1343 night-store aura knobs, and the seven
+        /// WO-1374 raid-reward knobs (two bases + the five-rung performance ladder), and the
+        /// WO-1374 free-starter-squad size.
+        /// Pinned as a literal, not as Registry.Length - an oracle that measures the thing
+        /// against itself certifies nothing.</summary>
+        private const int ExpectedKnobCount = 26;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -173,6 +175,51 @@ namespace DeNelle.Editor.Regression
             new KeyValuePair<string, int>("vfx.nightStoreAuraCadenceMin", 30),
             new KeyValuePair<string, int>("vfx.nightStoreAuraFamilyMask", 127),
             new KeyValuePair<string, int>("vfx.nightStoreAuraBurstRepeatSec", 0),
+            // WO-1374 - THE RAID REWARD TABLE, from the north-star map
+            // (docs/PROGRAM_RAID_ECONOMY_2026-09-04.md sections 1 and 12.7, which says in
+            // capitals that every number in it is a tunable).
+            //
+            // (!) THE TWO BASES ARE THE THIRD DELIBERATE DEPARTURE from "the default is
+            // today's behaviour", alongside the two vfx.* bug fixes and the ruled drain
+            // rate. TODAY A RAID PAYS ZERO WOOD AND ZERO IRON - that is the defect the work
+            // order exists to close - and the map states the target numbers outright, so
+            // the shipping default is the OWNER'S number. The invariant that still binds:
+            // no row, no network, no parse => exactly what this build hardcodes, and
+            // setting both bases to 0 restores the old food-and-crystals-only payout.
+            //
+            // (!) THE GOLD ROWS ARE HERE NOW. This block used to say there was no gold row
+            // and that its absence was the point, because WO-1372 (troops cost TIME) and the
+            // map (troops cost 1,650 GOLD) contradicted each other. THE FORK IS CLOSED
+            // (commit 281902df0): troops cost GOLD, also take time, and a second gold spend
+            // hires mercenaries to skip the clock. The stale sentence is deleted rather than
+            // annotated - CLAUDE.md section 15.
+            new KeyValuePair<string, int>("raid.lootWoodBase", 1800),
+            new KeyValuePair<string, int>("raid.lootIronBase", 1100),
+            // The performance ladder: fail / 1 / 2 / 3 stars / perfect, as percentages of
+            // the two bases. 18 is the middle of the map's stated 15-20% band for a loss,
+            // and it is deliberately not 0 - "a failed attack still pays 15-20%. That is
+            // deliberate - it keeps a loss from being a dead end."
+            new KeyValuePair<string, int>("raid.lootFailPct", 18),
+            new KeyValuePair<string, int>("raid.lootOneStarPct", 50),
+            new KeyValuePair<string, int>("raid.lootTwoStarPct", 75),
+            new KeyValuePair<string, int>("raid.lootThreeStarPct", 100),
+            new KeyValuePair<string, int>("raid.lootPerfectPct", 110),
+            // THE MISSING ARROW: troops -> raids -> GOLD. Four DESIGNED per-camp targets,
+            // each 125-140% of that camp's expected army replacement cost (map section 1),
+            // NOT one base times the camp's rewardMultiplier - x1.5 of 2200 is 3300, and
+            // her Camp II number is 3100.
+            new KeyValuePair<string, int>("raid.lootCoinsBaseCamp1", 2200),
+            new KeyValuePair<string, int>("raid.lootCoinsBaseCamp2", 3100),
+            new KeyValuePair<string, int>("raid.lootCoinsBaseCamp3", 4500),
+            new KeyValuePair<string, int>("raid.lootCoinsBaseBastion", 6500),
+            // The one reward in the map's table that DECREASES. 20 + 3x2 = 26 at a perfect
+            // clear, inside her 20-30 band, against the 55 this build used to pay.
+            // "Crystals are timer compression."
+            new KeyValuePair<string, int>("raid.lootCrystalsBase", 20),
+            new KeyValuePair<string, int>("raid.lootCrystalsPerStar", 2),
+            // The free starter squad (map section 2). 3 is her number and is exactly what
+            // 1,650 gold used to buy - the wall this removes. Granted once per save.
+            new KeyValuePair<string, int>("raid.starterArmySize", 3),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
@@ -275,7 +322,8 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 mitigations + the WO-1306 balance knob + the three " +
                          "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps + the four " +
-                         "WO-1343 night-store aura knobs) resolve to " +
+                         "WO-1343 night-store aura knobs + the seven WO-1374 raid-reward knobs + the " +
+                         "WO-1374 starter-squad size) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +

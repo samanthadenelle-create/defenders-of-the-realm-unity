@@ -1309,6 +1309,114 @@ namespace DeNelle.Village
         /// </summary>
         public const string InsufficientCrystalsPrefix = "Not enough crystals: ";
 
+        // =====================================================================
+        //  LANE D — MERCENARY HIRE: skip training time with gold
+        // =====================================================================
+
+        /// <summary>
+        /// LANE D — spend gold to hire mercenaries and skip remaining training time on a job.
+        /// Reduces the job's remaining time to ~1 second (not 0, so it completes on the next tick
+        /// rather than mid-calculation). Returns true on success, false with a player-readable
+        /// reason if the wallet is insufficient or the job has no remaining time.
+        /// </summary>
+        /// <param name="job">The job to accelerate (checked for validity before this call).</param>
+        /// <param name="costGold">The gold cost of hiring mercenaries.</param>
+        /// <param name="failure">Player-readable ASCII reason on a false return, null on success.</param>
+        /// <returns>True if mercenaries were hired and time was reduced; false otherwise.</returns>
+        public bool TryHireMercenaries(BuildJobData job, int costGold, out string failure)
+        {
+            failure = null;
+
+            // Find the job in its channel to check remaining time and validity.
+            var ch = GetChannel((ChannelId)job.Channel);
+            if (ch == null)
+            {
+                failure = "Save not loaded.";
+                return false;
+            }
+
+            // Find the job (active first, then pending).
+            var found = FindInChannel(ch, job.StructureId, out bool isActive);
+            if (!found.HasValue)
+            {
+                failure = "Job not found.";
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
+                    $"TryHireMercenaries: job '{job.StructureId}' on {(ChannelId)job.Channel} not found.");
+                return false;
+            }
+
+            var liveJob = found.Value;
+
+            // Only active jobs (running, not queued) can hire mercenaries. Queued jobs
+            // have no countdown yet and represent only a placeholder time value.
+            if (!isActive || liveJob.StartMs <= 0)
+            {
+                failure = "Can't hire: job hasn't started yet.";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                    $"TryHireMercenaries '{job.StructureId}' declined: job is queued, not active.");
+                return false;
+            }
+
+            // Calculate remaining time.
+            double remainingMs = liveJob.FinishMs - TimeSource.NowUnixMs();
+            if (remainingMs <= 0)
+            {
+                failure = "Already done.";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                    $"TryHireMercenaries '{job.StructureId}' declined: no time remaining.");
+                return false;
+            }
+
+            // Check wallet.
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null)
+            {
+                failure = "Save not loaded.";
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Obsidian",
+                    "TryHireMercenaries with no GameState.");
+                return false;
+            }
+
+            if (state.Resources.Coins < costGold)
+            {
+                failure = "Not enough gold: " + costGold + " needed, " + state.Resources.Coins + " held.";
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
+                    $"TryHireMercenaries('{job.StructureId}') declined — broke ({state.Resources.Coins}/{costGold} gold).");
+                return false;
+            }
+
+            // Spend the gold and reduce the time. Use Guard.Try to ensure the wallet mutation
+            // is logged if it fails (§12).
+            DeNelle.Core.Diagnostics.Guard.Try("Obsidian", "hire mercenaries", () =>
+            {
+                var r = state.Resources;
+                r.Coins = Mathf.Max(0, r.Coins - costGold);
+                state.Resources = r;
+                svc.Save();
+                svc.ResourcesChanged?.Invoke();
+            });
+
+            // Reduce the remaining time to ~1 second so the job completes on the next tick,
+            // not mid-calculation.
+            int jobIndex = ActiveIndexInChannel(ch, job.StructureId);
+            if (jobIndex >= 0)
+            {
+                var j = ch.ActiveJobs[jobIndex];
+                double newFinishMs = TimeSource.NowUnixMs() + 1000.0;  // 1 second from now
+                j.DurationMs = newFinishMs - j.StartMs;
+                ch.ActiveJobs[jobIndex] = j;
+                Persist();
+                JobSkipped?.Invoke(j);
+                RaiseQueueChanged();
+            }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                $"Hired mercenaries: '{job.StructureId}' on {(ChannelId)job.Channel} for {costGold} gold " +
+                $"(time reduced from {remainingMs / 1000.0:0.#}s to ~1s).");
+            return true;
+        }
+
         // Apply a time skip by pulling StartMs back by `seconds`; if that finishes it, complete it.
         private void ApplySkipSeconds(ChannelId channel, string structureId, float seconds)
         {

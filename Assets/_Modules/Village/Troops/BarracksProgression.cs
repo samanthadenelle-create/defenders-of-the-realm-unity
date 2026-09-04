@@ -225,13 +225,25 @@ namespace DeNelle.Village
         /// Grant a freshly-trained troop into <paramref name="state"/>'s army (unconditionally —
         /// cost/cap were checked at enqueue). The completion effect of a TrainTroop job. Returns
         /// the new roster count (0 on a null state).
+        ///
+        /// <para>WO-1374 — this is the SINGLE OWNER of "a troop joins the roster", and so it is
+        /// where funnel step 2 ("army trained") is emitted. Both real paths pass through here:
+        /// the timed Train job's completion effect, and the free starter squad granted on
+        /// Barracks completion. Instrumenting the two call sites separately would mean the step
+        /// could be reached by one and missed by the other, which is how a funnel starts
+        /// reporting a conversion nobody can reproduce.</para>
         /// </summary>
-        public static int GrantTrainedTroop(GameState state, string troopId)
+        /// <param name="source">Which seam granted it - trace/property only, never behaviour.</param>
+        public static int GrantTrainedTroop(GameState state, string troopId, string source = "train-job")
         {
             if (state == null || string.IsNullOrEmpty(troopId)) return 0;
             if (state.Army == null) state.Army = new ArmyStorage();
             state.Army.GrantTrained(troopId);
-            return state.Army.Owned != null ? state.Army.Owned.Count : 0;
+            int count = state.Army.Owned != null ? state.Army.Owned.Count : 0;
+            // Guarded: analytics must never be able to lose a troop the player paid for.
+            DeNelle.Core.Diagnostics.Guard.Try("Funnel", "army trained",
+                () => DeNelle.Core.Analytics.RaidFunnel.ArmyTrained(troopId, count, source));
+            return count;
         }
     }
 }

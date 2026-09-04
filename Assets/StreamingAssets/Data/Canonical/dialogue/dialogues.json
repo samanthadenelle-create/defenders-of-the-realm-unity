@@ -1,6 +1,6 @@
 {
-  "version": 8,
-  "_note": "v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
+  "version": 9,
+  "_note": "v9 (WO-1378, 2026-09-04): two RAID-LOOP teaching records added - tut_ctx_raid_barracks (three lines) and tut_ctx_raid_first - carrying the exact strings from docs/CREATIVE_CANON_ELARION_2026-09-04.md section 8.1. They exist because the FTUE never mentioned the loop at all: barracks/raid/army/troop each returned ZERO occurrences in tutorial-steps.json before this edit. All three speak as the {guide} token and nothing else, per the invariant below. PRIOR: v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
   "speakers": [
     {
       "name": "Mother Wren",
@@ -1318,6 +1318,50 @@
             {
               "speaker": "{guide}",
               "text": "Good steel wants good armor. An Armorer next, perhaps - in your own time, Keeper."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_raid_barracks",
+      "_note": "WO-1378 beat 1/3. Creative canon section 8.1, transcribed verbatim - not paraphrased and not invented. Speaks as {guide} because TutorialGuideIdentityRegression Case 2 [one-speaker] fails any tut_* line spoken by anything else. CARRIES THE CANON'S FIRST TWO MOMENTS IN ONE RECORD: contextual beats cannot be chained off each other (TutorialFlow.cs:1515-1523 returns before TryTriggerContextual at :1526), so a second beat keyed on this record's dialogue.ended would never fire. The two moments coincide anyway - StarterArmyGrant grants the free squad (DefaultStarterCount x troop-footman, WO-1374) the first time a save has a Barracks. The third line is the route, in the SAME words StarterArmyGrant.GrantToastFor and the Game Guide already use.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Your Barracks stands ready. Elarion can now raise soldiers to venture beyond the Heart's protection."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Three Footmen answer the call. Your first company is ready to march."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Open Journey, then Raids, when you are ready to march."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_raid_first",
+      "_note": "WO-1378 beat 3/3 - the first-raid prompt, creative canon section 8.1. THIS IS THE SENTENCE THE SHIPPING GAME HAS NEVER SAID: nothing anywhere told a player that raiding is how Elarion gets richer. The old Guide opener was \"Raids are where your trained troops earn their keep\" - a line about payroll, and the closest thing the game had to a motive. The second line carries the route in WORDS (the owner is red/green colourblind, and there is no Journey highlight id registered to point with).",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Beyond the Heart lie hostile camps holding resources Elarion needs. Break their defences and bring those resources home."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Every victory opens the road farther. Choose your target - stronger footholds carry greater risk and richer spoils."
             }
           ]
         }

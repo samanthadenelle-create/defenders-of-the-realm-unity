@@ -293,7 +293,7 @@
       "target": 1,
       "label": "Break a camp - clear {target} enemy outpost",
       "weight": 0.9,
-      "requiresFeature": null
+      "requiresFeature": "raids"
     },
     {
       "id": "combat.raid.double",
@@ -301,8 +301,8 @@
       "target": 2,
       "label": "Push the frontier - clear {target} enemy outposts",
       "weight": 0.6,
-      "requiresFeature": null
+      "requiresFeature": "raids"
     }
   ],
-  "notes": "Daily quest templates use only wired Report channels. Child ids tick through parent-prefix matching. Keep this file identical to its canonical twin."
+  "notes": "Daily quest templates use only wired Report channels. Child ids tick through parent-prefix matching. Keep this file identical to its canonical twin. WO-1374: the two combat.raid.* templates carry requiresFeature raids, which DailyQuests.FeatureShipped answers from PostureSignals.RaidCapable - a player with no Barracks can no longer be handed clear an enemy outpost as their daily and then find no door to do it through."
 }

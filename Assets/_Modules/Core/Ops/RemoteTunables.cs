@@ -293,6 +293,179 @@ namespace DeNelle.Core.Ops
         public const string KeyVfxMaxParticleLights = "vfx.maxParticleLights";
 
         // ---------------------------------------------------------------------
+        //  WO-1374 - THE RAID REWARD TABLE + THE PERFORMANCE LADDER.
+        //  Spec: docs/PROGRAM_RAID_ECONOMY_2026-09-04.md sections 1 and 12.7.
+        //
+        //  (S) EVERY NUMBER IN THAT DOCUMENT IS A TUNABLE. Section 12.7 says so in
+        //  capitals, and it is the standing 2026-09-02 rule applied to the one
+        //  curve the owner is going to set BY FEEL: how much a raid pays. A wrong
+        //  reward number is a thirty-minute rebuild away from being right, or it
+        //  is forty seconds away. These knobs are the difference.
+        //
+        //  (!) THESE DEFAULTS ARE NOT "TODAY'S BEHAVIOUR", AND THAT IS DELIBERATE
+        //  AND RULED. Today a raid pays ZERO wood and ZERO iron - that is the
+        //  defect WO-1374 exists to close, and the map states the target values
+        //  outright (1,800 wood / 1,100 iron at a perfect 3-star, 100% Camp I
+        //  run). So the shipping default is the OWNER'S NUMBER, exactly as
+        //  combat.drainReturnPct ships at her 60 rather than the code's old 100.
+        //  The invariant that still binds unchanged: no row, no network, no parse
+        //  => EXACTLY WHAT THIS BUILD HARDCODES, with the remote read an override
+        //  and never a dependency. Setting both bases to 0 restores the old
+        //  food-and-crystals-only payout precisely.
+        //
+        //  (!) GOLD IS HERE NOW. THE FORK IS CLOSED (commit 281902df0): troops COST
+        //  GOLD, ALSO take time, and a SECOND gold spend hires mercenaries to skip
+        //  the clock. So the map's gold column - sized at 125-140% of a per-camp
+        //  DESIGNED army-replacement cost - is the live spec, and the missing arrow
+        //  the map names explicitly ("you currently have Gold -> troops but not
+        //  troops -> raids -> gold") is the thing these four knobs build. Any
+        //  comment left in this repo still calling that fork open is STALE.
+        //
+        //  (!) GOLD IS FOUR KNOBS, NOT ONE, AND IT IS NOT MULTIPLIED BY THE CAMP'S
+        //  rewardMultiplier. The map gives a DESIGNED gold target per camp
+        //  (2,200 / 3,100 / 4,500 / 6,500) rather than a single base times a
+        //  difficulty multiplier - x1.5 on 2,200 is 3,300, not her 3,100, and x2.2
+        //  is 4,840, not her 4,500. Encoding the escalation in the knob VALUES is
+        //  the only arrangement in which every published number is payable exactly;
+        //  applying the multiplier on top would make all four defaults wrong.
+        //
+        //  The consumer is DeNelle.Village.RaidLootTunables, which owns the clamps
+        //  and is the ONLY reader.
+        // ---------------------------------------------------------------------
+
+        /// <summary>Wood paid by a perfect (3-star, 100% razed) Camp I raid. Map section 1.</summary>
+        public const int RaidLootWoodBaseDefault = 1800;
+
+        /// <summary>Iron paid by a perfect (3-star, 100% razed) Camp I raid. Map section 1.</summary>
+        public const int RaidLootIronBaseDefault = 1100;
+
+        /// <summary>Percent of the base paid by a FAILED attack. Map's ladder says 15-20.</summary>
+        public const int RaidLootFailPctDefault = 18;
+
+        /// <summary>Percent of the base paid at 1 star.</summary>
+        public const int RaidLootOneStarPctDefault = 50;
+
+        /// <summary>Percent of the base paid at 2 stars.</summary>
+        public const int RaidLootTwoStarPctDefault = 75;
+
+        /// <summary>Percent of the base paid at 3 stars.</summary>
+        public const int RaidLootThreeStarPctDefault = 100;
+
+        /// <summary>Percent of the base paid at 3 stars AND 100% destruction.</summary>
+        public const int RaidLootPerfectPctDefault = 110;
+
+        /// <summary>
+        /// GOLD paid by a perfect run on a Camp I-tier base (map section 1: 2,200, sized at
+        /// 125-140% of that camp's designed 1,650-gold army replacement cost). ALSO the
+        /// fallback for any raid config id the per-camp table below does not name.
+        /// </summary>
+        public const int RaidLootCoinsBaseCamp1Default = 2200;
+
+        /// <summary>GOLD at a perfect run on Camp II (map: 3,100 against a 2,300 army).</summary>
+        public const int RaidLootCoinsBaseCamp2Default = 3100;
+
+        /// <summary>GOLD at a perfect run on Camp III (map: 4,500 against a 3,300 army).</summary>
+        public const int RaidLootCoinsBaseCamp3Default = 4500;
+
+        /// <summary>GOLD at a perfect run on the Iron Bastion (map: 6,500 against a 4,800 army).</summary>
+        public const int RaidLootCoinsBaseBastionDefault = 6500;
+
+        /// <summary>
+        /// CRYSTALS at 100% destruction, before the per-star bonus. 20 + 3x2 = 26 at a
+        /// perfect clear, inside the map's 20-30 band and DOWN from the old 25 + 3x10 = 55.
+        /// The map: <i>"Crystals are timer compression. If raids dump huge amounts of
+        /// crystals, you accidentally accelerate the already-too-short progression curve."</i>
+        /// This is the one number in the reward table that DECREASES.
+        /// </summary>
+        public const int RaidLootCrystalsBaseDefault = 20;
+
+        /// <summary>Extra crystals per earned star. 2, down from 10.</summary>
+        public const int RaidLootCrystalsPerStarDefault = 2;
+
+        /// <summary>Int. Wood a perfect Camp I raid pays before the difficulty multiplier.</summary>
+        public const string KeyRaidLootWoodBase = "raid.lootWoodBase";
+
+        /// <summary>Int. Iron a perfect Camp I raid pays before the difficulty multiplier.</summary>
+        public const string KeyRaidLootIronBase = "raid.lootIronBase";
+
+        /// <summary>Int PERCENT of base paid by a failed attack.</summary>
+        public const string KeyRaidLootFailPct = "raid.lootFailPct";
+
+        /// <summary>Int PERCENT of base paid at 1 star.</summary>
+        public const string KeyRaidLootOneStarPct = "raid.lootOneStarPct";
+
+        /// <summary>Int PERCENT of base paid at 2 stars.</summary>
+        public const string KeyRaidLootTwoStarPct = "raid.lootTwoStarPct";
+
+        /// <summary>Int PERCENT of base paid at 3 stars.</summary>
+        public const string KeyRaidLootThreeStarPct = "raid.lootThreeStarPct";
+
+        /// <summary>Int PERCENT of base paid at 3 stars with 100% destruction.</summary>
+        public const string KeyRaidLootPerfectPct = "raid.lootPerfectPct";
+
+        /// <summary>Int GOLD a perfect Camp I raid pays. Also the fallback for an unknown camp.</summary>
+        public const string KeyRaidLootCoinsBaseCamp1 = "raid.lootCoinsBaseCamp1";
+
+        /// <summary>Int GOLD a perfect Camp II raid pays.</summary>
+        public const string KeyRaidLootCoinsBaseCamp2 = "raid.lootCoinsBaseCamp2";
+
+        /// <summary>Int GOLD a perfect Camp III raid pays.</summary>
+        public const string KeyRaidLootCoinsBaseCamp3 = "raid.lootCoinsBaseCamp3";
+
+        /// <summary>Int GOLD a perfect Iron Bastion raid pays.</summary>
+        public const string KeyRaidLootCoinsBaseBastion = "raid.lootCoinsBaseBastion";
+
+        /// <summary>Int CRYSTALS at 100% destruction, before the per-star bonus.</summary>
+        public const string KeyRaidLootCrystalsBase = "raid.lootCrystalsBase";
+
+        /// <summary>Int extra CRYSTALS per earned star.</summary>
+        public const string KeyRaidLootCrystalsPerStar = "raid.lootCrystalsPerStar";
+
+        /// <summary>
+        /// Int COUNT of free Footmen granted the first time a save has a Barracks
+        /// (map section 2, "the first army is free"). 3 = her number, and exactly what
+        /// 1,650 gold used to buy. 0 disables the grant.
+        /// </summary>
+        public const int RaidStarterArmySizeDefault = 3;
+
+        /// <summary>Int count. Free Footmen granted on the first Barracks.</summary>
+        public const string KeyRaidStarterArmySize = "raid.starterArmySize";
+
+        // ---------------------------------------------------------------------
+        //  WO-1379 - HEARTFIRE. Two knobs, and they are PACING, not economy.
+        //  Heartfire is a CHARGE, never a currency: it is not earned, traded,
+        //  stored, gifted or bought, so neither of these is a price and neither
+        //  may ever be joined to a wallet. See DeNelle.Core.State.HeartfireCharges,
+        //  which reads them and is the only consumer.
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// SHIPPED Heartfire pool ceiling: 3 (canon section 4 - "Three charges ... stacks
+        /// to three, so sleeping or working is not punished").
+        /// <para>(!) THE NUMBER LIVES HERE, not in the consumer, and that is deliberate on
+        /// two counts. This file is where a tunable default is allowed to live at all
+        /// (api/_lib/tunables.js says so in capitals), and tools/gen-tunable-manifest.mjs
+        /// parses Registry defaults out of THIS file with a regex that resolves a bare
+        /// int const and nothing else - a default written as another type's const silently
+        /// FAILS TO PARSE and the knob vanishes from the Command Center with no error
+        /// (measured 2026-09-04: the first draft of these two entries produced knobs=32 and
+        /// no Heartfire rows). DeNelle.Core.State.HeartfireCharges aliases these consts, so
+        /// there is exactly one literal and the compiler keeps the two in step.</para>
+        /// </summary>
+        public const int RaidHeartfireMaxChargesDefault = 3;
+
+        /// <summary>SHIPPED Heartfire rekindle interval: 14400 s = 4 h (canon section 4).
+        /// Equal to the shortest authored per-camp cooldown ON PURPOSE - see the Registry
+        /// entry.</summary>
+        public const int RaidHeartfireRegenSecondsDefault = 14400;
+
+        /// <summary>Int count. The Heartfire pool ceiling (canon: three charges).</summary>
+        public const string KeyRaidHeartfireMaxCharges = "raid.heartfireMaxCharges";
+
+        /// <summary>Int seconds. How long one Heartfire charge takes to rekindle.</summary>
+        public const string KeyRaidHeartfireRegenSeconds = "raid.heartfireRegenSeconds";
+
+        // ---------------------------------------------------------------------
         //  WO-1343 - THE NIGHT STORE'S AURA. Four knobs, and they exist because
         //  the owner asked a QUESTION SHE HAS EXPLICITLY NOT ANSWERED.
         //
@@ -583,6 +756,162 @@ namespace DeNelle.Core.Ops
                 "isLoop:false is CORRECT and a burst is what she authored. But '30~min' was a rough " +
                 "number said in passing, and if one pulse per half hour turns out to read as nothing " +
                 "at all, this fixes it without a rebuild and without anyone re-tagging her prefab."),
+
+            new TunableSpec(KeyRaidLootWoodBase, TunableKind.Int, RaidLootWoodBaseDefault,
+                "WOOD a raid pays at a PERFECT run (3 stars AND 100% destruction) on a Camp I-tier " +
+                "base, before the camp's own difficulty multiplier. 1800 = the owner's number from " +
+                "the north-star map. Every lesser result pays a percentage of it off the ladder " +
+                "knobs below. 0 restores the old behaviour, in which a raid paid no wood at all. " +
+                "Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - the CENTRAL BALANCE NUMBER of the whole raid programme " +
+                "(WO-1374). The map sizes it as 60-65% of four hours of passive wood output, so that " +
+                "a raid funds real construction without making collectors worthless - a ratio that " +
+                "only felt-testing on a real save can confirm. She is setting the reward curve for " +
+                "the main loop BY FEEL, and every value has to reach her device in seconds."),
+
+            new TunableSpec(KeyRaidLootIronBase, TunableKind.Int, RaidLootIronBaseDefault,
+                "IRON a raid pays at a PERFECT run, on the same terms as the wood knob above. " +
+                "1100 = the owner's number from the north-star map. 0 restores the old no-iron " +
+                "payout. Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - the second half of the WO-1374 reward table. Kept as " +
+                "its OWN knob rather than derived from wood by a ratio, because wood and iron are " +
+                "different construction bottlenecks at different points in the build tree and the " +
+                "first question she will ask is which of the two the raid should favour."),
+
+            new TunableSpec(KeyRaidLootFailPct, TunableKind.Int, RaidLootFailPctDefault,
+                "Percent of the base wood/iron a FAILED attack pays. 18 = the middle of the map's " +
+                "stated 15-20% band. Deliberately NOT zero: the map says a loss paying something is " +
+                "what keeps it from being a dead end. Clamped to 0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - a RETENTION lever. Whether a wipe reads as 'that was a " +
+                "waste of twenty minutes' or as 'I nearly had it, go again' is exactly the feeling " +
+                "this number sets, and it is unknowable from a spreadsheet."),
+
+            new TunableSpec(KeyRaidLootOneStarPct, TunableKind.Int, RaidLootOneStarPctDefault,
+                "Percent of the base wood/iron paid at 1 star. 50 = the map's ladder. Clamped to " +
+                "0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - one rung of the map's performance ladder (fail / 1 / 2 " +
+                "/ 3 stars / perfect). The ladder is the mechanism by which GETTING BETTER AT " +
+                "RAIDING HAS AN ECONOMIC PAYOFF, which is the map's phrase and the entire reason the " +
+                "rungs are separate knobs rather than one curve constant."),
+
+            new TunableSpec(KeyRaidLootTwoStarPct, TunableKind.Int, RaidLootTwoStarPctDefault,
+                "Percent of the base wood/iron paid at 2 stars. 75 = the map's ladder. Clamped to " +
+                "0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - see the 1-star rung. The gap between the 2-star and " +
+                "3-star rungs is what decides whether a player pushes for the full clear or takes " +
+                "the safe two and leaves."),
+
+            new TunableSpec(KeyRaidLootThreeStarPct, TunableKind.Int, RaidLootThreeStarPctDefault,
+                "Percent of the base wood/iron paid at 3 stars. 100 = the map's ladder, i.e. the " +
+                "base IS the 3-star payout. Clamped to 0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - the rung that DEFINES what the base means. Moving it " +
+                "off 100 re-anchors the whole table without touching the base numbers, which is the " +
+                "cheap way to answer 'is every raid paying slightly too much'."),
+
+            new TunableSpec(KeyRaidLootPerfectPct, TunableKind.Int, RaidLootPerfectPctDefault,
+                "Percent of the base wood/iron paid at 3 stars WITH 100% destruction. 110 = the " +
+                "map's ladder - the only rung that pays above the base, and the reward for razing " +
+                "everything rather than just winning. Clamped to 0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - the top of the ladder, and the one number that says " +
+                "mastery is worth more than victory. If the 10% premium turns out not to be worth " +
+                "the extra two minutes of mop-up, this is where that is discovered and fixed."),
+
+            new TunableSpec(KeyRaidLootCoinsBaseCamp1, TunableKind.Int, RaidLootCoinsBaseCamp1Default,
+                "GOLD a raid pays at a PERFECT run (3 stars AND 100% destruction) on CAMP I, and " +
+                "the fallback for any raid whose config id the per-camp table does not name. 2200 = " +
+                "the owner's number from the north-star map, sized at 125-140% of that camp's " +
+                "designed 1650-gold army replacement cost. Rides the SAME five-rung performance " +
+                "ladder as wood and iron. NOT multiplied by the camp's rewardMultiplier - the " +
+                "escalation lives in the three per-camp knobs below. 0 stops raids paying gold. " +
+                "Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - THE MISSING ARROW, named outright by the north-star " +
+                "map: 'You currently have Gold -> troops but not troops -> raids -> gold. That " +
+                "arrow has to exist.' Gold buys troops, troops win raids, raids pay gold. Whether " +
+                "+550 gold of advancement per clear reads as 'I can raid again' or as 'that was " +
+                "barely worth it' is the felt question this knob answers, and it is the number " +
+                "that closes the loop the whole programme is measured against."),
+
+            new TunableSpec(KeyRaidLootCoinsBaseCamp2, TunableKind.Int, RaidLootCoinsBaseCamp2Default,
+                "GOLD a PERFECT run pays on CAMP II. 3100 = the map's number, against that camp's " +
+                "designed 2300-gold army. Its own knob rather than a multiplier off Camp I because " +
+                "the map publishes a DESIGNED target per camp: x1.5 of 2200 is 3300, not 3100. " +
+                "Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - one rung of the map's per-camp gold escalation. The " +
+                "step between camps is what decides whether unlocking a harder raid feels like " +
+                "progress or like the same raid with more HP."),
+
+            new TunableSpec(KeyRaidLootCoinsBaseCamp3, TunableKind.Int, RaidLootCoinsBaseCamp3Default,
+                "GOLD a PERFECT run pays on CAMP III. 4500 = the map's number, against a designed " +
+                "3300-gold army. Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - see the Camp II knob. Sized against the army the " +
+                "player is EXPECTED to bring, never their actual one, because an actual-cost " +
+                "reward can be gamed by attacking with nothing."),
+
+            new TunableSpec(KeyRaidLootCoinsBaseBastion, TunableKind.Int, RaidLootCoinsBaseBastionDefault,
+                "GOLD a PERFECT run pays on the IRON BASTION, the map's fourth and evergreen " +
+                "target. 6500 = the map's number, against a designed 4800-gold army. The scene-configs.json row for " +
+                "'iron_bastion' exists as of 2026-09-04; its rewardMultiplier of 2.8 is deliberately " +
+                "IGNORED by gold, because 2200 x 2.8 is 6160 and her number is 6500. Clamped to " +
+                "0..1000000.",
+                "NOT a PROD-022 hypothesis - the top of the map's per-camp gold ladder, registered " +
+                "now so the number is a knob from the day the Bastion is switched on rather than a " +
+                "literal someone has to find later."),
+
+            new TunableSpec(KeyRaidLootCrystalsBase, TunableKind.Int, RaidLootCrystalsBaseDefault,
+                "CRYSTALS a raid pays at 100% destruction, before the per-star bonus. 20 = the " +
+                "owner's number; with the per-star knob a perfect clear pays 26, inside the map's " +
+                "20-30 band and DOWN from the 55 this build used to pay. Crystals are the ONE " +
+                "reward in the table that DECREASES, and they are NOT multiplied by the camp's " +
+                "rewardMultiplier, so a harder camp pays more gold/wood/iron and not more timer " +
+                "compression. Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - a PACING lever, and the one the map is bluntest " +
+                "about: 'Crystals are timer compression. If raids dump huge amounts of crystals, " +
+                "you accidentally accelerate the already-too-short progression curve.' Crystals " +
+                "buy instant-finish, so this number silently sets how long the whole build tree " +
+                "takes. It has to be movable in seconds if a raid turns out to be defunding the " +
+                "timer ladder the game is paced by."),
+
+            new TunableSpec(KeyRaidLootCrystalsPerStar, TunableKind.Int, RaidLootCrystalsPerStarDefault,
+                "Extra CRYSTALS per earned star, on top of the base above. 2 = the owner's number " +
+                "(down from 10). Clamped to 0..1000000 at the consumer.",
+                "NOT a PROD-022 hypothesis - the second half of the crystal cut. Kept separate " +
+                "from the base so 'should a great raid pay MORE crystals or just more gold' stays " +
+                "a question she can answer without re-deriving the base."),
+
+            new TunableSpec(KeyRaidStarterArmySize, TunableKind.Int, RaidStarterArmySizeDefault,
+                "How many FREE Footmen a save receives the first time it has a Barracks. 3 = the " +
+                "owner's number, and exactly what 1,650 gold used to buy. Granted once per save " +
+                "and never again, so a demolished-and-rebuilt Barracks is not a troop faucet. " +
+                "0 disables the grant. Clamped to 0..10 at the consumer.",
+                "NOT a PROD-022 hypothesis - the FTUE lever the map opens with (section 2): 'A " +
+                "player starts with 200 gold but needs 1,650 to participate in the thing you're " +
+                "trying to teach them. That's basically putting a nightclub behind a velvet rope " +
+                "and handing the player twelve cents.' Whether three troops is enough to make the " +
+                "first raid feel winnable, or whether it needs four, is a felt question about the " +
+                "first ten minutes of the game - the single most expensive ten minutes to get " +
+                "wrong and the most expensive to iterate on with a rebuild."),
+
+            new TunableSpec(KeyRaidHeartfireMaxCharges, TunableKind.Int, RaidHeartfireMaxChargesDefault,
+                "How many Heartfire charges the Heart can hold at once. Ships at 3 (canon): a " +
+                "charge is spent to march on a camp, one rekindles every four hours, and they " +
+                "STACK to the ceiling so a player who sleeps or works is not punished. Clamped " +
+                "to 1..9 at the consumer - Heartfire is never unbounded and never zero.",
+                "NOT a PROD-022 hypothesis - the pacing lever the raid loop is gated by. Three " +
+                "charges is the owner's number and the question it answers is felt, not " +
+                "arithmetic: whether a player returning after a night away gets a satisfying " +
+                "session or runs dry mid-evening. It is deliberately a knob because the answer " +
+                "cannot be derived, only played."),
+
+            new TunableSpec(KeyRaidHeartfireRegenSeconds, TunableKind.Int, RaidHeartfireRegenSecondsDefault,
+                "Seconds for one Heartfire charge to rekindle. Ships at 14400 (4 h). Floored at " +
+                "60 s at the consumer, because a non-positive interval would make Heartfire " +
+                "infinite and delete the gate entirely.",
+                "NOT a PROD-022 hypothesis. It ships EQUAL to the shortest authored per-camp " +
+                "cooldown (raider_camp_small, 14400 s) on purpose, which is what keeps the " +
+                "three-gate stack honest: a rekindled charge always has at least one recovered " +
+                "camp to spend on. Raising it above that shortest cooldown breaks the criterion " +
+                "'a player holding Heartfire always has somewhere to spend it', and " +
+                "HeartfireRegression goes red when it does."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

@@ -507,6 +507,15 @@ namespace DeNelle.Village.Buildings.Progression
 
             if (!CanAfford(costs)) { FlowTrace.Warn("Progression", "TrySpend: harvestables unaffordable — no deduction"); return false; }
 
+            // WO-1374 — FUNNEL STEP 5 ("raid reward spent"), the SECOND of the two real
+            // spend surfaces. Building upgrades, gear and barracks work all come through
+            // here rather than through EconomyService, and "upgrade something with what the
+            // raid paid you" is the most likely shape of step 5 by a distance - measuring
+            // only the other surface would under-report the step that proves the loop closed.
+            // Silent and near-free unless a raid win has armed it.
+            DeNelle.Core.Diagnostics.Guard.Try("Funnel", "reward spent (ledger)",
+                () => DeNelle.Core.Analytics.RaidFunnel.RewardSpent("ResourceLedger.TrySpend"));
+
             // Resources is a struct — read whole, mutate, write whole back.
             var bal = s.Resources;
             foreach (var c in costs)

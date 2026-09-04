@@ -130,6 +130,12 @@ namespace DeNelle.Village.UI
         public bool CanAffordFinish;
 
         /// <summary>
+        /// The verb for the Finish CTA's primary button ("Finish Now", "Hire Reinforcements", etc.).
+        /// Empty string means the View will default to "Finish Now".
+        /// </summary>
+        public string FinishVerbText = string.Empty;
+
+        /// <summary>
         /// The Finish CTA's SECOND LINE, in ASCII words: the price with its currency SPELLED OUT,
         /// plus the shortfall when the player is short ("5 crystals" / "5 crystals - need 3 more").
         ///

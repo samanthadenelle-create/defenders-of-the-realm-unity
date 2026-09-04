@@ -119,8 +119,12 @@ namespace DeNelle.Wallet
         private const string KeyPremium       = "bp.premiumLane";
         private const string KeyDayStamp      = "bp.dayStamp";
         private const string KeyDayXp         = "bp.dayXp";
+        private const string KeyRaidFirstClear = "bp.raidFirstClear.";
 
         private static bool _ready;
+
+        /// <summary>One-time bonus XP for the first clear of each raid config.</summary>
+        public const int RaidXpFirstClear = 100;
 
         /// <summary>Raised after XP or a claim changes anything a screen shows.</summary>
         public static event Action Changed;
@@ -330,6 +334,81 @@ namespace DeNelle.Wallet
             get { var s = Season; return s != null && s.Tiers != null ? s.Tiers.Count : 0; }
         }
 
+        /// <summary>
+        /// Calculates raid outcome XP per PROGRAM_RAID_ECONOMY_2026-09-04 section 6.
+        /// Pure function with no side effects.
+        ///
+        /// <para>XP table: base 50 if win, +25 for 3+ stars, +25 for 100% destruction,
+        /// +100 for first clear. Losses pay 0 regardless.</para>
+        ///
+        /// <para><paramref name="destruction"/> is normalised to 0..1 if handed as 0..100.</para>
+        /// </summary>
+        public static int RaidXpFor(bool win, int stars, float destruction, bool firstClear)
+        {
+            if (!win) return 0;
+
+            // Normalize destruction from 0..100 range to 0..1 if necessary
+            if (destruction > 1.0f) destruction /= 100f;
+            destruction = Mathf.Clamp01(destruction);
+
+            int xp = 50; // base for a win
+            if (stars >= 3) xp += 25;
+            if (destruction >= 1.0f) xp += 25;
+            if (firstClear) xp += RaidXpFirstClear;
+
+            return xp;
+        }
+
+        /// <summary>
+        /// Credits Battle XP for a completed raid. Called from ArenaOutcomeRelay after a raid
+        /// outcome is published. Resolves the outcome against the section 6 table, tracks
+        /// first-clear bonuses per config, and credits the XP into the season track.
+        ///
+        /// <para>Never throws - a raid result must never be lost because a pass was mid-load.</para>
+        /// </summary>
+        public static void OnRaidResult(int stars, float destructionPct, bool firstClear, string configId)
+        {
+            try
+            {
+                EnsureReady();
+                var s = Season;
+                if (s == null)
+                {
+                    FlowTrace.Warn("BattlePass", "OnRaidResult: no season loaded - no XP credited (the raid " +
+                                                 "result itself is unaffected).");
+                    return;
+                }
+
+                // The first-clear ledger ensures the bonus is taken at most once per config.
+                // If firstClear is claimed, try to take it; if it was already taken, zero the flag.
+                if (firstClear && !TakeRaidFirstClear(configId))
+                {
+                    firstClear = false;
+                }
+
+                int xp = RaidXpFor(true, stars, destructionPct, firstClear);
+                if (xp <= 0) return;
+
+                int priorTier = HighestTierReached;
+                int before = Xp;
+                PlayerPrefs.SetInt(KeyXp, before + xp);
+                PlayerPrefs.Save();
+
+                int reachedTier = HighestTierReached;
+                if (reachedTier > priorTier) BattlePassLevelUpVfxBridge.Play(reachedTier);
+
+                FlowTrace.Step("BattlePass", "OnRaidResult(stars=" + stars + ", destruction=" + destructionPct +
+                                             ", firstClear=" + firstClear + ", configId='" + configId + "'): +" + xp +
+                                             " XP -> " + Xp + " (tier " + HighestTierReached + "/" + TierCount + ").");
+                Changed?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("BattlePass", "OnRaidResult THREW: " + ex.GetType().Name + ": " + ex.Message +
+                                             " - no XP credited. The raid result itself is unaffected.");
+            }
+        }
+
         // =====================================================================
         //  Claiming
         // =====================================================================
@@ -536,5 +615,55 @@ namespace DeNelle.Wallet
 
         /// <summary>Test hook - forgets the boot-time season check so a re-run re-evaluates.</summary>
         public static void ResetForTests() { _ready = false; }
+
+        // =====================================================================
+        //  Raid first-clear tracking (private, exposed to tests)
+        // =====================================================================
+
+        /// <summary>
+        /// Takes the first-clear bonus for a raid config if it has not been taken before.
+        /// Returns true if the bonus was successfully taken (first time), false if it was
+        /// already taken (repeat clear, not eligible for the bonus again).
+        ///
+        /// <para>Stores the taken state in PlayerPrefs with key "bp.raidFirstClear.{configId}".</para>
+        /// </summary>
+        private static bool TakeRaidFirstClear(string configId)
+        {
+            if (string.IsNullOrEmpty(configId)) return false;
+
+            string key = KeyRaidFirstClear + configId;
+            if (PlayerPrefs.GetInt(key, 0) == 1) return false; // already taken
+
+            PlayerPrefs.SetInt(key, 1);
+            PlayerPrefs.Save();
+            return true;
+        }
+
+        /// <summary>
+        /// Test hook - checks whether the first-clear bonus for a raid config has been claimed.
+        /// </summary>
+        public static bool RaidFirstClearTaken(string configId)
+        {
+            if (string.IsNullOrEmpty(configId)) return false;
+            return PlayerPrefs.GetInt(KeyRaidFirstClear + configId, 0) == 1;
+        }
+
+        /// <summary>
+        /// Test hook - takes the first-clear bonus for a raid config. Returns true if successful
+        /// (first time), false if it was already taken.
+        /// </summary>
+        public static bool TakeRaidFirstClearForTests(string configId)
+        {
+            return TakeRaidFirstClear(configId);
+        }
+
+        /// <summary>
+        /// Test hook - resets the first-clear bonus for a raid config so it can be taken again.
+        /// </summary>
+        public static void ResetRaidFirstClearForTests(string configId)
+        {
+            if (!string.IsNullOrEmpty(configId))
+                PlayerPrefs.DeleteKey(KeyRaidFirstClear + configId);
+        }
     }
 }

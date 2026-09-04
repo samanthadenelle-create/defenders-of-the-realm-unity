@@ -51,6 +51,9 @@ EditorBuildSettings:
     path: Assets/Scenes/RaidBase_mage_enclave.unity
     guid: 2f1990e6a3742bc4d81694e2e9ee63da
   - enabled: 0
+    path: Assets/Scenes/RaidBase_IronBastion.unity
+    guid: c03c88937ff8c934c981dd4848f96739
+  - enabled: 0
     path: Assets/Scenes/Dungeon_Demo.unity
     guid: dc8b11c24ecb9124c8e5b6e05e1cdb45
   - enabled: 1

@@ -89,6 +89,18 @@ namespace DeNelle.Village.UI
         /// <summary>Outcome emblem for the medallion socket (bronze icon pack, never the crown).</summary>
         public Sprite Emblem;
 
+        /// <summary>
+        /// WO-1374 - the optional PROGRESSION line a victory carries, e.g.
+        /// "The Broken Garrison unlocked". Null on every screen that has nothing to announce.
+        ///
+        /// <para>It is its own field, and not a sentence pasted into <see cref="Subtitle"/> by
+        /// the caller, so the sibling ladder lane owns WHAT unlocked while this file owns
+        /// nothing about the ladder. Today <see cref="FromRaidVictory"/> also appends it to the
+        /// subtitle so it is visible with no EndStateView change; a view that grows a dedicated
+        /// band for it removes that append in the same edit.</para>
+        /// </summary>
+        public string UnlockLine;
+
         public readonly List<SpoilRowVM> Spoils = new List<SpoilRowVM>();
 
         /// <summary>The ONE primary action (owner button law: an end-state has exactly one way out).</summary>
@@ -378,7 +390,7 @@ namespace DeNelle.Village.UI
         public static EndStateVM FromRaidVictory(string joinedCompanionName,
             Action onReturn, float autoReturnSeconds = 20f,
             int stars = -1, int destructionPercent = -1, float elapsedSeconds = -1f,
-            int lootCrystals = 0, int lootFood = 0)
+            ResourceCost credited = default(ResourceCost), string unlockLine = null)
         {
             // WO-771.6: the LOCKED-V1 scoring/loot now rides the raid victory screen —
             // stars (0-3), the %-destruction of the base, the clear time, and the loot
@@ -405,19 +417,96 @@ namespace DeNelle.Village.UI
             };
 
             // Loot breakdown (null Icon -> BuildSpoilRow resolves the concept icon from
-            // the label, then a generic fallback — a reward row never blanks).
-            if (lootCrystals > 0)
-                vm.Spoils.Add(new SpoilRowVM
-                {
-                    Label = "Crystals", Amount = "+" + ElarionUi.CompactNumber(lootCrystals),
-                });
-            if (lootFood > 0)
-                vm.Spoils.Add(new SpoilRowVM
-                {
-                    // WO-1163: end-of-battle spoils read STONE. lootFood is the frozen slot name.
-                    Label = "Stone", Amount = "+" + ElarionUi.CompactNumber(lootFood),
-                });
+            // the label, then a generic fallback - a reward row never blanks).
+            //
+            // WO-1374 - THIS SCREEN USED TO NAME A CURRENCY THAT DOES NOT EXIST, AND TO HIDE
+            // MOST OF THE PAYOUT. The retired shape took exactly two ints (lootCrystals,
+            // lootFood) and emitted two rows: "Crystals" and "Stone". Two defects in three
+            // lines, and both are the visible half of the raid loop:
+            //   * "Stone" IS NOT A CURRENCY. It was retired as a balance - GameState.cs:59
+            //     records the removal of `public int Stone = 20;` in-code (WO-1212,
+            //     2026-08-26). The row was rendering the FOOD amount under a dead name.
+            //   * WOOD, IRON AND GOLD WERE NEVER SHOWN AT ALL. Raids pay all five currencies
+            //     (PROGRAM_RAID_ECONOMY_2026-09-04 section 1: 1,800 wood / 1,100 iron /
+            //     3,000 food / 2,200 gold / 20-30 crystals for a perfect Camp I), so a
+            //     three-star clear told the player about two fifths of what it paid, one
+            //     fifth of it by the wrong name. "Raid -> get richer" cannot be felt through
+            //     a screen that does not report getting richer.
+            // The parameter is now the whole CREDITED basket - the measured delta the wallet
+            // actually took, never the requested amount (the WO-978 contract the caller keeps).
+            // One row per NON-ZERO currency, ordered as section 1's table orders them.
+            AddSpoil(vm, "Wood", credited.Wood);
+            AddSpoil(vm, "Iron", credited.Iron);
+            AddSpoil(vm, FoodSpoilLabel, credited.Food);
+            AddSpoil(vm, "Gold", credited.Coins);
+            AddSpoil(vm, "Crystals", credited.Crystals);
+
+            // The UNLOCK LINE (optional). Carried as its own field rather than smuggled into
+            // the body text so the sibling ladder lane can hand this factory "The Broken
+            // Garrison unlocked" - the CREATIVE_CANON_ELARION_2026-09-04 section 3 name, never
+            // its superseded "Ironwatch Garrison" first pass - without this file changing again.
+            // Appended to the subtitle here so it is VISIBLE today with no EndStateView change;
+            // whoever adds a dedicated band in the view drops this append in the same edit, so
+            // the line can never render twice.
+            if (!string.IsNullOrEmpty(unlockLine))
+            {
+                vm.UnlockLine = unlockLine;
+                vm.Subtitle = string.IsNullOrEmpty(vm.Subtitle) ? unlockLine : vm.Subtitle + "\n" + unlockLine;
+            }
             return vm;
+        }
+
+        /// <summary>
+        /// The player-facing word for the FOOD balance on a spoils row.
+        ///
+        /// <para>WO-1374 sets this to "Food": PROGRAM_RAID_ECONOMY_2026-09-04 section 3 enumerates
+        /// the five currencies as Wood / Iron / Food / Gold / Crystals, and that document is
+        /// declared NORTH STAR and takes precedence over earlier rulings.</para>
+        ///
+        /// <para>IT CONTRADICTS THE LIVE HUD, AND THAT IS RECORDED HERE RATHER THAN BURIED,
+        /// because it is an OWNER call and not an engineering one. Three surfaces label this same
+        /// balance "Stone" today, all re-read at source 2026-09-04:
+        /// <list type="bullet">
+        ///   <item><description><c>HudKitController.cs:2190</c> - the town resource rail:
+        ///     <c>names = { "Wood", "Iron", "Stone", "Crystals" }</c> against
+        ///     <c>kinds = { Wood, Iron, Food, Crystal }</c>.</description></item>
+        ///   <item><description><c>BuildWalletRow.cs:46</c> - the build-mode wallet tags.</description></item>
+        ///   <item><description><c>DailyQuestHud.cs:407</c> - the daily-quest reward row.</description></item>
+        /// </list>
+        /// The retired line here said "Stone" for exactly that reason (WO-1163), so this row was
+        /// CONSISTENT with the wallet even though the underlying <c>GameState.Stone</c> BALANCE
+        /// was retired (GameState.cs:59, WO-1212). Two different things were retired at two
+        /// different times: the balance, and - per canon section 7 - never the word.</para>
+        ///
+        /// <para>SO THE RISK IS REAL: until the three surfaces above move too, a raid pays
+        /// "+3,000 Food" and the number the player then watches rise is labelled "Stone". The
+        /// word is isolated in this ONE constant precisely so the owner's ruling is a one-word
+        /// edit here plus three elsewhere, and so nobody has to re-derive the conflict.</para>
+        /// </summary>
+        private const string FoodSpoilLabel = "Food";
+
+        /// <summary>
+        /// Adds one spoils row when <paramref name="amount"/> is positive. Zero and negative are
+        /// skipped: a raid that credited no iron must show no iron row, and a NEGATIVE would mean
+        /// the measured wallet delta went backwards during the grant - which is a defect
+        /// elsewhere, not a reward, so it is reported rather than drawn as "+-40".
+        /// </summary>
+        private static void AddSpoil(EndStateVM vm, string label, int amount)
+        {
+            if (vm == null) return;
+            if (amount < 0)
+            {
+                FlowTrace.Warn("EndState",
+                    "raid spoils: '" + label + "' credited a NEGATIVE delta (" + amount + ") - the wallet " +
+                    "moved backwards across the grant. No row is drawn; the grant path is the defect, " +
+                    "not this screen.");
+                return;
+            }
+            if (amount == 0) return;
+            vm.Spoils.Add(new SpoilRowVM
+            {
+                Label = label, Amount = "+" + ElarionUi.CompactNumber(amount),
+            });
         }
 
         /// <summary>

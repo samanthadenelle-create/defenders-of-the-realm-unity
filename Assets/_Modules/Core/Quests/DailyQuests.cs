@@ -416,6 +416,24 @@ namespace DeNelle.Core.Quests
         /// <summary>True once the Day-1 build-towers quest has ever been completed.</summary>
         public static bool Day1QuestDone => PlayerPrefs.GetInt(Day1DonePrefKey, 0) == 1;
 
+        /// <summary>
+        /// Can this player actually DO the thing a template asks for?
+        ///
+        /// <para>Historically this asked only "did this build ship the feature", and the
+        /// answer was an unconditional true for everything. WO-1374 adds the second, and
+        /// more useful, sense: <b>is the door open on THIS save right now</b>. A daily
+        /// quest the player cannot possibly complete is worse than no daily quest - it
+        /// occupies one of three slots for a whole day and teaches the player that the
+        /// quest board lies.</para>
+        ///
+        /// <para>⛔ "raids" READS THE ONE RAID PREDICATE, IT DOES NOT RE-DERIVE IT.
+        /// <c>PostureSignals.RaidCapable</c> is the single answer to "can this player
+        /// raid" - the action-bar face, the Journey card and the selection screen all read
+        /// it, and WO-1357 is explicit that a second barracks check on a new surface is
+        /// the defect, not the fix. It defaults TRUE (the never-false-block precedent), so
+        /// a headless roll or a pre-publish frame keeps the template eligible rather than
+        /// silently shrinking the pool.</para>
+        /// </summary>
         private static bool FeatureShipped(string feature) => feature switch
         {
             // FLAG-6: these were stale-gated false but their systems are now
@@ -427,6 +445,10 @@ namespace DeNelle.Core.Quests
             "tower-build"   => true,
             "cosmetic-shop" => true,
             "hero-talents"  => true,
+            // WO-1374 — the ONLY per-save gate in this table. The two combat.raid.*
+            // templates carry it, because before this a player with no Barracks could be
+            // handed "clear 1 enemy outpost" as a daily and then find no way to attempt it.
+            "raids"         => DeNelle.Core.HudModel.PostureSignals.RaidCapable,
             _ => true,
         };
 

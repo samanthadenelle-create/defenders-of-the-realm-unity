@@ -711,6 +711,42 @@ namespace DeNelle.Core.State
             /// Append-only field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("everCompletedRaid")] public bool? EverCompletedRaid;
+
+            // -- WO-1375 / PROGRAM_RAID_ECONOMY section 4 -- the raid victory counter -----
+            /// <summary>
+            /// Monotonic count of raids WON on this save. The single input to the section-4
+            /// escalation ladder (target 2 after 3 wins, target 3 after 10, Iron Bastion after
+            /// 20). Written in exactly one place -
+            /// <c>RaidVictoryController.HandleVictory</c>, after its de-duplicating latch.
+            ///
+            /// <para>⛔ NO VERSION BUMP, and the reason is the <c>raidCooldowns</c> precedent
+            /// directly above: this is a NEW nullable field with no old shape to reinterpret
+            /// and no field to rewrite. Absent on an older payload simply leaves GameState's
+            /// <c>0</c> initializer. A bump on a LIVE published game is an owner decision and
+            /// nothing here requires one.</para>
+            ///
+            /// <para>⚠ AND A MIGRATOR STEP COULD NOT HELP ANYWAY. The evidence a veteran's wins
+            /// leave behind is the <c>RaidClaimService</c> claim set, and that set lives in
+            /// PlayerPrefs, not on this wire - a step here would have nothing to read. The
+            /// backfill therefore runs on the Village side and latches on
+            /// <c>raidVictoriesBackfilled</c>.</para>
+            /// Append-only field at the END so older saves stay loadable.
+            /// </summary>
+            /// <remarks>
+            /// <c>double?</c> and not <c>int?</c> deliberately, matching every other counter on
+            /// this wire (<c>bestWave</c> :241, <c>wavesCompleted</c> :436, both re-read at
+            /// source this session): the JSON layer must be able to ACCEPT a non-integer number
+            /// and have <see cref="Validate"/> floor it, rather than throw during deserialization
+            /// and lose the whole save.
+            /// </remarks>
+            [JsonProperty("raidVictories")] public double? RaidVictories;
+
+            /// <summary>
+            /// One-shot latch: the claim-flag backfill of <see cref="RaidVictories"/> has run on
+            /// this save. Absent -> GameState's <c>false</c>, so an existing save backfills once
+            /// at its next raid victory and never again. Append-only at the END.
+            /// </summary>
+            [JsonProperty("raidVictoriesBackfilled")] public bool? RaidVictoriesBackfilled;
         }
 
         // =====================================================================
@@ -872,6 +908,12 @@ namespace DeNelle.Core.State
                     RequireFinite(raw.SiloResources.Value, "siloResources");
                 if (raw.WavesCompleted.HasValue)
                     raw.WavesCompleted = NonNegInt(raw.WavesCompleted.Value, "wavesCompleted");
+
+                // -- Raid victory counter (WO-1375) -> nonNegInt -----------------------
+                // Clamped like every other counter: a hand-edited or corrupted negative would
+                // otherwise let the ladder run backwards, and NonNegInt also rejects NaN/Inf.
+                if (raw.RaidVictories.HasValue)
+                    raw.RaidVictories = NonNegInt(raw.RaidVictories.Value, "raidVictories");
 
                 // ── Population growth (v28) → all counters nonNegInt ─────────────────
                 if (raw.PopulationXP.HasValue)

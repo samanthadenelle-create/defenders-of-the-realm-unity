@@ -394,7 +394,10 @@ namespace DeNelle.Village.Hero
             // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
             // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
             float prevTop = hasSubHeader ? 0.960f : 0.845f;
-            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.46f), new Vector2(1.00f, prevTop));
+            // WO-1380: the ECHO GUIDE band takes the strip the preview well used to end on
+            // (0.46-0.60). The preview keeps the whole span above it; the SCOUT REPORT well
+            // below is untouched, because the honest config intel is not the thing to shrink.
+            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, GuideBandY1 + 0.02f), new Vector2(1.00f, prevTop));
             preview.GetComponent<Image>().raycastTarget = false;
 
             var crest = ElarionUiKit.AddImage(preview.transform, "PreviewCrest",
@@ -428,6 +431,9 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.FitBlock(pvInfo);
             pvInfo.raycastTarget = false;
 
+            // WO-1380: the ECHO GUIDE band, between the preview and the scout report.
+            BuildGuideBand(body);
+
             // WO-839 #3: SCOUT REPORT intel band fills the previously bare lower band.
             // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
             // facts only (walls / gates / garrison / boss; never the cosmetic reward
@@ -445,6 +451,139 @@ namespace DeNelle.Village.Hero
                 ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
             ElarionUiKit.FitBlock(intelLbl);
             intelLbl.raycastTarget = false;
+        }
+
+        // =====================================================================
+        //  WO-1380 — ECHO GUIDE. THE ECHO DOES NOT FIGHT. IT REMEMBERS.
+        // =====================================================================
+        // Before each expedition the player picks an Echo Guide (creative canon
+        // 2026-09-04 §7). The Heart cannot see clearly beyond its protection; an Echo
+        // can recognise fragments of the world that existed before the Realm fell, so
+        // the band shows WHO is guiding and WHAT they already remember about this
+        // target — the payoff line, right where the player is choosing.
+        //
+        // ⛔ SCOPE FENCE, owner-ruled and pinned by EchoGuideMemoryRegression: a Guide
+        // grants NO stat, NO yield and NO combat effect in V1. Nothing on this band
+        // touches power, readiness, loot or the deploy gate — swapping the Guide
+        // changes the SENTENCE and nothing else. Adding an effect later is a
+        // deliberate design decision, never a quiet one.
+        //
+        // ⛔ NO SECOND SPAWNER. This is a UI band. The Echo's world body still belongs
+        // solely to EchoWorldPresence (WO-1108 Lane B), which escorts the player to the
+        // gate and returns ONCE after the battle — and that return is where the Guide
+        // actually speaks this line aloud (EchoWorldPresence.SpeakGuideMemory).
+        private const float GuideBandY0 = 0.455f;
+        private const float GuideBandY1 = 0.600f;
+
+        // Live band labels, so cycling the Guide re-renders two strings instead of
+        // rebuilding the screen (a rebuild would drop the player's scroll position).
+        private TMPro.TMP_Text _guideNameLabel;
+        private TMPro.TMP_Text _guideMemoryLabel;
+
+        private void BuildGuideBand(Transform body)
+        {
+            var band = ElarionUiKit.Well(body, new Vector2(RightColX0, GuideBandY0), new Vector2(1.00f, GuideBandY1));
+            var bandImg = band.GetComponent<Image>();
+            if (bandImg != null) bandImg.raycastTarget = false;
+
+            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.66f, 0.98f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.55f, bold: true);
+            ElarionUiKit.FitSingleLine(hdr);
+            hdr.raycastTarget = false;
+
+            // "Change" cycles through the OWNED Echoes. A picker with one entry would be a
+            // dead control, so it is only offered when the player actually has a choice —
+            // "don't offer what you can't do" (WO-833), and an early player owning only the
+            // founding Echo simply sees who is guiding them.
+            var guides = DeNelle.Village.World.Camps.EchoGuideService.AvailableGuides();
+            if (guides != null && guides.Count > 1)
+            {
+                // ⚠ THE ANCHORS MUST SPAN A REAL BAND (y0 != y1). ElarionUiKit.Button writes
+                // offsetMin = offsetMax = Vector2.zero on BOTH the procedural path
+                // (ElarionUiKit.cs:1599-1600) and the Obsidian sprite path
+                // (ElarionUiKitObsidian.cs:154-155), so identical anchor y = a ZERO-PIXEL rect
+                // and an untappable control. The y0==y1 idiom used by the footer CTAs in this
+                // same file is legal ONLY because SeatFooterCtaAtCanonicalHeight (:654-662)
+                // supplies the height afterwards; this button has no such seat, so it carries
+                // its own band. UiKitMinTouchGuard is a net, not a layout — it does not run in
+                // an edit-mode headless capture (ElarionUiKit.cs:1075-1077).
+                ElarionUiKit.Button(band.transform, "Change", ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(0.58f, 0.66f), new Vector2(0.96f, 0.98f), OnCycleGuide);
+            }
+
+            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.42f, 0.66f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
+            _guideNameLabel.raycastTarget = false;
+
+            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.04f, 0.42f,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.05f, 0.95f);
+            _guideMemoryLabel.raycastTarget = false;
+
+            RefreshGuideBand();
+        }
+
+        // Re-renders the two band strings from the service. Never touches any deploy
+        // state — see the scope fence above.
+        private void RefreshGuideBand()
+        {
+            var guide = DeNelle.Village.World.Camps.EchoGuideService.SelectedGuide;
+            string raidId = _vm != null ? _vm.RaidId : null;
+
+            if (_guideNameLabel != null)
+            {
+                _guideNameLabel.text = guide != null && !string.IsNullOrEmpty(guide.DisplayName)
+                    ? guide.DisplayName : "No Echo awakened yet";
+                ElarionUiKit.FitSingleLine(_guideNameLabel);
+            }
+
+            if (_guideMemoryLabel == null) return;
+
+            string line = DeNelle.Village.World.Camps.EchoGuideService.MemoryLineFor(raidId);
+            if (string.IsNullOrEmpty(line))
+            {
+                // Honest empty state, never a blank band: the catalog has already WARNED with
+                // both keys, and the player is told the Guide has nothing to offer here rather
+                // than being shown an empty rectangle.
+                _guideMemoryLabel.text = "This Echo remembers nothing of this place.";
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("EchoGuide",
+                    "deploy band has NO memory line for guide=" + (guide != null ? guide.Id : "(none)") +
+                    " target=" + (raidId ?? "(null)") + ". All 24 lines must ship (WO-1380).");
+            }
+            else
+            {
+                _guideMemoryLabel.text = "\"" + line + "\"";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("EchoGuide",
+                    "deploy band shows " + (guide != null ? guide.Id : "(none)") + " at " +
+                    (raidId ?? "(null)") + ". Narrative only - no stat, no yield, no combat effect.");
+            }
+            ElarionUiKit.FitBlock(_guideMemoryLabel);
+        }
+
+        // Advance to the next OWNED Echo and re-render. The choice is a preference, not a
+        // purchase: nothing is spent and nothing is granted.
+        private void OnCycleGuide()
+        {
+            var guides = DeNelle.Village.World.Camps.EchoGuideService.AvailableGuides();
+            if (guides == null || guides.Count == 0)
+            {
+                ElarionUiKit.ShowToast("No Echo has awakened yet.", ElarionUiKit.ToastTone.Info);
+                return;
+            }
+
+            string currentId = DeNelle.Village.World.Camps.EchoGuideService.SelectedGuideEchoId;
+            int at = 0;
+            for (int i = 0; i < guides.Count; i++)
+                if (guides[i] != null && guides[i].Id == currentId) { at = i; break; }
+
+            var next = guides[(at + 1) % guides.Count];
+            if (next == null) return;
+            if (!DeNelle.Village.World.Camps.EchoGuideService.SelectGuide(next.Id, "raid deploy band"))
+            {
+                // Refused (unowned / unknown) — the service has already WARNED with the reason.
+                ElarionUiKit.ShowToast("That Echo cannot guide you yet.", ElarionUiKit.ToastTone.Info);
+                return;
+            }
+            RefreshGuideBand();
         }
 
         // WO-839 #6 flag (OWNER CONFIRM pending): false = DEPLOY stays enabled at 0 troops
@@ -584,6 +723,12 @@ namespace DeNelle.Village.Hero
                 Debug.Log("[RaidDeployScreen] DEPLOY blocked: 0 deployable troops (GateDeployAtZeroTroops).");
                 return;
             }
+            // WO-1380: remember WHERE the Guide is being taken, so the Echo has something to
+            // remember when EchoWorldPresence brings it back after the battle. Records an id
+            // only — it grants nothing and gates nothing, and a target with no authored lines
+            // just leaves the Echo silent (warned by the catalog, never a wrong line).
+            DeNelle.Village.World.Camps.EchoGuideService.NoteExpeditionTarget(_vm.RaidId, "BEGIN ASSAULT");
+
             string name = !string.IsNullOrEmpty(_vm.DisplayNameRaw) ? _vm.DisplayNameRaw : _vm.RaidId;
             ElarionUiKit.ShowToast("Assaulting " + name + "…", ElarionUiKit.ToastTone.Info);
             Debug.Log($"[RaidDeployScreen] BEGIN ASSAULT -> SceneRouter.GoRaid('{_vm.SceneName}').");
