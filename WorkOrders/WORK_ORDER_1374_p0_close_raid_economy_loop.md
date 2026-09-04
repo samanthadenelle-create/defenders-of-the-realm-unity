@@ -1,5 +1,30 @@
 # WORK ORDER 1374 - P0: close the raid economy loop
 
+> # ✅ RESOLVED 2026-09-04 - THE MAP WINS, AND BOTH RULINGS SURVIVE INTACT.
+>
+> Owner, three times and in this order: ***"these findings take presedence"***, ***"this is the north
+> star map"***, and ***"Make the goal when everything matches what i gave you"***. That settles the
+> precedence question this banner was raised to ask. **`docs/PROGRAM_RAID_ECONOMY_2026-09-04.md` is
+> the specification.** Troops COST GOLD.
+>
+> **The two rulings were never actually exclusive - the earlier one is a SPEED-UP, not a price.**
+> Read together they compose:
+>
+> | Axis | Ruling | Source |
+> |---|---|---|
+> | Troops have a **gold price** | 1,650 for three starters at Camp I | the map §1, and it is what the raid reward is sized against |
+> | Troops also take **TIME** | a training clock, one of the map's three clocks (§5) | WO-1372 |
+> | **Gold BUYS the remaining time** | *"paying gold is like saying we hired mercenaries"* | WO-1372, owner verbatim |
+> | **Surplus resources SELL for gold** | *"players should be able to sell extra resources to get gold, for troop building"* | WO-1372, owner verbatim |
+>
+> So the sink is the gold price, the clock is the pacing, and mercenary-gold is the impatience tax on
+> top - three distinct knobs, not one contested one. Nothing in WO-1372 is discarded except the single
+> line *"FREE. Time only."*, which the map supersedes.
+>
+> ⛔ **The one thing that must NOT happen:** shipping the map's gold table on top of free troops. That
+> is a faucet with no sink, and it was the real risk this banner caught.
+
+
 **Status:** READY TO IMPLEMENT
 **Silo / Lane:** Economy / raid rewards + FTUE + army grant
 **Type:** NEW BEHAVIOUR on existing systems, owner-ruled

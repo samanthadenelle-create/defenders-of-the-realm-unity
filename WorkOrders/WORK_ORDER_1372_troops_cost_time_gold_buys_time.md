@@ -1,5 +1,30 @@
 # WORK ORDER 1372 - Troops cost TIME, gold BUYS TIME, and surplus resources sell for gold
 
+> # ✅ RESOLVED 2026-09-04 - THE MAP WINS, AND BOTH RULINGS SURVIVE INTACT.
+>
+> Owner, three times and in this order: ***"these findings take presedence"***, ***"this is the north
+> star map"***, and ***"Make the goal when everything matches what i gave you"***. That settles the
+> precedence question this banner was raised to ask. **`docs/PROGRAM_RAID_ECONOMY_2026-09-04.md` is
+> the specification.** Troops COST GOLD.
+>
+> **The two rulings were never actually exclusive - the earlier one is a SPEED-UP, not a price.**
+> Read together they compose:
+>
+> | Axis | Ruling | Source |
+> |---|---|---|
+> | Troops have a **gold price** | 1,650 for three starters at Camp I | the map §1, and it is what the raid reward is sized against |
+> | Troops also take **TIME** | a training clock, one of the map's three clocks (§5) | WO-1372 |
+> | **Gold BUYS the remaining time** | *"paying gold is like saying we hired mercenaries"* | WO-1372, owner verbatim |
+> | **Surplus resources SELL for gold** | *"players should be able to sell extra resources to get gold, for troop building"* | WO-1372, owner verbatim |
+>
+> So the sink is the gold price, the clock is the pacing, and mercenary-gold is the impatience tax on
+> top - three distinct knobs, not one contested one. Nothing in WO-1372 is discarded except the single
+> line *"FREE. Time only."*, which the map supersedes.
+>
+> ⛔ **The one thing that must NOT happen:** shipping the map's gold table on top of free troops. That
+> is a faucet with no sink, and it was the real risk this banner caught.
+
+
 **Status:** READY TO IMPLEMENT
 **Silo / Lane:** Economy - troop training + vendor sell path + `Resources.Coins`
 **Type:** NEW FEATURE + BALANCE RESHAPE, owner-ruled
@@ -15,7 +40,7 @@
 
 | | Today | Ruled |
 |---|---|---|
-| Troop cost | **550 gold** (`troop-footman costGold: 550`) | **FREE. Time only.** |
+| Troop cost | **550 gold** (`troop-footman costGold: 550`) | ⚠ **SUPERSEDED - the gold price STAYS** (map, and owner 2026-09-04: *"gold buys hire mercenaries instead of waiting on time"*). A troop costs gold AND takes time; gold spent a SECOND time skips the remaining clock. |
 | Gold's role | a hard GATE on owning any troop | a **speed-up**, never a gate |
 | Surplus resources | capped, overflow DESTROYED | **sold for gold** |
 
@@ -80,7 +105,7 @@ reshape of existing fields, not a new system.
 ## §3. THE WORK - three parts, and the middle one is already built
 
 ### A. Troops become time-only
-Remove gold as a REQUIREMENT to enqueue a troop. ⛔ Do NOT delete `costGold` from the schema - it
+⚠ **SUPERSEDED - do NOT remove the gold requirement.** Gold stays the PRICE; the mercenary payment is a SEPARATE, second gold spend that skips the remaining training clock. Original text, kept for the record: ~~Remove gold as a REQUIREMENT to enqueue a troop.~~ ⛔ Do NOT delete `costGold` from the schema - it
 becomes the input to the speed-up price (part B) and to the sell economy's balance. **Read-migrate;
 never drop a live field.**
 
