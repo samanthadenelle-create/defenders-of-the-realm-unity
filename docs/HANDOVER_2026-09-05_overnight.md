@@ -68,6 +68,10 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 06:39-06:42 | `COMPILE_GATE_OK` 06:39; **`REGRESSION_OK 382/382`** 06:42 | `Builds/regression.log` 06:42:04 |
 | 06:42 | **WO-1395 finding for the morning:** the graph's "registered twice under GOOGLE_PLAY" is FALSE at source - Wallet is `!GOOGLE_PLAY`, GooglePlay is `GOOGLE_PLAY` (asmdef defineConstraints, WO-1282). Fixed what was real (door-context opener + funnel line under Play, registration traced, detector). **Ruling needed:** two artifact-exclusive storefronts (pinned) vs Play as a PackStore skin (reverses WO-1282). | WO-1395 status line |
 
+| 06:43-06:44 | `UI_CAPTURE_OK` zero geometry lines; `SETTINGS_CAPTURE_OK 3/3` with `ladder built: content=2066 px, unused=24 px` (the Help row fits; the PNG shows only the top of the scroll, so the row is proven by the trace, not the picture) | `Builds/ui-capture-settings.log` 06:44 |
+| 06:44 | committed 1395 + 1399 + 1400 by explicit path (22 files) + board | `0f716ffaa`, `89887a3c1` |
+| 06:45 | fourth APK chain started DETACHED on 89887a3c1; WO-1397 lane loaded in `D:\eoa-lane-1397` | `Builds/overnight-apk-status.txt` |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
