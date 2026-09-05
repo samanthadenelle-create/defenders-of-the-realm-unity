@@ -107,6 +107,56 @@ namespace DeNelle.Village.Buildings.Progression
             if (Instance == this) Instance = null;
         }
 
+        // =====================================================================
+        //  WO-1414 B -- NEW GAME: the LIVE half of the harvest tick's ledger view
+        // ---------------------------------------------------------------------
+        //  THE PERSISTED HALF IS ALREADY RIGHT and was before this change: ResetToNewGame
+        //  assigns EverBuiltStructureIds = new List<string>() (GameStateService.cs:1277), and
+        //  EverBuiltIds() below re-reads that list from the live state on EVERY tick -- no
+        //  snapshot is cached -- so a fresh town's existence gate is CLOSED for every id.
+        //
+        //  WHAT SURVIVED A NEW GAME IS THIS COMPONENT'S OWN PER-ID STATE. The harvester is
+        //  DDOL-lifetime beside the upgrade panel, so across "Start New" it carried:
+        //    * _elapsed[i] -- and WO-1208 deliberately makes that an OWED interval when a
+        //      tick finds no live collector ("HELD, not lost"). An owed tick banked under the
+        //      PREVIOUS town would be paid out the instant the new town places the same id.
+        //    * _lastGate[i] -- the last gate verdict, which is what suppresses the edge trace.
+        //      Carrying it means the new game's FIRST gate evaluation prints nothing, so the
+        //      one line that would prove what the ledger held on a fresh town is missing from
+        //      the capture. That is the line WO-1414 B needed and did not have.
+        //  Cleared here, with the ledger named out loud, so the next capture answers it.
+        //
+        //  Static handler on a static event, installed BeforeSceneLoad: the same shape and the
+        //  same reason as ResourceCollector.InstallNewGameHook (WO-1371) -- the hook must exist
+        //  whether or not a harvester happens to be alive when START NEW is pressed.
+        // =====================================================================
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InstallNewGameHook()
+        {
+            DeNelle.Core.State.GameStateService.NewGameStarted -= OnNewGameStarted;
+            DeNelle.Core.State.GameStateService.NewGameStarted += OnNewGameStarted;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Harvest",
+                "harvester New Game hook installed - a reset now clears the tick's own per-id state " +
+                "as well as the persisted ever-built ledger (WO-1414 B).");
+        }
+
+        private static void OnNewGameStarted()
+        {
+            var inst = Instance;
+            int n = inst != null && inst._elapsed != null ? inst._elapsed.Length : 0;
+            for (int i = 0; i < n; i++)
+            {
+                inst._elapsed[i] = 0f;
+                inst._lastGate[i] = -1;   // force a fresh edge trace on the new town's first evaluation
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Harvest",
+                $"New Game: cleared {n} per-id harvest tick slot(s) (owed intervals + cached gate verdicts). " +
+                $"The persisted ever-built ledger now reads [{EverBuiltJoined()}] - a fresh town must show " +
+                "<empty> here, and every existence gate must evaluate CLOSED, so no id can print the " +
+                "'in the ever-built ledger but NO ResourceCollector' HELD line (WO-1414 B).");
+        }
+
         private void Update()
         {
             // No service yet (Title / HeroSelect) → nothing to credit; skip cheaply.

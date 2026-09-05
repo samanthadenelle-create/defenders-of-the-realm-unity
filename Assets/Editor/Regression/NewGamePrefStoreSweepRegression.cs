@@ -48,6 +48,12 @@
 //                        (which is how TechTree.ResetAll is reached at all).
 //   6 [known-gaps]       reports the NotYetCleared rows as a NOTE, and fails only if one
 //                        carries no reason.
+//   7 [newgame-away-clock] WO-1414. A fresh save's away anchor is ZERO and its ever-built
+//                        ledger is EMPTY; the PARKED welcome-back reveal, the harvest tick's
+//                        own per-id state and the tutorial-dialogue deferral are all told
+//                        about New Game; and the coordinator's window trace still names the
+//                        anchor + its provenance. Three mutations, one per fix, listed at
+//                        the case.
 //
 // Markers: NEWGAME_PREF_SWEEP_OK / NEWGAME_PREF_SWEEP_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.NewGamePrefStoreSweepRegression.RunAll
@@ -94,6 +100,7 @@ namespace DeNelle.Editor.Regression
                 Case3And4_Behaviour(stores, failures);
                 Case5_LiveHalf(failures);
                 Case6_KnownGaps(stores, failures, notes);
+                Case7_NewGameAwayClockAndLedger(failures);
             }
             catch (Exception ex)
             {
@@ -251,6 +258,131 @@ namespace DeNelle.Editor.Regression
                              "a New Game / dev reset\" and had ZERO CALLERS, which is why a fresh town's farm carried " +
                              "a 7500 capacity instead of base, and why TechTree.ResetAll was unreachable too");
         }
+
+        // =====================================================================
+        //  Case 7 [newgame-away-clock] -- WO-1414
+        // ---------------------------------------------------------------------
+        //  THE DEFECT (owner device 2026-09-05 09:57, build 2026.09.05.356468): a BRAND-NEW
+        //  game opened on "YOUR REALM WORKED FOR 8h 22m" with +11520 Wood / +6912 Iron /
+        //  +15000 Stone waiting. 8h22m was the wall time since the PREVIOUS session; a second
+        //  New Game reported 1h56m. The window itself was honest -- it was measured on the
+        //  TITLE screen against the OLD save. What was wrong is that it was PARKED
+        //  (OfflineHarvestService._deferredReveal, added 2026-09-04 by commit d1fd1f6e0 so the
+        //  popup would stop firing over Title) and then RELEASED onto the new game's hub by
+        //  sceneLoaded, because ResetToNewGame had never heard of that parked result.
+        //
+        //  Instance SIX of the shape this whole suite exists for. It is pinned HERE and not in
+        //  an offline suite because the axis is "what does a New Game inherit", not "is the
+        //  away arithmetic right" -- that stays pinned by OfflineClaimFanOutRegression
+        //  (fresh clock => zero window, no fan-out) and OfflineHarvestRegression case 1.
+        //
+        //  SOURCE LINT, for the reason Cases 2 and 5 are source lint: this assembly references
+        //  DeNelle.Core only, so the DeNelle.Village types involved (OfflineHarvestService,
+        //  ResourceBuildingHarvester, TutorialFlow) are not callable from here. The STATE half
+        //  below IS behavioural and needs no Village type.
+        //
+        //  THE THREE MUTATIONS THAT RED THIS CASE, one per fix:
+        //    A: delete "GameStateService.NewGameStarted +=" from OfflineHarvestService.cs
+        //       (the parked reveal survives START NEW again -> [newgame-away-clock] A).
+        //    B: delete "GameStateService.NewGameStarted -=/+=" from ResourceBuildingHarvester.cs
+        //       (the tick's owed interval + cached gate verdict survive -> ...B), or delete
+        //       "EverBuiltStructureIds = new List<string>()" from ResetToNewGame (-> ...B-state).
+        //    C: delete "TutorialFlow.IsAwaitingDialogue" from OfflineHarvestService.cs
+        //       (the modal can cover the founding beat again -> ...C).
+        // =====================================================================
+
+        private const string OfflineSrc   = "Assets/_Modules/Village/Harvest/OfflineHarvestService.cs";
+        private const string HarvesterSrc = "Assets/_Modules/Village/Buildings/Progression/ResourceBuildingHarvester.cs";
+        private const string TutorialSrc  = "Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs";
+        private const string CoordSrc     = "Assets/_Modules/Village/Harvest/OfflineClaimCoordinator.cs";
+
+        private static void Case7_NewGameAwayClockAndLedger(List<string> failures)
+        {
+            // -- STATE: what a New Game's own fields must be. Asserted on a fresh GameState,
+            //    which is the shape ResetToNewGame re-seeds to; driving ResetToNewGame itself
+            //    is refused here for the reason this file's header gives (it ends in Save()).
+            var fresh = ScriptableObject.CreateInstance<GameState>();
+            try
+            {
+                if (fresh.LastHarvestClaimMs > 0d)
+                    failures.Add("[newgame-away-clock] a fresh GameState carries a NON-ZERO away anchor (" +
+                                 fresh.LastHarvestClaimMs + ") - the coordinator's fresh-clock arm would not " +
+                                 "fire and a brand-new town would claim a window it was never away for");
+                if (fresh.EverBuiltStructureIds == null || fresh.EverBuiltStructureIds.Count != 0)
+                    failures.Add("[newgame-away-clock] a fresh GameState's ever-built ledger is not EMPTY - the " +
+                                 "harvest tick's existence gate would open for a building the town does not have " +
+                                 "and HOLD its income forever");
+            }
+            finally
+            {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(fresh);
+                else UnityEngine.Object.DestroyImmediate(fresh);
+            }
+
+            string svcSrc = ReadSrc(ServiceSrc);
+            if (svcSrc.IndexOf("EverBuiltStructureIds = new List<string>()", StringComparison.Ordinal) < 0)
+                failures.Add("[newgame-away-clock] B-state: ResetToNewGame no longer clears EverBuiltStructureIds - " +
+                             "a new town would inherit the previous save's ever-built ledger and pay a building " +
+                             "that does not exist");
+            if (svcSrc.IndexOf("LastHarvestClaimMs = 0;", StringComparison.Ordinal) < 0)
+                failures.Add("[newgame-away-clock] ResetToNewGame no longer zeroes the away anchor - the first claim " +
+                             "of a new game would measure from the PREVIOUS save's stamp");
+
+            // -- A: the parked away summary must be dropped on New Game.
+            string off = ReadSrc(OfflineSrc);
+            if (off.Length == 0)
+                failures.Add("[newgame-away-clock] A: OfflineHarvestService.cs is MISSING");
+            else
+            {
+                if (off.IndexOf("GameStateService.NewGameStarted +=", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] A: OfflineHarvestService does not subscribe to NewGameStarted - " +
+                                 "a welcome-back result parked on the Title screen (the 2026-09-04 hub deferral) is " +
+                                 "released onto the NEW game by sceneLoaded. That is the 8h22m the owner saw on a " +
+                                 "town seconds old");
+                if (off.IndexOf("_deferredReveal = null", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] A: nothing clears _deferredReveal - the parked reveal is the " +
+                                 "state a New Game inherits");
+                if (off.IndexOf("GameStateService.NewGameStarted -=", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] A: the New Game subscription is never removed - the event's own " +
+                                 "note says an INSTANCE handler that does not unsubscribe is held forever");
+                // -- C: the reveal must not open over a tutorial beat awaiting its dialogue.
+                if (off.IndexOf("TutorialFlow.IsAwaitingDialogue", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] C: TryShowPopup does not consult TutorialFlow.IsAwaitingDialogue - " +
+                                 "the modal covers the SKIP control (SKIP_TOP_HIT_BLOCKED top=ObsidianPanel " +
+                                 "path=WelcomeBackUI/ObsidianPanel) and the founding beat then dies on its watchdog " +
+                                 "(STEP-STUCK :: founding_greet), silently skipping the first-run tutorial");
+            }
+
+            string tut = ReadSrc(TutorialSrc);
+            if (tut.IndexOf("AwaitedDialogueSignal", StringComparison.Ordinal) < 0)
+                failures.Add("[newgame-away-clock] C: TutorialFlow no longer publishes AwaitedDialogueSignal - the " +
+                             "popup has no way to know a beat is waiting on a dialogue");
+
+            // -- B: the live half of the harvest tick.
+            string harv = ReadSrc(HarvesterSrc);
+            if (harv.Length == 0)
+                failures.Add("[newgame-away-clock] B: ResourceBuildingHarvester.cs is MISSING");
+            else
+            {
+                if (harv.IndexOf("GameStateService.NewGameStarted +=", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] B: ResourceBuildingHarvester does not subscribe to " +
+                                 "NewGameStarted - its per-id _elapsed carries a WO-1208 OWED interval and _lastGate " +
+                                 "carries the previous town's gate verdict across Start New");
+                if (harv.IndexOf("RuntimeInitializeOnLoadMethod", StringComparison.Ordinal) < 0)
+                    failures.Add("[newgame-away-clock] B: the harvester's New Game hook is not self-installing - it " +
+                                 "would depend on a harvester happening to be alive when Start New is pressed");
+            }
+
+            // -- INSTRUMENT (CLAUDE.md s12): the anchor and its provenance, every claim.
+            string coord = ReadSrc(CoordSrc);
+            if (coord.IndexOf("provenance=", StringComparison.Ordinal) < 0 ||
+                coord.IndexOf("anchor=", StringComparison.Ordinal) < 0)
+                failures.Add("[newgame-away-clock] the coordinator's window trace no longer names the ANCHOR and its " +
+                             "PROVENANCE - that one line is what turns 'the window was 8h22m' into 'the anchor came " +
+                             "from the previous save', and it must print even when the window is 0");
+        }
+
+        private static string ReadSrc(string path) => File.Exists(path) ? File.ReadAllText(path) : string.Empty;
 
         private static void Case6_KnownGaps(GameStateService.NewGamePrefStore[] stores, List<string> failures, List<string> notes)
         {

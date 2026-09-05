@@ -127,12 +127,20 @@ namespace DeNelle.Village
             OfflineClaimCoordinator.Register(this);
             EnsureSubscribed();                       // WO-1231: the away summary's reveal seam
             EnsureJobSubscription();                  // LANE G: the away summary's finished-jobs seam
+            EnsureNewGameSubscription();              // WO-1414: a New Game drops any parked reveal
         }
 
         private void OnDestroy()
         {
             OfflineClaimCoordinator.Unregister(this);
             DisarmSceneHook();                        // the deferred welcome-back reveal (Title-screen guard)
+            if (_subscribedToNewGame)
+            {
+                // The event's own note: INSTANCE handlers must unsubscribe or the static event
+                // holds this destroyed service forever.
+                GameStateService.NewGameStarted -= OnNewGameStarted;
+                _subscribedToNewGame = false;
+            }
             if (_subscribedToJobs)
             {
                 var timers = BuildTimerService.Instance;
@@ -909,6 +917,98 @@ namespace DeNelle.Village
         private OfflineHarvestResult _deferredReveal;
         private bool _sceneHookArmed;
 
+        /// <summary>WO-1414 -- true while the parked reveal is waiting on a TUTORIAL step rather
+        /// than on a hub scene. The two deferrals share <see cref="_deferredReveal"/> but not
+        /// their release: the scene one is released by sceneLoaded, this one by the poll in
+        /// <see cref="Update"/>, because "the step stopped awaiting its dialogue" raises no event.</summary>
+        private bool _tutorialDeferred;
+
+        /// <summary>TEST SEAM / oracle readout: a reveal is parked waiting for a hub scene or for
+        /// the tutorial. A New Game must leave this FALSE (WO-1414 A).</summary>
+        public bool HasDeferredReveal => _deferredReveal != null;
+
+        // =====================================================================
+        //  WO-1414 A -- NEW GAME MUST NOT INHERIT A PARKED AWAY SUMMARY
+        // ---------------------------------------------------------------------
+        //  THE BUG THIS FIXES (owner device 2026-09-05 09:57, build 2026.09.05.356468):
+        //  a BRAND-NEW game opened on "YOUR REALM WORKED FOR 8h 22m" with +11520 Wood /
+        //  +6912 Iron / +15000 Stone waiting. 8h22m was the wall time since the owner's
+        //  PREVIOUS session, and a second New Game reported 1h56m -- the previous one's.
+        //
+        //  THE CHAIN, all of it in this file and provable from it:
+        //    1. OfflineHarvestBootstrap installs this service AfterSceneLoad and DDOLs it,
+        //       so it is alive on the TITLE screen carrying the PREVIOUS save.
+        //    2. Start() claims ("cold-load"). The window is measured off that save's stamp
+        //       and is genuinely 8h22m. Correct so far.
+        //    3. TryShowPopup below cannot show it -- Title is not a hub -- so it PARKS the
+        //       result in _deferredReveal and arms sceneLoaded (the 2026-09-04 22:30 fix,
+        //       commit d1fd1f6e0, which is what introduced this field).
+        //    4. The player taps START NEW. ResetToNewGame zeroes the persisted stamp and
+        //       notifies its live subscribers -- and _deferredReveal was not one of them.
+        //    5. The new game's hub scene loads. OnSceneLoadedForReveal releases the OLD
+        //       save's window onto a town that is seconds old. The F8 capture puts the
+        //       popup at t=23.6s into Main_Castle_Overworld, which is that release.
+        //
+        //  So this is instance SIX of the shape GameStateService.cs:1543-1547 names by
+        //  number (WO-860 equip, WO-1019 hot-swap bar, WO-1220 talents, WO-1371 collector
+        //  fill): state that ResetToNewGame has never heard of. The PERSISTED half was
+        //  already right -- the reset zeroes the stamp (GameStateService.cs:1232) and the
+        //  coordinator's fresh-clock arm then yields a ZERO window with no fan-out, which
+        //  is the "first claim window is 0 and no popup" the ticket asks for. This is the
+        //  LIVE half, and it is the whole fix: nothing about the window arithmetic changes.
+        // =====================================================================
+
+        private bool _subscribedToNewGame;
+
+        private void EnsureNewGameSubscription()
+        {
+            if (_subscribedToNewGame) return;
+            GameStateService.NewGameStarted -= OnNewGameStarted;
+            GameStateService.NewGameStarted += OnNewGameStarted;
+            _subscribedToNewGame = true;
+        }
+
+        private void OnNewGameStarted()
+        {
+            var dropped = _deferredReveal;
+            _deferredReveal = null;
+            _tutorialDeferred = false;
+            DisarmSceneHook();
+
+            // The held share is the PREVIOUS save's too: OnClaimCompleted re-reveals whatever
+            // _lastResult holds when the sequence matches, and a fresh-clock claim fans out to
+            // nobody, so leaving it here is how an already-collected summary comes back.
+            _lastResult = null;
+            _lastResultSeq = -1;
+
+            // And a report already ON SCREEN when START NEW is pressed belongs to the old town.
+            WelcomeBackPopup.DismissIfOpen("new game");
+
+            FlowTrace.Step("Offline",
+                dropped != null
+                    ? $"New Game: DROPPED a parked welcome-back reveal (away={dropped.AwaySeconds:0}s " +
+                      $"haul={dropped.Total} collectorsPending={dropped.PendingCollectorTotal}) - it was measured " +
+                      "on the PREVIOUS save and must never be released onto the new town (WO-1414 A)."
+                    : "New Game: no parked welcome-back reveal to drop; held share cleared (WO-1414 A).");
+        }
+
+        // =====================================================================
+        //  WO-1414 C -- the parked reveal's tutorial release (no event to hang on)
+        // =====================================================================
+
+        private void Update()
+        {
+            if (_deferredReveal == null || !_tutorialDeferred) return;
+            if (TutorialFlow.IsAwaitingDialogue) return;
+            var pending = _deferredReveal;
+            _deferredReveal = null;
+            _tutorialDeferred = false;
+            FlowTrace.Step("Offline",
+                $"welcome-back tutorial deferral RELEASED: no step is awaiting a dialogue any more " +
+                $"(AwaySeconds={pending.AwaySeconds:0}).");
+            TryShowPopup(pending);   // re-runs the combat + hub checks on the way in
+        }
+
         private void TryShowPopup(OfflineHarvestResult result)
         {
             // Suppress during an active wave or while the Defend-the-Tower mode is
@@ -927,6 +1027,7 @@ namespace DeNelle.Village
             if (!DeNelle.Core.HubScenes.IsHub(scene))
             {
                 _deferredReveal = result;
+                _tutorialDeferred = false;
                 if (!_sceneHookArmed)
                 {
                     UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedForReveal;
@@ -938,7 +1039,27 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-1414 C -- NEVER OVER A TUTORIAL BEAT THAT IS WAITING FOR A DIALOGUE.
+            // Device 2026-09-05: the panel sat over the SKIP control
+            // ([Flow:Tutorial] SKIP_TOP_HIT_BLOCKED top=ObsidianPanel path=WelcomeBackUI/ObsidianPanel,
+            // capture seq4681) and the founding beat then died on its watchdog
+            // (STEP-STUCK :: founding_greet - no 'dialogue.ended:tut_founding_greet' after 120s,
+            // seq4682) -- i.e. the first-run tutorial was silently SKIPPED.
+            // DEFERRING, NOT RE-LAYERING: raising the SKIP control above the modal would leave the
+            // dialogue itself covered, which is the beat the step is actually waiting on. The haul
+            // is already banked (this is only a reveal), so waiting costs the player nothing.
+            if (TutorialFlow.IsAwaitingDialogue)
+            {
+                _deferredReveal = result;
+                _tutorialDeferred = true;
+                FlowTrace.Step("Offline",
+                    $"welcome-back DEFERRED: a tutorial step is awaiting '{TutorialFlow.AwaitedDialogueSignal}' -- " +
+                    $"the reveal waits for the beat to end (AwaySeconds={result.AwaySeconds:0} haul={result.Total}).");
+                return;
+            }
+
             _deferredReveal = null;
+            _tutorialDeferred = false;
             FlowTrace.Step("Offline",
                 $"welcome-back SHOW: scene='{scene}' is a hub. AwaySeconds={result.AwaySeconds:0} " +
                 $"clock={result.ClockSource} haul={result.Total} collectorsPending={result.PendingCollectorTotal}.");
@@ -957,6 +1078,7 @@ namespace DeNelle.Village
                 return;
             }
             _deferredReveal = null;
+            _tutorialDeferred = false;
             DisarmSceneHook();
             FlowTrace.Step("Offline",
                 $"welcome-back deferred reveal RELEASED: hub scene '{scene.name}' loaded ({mode}). AwaySeconds={pending.AwaySeconds:0}.");

@@ -214,6 +214,43 @@ namespace DeNelle.Village
         /// <summary>Current mandatory step id, or null when idle/finished (probe read).</summary>
         public string CurrentStepId => _step != null ? _step.Id : null;
 
+        /// <summary>
+        /// WO-1414 C -- the completion signal the LIVE step is waiting on when that signal is a
+        /// DIALOGUE ending, else null. Read off <c>_awaitSignal</c> through the published
+        /// instance (<c>s_instance</c>), never mirrored into a second field: a copy is the
+        /// duplicated state that goes stale, which is the failure this repo keeps paying for.
+        /// <para>
+        /// WHY ANY OF THIS EXISTS: on the owner's device 2026-09-05 the welcome-back modal
+        /// opened over the founding beat, blocked the SKIP control
+        /// (<c>SKIP_TOP_HIT_BLOCKED top=ObsidianPanel path=WelcomeBackUI/ObsidianPanel</c>), and the
+        /// beat then died on its own watchdog (<c>STEP-STUCK :: founding_greet -- no
+        /// 'dialogue.ended:tut_founding_greet' after 120s</c>) -- so the first-run tutorial was
+        /// silently skipped. <c>OfflineHarvestService.TryShowPopup</c> reads this and DEFERS.
+        /// </para>
+        /// Null-safe and side-effect-free: no flow, no live step, or a step awaiting anything
+        /// else all read as null.
+        /// </summary>
+        public static string AwaitedDialogueSignal
+        {
+            get
+            {
+                var flow = s_instance;
+                // A LIVE step is required, not just a leftover signal string: _awaitSignal is
+                // assigned per step (EnterStep) and is NOT nulled when the chain finishes, so
+                // reading it alone would report "awaiting" forever after the last beat -- and a
+                // deferral with no release is a worse defect than the popup it prevents.
+                if (flow == null || flow._step == null || flow._phase == Phase.Finished) return null;
+                string sig = flow._awaitSignal;
+                return !string.IsNullOrEmpty(sig)
+                       && sig.StartsWith(TutorialSignals.DialogueEndedPrefix, StringComparison.OrdinalIgnoreCase)
+                    ? sig : null;
+            }
+        }
+
+        /// <summary>WO-1414 C -- true while a live tutorial step is waiting for a dialogue to end.
+        /// Nothing modal may open over that beat; see <see cref="AwaitedDialogueSignal"/>.</summary>
+        public static bool IsAwaitingDialogue => AwaitedDialogueSignal != null;
+
         /// <summary>The live step's intro dialogue id (WO-702: SylasStewardInjector routes a
         /// manual Talk to this — replaying the current beat's line; null when none).</summary>
         public string CurrentIntroDialogueId =>

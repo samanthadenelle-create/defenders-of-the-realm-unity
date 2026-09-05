@@ -415,6 +415,29 @@ namespace DeNelle.Village.UI
             return minutes + "m";
         }
 
+        /// <summary>
+        /// WO-1414 A -- close the open report, if any, because it is no longer about this game.
+        /// The one caller is <c>OfflineHarvestService</c>'s New Game hook: a summary already ON
+        /// SCREEN when START NEW is pressed was measured on the PREVIOUS save, and the reset has
+        /// no other way to reach it (this popup is code-built and owns its own host object).
+        /// Safe when nothing is open -- a no-op that still traces, so a capture can tell "nothing
+        /// was open" from "the hook never ran".
+        /// </summary>
+        public static void DismissIfOpen(string why)
+        {
+            var open = s_active;
+            if (open == null)
+            {
+                FlowTrace.Step("Offline", $"welcome-back DismissIfOpen({why}): nothing open.");
+                return;
+            }
+            double away = open._result != null ? open._result.AwaySeconds : 0.0;
+            FlowTrace.Step("Offline",
+                $"welcome-back DISMISSED ({why}): the open report covered {away:0}s of away time on the " +
+                "previous save.");
+            open.Dismiss();
+        }
+
         private void Dismiss()
         {
             _open = false;
