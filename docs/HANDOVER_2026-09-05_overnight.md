@@ -99,6 +99,9 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 08:02-08:07 | Season Track header fixed (TextBand excludes a CloseBand; header 200/1200): `COMPILE_GATE_OK` 08:03, **`REGRESSION_OK 383/383`** 08:06, **`REGISTERED_SECONDARY_CAPTURE_OK 36/36 routes=12 touch=clean`** (trace `header bands: close y307.6..439.6 x628.1..988.1, text ... gap 12 px` at 2670x1200); `UI_CAPTURE_OK` zero geometry lines at 07:51 (Journey five cards, 114 px) | `Builds/ui-capture-secondary.log` 08:07:28 |
 | 08:08 | sixth APK chain started DETACHED on this tree (lane B + rail + Season Track); commit follows by explicit path | `Builds/overnight-apk-status.txt` |
 
+| 08:09 | committed lane B + rail + Season Track fix (27 files) + board | `5f48aa7bd`, `241d12598` |
+| 08:11 | loaded the three raid-loop tickets from the merged review as worktree lanes off 241d12598: **WO-1402** (raid rows show estimated spoils, pips hidden, LOCKED word), **WO-1403** (zero-army deploy -> TRAIN TROOPS door, SCOUT ONLY secondary, spoils line, header stats one per line), **WO-1407** (Heart plate objective becomes state: how to become raid-capable; `14m 15s`; Builders chip visible when idle). All written to the merged review's defaults (spoils shown as an estimate; no assault at 0 troops); the Heartfire clause (ruling #3) and the card size (ruling #9) are NOT touched. | agents |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
