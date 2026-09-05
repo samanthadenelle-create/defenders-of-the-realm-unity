@@ -89,3 +89,20 @@ At every arrow, **log the hand-off** (who → who, why) for observability.
 
 *Cross-refs:* `CLAUDE.md` §11 (orchestration), §12 (instrument-don't-guess),
 `docs/ARCHITECTURE_PRINCIPLES.md` (HP B2B lens), `docs/INSTRUMENTATION_STANDARD.md`.
+
+---
+
+## Standing three-role loop (owner directive 2026-09-04, BINDING)
+
+Owner, verbatim: *"id like to have someone cleaning the RCA on ready tickets, CLI validating
+findings against tree, agent triggering the building of tree and prioritizing ready tickets
+into silos."*
+
+| Role | Who | Does | Never |
+|---|---|---|---|
+| RCA clean | read-only QA agent | re-verifies every READY ticket's cited file:lines against HEAD + the working tree; appends a dated `RCA re-verified <date>` block (VALID / STALE / SUPERSEDED / NEW-FEATURE, with evidence) | flips a Status; edits code; RCA-fixes the unbuilt (s13) |
+| Validate | CLI (sole committer) | re-reads the agent's evidence at source before any lane starts; gates (COMPILE_GATE_OK / REGRESSION_OK) and commits by explicit path | trusts a finding it has not opened |
+| Dispatch | agent | ranks READY by player-felt cost, groups into file-disjoint s9 silos with the file list per lane, names pins / blockers / rulings needed, writes `docs/reference/READY_SILOS_<date>.md` | holds the Unity lock - builds and gates are TRIGGERED by the CLI from the dispatch table (s11) |
+
+The loop runs every session; on any lane completion the dispatcher's next silo is loaded
+(CLAUDE.md s11: the pipeline never idles).

@@ -124,7 +124,8 @@ namespace DeNelle.Village.UI
         /// <summary>True when this row is one of an expanded stack's children (indented).</summary>
         public bool IsStackChild;
 
-        /// <summary>Crystal price to Complete Now, or 0 when unavailable.</summary>
+        /// <summary>Price to Complete Now, or 0 when unavailable. Crystals on every channel except a
+        /// gold-priced TrainTroop job (WO-1372; see <see cref="FinishVerbText"/>).</summary>
         public int FinishPrice;
         /// <summary>True when the player can afford <see cref="FinishPrice"/> right now.</summary>
         public bool CanAffordFinish;
@@ -513,6 +514,13 @@ namespace DeNelle.Village.UI
             var card = BuildTimerService.EntryFor(job);
             int price = svc.InstantFinishPrice(channel, job.StructureId);
             double rem = svc.RemainingSeconds(channel, job.StructureId);
+            // WO-1372 Lane D: the CURRENCY is the service's decision, asked of the ONE map
+            // (BuildTimerService.FinishPaysGold) — never inferred here, so the word on the row
+            // can never disagree with the wallet TryInstantFinish debits. A TrainTroop job is
+            // priced and paid in GOLD and wears the canon HIRE REINFORCEMENTS verb (creative
+            // canon §6); every other kind keeps crystals and the View's "Finish Now" default.
+            bool paysGold = BuildTimerService.FinishPaysGold(job.JobKind);
+            int balance = paysGold ? GoldBalance() : crystals;
 
             return new QueueRowVM
             {
@@ -534,8 +542,9 @@ namespace DeNelle.Village.UI
                 // The button is offered even when unaffordable (owner: "always show Finish while a
                 // job runs, plus a get-crystals route when broke") — never hidden on price.
                 FinishPrice = price,
-                CanAffordFinish = price > 0 && crystals >= price,
-                FinishCostText = DescribeFinishCost(price, crystals),
+                CanAffordFinish = price > 0 && balance >= price,
+                FinishCostText = DescribeFinishCost(price, balance, paysGold),
+                FinishVerbText = paysGold ? BuildTimerService.HireReinforcementsVerb : string.Empty,
                 // RELEASE BLOCKER GATE (2026-08-07): no ad SDK is wired, so the ad affordance is
                 // ABSENT on every row of every channel until FeatureFlags.RewardedAdSkip's two
                 // prerequisites land (real SDK + WO-912 server-side ad-window validation). The
@@ -1196,6 +1205,9 @@ namespace DeNelle.Village.UI
             else
             {
                 Notice = failure ?? "Could not finish that.";
+                // The CRYSTAL prefix only: NoticeIsBrokeCase routes the View to the crystal store,
+                // and a gold shortfall (BuildTimerService.InsufficientGoldPrefix, WO-1372) must
+                // never go there — gold is earned by raiding and selling, the store sells none.
                 NoticeIsBrokeCase = failure != null &&
                                     failure.StartsWith(BuildTimerService.InsufficientCrystalsPrefix, StringComparison.Ordinal);
             }
@@ -1499,20 +1511,32 @@ namespace DeNelle.Village.UI
         /// alone: "cannot afford" has to be readable as text.
         /// </summary>
         public static string DescribeFinishCost(int price, int crystals)
+            => DescribeFinishCost(price, crystals, paysGold: false);
+
+        /// <summary>
+        /// <see cref="DescribeFinishCost(int,int)"/> with the currency chosen by the caller from
+        /// <see cref="BuildTimerService.FinishPaysGold(JobKind)"/> (WO-1372 Lane D): a gold-priced
+        /// training row reads "120 gold" / "Short 40 gold", the same idiom as the research tab.
+        /// <paramref name="balance"/> is the balance OF THAT CURRENCY.
+        /// </summary>
+        public static string DescribeFinishCost(int price, int balance, bool paysGold)
         {
             if (price <= 0) return "";
-            int missing = price - crystals;
+            int missing = price - balance;
             // "Short N <currency>" is THIS screen's existing shortfall idiom (BuildResearchBrowse
             // already says "Short 40 gold"), so the two tabs read alike. It also stays inside the
             // CTA's width budget, which "5 crystals - need 3 more" would not: the sub-line has only
             // ~313-350 reference px, and a 20+ character string auto-shrinks to the font floor and
             // then ellipsizes — which would put us right back at an unreadable face.
-            return missing > 0 ? "Short " + Crystals(missing) : Crystals(price);
+            return missing > 0 ? "Short " + Currency(missing, paysGold) : Currency(price, paysGold);
         }
 
         /// <summary>"1 crystal" / "5 crystals" — the currency SPELLED OUT, singular/plural correct.
         /// Never "5c": the owner's felt-test is that the abbreviation says nothing to a new player.</summary>
         private static string Crystals(int n) => n + (n == 1 ? " crystal" : " crystals");
+
+        /// <summary>The spelled-out amount in the row's currency: "N gold" or <see cref="Crystals"/>.</summary>
+        private static string Currency(int n, bool gold) => gold ? n + " gold" : Crystals(n);
 
         /// <summary>ASCII cost summary ("400 wood, 200 food"); "free" when nothing is charged.</summary>
         public static string DescribeCost(CoreCost c)

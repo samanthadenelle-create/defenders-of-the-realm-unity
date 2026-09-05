@@ -172,7 +172,9 @@ namespace DeNelle.Editor.Regression
             // instant a charge is spent. This is the defect the "+24h is still 3" row exists
             // to set up, and this is the row that actually catches it.
             var sattedFull = HeartfireCharges.Regenerate(atT, t + 48d * Hour, Max, Regen, out _);
-            HeartfireCharges.TrySpend(sattedFull, out var spentAfterSitting);
+            if (!HeartfireCharges.TrySpend(sattedFull, out var spentAfterSitting))
+                f.Add("A8 setup: a pool that sat FULL for two days REFUSED a spend -- the backlog row " +
+                      "below would then be measuring an unspent pool, not a spent one");
             var oneSecondLater = HeartfireCharges.Regenerate(spentAfterSitting, t + 48d * Hour + 1000d,
                                                             Max, Regen, out _);
             if (oneSecondLater.Charges != 2)
@@ -324,10 +326,10 @@ namespace DeNelle.Editor.Regression
 
             // The catalogs a currency would have to be authored into. A Heartfire row in any
             // of them means somebody made it buyable, cappable or tradeable.
-            AssertNoHeartfireRow(f, "Resources/Data/Canonical/resources.json");
+            // resources.json was listed here and has NEVER existed in git (2026-09-04, checked);
+            // the guard used to swallow that silently. The two real resource-authoring files stay.
             AssertNoHeartfireRow(f, "Resources/Data/Canonical/storage-caps.json");
             AssertNoHeartfireRow(f, "Resources/Data/Canonical/packs.json");
-            AssertNoHeartfireRow(f, "StreamingAssets/Data/Canonical/resources.json");
             AssertNoHeartfireRow(f, "StreamingAssets/Data/Canonical/storage-caps.json");
             AssertNoHeartfireRow(f, "StreamingAssets/Data/Canonical/packs.json");
 
@@ -366,7 +368,13 @@ namespace DeNelle.Editor.Regression
         {
             string path = Path.Combine(Application.dataPath, relativeToAssets);
             string text = TryReadText(path);
-            if (text == null) return;   // an absent catalog is another suite's problem, not this one's
+            if (text == null)
+            {
+                // Fixture-absent -> FAIL naming the path (hollow-pass rule): an unreadable catalog
+                // here would otherwise green this case having asserted nothing about it.
+                f.Add(relativeToAssets + " could not be read, so the no-Heartfire-row check did not run");
+                return;
+            }
             if (text.IndexOf("heartfire", StringComparison.OrdinalIgnoreCase) >= 0)
                 f.Add(relativeToAssets + " now carries a Heartfire row -- that file authors resources, " +
                       "storage caps or purchasable packs, and Heartfire is none of those things");
@@ -410,7 +418,11 @@ namespace DeNelle.Editor.Regression
         private static void AssertNoRaidOrderCopy(List<string> f, string relativeToAssets)
         {
             string text = TryReadText(Path.Combine(Application.dataPath, relativeToAssets));
-            if (text == null) return;
+            if (text == null)
+            {
+                f.Add(relativeToAssets + " could not be read, so the no-'Raid Order' check did not run");
+                return;
+            }
             if (text.IndexOf("Raid Order", StringComparison.OrdinalIgnoreCase) >= 0)
                 f.Add(relativeToAssets + " still ships the string 'Raid Order' -- that name is dead " +
                       "(canon section 4)");

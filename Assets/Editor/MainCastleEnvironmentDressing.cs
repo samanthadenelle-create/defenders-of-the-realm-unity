@@ -96,7 +96,9 @@ namespace DeNelle.Editor
         {
             try
             {
-                FlowTrace.Enter("MainCastleEnvironmentDressing", "Run", warnAboveMs: 5000f);
+                // Measure, not Enter: Enter takes no threshold, and the scope was being discarded
+                // (never exited). 2026-09-04 compile-gate catch on commit 33ba9c966.
+                using var _scope = FlowTrace.Measure("MainCastleEnvironmentDressing", "Run", warnAboveMs: 5000f);
 
                 // Load the scene
                 var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);

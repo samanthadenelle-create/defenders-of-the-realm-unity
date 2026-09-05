@@ -1318,6 +1318,30 @@ namespace DeNelle.Editor
             // between scene-configs.json and the code fallback table.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-cooldown suite", () => { if (!DeNelle.Editor.Regression.RaidCooldownRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-cooldown] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "heartfire suite", () => { if (!DeNelle.Editor.Regression.HeartfireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heartfire] " + r); });
+
+            // 2026-09-04 (coverage audit before the production regression): commit 1ef5f6ad4 added
+            // fourteen suites and registered FOUR. The ten below existed on disk, compiled (or did
+            // not - two of them referenced runtime that had never landed, and nothing noticed,
+            // because nothing ran them) and never executed once. A suite that is not registered is
+            // not coverage; it is a file. Registered here in the order the raid economy map reads
+            // (docs/PROGRAM_RAID_ECONOMY_2026-09-04.md): loot -> gold arrow -> payout -> escalation
+            // -> season XP -> funnel -> starter army -> discoverability -> hire -> away summary.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-loot-currency suite", () => { if (!DeNelle.Editor.Regression.RaidLootCurrencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-loot-currency] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-gold-arrow suite", () => { if (!DeNelle.Editor.Regression.RaidGoldArrowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-gold-arrow] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-payout-visibility suite", () => { if (!DeNelle.Editor.Regression.RaidPayoutVisibilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-payout-visibility] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-escalation suite", () => { if (!DeNelle.Editor.RaidEscalationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-escalation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-season-xp suite", () => { if (!DeNelle.Editor.Regression.RaidSeasonXpRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-season-xp] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-funnel suite", () => { if (!DeNelle.Editor.Regression.RaidFunnelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-funnel] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-army-grant suite", () => { if (!DeNelle.Editor.Regression.StarterArmyGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-army-grant] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-discoverability-copy suite", () => { if (!DeNelle.Editor.Regression.RaidDiscoverabilityCopyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-discoverability-copy] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hire-reinforcements suite", () => { if (!DeNelle.Editor.HireReinforcementsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hire-reinforcements] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "away-summary-report suite", () => { if (!DeNelle.Editor.Regression.AwaySummaryReportRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[away-summary-report] " + r); });
+
+            // WO-1361 (P0, save data loss): the first oracle at the persistence seam. 17 real-id
+            // BaseLayout records must survive save -> reload -> migrate (from v14 and from current),
+            // an absent/null field must not replace a populated list, and the only sanctioned public
+            // clearer is ResetToNewGame. Before tonight no suite asserted more than ONE record.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "baselayout-roundtrip suite", () => { if (!DeNelle.Editor.Regression.BaseLayoutRoundTripRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[baselayout-roundtrip] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-budget-vfx-warm suite", () => { if (!DeNelle.Editor.Regression.SpawnBudgetAndVfxWarmRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-budget-vfx-warm] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });

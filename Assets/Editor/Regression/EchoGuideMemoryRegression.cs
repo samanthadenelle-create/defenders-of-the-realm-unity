@@ -195,7 +195,14 @@ namespace DeNelle.Editor.Regression
         private static void CheckRosterIds(IReadOnlyList<EchoGuideMemory> lines, List<string> failures)
         {
             var roster = EchoRosterCatalog.All;
-            if (lines == null || roster == null) return;
+            if (lines == null || roster == null)
+            {
+                // A missing dependency is a FAIL, not a silent pass (hollow-pass rule, WO-1138):
+                // with no lines or no roster this case would otherwise green having checked nothing.
+                failures.Add("[roster] cannot check memory-line speakers: " +
+                             (lines == null ? "the memory lines did not load" : "EchoRosterCatalog.All is null"));
+                return;
+            }
 
             var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < roster.Length; i++)
@@ -261,7 +268,11 @@ namespace DeNelle.Editor.Regression
         // -- 4 [ascii] ---------------------------------------------------------
         private static void CheckAscii(IReadOnlyList<EchoGuideMemory> lines, List<string> failures)
         {
-            if (lines == null) return;
+            if (lines == null)
+            {
+                failures.Add("[ascii] cannot check the memory lines: they did not load");
+                return;
+            }
             foreach (var m in lines)
             {
                 if (m == null) continue;

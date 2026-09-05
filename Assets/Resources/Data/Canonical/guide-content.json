@@ -277,12 +277,12 @@
       "title": "Raids",
       "status": "live",
       "body": [
-        "Raids are where your trained troops earn their keep. Open Raids from the HUD, pick a target camp from the list, and you are taken straight there. There is no march; you arrive at the edge of the enemy camp.",
+        "Raids are where your trained troops earn their keep. Open Journey, choose Raids, pick a target camp from the list, and you are taken straight there. There is no march; you arrive at the edge of the enemy camp.",
         "On the field you deploy. Tap a troop tile to pick a unit, then tap the ground to drop one. Set a rally point to pull your troops toward a spot, or call a Retreat to pull the survivors out. Your hero fights alongside them.",
         "A raid runs on a clock. When it ends you are scored up to three stars on how far you broke the camp, and paid resources to match. Raids stay closed until you have a Barracks and at least one trained troop."
       ],
       "tips": [
-        "Train troops at the Barracks first; the Raids button stays shut without them.",
+        "Build a Barracks and your first squad is free; with no troops the Raids card in Journey dims until you train more.",
         "Retreat saves the survivors -- a bad raid does not have to be a total loss.",
         "Raids are your troops; Arena battles are your hero alone."
       ]

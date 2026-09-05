@@ -1,4 +1,4 @@
-﻿{
+{
   "_comment": "Canonical lore fragments  -  Bryn's cottage-entry dialogue + the Healer's Cottage lore-stone journal texts. Port spec Part 4 lists data/lore-fragments.json as a shared canonical data file ('Lore-stone text, Alduin's journal fragments, Mira's letters  -  all canon-voice prose'). DATA ONLY  -  read by LoreFragments.cs and consumed by Bryn.cs + LoreStone.cs. ALL prose here is canon-verbatim and must NEVER be paraphrased. See _provenance below for the per-fragment source. Where a fragment has no verbatim canonical source it is flagged with \"placeholder\": true and MUST be replaced with sourced prose before ship  -  do not treat a placeholder as canon.",
   "_provenance": {
     "bryn-cottage-entry": "VERBATIM. defenders-of-the-realm/src/modules/dungeons/atmosphere/wandererCopy.ts HEALERS_COTTAGE_BRYN_LINE; docs/dungeon-3d-healers-cottage-design.md §4 Beat 1. Mirrors the firstEncounterLine already inlined in healers-cottage.json and WandererDialogue.HealersCottageLine.",

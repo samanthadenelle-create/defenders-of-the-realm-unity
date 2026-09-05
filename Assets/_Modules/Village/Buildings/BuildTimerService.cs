@@ -1053,7 +1053,14 @@ namespace DeNelle.Village
             // balance one).
             if (!JobRushPolicy.AllowsPaidInstantFinish(job.Value.JobKind)) return 0;
 
-            return Config.InstantFinishPrice(RemainingSeconds(channel, structureId));
+            // WO-1372 Lane D — a TRAINING job is priced in GOLD (HireReinforcementsPrice); every
+            // other kind keeps the crystal price. Same curve, different knob pair + wallet; the
+            // wallet half is branched identically in TryInstantFinish so the face and the debit
+            // can never disagree. FinishPaysGold is the ONE currency map for both.
+            double remaining = RemainingSeconds(channel, structureId);
+            return FinishPaysGold(job.Value.JobKind)
+                ? Config.HireReinforcementsPrice(remaining)
+                : Config.InstantFinishPrice(remaining);
         }
 
         /// <summary>True when a rewarded-ad skip is allowed right now (cooldown clear AND daily cap not hit).</summary>
@@ -1282,6 +1289,34 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Fail("Obsidian", "TryInstantFinish with no GameState.");
                 return false;
             }
+
+            // ⛔ WO-1372 Lane D — THE WALLET BRANCH. A TrainTroop job is paid in GOLD (owner
+            // 2026-09-04: "gold buys hire mercenaries instead of waiting on time"); every other
+            // kind pays crystals below, byte-for-byte as before. This is the ONE place a coins
+            // debit for a finish may live (HireReinforcementsRegression case 5a scans _Modules for
+            // a second one). The price quoted by InstantFinishPrice is already the gold price for
+            // this kind, so the face and the debit are the same number.
+            if (FinishPaysGold(channel, structureId))
+            {
+                if (state.Resources.Coins < price)
+                {
+                    // Its OWN prefix, never the crystal one: gold is EARNED (raids/selling), and
+                    // routing a gold shortfall to the crystal store would sell nothing that helps.
+                    failure = InsufficientGoldPrefix + $"{price} needed, {state.Resources.Coins} held.";
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                        $"TryInstantFinish('{structureId}' on {channel}) declined — broke on GOLD " +
+                        $"({state.Resources.Coins}/{price}).");
+                    return false;
+                }
+
+                SpendCoins(svc, state, price);
+                CompleteAnyJob(channel, structureId);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                    $"{HireReinforcementsVerb}: '{structureId}' on {channel} for {price} gold " +
+                    $"(coins now {state.Resources.Coins}).");
+                return true;
+            }
+
             if (state.Resources.Crystals < price)
             {
                 // Owner's rule: the button STAYS VISIBLE when broke and offers a route to buy.
@@ -1310,111 +1345,88 @@ namespace DeNelle.Village
         public const string InsufficientCrystalsPrefix = "Not enough crystals: ";
 
         // =====================================================================
-        //  LANE D — MERCENARY HIRE: skip training time with gold
+        //  WO-1372 LANE D — HIRE REINFORCEMENTS: gold buys TROOP time
+        //  -------------------------------------------------------------------
+        //  Owner ruling 2026-09-04, verbatim: "gold buys hire mercenaries
+        //  instead of waiting on time." Creative canon §6: the mercenaries ARE
+        //  the same unit (no second roster, no upkeep, no expiry) and the button
+        //  reads HIRE REINFORCEMENTS, never "Skip Training".
+        //
+        //  NOT a second speed-up. The speed-up (TryInstantFinish + CompleteAnyJob
+        //  + the one skip curve) was already channel-generic; the defect was the
+        //  CURRENCY. So Lane D is: ONE currency map (FinishPaysGold), the gold
+        //  branch inside TryInstantFinish, and a gold knob pair on the SAME curve.
+        //  A Train job completing this way reaches OnJobCompleted ->
+        //  JobEffectRegistry -> BarracksService.TrainTroopEffect exactly like a
+        //  timer expiry, so the troop lands in the roster by the shipping path.
         // =====================================================================
 
+        /// <summary>The canon face for the gold-priced training finish (creative canon §6).
+        /// Every surface quotes THIS constant; a retyped face drifts from canon.</summary>
+        public const string HireReinforcementsVerb = "HIRE REINFORCEMENTS";
+
         /// <summary>
-        /// LANE D — spend gold to hire mercenaries and skip remaining training time on a job.
-        /// Reduces the job's remaining time to ~1 second (not 0, so it completes on the next tick
-        /// rather than mid-calculation). Returns true on success, false with a player-readable
-        /// reason if the wallet is insufficient or the job has no remaining time.
+        /// WO-1372 — prefixes the "cannot afford" failure of a GOLD-priced finish, DISTINCT from
+        /// <see cref="InsufficientCrystalsPrefix"/>: a gold shortfall must never route the player to
+        /// the crystal store (which sells no gold — gold is earned by raiding and selling).
         /// </summary>
-        /// <param name="job">The job to accelerate (checked for validity before this call).</param>
-        /// <param name="costGold">The gold cost of hiring mercenaries.</param>
-        /// <param name="failure">Player-readable ASCII reason on a false return, null on success.</param>
-        /// <returns>True if mercenaries were hired and time was reduced; false otherwise.</returns>
+        public const string InsufficientGoldPrefix = "Not enough gold: ";
+
+        /// <summary>
+        /// THE ONE CURRENCY MAP. True for <see cref="JobKind.TrainTroop"/> and ONLY TrainTroop: gold
+        /// buys troop time, every other channel keeps crystals (which is what funds the crystal
+        /// ladders — BuildTimerConfig "ONE WALLET, DELIBERATELY"). No currency creep.
+        /// </summary>
+        public static bool FinishPaysGold(JobKind kind) => kind == JobKind.TrainTroop;
+
+        /// <summary>
+        /// <see cref="FinishPaysGold(JobKind)"/> for a LIVE job (running or queued) on
+        /// <paramref name="channel"/>. False when no such job exists.
+        /// </summary>
+        public bool FinishPaysGold(ChannelId channel, string structureId)
+        {
+            var job = FindInChannel(GetChannel(channel), structureId, out bool _);
+            return job.HasValue && FinishPaysGold(job.Value.JobKind);
+        }
+
+        // The GOLD debit for a finish. GameState.Resources.Coins is the one coin store (the same
+        // struct EconomyService.AddCoins and the town HUD read), and GameStateService owns its
+        // persistence — so this mirrors GameStateService.AddCrystals' exact shape (read struct,
+        // clamp, assign back, Save, ResourcesChanged) rather than routing through
+        // EconomyService.Instance, a scene MonoBehaviour that is absent pre-boot and in the
+        // headless/editor oracles (it would silently no-op the spend there). ⛔ Nothing outside
+        // this file may debit coins for a finish (HireReinforcementsRegression case 5a).
+        private static void SpendCoins(GameStateService svc, GameState state, int price)
+        {
+            var r = state.Resources;
+            int before = r.Coins;
+            r.Coins = Mathf.Max(0, r.Coins - price);
+            state.Resources = r;
+            svc.Save();
+            svc.ResourcesChanged?.Invoke();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                $"gold debit for a finish: {before} -> {r.Coins} (-{price}).");
+        }
+
+        /// <summary>
+        /// LEGACY ADAPTER, kept ONLY because BuildTimerMercenaryRegression pins this signature by
+        /// reflection. It is <see cref="TryInstantFinish(ChannelId,string,out string)"/> — nothing
+        /// else. The stub this replaced was a SECOND finish mechanism (its own wallet read, its own
+        /// coins debit, its own "shrink the timer to ~1s" completion that bypassed CompleteAnyJob and
+        /// the JobRushPolicy wall, and it refused QUEUED jobs that ruling Q5 says are finishable).
+        /// <paramref name="costGold"/> is NOT honoured: the service prices the hire itself
+        /// (<see cref="InstantFinishPrice(ChannelId,string)"/>), so the face and the debit are one
+        /// number; a caller-supplied figure that disagrees is traced, not charged.
+        /// </summary>
         public bool TryHireMercenaries(BuildJobData job, int costGold, out string failure)
         {
-            failure = null;
-
-            // Find the job in its channel to check remaining time and validity.
-            var ch = GetChannel((ChannelId)job.Channel);
-            if (ch == null)
-            {
-                failure = "Save not loaded.";
-                return false;
-            }
-
-            // Find the job (active first, then pending).
-            var found = FindInChannel(ch, job.StructureId, out bool isActive);
-            if (!found.HasValue)
-            {
-                failure = "Job not found.";
+            ChannelId channel = job.ChannelId;
+            int quoted = InstantFinishPrice(channel, job.StructureId);
+            if (costGold != quoted)
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
-                    $"TryHireMercenaries: job '{job.StructureId}' on {(ChannelId)job.Channel} not found.");
-                return false;
-            }
-
-            var liveJob = found.Value;
-
-            // Only active jobs (running, not queued) can hire mercenaries. Queued jobs
-            // have no countdown yet and represent only a placeholder time value.
-            if (!isActive || liveJob.StartMs <= 0)
-            {
-                failure = "Can't hire: job hasn't started yet.";
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
-                    $"TryHireMercenaries '{job.StructureId}' declined: job is queued, not active.");
-                return false;
-            }
-
-            // Calculate remaining time.
-            double remainingMs = liveJob.FinishMs - TimeSource.NowUnixMs();
-            if (remainingMs <= 0)
-            {
-                failure = "Already done.";
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
-                    $"TryHireMercenaries '{job.StructureId}' declined: no time remaining.");
-                return false;
-            }
-
-            // Check wallet.
-            var svc = GameStateService.Instance;
-            var state = svc != null ? svc.State : null;
-            if (state == null)
-            {
-                failure = "Save not loaded.";
-                DeNelle.Core.Diagnostics.FlowTrace.Fail("Obsidian",
-                    "TryHireMercenaries with no GameState.");
-                return false;
-            }
-
-            if (state.Resources.Coins < costGold)
-            {
-                failure = "Not enough gold: " + costGold + " needed, " + state.Resources.Coins + " held.";
-                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
-                    $"TryHireMercenaries('{job.StructureId}') declined — broke ({state.Resources.Coins}/{costGold} gold).");
-                return false;
-            }
-
-            // Spend the gold and reduce the time. Use Guard.Try to ensure the wallet mutation
-            // is logged if it fails (§12).
-            DeNelle.Core.Diagnostics.Guard.Try("Obsidian", "hire mercenaries", () =>
-            {
-                var r = state.Resources;
-                r.Coins = Mathf.Max(0, r.Coins - costGold);
-                state.Resources = r;
-                svc.Save();
-                svc.ResourcesChanged?.Invoke();
-            });
-
-            // Reduce the remaining time to ~1 second so the job completes on the next tick,
-            // not mid-calculation.
-            int jobIndex = ActiveIndexInChannel(ch, job.StructureId);
-            if (jobIndex >= 0)
-            {
-                var j = ch.ActiveJobs[jobIndex];
-                double newFinishMs = TimeSource.NowUnixMs() + 1000.0;  // 1 second from now
-                j.DurationMs = newFinishMs - j.StartMs;
-                ch.ActiveJobs[jobIndex] = j;
-                Persist();
-                JobSkipped?.Invoke(j);
-                RaiseQueueChanged();
-            }
-
-            DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
-                $"Hired mercenaries: '{job.StructureId}' on {(ChannelId)job.Channel} for {costGold} gold " +
-                $"(time reduced from {remainingMs / 1000.0:0.#}s to ~1s).");
-            return true;
+                    $"TryHireMercenaries('{job.StructureId}') was handed {costGold} gold but the service " +
+                    $"prices the hire at {quoted}; charging the service's price (one mechanism, one number).");
+            return TryInstantFinish(channel, job.StructureId, out failure);
         }
 
         // Apply a time skip by pulling StartMs back by `seconds`; if that finishes it, complete it.

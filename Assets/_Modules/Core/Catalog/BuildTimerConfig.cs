@@ -131,6 +131,41 @@ namespace DeNelle.Core.Catalog
         [Min(0)] public int instantFinishMinCrystals = 10;
 
         // ---------------------------------------------------------------------
+        //  HIRE REINFORCEMENTS -- WO-1372 Lane D. GOLD buys TROOP TIME.
+        //  Owner ruling 2026-09-04, verbatim: "gold buys hire mercenaries instead
+        //  of waiting on time." Creative canon (CREATIVE_CANON_ELARION §6): the
+        //  mercenaries ARE the same unit; the button reads HIRE REINFORCEMENTS.
+        //
+        //  ONE CURVE, TWO KNOB PAIRS. A TrainTroop job is priced by SkipPrice(...)
+        //  below with THESE knobs; every other kind keeps the crystal pair above.
+        //  HireReinforcementsRegression case 2 fails the moment the two prices
+        //  diverge under identical knobs, so the maths cannot fork.
+        //
+        //  THE NUMBERS (defaults, not rulings - the ruling fixed the VERB and the
+        //  CURRENCY, not a figure). Against the live troops.json (buildSeconds
+        //  45..270, costGold 205..1500) and the anchored e=0.75 curve, 20/min with
+        //  a 50 floor prices a fresh Footman (45s) at ~99 gold, a 2-minute train
+        //  at ~208 and a 4.5-minute one at ~380 - a second spend of roughly a
+        //  fifth to two-thirds of the troop's own price, so "hire" reads as an
+        //  impatience tax and never as a cheaper troop. Canon's illustrative
+        //  "HIRE REINFORCEMENTS - 300 Gold" lands near a 3-minute wait.
+        //
+        //  NOT on the remote-tunable rail, deliberately: neither
+        //  instantFinishCrystalsPerMinute nor instantFinishMinCrystals is on it
+        //  (RemoteTunables.cs carries no BuildTimerConfig knob at all), and the
+        //  owner's mirroring rule is "do what the crystal pair does". Author the
+        //  Resources asset to retune, exactly as for the crystal pair.
+        // ---------------------------------------------------------------------
+        [Header("Hire reinforcements (gold buys TROOP time, WO-1372 Lane D)")]
+        [Tooltip("GOLD price per remaining minute to hire reinforcements on a TRAINING job - the same " +
+                 "anchored curve as the crystal instant-finish, in gold. 0 disables the gold hire " +
+                 "(crystal skips on the other channels are unaffected).")]
+        [Min(0)] public int hireReinforcementsGoldPerMinute = 20;
+
+        [Tooltip("Minimum gold price for any hire (so a nearly-trained unit still costs something).")]
+        [Min(0)] public int hireReinforcementsMinGold = 50;
+
+        // ---------------------------------------------------------------------
         //  CONVEX SKIP CURVE -- OWNER RULING 2026-08-21.
         //
         //  THE PROBLEM IT FIXES, measured: under the old LINEAR price (crystals =
@@ -346,24 +381,45 @@ namespace DeNelle.Core.Catalog
         /// remaining time it produced and charges for cutting it short.
         /// </summary>
         public int InstantFinishPrice(double remainingSeconds)
+            => SkipPrice(remainingSeconds, instantFinishCrystalsPerMinute, instantFinishMinCrystals);
+
+        /// <summary>
+        /// WO-1372 Lane D — GOLD price to hire reinforcements on a TRAINING job with
+        /// <paramref name="remainingSeconds"/> left. The SAME curve as <see cref="InstantFinishPrice"/>
+        /// (one <see cref="SkipPrice"/>, two knob pairs): with identical knobs the two prices are
+        /// identical, which HireReinforcementsRegression case 2 pins. Floored at
+        /// <see cref="hireReinforcementsMinGold"/>; 0 when <see cref="hireReinforcementsGoldPerMinute"/>
+        /// is 0 (the gold hire disabled).
+        /// </summary>
+        public int HireReinforcementsPrice(double remainingSeconds)
+            => SkipPrice(remainingSeconds, hireReinforcementsGoldPerMinute, hireReinforcementsMinGold);
+
+        /// <summary>
+        /// THE ONE SKIP CURVE. <see cref="InstantFinishPrice"/> (crystals, every non-Train kind) and
+        /// <see cref="HireReinforcementsPrice"/> (gold, TrainTroop) are this function with their own
+        /// knob pair — never a copy of the maths. Shape and exponent are documented at
+        /// <see cref="instantFinishCurveExponent"/>.
+        /// </summary>
+        private int SkipPrice(double remainingSeconds, int perMinute, int minimum)
         {
-            if (instantFinishCrystalsPerMinute <= 0) return 0;   // paid skip disabled
+            if (perMinute <= 0) return 0;   // paid skip disabled
             double minutes = Mathf.Max(0f, (float)remainingSeconds) / 60.0;
-            if (minutes <= 0.0) return instantFinishMinCrystals;
+            if (minutes <= 0.0) return minimum;
 
             // Anchor at the 24h clamp so a full-length skip keeps its old linear price and
-            // instantFinishCrystalsPerMinute keeps its old meaning. Guarded so a zeroed or
-            // negative maxDurationSeconds degrades to the linear price instead of dividing by
-            // zero / NaN-ing the store: a broken config must never make a skip FREE.
+            // perMinute keeps its old meaning ("price for a full-length skip, per minute").
+            // Guarded so a zeroed or negative maxDurationSeconds degrades to the linear price
+            // instead of dividing by zero / NaN-ing the store: a broken config must never make
+            // a skip FREE.
             double anchorMinutes = Mathf.Max(1f, maxDurationSeconds) / 60.0;
             double e = Mathf.Clamp(instantFinishCurveExponent, 0.1f, 1f);
 
-            double price = instantFinishCrystalsPerMinute * anchorMinutes
+            double price = perMinute * anchorMinutes
                          * Math.Pow(minutes / anchorMinutes, e);
             if (double.IsNaN(price) || double.IsInfinity(price))
-                price = minutes * instantFinishCrystalsPerMinute;   // linear fallback, never free
+                price = minutes * perMinute;   // linear fallback, never free
 
-            return Mathf.Max(Mathf.CeilToInt((float)price), instantFinishMinCrystals);
+            return Mathf.Max(Mathf.CeilToInt((float)price), minimum);
         }
 
         // Code-default fallback so the system runs with no authored asset.

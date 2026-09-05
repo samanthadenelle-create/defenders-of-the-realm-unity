@@ -125,6 +125,10 @@ namespace DeNelle.Editor
             "en.json",
             "garrison-recipes.json",
             "themes.json",
+            // GENERATED, not authored: carries its own "generated" timestamp + "source" prefab path
+            // (Blink Obsidian_UI). A hand-bumped version on a generator output is duplicated state
+            // that rots on the next regenerate; the timestamp is its version. (2026-09-04)
+            "widget-params.json",
         };
 
         // Files read on a NON-dual-copy path (StreamingAssets-direct) — same

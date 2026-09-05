@@ -366,7 +366,7 @@ namespace DeNelle.Wallet
         ///
         /// <para>Never throws - a raid result must never be lost because a pass was mid-load.</para>
         /// </summary>
-        public static void OnRaidResult(int stars, float destructionPct, bool firstClear, string configId)
+        public static void OnRaidResult(bool win, int stars, float destructionPct, bool firstClear, string configId)
         {
             try
             {
@@ -386,7 +386,9 @@ namespace DeNelle.Wallet
                     firstClear = false;
                 }
 
-                int xp = RaidXpFor(true, stars, destructionPct, firstClear);
+                // The relay used to drop 'win' and this line hardcoded 'true' - a lost raid paid as
+                // a victory. Fixed 2026-09-04; RaidSeasonXpRegression [table] covers the loss rows.
+                int xp = RaidXpFor(win, stars, destructionPct, firstClear);
                 if (xp <= 0) return;
 
                 int priorTier = HighestTierReached;
@@ -397,7 +399,7 @@ namespace DeNelle.Wallet
                 int reachedTier = HighestTierReached;
                 if (reachedTier > priorTier) BattlePassLevelUpVfxBridge.Play(reachedTier);
 
-                FlowTrace.Step("BattlePass", "OnRaidResult(stars=" + stars + ", destruction=" + destructionPct +
+                FlowTrace.Step("BattlePass", "OnRaidResult(win=" + win + ", stars=" + stars + ", destruction=" + destructionPct +
                                              ", firstClear=" + firstClear + ", configId='" + configId + "'): +" + xp +
                                              " XP -> " + Xp + " (tier " + HighestTierReached + "/" + TierCount + ").");
                 Changed?.Invoke();

@@ -283,28 +283,29 @@ namespace DeNelle.Village
         }
 
         // One ACTIVE job's sell-time actions. Renders nothing at all when the job offers
-        // neither (Train/Research jobs never resolve InstantFinish by structureId), so an
-        // idle channel adds no empty rows.
+        // neither a priced finish nor an ad, so an idle channel adds no empty rows.
+        //
+        // WO-1372 Lane D: priced through the CHANNEL overload. The Builder-only
+        // InstantFinishPrice(structureId) this row used to call resolves NOTHING on the Train
+        // or Research line, so a training job priced at 0 and — because the button is gated on
+        // price > 0 — the finish CTA silently vanished from the training queue. The service now
+        // quotes a training job in GOLD (FinishPaysGold) and this row renders the canon
+        // HIRE REINFORCEMENTS face for it; the old flat "500g" literal and its private coins
+        // check are gone — the service is the ONE price and the ONE debit.
         private void AddJobActionRow(BuildJobData job, BuildTimerService svc)
         {
             if (job.StartMs <= 0 || svc == null) return;
 
-            // InstantFinish/AdSkip only resolve Builder jobs via structureId — price>0
-            // gates the Instant button so Train/Research never show a false Instant CTA.
-            int price = svc.InstantFinishPrice(job.StructureId);
+            ChannelId channel = job.ChannelId;
+            int price = svc.InstantFinishPrice(channel, job.StructureId);
+            bool paysGold = svc.FinishPaysGold(channel, job.StructureId);
             // RELEASE BLOCKER GATE (2026-08-07): no ad SDK exists, so the "Ad" button is ABSENT
             // (not greyed, not silently dead) until FeatureFlags.RewardedAdSkip's prerequisites
             // land — a real SDK plus WO-912 server-side ad-window validation. The row falls back
             // to Instant-only, or renders nothing at all when there is no Instant either.
-            bool adOk = DeNelle.Core.FeatureFlags.RewardedAdSkip && svc.CanWatchAdToSkip(job.StructureId);
+            bool adOk = DeNelle.Core.FeatureFlags.RewardedAdSkip && svc.CanWatchAdToSkip(channel, job.StructureId);
 
-            // LANE D: Hire mercenaries button for training jobs (gold skips time).
-            int hireGoldCost = 500;  // tunable default; would come from config in production
-            bool hireOk = job.JobKind == JobKind.TrainTroop &&
-                          svc.RemainingSeconds(DeNelle.Core.Jobs.ChannelId.Train, job.StructureId) > 0 &&
-                          GameStateService.Instance?.State?.Resources.Coins >= hireGoldCost;
-
-            if (price <= 0 && !adOk && !hireOk) return;
+            if (price <= 0 && !adOk) return;
 
             var row = MakeRowHost("JobActions", ActionRowHeightPx);
             AddStretchLabel(row.transform, "   " + FormatJobTarget(job),
@@ -314,11 +315,19 @@ namespace DeNelle.Village
             float x = 0.54f;
             if (price > 0)
             {
-                float w = 0.22f;
-                ElarionUiKit.BuildObsidianButton(row.transform, price + "c",
-                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                    new Vector2(x, 0.12f), new Vector2(x + w, 0.88f),
-                    () => OnInstantFinish(sid));
+                // The gold face carries the canon verb + the price, so it needs the width the
+                // ad button would otherwise take when no ad is offered. Offered even when the
+                // player is broke (owner: the button STAYS VISIBLE and the tap explains).
+                float w = paysGold ? (adOk ? 0.24f : 0.44f) : 0.22f;
+                string face = paysGold
+                    ? BuildTimerService.HireReinforcementsVerb + " " + price + "g"
+                    : price + "c";
+                var color = paysGold ? ElarionUiKit.ObsidianButtonColor.Blue
+                                     : ElarionUiKit.ObsidianButtonColor.Yellow;
+                ElarionUiKit.BuildObsidianButton(row.transform, face,
+                    ElarionUiKit.ObsidianButtonStyle.Style1, color,
+                    new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
+                    () => OnInstantFinish(channel, sid, paysGold));
                 x += w + 0.02f;
             }
             if (adOk)
@@ -327,16 +336,7 @@ namespace DeNelle.Village
                 ElarionUiKit.BuildObsidianButton(row.transform, "Ad",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                     new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
-                    () => OnAdSkip(sid));
-                x += w + 0.02f;
-            }
-            if (hireOk)
-            {
-                float w = 0.20f;
-                ElarionUiKit.BuildObsidianButton(row.transform, hireGoldCost + "g",
-                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Blue,
-                    new Vector2(x, 0.12f), new Vector2(Mathf.Min(0.98f, x + w), 0.88f),
-                    () => OnHireMercenaries(job, hireGoldCost));
+                    () => OnAdSkip(channel, sid));
             }
         }
 
@@ -400,20 +400,24 @@ namespace DeNelle.Village
                 ElarionUiKit.ShowToast(failure ?? "Could not buy a slot.", ElarionUiKit.ToastTone.Danger);
         }
 
-        private static void OnInstantFinish(string structureId)
+        // ONE handler for the priced finish on every channel. The currency is the SERVICE's
+        // decision (FinishPaysGold inside TryInstantFinish); this view only words the toast.
+        // It never reads a wallet and never debits anything (HireReinforcementsRegression 5a).
+        private static void OnInstantFinish(ChannelId channel, string structureId, bool paysGold)
         {
             var svc = BuildTimerService.Instance;
             if (svc == null || string.IsNullOrEmpty(structureId)) return;
-            bool ok = svc.TryInstantFinish(structureId);
+            bool ok = svc.TryInstantFinish(channel, structureId, out string failure);
             if (ok)
-                ElarionUiKit.ShowToast("Finished instantly.", ElarionUiKit.ToastTone.Confirm);
+                ElarionUiKit.ShowToast(paysGold ? "Reinforcements hired." : "Finished instantly.",
+                    ElarionUiKit.ToastTone.Confirm);
             else
-                ElarionUiKit.ShowToast("Can't finish now (need crystals or job not active).",
-                    ElarionUiKit.ToastTone.Danger);
-            FlowTrace.Step("HUD", "ObsidianQueueHud TryInstantFinish '" + structureId + "' ok=" + ok);
+                ElarionUiKit.ShowToast(failure ?? "Can't finish now.", ElarionUiKit.ToastTone.Danger);
+            FlowTrace.Step("HUD", "ObsidianQueueHud TryInstantFinish '" + structureId + "' on " + channel +
+                                  " paysGold=" + paysGold + " ok=" + ok);
         }
 
-        private static void OnAdSkip(string structureId)
+        private static void OnAdSkip(ChannelId channel, string structureId)
         {
             var svc = BuildTimerService.Instance;
             if (svc == null || string.IsNullOrEmpty(structureId)) return;
@@ -421,7 +425,7 @@ namespace DeNelle.Village
             // can never answer synchronously - the callback lands seconds after the return, so the
             // player would watch a full ad and be toasted "unavailable". The outcome now arrives
             // when the ad actually finishes.
-            svc.WatchAdToSkip(DeNelle.Core.Jobs.ChannelId.Builder, structureId, result =>
+            svc.WatchAdToSkip(channel, structureId, result =>
             {
                 if (result.Rewarded)
                 {
@@ -440,19 +444,6 @@ namespace DeNelle.Village
                 FlowTrace.Step("HUD",
                     "ObsidianQueueHud WatchAdToSkip '" + structureId + "' outcome=" + result);
             });
-        }
-
-        private static void OnHireMercenaries(BuildJobData job, int costGold)
-        {
-            var svc = BuildTimerService.Instance;
-            if (svc == null) return;
-            bool ok = svc.TryHireMercenaries(job, costGold, out string failure);
-            if (ok)
-                ElarionUiKit.ShowToast("Mercenaries hired!", ElarionUiKit.ToastTone.Confirm);
-            else
-                ElarionUiKit.ShowToast(failure ?? "Can't hire mercenaries now.",
-                    ElarionUiKit.ToastTone.Danger);
-            FlowTrace.Step("HUD", "ObsidianQueueHud OnHireMercenaries '" + job.StructureId + "' ok=" + ok);
         }
 
         // ── public format helpers (regression + Refresh) ──────────────────────

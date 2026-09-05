@@ -1,4 +1,4 @@
-﻿{
+{
   "_comment": "Canonical proper nouns for Defenders of the Realm. Copied VERBATIM from narrative-bible.md and src/content/story.ts. Do not paraphrase. These names are shared by the React v1 engine and the Unity v2 port.",
   "_sources": {
     "narrativeBible": "defenders-unity/docs/narrative-bible.md",

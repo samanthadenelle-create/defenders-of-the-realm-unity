@@ -121,7 +121,7 @@ namespace DeNelle.Editor.Regression
         /// WO-1374 free-starter-squad size.
         /// Pinned as a literal, not as Registry.Length - an oracle that measures the thing
         /// against itself certifies nothing.</summary>
-        private const int ExpectedKnobCount = 26;
+        private const int ExpectedKnobCount = 34;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -220,6 +220,12 @@ namespace DeNelle.Editor.Regression
             // The free starter squad (map section 2). 3 is her number and is exactly what
             // 1,650 gold used to buy - the wall this removes. Granted once per save.
             new KeyValuePair<string, int>("raid.starterArmySize", 3),
+            // WO-1379 - HEARTFIRE, the one gate on when you may raid (canon section 4). Three
+            // charges, one rekindles every 4 h; HeartfireCharges aliases the same consts, so the
+            // literal lives in exactly one place. Pinned 2026-09-04 - the knobs shipped in
+            // 1ef5f6ad4 without this pin, and the oracle correctly went red for it.
+            new KeyValuePair<string, int>("raid.heartfireMaxCharges", 3),
+            new KeyValuePair<string, int>("raid.heartfireRegenSeconds", 14400),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so

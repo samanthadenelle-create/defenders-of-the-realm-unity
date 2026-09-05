@@ -87,6 +87,10 @@ namespace DeNelle.Wallet
             // BeforeSceneLoad is early enough by construction: an arena bout cannot finish before
             // the first scene has loaded, so no result can be published into an empty handler.
             ArenaOutcomeRelay.RegisterHandler(BattlePassService.OnArenaResult);
+            // The raid half of the same door (economy map section 6: raids feed the Season Pass).
+            // Until 2026-09-04 nothing registered this, so every raid publish went nowhere and the
+            // season track silently never moved - RaidSeasonXpRegression [wired] pins it now.
+            ArenaOutcomeRelay.RegisterRaidHandler(BattlePassService.OnRaidResult);
 
             FlowTrace.Step("BattlePass",
                 "BattleMonthlyPanelsBootstrap: PanelId.BattlePass + PanelId.MonthlyLedger openers registered, " +

@@ -62,7 +62,11 @@ namespace DeNelle.Commerce
         /// battle pass. Deliberately a single handler: raid outcomes and arena outcomes are both
         /// season progression sources, and duplicating either is a bug.
         /// </summary>
-        private static Action<int, float, bool, string> _raidHandler;
+        // (bool win, int stars, float destructionPct, bool firstClear, string configId). The win
+        // flag was DROPPED on the way through until 2026-09-04 - the service then hardcoded
+        // RaidXpFor(true, ...), so a LOST raid credited season XP as a victory. Outcome-shaped
+        // still means the WHOLE outcome.
+        private static Action<bool, int, float, bool, string> _raidHandler;
 
         /// <summary>
         /// Installs the arena progression handler. Called once, at BeforeSceneLoad, by the assembly that
@@ -78,7 +82,7 @@ namespace DeNelle.Commerce
         /// Installs the raid progression handler. Called once, at BeforeSceneLoad, by the assembly that
         /// owns the battle pass. The last registration wins.
         /// </summary>
-        public static void RegisterRaidHandler(Action<int, float, bool, string> onRaidOutcome)
+        public static void RegisterRaidHandler(Action<bool, int, float, bool, string> onRaidOutcome)
         {
             _raidHandler = onRaidOutcome;
             FlowTrace.Step(TraceSystem, "ArenaOutcomeRelay: raid handler registered.");
@@ -136,7 +140,7 @@ namespace DeNelle.Commerce
             }
 
             Guard.Try(TraceSystem, "publish raid outcome to the battle pass",
-                      () => handler(stars, destructionPct, firstClear, configId));
+                      () => handler(win, stars, destructionPct, firstClear, configId));
         }
     }
 }

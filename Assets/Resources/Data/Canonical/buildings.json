@@ -1,4 +1,4 @@
-﻿{
+{
   "_comment": "Canonical building catalogue for Defenders of the Realm  -  the five gameplay buildings the player raises in Elarion (Crystal Mine, Pet House, Arcane Tower, Workshop, Farm). Shared by the React v1 engine and the Unity v2 port. The Unity loader (BuildingCatalog.cs) deserializes each entry into a typed BuildingDef record and Building.cs consumes HP from it.",
   "_sources": {
     "buildingsOverhaulSpec": "defenders-of-the-realm/docs/village-buildings-overhaul-spec.md (§5 village map, §6 interactions, §4 scale)",

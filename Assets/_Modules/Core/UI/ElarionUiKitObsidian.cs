@@ -519,7 +519,7 @@ namespace DeNelle.Core.UI
         /// <summary>The five Obsidian button face styles.</summary>
         public enum ObsidianButtonStyle { Style1 = 1, Style2 = 2, Style3 = 3, Style4 = 4, Style5 = 5 }
         /// <summary>The four Obsidian button colours.</summary>
-        public enum ObsidianButtonColor { Gray, Green, Red, Yellow }
+        public enum ObsidianButtonColor { Gray, Green, Red, Yellow, Blue }
 
         /// <summary>Canonical RpgUiCatalog sprite name for a family member ("button3_green").</summary>
         public static string ObsidianButtonSpriteName(ObsidianButtonStyle style, ObsidianButtonColor color)

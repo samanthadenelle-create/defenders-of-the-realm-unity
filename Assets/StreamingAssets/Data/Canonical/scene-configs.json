@@ -1,4 +1,4 @@
-﻿{
+{
   "version": 1,
   "_note": "Scene-generation config  -  the data contract that determines WHAT scene the base-scene factory generates (WO-454; canon: docs/WORK_ORDER_454_faction_base_scene_generator.md). A base IS a scene: player stronghold, enemy outpost, garrison  -  all generated from one of these configs. ownership=Player => buildable/owned, no garrison; ownership=Enemy => faction garrison + boss. The generator (StructureFactory/CastleHubBuilder + GridWall + WaveManager-composition + EnemyFactory) consumes these; the config is the ONLY delta between scene types. Dual-copy (Resources copy wins at load via CanonicalJson; keep StreamingAssets in sync).",
   "_schema": {
