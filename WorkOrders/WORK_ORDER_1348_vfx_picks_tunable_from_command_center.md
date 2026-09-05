@@ -114,3 +114,16 @@ the art is subtle" are indistinguishable** - the single most expensive ambiguity
       **Prove it RED first; report the mutation.**
 - [ ] Brace + NUL check per `.cs` file; any PowerShell parses under 5.1 and it is proven.
 - [ ] ⛔ Owner uses it on her phone and CLOSES.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** NEW-FEATURE
+**Evidence:**
+- The DISPATCH HOLD is released: first Status lines read `WO-1343 CLOSED 2026-09-04`, `WO-1344 CLOSED 2026-09-04`, `WO-1345 FIXED 2026-09-03`, `WO-1346 FIXED`, `WO-1347 FIXED`; their commits `fcf164a8b`, `7437942c6` (2026-09-03) are in HEAD.
+- Nothing of the feature exists: `grep realm\.vfx` over Assets/api/tools = 0 hits. The rail holds only `vfx.particleBouncePct` / `vfx.maxParticleLights` / `vfx.nightStoreAura*` (`api/_lib/tunables.js:80-81,104`; `Assets/_Modules/Core/Ops/RemoteTunables.cs:272,293,525-531`).
+- Consumer count moved: 39 `.cs` files reference `VfxManualPicks` (WO says ~29). The runtime does NOT read the json: picks are baked into `Assets/Resources/VFX/HovlVfxCatalog.asset` by `Assets/Editor/HovlVfxCatalogGenerator.cs` and resolved via `Assets/_Modules/Core/Addressables/VfxAssetLoader.cs:21-46` (Addressables-first, Resources-fallback). The runtime override seam is therefore the catalog/loader, not the json.
+- The six-source shape is confirmed on the `nightStoreAuraMode` precedent: `api/_lib/tunables.js`, `api/_lib/tunable-manifest.js`, `tunable-manifest.generated.json`, `RemoteTunables.cs`, `RemoteTunablesDefaultsRegression.cs`, `NightStoreAuraSelectionRegression.cs`.
+- No RESULT, no superseding WO.
+**What changed since the RCA:** the five blocking tickets landed; VfxManualPicks consumers grew to 39 files; otherwise nothing.
+**Ready for a lane?** yes - hold released and the spec is complete, but it is a BUILD, not an RCA (s13: route as spec). Files a lane would touch: `Core/Ops/RemoteTunables.cs`, `RemoteTunablesService.cs`, `api/_lib/tunables.js`, `api/_lib/tunable-manifest.js` + generated json, `api/admin/console.js` / `ops.js`, `Core/Addressables/VfxAssetLoader.cs` or `Village/Vfx/HovlVfxCatalog.cs`, one new regression suite.
+**Pins/rulings needed:** owner confirms the key shape `realm.vfx.<key>` (already stated in the WO); design must decide how key CREATION (e.g. boss-death) reaches a shipped prefab list.

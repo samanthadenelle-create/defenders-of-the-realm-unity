@@ -246,3 +246,16 @@ feel.** Every value must reach her device in ~40s, not a 10-minute APK round tri
 - **WO-1370 / WO-1371** - why the player is drowning in resources that mean nothing.
 - **WO-1357** - the Journey Raids card that locks on a barracks blocker: the discoverability end.
 - **The loops/rewards analysis commissioned 2026-09-04** - ⚠ **read it before setting any number here.**
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** NEEDS-RULING
+**Evidence:**
+- The collision is real at source: `Assets/_Modules/Core/Catalog/DungeonExclusiveItems.cs:42-44` reads "Item ids that may only ever enter the player's inventory by descending - never sold by a vendor..." verbatim; `:49` `ing_rough_stone` ("the rough, unidentified stone a dungeon run pays out (WO-1042)"); `:52-54` the three refined gems. `Assets/Editor/Regression/DungeonGemExclusivityRegression.cs` exists. `grep rough_stone` over `Assets/_Modules/**/*.cs` hits only `DungeonExclusiveItems.cs` and `Village/Crafting/JewelPolishService.cs` - no raid path drops it.
+- The grant seam is as cited: `RaidVictoryController.GrantLoot -> RaidScoring.ComputeLoot` (referenced at `Enemy.cs:3251,3286,3931`, `RaidDeployVM.cs:146`, `RaidSelectionScreen.cs:575`).
+- s4 (A/B/C) is UNANSWERED: `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md:330` still says "WO-1373's rough-stone / Jeweler chain is the other raid reward axis, still blocked on the..." and `:323-326` banners s5.1's 25/50/70 ladder as superseded ("Do not resurrect").
+- Adjacent work landed and changes the s6 rail: `1ef5f6ad4 2026-09-04` (WO-1374/1375, both FIXED in build 2026.09.05.355872) added `Assets/_Modules/Village/Troops/RaidLootTunables.cs` (288 lines), `RaidScoring.cs` (+157), `RaidLootCurrencyRegression.cs` (408 lines) - LANE A pays wood/iron/gold/crystals per performance ladder. WO-1374 `:66` names this ticket as "the other" axis - not implemented there.
+- No RESULT, no superseding WO.
+**What changed since the RCA:** the raid loot tunables rail and the performance ladder now exist (`RaidLootTunables.cs`), so s6 has a concrete precedent to register the stone drop on; the exclusivity invariant and its oracle are unchanged.
+**Ready for a lane?** no - blocked exactly as its Status says, on the s4 shape (A raids drop stone / B raids drop, dungeons keep grade / C new material). Files a lane would touch once ruled: `Village/Troops/RaidScoring.cs`, `RaidLootTunables.cs`, `Core/Catalog/DungeonExclusiveItems.cs`, `Editor/Regression/DungeonGemExclusivityRegression.cs` (re-point, never delete), `accessories.json` / `jeweler-recipes.json` for the s2b top-tier effects.
+**Pins/rulings needed:** owner picks s4 A/B/C (the WO recommends B); s5 open items per the WO; the s2b game-changer effects were RULED 2026-09-04 (`:64`).

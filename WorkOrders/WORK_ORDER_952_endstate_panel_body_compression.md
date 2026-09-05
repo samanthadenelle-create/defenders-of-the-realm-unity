@@ -1,6 +1,7 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** READY TO IMPLEMENT - REOPENED 2026-09-04. **P1: a GEAR DROP tips the arena victory panel
+**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: win an arena round with a GEAR DROP (5-row spoils) on the device and judge the crest/stars/time narrative strip side by side - no band squashed. Gap: only WaveClear PNGs exist under Builds/ui-capture/, no arena EndState capture.
+PRIOR STATUS: READY TO IMPLEMENT - REOPENED 2026-09-04. **P1: a GEAR DROP tips the arena victory panel
 past its screen-height clamp and squashes every band to 93.3%.** ⛔ **The "renders empty" escalation
 is WITHDRAWN - see §0a. The lead over-read the owner's words; the body was never proven empty.** Was
 "DONE - audit-verified as shipped (2026-08-21 backlog audit)"; that close rested on an AUDIT, not on
@@ -386,3 +387,16 @@ unmodified), then `UICaptureLaunch.RunCaptureHeadless` and OPEN the PNGs, becaus
 that fits is not proof the strip READS right. The one thing arithmetic cannot answer is whether
 crest / stars / time side by side is the composition the owner wants — that is a felt call on a
 screenshot, and it is the reason the capture half of this WO still matters.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- The reopen's fix landed in `f6540db88 2026-09-04 12:47` (ancestor of HEAD): stat shows `Assets/_Modules/Village/UI/EndState/EndStateView.cs | 390 +++--`, `Assets/Editor/Regression/EndStateBodyFitRegression.cs | 295 +` (new), `DataRegression.cs | 16 +`, and this WO `| 56 +`. Body line 37: "WO-952 - the arena victory panel. THE ORACLE FOUND MORE THAN THE DEVICE CAPTURE DID".
+- `EndStateView.cs:1035` `return RequiredBodyPxAt(vm, canvasH, cols, NarrativeStripAt(vm, canvasH, cols));` - the narrative-strip lever described in the 2026-09-04 section above IS in the committed tree (`git status` clean on the file; last touch `f6540db88`). So "edit-only, NOT gated" in that section is now stale on the "not committed" half.
+- `Assets/Editor/Regression/EndStateBodyFitRegression.cs:1-30` header cites this WO, F8 seq 4680, the 578/540 case and the RED recipe (`MaxSpoilColumns = 2`); registered `DataRegression.cs:679` `[endstate-body-fit]`.
+- The 2026-08-10 originals: `MaxPanelHalf` and the owned compact solve are still at `EndStateView.cs:340-446`, `:631`, `:701`.
+- Regression: `Builds/regression.log` at its 22:31 state read `:113715 REGRESSION_OK 377/377 suites -- 377 green, 0 red, 0 skipped` (a 22:42 rewrite began after that read). Acceptance still OPEN: (b) the EndState capture case - `Builds/ui-capture/` holds only `EndStateWaveClear_plain_{1920x1080,2340x1080,2670x1200}.png`, NO arena-with-gear capture; (c) the owner's felt call on crest/stars/time side by side.
+**What changed since the RCA:** the whole reopen fix (3-column lever + narrative strip + the COMPRESSED-absence oracle) is committed; this WO's Status line was never flipped from READY.
+**Ready for a lane?** no - implemented; remaining is capture + felt-verify. Files a lane would touch: this WO (Status), the UI-capture case list (add an arena 5-row gear-drop case at 2670x1200).
+**Pins/rulings needed:** owner felt call on the side-by-side narrative strip (2340x1080 / 1920x1080 surfaces); an arena EndState capture PNG opened, not just solved.

@@ -1,6 +1,6 @@
 # WORK ORDER 1368 - Manage/Queues builds ZERO queue rows: no Finish Now, no Watch Ad, on the money path
 
-**Status:** READY TO IMPLEMENT - ⛔ **THE ORIGINAL DIAGNOSIS BELOW IS REFUTED. READ §0 FIRST.**
+**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Manage/Queues with a job running on the device and confirm the queue rows render with Finish Now (charges crystals) and Watch Ad. PRIOR STATUS: READY TO IMPLEMENT - ⛔ **THE ORIGINAL DIAGNOSIS BELOW IS REFUTED. READ §0 FIRST.**
 **Silo / Lane:** Village/UI Manage - `ManageScreenPanel` / `ManageScreenVM` / `Core/Jobs`
 **Type:** EXISTING system, REGRESSION (it worked earlier the same morning)
 **Minted:** 2026-09-04 (CLI), live from her device while she played
@@ -193,3 +193,19 @@ The question is narrow: **why does `ManageScreenVM` yield zero queue rows while
 - ⛔ Do not flip `RewardedAdSkip` - it is already on.
 - ⛔ Do not re-tune the crystal price curve (WO-1129's convex Finish-Now curve). The price is not the
       defect; the row is missing entirely.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- Commit `f6540db88 2026-09-04 "P0 wave: freeze fixed, queue verbs restored..."` is an ancestor of HEAD; its body names WO-1368 ("verbs now build inside the drawer").
+- `Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs:1236 private void RenderQueueDrawer()`, `:1259-1262` `for (...) AddQueueRow(_vm.QueueRows[i]);` - `AddQueueRow` now HAS a caller (its definition moved `:1737` -> `:1878`). Verbs: `:1992 "Finish Now"` -> `:1996 _vm?.FinishNow(channel, jobId)`; `:2005 wantAd`; `:2027 BuildObsidianButton(row, "Ad", ...)` -> `_vm?.WatchAd`.
+- Stale ad comment corrected in-file at `:2015-2023` ("CORRECTED 2026-09-04 (WO-1368 s15)... BOTH HALVES ARE FALSE").
+- New FlowTrace `:1286-1294` "queue drawer BUILT {0} row(s)... FinishNow={1} Ad={2} Cancel={3}" plus a Warn when no verb renders.
+- Oracle re-pointed: `Assets/Editor/Regression/ManageQueueDrawerRegression.cs:6` "RE-POINTED 2026-09-04 (WO-1368). THIS SUITE ENFORCED THE DEFECT"; `:96` ban now scoped to RenderList; `:106-121 [rows-have-a-home]` requires `AddQueueRow(_vm.QueueRows[i])` inside RenderQueueDrawer. Registered `DataRegression.cs:1011`.
+- `FeatureFlags.cs:800` / `:829` `RewardedAdSkip => Get("rewardedadskip", defaultOn: true)` - as cited.
+- Path correction: `BuildTimerService` lives at `Assets/_Modules/Village/Buildings/BuildTimerService.cs:1075`, not `Core/Jobs` as the WO cites.
+- ManageScreenPanel was touched again by `1ef5f6ad4` after the fix; the caller is still present at `:1262`.
+**What changed since the RCA:** the fix landed in `f6540db88`; line numbers shifted ~+140. This WO's `**Status:**` line was never flipped (`git log -1 -- <WO>` = `d3409a15e`, before the fix), so the derived board still shows it READY.
+**Ready for a lane?** no - implemented and oracle-pinned; open acceptance is device felt-verify ("Finish Now renders and charges", "Ad renders"). No capture under `logs/device/` post-dates the fix - every log there is the 09-04 morning pre-fix pull. Files a lane would touch: this WO (Status line only).
+**Pins/rulings needed:** owner felt-verify on a build newer than `2026.09.04.354315` (the build that lacked the rows).

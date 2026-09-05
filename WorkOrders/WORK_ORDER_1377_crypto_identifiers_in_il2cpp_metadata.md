@@ -75,3 +75,15 @@ would object to, and it is hers.** A dead type name in a metadata blob is a very
 - ⛔ Do not rename an enum member before answering §4. That is the data-loss path.
 - ⛔ Do not delete `IJupiterService` - Jupiter swap is a real dApp-lane feature, only absent on Play.
 - ⛔ Do not widen `DeNelle.Web3`'s constraint - `!GOOGLE_PLAY` is correct and is what makes this work.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** NEEDS-RULING
+**Evidence:**
+- The identifiers are where the WO says: `Assets/_Modules/Core/Web3/` holds `BackendRequestSigner.cs`, `IJupiterService.cs`, `IWalletSigner.cs`; `Assets/_Modules/Core/CoreServices.cs:154` `public static IJupiterService Jupiter`, `:157 RegisterJupiter`, `:172 UnregisterJupiter`; `Assets/_Modules/Core/Payments/IPaymentProvider.cs:10` `SolanaDappStore = 1`; `Assets/_Modules/Core/Platform/CurrencySkin.cs:27` `SolanaWallet = 1`, `:143` `authMode: SkinAuthMode.SolanaWallet`. `DeNelle.Web3.asmdef:17` `"!GOOGLE_PLAY"` - the exclusion this WO would reuse. `Core/Web3` last touched `13770a912` 2026-08-30.
+- The artifact scan the WO predicts is now REAL: `Builds/wo1367-aab.log:37493 PLAY_ARTIFACT_DIRTY ... token:solana` / `:37507 PLAY_ARTIFACT_REJECTED` (WO-1364's widened gate, `GooglePlayPackagingGate.cs:50-62`). That particular hit is a canon-strings.json literal (WO-1363's residue), so the metadata-only count this ticket needs (`global-metadata.dat` before/after) has NOT been measured yet.
+- s4 persistence question, partial evidence from this seat: `grep PaymentChannel|SkinAuthMode` over `Assets/_Modules/Core/State/*.cs` = 0 hits (not a GameState field); `grep PaymentChannel` over `Assets/_Modules/**/*.cs` filtered to `PlayerPrefs|Parse|ToString()` = 0 hits; `SolanaDappStore|SolanaWallet` in `Assets/Resources/Data/**/*.json` hits only `skin.json` (a skin row, not a save), and in `api/**/*.js` only comments. That is evidence of NO name-persistence in the paths grepped; it is not the "prove it with a real save round-trip" the WO demands.
+- No RESULT; referenced by WO-1363 (SUPERSEDED, ceiling) and WO-1366 (VALID).
+**What changed since the RCA:** nothing in the cited code; the gate that will catch the identifiers now exists and is RED on a different token.
+**Ready for a lane?** no - blocked on the s4 owner ruling exactly as stated (move + rename vs accept a dead type name in metadata). Files a lane would touch once ruled: `Core/Web3/*` -> `Assets/_Modules/Web3/`, `Core/CoreServices.cs:154-172` (+ every `CoreServices.Jupiter` caller), `Core/FeatureFlags.cs`, `Core/Payments/IPaymentProvider.cs:10`, `Core/Platform/CurrencySkin.cs:27`, both asmdefs, save read-migration if persisted.
+**Pins/rulings needed:** owner rules s4; CLI proves (name vs ordinal vs not persisted) with a real save round-trip before any rename.

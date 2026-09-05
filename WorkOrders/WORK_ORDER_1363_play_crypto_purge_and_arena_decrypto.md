@@ -13,7 +13,7 @@
 > save fields all stay. What leaves is SKR - the currency it wagers and every SKR literal in it.
 > **The wager denomination is an OWNER DESIGN CALL and is recorded in §PART 3 below.**
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in 6979fb961 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Title and the Store/Stake panels on the device and confirm no SKR/Solana copy is visible; the artifact-clean AAB box stays open on WO-1366 + WO-1377 (canon-strings.json "Solana" residue still goes RED, wo1367-aab.log:37493).
 **Silo / Lane:** Release engineering / Play variant - `DeNelle.Core` UI + `DeNelle.Village/Arena`
 **Type:** EXISTING system, incomplete exclusion
 **Minted:** 2026-09-04 (CLI), on owner rulings
@@ -162,3 +162,16 @@ claim a clean artifact alone; run it once, after both have landed.
 - ⛔ Do not cut a Play AAB as a throwaway measurement - owner ruled fix-first-build-once. The one
       build in the acceptance criteria above is the verification build, and it is the point of the
       ticket.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- Landed in `6979fb961 2026-09-04 WO-1363/1364: the Play crypto purge, the gate that can finally see it, and the ceiling neither can cross` (body: COMPILE_GATE_OK both variants, REGRESSION_OK 363/363; 24 token-bearing literals down to 2).
+- The tree matches the commit, not this WO: `Assets/_Modules/Core/UI/SkrShowcasePanel.cs:46 #if !GOOGLE_PLAY` wraps the whole panel, `:277 #else // GOOGLE_PLAY` stub (the WO's `:68` early-return mechanism was recorded as wrong in the commit body). `StakeRewardsPanel.cs:57,67 #if GOOGLE_PLAY` per-channel consts. `TitleController.cs:337 #if !GOOGLE_PLAY` around the badge at `:356` (WO said 0 guards; now 2, at `:207` and `:337`).
+- Part 2 replaced by a rule: `Assets/Editor/GooglePlayContentExclusion.cs:406 PLAY_NEUTRAL_UNMAPPED_TOKEN`; mirror pairs include `siege-stakes.json:161`, `ad-placements.json:162`; `storeBalance*` mapped `:198-204`, `heroSelect.subtitle` `:210`, `_storePiSkinNote` `:170`.
+- Proven RED on a real artifact: `Builds/wo1367-aab.log:37493 PLAY_ARTIFACT_DIRTY: content:base/assets/Data/Canonical/canon-strings.json token:solana`, `:37507 PLAY_ARTIFACT_REJECTED` (Sep 4 09:20). The "clean AAB" acceptance box is therefore NOT green: `canon-strings.json:184,231` still carry "Solana" in `_nightMarketNote` / `_storePiSkinNote` (that file is also modified-uncommitted in the working tree).
+- This WO's Status line (`:17`) still reads READY; no RESULT. Part 3 split to WO-1366 (READY); the ceiling is WO-1377 (BLOCKED on ruling).
+**What changed since the RCA:** the purge landed; the artifact scan now goes RED on canon-strings.json; WO-1366 and WO-1377 hold the remaining crypto surface.
+**Ready for a lane?** no - implementation is done; what remains is (a) flip Status + write RESULT, (b) the artifact-clean box, blocked by WO-1366 (Arena literals) and WO-1377 (identifiers). Files a lane would touch: this WO only, then the 1366/1377 lanes.
+**Pins/rulings needed:** the WO-1377 owner ruling (rename vs save serialisation); WO-1366 is already ruled (Crystals on Play).

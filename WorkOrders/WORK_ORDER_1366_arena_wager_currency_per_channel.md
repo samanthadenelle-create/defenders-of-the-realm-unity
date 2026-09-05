@@ -155,3 +155,20 @@ knob is live, and let her feel it.
       stay.
 - ⛔ Do not write `GameState.Resources.Crystals` inline; use the existing spend seam.
 - ⛔ Do not re-pick the wager amounts. Register them, default them to today's values, hand her the knob.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** VALID
+**Evidence:**
+- `Assets/_Modules/Village/Arena/ArenaWalletService.cs:2` "CLIENT-SIDE SKR WAGER STUB", `:38` `PrefBalanceKey = "dotr-arena-skr-balance"`, `:41` `SeedBalance = 500L` - exactly as cited. API `:48 Balance`, `:54 CanAfford`, `:65 Debit`, `:86 Credit`, `:97 DevReset`. Last touched `387dc2bf1 2026-07-08`.
+- Callers: `ArenaMode.cs:161 Debit(opponent.Wager)`, `:379-380` `purse = opponentWager * 2L`, `:384 Credit(purse)`, `:431-436` forfeit, `:455 Credit(_stakedWager)`; `ArenaVM.cs:208 Balance`, `:212 CanAfford`. The header's "confined to one file" is not quite true - ArenaVM reads it too (still contained).
+- `ArenaCatalog.cs:48 WinPurse => Wager * 2L`, `:87 Wager = 50L`, `:101 100L`, `:114 200L` - match.
+- `grep -c GOOGLE_PLAY` = 0 across ArenaMode/ArenaVM/ArenaWalletService/ArenaCatalog. Unchanged.
+- Seam line numbers MOVED (`6979fb961 2026-09-04` touched CurrencySkinResolver): `#if GOOGLE_PLAY` now at `CurrencySkinResolver.cs:96, :140, :248, :276` (WO says :96, :239, :267); `requested = "wallet"` now `:279`. `CurrencySkin.cs:130-138` SkrDefault block matches. `PaymentChannelResolver.cs:18-27` matches. `GameState.cs:54-58` AetherCrystals DEPRECATED comment matches.
+- Tunables rail exists (`RemoteTunables.cs:26/:54 Registry`, `api/_lib/tunables.js:55 TUNABLE_KEYS`); `grep -i arena` in both = 0 hits - not registered yet.
+- The "existing spend seam" named in WHAT NOT TO TOUCH does NOT exist as a method: no `SpendCrystals` anywhere (only comment mentions at `ResourceBuildingProgression.cs:22,:454`); Crystals are debited inline at `ResourceBuildingProgression.cs:525,:564` and `WardTetherService.cs:655`; `GameStateService.cs:495 AddCrystals` exists; `EconomyService.cs:110 ResourceCost.CrystalsOnly` exists.
+- Suite: `Assets/Editor/Regression/ArenaCatalogRegression.cs:51-54` pins Wager 50/100/200 ascending and `WinPurse == Wager*2` (registered `DataRegression.cs:359`) - a tunables move must keep it green.
+- No RESULT file; WO-1363 `:120` explicitly defers Arena to this ticket; WO-1377 covers the metadata literals separately.
+**What changed since the RCA:** only the CurrencySkinResolver line numbers (:239->:248, :267->:276/:279). Arena code untouched since July.
+**Ready for a lane?** yes - RCA holds; files a lane would touch: `Village/Arena/ArenaWalletService.cs`, `ArenaMode.cs` (trace strings), `Core/Platform/CurrencySkinResolver.cs`, `Core/Ops/RemoteTunables.cs`, `RemoteTunablesService.cs`, `api/_lib/tunables.js`, `docs/PROD022_TUNABLE_FLAGS.md`, `Editor/Regression/ArenaCatalogRegression.cs`, Command Center Balance tab.
+**Pins/rulings needed:** (1) LEAD sign-off on the Crystals spend shape - the WO's "existing spend seam" is not a method; a lane either uses `GameStateService.AddCrystals(-n)` or adds one. (2) Owner ruling on wager amounts stays deferred (defaults = today's values).

@@ -54,3 +54,17 @@ Register each suite in `DataRegression` — an unregistered oracle never runs (t
 
 ## WHAT NOT TO TOUCH
 - ⛔ Do not build PvP (map §9). *"That's a whole dragon."*
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** NEW-FEATURE
+**Evidence:**
+- The sequencing gate is released: `WorkOrders/WORK_ORDER_1375_p1_raid_progression.md:3` reads `**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22` (RESULT file present). WO-1374 is FIXED in the same build.
+- The spec exists: `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md:295` "### P2 - build retention around it (**WO-1376**)"; `:37` says WO-1374/1375/1376 execute it and point at it rather than restating.
+- Gate 1 is real: `Assets/_Modules/Core/World/DungeonStatusCatalog.cs:2` "THE SAFETY DIRECTION IS FAIL-CLOSED", `:19-23` explains Sealed-on-anything-bad. `api/dungeon-status.js` exists; whether it currently serves `open` rows is NOT proven from this seat (no request made).
+- Gate 2 is real: `Assets/Editor/Regression/PublicNavigationRetirementRegression.cs` exists.
+- Journey deck: `Assets/_Modules/HUD/PlayerDeckWorkspace.cs:588-624` builds exactly two cards, `Title = "Quests"` (`:591`) and `Title = "Raids"` (`:610`); last touched `3921a487e` / `e63494ed8` 2026-09-03 (WO-1357). No Dungeons / Realm Map / Season card exists.
+- Tunables rail (`Core/Ops/RemoteTunables.cs` Registry, `api/_lib/tunables.js TUNABLE_KEYS`) exists; no `1376` / ladder keys registered.
+**What changed since the RCA:** WO-1375 landed, so "sequenced AFTER" no longer blocks; nothing of this ticket's scope is built.
+**Ready for a lane?** yes for the navigation half (five Journey cards, re-point the retirement oracle, dungeon gate); no for troops-in-wave-defence, which the owner marked "Not P0" and the WO itself suggests splitting. It is unbuilt scope - route as a spec (s13), not an RCA. Files a lane would touch: `HUD/PlayerDeckWorkspace.cs`, `Core/World/DungeonStatusCatalog.cs`, `Editor/Regression/PublicNavigationRetirementRegression.cs`, `Core/Ops/RemoteTunables.cs` + `RemoteTunablesService.cs` + `api/_lib/tunables.js`, Command Center Balance tab, new oracles.
+**Pins/rulings needed:** (1) prove or change the `/api/dungeon-status` gate before building on it; (2) owner: split troops-in-wave-defence into its own WO?; (3) the map's P2 numbers are the defaults - none copied here, by design.

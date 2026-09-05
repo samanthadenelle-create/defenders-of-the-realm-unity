@@ -155,7 +155,7 @@
 >   `OpaqueExecutableTokens` deliberately drops `solana`/`usdc`/`jupiter`, the USDC mint is in NEITHER
 >   token list, and there is no bare `skr` token anywhere. ⭐ **Fix the GATE first or the purge just
 >   produces another green marker nobody can trust — which is how we got here.**
-> - ⛔ **THE AAB LANE HAS NO SHIP CHAIN** (WO-1365): no script invokes `BuildGooglePlayAab`, it never
+> - **CORRECTED 2026-09-04: THE AAB LANE NOW HAS A SHIP CHAIN** - `google-play-aab-build.ps1` at the REPO ROOT (not under `tools/`), landed in commit `da9694c86` (WO-1365): it expects the `[AndroidBuild] SUCCEEDED` marker (`:270`), calls the one-file `tools/r2-ship.ps1` (`:316`) and asserts size (`AAB_SIZE_OK` / `AAB_SIZE_FAIL`, exit 6). *(The line below is the pre-fix wording, kept per s15:)* ⛔ THE AAB LANE HAS NO SHIP CHAIN (WO-1365): no script invokes `BuildGooglePlayAab`, it never
 >   calls `tools2-ship.ps1` (so its own content-hashed catalog is never pushed — §16 occurrence FIVE
 >   waiting), and nothing asserts size.
 > - ⚠ **THE AAB CANNOT CARRY A CHOSEN VERSION.** `AndroidBuild.ApplyVersionStamp` (`:350-365`) is

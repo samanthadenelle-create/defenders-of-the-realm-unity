@@ -107,3 +107,16 @@ cannot reach in seconds is not a control.
   to share the name.
 - ⛔ WO-1243's toggle semantics (fail-open, no device cache). This console is a surface ONTO them,
   not a second authority over them.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** UNPROVABLE
+**Evidence:**
+- Owner bounce (`695a5c92b` 2026-09-03): "Fail" with no note, no phone screenshot, no error code.
+- The console exists and is tested: `api/admin/console.js` (last `d1f79bef6` 2026-09-02, WO-1328 Balance tab) - `:132` `.gate{max-width:440px}`, `:197` `ADMIN_DASH_KEY` input, `:226` Toggles tab, `:302` prompts `ADMIN_OPS_KEY` once per tab. Read half `api/admin/stats.js:1905` `if (view === 'ops')`. Write half `api/admin/ops.js:101-128` POST-only, `ADMIN_DASH_KEY` then `ADMIN_OPS_KEY`, `:120` `code: 'OPS_WRITE_NOT_CONFIGURED'` when unset (`:33` comment).
+- `test/command-center.test.js:190-346`: SELECT-only read files, separate write file, no `purchase_entitlements|purchase_quotes` in ops.js (`:235-236`), fail-closed (`:297-306`), no CORS (`:329`).
+- This WO's status banner says "ADMIN_OPS_KEY IS NOT SET ON THE DEPLOYMENT"; `docs/ACCESS_AND_SECRETS.md:145` says "`ADMIN_OPS_KEY` is set on the production Vercel deployment as of 2026-08-28". The live env cannot be read from a read-only seat - the banner is stale by the doc, unproven either way.
+- Built on since: WO-1281 (`7cabb572a`), WO-1269 (`bb2e2a16b`), WO-1328 (`d1f79bef6`), `515b021ab` 09-02 eight PROD-022 flags in ops.js. WO-1169's status names 1244 as delivered.
+**What changed since the RCA:** the console gained sales/retention, ack, a Balance tab and eight tunable flags; the "key not set" blocker is contradicted by canon.
+**Ready for a lane?** no - a bare "Fail" on a surface with three later tickets layered on it; the failing pillar/action is unknown. Files a lane would touch: `api/admin/console.js`, `api/admin/ops.js`, `api/admin/stats.js`.
+**Pins/rulings needed:** her phone screenshot of the failing screen with the response code shown (`OPS_WRITE_NOT_CONFIGURED` / `OPS_UNAUTHORIZED` / blank); CLI confirms `ADMIN_OPS_KEY` is present and differs from `ADMIN_DASH_KEY` on prod.

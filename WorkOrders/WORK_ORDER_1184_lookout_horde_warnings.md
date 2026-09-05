@@ -79,3 +79,16 @@ force-size intel. Match a catalog **id** or the **role enum** instead.
 - [ ] Level-3 gating proven — a level-2 lookout sends no force-size line
 - [ ] Returning to the app cancels the pending notification (no stale alert)
 - [ ] `BestLookoutLevel` keys off a stable identifier, not a display name
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** UNPROVABLE
+**Evidence:**
+- Owner bounce (ingested `695a5c92b` 2026-09-03): "right now its a red dot middle of screen, Have UI refine to maybe vibration and pulsing warning". No F8 capture carries it: `logs/f8-inbox/QUEUE.jsonl` seq 4674-4680 are quiescence/pause/EndState lines, none tagged `Lookout`.
+- The shipped notice is NOT a red dot: `Assets/_Modules/Village/Waves/LookoutNoticeChip.cs:115` `ElarionUiKit.ToastCard(transform, ElarionUiKit.ToastTone.Info, ...)` (parchment/gold), `:118-121` anchored top-centre (`anchorMin/Max (0.5,1)`, `anchoredPosition (0,-96)`), `:100-102` ScreenSpaceOverlay uGUI canvas. `AlertIntelSystem.cs:24` "NO UIDocument", `:92` `_chip`, `:163` `_chip.Show(...)`. A grep for `red` / `Danger` / `Color.red` in both files hits only comments.
+- `RoamingHordeNotifications.cs:182-224` `BestLookoutLevel` keys on `IsLookoutCatalogId(rec.itemId)` over `BaseLayout` + `PlacedStructure`; no `IndexOf("Archer")`. `StructureRole.cs:101` `Lookout = "lookout"`. So findings 1 and 2 of this WO's body (UIDocument substrate, display-name matching) are already fixed and that text is stale.
+- Suite: `Assets/Editor/Regression/LookoutAlertRegression.cs` exists, registered `DataRegression.cs:346` `[lookout-alert]`.
+- git log: the five cited files were last touched `086ce14fd` 2026-08-27; RESULT dated 2026-08-27 matches. No superseding WO.
+**What changed since the RCA:** nothing in code since 08-27. The bounce describes a surface this system does not draw.
+**Ready for a lane?** no - "red dot middle of screen" matches nothing in `LookoutNoticeChip`; without a screenshot it may be a different surface entirely (a minimap ping, a Heart marker). Files a lane would touch (only after the capture names them): `LookoutNoticeChip.cs`, `AlertIntelSystem.cs`.
+**Pins/rulings needed:** (1) a device screenshot of the "red dot" plus the build id she tested; (2) an owner ruling on "vibration and pulsing" as the notice style - that is a design choice, not an RCA.

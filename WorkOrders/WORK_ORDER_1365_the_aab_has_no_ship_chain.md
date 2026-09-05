@@ -1,6 +1,6 @@
 # WORK ORDER 1365 - The AAB has no ship chain: no wrapper, no R2 push, no size guard
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in da9694c86 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: none on the device - this is a build chain; the machine evidence is google-play-aab-build.ps1 (repo root) emitting AAB_SIZE_OK (Builds/aab-status.txt: AAB_SIZE_OK 469202267) and calling tools/r2-ship.ps1 at :316. Gap: no captured RED for "no fresh R2 push FAILS".
 **Silo / Lane:** Release engineering / build chain - `tools/*.ps1`, `Assets/Editor/AndroidBuild.cs`
 **Type:** EXISTING lane, missing gates
 **Minted:** 2026-09-04 (CLI)
@@ -299,3 +299,19 @@ failure. **This is why `libil2cpp.so` is 21.42 MiB and why there is little left 
   which is why size lands where it does.
 - ⚠ `AndroidBuild.cs:10`'s header comment says Unity `6000.4.7f1`; the pinned editor is `6000.4.8f1`.
   Stale comment - fix it while you are in the file (§15).
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- Commit `da9694c86 2026-09-04 "WO-1365: the AAB finally has a ship chain..."` is an ancestor of HEAD (`git merge-base --is-ancestor`). Stat: `google-play-aab-build.ps1` (+350, NEW, at REPO ROOT - not under `tools/`, which is why a tools/ search misses it), `Assets/Editor/AndroidBuild.cs` (+4/-4), `docs/CLI_OPERATIONS_RUNBOOK.md` (+23), this WO (+16).
+- `google-play-aab-build.ps1:270` `-ExpectMarker '[AndroidBuild] SUCCEEDED'`; `:316` `& powershell -NoProfile -File (Join-Path $root 'tools\r2-ship.ps1')` (the ONE-file call, not re-inlined); `:223-233` `AAB_SIZE_FAIL` / `AAB_SIZE_OK`; `:243` `exit 6`; `:62` `SizeCeilingBytes = 500000000`; signing preflight `:106-132`.
+- `docs/CLI_OPERATIONS_RUNBOOK.md:189-190` (build-table rows), `:196-209` (marker list).
+- `Builds/aab-status.txt` (Sep 4 13:12): `AAB_SIZE_OK 469202267 (30797733 under 500000000)`, `AAB_SIZE_TOOLS editor=6000.4.8f1`.
+- `Assets/Editor/AndroidBuild.cs:10` and `:21` now read `6000.4.8f1` (the stale-comment item above is done). Markers still at `:196` PLAY_ARTIFACT_REJECTED, `:201` SUCCEEDED, `:206` FAILED, `:272` ANDROID_CATALOG_MISSING.
+- `Builds/r2-parity.log` (Sep 4 22:21) tail: `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`.
+- No regression suite pins the size guard (`grep -i size Assets/Editor/Regression/GooglePlayPackagingRegression.cs` = 0 hits); it is a PS1 judged by marker.
+- WO-1362 (untracked, dated 09-03, RECON COMPLETE) is the programme parent; its Wave 0 "size guard" and Wave 2 "catalog parity for the AAB" rows ARE this ticket. 1362 does not supersede 1365; 1365 executes 1362's rows.
+**What changed since the RCA:** the whole ticket landed in `da9694c86`, but this WO's `**Status:**` line was never flipped (CLAUDE.md s2 requires the flip in the same commit). Still open, unproven: (a) "AAB with no fresh R2 push FAILS on the marker" is wired at `:316` but no captured RED run exists; (b) "31 MB accounted for" is WO-1367's lane (IN PROGRESS, acceptance unchecked); (c) "was the 09-01 catalog pushed?" is not answered anywhere in the tree.
+**Ready for a lane?** no - implementation is done; what remains is the Status flip + a canon fix. Files a lane would touch: this WO (Status line), `KEY_FACTS.md:158` (still says "THE AAB LANE HAS NO SHIP CHAIN" - stale, s15).
+**Pins/rulings needed:** none for the flip. The 09-01 catalog question stays a recorded unknown.

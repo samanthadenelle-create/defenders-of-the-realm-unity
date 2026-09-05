@@ -442,3 +442,17 @@ After ANY rebuild, run `tools\r2-ship.ps1` — the build regenerates the catalog
 - All 7,162 texture `.meta` files parsed for per-`buildTarget` `overridden` / `maxTextureSize` /
   `textureCompression`.
 - Live HTTP checks against `echoes-of-elarion.vercel.app` with explicit `Accept-Encoding`.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- This WO `:1` reads `PARKED 2026-09-02 by owner ruling`; `:5` carries the RETRACTED note; `:125-195` hold the retraction and the same-day over-correction.
+- Its s7 "SINGLE NEXT ACTION" is already executed: `5163f425c 2026-09-03 perf(webgl): mesh compression on two heroes + drop unused Sentis - measured, and the projection did NOT hold` (.data 165,180,012 -> 157,461,237; Ranger 26.9 -> 13.7 MB; Mage 13.3 -> 6.8 MB; Sentis -9.5 MB; projected 46 MB, delivered 29.2 MB).
+- Tree confirms: `Packages/manifest.json` 0 hits for `inference`; `Assets/HeroContent/Ranger.fbx.meta:37 meshCompression: 1`, `Assets/HeroContent/Mage.fbx.meta:37 meshCompression: 1`. The cited `Assets/Resources/Heroes/*.fbx.meta` path no longer exists (moved by `d706b430b` 2026-09-03, WO-1187; pinned by `HeroRemoteContentRegression.cs:1-13`).
+- `Builds/webgl-build.log:16810-16811` (Sep 3): `Total User Assets 248.3 mb / Complete build size 177.2 mb` (WO cites 295.1 / 196.3).
+- `ProjectSettings/ProjectSettings.asset:834 webGLMemorySize: 512` unchanged - remedy #1 was never applied and no data ever supported it.
+- PROD-022: `WORK_ORDER_PROD-022_pi_browser_crash_loop.md:3 **Status:** DONE`; its RESULT (from `d24d4210d` 2026-09-04) says instrumentation deployed, the >10-min survival acceptance UNMET pending owner felt-test. PROD-022 never mentions 1314. WO-1315 and WO-1324 are DONE. No 1314 RESULT file.
+**What changed since the RCA:** both levers this ticket named were applied and measured (`5163f425c`); heroes moved to R2 (`d706b430b`); PROD-022 instrumentation shipped and awaits a device measurement.
+**Ready for a lane?** no - the actionable scope is done and the ticket is PARKED by owner ruling; the one open thread (does the phone now survive load) is a PROD-022 felt-test, not code. Files a lane would touch: none.
+**Pins/rulings needed:** owner: close 1314 as DONE-by-`5163f425c` or unpark the Pi lane; the s6 audio item (48.6 MB, 96 files without a WebGL override) would be a NEW WO if she wants more reduction.

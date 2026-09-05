@@ -1,6 +1,6 @@
 # PROD-021 — The R2 catalog for the shipped build was never pushed (occurrence FOUR)
 
-**Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT. ⚠ **CANDIDATE CLOSE — 2026-09-02 verification below says the gate defect this ticket was minted against is FIXED. NOT closed here: PO closes (CLAUDE.md §13).** *(Prior line:)* **Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
+**Status:** FIXED - implemented in 486cd7b17 (2026-09-01, the r2-ship.ps1 per-target gate), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: a Windows exe run showing no catalog 404 (Title + town render real art, zero "VisualFactory model not found"); the machine evidence is Builds/r2-parity.log 2026-09-04 22:21:57 R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271. PRIOR STATUS: READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT. ⚠ **CANDIDATE CLOSE — 2026-09-02 verification below says the gate defect this ticket was minted against is FIXED. NOT closed here: PO closes (CLAUDE.md §13).** *(Prior line:)* **Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
 **Minted:** 2026-09-01 (CLI, PROD banner bumped 021 -> 022 in the same edit)
 **Silo:** Content ship chain (CLAUDE.md §16). Disjoint from the WO-1289..1292 art lane.
 **Covers 93 of the 148 un-acked F8 captures** (seq 4081–4224 clusters A + B).
@@ -123,3 +123,16 @@ fixed, and the Windows catalog is present on R2.** Recorded here, not closed —
 **Recommendation to the owner:** this looks closeable on the gate defect, but close it only after the
 falsification run (line 3) and a fresh device/exe run (line 4). The WebGL freshness gap above is a
 separate, live item.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- Gate defect (THE WORK item 2) is fixed at source and has been since `486cd7b17` 2026-09-01 (last commit on `tools/r2-ship.ps1`): `:177 foreach ($t in $targets)`, `:182 --verify-catalog "ServerData/$name"`, `:161-162` `R2_PARITY_FAIL no target under ... nothing to verify is a FAILURE, not a pass`, `:223` `R2_PARITY_FAIL targets=... aggregate marker withheld`.
+- Fresh proof, re-read tonight: `Builds/r2-parity.log` mtime 2026-09-04 22:21:57 (UTF-16LE, decoded) ends `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`.
+- The s16 freshness invariant HOLDS right now: `find ServerData -type f -newer Builds/r2-parity.log` = empty; newest catalogs are `catalog_2026.09.05.355872.{bin,hash}` at 22:13:12, i.e. 8 minutes BEFORE the proof. The 09-02 WebGL freshness gap recorded above is no longer live. `git config core.hooksPath` = `.githooks`.
+- Falsification (acceptance line 3): commit `33ba9c966` 2026-09-04 body claims "falsification test proves gate fails when any target missing", but NO artefact of it exists in the tree - `grep -l R2_PARITY_FAIL Builds/*.log` = none, no test file under `tools/` mentions it. Claimed in a commit message, not proven here.
+- Acceptance lines 4-5 (fresh device/exe run with zero `VisualFactory model not found` / `StructureArtPending`, owner felt-verify) remain untouched; no post-fix exe log was found.
+**What changed since the RCA:** the gate is fixed and green on three targets with the proof postdating the bytes; the WebGL freshness violation has cleared; the falsification run is asserted by a commit message only.
+**Ready for a lane?** no - nothing left to implement; what remains is evidence: capture the falsification run to a log, one fresh exe run, then PO closes. Files a lane would touch: this WO (Status).
+**Pins/rulings needed:** CLI attaches the falsification log (rename one target's catalog in a scratch run, show `R2_PARITY_OK` withheld); owner felt-verifies Title + town on the exe; PO closes (s13).

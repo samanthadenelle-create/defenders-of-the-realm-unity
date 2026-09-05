@@ -71,3 +71,14 @@ modules instantiate from, and removing it breaks the effect rather than tuning i
 - Do not restyle, recolour or replace the fireball VFX. The owner picks all VFX.
 - Do not delete the `Point Light` child (it is the prototype).
 - Do not widen into WO-1305 part B (the Synty duplicate addresses), which is separately fenced.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** UNPROVABLE
+**Evidence:**
+- Owner bounce (`f6540db88` 2026-09-04): "red glowing orb stayed at me", 14:36:09, build `2026.09.04.354315` (`Builds/build-android.log:543`). No F8 capture with those words: seq 4680 (14:35:49Z) is `[Flow:EndState] body rows COMPRESSED` from `BattleArenaHud:ShowResult`, not VFX. `logs/f8-inbox/device/live-20260904-094010.png` shows one frame of a fire burst at Thrain's hands in the arena - a frame cannot show "stayed".
+- The fix is in the tree: `Assets/_Modules/Village/Vfx/VFXManager.cs:1592` `TameWorldCollision` (bounce<=cap, dampen/lifetimeLoss>=1-cap, World type only), `:1657` `ClampParticleLights`, `:1719` call inside `NormalizeSpawnedHost`; call sites `:584` (oneshot), `:680` (loop), `VFXManager.Hovl.cs:426`. `RemoteTunables.cs:269/290` defaults 0 and 4; `api/_lib/tunables.js:80-81`; pinned `RemoteTunablesDefaultsRegression.cs:165-166`. Landed `f27e95724` 09-02. No behavioural suite for the clamp (RESULT `:243` says so).
+- The RESULT (`:34-36`, `:78`) and `VFXManager.cs:1571-1580` both state the bounce was NOT the proven root of "casts at me and stays at me"; seq 4644 was root-caused to the looping `Casting_Fire.prefab` (fixed `ba5b7fad0`). `MarqueeSpellVfx.cs:66-84` makes `firespell_Cast` a marquee that suppresses the engine projectile, so the prefab owns cast+flight+impact on the caster.
+**What changed since the RCA:** clamp + marquee wiring landed 09-02; the new symptom ("orb stayed at me") is the seq-4644 class (effect persisting on the caster), not the bounce class this WO fixed, and there is no trace showing whether `collision-clamp:hovl:firespell_Cast`, `marquee:firespell_Cast` or `EnforceOneshotEmission` fired in build 354315.
+**Ready for a lane?** no - needs the capture first. Files a lane would touch: `VFXManager.Hovl.cs`, `VFXManager.cs` (`EnforceOneshotEmission:1495`), `MarqueeSpellVfx.cs`, `HeroAbilities.cs`.
+**Pins/rulings needed:** a device logcat of ONE fire cast on build 354315 filtered to `[Flow:VFX]` / `[Flow:Vfx]` (`collision-clamp`, `light-budget`, `marquee:`, `live systems=`) plus a short screen recording; then a NEW RCA for the "stayed" symptom - this ticket's RCA does not cover it.

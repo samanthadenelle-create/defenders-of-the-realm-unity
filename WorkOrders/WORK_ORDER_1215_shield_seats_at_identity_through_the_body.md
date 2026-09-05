@@ -66,3 +66,16 @@ from `mesh.bounds`, which is available regardless - never from vertex data.
 - ⛔ The global `_sheatheLongAxisSign` - WO-1136 records that flipping it only moves the defect onto
   the other heroes.
 - The equip LOGIC. That a Mage can hold a shield at all is **WO-1214**, a separate ticket.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** UNPROVABLE
+**Evidence:**
+- Owner bounce (`695a5c92b` 2026-09-03): "Fail" with no note, no shield id, no hero, no capture. `logs/f8-inbox/device/SM02G4061955851/` holds nothing dated 09-03/09-04 about a shield.
+- The fix is in the tree: `Assets/_Modules/Core/Geometry/WeaponOrientHelper.cs:319` `ManualSeatIsSubstantiated(bool manual, bool rowIsGenerated, bool hasAuthoredSeat)`, `:329-331` the 3-arg `MayDerive` overload; `:288` comment "All 19 shield rows: 18 have NO row in offsets.json". Pinned by `AttachmentOffsetRegression.cs` `Case6_ShieldSeatSubstantiation`. Landed `3eb499b88` 2026-08-26, flipped FIXED in `c7268971d`.
+- Data drift: `offsets.json:4` `shield_A` (rot -160/-180/-84, scale 1.04, fullOverride) unchanged; `offsets.json:24` `ShieldWithItemLogic` is now rot 1.915/-48.302/-127.941, pos -0.103/0.164/-0.238, scale 0.71 - this WO's "rot 0,0,0 scale 1.733" is stale (`74d9e6546` 2026-08-30). `weapons.json` has 20 shield ids, not 19 (`knight_shield_starter` at `:70`).
+- PROD-019 s0b (REOPENED 2026-08-30): a device trace shows the locked row applying byte-exact on `Socket_Shield` and says "THE SEAT IS NOT THE DEFECT. Stop dialling it"; the device reports `ShieldHandleSide ... AMBIGUOUS margin=0.072 < 0.1`. WO-1226 and WO-1214 are CLOSED; neither supersedes this ticket.
+- New since: `GearSeat.cs` (`EnsureShieldSocket:138`, `OrientShieldSocket:180`); mesh Read/Write fixed under WO-1284.
+**What changed since the RCA:** the identity gap is closed at the gate (18 shields no longer derive from a missing row); the `ShieldWithItemLogic` row was re-dialled; whether the DERIVED pose reads right on device is unmeasured.
+**Ready for a lane?** no - the failing case must be named first; PROD-019 already shows the knight's row applying correctly. Files a lane would touch: `WeaponOrientHelper.cs` (`TryResolveShieldFrame:514`, `TryComputeShieldMountRotation:627/647`, `TryResolveShieldHandleSide:727`), `GearSeat.cs`.
+**Pins/rulings needed:** a device screenshot plus logcat `AttachOffHandProp MEASURED` / `ShieldHandleSide` lines for the exact shield id and hero she saw (`blink_shield1h_*` vs `ShieldWithItemLogic`).

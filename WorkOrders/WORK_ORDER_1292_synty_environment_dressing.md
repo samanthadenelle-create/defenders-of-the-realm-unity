@@ -93,3 +93,16 @@ clean edges rather than a tiled rectangle.
 - The owner is red/green colourblind - ground/path readability must not depend on hue contrast alone.
 
 Full inventory, usage method and ranked opportunities: `docs/reference/SYNTY_PACK_REGISTRY.md`.
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** VALID
+**Evidence:**
+- The scene still matches the RCA: `Assets/Scenes/Main_Castle_Overworld.unity` carries 140 `value: Rock_N_X` prefab refs (14 Rock_1_A, 20 Rock_1_E, 16 Rock_2_B, 9 Rock_3_C, 21 Rock_3_H, 12 Rock_4_A, 17 Rock_5_B, 13 Rock_6_D, 18 Rock_6_G) and 0 `EnvironmentDressingRoot`. Scene last touched `62425d2d1` 09-02.
+- The builder landed in `33ba9c966` 2026-09-04 (`Assets/Editor/MainCastleEnvironmentDressing.cs`, 537 lines): `:42` `DressingRootName`, `:46-48` Synty base paths, `:53-61` rock mapping, `:67-75` floor pieces, `:94-95` `[MenuItem]` `Run()`. Both sample prefabs exist (`Castle/SM_Bld_Castle_Floor_Stone_01.prefab`, `Environments/SM_Env_Rock_01.prefab`). A 3-line compile fix (`FlowTrace.Enter(..., warnAboveMs:)` -> `FlowTrace.Measure(...)`; `FlowTrace.cs:297` has no `warnAboveMs`, `:257` does) was committed in `3f49e93d5` 22:34.
+- The script has NEVER RUN: no `logs/dressing-run.log`, scene unchanged. No regression suite references `MainCastleEnvironmentDressing`.
+- Blocker still stands: WO-1291 first Status line is `IN PROGRESS`.
+- Conflict with this WO's own constraint: `.gitignore:722` `/Assets/Synty/`; the script instantiates gitignored prefabs as DIRECT scene instances, and the RESULT (`:148-154`) calls that "identical to the 5 WO-1290 perimeter prefabs" - which this WO's `:82-84` explicitly forbids as a precedent ("Anything used goes through Addressables/remote").
+**What changed since the RCA:** builder code exists (committed); the scene itself is untouched.
+**Ready for a lane?** no - blocked on WO-1291 per its own status, and the builder must route through Addressables before it is executed. Files a lane would touch: `Assets/Editor/MainCastleEnvironmentDressing.cs`, Addressables group settings, `Main_Castle_Overworld.unity` (via the builder + navmesh bake only).
+**Pins/rulings needed:** owner call on running dressing before WO-1291 finishes; lead decision on the direct-instance vs Addressables route (the WO says Addressables).

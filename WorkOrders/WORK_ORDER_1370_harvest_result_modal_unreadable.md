@@ -1,6 +1,6 @@
 # WORK ORDER 1370 - The HARVEST RESULT modal does not say what 3000 is, or that anything was lost
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: harvest into a full store on the device and read the result modal - resource name and figure on one line, the word "lost" present; wording is the owner's to approve.
 **Silo / Lane:** Core/UI - `Assets/_Modules/Core/UI/HarvestOverflowModal.cs` (copy + layout only)
 **Type:** EXISTING system, legibility defect
 **Minted:** 2026-09-04 (CLI), from her screen mid-playtest
@@ -96,3 +96,16 @@ The principles behind it, which are the reviewable part:
 - ⛔ Do not rename `Stoneyard` or the `Stone` resource. Both are real and authored
       (`structures-catalog.json`); ⚠ note `GameState.cs:59-61` records that the player-facing Stone
       balance rides the legacy `Resources.Food` slot (WO-1163/WO-1212) - **do not "tidy" that here.**
+
+---
+## RCA re-verified 2026-09-04 (QA read-only pass)
+**Verdict:** SUPERSEDED
+**Evidence:**
+- Commit `f6540db88 2026-09-04` (ancestor of HEAD) body: "WO-1370 - the harvest modal now puts the resource name and its figure on ONE line and says the word LOST."
+- `Assets/_Modules/Core/UI/HarvestOverflowModal.cs:88 public static string BuildBody(...)`; `:100-102` `$"{name} storage: {s.Current} / {s.Max}{state}"` (name + figure on one line, `(full)` as text not tint); `:108-110` "...was not added to storage - it is lost." with singular/plural branches; `:114-116` over-cap vs full wording; `:120-123` no trailing summary. The WO's cited `:55-60` loop is gone; `:46-63` now emits a per-resource FlowTrace with the actual numbers.
+- Suite: `Assets/Editor/Regression/HarvestResultCopyRegression.cs` (new in `f6540db88`), cases `[name-with-figure]`, `[loss-is-named]`, `[no-list-tail]` (`:26-30`); registered `DataRegression.cs:669`. `TownBankCapRegression.cs` still pins the `Collected/Uncollected/was not added to storage` literals (preserved at `:102`, `:108-110`).
+- `GameState.cs:59-61` Stone-rides-Food comment untouched, as ordered.
+- Screenshot `logs/f8-inbox/device/live-20260904-095525.png` (Sep 4 09:55) is PRE-fix; no post-fix 2670x1200 capture exists.
+**What changed since the RCA:** copy rebuilt in `f6540db88`; this WO's `**Status:**` line was never flipped (`git log -1 -- <WO>` = `f850e5ed6`, the mint).
+**Ready for a lane?** no - implemented; two acceptance items open: a device screenshot of the NEW copy, and "Owner has read the new copy and approved the wording". Files a lane would touch: this WO (Status line).
+**Pins/rulings needed:** owner approval of the wording at `HarvestOverflowModal.cs:100-116` (the WO says final wording is hers; the commit shipped wording without recording her OK).
