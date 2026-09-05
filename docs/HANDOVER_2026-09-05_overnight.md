@@ -102,6 +102,8 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 08:09 | committed lane B + rail + Season Track fix (27 files) + board | `5f48aa7bd`, `241d12598` |
 | 08:11 | loaded the three raid-loop tickets from the merged review as worktree lanes off 241d12598: **WO-1402** (raid rows show estimated spoils, pips hidden, LOCKED word), **WO-1403** (zero-army deploy -> TRAIN TROOPS door, SCOUT ONLY secondary, spoils line, header stats one per line), **WO-1407** (Heart plate objective becomes state: how to become raid-capable; `14m 15s`; Builders chip visible when idle). All written to the merged review's defaults (spoils shown as an estimate; no assault at 0 troops); the Heartfire clause (ruling #3) and the card size (ruling #9) are NOT touched. | agents |
 
+| 08:15 | **APK 2026.09.05.356468 built from 241d12598** (detached): `APK_OK` 08:15:30 -> `R2_PARITY_OK objects=271` -> `APK_DONE` 08:15:54; version bump `dfcdc6e3a`; Firebase upload started (notes `firebase-release-notes-2026-09-05e.txt`). WO-1379/1366/1361/1376(nav)/1394/1396 -> FIXED. | `Builds/overnight-apk-status.txt` |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
