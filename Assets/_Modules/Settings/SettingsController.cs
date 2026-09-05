@@ -73,12 +73,30 @@ namespace DeNelle.Settings
         private bool _open;
         private bool _suppressCallbacks;
 
-        // AUDIT FIX (2026-07-30): px layout ladder. Sum of every rung + gap below:
-        //   top pad 14 + 5 captions x 54 + 3 slider rows x 68 + 3 toggle rows x 76
-        //   + seam 60 + difficulty row 132 + blurb 54 + quality row 132
-        //   + wallet caption/row 174 + help/reset row 120 + bottom pad 24 = 1370.
-        // Keep this constant in sync with the EnsureBuilt ladder if rungs change.
-        private const float RequiredLadderPx = 1370f;
+        // AUDIT FIX (2026-07-30): px layout ladder. Sum of every UNCONDITIONAL rung + gap in
+        // EnsureBuilt (re-summed 2026-09-05 for WO-1399; the old 1370 had gone stale - it
+        // predated the Legal / Ad Privacy / Offline sections, so on a short landscape body the
+        // rows past 1370 px were built BELOW the scroll content, where the mask clips them):
+        //   top pad 14
+        //   Audio     caption 54 + 3 slider rows x 68 + 2 toggle rows x 76 + seam 60 = 470
+        //   Gameplay  caption 54 + difficulty row 132 + blurb 54                    = 240
+        //   Graphics  caption 54 + quality row 132                                  = 186
+        //   Comfort   caption 54 + shake toggle 76                                  = 130
+        //   Wallet    caption 54 + row 132                                          = 186
+        //   Help      caption 54 + Game Guide|Help row 120 + Reset Defaults row 120 = 294
+        //   Legal     caption 54 + row 120                                          = 174
+        //   Ad Privacy caption 54 + row 120                                         = 174
+        //   Offline   caption 54 + row 120                                          = 174
+        //   bottom pad 24
+        //   = 2066. Conditional sections (Defence Reports, Developer) add ConditionalSectionPx
+        //   each in EnsureBuilt when their condition holds.
+        // Keep this constant in sync with the EnsureBuilt ladder if rungs change - EnsureBuilt
+        // now TRACES an overrun (FlowTrace.Fail) so a stale sum is a logged line, not a cut row.
+        private const float RequiredLadderPx = 2066f;
+
+        /// <summary>One caption (54) + one 120 px button row: the size of each CONDITIONAL
+        /// section (Defence Reports when reports exist, Developer when DevPanel is registered).</summary>
+        private const float ConditionalSectionPx = 174f;
 
         /// <summary>Resolved height (canvas-local px) of the scroll content every band is a
         /// fraction of: max(body px, <see cref="RequiredLadderPx"/>). Set in EnsureBuilt.</summary>
@@ -106,6 +124,37 @@ namespace DeNelle.Settings
 #if !GOOGLE_PLAY
             CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
 #endif
+        }
+
+        // WO-1399: the gear dock's "Settings" row reaches this screen through Core SettingsGate
+        // (PauseGate's twin) - DeNelle.HUD cannot reference DeNelle.Settings, so the request is
+        // an event this controller subscribes to, exactly as PauseController subscribes to
+        // PauseGate.PauseToggleRequested (PauseController.OnEnable). Subscribe here rather than
+        // in Awake so a disabled controller never answers a request it cannot show.
+        private void OnEnable()
+        {
+            SettingsGate.SettingsOpenRequested -= OnSettingsOpenRequested;
+            SettingsGate.SettingsOpenRequested += OnSettingsOpenRequested;
+        }
+
+        private void OnDisable()
+        {
+            SettingsGate.SettingsOpenRequested -= OnSettingsOpenRequested;
+        }
+
+        /// <summary>WO-1399: SettingsGate.RequestOpen landed here. <paramref name="source"/> names
+        /// the door ("dock"). Open() routes through the modal arbiter, so whatever else is open
+        /// (a HUD panel) is swapped out - the same rule every PanelRouter panel obeys.</summary>
+        private void OnSettingsOpenRequested(string source)
+        {
+            if (!isActiveAndEnabled)
+            {
+                FlowTrace.Warn("Settings", "SettingsGate request from=" + source +
+                    " reached an inactive SettingsController - ignored.");
+                return;
+            }
+            FlowTrace.Step("Settings", "opened via SettingsGate from " + source);
+            Open();
         }
 
         private void OnDestroy()
@@ -197,7 +246,12 @@ namespace DeNelle.Settings
             // fix layout, never shrink fonts). Zero behavior change - same controls, same
             // wiring, same persistence.
             float bodyPx = BodyLocalHeight(_modal.canvas, bodyZone);
-            _ladderPx = Mathf.Max(bodyPx, RequiredLadderPx);
+            // WO-1399: the conditional sections use the SAME conditions the rows below use, so
+            // the content is exactly as tall as what gets built - no clipped tail, no dead space.
+            float ladderNeedPx = RequiredLadderPx;
+            if (DeNelle.Core.Defense.DefenseReportLedger.All().Count > 0) ladderNeedPx += ConditionalSectionPx;
+            if (PanelRouter.IsRegistered(PanelId.DevPanel)) ladderNeedPx += ConditionalSectionPx;
+            _ladderPx = Mathf.Max(bodyPx, ladderNeedPx);
             var body = BuildScrollHost(bodyZone, _ladderPx);
 
             float y = 1f - Frac(14f);
@@ -262,10 +316,21 @@ namespace DeNelle.Settings
             ElarionUiKit.BuildObsidianButton(body, "Game Guide",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnGameGuideClicked);
+            // WO-1399: the HELP menu (Report a Bug / Controls / Reset Hero and Pet / Credits) now
+            // lives HERE, as a row, via PanelId.Help - the same door shape as Game Guide (WO-588)
+            // and Defence Reports (WO-1026). It used to be what the gear dock's "Settings" row
+            // opened, so Help was mislabelled and the real Settings was hidden behind Pause. A row
+            // inside Settings keeps ONE door and keeps the 2x3 gear dock at six cells.
+            ElarionUiKit.BuildObsidianButton(body, "Help",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnHelpClicked);
+            y -= Frac(120f);   // step PAST the row - Caption only advances 54, a button row is 120
+            // Reset Defaults moved down to its own rung so the Help caption keeps two Help doors
+            // side by side (Game Guide | Help) and the destructive red button sits alone.
             ElarionUiKit.BuildObsidianButton(body, "Reset Defaults",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
-                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnResetClicked);
-            y -= Frac(120f);   // step PAST the Help row - Caption only advances 54, a button row is 120
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnResetClicked);
+            y -= Frac(120f);
 
             // -- Defence reports (WO-1026) -----------------------------------
             // WHY SETTINGS AND NOT THE ACTION BAR: CLAUDE.md §7 caps the calm(town) bar at SIX
@@ -361,6 +426,21 @@ namespace DeNelle.Settings
                     new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnDevPanelClicked);
                 y -= Frac(120f);
             }
+
+            // WO-1399 instrument (CLAUDE.md section 12): the ladder is a hand-summed constant and
+            // the rows are built as fractions of it, so a rung added without re-summing lands
+            // rows BELOW the scroll content, where the mask clips them and the scroller cannot
+            // reach them - a silent cut with no error. `y` is the fraction of the content still
+            // unused after the last rung; negative means rows overran the content height.
+            float overrunPx = -y * _ladderPx;
+            if (y < 0f)
+                FlowTrace.Fail("Settings",
+                    "ladder OVERRUN: rows extend " + overrunPx.ToString("F0") + " px below the scroll " +
+                    "content (content=" + _ladderPx.ToString("F0") + " px) - the bottom rows are clipped " +
+                    "and unreachable. Raise RequiredLadderPx.");
+            else
+                FlowTrace.Step("Settings", "ladder built: content=" + _ladderPx.ToString("F0") +
+                    " px, unused=" + (y * _ladderPx).ToString("F0") + " px");
 
             BuildSelectorButtons();
             ApplyMedievalPresentation();
@@ -683,6 +763,20 @@ namespace DeNelle.Settings
         {
             Close();
             PanelRouter.Open(PanelId.GameGuide);
+        }
+
+        /// <summary>WO-1399: the Settings door onto the HELP menu (PanelId.Help, registered by
+        /// HelpMenu.Awake). Closes Settings first so the modal arbiter swaps cleanly (the Game
+        /// Guide route's rule). A FALSE route is reported, never swallowed - HelpMenuBootstrap
+        /// not having spawned the menu would otherwise read as a dead button.</summary>
+        private void OnHelpClicked()
+        {
+            FlowTrace.Step("Settings", "Help row tapped -> PanelRouter.Open(PanelId.Help)");
+            Close();
+            if (!PanelRouter.Open(PanelId.Help))
+                FlowTrace.Fail("Settings",
+                    "PanelRouter.Open(PanelId.Help) returned FALSE - HelpMenu did not register the " +
+                    "opener (HelpMenuBootstrap did not spawn it in this scene).");
         }
 
         /// <summary>WO-1026: the town door onto the Defence Report. Closes Settings first so the

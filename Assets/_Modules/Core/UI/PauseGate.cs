@@ -90,6 +90,10 @@ namespace DeNelle.Core.UI
                 PanelManager.CloseOpen();
                 return;
             }
+            // WO-1400: back with nothing open is a pause request, never a "return to the deck you
+            // left" - forget any remembered way back so the pause overlay is not undercut by a
+            // deck re-opening beneath it.
+            PanelManager.ClearReturnDoor("pause");
             PauseToggleRequested?.Invoke();
         }
 

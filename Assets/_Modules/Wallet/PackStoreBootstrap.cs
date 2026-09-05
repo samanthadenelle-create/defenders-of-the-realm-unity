@@ -29,6 +29,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Payments;   // WO-1395 - PaymentChannelResolver, the compile-stamped channel for the registration trace
+using DeNelle.Core.Platform;   // WO-1395 - CurrencySkinResolver, the active skin for the registration trace
 using DeNelle.Commerce;   // WO-1282 - StorefrontRegistry, the rail-neutral host handle
 
 namespace DeNelle.Wallet
@@ -43,6 +45,17 @@ namespace DeNelle.Wallet
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RegisterOpener()
         {
+            // WO-1395 - THE SOLE REGISTRAR IN THIS ARTIFACT. GooglePlayStorefront also registers
+            // PanelId.RealmStore, but only under GOOGLE_PLAY, where this assembly (!GOOGLE_PLAY,
+            // WO-1282 Lane B) is compiled out - the two never coexist. Finding the id already
+            // taken here is therefore a collision to shout about, never something to replace
+            // silently (PanelRouter.Register is last-writer-wins by design).
+            if (PanelRouter.IsRegistered(PanelId.RealmStore))
+                FlowTrace.Fail("Store",
+                    "second PanelId.RealmStore registrar detected: PackStoreBootstrap found the id already " +
+                    "registered at BeforeSceneLoad. Exactly one storefront may register this id per artifact " +
+                    "(DeNelle.Wallet is !GOOGLE_PLAY, DeNelle.GooglePlay is GOOGLE_PLAY).");
+
             // Reflection-free cross-assembly door: the merchant dialogue verb + any
             // future entry point open the store via PanelRouter.Open(PanelId.RealmStore).
             PanelRouter.Register(PanelId.RealmStore, OpenRealmStore);
@@ -50,7 +63,16 @@ namespace DeNelle.Wallet
             // "settings" / "vendor")) latches it for the funnel's store_opened {door}. Plain opens
             // still route through the line above and the store infers the door from its other latches.
             PanelRouter.Register(PanelId.RealmStore, (Action<string>)OpenRealmStoreFromDoor);
-            FlowTrace.Step("Store", "PackStoreBootstrap: PanelId.RealmStore opener registered (plain + door context).");
+
+            // WO-1395 - name the registrar AND the skin it will dress the one store in. The skin
+            // read is guarded: CurrencySkinResolver.Active resolves lazily (Resources.Load + URL
+            // read) and a throw there must not take the store's registration down with it.
+            string skin = "<unresolved>";
+            Guard.Try("Store", "read the active currency skin for the registration trace",
+                () => { skin = CurrencySkinResolver.Active != null ? CurrencySkinResolver.Active.SkinId : "<null>"; });
+            FlowTrace.Step("Store",
+                "RealmStore registrar=PackStoreBootstrap skin=" + skin + " channel=" + PaymentChannelResolver.ResolveStampedChannel() +
+                " (plain + door context).");
 
             // WO-1282 - the second door, for callers that need the HOST rather than an open request.
             // MarketplaceInteractor (DeNelle.Village) used to reach it with

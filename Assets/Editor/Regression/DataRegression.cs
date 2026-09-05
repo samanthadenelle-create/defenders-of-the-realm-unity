@@ -1523,6 +1523,19 @@ namespace DeNelle.Editor
             // face that opens PanelId.RealmStore renders it; no "Night Market" / "Realm Store"
             // literal survives in module code.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-name-single-source suite", () => { if (!DeNelle.Editor.Regression.StoreNameSingleSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-name-single-source] " + r); });
+            // WO-1395: PanelId.RealmStore has exactly ONE registrar per shipped artifact (the two
+            // registrar files sit in asmdefs constrained GOOGLE_PLAY vs !GOOGLE_PLAY), every registrar
+            // also registers the door-context opener so a plain and a door-tagged open land on the
+            // same screen, and each names itself in a [Flow:Store] registration line.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-store-single-registrar suite", () => { if (!DeNelle.Editor.Regression.RealmStoreSingleRegistrarRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-store-single-registrar] " + r); });
+            // WO-1399: the gear dock's "Settings" row opens the REAL Settings (SettingsController,
+            // via Core SettingsGate - PauseGate's twin), never HelpMenu; Help is a row INSIDE
+            // Settings through the append-only PanelId.Help; the dock grid stays 2x3 / six cells.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dock-settings-route suite", () => { if (!DeNelle.Editor.Regression.DockSettingsRouteRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dock-settings-route] " + r); });
+            // WO-1400: a panel opened FROM a deck returns to that deck on close (arbiter-level
+            // return door in PanelManager, one mechanism, honours the WO-1393 close-frame grace);
+            // a HUD-opened panel's close does not return anywhere.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "deck-return-door suite", () => { if (!DeNelle.Editor.Regression.DeckReturnDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[deck-return-door] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

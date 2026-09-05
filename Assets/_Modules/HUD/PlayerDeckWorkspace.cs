@@ -531,6 +531,24 @@ namespace DeNelle.HUD
         {
             if (spec == null || spec.Open == null || (spec.Available != null && !spec.Available())) return;
             string title = spec.Title;
+            // WO-1400: remember the way back BEFORE closing. The arbiter is exclusive, so this deck
+            // cannot stay open beneath the card; the door is arbiter state (PanelManager) and fires
+            // only on a close-to-nothing, so Equipment -> Skills -> close still lands back here.
+            // The deck is the ONE appearance owner: the reopen is the same Open(page) the HUD face
+            // uses, never a second spawner.
+            if (Navigation.Count > 0 && Navigation.Current != null)
+            {
+                PlayerDeckKind kind = Navigation.Current.Kind;
+                PanelManager.SetReturnDoor(kind + " deck", () =>
+                {
+                    FlowTrace.Step("Navigation", "deck return -> " + kind);
+                    Open(new PlayerDeckPage(kind));
+                });
+            }
+            else
+            {
+                FlowTrace.Warn("Navigation", "deck card '" + title + "' tapped with no page on the stack - no return door set");
+            }
             Close();
             Guard.Try("Navigation", "open deck card '" + title + "'", spec.Open);
             FlowTrace.Step("Navigation", "deck card -> " + title);

@@ -581,8 +581,9 @@ namespace DeNelle.HUD.Kit
 
             // ── system: flee ──
             // 3-settings-doors -> 1 (owner cosmetic flag A, 2026-07-24): the top-right "Menu"
-            // TEXT button was REMOVED here. It reached the same HelpMenu/Settings card the LEFT
-            // gold-gear slide-dock's Settings tab already opens, so it was a duplicate door. The
+            // TEXT button was REMOVED here. It reached the same card the LEFT gold-gear
+            // slide-dock's Settings tab already opens, so it was a duplicate door (WO-1399: that
+            // tab now opens the REAL Settings via SettingsGate; Help is a row inside it). The
             // single settings entry point is now the left gear (BuildSlideDock: Chat/Leaderboard/
             // Music/Settings/Pause). hud-areas.json "settingsButton" rows go inert automatically
             // (posture only iterates REGISTERED widgets). Flee stays below.
@@ -4064,13 +4065,23 @@ namespace DeNelle.HUD.Kit
                 });
         }
 
-        // Settings tab -> the Help/Settings card (same target as the gear/Menu button).
+        // Settings tab -> the REAL options screen (SettingsController: quality / difficulty /
+        // wallet / privacy / offline), through Core SettingsGate - PauseGate's twin.
+        // WO-1399: this row used to toggle the HELP menu's overlay directly, so a
+        // row labelled "Settings" opened the bug-report/Controls/Credits menu, and the real
+        // Settings was reachable only through Pause. The HUD cannot call SettingsController
+        // directly (DeNelle.HUD.asmdef references Core + Data only; DeNelle.Settings references
+        // Core only), so the request crosses through the Core gate and SettingsController
+        // subscribes. Help now lives as a row INSIDE Settings (PanelId.Help) - one door, and
+        // the 2x3 dock grid keeps its six cells (no seventh row).
+        // A request with no subscriber is a FlowTrace.Fail inside the gate, never a silent no-op.
         private void OpenSettings()
         {
-            if (DeNelle.HUD.HelpMenu.Instance != null)
-                DeNelle.HUD.HelpMenu.Instance.ToggleOverlay();
-            else if (!PanelRouter.Open(PanelId.GameGuide))
-                FlowTrace.Warn("HudKit", "dock: neither HelpMenu nor GameGuide available for Settings");
+            Guard.Try("Settings", "open Settings from the gear dock", () =>
+            {
+                FlowTrace.Step("Settings", "gear dock 'Settings' tapped -> SettingsGate.RequestOpen(dock)");
+                SettingsGate.RequestOpen("dock");
+            });
         }
 
         // The gear dock's "Realm" row -> PanelId.RealmDeck, the PlayerDeckWorkspace launcher

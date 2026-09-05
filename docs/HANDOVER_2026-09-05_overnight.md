@@ -62,6 +62,12 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 06:16 | committed 1398 + 1401 by explicit path (18 files); the four lane worktrees + branches removed | `eb118ac14` |
 | 06:17 | third APK chain started DETACHED on eb118ac14 (1398 + 1401 on top of the Firebase build); new lanes 1395 / 1399 / 1400 loaded in fresh worktrees off eb118ac14 | `Builds/overnight-apk-status.txt` |
 
+| 06:24 | **APK 2026.09.05.356357 built from eb118ac14** (detached): `APK_OK` 06:24:25 -> `R2_PARITY_OK objects=271` -> `APK_DONE` 06:24:51 | `Builds/overnight-apk-status.txt` |
+| 06:3x | **Pushed 356357 to Firebase App Distribution** (release `66dqqtmeb`, notes `Builds/firebase-release-notes-2026-09-05b.txt`: supersedes 356329; adds 1398 + 1401). Version bump committed `03991f38a`. | firebase CLI: `distributed to testers/groups successfully` |
+| 06:35 | lanes 1395 / 1399 / 1400 finished in worktrees; merged into `D:\eoa` (3-way; the only conflict was the three suite registrations above DataRegression's END fence - all three kept) | `scratchpad/lane-1395.patch` etc. |
+| 06:39-06:42 | `COMPILE_GATE_OK` 06:39; **`REGRESSION_OK 382/382`** 06:42 | `Builds/regression.log` 06:42:04 |
+| 06:42 | **WO-1395 finding for the morning:** the graph's "registered twice under GOOGLE_PLAY" is FALSE at source - Wallet is `!GOOGLE_PLAY`, GooglePlay is `GOOGLE_PLAY` (asmdef defineConstraints, WO-1282). Fixed what was real (door-context opener + funnel line under Play, registration traced, detector). **Ruling needed:** two artifact-exclusive storefronts (pinned) vs Play as a PackStore skin (reverses WO-1282). | WO-1395 status line |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 

@@ -1,5 +1,9 @@
 // =============================================================================
-// HelpMenu — the Settings/Help modal reachable from the HUD gear button.
+// HelpMenu - the HELP modal: PanelId.Help, opened from the "Help" row inside Settings.
+// WO-1399: this screen used to be what the gear dock's "Settings" row opened (the row
+// was mislabelled; the trace text said "Settings" too). The dock row now opens the real
+// SettingsController via Core SettingsGate, and this menu registers PanelId.Help so
+// Settings can route to it exactly as it routes to Game Guide / Defence Reports.
 // Surfaces whatever HelpMenuVM offers: Report Bug (WO-596 BugReportView),
 // Controls, Reset Hero & Pet, Credits — plus Dev Tools + the gated dev grant in
 // dev builds only. The list itself is VM state; see WO-882 below.
@@ -126,11 +130,14 @@ namespace DeNelle.HUD
         {
             Instance = this;
             _panelHandle = PanelManager.Register("Help", Close, () => IsOpen);
+            // WO-1399: the one reflection-free door onto this menu (Settings' "Help" row).
+            PanelRouter.Register(PanelId.Help, Open);
         }
 
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            PanelRouter.Unregister(PanelId.Help, Open);
             if (_vm != null)
             {
                 _vm.Changed -= OnEntriesChanged;
@@ -513,8 +520,19 @@ namespace DeNelle.HUD
         // ── Actions ────────────────────────────────────────────────────────────
         public void ToggleOverlay()
         {
-            FlowTrace.Step("UI", $"Settings open requested (gear -> ToggleOverlay; currently open={IsOpen})");
+            // WO-1399: this trace used to call the menu "Settings" (gear -> ToggleOverlay) - the
+            // misnomer was baked into the evidence. This is the HELP menu; the gear dock no
+            // longer calls it (AutoPilot's CaptureDockOverlays still does).
+            FlowTrace.Step("UI", $"HelpMenu: toggle requested (currently open={IsOpen})");
             SetOpen(!IsOpen);
+        }
+
+        /// <summary>WO-1399: the PanelRouter opener for <see cref="PanelId.Help"/> - Settings'
+        /// "Help" row lands here. Idempotent: an already-open menu stays open.</summary>
+        public void Open()
+        {
+            FlowTrace.Step("UI", $"HelpMenu: open requested via PanelId.Help (currently open={IsOpen})");
+            SetOpen(true);
         }
 
         /// <summary>Explicitly hide the Help modal (shared Close + modal-arbiter close).</summary>
@@ -531,7 +549,7 @@ namespace DeNelle.HUD
             if (open) PanelManager.NotifyOpened(_panelHandle);
             else PanelManager.NotifyClosed(_panelHandle);
             if (open) RefreshWell();   // re-snap + refresh the hint at the live screen size
-            FlowTrace.Step("UI", $"Settings {(open ? "shown" : "hidden")} — kit modal active={_modal.canvas.activeSelf} timeScale={Time.timeScale}");
+            FlowTrace.Step("UI", $"HelpMenu {(open ? "shown" : "hidden")} - kit modal active={_modal.canvas.activeSelf} timeScale={Time.timeScale}");
         }
 
         /// <summary>WO-596 — route to the player bug-report form. Close FIRST so the

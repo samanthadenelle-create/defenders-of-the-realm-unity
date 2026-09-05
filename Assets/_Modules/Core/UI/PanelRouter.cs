@@ -141,6 +141,13 @@ namespace DeNelle.Core.UI
         HeroDeck = 23,
         /// <summary>WO-1286 mobile-first card launcher for quests, map, raids and seasons.</summary>
         JourneyDeck = 24,
+        /// <summary>WO-1399 - the HELP menu (HelpMenu, DeNelle.HUD: Report a Bug / Controls /
+        /// Reset Hero and Pet / Credits, plus dev-only rows). Registered scene-independently by
+        /// HelpMenu.Awake (spawned by HelpMenuBootstrap). Its ONE player door is the "Help" row
+        /// inside Settings (SettingsController.OnHelpClicked) - the gear dock's "Settings" row
+        /// used to open THIS screen instead of Settings, and Help was reachable nowhere else.
+        /// Append-only: values are load-bearing.</summary>
+        Help = 25,
     }
 
     /// <summary>

@@ -1,3 +1,30 @@
+// =============================================================================
+// GooglePlayStorefront - the ONE PanelId.RealmStore registrar in a GOOGLE_PLAY artifact.
+// -----------------------------------------------------------------------------
+// WO-1395 (2026-09-05). The WO was minted on the premise that this class and
+// PackStoreBootstrap both register PanelId.RealmStore in the SAME build and race on
+// static-init order. Proven false at source: DeNelle.Wallet.asmdef carries
+// defineConstraints ["!GOOGLE_PLAY"] (WO-1282 Lane B, commit c06a66de5) and
+// DeNelle.GooglePlay.asmdef carries ["GOOGLE_PLAY"], so exactly ONE of the two
+// registrars is compiled into any artifact and they can never coexist. This is the
+// Play build's whole store, not a second store beside the Night Market - the Night
+// Market (PackStore, DeNelle.Wallet) does not exist in this artifact at all.
+//
+// WHAT WAS REAL in the WO's finding, and what this file now closes:
+//   * a door-tagged open (PanelRouter.Open(RealmStore, "settings"|"vendor")) fell back
+//     to the plain opener here because no Action<string> was registered, so the WO-1388
+//     funnel's store_opened {door} was never recorded under Play. Both call shapes now
+//     land on THIS one modal and the door is latched exactly as PackStoreBootstrap does.
+//   * registration was untraced and the open was unguarded. Both are now [Flow:Store].
+//   * a second registrar in the same build is now DETECTED (PanelRouter.IsRegistered
+//     before we register -> FlowTrace.Fail) instead of silently replaced.
+// Pinned by Assets/Editor/Regression/RealmStoreSingleRegistrarRegression.cs.
+// =============================================================================
+
+using System;
+using DeNelle.Commerce;          // StoreFocusRequest - the rail-neutral door latch (WO-1388)
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Payments;
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
@@ -13,18 +40,72 @@ namespace DeNelle.GooglePlay
         private PanelHandle _panelHandle;
         private bool _open;
 
+        /// <summary>The door the funnel records for a plain (context-free) open. Mirrors
+        /// PackStore.DoorHudCard: every remaining plain open is the HUD Night Market card.</summary>
+        private const string DoorHudCard = "hud-card";
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void RegisterRoute() => PanelRouter.Register(PanelId.RealmStore, Open);
+        private static void RegisterRoute()
+        {
+            // WO-1395 - a registrar that finds the id already taken is the collision the WO
+            // feared. It cannot happen while the asmdef constraints hold (see header); if it
+            // ever does, say so instead of letting PanelRouter.Register replace it silently.
+            if (PanelRouter.IsRegistered(PanelId.RealmStore))
+                FlowTrace.Fail("Store",
+                    "second PanelId.RealmStore registrar detected: GooglePlayStorefront found the id already " +
+                    "registered at BeforeSceneLoad. Exactly one storefront may register this id per artifact " +
+                    "(DeNelle.Wallet is !GOOGLE_PLAY, DeNelle.GooglePlay is GOOGLE_PLAY).");
+
+            PanelRouter.Register(PanelId.RealmStore, Open);
+            // The CONTEXT opener (WO-1388 door funnel): a caller that names its door lands on the
+            // SAME modal as a plain open, with the door latched for store_opened {door}.
+            PanelRouter.Register(PanelId.RealmStore, (Action<string>)OpenFromDoor);
+            FlowTrace.Step("Store",
+                "RealmStore registrar=GooglePlayStorefront skin=play channel=" + PaymentChannelResolver.ResolveStampedChannel() +
+                " (plain + door context; DeNelle.Wallet/PackStore is compiled out of this GOOGLE_PLAY artifact).");
+        }
+
+        /// <summary>The door-naming open (PanelRouter context opener). Latches the door for the
+        /// funnel, then opens exactly as the plain <see cref="Open"/>.</summary>
+        private static void OpenFromDoor(string door)
+        {
+            FlowTrace.Step("Store", "GooglePlayStorefront.OpenFromDoor door='" + (door ?? "<null>") + "'.");
+            StoreFocusRequest.RequestDoor(door);
+            Open();
+        }
 
         private static void Open()
         {
+            using var _ = FlowTrace.Enter("Store", "GooglePlayStorefront.Open");
             if (_active == null)
             {
-                var canvas = ElarionUiKit.BuildModalCanvas("GooglePlayStoreHost", 31000);
-                _active = canvas.AddComponent<GooglePlayStorefront>();
-                _active.Build();
+                bool built = Guard.Try("Store", "build the Google Play storefront host", () =>
+                {
+                    var canvas = ElarionUiKit.BuildModalCanvas("GooglePlayStoreHost", 31000);
+                    _active = canvas.AddComponent<GooglePlayStorefront>();
+                    _active.Build();
+                });
+                if (!built || _active == null)
+                {
+                    FlowTrace.Fail("Store", "GooglePlayStorefront.Open: host build failed - the store did NOT open.");
+                    return;
+                }
+                FlowTrace.Step("Store", "GooglePlayStorefront: host spawned (first open).");
             }
+            // WO-1388 funnel step 1 - store_opened {door}, the one emit site in THIS artifact
+            // (PackStore.TrackStoreOpened is the one in a DAPP_STORE artifact; never both compiled).
+            TrackStoreOpened();
             _active.SetOpen(true);
+        }
+
+        /// <summary>store_opened {door}: a named door comes from the latch; a plain open is the HUD card.</summary>
+        private static void TrackStoreOpened()
+        {
+            string named = StoreFocusRequest.ConsumeDoor();
+            string door = named ?? DoorHudCard;
+            FlowTrace.Step("Store", "funnel store_opened door=" + door + (named == null ? " (inferred)" : " (named)") + " [play].");
+            Guard.Try("Store", "track store_opened",
+                () => DeNelle.Core.Analytics.EventTracker.Track("store_opened", new { door }));
         }
 
         private void Awake()

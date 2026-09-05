@@ -111,6 +111,147 @@ namespace DeNelle.Core.UI
         }
 
         // =====================================================================
+        //  WO-1400 (2026-09-05) - THE RETURN DOOR.
+        // ---------------------------------------------------------------------
+        //  PROVEN by the UI screen graph (docs/qa/UI_SCREEN_GRAPH_2026-09-04.md:62, dead end 9):
+        //  PlayerDeckWorkspace.OpenCard closes the deck BEFORE it opens the card's panel, because
+        //  this arbiter is exclusive (NotifyOpened closes `previous`), and nothing remembered the
+        //  parent - so closing Bag / Equipment / Quests landed on the HUD, and a deck read as a
+        //  splash screen, not a place.
+        //
+        //  ONE mechanism, arbiter state, no panel learns about decks: whoever hands off SETS the
+        //  door (SetReturnDoor) before it closes itself. When the open slot later becomes null by
+        //  a CLOSE TO NOTHING (NotifyClosed / CloseOpen with no successor) the door is ARMED, and
+        //  it FIRES on the first pump strictly AFTER the WO-1393 close grace - the in-flight tap
+        //  has been raycast and swallowed by then, so the re-opened parent never inherits it. A
+        //  SWAP (NotifyOpened replacing `previous`) never consumes the door: Equipment -> Skills ->
+        //  close still returns to the Hero deck. CloseAll (the combat posture flip), a battle-lock
+        //  rejection and a back request with nothing open CLEAR the door without firing. The door
+        //  is cleared BEFORE its reopen runs, so a re-entrant SetReturnDoor from the re-opened
+        //  parent is never wiped.
+        //
+        //  The pump is a DDOL host created on the first SetReturnDoor (play mode only - the same
+        //  shape as EnemyContentWarmer.Host); EditMode drives PumpReturnDoor(frame) directly, which
+        //  is the seam DeckReturnDoorRegression uses. Reset on domain reload like every static here.
+        // =====================================================================
+
+        private sealed class ReturnDoor
+        {
+            public readonly string Name;
+            public readonly Action Reopen;
+            public ReturnDoor(string name, Action reopen) { Name = name; Reopen = reopen; }
+        }
+
+        private static ReturnDoor _returnDoor;
+        // -1 = no close-to-nothing is pending. Otherwise the last frame of the WO-1393 grace that
+        // followed the close; the door fires on the first pump whose frame is strictly greater.
+        private static int _returnDoorPendingUntilFrame = -1;
+        private static ReturnDoorPump _pump;
+
+        /// <summary>The name of the return door currently set (e.g. "Hero deck"), or null when
+        /// no hand-off is remembered.</summary>
+        public static string ReturnDoorName => _returnDoor != null ? _returnDoor.Name : null;
+
+        /// <summary>True between a close-to-nothing and the pump that fires (or keeps) the door.</summary>
+        public static bool ReturnDoorPending => _returnDoor != null && _returnDoorPendingUntilFrame >= 0;
+
+        /// <summary>
+        /// Remember the way back. Called by the screen that is about to close ITSELF to open a
+        /// child (PlayerDeckWorkspace.OpenCard): when the child - or whatever it swapped to - later
+        /// closes to nothing, <paramref name="reopen"/> runs and the player lands where they came
+        /// from instead of on the HUD. Replaces any earlier door.
+        /// </summary>
+        public static void SetReturnDoor(string name, Action reopen,
+            [CallerMemberName] string setterMember = null,
+            [CallerFilePath]  string setterFile   = null)
+        {
+            if (reopen == null)
+            {
+                FlowTrace.Warn("Navigation", "return door '" + (name ?? "<null>") + "' offered with NO reopen action - ignored");
+                ClearReturnDoor("null-reopen");
+                return;
+            }
+            _returnDoor = new ReturnDoor(string.IsNullOrEmpty(name) ? "parent" : name, reopen);
+            _returnDoorPendingUntilFrame = -1;
+            FlowTrace.Step("Navigation", "return door SET '" + _returnDoor.Name + "' by " +
+                System.IO.Path.GetFileNameWithoutExtension(setterFile ?? string.Empty) + "." + (setterMember ?? "?"));
+            EnsurePump();
+        }
+
+        /// <summary>Forget the way back WITHOUT walking through it (combat posture flip, pause
+        /// with nothing open, battle-lock). No-op and silent when no door is set.</summary>
+        public static void ClearReturnDoor(string reason)
+        {
+            var door = _returnDoor;
+            _returnDoor = null;
+            _returnDoorPendingUntilFrame = -1;
+            if (door != null)
+                FlowTrace.Step("Navigation", "return door CLEARED '" + door.Name + "' reason=" + reason);
+        }
+
+        // A close-to-nothing happened (the open slot is now null). Arm the door to fire once the
+        // WO-1393 grace has passed. If a successor opens before then, NotifyOpened keeps the door.
+        private static void ArmReturnDoor(string closedPanel)
+        {
+            if (_returnDoor == null) return;
+            _returnDoorPendingUntilFrame = CloseGraceUntilFrame;
+            FlowTrace.Step("Navigation", "return door '" + _returnDoor.Name + "' ARMED by close of '" +
+                closedPanel + "' - fires after frame " + CloseGraceUntilFrame);
+            EnsurePump();
+        }
+
+        /// <summary>
+        /// Advance the return door for <paramref name="frame"/>. Fires (and consumes) the door
+        /// when a close-to-nothing is pending, the WO-1393 grace has passed and NOTHING is open;
+        /// keeps the door when something opened in between; no-op otherwise. Returns true only
+        /// when the reopen ran. Driven every frame by the play-mode pump; EditMode calls it directly.
+        /// </summary>
+        public static bool PumpReturnDoor(int frame)
+        {
+            if (_returnDoor == null || _returnDoorPendingUntilFrame < 0) return false;
+            if (frame <= _returnDoorPendingUntilFrame) return false;   // WO-1393 grace still running
+            if (_open != null)
+            {
+                // A successor opened between the close and this pump - the door belongs to it now.
+                _returnDoorPendingUntilFrame = -1;
+                FlowTrace.Step("Navigation", "return door '" + _returnDoor.Name + "' KEPT - '" +
+                    _open.Name + "' is open");
+                return false;
+            }
+            var door = _returnDoor;
+            _returnDoor = null;
+            _returnDoorPendingUntilFrame = -1;
+            FlowTrace.Step("Navigation", "return door FIRED '" + door.Name + "' on frame " + frame + " (consumed)");
+            bool ran = Guard.Try("Navigation", "return door reopen '" + door.Name + "'", door.Reopen);
+            if (!ran)
+                FlowTrace.Fail("Navigation", "return door '" + door.Name + "' reopen threw - the player is left on the HUD");
+            else if (_open == null)
+                FlowTrace.Warn("Navigation", "return door '" + door.Name + "' reopen ran but NO panel is recorded open afterwards");
+            return ran;
+        }
+
+        private static void EnsurePump()
+        {
+            if (_pump != null) return;
+            if (!UnityEngine.Application.isPlaying) return;   // EditMode drives PumpReturnDoor directly
+            Guard.Try("Navigation", "create return-door pump", () =>
+            {
+                var go = new UnityEngine.GameObject("PanelManager.ReturnDoorPump");
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                _pump = go.AddComponent<ReturnDoorPump>();
+                FlowTrace.Step("Navigation", "return door pump created");
+            });
+        }
+
+        /// <summary>DDOL frame pump for the return door. Cheap: PumpReturnDoor early-outs when
+        /// nothing is set or pending.</summary>
+        private sealed class ReturnDoorPump : UnityEngine.MonoBehaviour
+        {
+            private void Update() { PumpReturnDoor(UnityEngine.Time.frameCount); }
+            private void OnDestroy() { if (ReferenceEquals(_pump, this)) _pump = null; }
+        }
+
+        // =====================================================================
         //  WO-1337 — ATTRIBUTION FOR THE MODAL INVARIANT.
         // ---------------------------------------------------------------------
         //  BattleQuiescenceGate's modal finding said a panel handle was still open and could
@@ -208,6 +349,9 @@ namespace DeNelle.Core.UI
                 FlowTrace.Warn("Input", "battle-lock: rejected open of '" + handle.Name + "' (in battle)");
                 if (opener != null)
                     DeathTrace.Note("SCREEN OPEN REJECTED (battle-lock): " + handle.Name + " by " + opener);
+                // WO-1400: a parent that handed off into a battle-locked child has no way back
+                // either - a reopen would be rejected by this same gate. Forget it, say so.
+                ClearReturnDoor("battle-lock");
                 var blocked = handle;
                 try { blocked.Close?.Invoke(); }
                 catch (Exception ex)
@@ -220,6 +364,16 @@ namespace DeNelle.Core.UI
 
             var previous = _open;
             _open = handle; // set first so a re-entrant probe sees the new owner
+
+            // WO-1400: a successor opened before an armed return door fired (the deck's own close
+            // inside OpenCard, or a child swapping to a sibling). The door is KEPT, not consumed -
+            // it now belongs to whatever just opened.
+            if (_returnDoor != null && _returnDoorPendingUntilFrame >= 0)
+            {
+                _returnDoorPendingUntilFrame = -1;
+                FlowTrace.Step("Navigation", "return door '" + _returnDoor.Name + "' KEPT - '" +
+                    handle.Name + "' opened before it fired");
+            }
 
             // F8-15: the open was ACCEPTED — record panel + opener in the death window.
             if (opener != null)
@@ -284,6 +438,8 @@ namespace DeNelle.Core.UI
             _open = null;
             // WO-1393: the tap that dismissed this panel may still be in flight - see ArmCloseGrace.
             ArmCloseGrace(handle.Name);
+            // WO-1400: a close to nothing - if a parent asked to be returned to, arm the way back.
+            ArmReturnDoor(handle.Name);
             // F8-15: window-gated close record (who dismissed which panel during the death window).
             DeathTrace.ScreenClosed(handle.Name, DeathTrace.Describe(closerMember, closerFile));
             OpenStateChanged?.Invoke();
@@ -297,6 +453,9 @@ namespace DeNelle.Core.UI
         /// </summary>
         public static void CloseAll()
         {
+            // WO-1400: a screen taking sole ownership (the combat HUD) must not have a deck
+            // re-open over it two frames later - forget the way back BEFORE the closes arm it.
+            ClearReturnDoor("closeall");
             int guard = 0;
             while (_open != null && guard++ < 32)
                 CloseOpen();
@@ -315,6 +474,9 @@ namespace DeNelle.Core.UI
             // already cleared (the ReferenceEquals guard returns early), so the grace is armed HERE
             // for the ESC / back / CloseAll path.
             ArmCloseGrace(open.Name);
+            // WO-1400: back / ESC on a child is a close to nothing too - arm the way back (CloseAll
+            // has already cleared the door, so its closes arm nothing).
+            ArmReturnDoor(open.Name);
             // F8-15: name who forced the close during the death window (ESC/back/CloseAll).
             if (DeathTrace.Active)
                 DeathTrace.ScreenClosed(open.Name, "PanelManager.CloseOpen <- " + DeathTrace.Caller());
