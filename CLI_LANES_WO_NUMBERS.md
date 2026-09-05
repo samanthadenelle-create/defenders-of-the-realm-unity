@@ -180,7 +180,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI docs lane, seventy-first pass): main line next free = **1414**.
+> ## RECONCILED 2026-09-05 (CLI, seventy-second pass): main line next free = **1417**.
+> *(CLI minted, all three from the owner's 10:0x-10:2x felt-test on build 2026.09.05.356468:
+> **1414** START NEW inherits the away clock AND the ever-built ledger (PRODUCTION BLOCKER - a fresh
+> town claims 8h of haul, the popup covers the tutorial SKIP so founding_greet dies, and the
+> inherited ledger HOLDS farm/lumbermill production forever); **1415** nothing in the game ever
+> introduces Heartfire, which WO-1379 just made the ONE gate on raiding (0 mentions in
+> guide-content / dialogues / tutorial-steps, measured); **1416** the Quarry pays STONE (owner
+> ruling) - one building answers Food in the role map and the harvest tick, Stone in the offline
+> summary. ⚠ 1414 was minted at 10:12 WITHOUT bumping this banner - the §2 violation this row
+> corrects; 1414 -> 1417 bumped in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI docs lane, seventy-first pass): main line next free = **1414**.
 > *(CLI docs lane minted **1402 through 1413** from the merged UI review
 > (`docs/qa/UI_REVIEW_2026-09-05/REVIEW_MERGED.md` section 1, one WO per failing screen, in table order):
 > **1402** Raid Selection rows never say what a raid pays; **1403** Raid Deploy BEGIN ASSAULT live at 0 troops /
