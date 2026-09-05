@@ -1528,7 +1528,8 @@ namespace DeNelle.Editor.Regression
         //        (gear) and the FLAG capture chip (its size parsed from FlagCaptureButton.cs);
         //   11b  HudKitController mounts the soft ring and the kit's RadialGlowSprite aura
         //        (WO-1384b: the ring REPLACED the flat gold frame - Case 12 pins the shape);
-        //   11c  "NIGHT MARKET" measures inside the label plate at the 20 px hard floor.
+        //   11c  the canon storeWordmark (the word the card renders since WO-1398; it was the
+        //        literal "NIGHT MARKET") measures inside the label plate at the 20 px hard floor.
         // RED, one line each: HudLayoutBands.NightMarketCardWidthPx = 112f (11a); delete the
         // "NightMarketCardRing" AddImage (11b); NightMarketLabelPlateX0 = 0.60f (11c).
         // =====================================================================
@@ -1594,20 +1595,32 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[night-market-standout] BuildNightMarketCard no longer uses ElarionUi.Gold - the " +
                              "frame must be the kit gold, the same tone as the card's title");
 
-            // 11c - the whole word, one line, at the hard floor.
+            // 11c - the whole word, one line, at the hard floor. WO-1398: the word is no longer
+            // a literal - it is the canon storeWordmark the card now renders (HudStrings.
+            // StoreFaceLabel), so the string MEASURED is the string AUTHORED in canon-strings.
+            // The obsidian button sets `canonical.text = label` with no case transform
+            // (ElarionUiKitObsidian.CanonicalizeButtonLabels), so the authored casing is what
+            // TMP steps the pen by; the upper-case width is reported as a note only.
             float plateX0;
             if (!TryFloatConst(src, "NightMarketLabelPlateX0", out plateX0))
             { failures.Add("[night-market-standout] NightMarketLabelPlateX0 is no longer a float literal in " + HudSrc); return; }
             float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
+            string word = Copy(failures, notes, HudStrings.KeyStoreWordmark);
+            if (string.IsNullOrEmpty(word)) return;
             string d;
-            float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, "NIGHT MARKET",
+            float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word,
                                                         ElarionUiKit.FontHardFloor, out d);
-            if (ww < 0f) notes.Add("'NIGHT MARKET' not measurable headlessly: " + d);
+            if (ww < 0f) notes.Add("'" + word + "' not measurable headlessly: " + d);
             else if (ww > plateW)
-                failures.Add("[night-market-standout] 'NIGHT MARKET' MEASURES " + ww.ToString("0.0") +
+                failures.Add("[night-market-standout] '" + word + "' (canon storeWordmark) MEASURES " + ww.ToString("0.0") +
                              " ref px at the " + ElarionUiKit.FontHardFloor + "px hard floor but the label plate is " +
-                             plateW.ToString("0.0") + " px wide (" + d + ") - that is the captured 'NIGHT MA...'");
-            else notes.Add("'NIGHT MARKET' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
+                             plateW.ToString("0.0") + " px wide (" + d + ") - that is the captured 'NIGHT MA...' " +
+                             "shape again. The words get shorter or the plate gets wider; the font does not shrink");
+            else notes.Add("'" + word + "' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
+            string du;
+            float wu = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word.ToUpperInvariant(),
+                                                        ElarionUiKit.FontHardFloor, out du);
+            if (wu >= 0f) notes.Add("upper-case '" + word.ToUpperInvariant() + "' would measure " + wu.ToString("0.0") + " px");
         }
 
         // =====================================================================
@@ -1632,7 +1645,7 @@ namespace DeNelle.Editor.Regression
         //   12d  the three knobs exist as literals in NightMarketGlowKnobs with sane defaults
         //        (lap 3..8 s, alpha 15..60 %) and the palette default names all three stops;
         //   12e  the label stays ONE FULL LINE: NoWrap + FitSingleLine in the slice, and
-        //        "NIGHT MARKET" still measures inside the plate at the hard floor.
+        //        the canon storeWordmark (WO-1398) still measures inside the plate at the hard floor.
         // RED, one line each: delete `button.gameObject.AddComponent<Mask>()` (12a); rename
         // "NightMarketCardRing" (12b); delete the `AnimateNightMarketGlow();` call in Update
         // (12c); NightMarketGlowLapSecDefault = 30f (12d); drop `TextWrappingModes.NoWrap` (12e).
@@ -1713,13 +1726,16 @@ namespace DeNelle.Editor.Regression
             float plateX0;
             if (TryFloatConst(src, "NightMarketLabelPlateX0", out plateX0))
             {
+                // WO-1398: measure the canon storeWordmark the card renders, not a literal.
                 float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
+                string word = Copy(failures, notes, HudStrings.KeyStoreWordmark);
                 string d;
-                float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, "NIGHT MARKET",
-                                                            ElarionUiKit.FontHardFloor, out d);
+                float ww = string.IsNullOrEmpty(word) ? -1f
+                    : ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word, ElarionUiKit.FontHardFloor, out d);
                 if (ww >= 0f && ww > plateW)
-                    failures.Add(Tag + " 'NIGHT MARKET' MEASURES " + ww.ToString("0.0") + " ref px at the hard floor " +
-                                 "but the plate is " + plateW.ToString("0.0") + " px - it would truncate again");
+                    failures.Add(Tag + " '" + word + "' (canon storeWordmark) MEASURES " + ww.ToString("0.0") +
+                                 " ref px at the hard floor but the plate is " + plateW.ToString("0.0") +
+                                 " px - it would truncate again");
             }
             notes.Add("night market aurora: r=" + radius + " lap=" + lap + "s alpha=" + alphaPct + "% updateOwners=" + updateOwners);
         }

@@ -1228,7 +1228,10 @@ namespace DeNelle.HUD.Kit
                                     ", lap=" + NightMarketGlowKnobs.LapSec + "s alpha=" +
                                     NightMarketGlowKnobs.AlphaPct + "% paletteMask=" + NightMarketGlowKnobs.PaletteMask);
 
-            var button = ElarionUiKit.BuildObsidianButton(root.transform, "Night Market",
+            // WO-1398: the word is the store's OWN name from canon-strings (storeWordmark), the
+            // same row PackStore titles itself with - never a literal typed here. Traced by
+            // HudStrings.StoreFaceLabel ("store face label=... site=hud-card").
+            var button = ElarionUiKit.BuildObsidianButton(root.transform, HudStrings.StoreFaceLabel("hud-card"),
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 Vector2.zero, Vector2.one, OpenNightMarket);
             if (button == null)
@@ -1275,9 +1278,9 @@ namespace DeNelle.HUD.Kit
             }
 
             // ⛔ THE WORD, ON ITS OWN PLATE. The owner is red/green colourblind (CLAUDE.md §7), so
-            // the card may never be identifiable by its artwork's hue alone. "Night Market" is the
-            // same name she used for it and the same name the drawer row carries, on a dark plate
-            // so it reads over any part of the illustration.
+            // the card may never be identifiable by its artwork's hue alone. The word is the
+            // store's own canon name (storeWordmark, WO-1398) - the same words the store titles
+            // itself with - on a dark plate so it reads over any part of the illustration.
             var face = button.GetComponentInChildren<TMP_Text>(true);
             if (face != null)
             {
@@ -3976,19 +3979,26 @@ namespace DeNelle.HUD.Kit
             AddDockTab(_slideDock.panel, dockRow++, "Leaderboard", OpenLeaderboard);
             AddDockTab(_slideDock.panel, dockRow++, "Music", OpenJukebox);
             AddDockTab(_slideDock.panel, dockRow++, "Settings", OpenSettings);
-            AddDockTab(_slideDock.panel, dockRow++, "Night Market", OpenRealmStore);
+            // WO-1398: this row opens the REALM DECK (PanelId.RealmDeck - the four-card
+            // launcher: store / Defense Report / Monthly Ledger / Game Guide), so it is labelled
+            // with what it opens. It used to read "Night Market" while the HUD card beside it,
+            // reading the same words, opened the store itself - one name for two screens
+            // (docs/qa/UI_SCREEN_GRAPH_2026-09-04.md dead end 7). "Realm" is the workspace's own
+            // name (PlayerDeckKind.Realm) and is the WO's proposed default pending owner word.
+            AddDockTab(_slideDock.panel, dockRow++, "Realm", OpenRealmDeck);
             // Pause folded into the LEFT gear (cosmetic flag A, 2026-07-24): the standalone
             // top-right pause chip (PauseHudBootstrap.PauseHudButton) was culled to leave ONE
             // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
             // tab is the caller that opens Pause/Quit-to-Title via PauseGate.RequestBack().
             AddDockTab(_slideDock.panel, dockRow, "Pause", () => PauseGate.RequestBack());
-            // Owner, 2026-08-22: "the only entrance to the Realm shop is from an interaction
-            // with a person in town" - so the store was unreachable without walking to the
-            // vendor, and unreachable at all outside town. This is a SECOND CALLER of the
-            // door that already exists (PanelRouter.Open(PanelId.RealmStore), registered by
-            // PackStoreBootstrap and used by RealmStoreVendor); it is not a second opener.
-            // It lives here rather than on the bottom action bar deliberately: that bar is
-            // deliberately: the five-slot bottom bar remains reserved for immediate play verbs.
+            // History of the Realm row (owner, 2026-08-22: "the only entrance to the Realm shop
+            // is from an interaction with a person in town" - so the store was unreachable
+            // without walking to the vendor, and unreachable at all outside town). The row was
+            // added as a second CALLER of the store door; WO-1335 then gave the store its own
+            // PERMANENT HUD card (BuildNightMarketCard -> PanelId.RealmStore) and this row was
+            // re-pointed at the Realm deck, which is where its label now comes from (WO-1398).
+            // It lives here rather than on the bottom action bar deliberately: the bottom bar
+            // remains reserved for immediate play verbs.
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
 
@@ -4021,7 +4031,7 @@ namespace DeNelle.HUD.Kit
         // Both numbers now come from DockTabCount. Add a tab -> the panel grows to
         // keep every row at the touch floor, automatically. Do NOT re-introduce a
         // literal height.
-        private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Night Market/Pause
+        private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Realm/Pause
         private const float DockRowGapFrac = 0.01f;
 
         // Three physical rows with breathing room around the 112px touch floor.
@@ -4063,13 +4073,16 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Warn("HudKit", "dock: neither HelpMenu nor GameGuide available for Settings");
         }
 
-        // Persistent Store face -> the same PanelId the world vendor opens.
+        // The gear dock's "Realm" row -> PanelId.RealmDeck, the PlayerDeckWorkspace launcher
+        // (its first card opens the store; the store's own HUD door is OpenNightMarket above).
+        // WO-1398: renamed from OpenRealmStore - the old name said RealmStore while the body
+        // opened RealmDeck, and the comment above it still described a store door.
         //
         // Shaped after RealmStoreVendor.Open deliberately: PanelRouter.Open returns
         // FALSE when no opener is registered, and an unchecked call would look to the
-        // player like the store is broken and to us like nothing happened. A refusal is
+        // player like the deck is broken and to us like nothing happened. A refusal is
         // reported, never swallowed.
-        private void OpenRealmStore()
+        private void OpenRealmDeck()
         {
             Guard.Try("Realm", "open the Realm workspace from the HUD", () =>
             {

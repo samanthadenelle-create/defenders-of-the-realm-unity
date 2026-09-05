@@ -422,8 +422,11 @@ namespace DeNelle.Editor.Regression
                 failures.Add("the legacy mislabeled 'Realm' HUD face is back. The permanent store " +
                              "door is the Night Market card (WO-1335); this button named a route it " +
                              "did not open and is retired.");
-            Require(hud, "AddDockTab(_slideDock.panel, dockRow++, \"Night Market\", OpenRealmStore)",
-                "Night Market drawer destination is absent or not bound to its route", failures);
+            // WO-1398: the row is labelled for what it OPENS (the Realm deck) and its command is
+            // named for it too. It used to read "Night Market" -> OpenRealmStore while opening
+            // PanelId.RealmDeck: one name for two screens, a method name that lied about its target.
+            Require(hud, "AddDockTab(_slideDock.panel, dockRow++, \"Realm\", OpenRealmDeck)",
+                "Realm drawer row is absent or not bound to OpenRealmDeck (WO-1398)", failures);
             Require(hud, "DockTabCount = 6",
                 "drawer capacity was not expanded for the Night Market touch row", failures);
             Require(hud, "HudLayoutBands.DockEdgePx",

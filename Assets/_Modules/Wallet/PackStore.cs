@@ -350,7 +350,12 @@ namespace DeNelle.Wallet
             _wallet = new WalletService();
             _vm = PackStoreVM.CreateDefault();
 
-            _panelHandle = PanelManager.Register("Realm Store",
+            // WO-1398: no player-facing store-name literal survives here. The handle's name is
+            // DIAGNOSTIC ONLY (PanelManager.cs:167) and is deliberately NOT the wordmark read:
+            // NightMarketUiRegression pins exactly ONE wordmark-key read in this file - the visible
+            // modal title (BuildObsidianModal below) - so the diagnostic handle reuses the modal's
+            // own object name instead of a second wordmark read.
+            _panelHandle = PanelManager.Register("PackStoreUI",
                 () => { if (this != null) gameObject.SetActive(false); },
                 () => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy);
         }

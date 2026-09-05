@@ -88,6 +88,18 @@ namespace DeNelle.Core.UI
         /// <summary>Manage face line 2 when some lines are cooking; {0} = idle, {1} = total.</summary>
         public const string KeyManageIdleSome = "hudManageIdleSome";
 
+        // -- The store's ONE player-facing name (WO-1398) --
+        // Two HUD rows both read "Night Market" and opened two different screens, while the
+        // store's own title came from canon (storeWordmark) and the Realm deck card said
+        // "Realm Store" - four names for one door, typed at four call sites. Every face that
+        // opens PanelId.RealmStore now renders THIS key: the HUD card, the Realm deck card and
+        // the Play skin title through this class, the store panel through StoreStrings.
+        // KeyWordmark. The key NAME is the single source; the two readers load the same file.
+
+        /// <summary>The store's wordmark - the same canon row StoreStrings.KeyWordmark names.
+        /// A face that opens the store says exactly what the store's own title says.</summary>
+        public const string KeyStoreWordmark = "storeWordmark";
+
         /// <summary>Every key this class names, so an oracle can prove each one resolves
         /// AND measure each one against the box it renders in.</summary>
         public static readonly string[] AllKeys =
@@ -95,7 +107,29 @@ namespace DeNelle.Core.UI
             KeyCollectorsTitle, KeyCollectorsCount, KeyCollectorsFullLine,
             KeyCollectorsNearlyLine, KeyCollectorsWaitingLine,
             KeyManageIdleAll, KeyManageIdleSome,
+            KeyStoreWordmark,
         };
+
+        /// <summary>
+        /// The store's name for a face that opens the store (WO-1398). Resolves
+        /// <see cref="KeyStoreWordmark"/> and traces the resolution once per built face so a
+        /// capture can prove which words a site rendered and where they came from. A missing key
+        /// is a FlowTrace.Fail naming the site - never a literal fallback, which would be the
+        /// fourth name this ticket exists to remove.
+        /// </summary>
+        /// <param name="site">Where the face is built: "hud-card", "realm-deck", "play-skin".</param>
+        public static string StoreFaceLabel(string site)
+        {
+            string label = Get(KeyStoreWordmark);
+            if (label.IndexOf("[[missing:", StringComparison.Ordinal) >= 0)
+            {
+                FlowTrace.Fail("Store", "storeWordmark unresolved at " + site +
+                                        " - the face renders the placeholder marker, not a typed name");
+                return label;
+            }
+            FlowTrace.Step("Store", "store face label='" + label + "' source=canon-strings site=" + site);
+            return label;
+        }
 
         private static Dictionary<string, string> _canon;
 

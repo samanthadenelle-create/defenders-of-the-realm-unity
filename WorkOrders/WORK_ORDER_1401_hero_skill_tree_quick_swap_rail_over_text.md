@@ -1,6 +1,6 @@
 # WO-1401: Hero Skill Tree - the three quick-swap slot buttons paint over the rail's own hint line
 
-**Status:** IN PROGRESS 2026-09-05 - minted from the 05:13 UI_CAPTURE geometry audit; edit-only lane in flight
+**Status:** IN PROGRESS 2026-09-05 06:15 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 379/379 incl. SkillsPanelLayoutRegression [rail]; UI_CAPTURE_OK with ZERO [UICap-GEO] lines, was x9; trace `quick-swap rail built: ... slots y 0..112, hint y 120..160 (gap 8)`); awaiting the next APK. Minted from the 05:13 UI_CAPTURE geometry audit.
 
 Lane: `lane/skilltree-geo` (worktree of D:\eoa at 9b47c9ad9). Pre-existing: `Assets/_Modules/Village/Talents/HeroSkillTreePanelMvvm.cs` last commit 3b3f28354 (2026-09-03 14:46). Found by the harness, not by eye: `Builds/ui-capture.log` (2026-09-05 05:13) reads `UI_CAPTURE_OK 91` AND `UI_GEOMETRY_FAIL x9 over 91 canvases` AND `UI_TOUCH_FAIL x9 over 91 panels (88 clean)` - all nine findings are this one panel at its three capture aspects, and they are the SAME defect counted twice (the touch tally classifies a `BUTTON OVER TEXT` prefix as touch debt, `UICaptureLaunch.cs:5682`).
 

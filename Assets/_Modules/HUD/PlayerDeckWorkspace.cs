@@ -633,7 +633,7 @@ namespace DeNelle.HUD
                 default:
                     return new List<Card>
                     {
-                        Route("Realm Store", "Browse clearly priced realm offers", "store", PanelId.RealmStore, "realm-store", openContext: "settings"),
+                        Route(HudStrings.StoreFaceLabel("realm-deck"), "Browse clearly priced realm offers", "store", PanelId.RealmStore, "realm-store", openContext: "settings"),
                         Route("Defense Report", "Review attacks against your town", "defense", PanelId.DefenseReport, "defense-report"),
                         Route("Monthly Ledger", "Review non-expiring monthly progress", "ledger", PanelId.MonthlyLedger, "monthly-ledger"),
                         Route("Game Guide", "Read controls, systems, and help", "settings", PanelId.GameGuide, "game-guide")

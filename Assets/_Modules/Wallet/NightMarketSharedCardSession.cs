@@ -38,7 +38,8 @@ namespace DeNelle.Wallet
             new CardCollectionModel
             {
                 CollectionId = "night-market-offers",
-                Title = "The Night Market",
+                // WO-1398: the ONE canon name (storeWordmark), never typed here.
+                Title = StoreStrings.Get(StoreStrings.KeyWordmark),
                 Subtitle = "Choose an offer to inspect its full contents and current channel price.",
                 IconKey = "UI/NightMarket/night-market-wordmark",
                 Cards = cards ?? Array.Empty<GenericCardModel>()

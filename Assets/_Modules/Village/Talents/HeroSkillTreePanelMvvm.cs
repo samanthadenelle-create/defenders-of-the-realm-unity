@@ -123,6 +123,36 @@ namespace DeNelle.Village.Talents
         /// floor; it is a little taller than the floor because the tile stacks TWO fixed line
         /// boxes (slot numeral + a two-line ability name).</summary>
         public const float AbilityRowPx = 132f;
+
+        // ---------------------------------------------------------------------
+        // WO-1401 QUICK-SWAP RAIL: TWO FIXED-PX BANDS, DISJOINT BY CONSTRUCTION.
+        // Builds/ui-capture.log 2026-09-05 05:13 read BUTTON OVER TEXT x9 on this
+        // panel: ObsBtn_1..3 (y 0..112 of the rail - the slot LayoutElement is
+        // MinTouchPx and the layout group seats it LOWER) covered QuickSwapHint by
+        // exactly 112x9 at all three aspects, because the hint was a FRACTION of the
+        // rail (0.78..1 of 132 = y 103..132). A fraction band beside a fixed band is
+        // the WO-841/852/865 failure class named above. Every number below is fixed
+        // ref px; the hint is pinned FROM THE TOP, the slots seat at the BOTTOM, and
+        // the gap between them is BandGapPx for ANY rail width or screen aspect.
+        // Pinned by SkillsPanelLayoutRegression case 7 [rail] on the REAL builder.
+        // ---------------------------------------------------------------------
+
+        /// <summary>The slot band: the three quick-swap buttons ARE this tall (their LayoutElement
+        /// min/preferred, see <see cref="ApplyQuickSwapSlotSize"/>), so the band is the kit touch
+        /// floor itself and ClampMinTouch can never grow one past it.</summary>
+        public const float QuickSwapSlotBandPx = ElarionUiKit.MinTouchPx;
+        /// <summary>The hint band above the slots: one TMP line box at the kit FontFloor
+        /// (30 x 1.25 = 37.5) with air; FontMicro 32 fits without ellipsis.</summary>
+        public const float QuickSwapHintBandPx = 40f;
+        /// <summary>The whole rail = slots + gap + hint. The layout group's top padding restates the
+        /// same sum so its own arithmetic seats the slots exactly in the slot band.</summary>
+        public const float QuickSwapRailPx = QuickSwapSlotBandPx + BandGapPx + QuickSwapHintBandPx;
+        /// <summary>Where the rail's bottom edge sits above the workspace floor.</summary>
+        public const float QuickSwapRailBottomPx = BodyPadPx + BandGapPx;
+        /// <summary>The graph well's floor: one gap ABOVE the rail's top, so a node plate (a Button)
+        /// can never sit on the hint. Derived, never retyped.</summary>
+        public const float GraphWellFloorPx = QuickSwapRailBottomPx + QuickSwapRailPx + BandGapPx;
+
         /// <summary>Default talent plate size (RPG north star: large enough that skill art
         /// reads at a glance). Always >= kit MinTouchPx so nodes stay tappable.</summary>
         public const float NodeSizePx = 136f;
@@ -1985,7 +2015,9 @@ namespace DeNelle.Village.Talents
             // pins touch floors; they no longer consume body height.)
             var graphWell = BandHost(panel, "GraphWell", 0f, 1f);
             PinRegion(graphWell, BodyPadPx, BodyPadPx);
-            graphWell.offsetMin = new Vector2(graphWell.offsetMin.x, AbilityRowPx + BandGapPx * 3f);
+            // WO-1401: the floor is DERIVED from the rail's own bands (rail bottom + rail + gap), so
+            // growing the rail can never put a node plate over the hint again.
+            graphWell.offsetMin = new Vector2(graphWell.offsetMin.x, GraphWellFloorPx);
             graphWell.offsetMax = new Vector2(graphWell.offsetMax.x, -(WisdomBandPx + BandGapPx));
             BuildScrollGraph(graphWell);
 
@@ -2199,14 +2231,28 @@ namespace DeNelle.Village.Talents
         /// the player can learn an active, equip it, and recognize the same numbered slot in combat.</summary>
         private void BuildQuickSwapBar(Transform panel)
         {
+            _quickSwapHost = BuildQuickSwapRailHost(panel, out _quickSwapStatus);
+        }
+
+        /// <summary>
+        /// WO-1401. The rail host + its hint, as ONE static builder so the regression suite
+        /// measures THIS construction and not a copy of it. Two fixed-px bands inside a
+        /// <see cref="QuickSwapRailPx"/>-tall rail: the hint owns the TOP
+        /// <see cref="QuickSwapHintBandPx"/> (pinned from the top - never a fraction of the rail),
+        /// the slots own the BOTTOM <see cref="QuickSwapSlotBandPx"/> (the layout group seats a
+        /// MinTouchPx child LOWER; its top padding restates hint + gap so the two agree), and
+        /// <see cref="BandGapPx"/> of air separates them at every aspect. Pure View: no VM, no state.
+        /// </summary>
+        public static RectTransform BuildQuickSwapRailHost(Transform panel, out TMPro.TextMeshProUGUI hint)
+        {
             var rail = new GameObject("QuickSwapRail", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             rail.transform.SetParent(panel, false);
-            _quickSwapHost = rail.GetComponent<RectTransform>();
-            _quickSwapHost.anchorMin = new Vector2(0.02f, 0f);
-            _quickSwapHost.anchorMax = new Vector2(0.98f, 0f);
-            _quickSwapHost.pivot = new Vector2(0.5f, 0f);
-            _quickSwapHost.offsetMin = new Vector2(0f, BodyPadPx + BandGapPx);
-            _quickSwapHost.offsetMax = new Vector2(0f, BodyPadPx + BandGapPx + AbilityRowPx);
+            var host = rail.GetComponent<RectTransform>();
+            host.anchorMin = new Vector2(0.02f, 0f);
+            host.anchorMax = new Vector2(0.98f, 0f);
+            host.pivot = new Vector2(0.5f, 0f);
+            host.offsetMin = new Vector2(0f, QuickSwapRailBottomPx);
+            host.offsetMax = new Vector2(0f, QuickSwapRailBottomPx + QuickSwapRailPx);
 
             var layout = rail.GetComponent<HorizontalLayoutGroup>();
             layout.spacing = 46f;
@@ -2215,17 +2261,45 @@ namespace DeNelle.Village.Talents
             layout.childControlHeight = true;
             layout.childForceExpandHeight = false;
             layout.childAlignment = TextAnchor.LowerCenter;
-            layout.padding = new RectOffset(0, 0, 34, 0);
+            // Top padding = the hint band + the gap: inner height is then EXACTLY the slot band, so
+            // the group's own arithmetic and the band constants describe the same rectangle.
+            layout.padding = new RectOffset(0, 0, Mathf.RoundToInt(QuickSwapHintBandPx + BandGapPx), 0);
 
-            _quickSwapStatus = ElarionUiKit.Label(rail.transform,
-                "Select an owned active, then tap a slot.", 0.78f, 1f,
+            // The default sentence is the VM's (HeroSkillTreeVM.QuickSwapStatus); RenderQuickSwapBar
+            // overwrites it on the first paint. ASCII only.
+            hint = ElarionUiKit.Label(rail.transform,
+                "Select an owned skill, then tap a slot (1-3).", 1f, 1f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
-            _quickSwapStatus.gameObject.name = "QuickSwapHint";
-            _quickSwapStatus.transform.SetAsFirstSibling();
-            var hintLayout = _quickSwapStatus.gameObject.AddComponent<LayoutElement>();
+            hint.gameObject.name = "QuickSwapHint";
+            hint.transform.SetAsFirstSibling();
+            var hintLayout = hint.gameObject.AddComponent<LayoutElement>();
             hintLayout.ignoreLayout = true;
-            ElarionUiKit.FitSingleLine(_quickSwapStatus);
+            // FIXED px from the rail's top. The retired shape was Label(y0: 0.78f, y1: 1f) - a fraction
+            // whose bottom (0.78 x 132 = 103) sat 9 px inside the 112 px slot band at every aspect.
+            PinBandFromTop((RectTransform)hint.transform, 0f, QuickSwapHintBandPx);
+            ElarionUiKit.FitSingleLine(hint);
+
+            FlowTrace.Step("SkillTree", "quick-swap rail built: rail " + QuickSwapRailPx.ToString("F0") +
+                " px above floor " + QuickSwapRailBottomPx.ToString("F0") + "; slots y 0.." +
+                QuickSwapSlotBandPx.ToString("F0") + ", hint y " +
+                (QuickSwapRailPx - QuickSwapHintBandPx).ToString("F0") + ".." + QuickSwapRailPx.ToString("F0") +
+                " (gap " + BandGapPx.ToString("F0") + "), graph well floor " + GraphWellFloorPx.ToString("F0"));
+            return host;
+        }
+
+        /// <summary>WO-1401. The slot's tap size - the ONE place the quick-swap button height is
+        /// authored, shared with the regression so the pin measures the shipped size. Equal to
+        /// <see cref="QuickSwapSlotBandPx"/>, which is the kit touch floor.</summary>
+        public static void ApplyQuickSwapSlotSize(GameObject slot)
+        {
+            if (slot == null) return;
+            var le = slot.GetComponent<LayoutElement>();
+            if (le == null) le = slot.AddComponent<LayoutElement>();
+            le.minWidth = QuickSwapSlotBandPx;
+            le.preferredWidth = QuickSwapSlotBandPx;
+            le.minHeight = QuickSwapSlotBandPx;
+            le.preferredHeight = QuickSwapSlotBandPx;
         }
 
         private void RenderQuickSwapBar()
@@ -2266,12 +2340,7 @@ namespace DeNelle.Village.Talents
                     slotImage.color = slot.IsEmpty
                         ? new Color(0.72f, 0.72f, 0.72f, 0.88f) : Color.white;
                 }
-                var le = btn.gameObject.GetComponent<LayoutElement>();
-                if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
-                le.minWidth = ElarionUiKit.MinTouchPx;
-                le.preferredWidth = ElarionUiKit.MinTouchPx;
-                le.minHeight = ElarionUiKit.MinTouchPx;
-                le.preferredHeight = ElarionUiKit.MinTouchPx;
+                ApplyQuickSwapSlotSize(btn.gameObject);   // WO-1401: the one authored slot size
                 var text = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
                 if (text != null)
                 {

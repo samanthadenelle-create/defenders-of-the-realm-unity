@@ -1,6 +1,6 @@
 # WO-1398: two HUD rows both read "Night Market" and open two different screens - the store's name must come from ONE string source
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the UI screen graph (overnight STRETCH)
+**Status:** IN PROGRESS 2026-09-05 06:15 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 379/379 incl. the new store-name-single-source suite, UI_CAPTURE_OK; trace `store face label='The Night Market' source=canon-strings`); awaiting the next APK. Owner question kept at the WO default: the gear-dock row for the Realm deck reads "Realm". Minted 2026-09-05 from the UI screen graph (overnight STRETCH).
 
 ## Evidence
 - Graph: `docs/qa/UI_SCREEN_GRAPH_2026-09-04.md:116` (HUD card -> RealmStore), `:130` (gear-dock "Night Market" -> RealmDeck, "NOT RealmStore"), `:249` (dead end 7).

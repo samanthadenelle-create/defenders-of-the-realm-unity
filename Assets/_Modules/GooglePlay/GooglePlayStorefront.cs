@@ -41,7 +41,9 @@ namespace DeNelle.GooglePlay
 
         private void Build()
         {
-            _modal = ElarionUiKit.BuildObsidianModal("GooglePlayRealmStore", "REALM STORE",
+            // WO-1398: the Play skin titles itself with the store's ONE canon name (storeWordmark),
+            // the same words the HUD card that opened it rendered - never a typed literal.
+            _modal = ElarionUiKit.BuildObsidianModal("GooglePlayRealmStore", HudStrings.StoreFaceLabel("play-skin"),
                 new Vector2(.08f, .04f), new Vector2(.92f, .96f), Close,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "shop");
             var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null

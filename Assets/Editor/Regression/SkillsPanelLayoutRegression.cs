@@ -59,6 +59,16 @@
 //                   top-left content pivot, the fixed-pixel band pins, the reserved
 //                   section row, no 1/n fraction slicing, no green ButtonConfirm
 //                   overlay (the fill that bled), and no embedded NUL.
+//   7 [rail]        WO-1401 (Builds/ui-capture.log 2026-09-05 05:13: BUTTON OVER TEXT x9,
+//                   ObsBtn_1..3 covering QuickSwapHint by 112x9 at all three aspects). A
+//                   REAL-GEOMETRY pin: it calls the view's OWN BuildQuickSwapRailHost and
+//                   ApplyQuickSwapSlotSize into an edit-mode canvas at the reference body,
+//                   settles layout, runs LayoutOracle.Audit and asserts that no slot button
+//                   intersects any text it does not own, that the hint clears the slot band
+//                   by BandGapPx, that a label at the graph well's floor clears the rail, and
+//                   that the band constants add up. Mutation that reds it: pin the hint
+//                   `PinBandFromTop(hint, QuickSwapHintBandPx + BandGapPx, QuickSwapHintBandPx)`
+//                   (the hint drops into the slot band).
 //
 // Standalone: run-unity-method DeNelle.Editor.Regression.SkillsPanelLayoutRegression.RunAll
 // =============================================================================
@@ -68,6 +78,10 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using DeNelle.Core.UI;
+using DeNelle.Village.Talents;
 
 namespace DeNelle.Editor.Regression
 {
@@ -117,6 +131,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "truncation", () => Case4_Truncation(failures, notes));
                 Case(failures, "source", () => Case5_SourceLaws(failures, notes));
                 Case(failures, "popup", () => Case6_SpendPopup(failures, notes));
+                Case(failures, "rail", () => Case7_QuickSwapRail(failures, notes));
             }
             catch (Exception ex)
             {
@@ -130,7 +145,8 @@ namespace DeNelle.Editor.Regression
                          "spend-popup action band clears the kit touch floor, text floors hold a line box, " +
                          "the node graph is padded + clipped on a fixed-pixel lattice, no catalog " +
                          "label is forced to ellipsize at 2340x1080, and the spend popup wraps its full " +
-                         "ASCII-only description inside a frame that encloses it (WO-1342)" + noteStr;
+                         "ASCII-only description inside a frame that encloses it (WO-1342), and the " +
+                         "quick-swap slots and their hint are disjoint bands measured on the real builder (WO-1401)" + noteStr;
                 return true;
             }
             reason = "skills-panel-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -903,6 +919,257 @@ namespace DeNelle.Editor.Regression
                              "overlay reached the popup frame");
             notes.Add("confirm emphasis = " + bars + " edge bars, " + thick.ToString("F0") + " px inset " +
                       inset.ToString("F0") + " px, no full-rect fill");
+        }
+
+        // =====================================================================
+        //  CASE 7 - the QUICK-SWAP RAIL: slots and hint are DISJOINT bands
+        //  (WO-1401; Builds/ui-capture.log 2026-09-05 05:13)
+        // =====================================================================
+        // The capture harness measured, at 1920x1080 / 2340x1080 / 2670x1200 alike:
+        //   BUTTON OVER TEXT 'TalentWorkspace/QuickSwapRail/ObsBtn_1|2|3' (y 0..112 of the
+        //   rail) covers 'QuickSwapRail/QuickSwapHint' (y 103..132 of the rail) by 112x9.
+        // The slot LayoutElement is MinTouchPx (112) and the HorizontalLayoutGroup seats it
+        // LOWER, so the slots own the rail's bottom 112 px at every aspect; the hint was a
+        // FRACTION of the rail (Label y0 0.78 x 132 = 103), so its bottom 9 px sat inside
+        // the slot band at every aspect. A fraction band next to a fixed band is the same
+        // failure the header of this file was written about.
+        //
+        // This case is NOT a re-derivation of the numbers: it builds THE VIEW'S OWN rail
+        // (HeroSkillTreePanelMvvm.BuildQuickSwapRailHost) into an edit-mode canvas at the
+        // reference body, seats three slot buttons through the view's own sizing helper
+        // (ApplyQuickSwapSlotSize), settles layout and measures the resolved rects with the
+        // same LayoutOracle the capture harness runs. If the view's construction drifts, this
+        // measures the drift; a copy of the construction would only measure the copy.
+        //
+        //   (a) LayoutOracle.Audit on the probe reports no BUTTON OVER TEXT / BUTTONS OVERLAP.
+        //   (b) every slot rect clears the hint rect by >= BandGapPx, every slot is >= MinTouch
+        //       tall, and the hint sits inside the rail (no fraction, no escape).
+        //   (c) a label seated at the graph well's floor (GraphWellFloorPx) clears the rail.
+        //   (d) the constants add up: rail = slot + gap + hint; well floor = rail bottom +
+        //       rail + gap; hint band >= one FontFloor line box; slot band >= MinTouchPx.
+        //
+        // RED FIRST: in BuildQuickSwapRailHost change the hint pin to
+        //   PinBandFromTop((RectTransform)hint.transform, QuickSwapHintBandPx + BandGapPx, QuickSwapHintBandPx)
+        // and (a) + (b) fail with the hint measured inside the slot band.
+        private static void Case7_QuickSwapRail(List<string> failures, List<string> notes)
+        {
+            Type view = FindType(ViewType);
+            Type kit = FindType(KitType);
+            if (view == null || kit == null)
+            {
+                failures.Add("[rail] " + ViewType + " / " + KitType + " not found - re-point this oracle");
+                return;
+            }
+
+            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[rail]");
+            float fontFloor = ConstFloat(FindType(ObsidianType), "FontFloor", failures, "[rail]");
+            float bandGap = ConstFloat(view, "BandGapPx", failures, "[rail]");
+            float slotBand = ConstFloat(view, "QuickSwapSlotBandPx", failures, "[rail]");
+            float hintBand = ConstFloat(view, "QuickSwapHintBandPx", failures, "[rail]");
+            float railH = ConstFloat(view, "QuickSwapRailPx", failures, "[rail]");
+            float railBottom = ConstFloat(view, "QuickSwapRailBottomPx", failures, "[rail]");
+            float wellFloor = ConstFloat(view, "GraphWellFloorPx", failures, "[rail]");
+            if (minTouch <= 0f || fontFloor <= 0f || slotBand <= 0f || hintBand <= 0f || railH <= 0f) return;
+
+            // (d) the arithmetic the construction is built from.
+            if (slotBand < minTouch)
+                failures.Add("[rail] QuickSwapSlotBandPx=" + slotBand + " is below MinTouchPx=" + minTouch +
+                             " - ClampMinTouch would grow every slot past its band into the hint");
+            float lineBox = fontFloor * LineBoxMul;
+            if (hintBand < lineBox)
+                failures.Add("[rail] QuickSwapHintBandPx=" + hintBand + " is shorter than one FontFloor line box (" +
+                             lineBox.ToString("F1") + ") - the hint sentence would cull or ellipsize");
+            if (railH < slotBand + bandGap + hintBand - 0.01f)
+                failures.Add("[rail] QuickSwapRailPx=" + railH + " < slot " + slotBand + " + gap " + bandGap +
+                             " + hint " + hintBand + " - the two bands cannot both fit inside the rail");
+            if (wellFloor < railBottom + railH + bandGap - 0.01f)
+                failures.Add("[rail] GraphWellFloorPx=" + wellFloor + " < rail bottom " + railBottom + " + rail " +
+                             railH + " + gap " + bandGap + " - a node plate (a Button) can sit on the hint");
+
+            // (a)(b)(c) the geometry that ships, measured.
+            GameObject canvasGo = null;
+            try
+            {
+                const int probeW = 2340, probeH = 1080;
+                canvasGo = RailProbeCanvas(probeW, probeH);
+                var root = canvasGo.GetComponent<RectTransform>();
+
+                var workspaceGo = new GameObject("TalentWorkspace", typeof(RectTransform));
+                workspaceGo.transform.SetParent(canvasGo.transform, false);
+                var workspace = workspaceGo.GetComponent<RectTransform>();
+                workspace.anchorMin = workspace.anchorMax = workspace.pivot = new Vector2(0.5f, 0.5f);
+                workspace.sizeDelta = new Vector2(RefBodyWidthPx, RefBodyHeightPx);
+                workspace.anchoredPosition = Vector2.zero;
+
+                // The view's own graph well seat (BuildChrome: BandHost 0..1, floor = GraphWellFloorPx),
+                // carrying a probe label flush on its floor - the nearest text the rail could touch.
+                var wellGo = new GameObject("GraphWell", typeof(RectTransform));
+                wellGo.transform.SetParent(workspaceGo.transform, false);
+                var well = wellGo.GetComponent<RectTransform>();
+                well.anchorMin = Vector2.zero; well.anchorMax = Vector2.one;
+                well.offsetMin = new Vector2(0f, wellFloor); well.offsetMax = Vector2.zero;
+                var floorText = ElarionUiKit.Label(wellGo.transform, "NODE NAME AT THE WELL FLOOR", 0f, 0f,
+                    Color.white, 18, TextAlignmentOptions.Center, 0.2f, 0.8f);
+                floorText.gameObject.name = "WellFloorProbe";
+                var floorRt = (RectTransform)floorText.transform;
+                floorRt.offsetMin = new Vector2(floorRt.offsetMin.x, 0f);
+                floorRt.offsetMax = new Vector2(floorRt.offsetMax.x, 24f);
+
+                // THE VIEW'S OWN BUILDER - not a copy of it.
+                TextMeshProUGUI hint;
+                RectTransform rail = HeroSkillTreePanelMvvm.BuildQuickSwapRailHost(workspaceGo.transform, out hint);
+                if (rail == null || hint == null)
+                {
+                    failures.Add("[rail] BuildQuickSwapRailHost returned no rail/hint - the builder the capture " +
+                                 "measures is gone; re-point this oracle rather than deleting it");
+                    return;
+                }
+
+                // Three slots, sized by THE VIEW'S OWN helper. A real Button with a visible graphic
+                // (LayoutOracle.HasVisibleGraphic) and the production touch guard, so the oracle
+                // sees exactly what it sees on the captured panel.
+                var slots = new List<Button>(3);
+                for (int i = 1; i <= 3; i++)
+                {
+                    var go = new GameObject("ObsBtn_" + i, typeof(RectTransform), typeof(CanvasRenderer),
+                                            typeof(Image), typeof(Button));
+                    go.transform.SetParent(rail, false);
+                    var img = go.GetComponent<Image>();
+                    img.color = Color.white;
+                    var btn = go.GetComponent<Button>();
+                    btn.targetGraphic = img;
+                    ElarionUiKit.ClampMinTouch(btn);
+                    HeroSkillTreePanelMvvm.ApplyQuickSwapSlotSize(go);
+                    var face = ElarionUiKit.Label(go.transform, i + "\nEMPTY", 0f, 1f, Color.white, 18,
+                        TextAlignmentOptions.Center, 0f, 1f);
+                    face.gameObject.name = "Face";
+                    slots.Add(btn);
+                }
+
+                SettleProbe(canvasGo);
+
+                // (a) the harness's oracle, verbatim.
+                var found = LayoutOracle.Audit(canvasGo, "SkillsRailProbe", probeW, probeH);
+                for (int i = 0; i < found.Count; i++)
+                {
+                    if (found[i].Kind == LayoutOracle.FindingKind.ButtonOverText ||
+                        found[i].Kind == LayoutOracle.FindingKind.ButtonsOverlap)
+                        failures.Add("[rail] " + found[i].Message);
+                }
+
+                // (b) the bands, by the numbers the oracle resolves.
+                Rect railR, hintR, floorR;
+                if (!LayoutOracle.TryRectInRoot(rail, root, out railR) ||
+                    !LayoutOracle.TryRectInRoot((RectTransform)hint.transform, root, out hintR) ||
+                    !LayoutOracle.TryRectInRoot(floorRt, root, out floorR))
+                {
+                    failures.Add("[rail] could not resolve the rail / hint / well-floor rects in root space");
+                    return;
+                }
+                if (Mathf.Abs(railR.height - railH) > 0.5f)
+                    failures.Add("[rail] the rail resolves " + railR.height.ToString("0.#") + " px tall but " +
+                                 "QuickSwapRailPx says " + railH + " - the host is no longer pinned to the constant");
+                if (hintR.yMax > railR.yMax + 0.5f || hintR.yMin < railR.yMin - 0.5f)
+                    failures.Add("[rail] the hint (y " + hintR.yMin.ToString("0.#") + ".." + hintR.yMax.ToString("0.#") +
+                                 ") escapes the rail (y " + railR.yMin.ToString("0.#") + ".." + railR.yMax.ToString("0.#") +
+                                 ") - it is not pinned inside its own band");
+                if (hintR.height < lineBox - 0.5f)
+                    failures.Add("[rail] the hint resolves " + hintR.height.ToString("0.#") + " px tall, under one " +
+                                 "FontFloor line box (" + lineBox.ToString("F1") + ")");
+
+                var texts = canvasGo.GetComponentsInChildren<TMP_Text>(false);
+                float worstClear = float.MaxValue;
+                for (int s = 0; s < slots.Count; s++)
+                {
+                    Rect br;
+                    if (!LayoutOracle.TryRectInRoot((RectTransform)slots[s].transform, root, out br))
+                    {
+                        failures.Add("[rail] slot " + (s + 1) + " has no resolvable rect");
+                        continue;
+                    }
+                    if (br.height < minTouch - 0.5f || br.width < minTouch - 0.5f)
+                        failures.Add("[rail] slot " + (s + 1) + " resolves " + br.width.ToString("0.#") + "x" +
+                                     br.height.ToString("0.#") + " - under MinTouchPx " + minTouch);
+                    float clear = hintR.yMin - br.yMax;
+                    if (clear < worstClear) worstClear = clear;
+                    if (clear < bandGap - 0.5f)
+                        failures.Add("[rail] slot " + (s + 1) + " top y=" + br.yMax.ToString("0.#") + " vs hint bottom y=" +
+                                     hintR.yMin.ToString("0.#") + " - clearance " + clear.ToString("0.#") +
+                                     " px is under BandGapPx " + bandGap + " (the capture's 112x9 overlap is clearance -9)");
+
+                    // The brief's law, verbatim: a slot rect intersects NO text rect it does not own.
+                    for (int t = 0; t < texts.Length; t++)
+                    {
+                        var text = texts[t];
+                        if (text == null || !text.gameObject.activeInHierarchy) continue;
+                        if (LayoutOracle.IsDescendantOf(text.transform, slots[s].transform)) continue;
+                        Rect tr;
+                        if (!LayoutOracle.TryRectInRoot(text.rectTransform, root, out tr)) continue;
+                        float ow, oh;
+                        if (LayoutOracle.Overlaps(br, tr, LayoutOracle.OverlapPadPx, out ow, out oh))
+                            failures.Add("[rail] slot " + (s + 1) + " covers foreign text '" + text.gameObject.name +
+                                         "' by " + ow.ToString("0.#") + "x" + oh.ToString("0.#") + " ref px");
+                    }
+                }
+
+                // (c) the graph well floor clears the rail by the gap.
+                float wellClear = floorR.yMin - railR.yMax;
+                if (wellClear < bandGap - 0.5f)
+                    failures.Add("[rail] the graph well's floor label (y " + floorR.yMin.ToString("0.#") +
+                                 ") clears the rail top (y " + railR.yMax.ToString("0.#") + ") by only " +
+                                 wellClear.ToString("0.#") + " px - under BandGapPx " + bandGap +
+                                 "; a node plate can paint over the hint");
+
+                notes.Add("rail probe @" + probeW + "x" + probeH + ": rail " + railR.height.ToString("0.#") +
+                          " px, hint " + hintR.height.ToString("0.#") + " px, slot-to-hint clearance " +
+                          (worstClear == float.MaxValue ? "n/a" : worstClear.ToString("0.#")) +
+                          " px, well-floor clearance " + wellClear.ToString("0.#") + " px, oracle findings " +
+                          found.Count);
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[rail] probe THREW " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+            }
+        }
+
+        /// <summary>An edit-mode WORLD-SPACE canvas sized like the game's 1080x1920 match-0.5
+        /// scaler resolves at the given screen (the same arithmetic UiTouchClampRegression uses;
+        /// an overlay canvas in an edit-mode call reports the editor's own window and every
+        /// measurement is fiction).</summary>
+        private static GameObject RailProbeCanvas(int w, int h)
+        {
+            const float refW = 1080f, refH = 1920f, match = 0.5f;
+            float logW = Mathf.Log(w / refW, 2f);
+            float logH = Mathf.Log(h / refH, 2f);
+            float sf = Mathf.Pow(2f, Mathf.Lerp(logW, logH, match));
+            if (!(sf > 0f) || float.IsNaN(sf) || float.IsInfinity(sf)) sf = 1f;
+
+            var go = new GameObject("~SkillsRailProbe", typeof(RectTransform), typeof(Canvas));
+            go.hideFlags = HideFlags.HideAndDontSave;
+            var canvas = go.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w / sf, h / sf);
+            rt.position = Vector3.zero;
+            rt.localScale = Vector3.one;
+            return go;
+        }
+
+        /// <summary>Two synchronous layout passes, matching the capture harness - one is not always
+        /// enough for a layout group's children to settle.</summary>
+        private static void SettleProbe(GameObject canvas)
+        {
+            var rt = canvas.GetComponent<RectTransform>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                Canvas.ForceUpdateCanvases();
+                if (rt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+            }
         }
 
         /// <summary>Fail on any codepoint above ASCII, naming file:line:col and the codepoint -

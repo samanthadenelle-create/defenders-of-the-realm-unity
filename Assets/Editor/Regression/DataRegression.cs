@@ -1519,6 +1519,10 @@ namespace DeNelle.Editor
             // structure may carry a NULL material slot (F8 seq 3618 CrystalMine engine-default).
             // Stands down via Skip if the set cannot be enumerated -- never quiet green.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-null-slot suite", () => { if (!DeNelle.Editor.Regression.StructureNullMaterialSlotRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-null-slot] " + r); });
+            // WO-1398: the store has ONE player-facing name (canon-strings storeWordmark) and every
+            // face that opens PanelId.RealmStore renders it; no "Night Market" / "Realm Store"
+            // literal survives in module code.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-name-single-source suite", () => { if (!DeNelle.Editor.Regression.StoreNameSingleSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-name-single-source] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
