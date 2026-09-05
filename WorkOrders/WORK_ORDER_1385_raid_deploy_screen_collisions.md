@@ -1,6 +1,6 @@
 # WO-1385: the raid deploy screen - Echo Guide collides with CHANGE and the enemy line; portraits behind labels; truncated quote; raw yellow slab
 
-**Status:** IN PROGRESS 2026-09-04 23:08 - edit-only lane on the deploy screen View; gate + build follow
+**Status:** FIXED - in 65d5a7eae, on the Seeker in build 2026.09.05.355952 (bands Enemy/Guide/Scout disjoint, portrait labels below plates, BEGIN ASSAULT kit button; RaidDeployUiRegression pins green in 378/378). Awaiting owner felt-test on the deploy screen.
 
 **Owner (2026-09-04 23:06, felt-test on the Seeker, build 355905), verbatim:** "screenshot. yuck"
 

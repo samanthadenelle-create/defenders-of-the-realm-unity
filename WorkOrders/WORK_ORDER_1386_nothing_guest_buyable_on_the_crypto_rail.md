@@ -1,6 +1,6 @@
 # WO-1386: nothing is guest-buyable on the crypto rail - every Seeker purchase requires an attested wallet
 
-**Status:** IN PROGRESS 2026-09-04 23:13 - edit-only lane on PurchaseGate + its consumers + the two pinning suites
+**Status:** FIXED - in 65d5a7eae, on the Seeker in build 2026.09.05.355952 (PurchaseGate.RequiresWallet: every non-GooglePlay channel requires a wallet at any USD price; BuyGate suite green). Awaiting owner felt-test: as a guest on the Seeker, any pack's CTA reads the connect-wallet sentence.
 
 **Owner (2026-09-04 23:12), verbatim:** "nothing should be guest buyable on a crypto account otherwise we can
 never persist change"

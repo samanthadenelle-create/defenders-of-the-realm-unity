@@ -1,6 +1,6 @@
 # WO-1387: training and troop upgrades cost TIME only - gold is spent only to skip the clock
 
-**Status:** IN PROGRESS 2026-09-04 23:17 - edit-only lane on the troop cost seams + the suites that pin them
+**Status:** FIXED - in 65d5a7eae, on the Seeker in build 2026.09.05.355952 (training charges nothing, "Train one: 45s . Ready"; HIRE REINFORCEMENTS is the gold skip; TrainingCostsTimeOnlyRegression green). Device proof on 355952: TRAIN 1 FOOTMAN -> enqueued -> TRAINING NOW rows=1. Awaiting owner felt-test.
 
 ## Owner, verbatim (2026-09-04 23:14-23:16, Seeker, build 355905)
 > "can you check the training. seems brutal almsot 4000 stone to upgrade, and gold? Seems should be

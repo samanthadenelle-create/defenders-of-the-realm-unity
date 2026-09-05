@@ -1,6 +1,6 @@
 # WO-1384: HUD left column - the Heartfire row is unreadable and half off its plate; the Night Market card must be the shining gem
 
-**Status:** IN PROGRESS 2026-09-04 23:05 - edit-only lane on HudKitController + the HUD layout bands; gate + build follow
+**Status:** FIXED - in 65d5a7eae, on the Seeker in build 2026.09.05.355952 (Heartfire single readable line inside the plate; Night Market card 320x156 with gold frame + aura). Awaiting owner felt-test. The 23:59 refinement (rounded corners + chasing colour-shifting glow, "WO-1384b" below) is a follow-up lane for a later build, not yet on the device.
 
 ## Owner, verbatim (2026-09-04 23:03-23:05, felt-test on the Seeker, build 355905)
 1. "in the top left there is something under the Heart of Elarion, but i cannot read it its too small on screen"

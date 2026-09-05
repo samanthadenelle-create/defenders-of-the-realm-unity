@@ -1,6 +1,6 @@
 # WO-1390: Manage - Research shows nothing when no perk is researchable; show the locked tier with its prerequisite and a door to upgrade it
 
-**Status:** IN PROGRESS 2026-09-04 23:36 - edit-only lane on the Research browse (VM) + its row (Panel); gate + build follow
+**Status:** FIXED - in 65d5a7eae, on the Seeker in build 2026.09.05.355952 (locked tiers listed with the CanResearch reason verbatim and an UPGRADE <BUILDING> door to the upgrade page; [research-locked-visible] green). Awaiting owner felt-test: Manage - Research shows the locked rows and the door opens the Cathedral page.
 
 ## Owner, verbatim (2026-09-04 23:33-23:35, Seeker, build 355905)
 > "under manange research it shows nothing, should it show Tier one and show locked with a link to upgrade
