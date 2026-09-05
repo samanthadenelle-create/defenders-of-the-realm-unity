@@ -180,7 +180,20 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI, seventieth pass): main line next free = **1402**.
+> ## RECONCILED 2026-09-05 (CLI docs lane, seventy-first pass): main line next free = **1414**.
+> *(CLI docs lane minted **1402 through 1413** from the merged UI review
+> (`docs/qa/UI_REVIEW_2026-09-05/REVIEW_MERGED.md` section 1, one WO per failing screen, in table order):
+> **1402** Raid Selection rows never say what a raid pays; **1403** Raid Deploy BEGIN ASSAULT live at 0 troops /
+> "Visit the Barracks" is not a door; **1404** Journey deck subtitles truncate, no state; **1405** Manage rows price
+> the tap, never the benefit + `grid x, y`; **1406** Manage launcher chips say nothing about idle / locked Troops
+> card is a wall; **1407** HUD never says how to become raid-capable, raw seconds, ASCII pips; **1408** Welcome-back
+> COLLECT lands on a HUD with no next door; **1409** Night Market without a wallet is nine "unavailable"s + rail
+> overlap; **1410** Hero screens: four names for two screens, WISDOM mystery, Loadout no door; **1411** Build never
+> says what is affordable, icon-only ghost buttons, confirm without cost/time; **1412** store CLOSE ejects from
+> Manage + unpriced BUY BUILDER; **1413** copy hygiene (retired words, DEV TOOLS on Help, etc.).
+> Bumped 1402 -> 1414 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI, seventieth pass): main line next free = **1402**.
 > *(CLI minted **1401** - HeroSkillTree quick-swap rail draws over the hint text (nine `[UICap-GEO]` lines at
 > 05:13 on all three resolutions; pre-existing since 3b3f28354). Assigned to a worktree lane by the orchestrator;
 > bumped 1401 -> 1402 in this SAME edit.)*
