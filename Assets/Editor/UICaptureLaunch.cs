@@ -6739,9 +6739,16 @@ namespace DeNelle.Editor
             GameObject host = null;
             GameObject canvas = null;
             Action captureDoor = () => { };
+            // Every deck card's Available is PanelRouter.IsRegistered(target), and no real panel
+            // registers in this edit-mode fixture, so each destination gets a stand-in door here or
+            // its card captures LOCKED. WO-1397: CosmeticShop joins the list for the Hero deck's
+            // Wardrobe card - on device CosmeticShopPanelBootstrap spawns the panel in every
+            // hero scene (CosmeticShopPanelBootstrap.cs EnsureFirst/SpawnInScene) and its Awake
+            // registers PanelId.CosmeticShop, so "available" is what the player actually sees.
             PanelId[] fixtureDoors =
             {
                 PanelId.Inventory, PanelId.EquipmentPanel, PanelId.HeroSkillTree, PanelId.HeroLoadout,
+                PanelId.CosmeticShop,
                 PanelId.RumorBoard, PanelId.RealmMap, PanelId.BattlePass, PanelId.RealmStore,
                 PanelId.DefenseReport, PanelId.MonthlyLedger, PanelId.GameGuide
             };

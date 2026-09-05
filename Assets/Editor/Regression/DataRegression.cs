@@ -1536,6 +1536,10 @@ namespace DeNelle.Editor
             // return door in PanelManager, one mechanism, honours the WO-1393 close-frame grace);
             // a HUD-opened panel's close does not return anywhere.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "deck-return-door suite", () => { if (!DeNelle.Editor.Regression.DeckReturnDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[deck-return-door] " + r); });
+            // WO-1397: the Cosmetic Shop is reachable - a Hero-deck "Wardrobe" card routes to the
+            // already-registered PanelId.CosmeticShop; the deck grid derives its rows from the card
+            // count (2x3 for five cards) so no card lands under the purpose line.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cosmetic-shop-reach suite", () => { if (!DeNelle.Editor.Regression.CosmeticShopReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cosmetic-shop-reach] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

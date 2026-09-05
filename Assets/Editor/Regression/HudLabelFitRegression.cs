@@ -606,9 +606,12 @@ namespace DeNelle.Editor.Regression
                                  "and a Hero card that mounts illustrated art gets its title and tagline a " +
                                  "SECOND time from the PNG - that is the WO-1341 defect exactly");
             }
-            if (routes != 4)
-                failures.Add("[deck-card-labels] found " + routes + " Hero deck routes, expected 4 " +
-                             "(Bag, Equipment, Skills, Loadout)");
+            // WO-1397 re-pointed this from 4 to 5: Wardrobe (PanelId.CosmeticShop) joined the deck
+            // as a text-free card - no PNG exists for it, so it cannot re-create the WO-1341
+            // double-label; the quotes==6 check above still holds it to three literals.
+            if (routes != 5)
+                failures.Add("[deck-card-labels] found " + routes + " Hero deck routes, expected 5 " +
+                             "(Bag, Equipment, Skills, Loadout, Wardrobe)");
 
             // ---- 6b  the label-baked PNGs are mounted by NOTHING in the deck ---------------
             foreach (string key in BakedLabelCardArt)
@@ -671,7 +674,7 @@ namespace DeNelle.Editor.Regression
                 break;
             }
 
-            notes.Add("Hero deck: 4 text-free cards, one live producer per label, format read from Manage");
+            notes.Add("Hero deck: 5 text-free cards, one live producer per label, format read from Manage");
         }
 
         // =====================================================================

@@ -1,6 +1,11 @@
 // =============================================================================
-// CosmeticShopPanel - the in-game Cosmetic Shop UI. Opened via its world
-// interactable (Marketplace). Category tabs (Hero / Pet / Village) + a
+// CosmeticShopPanel - the in-game Cosmetic Shop UI. Opened from the Hero deck's
+// Wardrobe card (PlayerDeckWorkspace, WO-1397) through PanelRouter.Open(
+// PanelId.CosmeticShop); the dialogue verb OpenCosmetics (DialogueCommandSink)
+// opens the same id. There is NO Marketplace interactable - BuildingType has no
+// such member and BuildingInteractable.TryPanelFor has no Cosmetic case; the old
+// header claimed one and the shop sat unreachable for every player (UI screen
+// graph 2026-09-04, dead end 4). Category tabs (Hero / Pet / Village) + a
 // scrollable card list; each card shows the preview, name, description,
 // Cosmetics price (with DEF-197 "short by N" honesty) and ONE action button
 // (Buy / Equip / Equipped / Locked).
@@ -72,7 +77,8 @@ namespace DeNelle.HUD
         private void Awake()
         {
             _panelHandle = PanelManager.Register("Cosmetic Shop", CloseOverlay, IsOverlayOpen);
-            // DEF-213: let the Marketplace / Store interaction open this panel by id.
+            // DEF-213: any door opens this panel by id. WO-1397: the door that exists is the
+            // Hero deck Wardrobe card (PlayerDeckWorkspace.CardsFor, PlayerDeckKind.Hero).
             PanelRouter.Register(PanelId.CosmeticShop, OpenOverlay);
         }
 
@@ -98,7 +104,7 @@ namespace DeNelle.HUD
 
         private void Update()
         {
-            // WO-437: no global hotkey — opens only via the Marketplace interactable.
+            // WO-437: no global hotkey - opens only through PanelRouter (Hero deck Wardrobe card).
             if (_toast != null && _toast.card != null && _toastUntil > 0f
                 && Time.unscaledTime > _toastUntil)
             {
@@ -524,9 +530,40 @@ namespace DeNelle.HUD
             {
                 _open = false;
                 _modal.canvas.SetActive(false);
+                FlowTrace.Warn("CosmeticShop", "OpenOverlay: arbiter rejected the open (battle-lock) - shop stays hidden");
                 return;
             }
             Repaint();
+            TraceOpened();
+        }
+
+        /// <summary>
+        /// WO-1397: the door's proof line. The shop was unreachable for every player until the
+        /// Hero deck Wardrobe card, so an open now says what the player will actually see:
+        /// owned/total across the three categories and the equipped hero look. A missing bridge
+        /// (Cosmetics assembly stripped, service not yet spawned) is a WARN naming the reason,
+        /// never a silent empty list.
+        /// </summary>
+        private void TraceOpened()
+        {
+            if (_serviceInstance == null) _serviceInstance = ResolveServiceInstance();
+            if (s_catalogType == null || s_byCategoryMethod == null)
+            {
+                FlowTrace.Warn("CosmeticShop", "shop unavailable: DeNelle.Cosmetics.CosmeticCatalog not resolved - every tab renders data-empty");
+                return;
+            }
+            if (_serviceInstance == null)
+            {
+                FlowTrace.Warn("CosmeticShop", "shop unavailable: CosmeticOwnershipService.Instance is null - nothing owned, nothing equippable");
+                return;
+            }
+            int total = 0;
+            foreach (var category in new[] { "hero", "pet", "village" })
+                foreach (var def in CatalogByCategory(category))
+                    if (def != null) total++;
+            string equipped = EquippedFor("hero");
+            FlowTrace.Step("CosmeticShop", "shop opened from Hero deck; owned=" + OwnedCount() + "/" + total +
+                " equipped=" + (string.IsNullOrEmpty(equipped) ? "none" : equipped));
         }
 
         public void CloseOverlay()

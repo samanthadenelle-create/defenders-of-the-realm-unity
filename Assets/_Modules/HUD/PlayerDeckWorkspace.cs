@@ -50,6 +50,11 @@ namespace DeNelle.HUD
         private static PlayerDeckWorkspace _instance;
         protected override string WorkspaceName => "Player Deck";
 
+        /// <summary>WO-1397: ref px authored ABOVE ElarionUiKit.MinTouchPx for a deck card's
+        /// height, so layout rounding can never settle the rect a hair under the floor the
+        /// capture touch oracle reads. Not a second floor - a margin on the one floor.</summary>
+        private const float TouchFloorMarginPx = 2f;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Install()
         {
@@ -79,7 +84,7 @@ namespace DeNelle.HUD
             switch (page.Kind)
             {
                 case PlayerDeckKind.Realm: return "Realm services, records, and guidance.";
-                case PlayerDeckKind.Hero: return "Your equipment, inventory, skills, and loadout.";
+                case PlayerDeckKind.Hero: return "Your equipment, inventory, skills, loadout, and wardrobe.";
                 default: return "Quests and raids.";
             }
         }
@@ -101,9 +106,52 @@ namespace DeNelle.HUD
             layout.spacing = new Vector2(24f, 20f);
             layout.padding = new RectOffset(14, 14, 14, 14);
             Canvas.ForceUpdateCanvases();
+            // WO-1397: the grid is two columns wide and as many rows tall as the deck needs, never
+            // fewer than two. A deck of up to four cards gets EXACTLY the cell it always had
+            // (rows=2 reduces to the old h*0.5f, spacing subtracted once); the Hero deck's fifth
+            // card (Wardrobe) opens a third row instead of overflowing the 0.82 top band into the
+            // purpose line. Rows, not a third column: every card keeps its measured width, so the
+            // WO-1341/HudLabelFitRegression label fits stay exactly what they were.
+            int rows = Mathf.Max(2, Mathf.CeilToInt(cards.Count / (float)layout.constraintCount));
             float w = Mathf.Max(1f, grid.rect.width - layout.padding.horizontal - layout.spacing.x);
-            float h = Mathf.Max(1f, grid.rect.height - layout.padding.vertical - layout.spacing.y);
-            layout.cellSize = new Vector2(w * 0.5f, h * 0.5f);
+            float h = Mathf.Max(1f, grid.rect.height - layout.padding.vertical - layout.spacing.y * (rows - 1));
+            // WO-1397 gate finding (UI_GEOMETRY_FAIL x10, HeroWorkspace 2670x1200): three rows in
+            // the 0.03..0.82 band resolved 108.7 ref px tall - 3.3 under ElarionUiKit.MinTouchPx -
+            // and ClampMinTouch would have grown every card into its neighbours at runtime. A cell
+            // is therefore never AUTHORED under the floor (plus a 2 px margin, because the touch
+            // oracle reads the settled rect and a cell authored exactly AT the floor can round a
+            // hair under it). When the floor needs more height than the band has, the grid is
+            // EXTENDED DOWNWARD toward the Close band - the top edge is fixed by the purpose line
+            // (the WO-1341 note above reserved the TOP, not the bottom) - and never below the
+            // body's own bottom edge (anchor 0): a card's text must stay on the body plate
+            // (capture RULE 1 [text-off-plate]), and the factory already ends the body above the
+            // Close. For every 2-row deck h / rows is far above the floor and the extension never
+            // fires, so their geometry is byte-identical to before this note.
+            float cellY = Mathf.Max(ElarionUiKit.MinTouchPx + TouchFloorMarginPx, h / rows);
+            float needed = cellY * rows + layout.padding.vertical + layout.spacing.y * (rows - 1);
+            float bodyH = Mathf.Max(1f, content.rect.height);
+            bool extended = false;
+            if (needed > grid.rect.height + 0.01f)
+            {
+                float deficitFrac = (needed - grid.rect.height) / bodyH;
+                float newMinY = Mathf.Max(0f, grid.anchorMin.y - deficitFrac);
+                extended = newMinY < grid.anchorMin.y;
+                grid.anchorMin = new Vector2(grid.anchorMin.x, newMinY);
+                Canvas.ForceUpdateCanvases();
+                float hAfter = Mathf.Max(1f, grid.rect.height - layout.padding.vertical - layout.spacing.y * (rows - 1));
+                if (hAfter / rows < ElarionUiKit.MinTouchPx)
+                    FlowTrace.Warn("Navigation", "deck '" + page.Kind + "' grid: " + rows + " rows need " +
+                        Mathf.RoundToInt(needed) + " px but the body band (" + Mathf.RoundToInt(bodyH) +
+                        " px) cannot give it even at anchor 0 - cell " + (hAfter / rows).ToString("F1") +
+                        " is under MinTouchPx " + ElarionUiKit.MinTouchPx + "; ClampMinTouch will grow it into its neighbours");
+                cellY = Mathf.Max(ElarionUiKit.MinTouchPx + TouchFloorMarginPx, hAfter / rows);
+            }
+            layout.cellSize = new Vector2(w * 0.5f, cellY);
+            FlowTrace.Step("Navigation", "deck '" + page.Kind + "' grid " + layout.constraintCount + "x" + rows +
+                " for " + cards.Count + " card(s), cell " + Mathf.RoundToInt(layout.cellSize.x) + "x" +
+                Mathf.RoundToInt(layout.cellSize.y) + " (band " + grid.anchorMin.y.ToString("F3") + ".." +
+                grid.anchorMax.y.ToString("F3") + " of body " + Mathf.RoundToInt(bodyH) + " px" +
+                (extended ? ", extended toward Close for the touch floor)" : ")"));
 
             for (int i = 0; i < cards.Count; i++) BuildCard(grid, cards[i]);
         }
@@ -572,8 +620,9 @@ namespace DeNelle.HUD
             switch (kind)
             {
                 case PlayerDeckKind.Hero:
-                    // WO-1341. THESE FOUR CARDS DELIBERATELY CARRY NO ArtKey, and that is the
-                    // whole fix - do not "restore the missing art" without reading this.
+                    // WO-1341. THE FOUR CARDS BELOW (Bag, Equipment, Skills, Loadout) DELIBERATELY
+                    // CARRY NO ArtKey, and that is the whole fix - do not "restore the missing art"
+                    // without reading this. (Wardrobe, the fifth, is WO-1397 - see its own note.)
                     //
                     // Every label on the Hero deck rendered TWICE on device (build
                     // 2026.09.03.353742): once as the live TMP text built below, and once as
@@ -598,12 +647,24 @@ namespace DeNelle.HUD
                     // needs to change. Until then these render through the text-free branch
                     // (card-frame-empty + the concept medallion), which is the same treatment
                     // every other non-illustrated card in the game gets.
+                    //
+                    // WO-1397: the FIFTH card, Wardrobe, is the Cosmetic Shop's only player door.
+                    // PanelId.CosmeticShop was registered by CosmeticShopPanel every session and
+                    // opened by nobody - its one caller was a dialogue verb (OpenCosmetics) that no
+                    // dialogue uses (docs/qa/UI_SCREEN_GRAPH_2026-09-04.md dead end 4). No PNG was
+                    // ever authored for it, so it takes the same text-free face as its four
+                    // siblings by construction, not by stripping. The concept id is unmapped in
+                    // concept-icons.json ON PURPOSE (owner tags the art; the CLI never picks), so
+                    // the medallion renders the "W" monogram exactly as Equipment/Skills do today.
+                    // Owner may re-rule the door into the Night Market (WO-1164): move THIS line,
+                    // the panel stays. CosmeticShopReachabilityRegression pins the route.
                     return new List<Card>
                     {
                         Route("Bag", "Every item you carry", "inventory", PanelId.Inventory),
                         Route("Equipment", "Gear worn by your hero", "armor", PanelId.EquipmentPanel),
                         Route("Skills", "Learn and improve talents", "skill", PanelId.HeroSkillTree),
-                        Route("Loadout", "Abilities equipped for battle", "magic", PanelId.HeroLoadout)
+                        Route("Loadout", "Abilities equipped for battle", "magic", PanelId.HeroLoadout),
+                        Route("Wardrobe", "Looks for your hero, Echo, and town", "wardrobe", PanelId.CosmeticShop)
                     };
                 case PlayerDeckKind.Journey:
                     return new List<Card>
