@@ -1,6 +1,6 @@
 # WO-1415: nothing in the game ever introduces Heartfire - and it is now the ONE gate on raiding
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the owner's felt-test on build 2026.09.05.356468
+**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the owner's felt-test on build 2026.09.05.356468. ⭐ **RULED 2026-09-05: the sentence is "each one sends you on a raid"** (owner: "yes use that sentence"). Merged-review ruling #3 is CLOSED; the copy below is now canon, not a proposal.
 
 ## Owner, verbatim (2026-09-05 10:2x)
 > "Heartfire is full, i dont understand as a new player what to do with that. No one in game has
@@ -34,10 +34,15 @@ It reports a STATE with no consequence attached. A player reads it and cannot an
 what spends it, what do I get, what happens when it is empty, when does it come back.
 
 ## Fix shape (one mechanism each, no new systems)
-1. **The plate says what it buys, not just that it is full.** When charged:
-   `Heartfire 3/3 - each one sends you on a raid`. When spent: `Next Heartfire in 3h 12m`.
-   The three marks stay (greyscale-safe); the sentence is what changes.
-   ⛔ The exact wording is the OWNER'S (ruling below) - this is the proposed default only.
+1. **The plate carries the meaning in PARENTHESES, not a sentence** (owner ruling 2026-09-05: "why
+   not display raid in parantheses"). Charged: `Heartfire 3/3 (raids)`. Spent: `Heartfire 0/3
+   (raids) - next in 3h 12m`. The three marks stay (greyscale-safe).
+   **Why the parenthetical and not the sentence here, measured:** this is a single fitted line on the
+   Heart plate - the row WO-1384 had to fight into the plate at 20-26 px - and WO-1407's lane
+   measured a 42-char line as the tight case against `HudLayoutBands.HeartMount`. A sentence
+   ellipsises; two words do not. The SENTENCE lives where there is room (the guide entry and the
+   introduction beat, below). One source string, two renderings: short form on the plate, full
+   sentence everywhere else.
 2. **One guide entry** ("Heartfire") in `guide-content.json`: what it is, that it stacks to three,
    that one rekindles every four hours, that a raid spends one. Two sentences, the shape the
    WO-1389 "Troops" entry already uses.
@@ -56,10 +61,16 @@ what spends it, what do I get, what happens when it is empty, when does it come 
       (`TutorialStepReachabilityRegression`). Name the mutation for each.
 - [ ] Owner felt-test: a new player meets the word before it ever blocks them.
 
-## Owner ruling needed (this is merged-review ruling #3, still open)
-**What does one Heartfire charge buy, in your words?** The proposed default above is
-"each one sends you on a raid". One sentence replaces every occurrence.
-Second, smaller: introduce it at the first Raids-grid open (proposed) or at founding?
+## Owner ruling - GIVEN 2026-09-05
+> "yes use that sentence"
+
+**CANON: a Heartfire charge is what "sends you on a raid".** That clause is the one source for
+every place the mechanic is explained - the plate, the guide entry, the introduction beat and the
+refusal toast's second line if it needs one. Do not paraphrase it per surface; author it ONCE
+(canon-strings) and read it everywhere, the WO-1398 one-source pattern.
+
+Still open, smaller: introduce it at the first Raids-grid open (the ticket's default, implement it)
+or at founding? Implement the default; one word re-points it.
 
 ## Not in scope
 The charge maths (3 max / 4 h regen, canon §4), the HUD flame art (owner's creative call), the

@@ -180,7 +180,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI, seventy-second pass): main line next free = **1417**.
+> ## RECONCILED 2026-09-05 (CLI, seventy-third pass): main line next free = **1418**.
+> *(CLI minted **1417** - the build palette item cards are flat navy boxes inside the medieval frame, with `COST: NO COST` and `[READY] AVAILABLE`; owner live screen 10:34. Bumped 1417 -> 1418 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI, seventy-second pass): main line next free = **1417**.
 > *(CLI minted, all three from the owner's 10:0x-10:2x felt-test on build 2026.09.05.356468:
 > **1414** START NEW inherits the away clock AND the ever-built ledger (PRODUCTION BLOCKER - a fresh
 > town claims 8h of haul, the popup covers the tutorial SKIP so founding_greet dies, and the
