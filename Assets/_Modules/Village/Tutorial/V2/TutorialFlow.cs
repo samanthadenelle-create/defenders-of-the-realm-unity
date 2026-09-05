@@ -2525,6 +2525,11 @@ namespace DeNelle.Village
                 {
                     ShowHighlight(ctx.Highlight[0], UiSpotlight.MaskStyle.Glow);
                 }
+                // WO-1389 - a beat with a spotlight and NO dialogue (the TRAINING NOW coach-mark)
+                // still has to SAY something: its authored hint rides the same gold toast the
+                // stuck-step coach uses, so the mechanism is one, not two.
+                if (!string.IsNullOrEmpty(ctx.Hint))
+                    ShowCoachHint(ctx.Id, ctx.Hint);
                 if (ctx.Dialogue != null && !string.IsNullOrEmpty(ctx.Dialogue.Intro))
                 {
                     if (!CoreDialogue.DialogueService.Play(ctx.Dialogue.Intro))
@@ -2532,6 +2537,31 @@ namespace DeNelle.Village
                 }
                 return;
             }
+        }
+
+        /// <summary>WO-1389 - the coach-mark SENTENCE for a route hop / hintful beat: the SAME
+        /// gold toast surface the stuck-step coach (TickCoach) uses, so guided taps and rescue
+        /// nudges look like one voice. Guarded: a toast that throws must never break the beat.</summary>
+        private static void ShowCoachHint(string ctxId, string hint)
+        {
+            bool ok = Guard.Try("Tutorial", "coach hint toast " + ctxId, () =>
+                ElarionUiKit.ShowToast(hint, ElarionUiKit.ToastTone.Gold, 4.5f));
+            FlowTrace.Step("Tutorial", $"CTX-HINT :: {ctxId} - \"{hint}\"" + (ok ? "" : " (toast FAILED)"));
+        }
+
+        /// <summary>
+        /// WO-1389 - TRUE once the contextual step <paramref name="ctxId"/> has been latched on
+        /// this save (the tutorial_ctx:&lt;id&gt; SeenTutorials key). Exposed so an EMITTER can
+        /// stop re-raising a trigger the flow will never consume again (TutorialSignalAdapters'
+        /// raid.first_completed re-raise), without a second copy of the key prefix anywhere.
+        /// Null state = not seen.
+        /// </summary>
+        public static bool IsContextualSeen(string ctxId)
+        {
+            if (string.IsNullOrEmpty(ctxId)) return false;
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return state != null && state.SeenTutorials != null &&
+                   state.SeenTutorials.TryGetValue(CtxSeenPrefix + ctxId, out bool seen) && seen;
         }
 
         /// <summary>
@@ -2562,6 +2592,9 @@ namespace DeNelle.Village
                     FlowTrace.Step("Tutorial", $"CTX-ROUTE :: {_activeCtx.Id} - '{signalId}' reached; " +
                         $"spotlight now on '{hop.Highlight}'.");
                 }
+                // WO-1389 - the hop's coach-mark sentence, if authored ("Pick a troop").
+                if (!string.IsNullOrEmpty(hop.Hint))
+                    ShowCoachHint(_activeCtx.Id, hop.Hint);
                 return;
             }
         }

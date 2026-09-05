@@ -431,10 +431,33 @@ namespace DeNelle.Village.Hero
             // hits), so the old "★★★" text rendered as boxes in builds. Procedural
             // gold diamonds instead (EndStateView's pattern via StarRatingRow).
             StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
+            // WO-1389 pressure point 4: the SCOUT LINE ("Iron walls . 15 defenders") shares the
+            // clock band, right half, so a LOCKED card already says what the wins buy - and an
+            // open card says what it is walking into. The clock label gives up its right half
+            // (0.95 -> 0.54); both fit-never-clip. Absent on a def that authors neither fact.
+            string scoutLine = _vm.ScoutLineFor(id);
+            bool hasScout = !string.IsNullOrEmpty(scoutLine);
             var timeLabel = ElarionUiKit.Label(card.transform,
                 "Clock: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
-                ElarionUi.Parchment, 28, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
+                ElarionUi.Parchment, 28, TMPro.TextAlignmentOptions.Left, 0.22f, hasScout ? 0.54f : 0.95f);
             timeLabel.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(timeLabel);
+            if (hasScout)
+            {
+                var scoutLabel = ElarionUiKit.Label(card.transform, scoutLine, 0.38f, 0.60f,
+                    dimmed ? ElarionUi.ParchmentDim : ElarionUi.Parchment, 22,
+                    TMPro.TextAlignmentOptions.Right, 0.56f, 0.95f);
+                scoutLabel.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(scoutLabel);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "raid card '" + id + "' scout line: \"" + scoutLine + "\"" + (locked ? " (locked - shown before entry)" : ""));
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "raid card '" + id + "' has NO scout line - scene-configs.json authors neither wallTier " +
+                    "nor a garrison composition for it, so the locked card cannot say what the wins buy.");
+            }
 
             // Bottom band — the reward hint when the camp is available, the RECOVERY SENTENCE
             // when it is not.

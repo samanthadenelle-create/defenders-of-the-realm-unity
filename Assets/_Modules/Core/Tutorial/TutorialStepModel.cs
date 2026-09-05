@@ -69,6 +69,11 @@ namespace DeNelle.Core.Tutorial
     {
         [JsonProperty("signal")] public string Signal;
         [JsonProperty("highlight")] public string Highlight;
+        /// <summary>WO-1389 - optional ONE-SENTENCE coach-mark text shown (as the same gold toast
+        /// the stuck-step coach uses) the moment this hop fires, so a guided tap can SAY what the
+        /// spotlight is pointing at ("Pick a troop"). Presentation only; absent on every earlier
+        /// hop. ASCII only (mobile font-atlas law).</summary>
+        [JsonProperty("hint")] public string Hint;
     }
 
     /// <summary>Kit objective-banner text + optional progress count.</summary>
@@ -126,6 +131,10 @@ namespace DeNelle.Core.Tutorial
         /// follow the player along the route to the thing being taught. Null/empty for every
         /// existing step (the hint just lights <c>highlight[0]</c> and stays there).</summary>
         [JsonProperty("route")] public List<TutorialRouteHop> Route;
+        /// <summary>WO-1389 - contextual steps only: an optional one-sentence coach-mark toast
+        /// shown on ENTER, for a beat that has a spotlight but no dialogue (the TRAINING NOW
+        /// beat). Null on every other step. Presentation only - never gates, never completes.</summary>
+        [JsonProperty("hint")] public string Hint;
 
         /// <summary>
         /// WO-1340 — TRUE when this contextual hint waits on a REAL GAMEPLAY completion

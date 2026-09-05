@@ -201,7 +201,11 @@ namespace DeNelle.Editor
                     {
                         if (line == null) { failures.Add("ScoutReport contains a null line"); continue; }
                         if (line.Contains("Reinforced Steel") && line.Contains("2 gates")) walls = true;
-                        if (line == "Garrison: 6 defenders") garrison = true;
+                        // WO-1389 (2026-09-05): the garrison line is now the COMPARE form
+                        // "Garrison: 6 defenders - you field N" (owner: the scout report must
+                        // compare the camp to YOUR army). Pin the prefix + the compare tail;
+                        // the exact equality it replaced would red on the feature working.
+                        if (line.StartsWith("Garrison: 6 defenders") && line.Contains(" - you field ")) garrison = true;
                         if (line == "Boss: Necromancer") boss = true;
                         string lower = line.ToLowerInvariant();
                         // The anatomy-doc lie guard: these config fields are COSMETIC (the
@@ -210,7 +214,7 @@ namespace DeNelle.Editor
                             failures.Add("ScoutReport surfaces a cosmetic-only reward field (lie on screen): '" + line + "'");
                     }
                     if (!walls) failures.Add("ScoutReport missing the walls line ('Reinforced Steel', '2 gates'); got: " + Join(report));
-                    if (!garrison) failures.Add("ScoutReport missing 'Garrison: 6 defenders'; got: " + Join(report));
+                    if (!garrison) failures.Add("ScoutReport missing 'Garrison: 6 defenders - you field N' (WO-1389 compare form); got: " + Join(report));
                     if (!boss) failures.Add("ScoutReport missing 'Boss: Necromancer'; got: " + Join(report));
                 }
             }

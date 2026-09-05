@@ -1,6 +1,6 @@
 # WO-1389: introduce the reason to train and to upgrade - the free three open the door; the game must show what is behind it
 
-**Status:** READY TO IMPLEMENT - design ruled by the owner 23:20-23:27 (why AND how, as a post-first-raid FTUE beat); sequenced AFTER WO-1387 (time-only training) lands; Q1 voice still open - implement with the HUD voice and swap on her word
+**Status:** IN PROGRESS 2026-09-05 05:37 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 378/378 incl. [post-raid-beat]); in the APK building now, then the device/Firebase. Q1-Q3 still open (HUD voice shipped). Design ruled by the owner 23:20-23:27 (why AND how, as a post-first-raid FTUE beat); sequenced AFTER WO-1387 (time-only training) lands; Q1 voice still open - implement with the HUD voice and swap on her word
 
 ## Owner, verbatim (2026-09-04 23:20-23:23)
 > "the idea was lets start them with a free army to get them into raids" -> "then introduce the reason to

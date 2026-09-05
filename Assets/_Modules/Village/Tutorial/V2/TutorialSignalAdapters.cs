@@ -77,6 +77,20 @@ namespace DeNelle.Village
         private bool _economyHooked;
         private bool _affordRaised;   // session guard; per-save one-shot lives in TutorialFlow
 
+        // -- WO-1389: raid.first_completed -------------------------------------
+        /// <summary>The contextual step the raise exists for; its tutorial_ctx latch is the
+        /// stop condition (read through TutorialFlow.IsContextualSeen - ONE owner of the key).</summary>
+        private const string PostRaidBeatId = "ctx_post_raid";
+        /// <summary>Re-raise cadence while the beat is unseen. A raise that lands while another
+        /// hint is live is refused by TutorialFlow.TryTriggerContextual, so a single raise could
+        /// lose the beat for the whole session; 30 s is long enough not to spam the latch.</summary>
+        private const float FirstRaidReraiseSeconds = 30f;
+        /// <summary>Let the hub settle after the raid scene returns (the settle screen is
+        /// dismissed in the raid scene; this is "back in town, on your feet").</summary>
+        private const float FirstRaidHubSettleSeconds = 3f;
+        private float _nextFirstRaidRaiseAt;
+        private bool _firstRaidSeenTraced;
+
         /// <summary>
         /// Stands the adapter host up once per process, on any scene, with no feature
         /// flag and no hub check - the signal bus is game-wide, not tutorial-wide.
@@ -221,6 +235,60 @@ namespace DeNelle.Village
                     _economyHooked = true;
                 }
             }
+
+            TickFirstRaidCompleted();
+        }
+
+        // -- WO-1389: raid.first_completed - the post-first-raid beat's trigger -------
+        // The ONE writer of everCompletedRaid is RaidDeployController.ReconcileRaidEnd
+        // (:766), which runs in the RAID scene - where TutorialFlow is not armed (TryArm
+        // refuses outside a hub), so a raise at the flip itself would land on nobody. The
+        // beat is authored to fire "after the settle screen is dismissed and the player is
+        // back in town", which is exactly the state this tick observes: a hub scene, the
+        // persisted flag, no dialogue on screen, a few seconds after the scene settled.
+        // Runs on the existing 1 Hz Discover tick; no per-frame work.
+        private void TickFirstRaidCompleted()
+        {
+            if (Time.unscaledTime < _nextFirstRaidRaiseAt) return;
+
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null || !state.EverCompletedRaid || !state.Onboarded) return;
+
+            if (TutorialFlow.IsContextualSeen(PostRaidBeatId))
+            {
+                if (!_firstRaidSeenTraced)
+                {
+                    _firstRaidSeenTraced = true;
+                    FlowTrace.Step("Tutorial", "raid.first_completed: '" + PostRaidBeatId +
+                        "' is already latched on this save - the trigger will not be raised again.");
+                }
+                return;
+            }
+
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            // Fully qualified: this file has no `using DeNelle.Core;` and DeNelle.Village cannot see a
+            // sibling namespace's types unqualified (the partial lane's version did not compile).
+            if (!DeNelle.Core.HubScenes.IsHub(scene) || DeNelle.Core.HubScenes.IsEnemyOwnedScene(scene))
+            {
+                FlowTrace.Once("Tutorial", "first-raid-not-hub",
+                    "raid.first_completed: everCompletedRaid is set but scene '" + scene +
+                    "' is not a home hub - waiting for the return to town.");
+                return;
+            }
+            if (Time.timeSinceLevelLoad < FirstRaidHubSettleSeconds) return;
+            if (DeNelle.Core.Dialogue.DialogueService.IsRunning)
+            {
+                FlowTrace.Once("Tutorial", "first-raid-dialogue-busy",
+                    "raid.first_completed: a dialogue is on screen - deferring the raise.");
+                return;
+            }
+
+            _nextFirstRaidRaiseAt = Time.unscaledTime + FirstRaidReraiseSeconds;
+            FlowTrace.Step("Tutorial", "raid.first_completed: back in hub '" + scene +
+                "' with everCompletedRaid=true and '" + PostRaidBeatId + "' unseen - raising " +
+                "(re-raises every " + FirstRaidReraiseSeconds.ToString("0") + "s until the beat latches).");
+            TutorialSignals.Raise(TutorialSignals.FirstRaidCompleted);
         }
 
         // ── Event → bus ───────────────────────────────────────────────────────

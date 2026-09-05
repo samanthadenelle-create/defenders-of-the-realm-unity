@@ -254,7 +254,14 @@ namespace DeNelle.Village.Hero
                         foreach (var u in g.composition)
                             if (u != null && u.count > 0) defenders += u.count;
                     if (defenders > 0)
-                        _scoutReport.Add("Garrison: " + defenders + (defenders == 1 ? " defender" : " defenders"));
+                    {
+                        // WO-1389 pressure point 2: the report COMPARES. "Garrison: 15 defenders -
+                        // you field 3" puts the seven empty slots next to the number they are
+                        // measured against. DeployableCount is computed by Rebuild() before this
+                        // runs (constructor order), so the two halves are read from one snapshot.
+                        _scoutReport.Add("Garrison: " + defenders + (defenders == 1 ? " defender" : " defenders") +
+                                         " - you field " + DeployableCount);
+                    }
                     if (!string.IsNullOrEmpty(g.boss))
                         _scoutReport.Add("Boss: " + TitleCaseId(g.boss));
                 }

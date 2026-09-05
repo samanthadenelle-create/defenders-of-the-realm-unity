@@ -139,6 +139,15 @@ namespace DeNelle.Core.UI
             // it's Hero then Skills". Bar HERO face -> the SKILLS card on the Hero deck.
             "hud.hero_button",      // HudKitController bar face (ActionBarButtonId.Bag, labelled "Hero") -> PanelId.HeroDeck
             "deck.card.skills",     // PlayerDeckWorkspace "DeckCard_Skills" -> PanelId.HeroSkillTree; resolved lazily below
+            // WO-1389 - the post-first-raid HOW beat walks the REAL Manage > Troops screen. All four
+            // are registered EAGERLY by ManageScreenPanel as it builds the Troops workspace (rail
+            // row per troop id, the two CTA faces on the selected-troop card, the OPEN QUEUE face on
+            // the TRAINING NOW band); Register is idempotent and the panel re-registers on every
+            // Render, so a rebuilt row resolves again on the next spotlight frame.
+            "manage.troop_row.troop-footman",   // ManageScreenPanel.BuildTroopRailRow ("manage.troop_row.<troopId>")
+            "manage.troop_cta_train",           // ManageScreenPanel.BuildTroopCard TRAIN 1 <NAME> face
+            "manage.troop_cta_upgrade",         // ManageScreenPanel.BuildTroopCard UPGRADE TO L<n> face
+            "manage.open_queue",                // ManageScreenPanel.AddTroopTrainingNowBand OPEN QUEUE face
         };
 
         // FTUE-04: the founding_echo tutorial step spotlights the Pets button, but that

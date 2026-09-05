@@ -1,6 +1,6 @@
 {
-  "version": 9,
-  "_note": "v9 (WO-1378, 2026-09-04): two RAID-LOOP teaching records added - tut_ctx_raid_barracks (three lines) and tut_ctx_raid_first - carrying the exact strings from docs/CREATIVE_CANON_ELARION_2026-09-04.md section 8.1. They exist because the FTUE never mentioned the loop at all: barracks/raid/army/troop each returned ZERO occurrences in tutorial-steps.json before this edit. All three speak as the {guide} token and nothing else, per the invariant below. PRIOR: v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
+  "version": 10,
+  "_note": "v10 (WO-1389, 2026-09-05): ONE post-first-raid teaching record added - tut_ctx_post_raid - the WHY half of the reason-to-train-and-upgrade beat (tutorial-steps.json ctx_post_raid). Three panels, each ONE image (a portrait command in a lines-less setup node, because DialogueRunner fires a node's commands AFTER its lines) + ONE sentence + ONE door (an option whose goto lands on a commands-only node: OpenManageTroops / OpenManageTroops troop-footman / OpenJourney - the brom_intro open_board pattern). THE NUMBERS ARE LIVE TEXT TOKENS - {army.used}, {army.cap}, {army.missing}, {footman.next}, {camp.next.line} - resolved at surface time by DialogueTextTokens (Core) with resolvers registered by PostRaidBeatTokens (Village) from the raid gate, troop-upgrades.json and scene-configs.json; unknown tokens pass through untouched so every earlier line is byte-identical. Speaks as {guide} and nothing else, per the invariant below. Voice is the plain HUD voice pending owner Q1. PRIOR: v9 (WO-1378, 2026-09-04): two RAID-LOOP teaching records added - tut_ctx_raid_barracks (three lines) and tut_ctx_raid_first - carrying the exact strings from docs/CREATIVE_CANON_ELARION_2026-09-04.md section 8.1. They exist because the FTUE never mentioned the loop at all: barracks/raid/army/troop each returned ZERO occurrences in tutorial-steps.json before this edit. All three speak as the {guide} token and nothing else, per the invariant below. PRIOR: v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
   "speakers": [
     {
       "name": "Mother Wren",
@@ -1364,6 +1364,79 @@
               "text": "Every victory opens the road farther. Choose your target - stronger footholds carry greater risk and richer spoils."
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_post_raid",
+      "_note": "WO-1389 - the post-FIRST-RAID beat, WHY half (owner 2026-09-04 23:25: a dialogue screen with images, no world actor; 23:27: introduce why to upgrade and how). Three panels, each one image + one sentence + one door. IMAGES: the portrait command is fired by a lines-less setup node (img1/img2/img3) whose next is the panel, because DialogueRunner.PostLines runs a node's commands AFTER its lines - a portrait command on the panel node itself would change the image only as the panel closed. All three sprites are textureType Sprite in Resources (DataRegression.CheckDialogueSpeakers loads every portrait path). DOORS: an option whose goto is a commands-only node (the brom_intro open_board pattern) - the node fires the verb and the dialogue ends. Next/Later keep the player in the screen. LIVE TOKENS: every number is a {token} resolved at surface time (DialogueTextTokens <- PostRaidBeatTokens) - army fill from ArmyReadiness.Compute (the raid gate's own snapshot), the Footman line from BarracksProgression.NextAbilityLine (the same composer the Troops card paints), the camp sentence from RaidSelectionVM.NextLockedCamp + ScoutLine (the same lock and scout line the raid grid shows). The WO's draft copy said stone walls, 12 defenders for a camp whose data reads Iron / 15 - authoring the number would have shipped that drift. Voice: plain HUD voice pending owner Q1; speaker stays {guide} (TutorialGuideIdentityRegression Case 2). Pinned by tutorial-reach Case 8 [post-raid-beat] (e): 3 lines, 3 doors, 3 images, every token registered, every verb routed.",
+      "startNode": "img1",
+      "nodes": [
+        {
+          "id": "img1",
+          "commands": [ { "verb": "portrait", "args": [ "Portraits/barracks" ] } ],
+          "next": "p1"
+        },
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Your first raid is done. Army {army.used} / {army.cap} - train {army.missing} more to fill your ranks."
+            }
+          ],
+          "options": [
+            { "text": "Open Manage - Troops", "goto": "door_troops" },
+            { "text": "Next", "goto": "img2" }
+          ]
+        },
+        {
+          "id": "door_troops",
+          "commands": [ { "verb": "OpenManageTroops", "args": [] } ]
+        },
+        {
+          "id": "img2",
+          "commands": [ { "verb": "portrait", "args": [ "RpgUi/troop/troop-footman" ] } ],
+          "next": "p2"
+        },
+        {
+          "id": "p2",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Levels change what a troop can do. Footman {footman.next} - and upgrading costs only time."
+            }
+          ],
+          "options": [
+            { "text": "Open the Footman card", "goto": "door_footman" },
+            { "text": "Next", "goto": "img3" }
+          ]
+        },
+        {
+          "id": "door_footman",
+          "commands": [ { "verb": "OpenManageTroops", "args": [ "troop-footman" ] } ]
+        },
+        {
+          "id": "img3",
+          "commands": [ { "verb": "portrait", "args": [ "UI/ElarionMedieval/cards/raids-locked" ] } ],
+          "next": "p3"
+        },
+        {
+          "id": "p3",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "{camp.next.line}. Every win opens the road farther."
+            }
+          ],
+          "options": [
+            { "text": "Open Journey - Raids", "goto": "door_journey" },
+            { "text": "Later", "goto": "end" }
+          ]
+        },
+        {
+          "id": "door_journey",
+          "commands": [ { "verb": "OpenJourney", "args": [] } ]
         }
       ]
     },

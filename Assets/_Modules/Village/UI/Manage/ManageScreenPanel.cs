@@ -369,6 +369,37 @@ namespace DeNelle.Village.UI
             {
                 ShowOperational(ManageTab.Defense);
                 FlowTrace.Step("Manage", "context open -> UPGRADABLE TOWERS (Defense tab).");
+                return;
+            }
+            // WO-1389: the post-first-raid beat's doors land on TROOPS, optionally with a troop
+            // pre-selected ("Troops" or "Troops:troop-footman"). The Barracks lock is honoured
+            // exactly as a card tap honours it: ShowOperational is not called for a locked tab.
+            if (!string.IsNullOrEmpty(requestedTab) &&
+                requestedTab.StartsWith("Troops", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!BarracksUnlock.IsUnlocked)
+                {
+                    FlowTrace.Warn("Manage", "context open -> Troops REFUSED: the Barracks is locked; " +
+                        "left on the launcher (the Troops card shows its own reason).");
+                    return;
+                }
+                int colon = requestedTab.IndexOf(':');
+                if (colon >= 0 && colon + 1 < requestedTab.Length)
+                    _selectedTroopId = requestedTab.Substring(colon + 1);
+                ShowOperational(ManageTab.Troops);   // raises manage.troops_shown once the rows exist
+                FlowTrace.Step("Manage", "context open -> TRAIN & UPGRADE TROOPS (Troops tab" +
+                    (string.IsNullOrEmpty(_selectedTroopId) ? "" : ", preselect '" + _selectedTroopId + "'") + ").");
+                // WO-1389: a PRESELECTED troop is a selection that landed - the card is built and the
+                // UPGRADE face exists - so it raises the same route-hop id a rail tap raises, AFTER
+                // manage.troops_shown, so the post-raid beat's spotlight walks row -> UPGRADE face
+                // in that order and never ends on a row the player has already passed.
+                if (!string.IsNullOrEmpty(_selectedTroopId))
+                {
+                    string preselected = _selectedTroopId;
+                    Guard.Try("Manage", "raise preselect troop-selected signal", () =>
+                        DeNelle.Core.Tutorial.TutorialSignals.Raise(
+                            DeNelle.Core.Tutorial.TutorialSignals.ManageTroopSelectedPrefix + preselected));
+                }
             }
         }
 
@@ -900,6 +931,13 @@ namespace DeNelle.Village.UI
             }
             _vm?.SelectTab(tab);
             FlowTrace.Step("Navigation", "Manage category card -> " + tab);
+            // WO-1389: the TROOPS workspace is on screen - the post-raid beat's first route hop
+            // (spotlight -> the Footman rail row). Raised HERE, after SelectTab has rebuilt and
+            // Render has re-registered every "manage.troop_row.<id>" rect, so the hop can resolve
+            // on the frame it fires; both the launcher card tap and the dialogue door land here.
+            if (tab == ManageTab.Troops)
+                Guard.Try("Manage", "raise troops-shown signal", () =>
+                    DeNelle.Core.Tutorial.TutorialSignals.Raise(DeNelle.Core.Tutorial.TutorialSignals.ManageTroopsShown));
         }
 
         /// <summary>
@@ -1227,6 +1265,12 @@ namespace DeNelle.Village.UI
         {
             _queueDrawerOpen = !_queueDrawerOpen;
             if (_queueDrawer != null) _queueDrawer.SetActive(_queueDrawerOpen);
+            // WO-1389: the real OPEN QUEUE tap is the completion of the TRAINING NOW beat. Only
+            // the OPENING edge raises (closing teaches nothing). Guarded: a bus subscriber must
+            // never be able to leave the drawer half-toggled.
+            if (_queueDrawerOpen)
+                Guard.Try("Manage", "raise queue-opened signal", () =>
+                    DeNelle.Core.Tutorial.TutorialSignals.Raise(DeNelle.Core.Tutorial.TutorialSignals.ManageQueueOpened));
             // WO-1393: the toggle STAYS visible while open - it was hidden here before, which is
             // why the top-right QUEUE tap in 10-troops-after-upgrade.png closed nothing.
             SyncQueueToggleFace();
@@ -1821,7 +1865,21 @@ namespace DeNelle.Village.UI
             var button = faceGo.AddComponent<Button>();
             button.targetGraphic = face;
             button.transition = Selectable.Transition.ColorTint;
-            button.onClick.AddListener(() => { _selectedTroopId = choice.Id; _browsePage = 0; Render(); });
+            button.onClick.AddListener(() =>
+            {
+                _selectedTroopId = choice.Id;
+                _browsePage = 0;
+                // WO-1389: the REAL rail tap is a route hop of the post-raid beat ("Pick a troop" ->
+                // the UPGRADE face). Raised BEFORE Render so the spotlight's next target (the CTA
+                // face, registered by BuildTroopCard) is rebuilt on the same frame it is asked for.
+                Guard.Try("Manage", "raise troop-selected signal", () =>
+                    DeNelle.Core.Tutorial.TutorialSignals.Raise(
+                        DeNelle.Core.Tutorial.TutorialSignals.ManageTroopSelectedPrefix + choice.Id));
+                Render();
+            });
+            // WO-1389: spotlightable by id ("manage.troop_row.<troopId>"; the footman row is the
+            // KnownIds contract). Idempotent; every Render re-registers the fresh rect.
+            DeNelle.Core.UI.TutorialHighlightRegistry.Register("manage.troop_row." + choice.Id, (RectTransform)faceGo.transform);
             if (isSelected)
             {
                 // Frames the WHOLE row (the face fills it). useGraphicAlpha off so the outline is
@@ -1956,6 +2014,7 @@ namespace DeNelle.Village.UI
                 // Disabled + the sentence above says why (ruling #4). Never colour alone.
                 train.interactable = trainOn;
                 MedievalUiSkin.ApplyButton(train, true);
+                DeNelle.Core.UI.TutorialHighlightRegistry.Register("manage.troop_cta_train", (RectTransform)train.transform);   // WO-1389
             }
 
             // The upgrade fact ("300 wood, 120 iron . Ready" / "Short 40 iron" / "At max level")
@@ -1969,6 +2028,13 @@ namespace DeNelle.Village.UI
                 string upgradeSub = string.IsNullOrEmpty(selected.UpgradeCostText)
                     ? selected.UpgradeStateText
                     : selected.UpgradeCostText + " . " + selected.UpgradeStateText;
+                // WO-1389: the DESTINATION rides the same sub-line ("1m 30s . Ready . L3 unlocks
+                // Sweeping Cut") - the 260px card has no spare band, and the sentence must stay
+                // with the button it explains (ruling #4). FitSingleLine shrinks, never clips.
+                if (!string.IsNullOrEmpty(selected.NextUnlockText))
+                    upgradeSub = string.IsNullOrEmpty(upgradeSub)
+                        ? selected.NextUnlockText
+                        : upgradeSub + " . " + selected.NextUnlockText;
                 upgrade = BuildTwoLineCta(card, "UPGRADE TO L" + (selected.Level + 1), upgradeSub,
                     ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
@@ -1986,6 +2052,7 @@ namespace DeNelle.Village.UI
             {
                 upgrade.gameObject.name = "TroopCta_Upgrade";
                 MedievalUiSkin.ApplyButton(upgrade, false);   // the SECONDARY verb, by construction
+                DeNelle.Core.UI.TutorialHighlightRegistry.Register("manage.troop_cta_upgrade", (RectTransform)upgrade.transform);   // WO-1389
             }
         }
 
@@ -2030,7 +2097,11 @@ namespace DeNelle.Village.UI
             var open = ElarionUiKit.BuildObsidianButton(band, "OPEN QUEUE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(PrimaryX0, BandCtrlY0), new Vector2(PrimaryX1, BandCtrlY1), ToggleQueueDrawer);
-            if (open != null) open.gameObject.name = "TroopOpenQueue";
+            if (open != null)
+            {
+                open.gameObject.name = "TroopOpenQueue";
+                DeNelle.Core.UI.TutorialHighlightRegistry.Register("manage.open_queue", (RectTransform)open.transform);   // WO-1389
+            }
             ElarionUiKit.ClampMinTouch(open);
 
             if (_vm.QueueRows.Count == 0)

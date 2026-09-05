@@ -190,6 +190,18 @@ namespace DeNelle.Village
                 case "camera_show_all_gates": if (CameraShakeBridge.Enabled) SmartMobileCamera.Instance?.Shake(0.08f, 0.3f); break;
                 case "camera_return_to_hero": { var h = HeroTransform(); if (h != null) SmartMobileCamera.Instance?.SetTarget(h); } break;
 
+                // -- WO-1389: the post-first-raid beat's DOORS ---------------------
+                // <<OpenManageTroops [troopId]>> lands on Manage > Troops (optionally preselecting a
+                // troop card); <<OpenJourney>> opens the Journey deck where the Raids card lives.
+                // Both route through PanelRouter like every other panel verb here - no new opener.
+                case "OpenManageTroops":
+                    if (!PanelBlockedByBattle("OpenManageTroops"))
+                        PanelRouter.Open(PanelId.Manage, string.IsNullOrEmpty(a0) ? "Troops" : "Troops:" + a0);
+                    break;
+                case "OpenJourney":
+                    if (!PanelBlockedByBattle("OpenJourney")) PanelRouter.Open(PanelId.JourneyDeck);
+                    break;
+
                 // ── HUD objective / hint / highlight → TutorialHudOverlay ─────────
                 case "set_hud_objective": EnsureOverlay()?.SetObjective(a0, ParseInt(a1), ParseInt(a2)); break;
                 case "set_hud_hint":      EnsureOverlay()?.SetHint(a0); break;

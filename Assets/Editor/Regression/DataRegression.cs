@@ -1710,6 +1710,11 @@ namespace DeNelle.Editor
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstTalentLearned ||
                     // WO-1012 P3: the scripted teaching band's repelled signal (ENEMIES beat).
                     s == DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled ||
+                    // WO-1389: the post-first-raid HOW beat completes on a troop job actually landing
+                    // (BarracksService.UpgradeTroop / EnqueueTraining success points), and its TRAINING
+                    // NOW coach-mark completes on the OPEN QUEUE drawer opening (ManageScreenPanel).
+                    s == DeNelle.Core.Tutorial.TutorialSignals.TroopJobQueued ||
+                    s == DeNelle.Core.Tutorial.TutorialSignals.ManageQueueOpened ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix) ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.HeroReachedPrefix) ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix) ||

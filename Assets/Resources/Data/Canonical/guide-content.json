@@ -288,6 +288,20 @@
       ]
     },
     {
+      "id": "troops",
+      "tab": "Troops",
+      "title": "Troops",
+      "status": "live",
+      "body": [
+        "Your first Barracks raises a free squad of Footmen. That squad is the door to raids, not the whole army: the army holds more slots than the free squad fills, and every empty slot is a fighter you did not bring. Fill them from Manage, then Troops - training costs only time.",
+        "Levels change what a troop can do, not just how hard it hits. The Footman learns Sweeping Cut at L3, Warden's Roar at L5 and Champion's Combo at L7, and every troop has its own ladder. Upgrade from the same Troops card - the line under UPGRADE names the next unlock."
+      ],
+      "tips": [
+        "The Raids card in Journey reads Army N / M until your ranks are full.",
+        "A locked camp on the raid grid already shows its walls and garrison - that is what your next wins buy."
+      ]
+    },
+    {
       "id": "dungeons",
       "tab": "Dungeons",
       "title": "Dungeons",

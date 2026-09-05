@@ -257,6 +257,11 @@ namespace DeNelle.Village.UI
         public bool UpgradeReady;
         /// <summary>The whole fact sentence: "Upgrade: 1m 30s . Ready" (WO-1387 shape).</summary>
         public string UpgradeFactText = "";
+        /// <summary>WO-1389 - what the NEXT levels buy: "L3 unlocks Sweeping Cut"
+        /// (BarracksProgression.NextAbilityLine), or "" when no ability remains above this level.
+        /// The View paints it under the UPGRADE face so the button has a destination, not just a
+        /// number. Pinned by ManageTroopsTrainDoorRegression case 7.</summary>
+        public string NextUnlockText = "";
     }
 
     /// <summary>
@@ -1133,6 +1138,11 @@ namespace DeNelle.Village.UI
             // The time IS the price (WO-1387); it rides UpgradeCostText because the View composes
             // its sub-line from that field (see the TroopChoiceVM field comment).
             choice.UpgradeCostText = FormatTime(BarracksProgression.TroopUpgradeSeconds(id, level + 1));
+            // WO-1389: the reason to press it - "L3 unlocks Sweeping Cut" from troop-upgrades.json.
+            choice.NextUnlockText = BarracksProgression.NextAbilityLine(id, level) ?? "";
+            if (choice.NextUnlockText.Length == 0)
+                FlowTrace.Step("Manage", "troop '" + id + "' L" + level + ": no ability above this level - " +
+                    "the UPGRADE face carries no next-unlock line.");
             choice.UpgradeInProgress = BarracksService.IsUpgradingTroop(id);
             if (choice.UpgradeInProgress)
             {

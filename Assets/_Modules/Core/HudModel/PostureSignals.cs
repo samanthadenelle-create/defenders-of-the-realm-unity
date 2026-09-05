@@ -297,5 +297,37 @@ namespace DeNelle.Core.HudModel
                            (capable ? "" : " (locked: " + reason + " -> \"" + RaidLockCopy(reason) + "\")"));
             RaidCapableChanged?.Invoke();
         }
+
+        // -- WO-1389: ARMY FILL rides the SAME rail, beside RaidCapable ---------
+        // The Journey deck's Raids card shows "Army 3 / 10" as its subtitle until the army
+        // is full (WO-1389 pressure point 6). DeNelle.HUD may reference Core ONLY, and the
+        // slot arithmetic needs the Village TroopCatalog (a siege unit is 4 slots), so the
+        // Village BuildTimerService.PublishArmyStatus - the ONE relay of ArmyReadiness.Compute
+        // to the Core seams (RaidEntryGate), QueueChanged edges + the 1 s heartbeat - PUBLISHES
+        // the two numbers here and the card just reads them - the SetRaidCapable mirror pattern.
+        // NOT RaidCapabilityHudBridge: RaidsDiscoverabilityRegression D5 forbids ArmyReadiness
+        // there by design (readiness decides DIM and REFUSAL, never visibility).
+        // Defaults (0, 0) = "not published" - the card then keeps its ordinary purpose
+        // line, so headless / pre-publish never shows a fake count.
+
+        /// <summary>Roster slots in use (incl. wounded), Village-published. 0 until published.</summary>
+        public static int ArmyFillUsed { get; private set; }
+        /// <summary>Army slot cap, Village-published. 0 until published (= "unknown", never "full").</summary>
+        public static int ArmyFillCap { get; private set; }
+        /// <summary>Raised when either army-fill number changes.</summary>
+        public static event Action ArmyFillChanged;
+
+        /// <summary>Producer-only (Village BuildTimerService.PublishArmyStatus). Change-only publish.</summary>
+        public static void SetArmyFill(int used, int cap)
+        {
+            if (used < 0) used = 0;
+            if (cap < 0) cap = 0;
+            if (ArmyFillUsed == used && ArmyFillCap == cap) return;
+            ArmyFillUsed = used;
+            ArmyFillCap = cap;
+            FlowTrace.Step("HudKit", "army fill -> " + used + " / " + cap +
+                           (cap > 0 && used >= cap ? " (full)" : ""));
+            ArmyFillChanged?.Invoke();
+        }
     }
 }

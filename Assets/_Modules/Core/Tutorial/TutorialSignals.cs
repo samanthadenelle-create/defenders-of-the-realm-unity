@@ -94,6 +94,46 @@ namespace DeNelle.Core.Tutorial
         /// player ever touching the talent tree.</summary>
         public const string FirstTalentLearned = "talent.learned:first";
 
+        // -- WO-1389: the post-first-raid beat (WHY to train and upgrade, then HOW) --
+        /// <summary>WO-1389 - the player is BACK IN TOWN after their FIRST raid (win or loss).
+        /// Raised by DeNelle.Village.TutorialSignalAdapters from its 1 Hz discovery tick when the
+        /// active scene is a hub, the save carries everCompletedRaid (the ONE writer is
+        /// RaidDeployController.ReconcileRaidEnd) and no dialogue is running. Re-raised every
+        /// 30 s while the post-raid beat is still unseen, so a hint that was live at the first
+        /// raise cannot swallow the beat for the whole session; the beat's tutorial_ctx one-shot
+        /// persistence dedupes.</summary>
+        public const string FirstRaidCompleted = "raid.first_completed";
+        /// <summary>WO-1389 - a TRAIN or UPGRADE job actually landed on a line (the real tap the
+        /// HOW half of the post-raid beat waits for). Raised by BarracksService.UpgradeTroop and
+        /// BarracksService.EnqueueTraining at their success points - the single choke points every
+        /// train/upgrade path funnels through - alongside the per-troop
+        /// <see cref="TroopJobQueuedPrefix"/> id.</summary>
+        public const string TroopJobQueued = "troop.job_queued";
+        /// <summary>"troop.job_queued:" + troop id - the per-troop twin of <see cref="TroopJobQueued"/>.</summary>
+        public const string TroopJobQueuedPrefix = "troop.job_queued:";
+        /// <summary>WO-1389 - the Train/Research line now HAS work (raised right AFTER
+        /// <see cref="TroopJobQueued"/> by the same emitters). A separate id on purpose: contextual
+        /// beats cannot chain off one another's completion (TutorialFlow.OnSignal returns after
+        /// completing a live beat), so the TRAINING NOW coach-mark is its own beat triggered by
+        /// this second raise, which arrives once the first beat has already closed.</summary>
+        public const string TroopLineBusy = "troop.line_busy";
+        /// <summary>WO-1389 - the Manage &gt; TROOPS workspace is on screen (ManageScreenPanel
+        /// .ShowOperational for ManageTab.Troops - the card tap AND the dialogue door both funnel
+        /// through it). The post-raid beat's FIRST route hop: it lights the Footman rail row. Used
+        /// instead of panel.opened:Manage because that raise's ORDER relative to the workspace
+        /// build is PanelRouter's business, while this one is raised after the rows exist and
+        /// BEFORE any preselect raise - so a door that preselects a troop always walks
+        /// row -&gt; UPGRADE face in that order.</summary>
+        public const string ManageTroopsShown = "manage.troops_shown";
+        /// <summary>"manage.troop_selected:" + troop id - a rail row on the Manage &gt; Troops screen
+        /// was TAPPED (ManageScreenPanel.BuildTroopRailRow), or a door PRESELECTED it
+        /// (ManageScreenPanel.Open(requestedTab) with "Troops:&lt;id&gt;" - the selection landed and
+        /// the card is built, which is the same state a tap produces). A route hop, never a completion.</summary>
+        public const string ManageTroopSelectedPrefix = "manage.troop_selected:";
+        /// <summary>WO-1389 - the OPEN QUEUE face on the Manage screen was tapped and the drawer
+        /// OPENED (ManageScreenPanel.ToggleQueueDrawer). Completion of the TRAINING NOW beat.</summary>
+        public const string ManageQueueOpened = "manage.queue_opened";
+
         private static readonly HashSet<string> _fired =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

@@ -137,7 +137,11 @@ namespace DeNelle.Core.Dialogue
             // to the live guide identity (the pet-Echo) at surface time. Copy unchanged;
             // non-token speakers pass through untouched.
             Speaker = l != null ? Tutorial.TutorialGuide.ResolveToken(l.Speaker ?? "") : "";
-            Text = l != null ? (l.Text ?? "") : "";
+            // WO-1389: line TEXT may carry live-data tokens ("{army.used}", "{camp.next.defenders}")
+            // registered by gameplay (DialogueTextTokens). Resolved at surface time so an authored
+            // sentence can never go stale against the catalog it describes; unknown tokens pass
+            // through untouched, so every earlier line is byte-identical to before.
+            Text = l != null ? DialogueTextTokens.Resolve(l.Text ?? "") : "";
             _optionLabels.Clear();
             Changed?.Invoke();
         }

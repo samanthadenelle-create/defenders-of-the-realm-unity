@@ -2201,6 +2201,19 @@ namespace DeNelle.Village
             var s = ArmyReadiness.Compute(State);
             DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(
                 s.Ready, s.DeployableSlots, s.QueuedSlots, s.CapSlots);
+
+            // WO-1389 pressure point 6 - "Army N / M" for the Journey Raids card subtitle rides
+            // the SAME relay, on the SAME cadence, off the SAME snapshot: this method is the one
+            // readiness relay that may read ArmyReadiness (RaidsDiscoverabilityRegression D5
+            // forbids it in RaidCapabilityHudBridge - readiness decides DIM and REFUSAL, never
+            // visibility - which is where this producer first landed and was moved from).
+            // RosterSlots counts every roster body incl. wounded (the "3" a player sees in
+            // Manage), CapSlots is the army cap. PostureSignals.SetArmyFill is change-only, so
+            // the 1 Hz republish is repaint-free. Null State/Army -> Compute's headless READY
+            // snapshot carries (0, 0), which the card reads as "unpublished" and keeps its plain
+            // purpose line - never a fake count on a headless surface.
+            DeNelle.Core.Diagnostics.Guard.Try("HudKit", "publish army fill", () =>
+                DeNelle.Core.HudModel.PostureSignals.SetArmyFill(s.RosterSlots, s.CapSlots));
         }
 
         // Player-facing label for a queue row: strip the placement suffix ("@15_7"), then

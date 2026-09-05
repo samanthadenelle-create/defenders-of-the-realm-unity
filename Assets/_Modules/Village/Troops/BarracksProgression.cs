@@ -196,6 +196,26 @@ namespace DeNelle.Village
             return best;
         }
 
+        /// <summary>
+        /// WO-1389 - the NEXT-UNLOCK SENTENCE for the Troops card ("L3 unlocks Sweeping Cut"):
+        /// the ability name is the authored description up to its first " - " (troop-upgrades.json
+        /// writes every description as "Name - what it does"), so the card names the ability and
+        /// not the whole flavour line. Null when nothing remains above <paramref name="currentLevel"/>
+        /// (the View then paints nothing extra). ONE composer, read by the Manage VM, the post-raid
+        /// dialogue token and the regression oracle, so the three can never disagree.
+        /// </summary>
+        public static string NextAbilityLine(string troopId, int currentLevel)
+        {
+            var next = NextAbility(troopId, currentLevel);
+            if (next == null) return null;
+            string name = next.Description ?? "";
+            int dash = name.IndexOf(" - ", System.StringComparison.Ordinal);
+            if (dash > 0) name = name.Substring(0, dash);
+            name = name.Trim();
+            if (name.Length == 0) name = next.AbilityId ?? "a new ability";
+            return "L" + next.LevelThreshold + " unlocks " + name;
+        }
+
         // ── Mutators (mutate ONLY the passed GameState — the IJobEffect completion seams) ──
 
         /// <summary>

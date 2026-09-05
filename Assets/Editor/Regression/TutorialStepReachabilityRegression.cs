@@ -102,9 +102,31 @@
 //                          map's generous 15-20 percent failure payout exists: you do
 //                          not lose the memory, you fail to reclaim it.
 //
+//   Case 8 [post-raid-beat] WO-1389 (2026-09-05): the post-FIRST-RAID beat is REACHABLE
+//                          headlessly and teaches WHY then HOW. Measured RED FIRST on the
+//                          tree before the beat was authored (no 'ctx_post_raid' step). Asserts
+//                          (a) ctx_post_raid exists, is CONTEXTUAL, oneShot, non-pausing;
+//                          (b) its trigger is TutorialSignals.FirstRaidCompleted and a LIVE
+//                          emitter raises it (the same Case 1 source scan - TutorialSignal
+//                          Adapters.TickFirstRaidCompleted); (c) it is a TEACH beat: completion
+//                          is TutorialSignals.TroopJobQueued (a train/upgrade job actually
+//                          landed), NOT its own dialogue.ended, and that id has a live emitter
+//                          (BarracksService); (d) every highlight and every route-hop
+//                          highlight is a TutorialHighlightRegistry.KnownIds member and every
+//                          hop signal has a live emitter; (e) the dialogue record exists, its
+//                          "{tokens}" are all registered by PostRaidBeatTokens (a sentence with
+//                          a hole in it is the defect), and its door verbs are cases in
+//                          DialogueCommandSink; (f) the TRAINING NOW coach-mark beat
+//                          (ctx_post_raid_training) exists, triggers on TroopLineBusy, completes
+//                          on ManageQueueOpened, points at manage.open_queue and carries a hint.
+//                          Mutation that reds it: delete the ctx_post_raid object from
+//                          tutorial-steps.json, or re-point its completion to
+//                          dialogue.ended:tut_ctx_post_raid (the WO-1340 "teaches nothing" class).
+//
 // Contextual (flowId "contextual") steps are NOT failed - they are hints, they never
 // gate, and one of them (inventory.gear_added:first) is a documented known-unwired
-// trigger. They are reported as notes so the gap stays visible.
+// trigger. They are reported as notes so the gap stays visible. Case 8 is the
+// deliberate exception: the post-raid beat is a contract the WO-1389 loop depends on.
 //
 // Markers: TUTORIAL_REACH_OK / TUTORIAL_REACH_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.TutorialStepReachabilityRegression.RunAll
@@ -117,6 +139,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;   // WO-1389 Case 8: JArray.OfType<JObject>()
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
@@ -164,6 +187,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "refusal-loud", () => Case5_RefusalLoud(steps, failures, notes));
                     Case(failures, "arc-shape", () => Case6_ArcShape(steps, failures, notes));
                     Case(failures, "loop-taught", () => Case7_LoopTaught(steps, failures, notes));
+                    Case(failures, "post-raid-beat", () => Case8_PostRaidBeat(steps, failures, notes));
                 }
                 Case(failures, "arm-safety", () => Case4_ArmSafety(failures, notes));
             }
@@ -217,6 +241,16 @@ namespace DeNelle.Editor.Regression
             public bool GrantPrepaidTower;
             public bool OneShot;
             public bool PausePressure;
+            // WO-1389 (post-raid-beat): the route hops and the coach-mark hint Case 8 pins.
+            public string Hint;
+            public List<RouteHop> Route = new List<RouteHop>();
+        }
+
+        private sealed class RouteHop
+        {
+            public string Signal;
+            public string Highlight;
+            public string Hint;
         }
 
         private static List<Step> LoadSteps(List<string> failures)
@@ -264,6 +298,7 @@ namespace DeNelle.Editor.Regression
                     GrantPrepaidTower = o["grant"] != null && o["grant"]["prepaidTower"] != null && (bool)o["grant"]["prepaidTower"],
                     OneShot = o["oneShot"] != null && (bool)o["oneShot"],
                     PausePressure = o["pausePressure"] != null && (bool)o["pausePressure"],
+                    Hint = (string)o["hint"],
                 };
                 var hl = o["highlight"] as JArray;
                 if (hl != null)
@@ -271,6 +306,20 @@ namespace DeNelle.Editor.Regression
                     {
                         string v = (string)h;
                         if (!string.IsNullOrEmpty(v)) s.Highlight.Add(v);
+                    }
+                // WO-1389: route hops (WO-1340 schema) read straight from JSON like everything else here.
+                var route = o["route"] as JArray;
+                if (route != null)
+                    foreach (var r in route)
+                    {
+                        var ro = r as JObject;
+                        if (ro == null) continue;
+                        s.Route.Add(new RouteHop
+                        {
+                            Signal = (string)ro["signal"],
+                            Highlight = (string)ro["highlight"],
+                            Hint = (string)ro["hint"],
+                        });
                     }
                 if (!string.IsNullOrEmpty(s.Id)) list.Add(s);
             }
@@ -1051,6 +1100,206 @@ namespace DeNelle.Editor.Regression
                       "completed' and 'first army granted' moments share one beat because contextual beats cannot be " +
                       "chained. BOTH close the same way: an emitter for the barracks-completed and army-granted edges " +
                       "in TutorialSignalAdapters, which is another lane's file");
+        }
+
+        // =====================================================================
+        //  CASE 8 - the post-FIRST-RAID beat is reachable and teaches WHY then HOW (WO-1389)
+        // =====================================================================
+
+        private const string PostRaidBeatId = "ctx_post_raid";
+        private const string PostRaidTrainingBeatId = "ctx_post_raid_training";
+        private const string PostRaidDialogueId = "tut_ctx_post_raid";
+        private const string CommandSinkSrc = "Assets/_Modules/Village/Tutorial/DialogueCommandSink.cs";
+        private const string PostRaidTokensSrc = "Assets/_Modules/Village/Tutorial/V2/PostRaidBeatTokens.cs";
+
+        /// <summary>The dialogue verbs the beat's three doors fire; each must be a switch case in the sink.</summary>
+        private static readonly string[] PostRaidDoorVerbs = { "OpenManageTroops", "OpenJourney" };
+
+        private static void Case8_PostRaidBeat(List<Step> steps, List<string> failures, List<string> notes)
+        {
+            var byId = new Dictionary<string, Step>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in steps) if (!string.IsNullOrEmpty(s.Id) && !byId.ContainsKey(s.Id)) byId[s.Id] = s;
+
+            // The live emitter set (same scan Case 1 uses) - "reachable" means a real raise exists.
+            var exact = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var prefixes = new List<string>();
+            int sites = ScanEmitters(exact, prefixes, failures);
+            bool Emitted(string sig)
+            {
+                if (string.IsNullOrEmpty(sig)) return false;
+                if (exact.Contains(sig)) return true;
+                foreach (var p in prefixes)
+                    if (sig.StartsWith(p, StringComparison.OrdinalIgnoreCase) && sig.Length > p.Length) return true;
+                return false;
+            }
+            var known = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds, StringComparer.OrdinalIgnoreCase);
+
+            // (a) The WHY+HOW beat exists and never gates.
+            if (!byId.TryGetValue(PostRaidBeatId, out var beat))
+            {
+                failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' is GONE from tutorial-steps.json - WO-1389's " +
+                             "reason-to-train-and-upgrade beat (Army N / M, Footman L3 unlocks, the next camp) never fires, " +
+                             "and the free three stay the whole army");
+            }
+            else
+            {
+                if (!beat.Contextual)
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' is not flowId 'contextual' - a MANDATORY beat " +
+                                 "awaiting a raid the player may never run strands the FTUE (and breaks the 8-beat pin)");
+                if (!beat.OneShot) failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' is not oneShot:true");
+                if (beat.PausePressure) failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' sets pausePressure - a teach beat never gates");
+
+                // (b) Trigger = the first-raid raise, and something raises it.
+                string wantTrigger = DeNelle.Core.Tutorial.TutorialSignals.FirstRaidCompleted;
+                if (!string.Equals(beat.TriggerSignal, wantTrigger, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' triggers on '" + (beat.TriggerSignal ?? "<none>") +
+                                 "' - the beat fires on '" + wantTrigger + "' (back in town after the first ReconcileRaidEnd)");
+                if (!Emitted(wantTrigger))
+                    failures.Add("[post-raid-beat] nothing under " + ModulesRoot + " raises '" + wantTrigger + "' (" + sites +
+                                 " Raise sites scanned) - the beat can never be REACHED; TutorialSignalAdapters" +
+                                 ".TickFirstRaidCompleted is the emitter");
+
+                // (c) A TEACH beat: completes on the real job landing, never on its own text box closing.
+                string wantDone = DeNelle.Core.Tutorial.TutorialSignals.TroopJobQueued;
+                if (!string.Equals(beat.Signal, wantDone, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' completes on '" + (beat.Signal ?? "<none>") +
+                                 "' - the HOW half completes on '" + wantDone + "' (a train/upgrade job actually landed); " +
+                                 "completing on dialogue.ended is the WO-1340 'teaches nothing' defect");
+                if (!Emitted(wantDone))
+                    failures.Add("[post-raid-beat] nothing raises '" + wantDone + "' - BarracksService.RaiseJobQueuedSignals " +
+                                 "is the emitter and the beat can never COMPLETE without it");
+                if (!string.Equals(beat.IntroDialogue, PostRaidDialogueId, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' plays intro '" + (beat.IntroDialogue ?? "<none>") +
+                                 "' - the WHY panels live in '" + PostRaidDialogueId + "'");
+                if (string.IsNullOrEmpty(beat.ObjectiveText))
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' authors no objective text - the coach has nothing honest to say");
+
+                // (d) Every spotlight target is real and every hop is a signal something raises.
+                foreach (var h in beat.Highlight)
+                    if (!known.Contains(h))
+                        failures.Add("[post-raid-beat] highlight '" + h + "' is not a TutorialHighlightRegistry.KnownIds member");
+                if (beat.Route.Count == 0)
+                    failures.Add("[post-raid-beat] '" + PostRaidBeatId + "' has no route - the HOW half is a GUIDED TAP on the " +
+                                 "real Troops screen (row -> UPGRADE face), which is what the route hops are");
+                bool pointsAtUpgrade = false;
+                foreach (var hop in beat.Route)
+                {
+                    if (hop == null) continue;
+                    if (!Emitted(hop.Signal))
+                        failures.Add("[post-raid-beat] route hop '" + (hop.Signal ?? "<null>") + "' has no live emitter - the " +
+                                     "spotlight can never advance to '" + (hop.Highlight ?? "") + "'");
+                    if (!string.IsNullOrEmpty(hop.Highlight) && !known.Contains(hop.Highlight))
+                        failures.Add("[post-raid-beat] route hop highlight '" + hop.Highlight + "' is not a KnownIds member");
+                    if (string.Equals(hop.Highlight, "manage.troop_cta_upgrade", StringComparison.OrdinalIgnoreCase)) pointsAtUpgrade = true;
+                }
+                if (!pointsAtUpgrade)
+                    failures.Add("[post-raid-beat] no route hop lands the spotlight on 'manage.troop_cta_upgrade' - the beat " +
+                                 "never shows the player the UPGRADE button it is asking them to press");
+            }
+
+            // (e) The dialogue record: exists, tokens resolve, doors are real verbs.
+            string dlgRaw = ReadText(DialoguesRes, failures);
+            string tokensSrc = ReadText(PostRaidTokensSrc, failures);
+            string sinkSrc = ReadText(CommandSinkSrc, failures);
+            if (dlgRaw != null)
+            {
+                JObject rec = null;
+                try
+                {
+                    var arr = JObject.Parse(dlgRaw)["dialogues"] as JArray;
+                    if (arr != null)
+                        foreach (var d in arr.OfType<JObject>())
+                            if (string.Equals((string)d["id"], PostRaidDialogueId, StringComparison.Ordinal)) { rec = d; break; }
+                }
+                catch (Exception ex) { failures.Add("[post-raid-beat] dialogues.json is not valid JSON: " + ex.Message); }
+
+                if (rec == null)
+                    failures.Add("[post-raid-beat] dialogues.json has no record '" + PostRaidDialogueId + "' - the beat fires with nothing to say");
+                else
+                {
+                    int lines = 0, doors = 0, portraits = 0;
+                    var verbs = new HashSet<string>(StringComparer.Ordinal);
+                    var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var tokenRx = new Regex(@"\{([a-z][a-z0-9_.]*)\}", RegexOptions.IgnoreCase);
+                    var nodes = rec["nodes"] as JArray;
+                    if (nodes != null)
+                        foreach (var n in nodes.OfType<JObject>())
+                        {
+                            if (n["lines"] is JArray ls)
+                                foreach (var l in ls.OfType<JObject>())
+                                {
+                                    lines++;
+                                    string text = (string)l["text"] ?? "";
+                                    foreach (Match m in tokenRx.Matches(text)) tokens.Add(m.Groups[1].Value);
+                                }
+                            if (n["commands"] is JArray cs)
+                                foreach (var c in cs.OfType<JObject>())
+                                {
+                                    string verb = (string)c["verb"] ?? "";
+                                    verbs.Add(verb);
+                                    if (verb == "portrait") portraits++;
+                                    else if (Array.IndexOf(PostRaidDoorVerbs, verb) >= 0) doors++;
+                                }
+                        }
+                    if (lines < 3)
+                        failures.Add("[post-raid-beat] '" + PostRaidDialogueId + "' has " + lines + " line(s) - the WHY half is THREE " +
+                                     "panels (army fill / what levels buy / the next camp)");
+                    if (doors < 3)
+                        failures.Add("[post-raid-beat] '" + PostRaidDialogueId + "' fires " + doors + " door verb(s) - each panel " +
+                                     "has ONE door (Manage - Troops / the Footman card / Journey - Raids)");
+                    if (portraits < 3)
+                        failures.Add("[post-raid-beat] '" + PostRaidDialogueId + "' sets " + portraits + " portrait(s) - each panel " +
+                                     "carries ONE image (a dialogue SCREEN WITH IMAGES, no world actor)");
+                    // "{guide}" is the SPEAKER token (TutorialGuide) - only TEXT tokens are asserted here.
+                    tokens.Remove("guide");
+                    if (tokens.Count == 0)
+                        failures.Add("[post-raid-beat] '" + PostRaidDialogueId + "' carries NO live-data tokens - its numbers are " +
+                                     "hardcoded copy that will drift from the catalogs (the WO-1389 draft already had)");
+                    if (tokensSrc != null)
+                    {
+                        string code = StripComments(tokensSrc);
+                        foreach (var t in tokens)
+                            if (code.IndexOf("\"" + t + "\"", StringComparison.OrdinalIgnoreCase) < 0)
+                                failures.Add("[post-raid-beat] dialogue token '{" + t + "}' is not registered in PostRaidBeatTokens - " +
+                                             "it would print literally on screen");
+                    }
+                    if (sinkSrc != null)
+                    {
+                        string code = StripComments(sinkSrc);
+                        foreach (var v in PostRaidDoorVerbs)
+                            if (code.IndexOf("case \"" + v + "\"", StringComparison.Ordinal) < 0)
+                                failures.Add("[post-raid-beat] DialogueCommandSink has no case \"" + v + "\" - the door is a dead tap");
+                        foreach (var v in verbs)
+                            if (v != "portrait" && code.IndexOf("case \"" + v + "\"", StringComparison.Ordinal) < 0)
+                                failures.Add("[post-raid-beat] '" + PostRaidDialogueId + "' fires verb '" + v + "' which the sink does not route");
+                    }
+                    notes.Add("post-raid-beat: '" + PostRaidDialogueId + "' = " + lines + " lines, " + doors + " doors, " +
+                              portraits + " images, tokens [" + string.Join(", ", tokens) + "]");
+                }
+            }
+
+            // (f) The TRAINING NOW coach-mark beat: its own contextual, fed by the SECOND raise.
+            if (!byId.TryGetValue(PostRaidTrainingBeatId, out var training))
+            {
+                failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' is missing - the HOW half ends at the tap and " +
+                             "never shows the player where the job went (OPEN QUEUE) or that gold hurries it");
+            }
+            else
+            {
+                string wantTrigger = DeNelle.Core.Tutorial.TutorialSignals.TroopLineBusy;
+                string wantDone = DeNelle.Core.Tutorial.TutorialSignals.ManageQueueOpened;
+                if (!training.Contextual || !training.OneShot || training.PausePressure)
+                    failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' must be contextual, oneShot and non-pausing");
+                if (!string.Equals(training.TriggerSignal, wantTrigger, StringComparison.OrdinalIgnoreCase) || !Emitted(wantTrigger))
+                    failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' must trigger on the live '" + wantTrigger +
+                                 "' raise (it cannot chain off ctx_post_raid's completion: TutorialFlow.OnSignal returns after completing a beat)");
+                if (!string.Equals(training.Signal, wantDone, StringComparison.OrdinalIgnoreCase) || !Emitted(wantDone))
+                    failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' must complete on the live '" + wantDone + "' raise (the real OPEN QUEUE tap)");
+                if (!training.Highlight.Contains("manage.open_queue"))
+                    failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' does not spotlight 'manage.open_queue'");
+                if (string.IsNullOrEmpty(training.Hint))
+                    failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' has no hint - a spotlight with no dialogue must SAY something");
+            }
         }
 
         // =====================================================================

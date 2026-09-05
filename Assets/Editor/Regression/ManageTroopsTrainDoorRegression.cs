@@ -30,6 +30,12 @@
 //   4. activating a Train row produces a real JobKind.TrainTroop job on ChannelId.Train;
 //   5. the door stays SINGLE — the source still routes through BarracksService and
 //      the barracks talk-door stays closed (canon CLAUDE.md §7: one Queues entry).
+//   7. (WO-1389, 2026-09-05) the UPGRADE face has a DESTINATION: the Footman choice's
+//      NextUnlockText reads "L3 unlocks Sweeping Cut" (BarracksProgression.NextAbilityLine
+//      over troop-upgrades.json) and the panel composes it into the upgrade sub-line.
+//      Measured RED FIRST: before WO-1389 TroopChoiceVM had no NextUnlockText and the
+//      button said "UPGRADE TO L2" with a time under it and nothing about what L3 buys.
+//      Mutation that reds it: `choice.NextUnlockText = "";` in ManageScreenVM.FillUpgradeFacts.
 // =============================================================================
 
 using System;
@@ -197,6 +203,35 @@ namespace DeNelle.Editor
                 else
                     log.AppendLine($"  case 3 OK - muster entry \"{musterRow.Label}\" [{musterRow.ActionText}]");
 
+                // -- CASE 7 (WO-1389): the UPGRADE face names what the next level BUYS --
+                // Read from the SAME Rebuild() as cases 1-3, before case 4 mutates the queue.
+                // The fixture's troop level is the state default (L1), so the Footman's next
+                // authored ability is the L3 one; the oracle asks the ONE composer for the exact
+                // sentence rather than retyping "Sweeping Cut" (that string is troop-upgrades.json's).
+                const string taughtTroop = "troop-footman";
+                var footman = vm.TroopChoices.Find(c => c != null && string.Equals(c.Id, taughtTroop, StringComparison.Ordinal));
+                if (footman == null)
+                {
+                    failures.Add($"[case 7] the Troops tab emitted no TroopChoiceVM for '{taughtTroop}' - the StarterArmyGrant " +
+                                 "unit the post-raid beat teaches on is not on the card rail at all.");
+                }
+                else
+                {
+                    string expected = BarracksProgression.NextAbilityLine(taughtTroop, footman.Level) ?? "";
+                    if (string.IsNullOrEmpty(expected))
+                        failures.Add($"[case 7] BarracksProgression.NextAbilityLine('{taughtTroop}', L{footman.Level}) returned nothing - " +
+                                     "troop-upgrades.json authors abilities at L3/L5/L7 for the Footman, so the composer lost them.");
+                    else if (!expected.StartsWith("L", StringComparison.Ordinal) || expected.IndexOf(" unlocks ", StringComparison.Ordinal) < 0)
+                        failures.Add($"[case 7] the next-unlock sentence reads \"{expected}\" - the shape is \"L<n> unlocks <Ability>\" " +
+                                     "so the button has a destination the player can read, not a whole flavour line.");
+                    if (!string.Equals(footman.NextUnlockText, expected, StringComparison.Ordinal))
+                        failures.Add($"[case 7] Footman NextUnlockText is \"{footman.NextUnlockText}\" but the composer says \"{expected}\" - " +
+                                     "the UPGRADE TO L<n> face has lost its destination (WO-1389 pressure point 3: " +
+                                     "\"the button has a destination, not just a number\").");
+                    else
+                        log.AppendLine($"  case 7 OK - Footman L{footman.Level} next-unlock line \"{footman.NextUnlockText}\"");
+                }
+
                 // ── CASE 4: activating a Train row makes a REAL job on the REAL line ──
                 if (trainRows.Count > 0)
                 {
@@ -297,6 +332,15 @@ namespace DeNelle.Editor
                                  "upgrade is a second BUTTON on the same card, never a mode.");
                 if (failures.Count == 0 || !failures.Exists(f => f.StartsWith("[case 6]", StringComparison.Ordinal)))
                     log.AppendLine("  case 6 OK - no _troopMode; TRAIN 1 <NAME> and UPGRADE TO L<n> are both authored");
+
+                // -- CASE 7 (source half, WO-1389): the View actually PAINTS the destination --
+                // The VM half above proves the sentence is composed; this proves the panel reads
+                // it into the UPGRADE face's sub-line (a composed-but-unpainted line is invisible).
+                if (code.IndexOf("NextUnlockText", StringComparison.Ordinal) < 0)
+                    failures.Add("[case 7] ManageScreenPanel never reads TroopChoiceVM.NextUnlockText - the next-unlock " +
+                                 "sentence is composed by the VM but never painted under the UPGRADE face.");
+                else
+                    log.AppendLine("  case 7 OK (source) - ManageScreenPanel composes NextUnlockText into the UPGRADE sub-line");
             }
         }
 

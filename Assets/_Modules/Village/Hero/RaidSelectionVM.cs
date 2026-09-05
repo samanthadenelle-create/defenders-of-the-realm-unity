@@ -137,6 +137,79 @@ namespace DeNelle.Village.Hero
         /// <summary>Authored victory threshold for this target (0 = always available).</summary>
         public int UnlockVictoriesFor(string id) { var d = DefFor(id); return d != null ? d.unlockVictories : 0; }
 
+        /// <summary>
+        /// WO-1389 pressure point 4 - what the wins BUY, before the player can enter: the scout
+        /// line for a card, "Iron walls . 15 defenders" (wall tier + garrison headcount from the
+        /// def, the same two facts RaidDeployVM's scout report opens with). Null when the def
+        /// authors neither, so an unauthored row paints nothing. Pure string work.
+        /// </summary>
+        public string ScoutLineFor(string id) => ScoutLine(DefFor(id));
+
+        /// <summary>
+        /// WO-1389 - the NEXT camp the ladder has not yet opened for <paramref name="victories"/>
+        /// banked wins: the first FLAGSHIP def (the same ordered list CreateDefault renders) whose
+        /// authored unlockVictories exceeds the count. Null when every camp is open (the ladder is
+        /// climbed) or the catalog resolves nothing - the post-raid dialogue then drops its camp
+        /// sentence rather than inventing one. ONE resolution site, shared by the dialogue text
+        /// tokens (PostRaidBeatTokens) and the regression oracle, so the card and the sentence can
+        /// never name different camps.
+        /// </summary>
+        public static SceneConfigDef NextLockedCamp(int victories)
+        {
+            if (victories < 0) victories = 0;
+            SceneConfigDef best = null;
+            foreach (var id in FlagshipRaidIds)
+            {
+                var def = SceneConfigCatalog.Find(id);
+                if (def == null)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                        "NextLockedCamp: flagship raid id '" + id + "' does not resolve in scene-configs.json - skipped.");
+                    continue;
+                }
+                if (def.unlockVictories <= victories) continue;
+                if (best == null || def.unlockVictories < best.unlockVictories) best = def;
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid", "NextLockedCamp(victories=" + victories + ") -> " +
+                (best != null ? "'" + best.id + "' at " + best.unlockVictories + " wins" : "<none - ladder climbed>"));
+            return best;
+        }
+
+        /// <summary>Static composer so the dialogue token and the oracle read the SAME sentence.</summary>
+        public static string ScoutLine(SceneConfigDef d)
+        {
+            if (d == null) return null;
+            var parts = new List<string>(2);
+            if (!string.IsNullOrEmpty(d.wallTier)) parts.Add(SpaceCamelCase(d.wallTier) + " walls");
+            int defenders = GarrisonCount(d);
+            if (defenders > 0) parts.Add(defenders + (defenders == 1 ? " defender" : " defenders"));
+            return parts.Count == 0 ? null : string.Join(" . ", parts);
+        }
+
+        /// <summary>Garrison headcount authored on a def (sum of composition counts), 0 when none.</summary>
+        public static int GarrisonCount(SceneConfigDef d)
+        {
+            if (d == null || d.garrison == null || d.garrison.composition == null) return 0;
+            int n = 0;
+            foreach (var u in d.garrison.composition)
+                if (u != null && u.count > 0) n += u.count;
+            return n;
+        }
+
+        /// <summary>"ReinforcedSteel" -> "Reinforced Steel" (mirrors RaidDeployVM; no regex).</summary>
+        private static string SpaceCamelCase(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(s[i]) && !char.IsUpper(s[i - 1]) && s[i - 1] != ' ')
+                    sb.Append(' ');
+                sb.Append(s[i]);
+            }
+            return sb.ToString();
+        }
+
         // ── Construction / resolution ───────────────────────────────────────────
 
         /// <summary>The ONLY resolution site: pulls the flagship raids (fallback to all

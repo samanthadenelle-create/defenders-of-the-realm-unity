@@ -537,14 +537,16 @@ namespace DeNelle.HUD
         }
 
         private static Card Route(string title, string purpose, string concept, PanelId target,
-                                  string artKey = null) => new Card
+                                  string artKey = null, string openContext = null) => new Card
         {
             Title = title,
             Purpose = purpose,
             Concept = concept,
             ArtKey = artKey,
             Available = () => PanelRouter.IsRegistered(target),
-            Open = () => PanelRouter.Open(target)
+            // WO-1388: a route that names its door passes it as the PanelRouter context (the store
+            // funnel's store_opened {door}); every other route keeps the plain open, byte for byte.
+            Open = () => { if (openContext == null) PanelRouter.Open(target); else PanelRouter.Open(target, openContext); }
         };
 
         private static List<Card> CardsFor(PlayerDeckKind kind)
@@ -607,7 +609,13 @@ namespace DeNelle.HUD
                         // The card stays VISIBLE and locked rather than hidden: WO-1008 already
                         // settled that a raid door which hides itself reads as broken ("I do not
                         // see a way to start a raid"). Locked-with-a-reason teaches the next goal.
-                        new Card { Title = "Raids", Purpose = "Choose a camp and deploy your army", Concept = "raid",
+                        // WO-1389 pressure point 6: until the army is full the subtitle is the
+                        // fill count ("Army 3 / 10 - train to fill your ranks"), read off the
+                        // Village-published posture rail (PostureSignals.ArmyFill*, the same
+                        // ArmyReadiness snapshot the raid gate judges). Unpublished (0 cap) or
+                        // full = the ordinary purpose line. Cards are rebuilt per page render, so
+                        // the count refreshes every time the deck opens.
+                        new Card { Title = "Raids", Purpose = RaidsCardPurpose(), Concept = "raid",
                             ArtKey = "raids",
                             // Owner art delivery 2026-09-03. cards/raids-locked.png is the war
                             // camp gone dark behind a stone-and-steel padlock, with the right
@@ -625,12 +633,40 @@ namespace DeNelle.HUD
                 default:
                     return new List<Card>
                     {
-                        Route("Realm Store", "Browse clearly priced realm offers", "store", PanelId.RealmStore, "realm-store"),
+                        Route("Realm Store", "Browse clearly priced realm offers", "store", PanelId.RealmStore, "realm-store", openContext: "settings"),
                         Route("Defense Report", "Review attacks against your town", "defense", PanelId.DefenseReport, "defense-report"),
                         Route("Monthly Ledger", "Review non-expiring monthly progress", "ledger", PanelId.MonthlyLedger, "monthly-ledger"),
                         Route("Game Guide", "Read controls, systems, and help", "settings", PanelId.GameGuide, "game-guide")
                     };
             }
+        }
+
+        /// <summary>WO-1389 - the Raids card subtitle: "Army 3 / 10 - train to fill your ranks"
+        /// while the roster is under its cap, else the ordinary purpose line. Guarded read of
+        /// the posture rail; a fault falls back to the purpose line and says so.</summary>
+        private static string RaidsCardPurpose()
+        {
+            const string purpose = "Choose a camp and deploy your army";
+            int used = 0, cap = 0;
+            bool ok = Guard.Try("HUD", "read army fill for the Raids card", () =>
+            {
+                used = PostureSignals.ArmyFillUsed;
+                cap = PostureSignals.ArmyFillCap;
+            });
+            if (!ok || cap <= 0)
+            {
+                FlowTrace.Step("Navigation", "Raids card subtitle: army fill unpublished (cap=" + cap +
+                    ") - purpose line kept.");
+                return purpose;
+            }
+            if (used >= cap)
+            {
+                FlowTrace.Step("Navigation", "Raids card subtitle: army full (" + used + "/" + cap + ") - purpose line kept.");
+                return purpose;
+            }
+            string line = "Army " + used + " / " + cap + " - train to fill your ranks";
+            FlowTrace.Step("Navigation", "Raids card subtitle: \"" + line + "\".");
+            return line;
         }
 
         protected override void OnDestroy()

@@ -26,6 +26,7 @@ using UnityEngine;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Tutorial;   // WO-1389: TutorialSignals.TroopJobQueued / TroopLineBusy at the enqueue success points
 using Ledger = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
@@ -247,7 +248,29 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Barracks", $"troop upgrade '{troopId}' L{level}->L{level + 1} enqueued (Research, {seconds:0}s).");
             Changed?.Invoke();
+            RaiseJobQueuedSignals(troopId);
             return true;
+        }
+
+        /// <summary>
+        /// WO-1389 - the tutorial bus ids for "a troop job actually landed", raised at the TWO
+        /// success points every train/upgrade path funnels through (this and EnqueueTraining).
+        /// ORDER IS LOAD-BEARING: <see cref="TutorialSignals.TroopJobQueued"/> completes the
+        /// post-raid HOW beat, and TutorialFlow.OnSignal RETURNS after completing a beat - so the
+        /// TRAINING NOW coach-mark (its own contextual beat) is triggered by the SEPARATE
+        /// <see cref="TutorialSignals.TroopLineBusy"/> raise that follows, by which time the first
+        /// beat has already closed. Swapping the order would refuse the second beat forever.
+        /// Guarded: bus subscribers must never be able to unwind a job that was already enqueued.
+        /// </summary>
+        private static void RaiseJobQueuedSignals(string troopId)
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("Barracks", "raise troop job-queued signals", () =>
+            {
+                TutorialSignals.Raise(TutorialSignals.TroopJobQueued);
+                if (!string.IsNullOrEmpty(troopId))
+                    TutorialSignals.Raise(TutorialSignals.TroopJobQueuedPrefix + troopId);
+                TutorialSignals.Raise(TutorialSignals.TroopLineBusy);
+            });
         }
 
         // ── Timed training (Train channel; WO-771.9 §2 / WO-771.8) ─────────────
@@ -364,6 +387,7 @@ namespace DeNelle.Village
             {
                 FlowTrace.Step("Barracks", $"training enqueued {enqueued}/{qty}x '{troopId}' (Train, {def.BuildSeconds:0}s each).");
                 Changed?.Invoke();
+                RaiseJobQueuedSignals(troopId);   // WO-1389 - once per call, not per unit
             }
             if (enqueued < qty)
                 FlowTrace.Step("Barracks", $"training stopped at {enqueued}/{qty} '{troopId}' " +
