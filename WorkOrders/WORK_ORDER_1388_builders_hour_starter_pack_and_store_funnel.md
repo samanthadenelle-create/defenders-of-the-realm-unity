@@ -1,6 +1,6 @@
 # WO-1388: "Builder's Hour" - a cheap starter pack (small basket + 6 h temporary builder) and the store funnel telemetry
 
-**Status:** READY TO IMPLEMENT - owner rulings complete 2026-09-04 23:14; sequenced AFTER WO-1386 (wallet at any price on Solana) and WO-1387 (training is time-only) land, because both change what the pack means
+**Status:** IN PROGRESS 2026-09-05 05:23 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 378/378 incl. [temporary-builder-pack]); awaiting the next APK. Owner still to approve the pack NAME ("Builder's Hour"), the BASKET (wood 600 / iron 300 / stone 300) and the BADGE copy ("FIRST BUY"). Rulings complete 2026-09-04 23:14; sequenced AFTER WO-1386 (wallet at any price on Solana) and WO-1387 (training is time-only) land, because both change what the pack means
 
 ## Owner, verbatim (2026-09-04 23:08-23:14)
 > "can we add a pack which has some resources and faster building for a short duration" / "something cheap but

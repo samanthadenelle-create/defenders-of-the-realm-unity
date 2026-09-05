@@ -234,6 +234,17 @@ namespace DeNelle.Core.Catalog
                  "The grant is non-stacking; an active window cannot be extended or overlapped.")]
         [Min(0f)] public float temporaryBuilderSeconds = 24f * 60f * 60f;
 
+        // WO-1388 - the PACK-sold temporary crew is a DIFFERENT PRODUCT from the one-time
+        // 24 h taste above: it is repeatable (every purchase is a window), it is 6 h, and a
+        // second purchase inside a running window is deferred behind it, never burned.
+        // Do NOT repurpose temporaryBuilderSeconds for it - the crystal/free taste path reads that.
+        // The live value rides the tunables rail as RemoteTunables.KeyEconomyPackTemporaryBuilderSeconds;
+        // ConvenienceRedeemer resolves the knob and falls back to THIS field only when the knob
+        // is at its shipping default, so the two cannot disagree in a way that matters.
+        [Tooltip("Seconds of extra Builder crew granted by ONE 'temporary-builder' pack token (WO-1388). " +
+                 "Default: 6 hours. Repeatable per purchase; a purchase inside a running window is deferred.")]
+        [Min(0f)] public float packTemporaryBuilderSeconds = 6f * 60f * 60f;
+
         // ─────────────────────────────────────────────────────────────────────
         //  WO-911 (M1) — QUEUE DEPTH. A DIFFERENT AXIS FROM freeBuildSlots.
         //  -------------------------------------------------------------------

@@ -454,6 +454,60 @@ const PRESENTATION = {
               'it. Lowering it makes raiding more frequent everywhere at once.',
     },
 
+    'economy.packTemporaryBuilderSeconds': {
+        area: 'misc',
+        label: "Builder's Hour: seconds the extra crew lasts",
+        what: 'How long the extra builder crew from the $1.99 Builder\'s Hour pack keeps ' +
+              'working. The game ships at 21600 - six hours. Buying another while one is ' +
+              'running queues it to start when the first one ends; nothing is lost.',
+        min: 0,
+        max: 604800,
+        risk: 'Raising it makes the cheapest pack worth more than the $9.99 permanent ' +
+              'builder for a while, which is the wrong order. Lowering it below an hour ' +
+              'makes the pack feel like nothing happened. 0 refuses the grant and keeps ' +
+              'the charge queued.',
+    },
+
+    // ---- WO-1384b: the Night Market card's glow. Three feel knobs on the HUD's
+    // permanent store face. Filed under Misc because the manifest's four areas
+    // are pinned by test/tunables-manifest.test.js ('the four areas are the ones
+    // the owner named') - a fifth 'hud' area is a ruling, not a knob.
+    'hud.nightMarketGlowLapSec': {
+        area: 'misc',
+        label: 'Night Market card: seconds per lap of the glow',
+        what: 'The store card on the HUD has a soft ring and three small lights that ' +
+              'chase round its edge. This is how many seconds one trip round takes. The ' +
+              'game ships at 5. Lower is busier, higher is calmer. Takes effect the next ' +
+              'time the HUD is built.',
+        min: 1,
+        max: 60,
+        risk: 'A very short lap reads as flicker on a phone and draws the eye away from ' +
+              'the action bar; a very long one looks like the glow has stopped.',
+    },
+    'hud.nightMarketGlowAlphaPct': {
+        area: 'misc',
+        label: 'Night Market card: how bright the glow is (percent)',
+        what: 'How strong the ring and the chasing lights are, from 0 (off) to 100 (solid). ' +
+              'The game ships at 35 - a rim light, not a spotlight. Takes effect the next ' +
+              'time the HUD is built.',
+        min: 0,
+        max: 100,
+        risk: 'Above about 60 the card shouts over the Heart plate above it. 0 keeps the ' +
+              'card and removes the glow entirely, which makes the store easier to miss.',
+    },
+    'hud.nightMarketGlowPaletteMask': {
+        area: 'misc',
+        label: 'Night Market card: which colours the glow cycles through',
+        what: 'Add up the colours you want: Gold = 1, Amber = 2, Rose = 4. The game ships ' +
+              'at 7 (all three, gold then amber then rose). 1 alone holds a steady gold. ' +
+              '0 is treated as gold on its own, never as nothing. Takes effect the next ' +
+              'time the HUD is built.',
+        min: 0,
+        max: 7,
+        risk: 'Rose alone (4) can read as a warning tint next to the health bars. Any ' +
+              'value above 7 is clamped back to 7.',
+    },
+
     // ---- the PROD-022 loading knobs. Not balance. They live under Misc because
     // they are numbers that ship, and the owner asked for "almost anything (misc)",
     // but every one of them says out loud that it is a bug-hunting lever.

@@ -224,34 +224,104 @@ namespace DeNelle.Village
         public static bool CanClaimTemporarySlot(bool alreadyClaimed) => !alreadyClaimed;
 
         /// <summary>
+        /// WO-1388 - the PACK path's guard, pure. The one-time taste (<paramref name="reclaimAfterExpiry"/>
+        /// false) is exactly <see cref="CanClaimTemporarySlot(bool)"/>. The pack path may RE-CLAIM once the
+        /// previous window has EXPIRED (every purchase is a window), but never while one is ACTIVE - that
+        /// is the deferral case the redeemer handles, and it is refused here so the deferral is the only
+        /// way a second window can start.
+        /// </summary>
+        public static bool CanClaimTemporarySlot(bool alreadyClaimed, bool activeNow, bool reclaimAfterExpiry)
+        {
+            if (!alreadyClaimed) return true;
+            return reclaimAfterExpiry && !activeNow;
+        }
+
+        /// <summary>
+        /// Prefix of the refusal <see cref="TryGrantTemporaryBuilder(double, bool, out string)"/> answers while
+        /// a window is RUNNING. The pack redeemer keys its DEFER decision on <see cref="IsTemporaryBuilderActive"/>,
+        /// not on this text; the constant exists so the oracle and the trace name the same sentence.
+        /// </summary>
+        public const string TemporaryBuilderActiveRefusal = "Temporary builder is already active.";
+
+        /// <summary>True while a temporary Builder crew window is running RIGHT NOW (taste or pack).</summary>
+        public bool IsTemporaryBuilderActive
+        {
+            get
+            {
+                var ch = GetChannel(ChannelId.Builder);
+                return ch != null && IsTemporarySlotActive(ch.TemporarySlotEndsAtUnixMs, TimeSource.NowUnixMs());
+            }
+        }
+
+        /// <summary>
         /// Grants the builder-only temporary worker once. An active window is refused rather than
         /// stacked, extended, or reclaimed after expiry. The server must still verify the purchase
         /// before calling this seam; this durable guard makes local settlement idempotent.
         /// </summary>
         public bool TryGrantTemporaryBuilder(double durationSeconds, out string failure)
+            => TryGrantTemporaryBuilder(durationSeconds, false, out failure);
+
+        /// <summary>
+        /// WO-1388 - the same grant with the pack's re-claim rule. <paramref name="reclaimAfterExpiry"/>
+        /// true lets a NEW window start once the previous one has expired (the pack is repeatable);
+        /// an ACTIVE window is still refused, with <see cref="TemporaryBuilderActiveRefusal"/>, so the
+        /// caller can defer rather than burn. False is byte-for-byte the one-time taste above.
+        /// </summary>
+        public bool TryGrantTemporaryBuilder(double durationSeconds, bool reclaimAfterExpiry, out string failure)
         {
             failure = null;
             var ch = GetChannel(ChannelId.Builder);
-            if (ch == null) { failure = "Save not loaded."; return false; }
+            if (ch == null)
+            {
+                failure = "Save not loaded.";
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("TempBuilder",
+                    "grant refused: no Builder channel (save not loaded). reclaimAfterExpiry=" + reclaimAfterExpiry);
+                return false;
+            }
 
             double now = TimeSource.NowUnixMs();
-            if (!CanClaimTemporarySlot(ch.TemporarySlotClaimed))
+            bool activeNow = IsTemporarySlotActive(ch.TemporarySlotEndsAtUnixMs, now);
+            if (!CanClaimTemporarySlot(ch.TemporarySlotClaimed, activeNow, reclaimAfterExpiry))
             {
-                failure = IsTemporarySlotActive(ch.TemporarySlotEndsAtUnixMs, now)
-                    ? "Temporary builder is already active."
+                failure = activeNow
+                    ? TemporaryBuilderActiveRefusal
                     : "Temporary builder was already claimed.";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("TempBuilder",
+                    "grant refused: " + failure + " (claimed=" + ch.TemporarySlotClaimed + " active=" + activeNow +
+                    " reclaimAfterExpiry=" + reclaimAfterExpiry + ").");
                 return false;
             }
 
             double seconds = Math.Max(0d, durationSeconds);
-            if (seconds <= 0d) { failure = "Temporary builder duration is disabled."; return false; }
+            if (seconds <= 0d)
+            {
+                failure = "Temporary builder duration is disabled.";
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("TempBuilder", "grant refused: duration " + durationSeconds + " <= 0.");
+                return false;
+            }
             ch.TemporarySlotClaimed = true;
             ch.TemporarySlotEndsAtUnixMs = now + seconds * 1000d;
             Persist();
             ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(ChannelId.Builder), now);
             Persist();
             RaiseQueueChanged();
+            DeNelle.Core.Diagnostics.FlowTrace.Step("TempBuilder",
+                "granted +1 Builder crew for " + (seconds / 3600d).ToString("0.##", CultureInfo.InvariantCulture) +
+                "h (reclaim=" + reclaimAfterExpiry + ") -> SlotCount(Builder)=" + SlotCount(ChannelId.Builder) +
+                " endsAtMs=" + ch.TemporarySlotEndsAtUnixMs.ToString("F0", CultureInfo.InvariantCulture) + ".");
             return true;
+        }
+
+        /// <summary>
+        /// WO-1388 - PackStoreVM (via the same reflection bridge as
+        /// <see cref="OnPermanentBuilderEntitlement"/>) tells the service a convenience token landed in
+        /// GearInventory, so a 'temporary-builder' pack starts its crew NOW rather than on the next 1 Hz
+        /// sweep. Idempotent: the redeemer spends nothing when nothing is owed.
+        /// </summary>
+        public void OnConvenienceTokensGranted()
+        {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("TempBuilder", "convenience tokens granted - redeem pass.");
+            ConvenienceRedeemer.TryRedeemTemporaryBuilder();
         }
 
         /// <summary>Data-first default grant; pack/server settlement may call this after ownership verification.</summary>
@@ -1778,6 +1848,13 @@ namespace DeNelle.Village
                 Persist();
                 RaiseQueueChanged();
             }
+
+            // WO-1388 - the DEFERRED pack crew starts the moment the running window ends. This is
+            // the one pickup for a deferral (and for a token that landed with no live service):
+            // the sweep already runs on load and at 1 Hz, so no second timer is introduced.
+            // No-op in the common case (nothing owed); the redeemer traces every real transition.
+            DeNelle.Core.Diagnostics.Guard.Try("TempBuilder", "sweep redeem pass",
+                () => ConvenienceRedeemer.TryRedeemTemporaryBuilder());
         }
 
         // =====================================================================

@@ -144,6 +144,7 @@ namespace DeNelle.Wallet
 
             // VERIFY the entitlement actually landed before persisting — the SKU must now be owned, or
             // the paid-for grant silently failed. This is the proof the entitlement took.
+            int convenienceTokensLanded = 0;
             if (pack.Contents != null && pack.Contents.Convenience != null)
                 foreach (var item in pack.Contents.Convenience)
                 {
@@ -156,7 +157,14 @@ namespace DeNelle.Wallet
                     if (state.GearInventory == null) state.GearInventory = new Dictionary<string, int>();
                     state.GearInventory.TryGetValue(key, out int prior);
                     state.GearInventory[key] = Mathf.Max(0, prior) + item.Count;
+                    convenienceTokensLanded += item.Count;
+                    FlowTrace.Step("Store", $"ApplyPackContents: convenience token '{key}' +{item.Count} -> {state.GearInventory[key]}.");
                 }
+
+            // WO-1388 - a 'temporary-builder' token must START its crew now, not on the next sweep.
+            // Same reflection bridge as the permanent-builder hook; a miss is logged, never silent,
+            // and the token is still in GearInventory for BuildTimerService's own sweep to spend.
+            if (convenienceTokensLanded > 0) TryNotifyConvenienceTokensGranted(pack.Sku);
 
             if (PackCatalog.IsPermanentBuilderSku(pack.Sku))
             {
@@ -379,6 +387,37 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Fail("Store",
                     "OnPermanentBuilderEntitlement THREW: " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// WO-1388 - tell BuildTimerService that convenience tokens landed so a 'temporary-builder'
+        /// charge starts its window immediately (or is deferred behind a running one). Wallet cannot
+        /// reference Village; same reflection bridge as <see cref="TryNotifyPermanentBuilderGrant"/>.
+        /// A miss is a Step, not a Fail: the token is durable in GearInventory and the service's own
+        /// sweep spends it on load, so nothing paid-for is lost - only the immediacy.
+        /// </summary>
+        private static void TryNotifyConvenienceTokensGranted(string packSku)
+        {
+            var svc = ResolveServiceInstance("DeNelle.Village.BuildTimerService", out var t);
+            if (svc == null || t == null)
+            {
+                FlowTrace.Step("Store", $"convenience tokens for '{packSku}' landed; timer service not live - " +
+                                        "BuildTimerService's sweep redeems them on load.");
+                return;
+            }
+            var m = t.GetMethod("OnConvenienceTokensGranted", Type.EmptyTypes);
+            if (m == null)
+            {
+                FlowTrace.Fail("Store", "OnConvenienceTokensGranted() not found on BuildTimerService - a " +
+                                        "temporary-builder token will wait for the next sweep instead of starting now.");
+                return;
+            }
+            try { m.Invoke(svc, null); }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Store", "OnConvenienceTokensGranted THREW: " + ex.GetType().Name + ": " + ex.Message +
+                                        " - the token stays in GearInventory for the sweep.");
             }
         }
 

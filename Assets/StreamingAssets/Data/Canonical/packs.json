@@ -10,7 +10,7 @@
     "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
     "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts. The Unity wallet module reads sol/usdc/skr only. Starter bundles reuse the three ladder price points: $4.99 -> {usdc 4.99, sol 0.045, skr 60}; $9.99 -> {usdc 9.99, sol 0.09, skr 120}; $19.99 -> {usdc 19.99, sol 0.18, skr 240}.",
     "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band  -  multiple bundles share a price point but each has a unique tier.",
-    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition / permanent-builder. Lantern blessings are consumed per expedition. permanent-builder is CONCURRENCY (+1 crew at once), not combat power and not queue depth.",
+    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition / permanent-builder / temporary-builder. Lantern blessings are consumed per expedition. permanent-builder is CONCURRENCY (+1 crew at once), not combat power and not queue depth. temporary-builder (WO-1388) is the same +1 crew for BuildTimerConfig.packTemporaryBuilderSeconds (6 h); a second grant inside a running window is deferred, never burned.",
     "economy": "PackStoreVM routes wood/iron/stone/crystals through EconomyService.GrantSpendablePurchased and coins through AddCoins.",
     "impulsePacks": "Packs 14-25 (tiers 14-25) are the WO-1037 SINGLE-RESOURCE IMPULSE PACKS, authored 2026-08-17 under the owner ruling of 2026-08-16 (option (b), verbatim: \"we should have small instant packs\" / \"small wood only\") and legalised by the WO-947 s12 amendment (the PURCHASE boundary is not the COST boundary). ONE family per harvestable resource (wood, iron, stone, crystals) x small/medium/large. THE LOAD-BEARING RULE: each of these SKUs carries EXACTLY ONE economy key and an EMPTY cosmetics + convenience list. A multi-resource impulse bundle would re-mix the WO-947 cost baskets through the back door and is FORBIDDEN (WO-947 s12c guardrail 1) - asserted headlessly by DeNelle.Editor.Regression.ImpulsePackRegression [impulse-pack], which also pins the $5 PRICE CEILING (owner standing ruling, memory solana-store-early-access-pack-pricing) and the no-structures/no-levels/no-queue-completions rule. AMOUNTS ARE PENDING OWNER RATIFICATION - they were sized against the REAL demand curve read out of building-tiers.json (tier costWood 500..16000, costFood 300..13000, costCrystal 100..4800) and structures-catalog.json (repo.upgradeCost iron 20..1440): small closes the cheapest tier upgrade (the Lumber Mill T1 900-wood shortfall in the screenshot that prompted this WO), medium closes a mid-ladder step, large closes a late step but deliberately NOT the Barracks T6 16000-wood ceiling, so the top pack does not trivialise the game. The optional impulse/impulseResource/impulseSize fields are the machine-readable family tag ShortfallPackOffer resolves on; older packs omit them (absent = false/null, no migration break).",
     "cosmeticGrant": "Every cosmetics SKU is recorded in OwnedItemIds and CosmeticOwnershipService.",
@@ -339,6 +339,40 @@
       },
       "storeVisible": true,
       "_shelfNote": "WO-1118: contents rewritten to the $4.99 resource-forward basket (4000 wood / 2000 iron / 400 crystals / 1500 stone + the 2x lantern, which is the ONE convenience kind with a live redeemer). instant-build + instant-repair were stripped: nothing in the build spends them (see _schemaNotes.convenienceRedeemers). OWNER TODO: the 'theme' above still advertises 'instant-build/repair + one welcome cosmetic' - reword when those redeemers ship."
+    },
+    {
+      "sku": "builders-hour",
+      "band": "patronage",
+      "tier": 29,
+      "storeSection": "featured",
+      "storeBadge": "FIRST BUY",
+      "storeVisible": true,
+      "name": "Builder's Hour",
+      "tagline": "A small chest of materials and a second crew on the walls for six hours.",
+      "theme": "WO-1388: the cheap FIRST micro-transaction. A small basket (about half a Cord of Timber) plus ONE extra builder crew for six hours. Convenience compresses TIME, never sells power; storage caps untouched.",
+      "founderOnly": false,
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 600,
+          "iron": 300,
+          "stone": 300
+        },
+        "convenience": [
+          {
+            "kind": "temporary-builder",
+            "count": 1,
+            "description": "One extra builder crew for six hours."
+          }
+        ]
+      },
+      "_shelfNote": "WO-1388 (owner 2026-09-04, verbatim: 'something cheap but to try to get at least a micro transaction' / '6 hours'). Redeemed by ConvenienceRedeemer.KindTemporaryBuilder -> BuildTimerService.TryGrantTemporaryBuilder(BuildTimerConfig.packTemporaryBuilderSeconds, reclaimAfterExpiry: true). A second purchase while a window is running is DEFERRED (queued behind the active crew, PlayerPrefs convenience.temporary-builder.deferred), never burned. The duration rides the tunables rail as economy.packTemporaryBuilderSeconds. On the Solana channel this pack requires an attested wallet like every price (WO-1386). NAME, BASKET and BADGE COPY are pending owner approval."
     },
     {
       "sku": "echo-patron-pack",

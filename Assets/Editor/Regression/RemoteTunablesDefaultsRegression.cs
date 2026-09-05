@@ -118,10 +118,12 @@ namespace DeNelle.Editor.Regression
         /// WO-1306 balance knob, the three WO-1330 over-time levers, the two WO-1327 VFX
         /// feel/perf clamps, the four WO-1343 night-store aura knobs, and the seven
         /// WO-1374 raid-reward knobs (two bases + the five-rung performance ladder), and the
-        /// WO-1374 free-starter-squad size.
+        /// WO-1374 free-starter-squad size, the two WO-1379 Heartfire pacing knobs, and the
+        /// WO-1388 Builder's Hour crew duration, and the three WO-1384b Night Market glow
+        /// feel knobs.
         /// Pinned as a literal, not as Registry.Length - an oracle that measures the thing
         /// against itself certifies nothing.</summary>
-        private const int ExpectedKnobCount = 34;
+        private const int ExpectedKnobCount = 38;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -226,6 +228,17 @@ namespace DeNelle.Editor.Regression
             // 1ef5f6ad4 without this pin, and the oracle correctly went red for it.
             new KeyValuePair<string, int>("raid.heartfireMaxCharges", 3),
             new KeyValuePair<string, int>("raid.heartfireRegenSeconds", 14400),
+            // WO-1388 - BUILDER'S HOUR. Seconds the pack-sold +1 Builder crew lasts: 21600 = 6 h,
+            // the owner's verbatim number (2026-09-04). ConvenienceRedeemer.PackTemporaryBuilderSeconds
+            // is the consumer; BuildTimerConfig.packTemporaryBuilderSeconds authors the same value.
+            new KeyValuePair<string, int>("economy.packTemporaryBuilderSeconds", 21600),
+            // WO-1384b - THE NIGHT MARKET CARD'S GLOW. Three feel knobs on the HUD store face:
+            // 5 s per comet lap, 35 % peak alpha, and the full warm palette Gold|Amber|Rose = 7.
+            // HudKitController.NightMarketGlowKnobs is the consumer (read at BuildNightMarketCard,
+            // clamped 1..60 / 0..100 / 0..7 there).
+            new KeyValuePair<string, int>("hud.nightMarketGlowLapSec", 5),
+            new KeyValuePair<string, int>("hud.nightMarketGlowAlphaPct", 35),
+            new KeyValuePair<string, int>("hud.nightMarketGlowPaletteMask", 7),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
@@ -329,7 +342,8 @@ namespace DeNelle.Editor.Regression
                 reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 mitigations + the WO-1306 balance knob + the three " +
                          "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps + the four " +
                          "WO-1343 night-store aura knobs + the seven WO-1374 raid-reward knobs + the " +
-                         "WO-1374 starter-squad size) resolve to " +
+                         "WO-1374 starter-squad size + the two WO-1379 Heartfire knobs + the WO-1388 " +
+                         "Builder's Hour crew duration + the three WO-1384b Night Market glow knobs) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +

@@ -177,6 +177,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "raids-locked-face", () => Case9_RaidsLockedFace(failures, notes));
                 Case(failures, "heartfire-inside-plate", () => Case10_HeartfireInsidePlate(failures, notes));
                 Case(failures, "night-market-standout", () => Case11_NightMarketStandout(failures, notes));
+                Case(failures, "night-market-aurora", () => Case12_NightMarketAurora(failures, notes));
             }
             catch (Exception ex)
             {
@@ -1525,10 +1526,11 @@ namespace DeNelle.Editor.Regression
         // frame and aura are source pins; the word is measured.
         //   11a  the card's resolved area exceeds every other left-column band that is drawn
         //        (gear) and the FLAG capture chip (its size parsed from FlagCaptureButton.cs);
-        //   11b  HudKitController mounts the gold frame and the kit's RadialGlowSprite aura;
+        //   11b  HudKitController mounts the soft ring and the kit's RadialGlowSprite aura
+        //        (WO-1384b: the ring REPLACED the flat gold frame - Case 12 pins the shape);
         //   11c  "NIGHT MARKET" measures inside the label plate at the 20 px hard floor.
         // RED, one line each: HudLayoutBands.NightMarketCardWidthPx = 112f (11a); delete the
-        // "NightMarketCardFrame" AddImage (11b); NightMarketLabelPlateX0 = 0.60f (11c).
+        // "NightMarketCardRing" AddImage (11b); NightMarketLabelPlateX0 = 0.60f (11c).
         // =====================================================================
         private const string FlagSrc = "Assets/_Modules/Core/Dev/FlagCaptureButton.cs";
 
@@ -1578,8 +1580,9 @@ namespace DeNelle.Editor.Regression
             }
 
             // 11b - frame + light, by source pin.
-            RequirePin(failures, "[night-market-standout]", src, "\"NightMarketCardFrame\"",
-                "the card lost its gold frame - standout by FRAME is one of the three legs");
+            RequirePin(failures, "[night-market-standout]", src, "\"NightMarketCardRing\"",
+                "the card lost its ring - standout by FRAME is one of the three legs (WO-1384b: a soft " +
+                "rounded ring, never the flat gold box again)");
             RequirePin(failures, "[night-market-standout]", src, "\"NightMarketCardAura\"",
                 "the card lost its aura - standout by LIGHT is one of the three legs");
             RequirePin(failures, "[night-market-standout]", src, "ElarionUiKit.RadialGlowSprite",
@@ -1605,6 +1608,127 @@ namespace DeNelle.Editor.Regression
                              " ref px at the " + ElarionUiKit.FontHardFloor + "px hard floor but the label plate is " +
                              plateW.ToString("0.0") + " px wide (" + d + ") - that is the captured 'NIGHT MA...'");
             else notes.Add("'NIGHT MARKET' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
+        }
+
+        // =====================================================================
+        // CASE 12  [night-market-aurora]  THE NIGHT MARKET CARD IS ROUNDED AND WEARS A
+        //          CHASING, COLOUR-DRIFTING RIM LIGHT - NOT A FLAT GOLD BOX.
+        //                                                         (WO-1384b, 2026-09-05)
+        // ---------------------------------------------------------------------
+        // Owner, after seeing build 355952: "instead of just dropping a yellow box around the
+        // store on the left of UI can we round the edges and have a chasing soft color changing
+        // vfx, subtle but inviting?" Headless capture cannot see motion - the device
+        // screenrecord is the felt proof, and "[Flow:Store] aurora cost" is the perf proof. What
+        // THIS case pins is the SHAPE of the implementation, from source:
+        //   12a  the flat "NightMarketCardFrame" AddImage is GONE and the card is rounded: the
+        //        BuildNightMarketCard slice applies ElarionUiKit.ApplyRounded at
+        //        NightMarketCornerRadiusPx and mounts a Mask so the art is clipped to it;
+        //   12b  the ring and the comets exist under the card root ("NightMarketCardRing",
+        //        "NightMarketCardComet"), the comets ride the kit's RadialGlowSprite (no second
+        //        glow texture, no ParticleSystem anywhere in the slice);
+        //   12c  the motion is driven from THIS class's existing Update (AnimateNightMarketGlow
+        //        is called inside the Update slice - no second Update owner) and the cost line
+        //        "aurora cost" is traced;
+        //   12d  the three knobs exist as literals in NightMarketGlowKnobs with sane defaults
+        //        (lap 3..8 s, alpha 15..60 %) and the palette default names all three stops;
+        //   12e  the label stays ONE FULL LINE: NoWrap + FitSingleLine in the slice, and
+        //        "NIGHT MARKET" still measures inside the plate at the hard floor.
+        // RED, one line each: delete `button.gameObject.AddComponent<Mask>()` (12a); rename
+        // "NightMarketCardRing" (12b); delete the `AnimateNightMarketGlow();` call in Update
+        // (12c); NightMarketGlowLapSecDefault = 30f (12d); drop `TextWrappingModes.NoWrap` (12e).
+        // =====================================================================
+        private static void Case12_NightMarketAurora(List<string> failures, List<string> notes)
+        {
+            const string Tag = "[night-market-aurora]";
+            string src = ReadSrc(HudSrc);
+            if (src == null) { failures.Add(Tag + " cannot read " + HudSrc); return; }
+            string card = Between(src, "private void BuildNightMarketCard(", "private void OpenNightMarket(");
+            if (card == null) { failures.Add(Tag + " BuildNightMarketCard..OpenNightMarket slice not found in " + HudSrc); return; }
+
+            // 12a - rounded, masked, and the flat box gone.
+            if (card.IndexOf("\"NightMarketCardFrame\"", StringComparison.Ordinal) >= 0)
+                failures.Add(Tag + " the flat rectangular \"NightMarketCardFrame\" AddImage is back - the owner " +
+                             "retired the yellow box (WO-1384b); the standout is rounding + motion");
+            if (card.IndexOf("ElarionUiKit.ApplyRounded(cardImage, NightMarketCornerRadiusPx)", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the card's button Image is no longer the kit RoundedSprite at " +
+                             "NightMarketCornerRadiusPx - the card lost its rounded corners");
+            if (card.IndexOf("AddComponent<Mask>()", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the card no longer mounts a Mask - without it the opaque art paints " +
+                             "square over the rounded stencil");
+            float radius;
+            if (!TryFloatConst(src, "NightMarketCornerRadiusPx", out radius))
+                failures.Add(Tag + " NightMarketCornerRadiusPx is no longer a float literal in " + HudSrc);
+            else if (radius < 8f || radius > 40f)
+                failures.Add(Tag + " NightMarketCornerRadiusPx = " + radius + " is outside 8..40 - under 8 reads as " +
+                             "square, over 40 eats the art on a 156-unit card");
+
+            // 12b - the ring + comets, on the kit's one bloom sprite, no particles.
+            if (card.IndexOf("\"NightMarketCardRing\"", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " \"NightMarketCardRing\" is not built under the card root");
+            if (card.IndexOf("\"NightMarketCardComet\"", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the \"NightMarketCardComet\" chase blobs are not built under the card root");
+            if (card.IndexOf("cimg.sprite = auraSprite", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the comets no longer ride ElarionUiKit.RadialGlowSprite (auraSprite) - " +
+                             "one bloom primitive, never a second glow texture");
+            if (card.IndexOf("ParticleSystem", StringComparison.Ordinal) >= 0)
+                failures.Add(Tag + " a ParticleSystem appeared in BuildNightMarketCard - no particles on the HUD canvas");
+
+            // 12c - driven from the existing Update, cost traced.
+            string update = Between(src, "private void Update()", "private void RepaintHeartfire(");
+            if (update == null) failures.Add(Tag + " the HudKitController Update() slice was not found");
+            else if (update.IndexOf("AnimateNightMarketGlow();", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " Update() no longer calls AnimateNightMarketGlow() - the rim light is static " +
+                             "(or a second Update owner was added, which is forbidden)");
+            if (src.IndexOf("\"aurora cost \"", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the \"[Flow:Store] aurora cost\" trace line is gone - that line is the perf pin");
+            int updateOwners = CountOccurrences(src, "private void Update()");
+            if (updateOwners != 1)
+                failures.Add(Tag + " HudKitController.cs declares " + updateOwners + " Update() methods - exactly one " +
+                             "owner drives every HUD animation");
+
+            // 12d - the knobs, with sane shipping defaults.
+            float lap, alphaPct;
+            if (!TryFloatConst(src, "NightMarketGlowLapSecDefault", out lap))
+                failures.Add(Tag + " NightMarketGlowLapSecDefault is not a float literal (hud.nightMarketGlowLapSec)");
+            else if (lap < 3f || lap > 8f)
+                failures.Add(Tag + " NightMarketGlowLapSecDefault = " + lap + "s is outside the owner's 'slow, a lap " +
+                             "every ~4-6 s' window (3..8)");
+            if (!TryFloatConst(src, "NightMarketGlowAlphaPctDefault", out alphaPct))
+                failures.Add(Tag + " NightMarketGlowAlphaPctDefault is not a float literal (hud.nightMarketGlowAlphaPct)");
+            else if (alphaPct < 15f || alphaPct > 60f)
+                failures.Add(Tag + " NightMarketGlowAlphaPctDefault = " + alphaPct + "% is outside 15..60 - 'subtle " +
+                             "but inviting', neither invisible nor a beacon");
+            if (src.IndexOf("NightMarketGlowPaletteMaskDefault = PaletteGold | PaletteAmber | PaletteRose", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the palette default no longer names gold|amber|rose (hud.nightMarketGlowPaletteMask)");
+            foreach (var knob in new[] { "hud.nightMarketGlowLapSec", "hud.nightMarketGlowAlphaPct", "hud.nightMarketGlowPaletteMask" })
+                if (src.IndexOf(knob, StringComparison.Ordinal) < 0)
+                    failures.Add(Tag + " the tunable key '" + knob + "' is no longer named at the knob holder - the rail " +
+                                 "lane finds the knobs by that name");
+
+            // 12e - one full line.
+            if (card.IndexOf("TextWrappingModes.NoWrap", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the label lost TextWrappingModes.NoWrap - 'NIGHT MARKET' may wrap to two lines");
+            if (card.IndexOf("ElarionUiKit.FitSingleLine(face, 20f, 26f)", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " the label is no longer fitted as ONE line at the 20 px hard floor");
+            float plateX0;
+            if (TryFloatConst(src, "NightMarketLabelPlateX0", out plateX0))
+            {
+                float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
+                string d;
+                float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, "NIGHT MARKET",
+                                                            ElarionUiKit.FontHardFloor, out d);
+                if (ww >= 0f && ww > plateW)
+                    failures.Add(Tag + " 'NIGHT MARKET' MEASURES " + ww.ToString("0.0") + " ref px at the hard floor " +
+                                 "but the plate is " + plateW.ToString("0.0") + " px - it would truncate again");
+            }
+            notes.Add("night market aurora: r=" + radius + " lap=" + lap + "s alpha=" + alphaPct + "% updateOwners=" + updateOwners);
+        }
+
+        private static int CountOccurrences(string src, string literal)
+        {
+            int n = 0, i = 0;
+            while ((i = src.IndexOf(literal, i, StringComparison.Ordinal)) >= 0) { n++; i += literal.Length; }
+            return n;
         }
 
         /// <summary>Read a <c>private const float NAME = 1.23f;</c> literal out of a source file.</summary>

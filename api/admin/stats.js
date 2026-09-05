@@ -195,6 +195,19 @@ const NOT_PLAY_EVENTS = [
     'session_start', 'tutorial_started', 'tutorial_step_enter', 'tutorial_step_drop',
     'contextual_step_enter', 'bundle_viewed', 'rewarded_ad_impression',
     'rewarded_ad_unavailable', 'playtest_break', 'maintenance_refusal', 'admin_ops_write',
+    // WO-1388 store funnel: browsing and a checkout attempt are not play.
+    'store_opened', 'pack_tapped', 'checkout_started', 'checkout_failed',
+];
+
+// WO-1388 - THE STORE FUNNEL, in the order a player walks it. Emitters (read in
+// Assets/, not from a doc): store_opened / pack_tapped / checkout_started /
+// checkout_failed are Wallet/PackStore.cs (one Track each: OnEnable, FocusPack,
+// Purchase() head, TrackCheckoutFailed); bundle_viewed and purchase_completed
+// are the two that already existed. "0 sales" is only useful once it reads as
+// WHICH of these six is the first zero.
+const STORE_FUNNEL_EVENTS = [
+    'store_opened', 'bundle_viewed', 'pack_tapped',
+    'checkout_started', 'checkout_failed', 'purchase_completed',
 ];
 
 // A milestone is a thing FINISHED, as opposed to a thing merely done. Used only
@@ -723,6 +736,63 @@ module.exports = async (req, res) => {
                 ORDER BY 2 DESC
                 LIMIT 20`;
 
+            // WO-1388 - the funnel, 7d and 30d side by side, COUNTS per event name
+            // (events + distinct identified players). Fixed windows on purpose, not
+            // `days`: the question is "where do players drop THIS week", and a
+            // window that moves with the query string cannot be compared to last
+            // week's answer. Every one of the six names is listed even when it has
+            // no rows, so a step that never fired reads as 0 rather than vanishing.
+            // `reason` on checkout_failed and `door` on store_opened are the two
+            // properties pulled by name; nothing else in `properties` is returned.
+            const funnelRows = await sql`
+                SELECT event_name,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '7 days')::bigint  AS events_7d,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '30 days')::bigint AS events_30d,
+                       COUNT(DISTINCT player_id) FILTER (WHERE player_id <> ${ANON_ID}
+                             AND received_at > NOW() - INTERVAL '7 days')::bigint  AS players_7d,
+                       COUNT(DISTINCT player_id) FILTER (WHERE player_id <> ${ANON_ID}
+                             AND received_at > NOW() - INTERVAL '30 days')::bigint AS players_30d,
+                       MAX(received_at) AS latest
+                FROM analytics_events
+                WHERE event_name IN ('store_opened', 'bundle_viewed', 'pack_tapped',
+                                     'checkout_started', 'checkout_failed', 'purchase_completed')
+                  AND received_at > NOW() - INTERVAL '30 days'
+                GROUP BY 1
+                LIMIT 10`;
+            const funnelFailReasons = await sql`
+                SELECT COALESCE(properties->>'reason', '(none)') AS reason,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '7 days')::bigint  AS events_7d,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '30 days')::bigint AS events_30d
+                FROM analytics_events
+                WHERE event_name = 'checkout_failed'
+                  AND received_at > NOW() - INTERVAL '30 days'
+                GROUP BY 1
+                ORDER BY 3 DESC
+                LIMIT 20`;
+            const funnelDoors = await sql`
+                SELECT COALESCE(properties->>'door', '(none)') AS door,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '7 days')::bigint  AS events_7d,
+                       COUNT(*) FILTER (WHERE received_at > NOW() - INTERVAL '30 days')::bigint AS events_30d
+                FROM analytics_events
+                WHERE event_name = 'store_opened'
+                  AND received_at > NOW() - INTERVAL '30 days'
+                GROUP BY 1
+                ORDER BY 3 DESC
+                LIMIT 20`;
+            const funnelByName = new Map();
+            for (const r of funnelRows) funnelByName.set(String(r.event_name), r);
+            const storeFunnel = STORE_FUNNEL_EVENTS.map((name) => {
+                const r = funnelByName.get(name);
+                return {
+                    event: name,
+                    events_7d: Number(r ? r.events_7d : 0),
+                    events_30d: Number(r ? r.events_30d : 0),
+                    players_7d: Number(r ? r.players_7d : 0),
+                    players_30d: Number(r ? r.players_30d : 0),
+                    latest: r ? r.latest : null,
+                };
+            });
+
             // View → buy, per pack. bundle_viewed's bundleId and
             // purchase_completed's packId are BOTH pack.Sku (PackStore.cs), so
             // they join cleanly.
@@ -761,6 +831,18 @@ module.exports = async (req, res) => {
                 purchases: purchases,
                 bundle_views: views,
                 conversion: conversion,
+                // WO-1388: the six-step store funnel, fixed 7d/30d windows, every
+                // step present even at zero. Read top to bottom: the first zero is
+                // where players drop.
+                store_funnel: {
+                    windows: ['7d', '30d'],
+                    steps: storeFunnel,
+                    checkout_failed_reasons: funnelFailReasons,
+                    store_opened_doors: funnelDoors,
+                    note: 'CLIENT-REPORTED counts per event name (PackStore.cs emits one Track per step). '
+                        + 'Fixed 7d/30d windows, independent of ?days=, so weeks compare. A step missing '
+                        + 'from analytics_events is reported as 0, never omitted.',
+                },
                 promo_codes: promos,
                 referrals: referrals[0] || null,
                 client_events: clientSide,

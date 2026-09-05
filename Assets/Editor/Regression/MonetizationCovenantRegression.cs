@@ -47,6 +47,8 @@ namespace DeNelle.Editor
             "harvest_boost", "instant_fill_storage", "workforce_slot",
             "storage_tier_jump", "offline_window_extension",
             "permanent_builder",
+            // WO-1388 - Builder's Hour: +1 crew for a 6 h window. Time, never power.
+            "temporary_builder",
         };
 
         // --- documented GRANT/PERK wrapper kinds ---------------------------------

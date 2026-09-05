@@ -466,6 +466,56 @@ namespace DeNelle.Core.Ops
         public const string KeyRaidHeartfireRegenSeconds = "raid.heartfireRegenSeconds";
 
         // ---------------------------------------------------------------------
+        //  WO-1388 - BUILDER'S HOUR. One knob: how long the pack-sold +1 Builder
+        //  crew lasts. Convenience compresses TIME, never sells power (covenant
+        //  docs/monetization-v2-spec.md s2), so this is a duration and nothing else.
+        //  A bare int const, because tools/gen-tunable-manifest.mjs resolves ONLY
+        //  that shape (see RaidHeartfireMaxChargesDefault above).
+        // ---------------------------------------------------------------------
+
+        /// <summary>SHIPPED pack temporary-builder window: 21600 s = 6 h (owner ruling 2026-09-04,
+        /// verbatim "6 hours"). BuildTimerConfig.packTemporaryBuilderSeconds authors the same value;
+        /// ConvenienceRedeemer.PackTemporaryBuilderSeconds resolves this knob first and falls back to
+        /// the config field only when no row overrides it.</summary>
+        public const int EconomyPackTemporaryBuilderSecondsDefault = 21600;
+
+        /// <summary>Int seconds. Duration of ONE 'temporary-builder' pack charge (Builder's Hour).</summary>
+        public const string KeyEconomyPackTemporaryBuilderSeconds = "economy.packTemporaryBuilderSeconds";
+
+        // ---------------------------------------------------------------------
+        //  WO-1384b - THE NIGHT MARKET CARD'S GLOW. Three FEEL knobs for the HUD
+        //  card's animated rim light (a soft rounded ring plus three comets that
+        //  chase the card's perimeter). Every one is a felt question about a phone
+        //  screen, which is exactly what the 2026-09-02 ruling made a row instead
+        //  of a rebuild: "dont make it need a code change, make it tweakable from a
+        //  db call". Bare int consts, because tools/gen-tunable-manifest.mjs
+        //  resolves ONLY that shape (see RaidHeartfireMaxChargesDefault above).
+        //
+        //  The consumer is DeNelle.HUD.HudKitController.NightMarketGlowKnobs, read
+        //  once when the card is built; the animator reads the statics every frame
+        //  and owns the clamps (lap 1..60 s, alpha 0..100 %, mask 0..7).
+        // ---------------------------------------------------------------------
+
+        /// <summary>SHIPPED glow lap: 5 s for one trip of the comets round the card.</summary>
+        public const int HudNightMarketGlowLapSecDefault = 5;
+
+        /// <summary>SHIPPED glow peak alpha: 35 % - a rim light, not a spotlight.</summary>
+        public const int HudNightMarketGlowAlphaPctDefault = 35;
+
+        /// <summary>SHIPPED glow palette: Gold(1) | Amber(2) | Rose(4) = 7, the full warm cycle.</summary>
+        public const int HudNightMarketGlowPaletteMaskDefault = 7;
+
+        /// <summary>Int seconds. One lap of the Night Market card's comets. Clamped 1..60 at the consumer.</summary>
+        public const string KeyHudNightMarketGlowLapSec = "hud.nightMarketGlowLapSec";
+
+        /// <summary>Int percent. Peak alpha of the ring and comet heads. Clamped 0..100 at the consumer.</summary>
+        public const string KeyHudNightMarketGlowAlphaPct = "hud.nightMarketGlowAlphaPct";
+
+        /// <summary>Int bitmask. Palette stops: Gold=1, Amber=2, Rose=4. Clamped 0..7 at the consumer;
+        /// an empty mask resolves to Gold alone (logged once), never to nothing.</summary>
+        public const string KeyHudNightMarketGlowPaletteMask = "hud.nightMarketGlowPaletteMask";
+
+        // ---------------------------------------------------------------------
         //  WO-1343 - THE NIGHT STORE'S AURA. Four knobs, and they exist because
         //  the owner asked a QUESTION SHE HAS EXPLICITLY NOT ANSWERED.
         //
@@ -912,6 +962,41 @@ namespace DeNelle.Core.Ops
                 "camp to spend on. Raising it above that shortest cooldown breaks the criterion " +
                 "'a player holding Heartfire always has somewhere to spend it', and " +
                 "HeartfireRegression goes red when it does."),
+
+            new TunableSpec(KeyEconomyPackTemporaryBuilderSeconds, TunableKind.Int, EconomyPackTemporaryBuilderSecondsDefault,
+                "Seconds of extra Builder crew ONE 'temporary-builder' pack charge (the $1.99 Builder's " +
+                "Hour, WO-1388) grants. Ships at 21600 (6 h). A charge bought while a window is running " +
+                "is DEFERRED behind it and starts when it ends - never stacked, never burned. 0 refuses " +
+                "the grant and keeps the charge deferred rather than spending it on nothing.",
+                "NOT a PROD-022 hypothesis - the one lever on the cheapest micro-transaction, which " +
+                "exists because the store has sold nothing (owner, 2026-09-04: 'we have 0 sales'). " +
+                "Whether six hours is the number that turns a first tap into a habit is felt, not " +
+                "derived, and a rebuild per opinion is the wrong price for finding out."),
+
+            new TunableSpec(KeyHudNightMarketGlowLapSec, TunableKind.Int, HudNightMarketGlowLapSecDefault,
+                "Seconds for the Night Market card's comets to make ONE lap of the card's perimeter " +
+                "(WO-1384b). Ships at 5. Clamped to 1..60 at the consumer - never frozen, never a blur. " +
+                "Read when the HUD builds the card; the animator reads the value every frame.",
+                "NOT a PROD-022 hypothesis - a FEEL knob on the store's permanent HUD face. Whether a " +
+                "five-second lap reads as alive or as nagging on a phone in a dark room is a felt " +
+                "question (owner 2026-09-02: 'make it tweakable from a db call'), and the rebuild per " +
+                "opinion is the wrong price for it."),
+
+            new TunableSpec(KeyHudNightMarketGlowAlphaPct, TunableKind.Int, HudNightMarketGlowAlphaPctDefault,
+                "Peak alpha, in percent, of the Night Market card's ring and comet heads (WO-1384b). " +
+                "Ships at 35 - a rim light, not a spotlight. Clamped to 0..100 at the consumer; 0 " +
+                "keeps the card and hides the glow entirely.",
+                "NOT a PROD-022 hypothesis - the brightness half of the same feel question. The card " +
+                "must stand out from the Heart plate above it without out-shouting the action bar; " +
+                "the owner is colourblind, so contrast is judged on device, never from a palette."),
+
+            new TunableSpec(KeyHudNightMarketGlowPaletteMask, TunableKind.Int, HudNightMarketGlowPaletteMaskDefault,
+                "Bitmask of the warm palette stops the glow drifts through (WO-1384b): Gold=1, Amber=2, " +
+                "Rose=4. Ships at 7 (all three, gold -> amber -> rose -> gold). Clamped to 0..7 at the " +
+                "consumer; 0 or any single bit holds one steady colour, and an empty mask resolves to " +
+                "Gold alone (logged once), never to nothing.",
+                "NOT a PROD-022 hypothesis - 'take that colour out of the cycle' as one number, no " +
+                "code change, no schema change, on the same integer rail as the WO-1343 aura mask."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

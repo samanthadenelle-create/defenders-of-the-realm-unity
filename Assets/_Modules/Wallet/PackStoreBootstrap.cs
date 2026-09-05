@@ -46,7 +46,11 @@ namespace DeNelle.Wallet
             // Reflection-free cross-assembly door: the merchant dialogue verb + any
             // future entry point open the store via PanelRouter.Open(PanelId.RealmStore).
             PanelRouter.Register(PanelId.RealmStore, OpenRealmStore);
-            FlowTrace.Step("Store", "PackStoreBootstrap: PanelId.RealmStore opener registered.");
+            // WO-1388 - the CONTEXT opener: a caller that names its door (PanelRouter.Open(RealmStore,
+            // "settings" / "vendor")) latches it for the funnel's store_opened {door}. Plain opens
+            // still route through the line above and the store infers the door from its other latches.
+            PanelRouter.Register(PanelId.RealmStore, (Action<string>)OpenRealmStoreFromDoor);
+            FlowTrace.Step("Store", "PackStoreBootstrap: PanelId.RealmStore opener registered (plain + door context).");
 
             // WO-1282 - the second door, for callers that need the HOST rather than an open request.
             // MarketplaceInteractor (DeNelle.Village) used to reach it with
@@ -117,6 +121,17 @@ namespace DeNelle.Wallet
         }
 
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => TryUrlAutoOpen(scene);
+
+        /// <summary>
+        /// WO-1388 - the door-naming open (the PanelRouter CONTEXT opener). Latches the door for
+        /// the funnel's store_opened {door}, then opens exactly as the plain <see cref="OpenRealmStore"/>.
+        /// </summary>
+        public static void OpenRealmStoreFromDoor(string door)
+        {
+            FlowTrace.Step("Store", "PackStoreBootstrap.OpenRealmStoreFromDoor door='" + (door ?? "<null>") + "'.");
+            StoreFocusRequest.RequestDoor(door);
+            OpenRealmStore();
+        }
 
         /// <summary>
         /// Opens the Realm Store, find-or-spawning the <see cref="PackStore"/> host so it

@@ -11,11 +11,16 @@
 // WO-1118 exists to stop. Wallet cannot reference Village, so the allowlist
 // cannot call this type — the two stay in step by the same-commit rule.
 //
-// FOUR KINDS this file actually spends:
+// FIVE KINDS this file actually spends:
 //   instant-build         count token, consumed when a Builder job starts
 //   instant-repair        count token, consumed when a Repair job enqueues
 //   harvest-auto-collect  24h window; AutoHarvestService ticks CollectAll
 //   xp-weekend            24h 2x hero XP window; HeroProgression.AddXp asks
+//   temporary-builder     WO-1388: +1 Builder crew for BuildTimerConfig.packTemporaryBuilderSeconds
+//                         (6 h, tunable economy.packTemporaryBuilderSeconds). Consumed the moment it
+//                         can START; while a window is already running the charge is DEFERRED
+//                         (PlayerPrefs count, below) and starts when BuildTimerService's sweep sees
+//                         the window end. A purchase is NEVER burned.
 //
 // harvest_boost is NOT redeemed here — HarvestBoostService already owns that
 // rate-only 2x and is crystal/ad granted, not a pack-token consumer. keepers-satchel
@@ -32,6 +37,7 @@
 
 using System.Globalization;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ops;     // WO-1388 - RemoteTunables, the 6 h pack crew rides the tunables rail
 using DeNelle.Core.State;
 using UnityEngine;
 
@@ -46,6 +52,8 @@ namespace DeNelle.Village.Monetization
         public const string KindInstantRepair = "instant-repair";
         public const string KindHarvestAutoCollect = "harvest-auto-collect";
         public const string KindXpWeekend = "xp-weekend";
+        /// <summary>WO-1388 - the pack-sold +1 Builder crew window. Spent by <see cref="TryRedeemTemporaryBuilder"/>.</summary>
+        public const string KindTemporaryBuilder = "temporary-builder";
 
         /// <summary>Authored duration of a harvest-auto-collect / xp-weekend charge (24h).</summary>
         public const double TimedWindowSeconds = 24.0 * 3600.0;
@@ -56,6 +64,14 @@ namespace DeNelle.Village.Monetization
         private const string PrefHarvestEnds = "convenience.harvest-auto-collect.endsatms";
         private const string PrefXpEnds = "convenience.xp-weekend.endsatms";
         private const string PrefXpMult = "convenience.xp-weekend.mult";
+        /// <summary>
+        /// WO-1388 - how many temporary-builder windows are OWED but could not start because one was
+        /// already running. Same PlayerPrefs mechanism (and the same declared limitation) as the
+        /// timed windows above. Public so the oracle reads the same key the code writes.
+        /// </summary>
+        public const string PrefTemporaryBuilderDeferred = "convenience.temporary-builder.deferred";
+
+        private const string TempBuilderSys = "TempBuilder";
 
         // =====================================================================
         //  Count tokens (instant-build / instant-repair)
@@ -165,12 +181,121 @@ namespace DeNelle.Village.Monetization
             return XpMaxMultiplier;
         }
 
+        // =====================================================================
+        //  Temporary builder (WO-1388) - a window on the Builder line; deferred, never burned
+        // =====================================================================
+
+        /// <summary>Windows OWED but not yet started (bought while one was already running).</summary>
+        public static int DeferredTemporaryBuilderCount
+        {
+            get
+            {
+                int n = (int)ReadDouble(PrefTemporaryBuilderDeferred);
+                return n < 0 ? 0 : n;
+            }
+        }
+
+        /// <summary>
+        /// Seconds ONE temporary-builder charge grants. The tunable wins when the owner has set a row
+        /// (its resolved value differs from the shipping default); otherwise the authored
+        /// <c>BuildTimerConfig.packTemporaryBuilderSeconds</c>, which ships at the same 6 h. Both live
+        /// so the ScriptableObject stays the editor-visible knob and the database row stays the
+        /// no-rebuild override; the tie-break above is what keeps them from disagreeing in a way
+        /// that matters.
+        /// </summary>
+        public static double PackTemporaryBuilderSeconds()
+        {
+            var spec = RemoteTunables.SpecFor(RemoteTunables.KeyEconomyPackTemporaryBuilderSeconds);
+            int knob = RemoteTunables.Int(RemoteTunables.KeyEconomyPackTemporaryBuilderSeconds);
+            if (spec != null && knob != spec.Default)
+            {
+                FlowTrace.Once(TempBuilderSys, "duration-override:" + knob,
+                    "pack temporary-builder duration is the TUNABLE override: " + knob + "s (shipping default " +
+                    spec.Default + "s).");
+                return knob;
+            }
+            var svc = BuildTimerService.Instance;
+            var cfg = svc != null ? svc.Config : null;
+            if (cfg != null) return cfg.packTemporaryBuilderSeconds;
+            return spec != null ? spec.Default : RemoteTunables.EconomyPackTemporaryBuilderSecondsDefault;
+        }
+
+        /// <summary>
+        /// THE ONE redeem pass for the pack crew. Called by <c>BuildTimerService</c> right after a pack
+        /// lands (<c>OnConvenienceTokensGranted</c>) and from its sweep (load + 1 Hz). Returns true only
+        /// when a window STARTED on this call.
+        /// <para>Order: (1) nothing owed -> false, no trace (this runs every second). (2) a window is
+        /// RUNNING -> every unspent token becomes a DEFERRED charge (persisted) and the trace says so;
+        /// false. (3) no window running -> start one, from the deferred count first, else from a token.
+        /// A grant the service refuses hands the charge back as a deferral. Nothing is ever burned.</para>
+        /// </summary>
+        public static bool TryRedeemTemporaryBuilder()
+        {
+            int deferred = DeferredTemporaryBuilderCount;
+            int tokens = Count(KindTemporaryBuilder);
+            if (deferred <= 0 && tokens <= 0) return false;
+
+            var svc = BuildTimerService.Instance;
+            if (svc == null)
+            {
+                FlowTrace.Warn(TempBuilderSys, "owed " + tokens + " token(s) + " + deferred +
+                    " deferred, but BuildTimerService is not live - nothing spent; its sweep retries.");
+                return false;
+            }
+
+            if (svc.IsTemporaryBuilderActive)
+            {
+                if (tokens > 0)
+                {
+                    int moved = 0;
+                    while (TryConsume(KindTemporaryBuilder)) moved++;
+                    deferred += moved;
+                    WriteDeferred(deferred);
+                    FlowTrace.Step(TempBuilderSys, "DEFERRED " + moved + " temporary-builder charge(s): a window is " +
+                        "already running (" + svc.TemporaryBuilderSecondsRemaining().ToString("F0", CultureInfo.InvariantCulture) +
+                        "s left). " + deferred + " queued to start when it ends; none burned.");
+                }
+                return false;
+            }
+
+            bool fromDeferred = deferred > 0;
+            if (!fromDeferred && !TryConsume(KindTemporaryBuilder))
+            {
+                FlowTrace.Warn(TempBuilderSys, "token count read " + tokens + " but TryConsume spent nothing - no window started.");
+                return false;
+            }
+
+            double seconds = PackTemporaryBuilderSeconds();
+            if (!svc.TryGrantTemporaryBuilder(seconds, true, out string failure))
+            {
+                int kept = deferred + (fromDeferred ? 0 : 1);
+                WriteDeferred(kept);
+                FlowTrace.Warn(TempBuilderSys, "grant REFUSED (" + failure + ") - charge kept as deferred (" + kept +
+                    " queued), nothing burned.");
+                return false;
+            }
+            if (fromDeferred) WriteDeferred(deferred - 1);
+            FlowTrace.Step(TempBuilderSys, "STARTED temporary-builder window +" +
+                (seconds / 3600.0).ToString("0.##", CultureInfo.InvariantCulture) + "h from " +
+                (fromDeferred ? "the deferred queue" : "a pack token") + "; deferred left=" +
+                DeferredTemporaryBuilderCount + " tokens left=" + Count(KindTemporaryBuilder) + ".");
+            return true;
+        }
+
+        private static void WriteDeferred(int n)
+        {
+            if (n <= 0) PlayerPrefs.DeleteKey(PrefTemporaryBuilderDeferred);
+            else WriteDouble(PrefTemporaryBuilderDeferred, n);
+            PlayerPrefs.Save();
+        }
+
         /// <summary>Test/QA reset. Never called by gameplay.</summary>
         public static void ClearTimedWindowsForTests()
         {
             PlayerPrefs.DeleteKey(PrefHarvestEnds);
             PlayerPrefs.DeleteKey(PrefXpEnds);
             PlayerPrefs.DeleteKey(PrefXpMult);
+            PlayerPrefs.DeleteKey(PrefTemporaryBuilderDeferred);
             PlayerPrefs.Save();
         }
 

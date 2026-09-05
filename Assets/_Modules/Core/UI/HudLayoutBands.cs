@@ -77,7 +77,8 @@ namespace DeNelle.Core.UI
         /// shrink the text": the old 87-unit band had two Heartfire lines forced into a
         /// 23-unit slot, which is why the marks drew half off the plate at the plate's smallest
         /// size. The 0.010 gap to the Minimap mount below is deliberate breathing room for the
-        /// Night Market card's gold frame (HudKitController.NightMarketCardFramePx).</summary>
+        /// Night Market card's soft ring (HudKitController.NightMarketRingPx, WO-1384b; it was
+        /// the flat gold frame NightMarketCardFramePx before the 2026-09-04 23:59 refinement).</summary>
         public static readonly Rect HeartMount = Rect.MinMaxRect(0.011f, 0.655f, 0.240f, 0.790f);
 
         /// <summary>Minimap mount - holds TWO exclusive bands: the square plate hanging from

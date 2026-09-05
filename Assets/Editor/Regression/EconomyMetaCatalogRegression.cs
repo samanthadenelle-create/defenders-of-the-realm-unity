@@ -75,8 +75,11 @@ namespace DeNelle.Editor
         /// soon". The Patronage band instead carries the TWO REAL top rungs that were already on the
         /// shelf. The redesign is presentation-only and added no browsable pack, so 13 still holds.
         /// The owner may overrule and mint the SKU; this constant is then the one to re-rule.</para>
+        /// <para>RE-RULED 14 -> 15 on 2026-09-05 (WO-1388): the owner minted `builders-hour`, the
+        /// $1.99 featured starter (small basket + 6 h temporary builder). It is a browsable shelf row,
+        /// not an impulse SKU, so it counts here.</para>
         /// </summary>
-        private const int CanonShelfPackCount = 14;
+        private const int CanonShelfPackCount = 15;
 
         private static readonly string[] SecretFragments =
         {

@@ -406,6 +406,12 @@ namespace DeNelle.Wallet
             // quote must not yank the spotlight back off a card the player just tapped.
             LatchPiSpotlightOnOpen();
 
+            // WO-1388 FUNNEL step 1 of 4 - store_opened {door}. THE ONE PLACE. Read BEFORE Render:
+            // Render consumes the SKU latch and RouteGuestShortfallToWalletConnect consumes the
+            // shortfall arm, and both are inputs to the inferred door. A caller that named its door
+            // (PanelRouter context via PackStoreBootstrap.OpenRealmStoreFromDoor) wins outright.
+            TrackStoreOpened();
+
             Render();
             // WO-1386 - AFTER the first Render, because the connect door writes the commerce banner
             // and the banner must exist; the spotlight it lands beside was resolved by that Render.
@@ -418,6 +424,88 @@ namespace DeNelle.Wallet
             RestorePendingPresentation();
 
             if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
+        }
+
+        // =====================================================================
+        //  WO-1388 - THE STORE FUNNEL. Four events, ONE emit site each, so a count can never be
+        //  double-fired from a second surface. store_opened / pack_tapped / checkout_started /
+        //  checkout_failed sit between the pre-existing bundle_viewed and purchase_completed;
+        //  api/admin/stats.js ?view=economy renders them as store_funnel so "0 sales" reads as
+        //  WHICH step is the first zero. Every emit is also a [Flow:Store] line, because a
+        //  telemetry row nobody can see on a device log is a claim, not a measurement.
+        // =====================================================================
+
+        /// <summary>Door names the funnel records. The inferred set; named doors arrive via the latch.</summary>
+        private const string DoorHudCard = "hud-card";
+        private const string DoorShortfall = "shortfall";
+        private const string DoorManage = "manage";
+
+        /// <summary>
+        /// store_opened {door}. A named door (settings / vendor / ...) comes from the
+        /// <see cref="StoreFocusRequest"/> latch; otherwise the door is INFERRED from the two other
+        /// open-time latches: an armed shortfall route means the "Short N wood" door, a pending SKU
+        /// focus means the Manage "Buy builder" route, and everything else is the HUD card - which
+        /// is where every remaining plain open (the HUD Night Market card and its dock tab) comes from.
+        /// </summary>
+        private void TrackStoreOpened()
+        {
+            string named = StoreFocusRequest.ConsumeDoor();
+            string door = named ??
+                          (_shortfallWalletRouteArmed ? DoorShortfall
+                           : StoreFocusRequest.HasPending ? DoorManage
+                           : DoorHudCard);
+            FlowTrace.Step("Store", "funnel store_opened door=" + door + (named == null ? " (inferred)" : " (named)") + ".");
+            Guard.Try("Store", "track store_opened",
+                () => DeNelle.Core.Analytics.EventTracker.Track("store_opened", new { door }));
+        }
+
+        /// <summary>pack_tapped {sku, section, priceUsd} - emitted from <see cref="FocusPack"/> on a player tap.</summary>
+        private static void TrackPackTapped(PackDef pack)
+        {
+            if (pack == null) return;
+            string section = pack.StoreSection ?? string.Empty;
+            double priceUsd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
+            FlowTrace.Step("Store", "funnel pack_tapped sku=" + pack.Sku + " section=" + section + " priceUsd=" + priceUsd + ".");
+            Guard.Try("Store", "track pack_tapped",
+                () => DeNelle.Core.Analytics.EventTracker.Track("pack_tapped", new { sku = pack.Sku, section, priceUsd }));
+        }
+
+        /// <summary>
+        /// checkout_started {sku, channel, rail} - emitted at the head of <see cref="Purchase"/>, which
+        /// BOTH rails enter (the provider path branches off inside it), so one site covers Solana,
+        /// Google Play and Pi. It fires before the gates on purpose: a gate refusal is then a
+        /// checkout_failed against a started checkout, which is the drop the funnel exists to show.
+        /// </summary>
+        private void TrackCheckoutStarted(PackDef pack)
+        {
+            string channel = PaymentChannelResolver.Current.ToString();
+            var provider = PaymentProviders.Current;
+            string rail = OwnsTheRail(provider)
+                ? "provider:" + provider.Channel
+                : "wallet:" + (_wallet != null ? _wallet.Network.ToString() : "none");
+            FlowTrace.Step("Store", "funnel checkout_started sku=" + pack.Sku + " channel=" + channel + " rail=" + rail + ".");
+            Guard.Try("Store", "track checkout_started",
+                () => DeNelle.Core.Analytics.EventTracker.Track("checkout_started", new { sku = pack.Sku, channel, rail }));
+        }
+
+        /// <summary>The four reasons checkout_failed may carry. Anything else is a caller bug.</summary>
+        private const string FailWalletRequired = "wallet-required";
+        private const string FailProviderRefused = "provider-refused";
+        private const string FailCancelled = "cancelled";
+        private const string FailError = "error";
+
+        /// <summary>
+        /// checkout_failed {sku, reason}. THE ONE emit site - every failure branch in
+        /// <see cref="Purchase"/> and <see cref="PurchaseThroughProvider"/> calls this with one of the
+        /// four reasons above. A refusal, a cancel and a throw are all "the checkout did not complete",
+        /// and the reason is what separates a rule from a bug.
+        /// </summary>
+        private static void TrackCheckoutFailed(string sku, string reason, string detail)
+        {
+            FlowTrace.Step("Store", "funnel checkout_failed sku=" + sku + " reason=" + reason +
+                                    (string.IsNullOrEmpty(detail) ? "" : " (" + detail + ")") + ".");
+            Guard.Try("Store", "track checkout_failed",
+                () => DeNelle.Core.Analytics.EventTracker.Track("checkout_failed", new { sku, reason }));
         }
 
         private void OnDisable()
@@ -2113,6 +2201,11 @@ namespace DeNelle.Wallet
             var band = pack != null ? PackCatalog.BandOf(pack) : StoreBand.Basket;
             var light = NightMarketPalette.For(band);
 
+            // WO-1388 FUNNEL step 2 of 4 - pack_tapped. `animate` is true on exactly the three
+            // player-tap callers (shelf card, shared offer card, gap-utility row) and false on the
+            // render-time default focus, so it is the tap discriminator without a second parameter.
+            if (animate) TrackPackTapped(pack);
+
             // ── REPAINT SELECTION — THREE CARRIERS, AND THE HUE IS THE WEAKEST ───
             // The owner is red/green colourblind, so selection may never be a colour swap. It is
             // carried by (1) the card MOVING TO THE SPOTLIGHT — unmissable by any eye, (2) the ring's
@@ -3148,6 +3241,11 @@ namespace DeNelle.Wallet
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
             }
 
+            // WO-1388 FUNNEL step 3 of 4 - checkout_started. Before the rail branch and before the
+            // gates, so every Buy press is one started checkout and every refusal below is a
+            // checkout_failed against it.
+            TrackCheckoutStarted(pack);
+
             using var sharedConfirmation = _sharedCardSession?.EnterConfirmation();
 
             // WO-1318: widened from GooglePlay-only to "a provider owns this rail" (OwnsTheRail), so
@@ -3182,6 +3280,11 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' REFUSED at PurchaseGate — \"{gateReason}\" (nothing charged).");
                 SetStatus(gateReason);
+                // WO-1388: the wallet rule is the ONE refusal that is a funnel step of its own
+                // (a guest who has to connect), so it gets its own reason; every other gate
+                // sentence is the rail refusing the sale.
+                TrackCheckoutFailed(pack.Sku,
+                    PurchaseGate.WalletIsTheBlocker(pack) ? FailWalletRequired : FailProviderRefused, gateReason);
                 return PaymentResult.Failure(pack.Sku, currency, gateReason);
             }
 
@@ -3190,6 +3293,7 @@ namespace DeNelle.Wallet
                 const string skrCanaryOnly = "Today's verified devnet purchase uses test SKR. No other rail was charged.";
                 FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' refused: MON-1147 devnet canary is SKR-only.");
                 SetStatus(skrCanaryOnly);
+                TrackCheckoutFailed(pack.Sku, FailProviderRefused, "devnet canary is SKR-only");
                 return PaymentResult.Failure(pack.Sku, currency, skrCanaryOnly);
             }
 
@@ -3219,6 +3323,7 @@ namespace DeNelle.Wallet
                         FlowTrace.Warn("Store", $"Purchase '{pack.Sku}': wallet connect cancelled/failed — aborted (player NOT charged).");
                         SetCommerceState(CommerceState.Cancelled,
                             "Wallet did not respond. Check that it is installed, then retry.");
+                        TrackCheckoutFailed(pack.Sku, FailCancelled, "wallet connect cancelled/failed");
                         return PaymentResult.Failure(pack.Sku, currency, "Wallet not connected.");
                     }
                 }
@@ -3358,6 +3463,7 @@ namespace DeNelle.Wallet
                     FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' STOPPED before the wallet: no server quote " +
                                             $"- \"{refusal}\" (player NOT charged).");
                     SetCommerceState(CommerceState.Failed, refusal);
+                    TrackCheckoutFailed(pack.Sku, FailProviderRefused, "no server quote");
                     return PaymentResult.Failure(pack.Sku, currency, refusal);
                 }
                 var quote = quoted.Quote;
@@ -3432,6 +3538,7 @@ namespace DeNelle.Wallet
                     FlowTrace.Fail("Store", $"Purchase '{pack.Sku}' ({currency}) FAILED: {result.Error}");
                     SetCommerceState(CommerceState.Failed,
                         "Reopen the store to reconcile before trying another payment.");
+                    TrackCheckoutFailed(pack.Sku, FailError, result.Error);
                 }
                 return result;
             }
@@ -3441,6 +3548,7 @@ namespace DeNelle.Wallet
                     $"Purchase '{pack.Sku}' ({currency}) THREW: {ex.GetType().Name}: {ex.Message} — outcome indeterminate; if a charge settled the entitlement may be lost.");
                 SetCommerceState(CommerceState.Failed,
                     "Reopen the store to reconcile before trying another payment.");
+                TrackCheckoutFailed(pack.Sku, FailError, ex.GetType().Name);
                 return PaymentResult.Failure(pack.Sku, currency, ex.Message);
             }
             finally
@@ -3463,6 +3571,7 @@ namespace DeNelle.Wallet
             if (!provider.CanBuy(pack.Sku, out string reason))
             {
                 SetCommerceState(CommerceState.Failed, reason);
+                TrackCheckoutFailed(pack.Sku, FailProviderRefused, reason);
                 return PaymentResult.Failure(pack.Sku, legacyCurrency, reason);
             }
 
@@ -3490,6 +3599,9 @@ namespace DeNelle.Wallet
                 if (!result.Succeeded)
                 {
                     SetCommerceState(CommerceState.Failed, result.Error);
+                    // ProviderPurchaseResult carries no cancelled flag, so a user-dismissed sheet and
+                    // a real failure both land here as "error"; the detail keeps the provider's text.
+                    TrackCheckoutFailed(pack.Sku, FailError, result.Error);
                     return PaymentResult.Failure(pack.Sku, legacyCurrency, result.Error);
                 }
 

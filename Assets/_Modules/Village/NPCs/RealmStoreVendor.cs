@@ -100,9 +100,11 @@ namespace DeNelle.Village
             // false in that case, so say so.
             Guard.Try("RealmStore", "open the Realm Store panel", () =>
             {
-                if (PanelRouter.Open(PanelId.RealmStore))
+                // WO-1388: "vendor" is the door name the store funnel records (store_opened {door}).
+                // Falls back to the plain opener when no context opener is registered.
+                if (PanelRouter.Open(PanelId.RealmStore, "vendor"))
                 {
-                    FlowTrace.Step("RealmStore", "storefront vendor opened PanelId.RealmStore.");
+                    FlowTrace.Step("RealmStore", "storefront vendor opened PanelId.RealmStore (door=vendor).");
                 }
                 else
                 {

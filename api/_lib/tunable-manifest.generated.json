@@ -171,6 +171,26 @@
             "key": "raid.heartfireRegenSeconds",
             "kind": "int",
             "default": 14400
+        },
+        {
+            "key": "economy.packTemporaryBuilderSeconds",
+            "kind": "int",
+            "default": 21600
+        },
+        {
+            "key": "hud.nightMarketGlowLapSec",
+            "kind": "int",
+            "default": 5
+        },
+        {
+            "key": "hud.nightMarketGlowAlphaPct",
+            "kind": "int",
+            "default": 35
+        },
+        {
+            "key": "hud.nightMarketGlowPaletteMask",
+            "kind": "int",
+            "default": 7
         }
     ]
 }

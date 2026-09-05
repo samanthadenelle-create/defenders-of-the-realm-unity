@@ -10,6 +10,16 @@
 // advertised entitlement landed: Glimmer +1000, Crystals/Food/Coins by the packs.json
 // amounts, and all 5 cosmetic SKUs return true from CosmeticOwnershipService.Owns.
 //
+// [temporary-builder-pack] (WO-1388, same suite, second case): applies the REAL
+// 'builders-hour' PackDef against a throwaway GameState with the REAL EconomyService +
+// BuildTimerService installed and asserts (1) the wood/iron/stone basket landed AND a
+// temporary Builder crew window of RemoteTunables.EconomyPackTemporaryBuilderSecondsDefault
+// (21600 s = 6 h) is RUNNING with SlotCount(Builder) +1; (2) a second purchase INSIDE the
+// window is DEFERRED (ConvenienceRedeemer.DeferredTemporaryBuilderCount == 1, the running
+// window is NOT extended, nothing burned); (3) after the clock is pushed past expiry, the
+// service's own sweep starts the deferred charge as a fresh 6 h window. Proven RED first on
+// the pre-WO tree (PackCatalog.Find('builders-hour') is null there).
+//
 // Marker: PACK_GRANT_OK / PACK_GRANT_FAIL. Expected: GREEN.
 //
 // Wire (DataRegression.RunAll):
@@ -22,6 +32,9 @@ using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Village;
+using DeNelle.Village.Monetization;   // WO-1388 - ConvenienceRedeemer (the temporary-builder redeem pass)
+using DeNelle.Core.Jobs;              // WO-1388 - ChannelId / ObsidianQueueState
+using DeNelle.Core.Ops;               // WO-1388 - RemoteTunables.EconomyPackTemporaryBuilderSecondsDefault
 using DeNelle.Core.State;
 
 namespace DeNelle.Editor
@@ -31,6 +44,11 @@ namespace DeNelle.Editor
         private const string SaveKey = "dotr-save";
         private const string CosmeticsKey = "dotr-cosmetics-v1";
         private const string PackSku = "founders-vow";
+
+        // WO-1388 - the Builder's Hour pack and the convenience kind it carries.
+        private const string TempPackSku = "builders-hour";
+        private const string TempKind = "temporary-builder";
+        private const string TempTag = "[temporary-builder-pack]";
 
         public static bool Run(out string reason)
         {
@@ -152,8 +170,278 @@ namespace DeNelle.Editor
                 PlayerPrefs.Save();
             }
 
+            // WO-1388 - second case, same suite (the suite count is pinned elsewhere; a new
+            // suite would move it for no gain). Its fixture restores everything it touches.
+            try { RunTemporaryBuilderPackCase(failures, log); }
+            catch (Exception ex) { failures.Add(TempTag + " case threw outside its fixture: " + ex.GetType().Name + ": " + ex.Message); }
+
             reason = Finish(failures, log);
             return failures.Count == 0;
+        }
+
+        // =====================================================================
+        //  [temporary-builder-pack] - WO-1388 Builder's Hour
+        // =====================================================================
+
+        /// <summary>
+        /// The Builder's Hour contract, driven through the REAL grant path (PackStoreVM.ApplyPackContents ->
+        /// GearInventory token -> BuildTimerService.OnConvenienceTokensGranted -> ConvenienceRedeemer.
+        /// TryRedeemTemporaryBuilder -> BuildTimerService.TryGrantTemporaryBuilder(seconds, reclaimAfterExpiry:true)).
+        /// <para>Named mutations this case catches:
+        /// (a) KindTemporaryBuilder routed nowhere / OnConvenienceTokensGranted not invoked -> step 1 reads
+        ///     tempActive=false; (b) the 24 h <c>temporaryBuilderSeconds</c> repurposed instead of the 6 h
+        ///     <c>packTemporaryBuilderSeconds</c> -> step 1 reads remaining ~86400; (c) a second buy BURNED
+        ///     (token consumed, no WriteDeferred) -> step 2 reads deferred=0; (d) a second buy STACKED
+        ///     (window extended) -> step 2 reads remaining grew; (e) the sweep redeem pass missing -> step 3
+        ///     reads deferred=1 and no window after expiry.</para>
+        /// </summary>
+        private static void RunTemporaryBuilderPackCase(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- TEMPORARY BUILDER PACK (WO-1388 'builders-hour' -> basket + 6 h Builder crew; a second buy inside the window defers, never burns) ---");
+
+            Type vmType = FindType("DeNelle.Wallet.PackStoreVM");
+            Type catType = FindType("DeNelle.Wallet.PackCatalog");
+            if (vmType == null || catType == null)
+            {
+                failures.Add(TempTag + $" pack types not loaded (PackStoreVM={vmType != null}, PackCatalog={catType != null})");
+                return;
+            }
+
+            if (!ReadTempPackExpected(out int expWood, out int expIron, out int expStone, out int expTokens, out string readErr))
+            {
+                // On the pre-WO tree this is the RED: packs.json has no 'builders-hour' row.
+                failures.Add(TempTag + " packs.json read: " + readErr);
+                return;
+            }
+            log.AppendLine($"  packs.json '{TempPackSku}': wood={expWood} iron={expIron} stone={expStone} {TempKind} tokens={expTokens}");
+            if (expTokens != 1)
+                failures.Add(TempTag + $" packs.json advertises {expTokens} '{TempKind}' charge(s); the Builder's Hour is exactly ONE crew for one window");
+            if (expWood <= 0 || expIron <= 0 || expStone <= 0)
+                failures.Add(TempTag + " packs.json basket is missing a lane (wood/iron/stone must each be > 0 - the WO's small basket)");
+
+            bool hadSave = PlayerPrefs.HasKey(SaveKey);
+            string rawSave = hadSave ? PlayerPrefs.GetString(SaveKey, null) : null;
+            bool hadDeferred = PlayerPrefs.HasKey(ConvenienceRedeemer.PrefTemporaryBuilderDeferred);
+            string rawDeferred = hadDeferred ? PlayerPrefs.GetString(ConvenienceRedeemer.PrefTemporaryBuilderDeferred, null) : null;
+            PlayerPrefs.DeleteKey(ConvenienceRedeemer.PrefTemporaryBuilderDeferred);   // fresh: nothing owed
+
+            GameStateService priorGss = GameStateService.Instance;
+            object priorEcon = GetInstance(typeof(EconomyService));
+            BuildTimerService priorQueue = BuildTimerService.Instance;
+            double priorSkipMs = TimeSource.DevSkipMs;
+            if (priorSkipMs != 0d)
+                log.AppendLine($"  note: DevClock skip was {priorSkipMs:F0} ms before this case; it is reset to 0 on exit.");
+
+            GameObject gssGo = null, econGo = null, svcGo = null;
+            GameState throwaway = null;
+            try
+            {
+                throwaway = ScriptableObject.CreateInstance<GameState>();
+                throwaway.ObsidianQueue = ObsidianQueueState.Empty();
+                gssGo = new GameObject("GSS (temporary-builder-pack oracle)");
+                var gss = gssGo.AddComponent<GameStateService>();
+                if (!InstallState(gss, throwaway))
+                {
+                    // NOT a skip: a case that green-passes on an unreachable seam asserts nothing.
+                    failures.Add(TempTag + " [fixture] GameStateService state seam not reflectable - FAIL, not a skip");
+                    return;
+                }
+
+                econGo = new GameObject("EconomyService (temporary-builder-pack oracle)");
+                var econ = econGo.AddComponent<EconomyService>();
+                SetInstance(typeof(EconomyService), econ);
+
+                svcGo = new GameObject("BuildTimerService (temporary-builder-pack oracle)");
+                var svc = svcGo.AddComponent<BuildTimerService>();
+                if (!InstallQueueInstance(svc))
+                {
+                    failures.Add(TempTag + " [fixture] BuildTimerService.Instance is not reflectable - the redeem pass cannot find the queue. FAIL, not a skip");
+                    return;
+                }
+
+                catType.GetMethod("Reload", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
+                var findM = catType.GetMethod("Find", new[] { typeof(string) });
+                object pack = findM?.Invoke(null, new object[] { TempPackSku });
+                if (pack == null)
+                {
+                    failures.Add(TempTag + $" PackCatalog.Find('{TempPackSku}') returned null - the catalog did not load the Builder's Hour row");
+                    return;
+                }
+
+                var vm = vmType.GetMethod("CreateDefault", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
+                if (vm == null) { failures.Add(TempTag + " PackStoreVM.CreateDefault() returned null"); return; }
+                var applyM = vmType.GetMethod("ApplyPackContents", new[] { pack.GetType() });
+                if (applyM == null) { failures.Add(TempTag + " PackStoreVM.ApplyPackContents(PackDef) not resolvable by reflection"); return; }
+
+                double expectedSeconds = RemoteTunables.EconomyPackTemporaryBuilderSecondsDefault;   // 21600 = 6 h
+                double resolvedSeconds = ConvenienceRedeemer.PackTemporaryBuilderSeconds();
+                log.AppendLine($"  duration: RemoteTunables default={expectedSeconds:F0}s, ConvenienceRedeemer.PackTemporaryBuilderSeconds()={resolvedSeconds:F0}s");
+                if (Math.Abs(resolvedSeconds - expectedSeconds) > 0.5)
+                    failures.Add(TempTag + $" PackTemporaryBuilderSeconds() resolves {resolvedSeconds:F0}s, not the shipping 6 h ({expectedSeconds:F0}s) - the knob and BuildTimerConfig.packTemporaryBuilderSeconds disagree, or a tunable row leaked into the oracle");
+
+                int woodBefore = throwaway.Wood, ironBefore = throwaway.Iron, stoneBefore = throwaway.Resources.Food;
+                int slotsBefore = svc.SlotCount(ChannelId.Builder);
+                if (svc.IsTemporaryBuilderActive)
+                    failures.Add(TempTag + " [fixture] a fresh throwaway state already reports an active temporary builder");
+
+                // ---- (1) FIRST PURCHASE: basket lands AND the crew starts NOW ---------------------
+                applyM.Invoke(vm, new[] { pack });
+                int woodDelta = throwaway.Wood - woodBefore;
+                int ironDelta = throwaway.Iron - ironBefore;
+                int stoneDelta = throwaway.Resources.Food - stoneBefore;
+                bool active1 = svc.IsTemporaryBuilderActive;
+                double remaining1 = svc.TemporaryBuilderSecondsRemaining();
+                int slots1 = svc.SlotCount(ChannelId.Builder);
+                int tokens1 = ConvenienceRedeemer.Count(TempKind);
+                int deferred1 = ConvenienceRedeemer.DeferredTemporaryBuilderCount;
+                log.AppendLine($"  (1) first buy: wood=+{woodDelta} iron=+{ironDelta} stone=+{stoneDelta} tempActive={active1} remaining={remaining1:F0}s slots {slotsBefore}->{slots1} tokens={tokens1} deferred={deferred1}");
+
+                if (woodDelta != expWood) failures.Add(TempTag + $" Wood delta {woodDelta} != advertised {expWood}");
+                if (ironDelta != expIron) failures.Add(TempTag + $" Iron delta {ironDelta} != advertised {expIron}");
+                if (stoneDelta != expStone) failures.Add(TempTag + $" Stone (Resources.Food) delta {stoneDelta} != advertised {expStone}");
+                if (!active1)
+                    failures.Add(TempTag + " no temporary Builder window is running after the first buy - the '" + TempKind +
+                                 "' token was NOT redeemed (mutation a: KindTemporaryBuilder routed nowhere / OnConvenienceTokensGranted not invoked)");
+                if (remaining1 < expectedSeconds - 5d || remaining1 > expectedSeconds + 0.5d)
+                    failures.Add(TempTag + $" window remaining {remaining1:F0}s is not ~{expectedSeconds:F0}s (mutation b: the 24 h temporaryBuilderSeconds was used, or the wrong knob)");
+                if (slots1 != slotsBefore + 1)
+                    failures.Add(TempTag + $" SlotCount(Builder) {slotsBefore}->{slots1}; expected exactly +1 crew while the window runs");
+                if (tokens1 != 0)
+                    failures.Add(TempTag + $" {tokens1} '{TempKind}' token(s) still in GearInventory after the crew started - a double-spend on the next sweep");
+                if (deferred1 != 0)
+                    failures.Add(TempTag + $" deferred={deferred1} after the FIRST buy; nothing was running, so nothing should have been deferred");
+
+                // ---- (2) SECOND PURCHASE INSIDE THE WINDOW: DEFERRED, never burned, never stacked --
+                applyM.Invoke(vm, new[] { pack });
+                int deferred2 = ConvenienceRedeemer.DeferredTemporaryBuilderCount;
+                int tokens2 = ConvenienceRedeemer.Count(TempKind);
+                double remaining2 = svc.TemporaryBuilderSecondsRemaining();
+                int slots2 = svc.SlotCount(ChannelId.Builder);
+                int woodDelta2 = throwaway.Wood - woodBefore;
+                log.AppendLine($"  (2) second buy inside window: deferred={deferred2} tokens={tokens2} remaining={remaining2:F0}s slots={slots2} wood total=+{woodDelta2}");
+
+                if (deferred2 != 1)
+                    failures.Add(TempTag + $" second buy inside the window: deferred={deferred2}, expected 1 (mutation c: the charge was BURNED - consumed without WriteDeferred - or never consumed)");
+                if (tokens2 != 0)
+                    failures.Add(TempTag + $" second buy left {tokens2} token(s) in GearInventory instead of moving them to the deferred queue");
+                if (remaining2 > remaining1 + 0.5d)
+                    failures.Add(TempTag + $" the running window GREW from {remaining1:F0}s to {remaining2:F0}s on the second buy (mutation d: stacked/extended instead of deferred)");
+                if (slots2 != slots1)
+                    failures.Add(TempTag + $" SlotCount(Builder) moved {slots1}->{slots2} on the second buy; a deferred charge adds no crew yet");
+                if (woodDelta2 != 2 * expWood)
+                    failures.Add(TempTag + $" second buy basket: wood total +{woodDelta2}, expected +{2 * expWood} (the basket is granted every purchase; only the crew defers)");
+
+                // ---- (3) EXPIRE THE WINDOW, SWEEP: the deferred charge starts as a FRESH window ----
+                TimeSource.AddDevSkipMs((expectedSeconds + 1d) * 1000d);
+                bool activeAfterSkip = svc.IsTemporaryBuilderActive;
+                var sweepM = typeof(BuildTimerService).GetMethod("SweepAllChannels", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (sweepM == null)
+                {
+                    failures.Add(TempTag + " BuildTimerService.SweepAllChannels not reflectable - the deferred pickup is unprovable. FAIL, not a skip");
+                    return;
+                }
+                if (activeAfterSkip)
+                    failures.Add(TempTag + " the window still reads ACTIVE after the clock was pushed past its end - expiry is not wall-clock");
+                sweepM.Invoke(svc, null);
+                int deferred3 = ConvenienceRedeemer.DeferredTemporaryBuilderCount;
+                bool active3 = svc.IsTemporaryBuilderActive;
+                double remaining3 = svc.TemporaryBuilderSecondsRemaining();
+                int slots3 = svc.SlotCount(ChannelId.Builder);
+                log.AppendLine($"  (3) clock +{expectedSeconds + 1d:F0}s, sweep: activeBeforeSweep={activeAfterSkip} deferred={deferred3} tempActive={active3} remaining={remaining3:F0}s slots={slots3}");
+
+                if (deferred3 != 0)
+                    failures.Add(TempTag + $" deferred={deferred3} after the sweep past expiry - the queued charge did NOT start (mutation e: sweep redeem pass missing)");
+                if (!active3)
+                    failures.Add(TempTag + " no window running after the sweep - the deferred charge was LOST (the one thing this pack promises never happens)");
+                if (remaining3 < expectedSeconds - 5d || remaining3 > expectedSeconds + 0.5d)
+                    failures.Add(TempTag + $" the deferred window remaining {remaining3:F0}s is not a fresh ~{expectedSeconds:F0}s");
+                if (slots3 != slotsBefore + 1)
+                    failures.Add(TempTag + $" SlotCount(Builder)={slots3} after the deferred start; expected {slotsBefore + 1}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add(TempTag + $" oracle threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                TimeSource.ResetDevSkip();
+                if (svcGo != null) UnityEngine.Object.DestroyImmediate(svcGo);
+                if (econGo != null) UnityEngine.Object.DestroyImmediate(econGo);
+                if (gssGo != null) UnityEngine.Object.DestroyImmediate(gssGo);
+                if (throwaway != null) UnityEngine.Object.DestroyImmediate(throwaway);
+                SetInstance(typeof(EconomyService), priorEcon);
+                RestoreQueueInstance(priorQueue);
+                SetGssInstance(priorGss);
+                if (hadSave) PlayerPrefs.SetString(SaveKey, rawSave); else PlayerPrefs.DeleteKey(SaveKey);
+                if (hadDeferred) PlayerPrefs.SetString(ConvenienceRedeemer.PrefTemporaryBuilderDeferred, rawDeferred);
+                else PlayerPrefs.DeleteKey(ConvenienceRedeemer.PrefTemporaryBuilderDeferred);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>The Builder's Hour row as ADVERTISED in packs.json: basket lanes + temporary-builder charge count.</summary>
+        private static bool ReadTempPackExpected(out int wood, out int iron, out int stone, out int tokens, out string err)
+        {
+            wood = iron = stone = tokens = 0; err = null;
+            string json = DeNelle.Core.CanonicalJson.Read("Data/Canonical/packs.json");
+            if (string.IsNullOrEmpty(json)) { err = "packs.json not found/empty"; return false; }
+            JObject root;
+            try { root = JObject.Parse(json); } catch (Exception ex) { err = "parse error: " + ex.Message; return false; }
+            var packs = root["packs"] as JArray;
+            if (packs == null) { err = "no 'packs' array"; return false; }
+            foreach (var tok in packs)
+            {
+                if (!(tok is JObject o) || o["sku"]?.ToString() != TempPackSku) continue;
+                var econ = o["contents"]?["economy"] as JObject;
+                if (econ != null)
+                {
+                    wood = econ["wood"]?.Value<int>() ?? 0;
+                    iron = econ["iron"]?.Value<int>() ?? 0;
+                    stone = econ["stone"]?.Value<int>() ?? 0;
+                }
+                var conv = o["contents"]?["convenience"] as JArray;
+                if (conv != null)
+                    foreach (var c in conv)
+                    {
+                        if (!(c is JObject item)) continue;
+                        if (string.Equals(item["kind"]?.ToString(), TempKind, StringComparison.OrdinalIgnoreCase))
+                            tokens += item["count"]?.Value<int>() ?? 0;
+                    }
+                return true;
+            }
+            err = $"packs.json has no '{TempPackSku}' entry";
+            return false;
+        }
+
+        // ---- BuildTimerService.Instance install/restore (same shape as TrainingCostsTimeOnlyRegression) ----
+        private static bool InstallQueueInstance(BuildTimerService svc)
+        {
+            var t = typeof(BuildTimerService);
+            var prop = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            if (prop != null && prop.GetSetMethod(true) != null)
+            {
+                prop.GetSetMethod(true).Invoke(null, new object[] { svc });
+                return ReferenceEquals(BuildTimerService.Instance, svc);
+            }
+            var f = t.GetField("<Instance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?? t.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f == null) return false;
+            f.SetValue(null, svc);
+            return ReferenceEquals(BuildTimerService.Instance, svc);
+        }
+
+        private static void RestoreQueueInstance(BuildTimerService prior)
+        {
+            var t = typeof(BuildTimerService);
+            var prop = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            if (prop != null && prop.GetSetMethod(true) != null)
+            {
+                prop.GetSetMethod(true).Invoke(null, new object[] { prior });
+                return;
+            }
+            var f = t.GetField("<Instance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?? t.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f != null) f.SetValue(null, prior);
         }
 
         private static bool ReadExpected(out int glimmer, out int crystals, out int food, out int coins,
@@ -230,7 +518,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "PACK_GRANT_OK");
-                return "PACK GRANT OK -- founders-vow granted Glimmer + Crystals/Food/Coins by the advertised amounts and all cosmetic SKUs are owned";
+                return "PACK GRANT OK -- founders-vow granted Glimmer + Crystals/Food/Coins by the advertised amounts and all cosmetic SKUs are owned; " +
+                       "[temporary-builder-pack] builders-hour granted its basket + a 6 h Builder crew, a second buy inside the window deferred (not burned, not stacked) and started after expiry";
             }
             string reason = "pack-grant: " + string.Join("; ", failures);
             Debug.LogError(log.ToString() + "PACK_GRANT_FAIL: " + reason);

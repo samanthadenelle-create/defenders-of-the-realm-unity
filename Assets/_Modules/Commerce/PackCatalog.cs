@@ -576,6 +576,8 @@ namespace DeNelle.Wallet
             "storage_tier_jump", "offline_window_extension",
             // WO-1253: +1 concurrent Builder. Time-saving (crew at once), never combat power.
             "permanent_builder",
+            // WO-1388: the same +1 crew for a 6 h window (Builder's Hour). Time, never power.
+            "temporary_builder",
             // skr_staking.json convenienceAllowList (loyalty convenience bumps)
             "echo_storage_slot", "passive_accrual_hours",
         };
@@ -613,6 +615,9 @@ namespace DeNelle.Wallet
             "permanent_builder",
             // WO-1246 — ConvenienceRedeemer.cs (Village/Monetization).
             "instant_build", "instant_repair", "harvest_auto_collect", "xp_weekend",
+            // WO-1388 - ConvenienceRedeemer.TryRedeemTemporaryBuilder ->
+            // BuildTimerService.TryGrantTemporaryBuilder(seconds, reclaimAfterExpiry: true).
+            "temporary_builder",
         };
 
         /// <summary>

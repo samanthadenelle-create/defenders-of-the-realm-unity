@@ -978,16 +978,34 @@ namespace DeNelle.HUD.Kit
         //  owner is red/green colourblind (CLAUDE.md section 7):
         //    SIZE  - HudLayoutBands.NightMarketCardWidthPx/HeightPx grew to 320 x 156, the
         //            largest control in the column (gear 112 x 112, FLAG chip 120 x 84).
-        //    FRAME - a solid ElarionUi.Gold border NightMarketCardFramePx wide drawn OUTSIDE the
-        //            art (an inside border would be painted over by the opaque card surface).
+        //    FRAME - WO-1384b (owner 2026-09-04 23:59, after seeing build 355952: "instead of
+        //            just dropping a yellow box around the store ... can we round the edges and
+        //            have a chasing soft color changing vfx, subtle but inviting?"). The flat
+        //            rectangular gold AddImage frame is GONE. The card is now ROUNDED - the
+        //            button's own Image is the kit RoundedSprite at NightMarketCornerRadiusPx and
+        //            carries a Mask, so the opaque card art is clipped to the rounded shape (the
+        //            RoundIconMask precedent, ElarionUiKit.cs:3768) - and it wears a soft RING:
+        //            "NightMarketCardRing", the same RoundedSprite one radius step larger, pushed
+        //            NightMarketRingPx outside the card. The masked art covers the ring's middle,
+        //            so what remains visible is a true rounded band with rounded INNER and OUTER
+        //            corners - geometry a single hollow 9-slice cannot produce.
+        //    CHASE - "NightMarketCardComet0..2": three RadialGlowSprite blobs (head + two tail)
+        //            that ride the card's perimeter once every NightMarketGlowKnobs.LapSec, half
+        //            spilling past the edge and half hidden under the opaque art, so they read as
+        //            a rim light travelling round the card. The ring and the comets DRIFT through
+        //            the warm palette (gold -> amber -> rose -> gold) at NightMarketGlowKnobs.
+        //            AlphaPct. Driven from THIS class's existing Update via AnimateNightMarketGlow
+        //            (no second Update owner, no particle system on the HUD canvas); the first 60
+        //            frames are Stopwatch-sampled and reported ONCE as
+        //            "[Flow:Store] aurora cost <ms>ms/frame (sampled 60 frames)" - the perf pin.
         //    LIGHT - ElarionUiKit.RadialGlowSprite, the kit's one bloom primitive (the same aura
         //            StorePackCard mounts behind every pack, StorePackCard.cs:689), tinted gold
-        //            behind the frame. Its rim is alpha 0, so the overshoot past the band is a
-        //            transparent halo; the OPAQUE frame stays inside the band's neighbours.
+        //            behind the ring. Its rim is alpha 0, so the overshoot past the band is a
+        //            transparent halo; the OPAQUE card stays inside the band's neighbours.
         //    WORD  - "NIGHT MARKET" on ONE line, never truncated: the label plate widened to
         //            x 0.30..0.97 and the fit floor stays the kit's 20 px hard floor.
-        //  No pulse: the kit has no reusable pulse primitive (UiSpotlight's PulseRing is private
-        //  to the spotlight), and WO-1384 forbids authoring animation code for this.
+        //  Colourblind law (CLAUDE.md section 7): SIZE, ROUNDING and glow MOTION carry the
+        //  standout; the hue drift is decoration on top of them, never the only cue.
         //
         //  ⛔ ONE DESTINATION, TWO DOORWAYS (WO-1164). This opens PanelId.RealmStore - the SAME
         //  door RealmStoreVendor walks the player through and the same one PackStoreBootstrap
@@ -1007,11 +1025,70 @@ namespace DeNelle.HUD.Kit
         //  by the oracle, never eyeballed.
         // =====================================================================
 
-        /// <summary>WO-1384: the gold frame's thickness in reference units, drawn OUTSIDE the
-        /// card band. 4 units on every side; the band keeps a 9.7-unit gap to the Heart plate
-        /// above and a 10-unit gap to the gear below at 2670x1200, so the opaque frame never
-        /// enters a neighbour's band.</summary>
-        private const float NightMarketCardFramePx = 4f;
+        /// <summary>WO-1384b: the card's corner radius in reference units. The button Image is
+        /// the kit RoundedSprite at this radius and masks the art to it.</summary>
+        private const float NightMarketCornerRadiusPx = 18f;
+        /// <summary>WO-1384b: the soft ring's thickness in reference units, drawn OUTSIDE the
+        /// card band (translucent, so a neighbour band under its tail is not occluded). 6 units
+        /// on every side; the band keeps a 9.7-unit gap to the Heart plate above and a 10-unit
+        /// gap to the gear below at 2670x1200 (HudLayoutBands), so the ring never enters a
+        /// neighbour's band.</summary>
+        private const float NightMarketRingPx = 6f;
+        /// <summary>WO-1384b: comet head diameter, then the two tail blobs, reference units.</summary>
+        private static readonly float[] NightMarketCometSizePx = { 64f, 52f, 40f };
+        /// <summary>WO-1384b: each comet's alpha as a fraction of the knob alpha (head, tails).</summary>
+        private static readonly float[] NightMarketCometAlphaScale = { 1f, 0.6f, 0.35f };
+        /// <summary>WO-1384b: each comet's lag behind the head along the perimeter (lap fraction).</summary>
+        private static readonly float[] NightMarketCometLag = { 0f, 0.035f, 0.07f };
+        /// <summary>WO-1384b: the ring reads at this fraction of the knob alpha so the comets
+        /// stay the brighter, moving element.</summary>
+        private const float NightMarketRingAlphaScale = 0.8f;
+        /// <summary>WO-1384b: how many frames the cost sample covers before the ONE trace line.</summary>
+        private const int NightMarketGlowSampleFrames = 60;
+        /// <summary>WO-1384b: the warm palette's two non-kit tones. ElarionUi has Gold; amber and
+        /// rose are authored here, once, and only reachable through the palette mask.</summary>
+        private static readonly Color NightMarketAmber = new Color(0.95f, 0.55f, 0.18f, 1f);
+        private static readonly Color NightMarketRose  = new Color(0.86f, 0.42f, 0.50f, 1f);
+
+        /// <summary>
+        /// WO-1384b - THE THREE FEEL KNOBS, in ONE place. TUNABLE (WO-1384b): wire to the
+        /// RemoteTunables rail - `hud.nightMarketGlowLapSec` (default 5),
+        /// `hud.nightMarketGlowAlphaPct` (default 35), `hud.nightMarketGlowPaletteMask` (default
+        /// gold|amber|rose = 7). The rail lane overwrites these statics from its int table; the
+        /// animator reads them EVERY frame, so an overwrite lands live with no rebuild. Until
+        /// the rail is wired they hold the shipping defaults below.
+        /// </summary>
+        public static class NightMarketGlowKnobs
+        {
+            /// <summary>hud.nightMarketGlowLapSec shipping default.</summary>
+            public const float NightMarketGlowLapSecDefault = 5f;
+            /// <summary>hud.nightMarketGlowAlphaPct shipping default.</summary>
+            public const float NightMarketGlowAlphaPctDefault = 35f;
+            /// <summary>hud.nightMarketGlowPaletteMask shipping default: Gold|Amber|Rose.</summary>
+            public const int NightMarketGlowPaletteMaskDefault = PaletteGold | PaletteAmber | PaletteRose;
+
+            public const int PaletteGold  = 1;
+            public const int PaletteAmber = 2;
+            public const int PaletteRose  = 4;
+
+            /// <summary>Seconds for one lap of the perimeter. Clamped to 1..60 at read.</summary>
+            public static float LapSec = NightMarketGlowLapSecDefault;
+            /// <summary>Peak alpha of the ring/comets in percent. Clamped to 0..100 at read.</summary>
+            public static float AlphaPct = NightMarketGlowAlphaPctDefault;
+            /// <summary>Bit mask of palette stops (PaletteGold | PaletteAmber | PaletteRose).
+            /// An empty mask resolves to Gold alone (logged once), never to nothing.</summary>
+            public static int PaletteMask = NightMarketGlowPaletteMaskDefault;
+        }
+
+        // WO-1384b live pieces. Null when the card was not built (no obsidian button) or the
+        // kit sprites failed; AnimateNightMarketGlow early-outs on null.
+        private Image _nightMarketRing;
+        private Image[] _nightMarketComets;
+        private RectTransform[] _nightMarketCometRts;
+        private int _nightMarketGlowSampled;
+        private long _nightMarketGlowTicks;
+        private static readonly System.Diagnostics.Stopwatch s_nightMarketGlowWatch = new System.Diagnostics.Stopwatch();
+        private static readonly List<Color> s_nightMarketPalette = new List<Color>(3);
         /// <summary>WO-1384: the aura's reach past the card as a fraction of the card, per axis.
         /// The radial sprite is alpha 1 at centre and 0 at its rim, so only the transparent tail
         /// crosses the band edge.</summary>
@@ -1027,6 +1104,30 @@ namespace DeNelle.HUD.Kit
 
         private void BuildNightMarketCard(Transform pool)
         {
+            // WO-1384b TUNABLE: the three feel knobs come off the RemoteTunables rail HERE, the one
+            // place the card is built, before alpha0 below samples the holder. Int() never throws
+            // and answers the shipping default on every failure path (no row, offline, malformed),
+            // so an unreachable server lands exactly the constants NightMarketGlowKnobs already
+            // holds. The clamps are the ones AnimateNightMarketGlow applies (lap 1..60, alpha
+            // 0..100, mask 0..7), so a wild row becomes the nearest legal value, never a frozen
+            // or invisible ring; an empty mask is left to ResolveNightMarketPalette, which
+            // resolves it to Gold alone and logs once. Guarded: a throw here must never cost the
+            // store its HUD face. Traced ONCE per distinct triple (CLAUDE.md section 12).
+            Guard.Try("Store", "read the Night Market glow knobs from the RemoteTunables rail", () =>
+            {
+                int lap = Mathf.Clamp(DeNelle.Core.Ops.RemoteTunables.Int(
+                    DeNelle.Core.Ops.RemoteTunables.KeyHudNightMarketGlowLapSec), 1, 60);
+                int alphaPct = Mathf.Clamp(DeNelle.Core.Ops.RemoteTunables.Int(
+                    DeNelle.Core.Ops.RemoteTunables.KeyHudNightMarketGlowAlphaPct), 0, 100);
+                int mask = Mathf.Clamp(DeNelle.Core.Ops.RemoteTunables.Int(
+                    DeNelle.Core.Ops.RemoteTunables.KeyHudNightMarketGlowPaletteMask), 0, 7);
+                NightMarketGlowKnobs.LapSec = lap;
+                NightMarketGlowKnobs.AlphaPct = alphaPct;
+                NightMarketGlowKnobs.PaletteMask = mask;
+                FlowTrace.Once("Store", "nightmarket-glow-knobs:" + lap + ":" + alphaPct + ":" + mask,
+                    "Night Market glow knobs from rail: lap=" + lap + " alpha=" + alphaPct + " mask=" + mask);
+            });
+
             var root = new GameObject("NightMarketCard", typeof(RectTransform));
             root.transform.SetParent(pool, false);
             var rt = (RectTransform)root.transform;
@@ -1066,16 +1167,66 @@ namespace DeNelle.HUD.Kit
                                         "ships with its gold frame but no aura this session.");
             }
 
-            // WO-1384 FRAME: a solid gold border OUTSIDE the art. AddImage anchors it to the card
-            // and zeroes the offsets; the offsets are then pushed outward by the frame width so
-            // the border is visible around an opaque surface.
-            var frame = ElarionUiKit.AddImage(root.transform, "NightMarketCardFrame",
-                Vector2.zero, Vector2.one, ElarionUi.Gold, rounded: false);
-            var frameRt = (RectTransform)frame.transform;
-            frameRt.offsetMin = new Vector2(-NightMarketCardFramePx, -NightMarketCardFramePx);
-            frameRt.offsetMax = new Vector2(NightMarketCardFramePx, NightMarketCardFramePx);
-            var frameImage = frame.GetComponent<Image>();
-            frameImage.raycastTarget = false;
+            // WO-1384b RING: the kit's rounded 9-slice, one radius step larger than the card and
+            // pushed NightMarketRingPx outside it. The masked art drawn later covers its middle,
+            // so the visible remainder is a soft rounded band. Its colour drifts through the
+            // palette from AnimateNightMarketGlow. AddImage(rounded:true) already applied the
+            // sprite; ApplyRounded(img, radius) only moves the 9-slice scale.
+            float alpha0 = Mathf.Clamp(NightMarketGlowKnobs.AlphaPct, 0f, 100f) * 0.01f;
+            var ring = ElarionUiKit.AddImage(root.transform, "NightMarketCardRing",
+                Vector2.zero, Vector2.one,
+                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, alpha0 * NightMarketRingAlphaScale),
+                rounded: true);
+            var ringRt = (RectTransform)ring.transform;
+            ringRt.offsetMin = new Vector2(-NightMarketRingPx, -NightMarketRingPx);
+            ringRt.offsetMax = new Vector2(NightMarketRingPx, NightMarketRingPx);
+            _nightMarketRing = ring.GetComponent<Image>();
+            _nightMarketRing.raycastTarget = false;
+            if (_nightMarketRing.sprite != null)
+                ElarionUiKit.ApplyRounded(_nightMarketRing, NightMarketCornerRadiusPx + NightMarketRingPx);
+            else
+                FlowTrace.Warn("Store", "HUD Night Market card: RoundedSprite is null - the ring and the " +
+                                        "card corners are square this session (flat quads).");
+
+            // WO-1384b CHASE: three soft blobs (head + two tail) on the card's perimeter. Built
+            // BEFORE the button so the opaque art hides their inner half - a rim light, not a
+            // spotlight. Sized in reference units, anchored to the card's top-left like the card
+            // itself, positioned every frame by AnimateNightMarketGlow.
+            if (auraSprite != null)
+            {
+                _nightMarketComets = new Image[NightMarketCometSizePx.Length];
+                _nightMarketCometRts = new RectTransform[NightMarketCometSizePx.Length];
+                for (int i = 0; i < NightMarketCometSizePx.Length; i++)
+                {
+                    var comet = ElarionUiKit.AddImage(root.transform, "NightMarketCardComet" + i,
+                        new Vector2(0f, 1f), new Vector2(0f, 1f),
+                        new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
+                                  alpha0 * NightMarketCometAlphaScale[i]),
+                        rounded: false);
+                    var crt = (RectTransform)comet.transform;
+                    crt.pivot = new Vector2(0.5f, 0.5f);
+                    crt.sizeDelta = new Vector2(NightMarketCometSizePx[i], NightMarketCometSizePx[i]);
+                    crt.anchoredPosition = Vector2.zero;
+                    var cimg = comet.GetComponent<Image>();
+                    cimg.sprite = auraSprite;
+                    cimg.type = Image.Type.Simple;
+                    cimg.preserveAspect = false;
+                    cimg.raycastTarget = false;
+                    _nightMarketComets[i] = cimg;
+                    _nightMarketCometRts[i] = crt;
+                }
+            }
+            else
+            {
+                // The aura branch above already warned; the ring still carries the colour drift.
+                _nightMarketComets = null;
+                _nightMarketCometRts = null;
+            }
+            FlowTrace.Step("Store", "HUD Night Market card (WO-1384b): rounded r=" + NightMarketCornerRadiusPx +
+                                    "px, ring " + NightMarketRingPx + "px, comets=" +
+                                    (_nightMarketComets == null ? 0 : _nightMarketComets.Length) +
+                                    ", lap=" + NightMarketGlowKnobs.LapSec + "s alpha=" +
+                                    NightMarketGlowKnobs.AlphaPct + "% paletteMask=" + NightMarketGlowKnobs.PaletteMask);
 
             var button = ElarionUiKit.BuildObsidianButton(root.transform, "Night Market",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -1094,8 +1245,16 @@ namespace DeNelle.HUD.Kit
             var cardImage = button.GetComponent<Image>();
             if (art != null && cardImage != null)
             {
-                cardImage.sprite = null;
-                cardImage.color = Color.clear;
+                // WO-1384b ROUNDING: the button's own Image becomes the rounded stencil. The
+                // RoundIconMask precedent (ElarionUiKit.cs:3768): white, showMaskGraphic OFF, so
+                // it paints nothing itself and clips every child (art, label plate) to the
+                // rounded shape. raycastTarget stays TRUE - this Image is what catches the tap.
+                // A null RoundedSprite leaves a square stencil (the ring branch above warned).
+                cardImage.color = Color.white;
+                ElarionUiKit.ApplyRounded(cardImage, NightMarketCornerRadiusPx);
+                var mask = button.gameObject.GetComponent<Mask>();
+                if (mask == null) mask = button.gameObject.AddComponent<Mask>();
+                mask.showMaskGraphic = false;
                 var surface = ElarionUiKit.AddImage(button.transform, "NightMarketCardSurface",
                     Vector2.zero, Vector2.one, Color.white, false);
                 surface.transform.SetAsFirstSibling();
@@ -1152,6 +1311,112 @@ namespace DeNelle.HUD.Kit
             }
 
             Register("nightMarketCard", WrapAsWidget("nightMarketCard", root));
+        }
+
+        /// <summary>
+        /// WO-1384b: one frame of the Night Market card's rim light. Reads the three knobs every
+        /// call (so a tunables overwrite lands live), moves the three comets along the card's
+        /// perimeter and drifts the ring + comet colours through the palette. PURE PRESENTATION:
+        /// nothing here decides anything about the store. Unscaled time, like every other HUD
+        /// animation in this class (timeScale must never freeze or speed the HUD chrome).
+        /// Cost: 4 Image colour writes + 3 anchoredPosition writes per frame; the animator's own
+        /// CPU is Stopwatch-sampled over the first NightMarketGlowSampleFrames frames and traced
+        /// ONCE - the canvas rebuild those dirty graphics trigger is outside this sample and is
+        /// what the device screenrecord + Player.log frame time judge.
+        /// </summary>
+        private void AnimateNightMarketGlow()
+        {
+            if (_nightMarketRing == null) return;
+            if (!_nightMarketRing.gameObject.activeInHierarchy) return;   // occupancy hid the card
+
+            bool sampling = _nightMarketGlowSampled < NightMarketGlowSampleFrames;
+            if (sampling) s_nightMarketGlowWatch.Restart();
+
+            float lap = Mathf.Clamp(NightMarketGlowKnobs.LapSec, 1f, 60f);
+            float alpha = Mathf.Clamp(NightMarketGlowKnobs.AlphaPct, 0f, 100f) * 0.01f;
+            float t = Mathf.Repeat(Time.unscaledTime / lap, 1f);
+
+            // Ring: a slow drift, a third of a lap behind the comet head so the two never
+            // read as one flat tint.
+            var ringColor = NightMarketPaletteColor(t + 0.33f);
+            ringColor.a = alpha * NightMarketRingAlphaScale;
+            _nightMarketRing.color = ringColor;
+
+            if (_nightMarketComets != null)
+            {
+                float w = HudLayoutBands.NightMarketCardWidthPx;
+                float h = HudLayoutBands.NightMarketCardHeightPx;
+                for (int i = 0; i < _nightMarketComets.Length; i++)
+                {
+                    var img = _nightMarketComets[i];
+                    var crt = _nightMarketCometRts[i];
+                    if (img == null || crt == null) continue;
+                    float ti = Mathf.Repeat(t - NightMarketCometLag[i], 1f);
+                    crt.anchoredPosition = NightMarketPerimeterPoint(ti, w, h);
+                    var c = NightMarketPaletteColor(ti);
+                    c.a = alpha * NightMarketCometAlphaScale[i];
+                    img.color = c;
+                }
+            }
+
+            if (sampling)
+            {
+                s_nightMarketGlowWatch.Stop();
+                _nightMarketGlowTicks += s_nightMarketGlowWatch.ElapsedTicks;
+                _nightMarketGlowSampled++;
+                if (_nightMarketGlowSampled == NightMarketGlowSampleFrames)
+                {
+                    double msPerFrame = _nightMarketGlowTicks * 1000.0 /
+                                        System.Diagnostics.Stopwatch.Frequency / NightMarketGlowSampleFrames;
+                    string line = "aurora cost " + msPerFrame.ToString("F3", CultureInfo.InvariantCulture) +
+                                  "ms/frame (sampled " + NightMarketGlowSampleFrames + " frames)";
+                    FlowTrace.Once("Store", "aurora-cost", line);
+                    if (msPerFrame > 1.0)
+                        FlowTrace.Warn("Store", line + " - OVER the 1 ms/frame budget (WO-1384b)");
+                }
+            }
+        }
+
+        /// <summary>
+        /// WO-1384b: a point on the card's perimeter, clockwise from the top-left, in the card
+        /// root's local space (pivot top-left: x 0..w, y 0..-h). Corner rounding is ignored on
+        /// purpose - an 18-unit radius under a 64-unit soft blob is invisible, and the straight
+        /// path is four branches with no trig.
+        /// </summary>
+        private static Vector2 NightMarketPerimeterPoint(float t, float w, float h)
+        {
+            float p = 2f * (w + h);
+            float s = Mathf.Repeat(t, 1f) * p;
+            if (s < w)         return new Vector2(s, 0f);
+            if (s < w + h)     return new Vector2(w, -(s - w));
+            if (s < 2f * w + h) return new Vector2(w - (s - w - h), -h);
+            return new Vector2(0f, -(p - s));
+        }
+
+        /// <summary>
+        /// WO-1384b: the palette colour at lap fraction <paramref name="u"/>: the active stops
+        /// (from NightMarketGlowKnobs.PaletteMask, in gold -> amber -> rose order) blended
+        /// smoothly in a loop. An empty mask resolves to Gold, once-logged, never to nothing.
+        /// </summary>
+        private static Color NightMarketPaletteColor(float u)
+        {
+            var stops = s_nightMarketPalette;
+            stops.Clear();
+            int mask = NightMarketGlowKnobs.PaletteMask;
+            if ((mask & NightMarketGlowKnobs.PaletteGold) != 0)  stops.Add(ElarionUi.Gold);
+            if ((mask & NightMarketGlowKnobs.PaletteAmber) != 0) stops.Add(NightMarketAmber);
+            if ((mask & NightMarketGlowKnobs.PaletteRose) != 0)  stops.Add(NightMarketRose);
+            if (stops.Count == 0)
+            {
+                FlowTrace.Once("Store", "aurora-palette-empty",
+                    "hud.nightMarketGlowPaletteMask=" + mask + " selects no palette stop - falling back to Gold");
+                stops.Add(ElarionUi.Gold);
+            }
+            if (stops.Count == 1) return stops[0];
+            float seg = Mathf.Repeat(u, 1f) * stops.Count;
+            int i = Mathf.Min((int)seg, stops.Count - 1);
+            float f = Mathf.SmoothStep(0f, 1f, seg - i);
+            return Color.Lerp(stops[i], stops[(i + 1) % stops.Count], f);
         }
 
         /// <summary>
@@ -4130,6 +4395,10 @@ namespace DeNelle.HUD.Kit
 
             // WO-1104: run the XP strip flash + the "+N XP" readout hold/fade.
             AnimateXpGain();
+
+            // WO-1384b: the Night Market card's chasing rim light + palette drift. Early-outs
+            // when the card is not built or hidden; the first 60 frames are cost-sampled once.
+            AnimateNightMarketGlow();
 
             // WO-1225: time out an armed reward acknowledgement whose wallet push never came.
             TickGoldCelebration();

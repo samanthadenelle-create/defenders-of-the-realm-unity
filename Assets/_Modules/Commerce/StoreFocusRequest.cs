@@ -62,5 +62,30 @@ namespace DeNelle.Commerce
 
         /// <summary>True when a focus request is waiting. Does NOT consume it.</summary>
         public static bool HasPending => !string.IsNullOrEmpty(_pendingSku);
+
+        // ---------------------------------------------------------------------
+        //  WO-1388 - THE DOOR. Which entry point opened the store, for the funnel's
+        //  store_opened {door}. Same latch shape as the SKU above, for the same reason:
+        //  the host may not exist when the door is walked through, and the read happens
+        //  on the next OnEnable. Written by PackStoreBootstrap from the PanelRouter
+        //  context string; callers that open with no context leave it unset and the
+        //  store infers (shortfall / manage / hud-card) from the other latches.
+        // ---------------------------------------------------------------------
+        private static string _pendingDoor;
+
+        /// <summary>Latch the door name (hud-card | shortfall | settings | vendor ...) for the next open.</summary>
+        public static void RequestDoor(string door)
+        {
+            _pendingDoor = string.IsNullOrWhiteSpace(door) ? null : door.Trim();
+            FlowTrace.Step(TraceSystem, "RequestDoor '" + (_pendingDoor ?? "<null>") + "' latched.");
+        }
+
+        /// <summary>Takes the pending door and CLEARS it. Null when no caller named one.</summary>
+        public static string ConsumeDoor()
+        {
+            var door = _pendingDoor;
+            _pendingDoor = null;
+            return door;
+        }
     }
 }
