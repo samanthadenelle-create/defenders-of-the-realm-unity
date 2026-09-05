@@ -180,7 +180,19 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, sixty-eighth pass): main line next free = **1394**.
+> ## RECONCILED 2026-09-05 (CLI docs lane, sixty-ninth pass): main line next free = **1401**.
+> *(CLI docs lane minted **1394 through 1400** from the UI screen graph's dead ends
+> (docs/qa/UI_SCREEN_GRAPH_2026-09-04.md section c; OVERNIGHT_ORDERS_2026-09-05 STRETCH): **1394** the
+> Season Track is registered and never opened (ruled Journey card, re-point PublicNavigationRetirementRegression);
+> **1395** PanelId.RealmStore registered twice under GOOGLE_PLAY, plus a call-shape split (context opens always
+> land in PackStore, plain opens in whichever registrar ran last); **1396** the Realm Map has no release door
+> (MapTab default OFF, DevPanel compiled out); **1397** the Cosmetic Shop is unreachable (verb absent from both
+> dialogues.json, no Marketplace BuildingType); **1398** two "Night Market" rows open two screens - one string
+> source, storeWordmark; **1399** dock "Settings" opens HelpMenu (SettingsGate, Help as a Settings row - the dock
+> grid is 2x3, no 7th cell); **1400** deck cards have no back-to-deck (arbiter return door).
+> Bumped 1394 -> 1401 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-eighth pass): main line next free = **1394**.
 > *(CLI minted from the headed walk on build 355952, 23:40-23:52: **1391** the building upgrade page - noise
 > texture in the 3D preview (RenderTexture never rendered), 'Missing resources' with 4000 wood on the strip vs
 > 1280 cost, UPGRAD... truncated, empty-box glyph, off-kit styling; **1392** the harvest result modal reports

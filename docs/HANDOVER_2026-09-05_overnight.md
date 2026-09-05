@@ -24,6 +24,21 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 00:29 | 1391 layout fixed (bonus zone budgeted from the post-scale body; pills+tabs moved into the Close band): **`REGISTERED_SECONDARY_CAPTURE_OK 33/33 touch=clean`** | `Builds/ui-capture-secondary.log` 00:29:26; PNG regenerated |
 | 00:31 | committed the gated set by explicit path | `da90ddc0f` |
 
+| 00:33 | board: 1383/1384/1385/1386/1387/1390 -> FIXED (all in 65d5a7eae = build 355952); 1369/1371 wording; `BOARD_CHECK_OK` Fixed 32 / Ready 21 | `45ae654da` |
+| ~00:45 | **API session limit hit** (HTTP 429, "resets 3:30am") - both lanes (1389, 1388) died mid-edit. Their partial diffs saved: `git stash@{0}` + `scratchpad/lanes-1388-1389-partial.patch` (1859 lines). Tree returned to HEAD. | stash list |
+| 04:48 | resumed. `REGRESSION_OK 378/378` on HEAD 45ae654da (the tree the APK is built from) | `Builds/regression.log` mtime 04:51:07 |
+| 04:52 | `overnight-apk-build.ps1 -Tester` started (background). Lanes 1389 + 1388 relaunched in plain worktrees `D:\eoa-lane-1389` / `D:\eoa-lane-1388` (branches `lane/wo-1389`, `lane/wo-1388`) so nothing touches the build tree; the Agent tool's own worktree isolation was refused (a `D:/EoA` vs `D:/eoa` path-case redirect - `git worktree list` shows the repo as `D:/EoA`). | `Builds/overnight-apk-status.txt` |
+
+| 04:59 | **APK 2026.09.05.356272 built from 45ae654da** (version read off `Builds/apk-build.log`): `SCHEMA_PARITY_OK` 04:51:47 -> `APK_OK` 04:58:38 (461 MB) -> `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271` 04:59:04 -> `APK_DONE` | `Builds/overnight-apk-status.txt`; `Builds/Android/DefendersOfTheRealm.apk` |
+| 05:00 | **install BLOCKED: the Seeker is gone from USB.** Windows PnP: Seeker `LastRemovalDate 2026-09-05 04:47:32` (arrival was 09-04 22:21). My first command after the limit reset was the regression at 04:48:01 - nothing I ran touched USB before the removal. adb kill/start-server: no devices. Cable/phone event; cannot be fixed from here. | `Get-PnpDeviceProperty ... DEVPKEY_Device_LastRemovalDate`; `install-apk-to-seeker.ps1`: "No Android device in 'device' state" |
+| 05:02 | armed `scratchpad/wait-device-then-install.ps1` (polls adb every 30 s for 5 h; on sight runs the SANCTIONED install script once). Log: `Builds/wait-device-install.log`. **If the phone is back on USB in the morning and this log shows INSTALL_DONE, the build on the device is 45ae654da's.** Otherwise plug it in and run `.\install-apk-to-seeker.ps1 -Build:$false -Install:$true`. | that log |
+
+| 05:07 | WO-1388 lane finished in its worktree (21 files, +932/-16); diff applied into `D:\eoa` by explicit path; `cmp` packs.json twins IDENTICAL; `builders-hour` present. Pack name / basket / badge copy still the owner's call. | `scratchpad/lane-1388.patch` |
+| 05:10 | WO-1384b lane finished (HudKitController rounded Mask + `NightMarketCardRing` + 3 comets from the ONE `Update()`; HudLabelFitRegression Case 12 `[night-market-aurora]`); rail-wiring lane dispatched for its 3 knobs (36-38) | agent report |
+| 05:12 | `COMPILE_GATE_OK` on 1388 + 1384b | `Builds/compile-gate.log` 05:12:07 |
+| 05:13 | `UI_CAPTURE_OK` (91 canvases) but `UI_GEOMETRY_FAIL x9` / `UI_TOUCH_FAIL x9` - ALL on `HeroSkillTree` QuickSwapRail ObsBtn_1..3 over text, at all three resolutions. **Pre-existing, not tonight's:** `HeroSkillTreePanelMvvm.cs` last commit 3b3f28354 (09-03 14:46), untouched by any lane. Ticket to mint in the morning pile. | `Builds/ui-capture.log` `[UICap-GEO]` lines |
+| 05:14 | `ADAPTIVE_HUD_CAPTURE_OK 9/9`; trace `[Flow:Store] HUD Night Market card (WO-1384b): rounded r=18px, ring 6px, comets=3, lap=5s alpha=35% paletteMask=7`. PNG shows the rounded ring + a comet, full "NIGHT MARKET" label. Motion + the `aurora cost` line need the device. | `Builds/ui-capture/AdaptiveHudPeaceful_2670x1200.png` |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
