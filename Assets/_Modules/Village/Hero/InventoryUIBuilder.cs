@@ -655,16 +655,10 @@ namespace DeNelle.Village
         // The seating editor keeps its ONE sanctioned entry point, AdminOverlay. Do not re-add
         // a per-screen launcher.
 
-        // The "Map" section (WO-911): open the Realm Map parchment overworld. Routes through
-        // PanelRouter so the inventory needs NO reference to RealmMapPanel. Reached only when
-        // FeatureFlags.MapTab is ON — the dormant entry never calls this.
-        private void OpenRealmMap()
-        {
-            if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.RealmMap))
-                return;
-            Close();
-            FlowTrace.Warn("UI", "Map section: PanelId.RealmMap has no registered opener — nothing to open.");
-        }
+        // RETIRED 2026-09-05 (WO-1396): the Bag's "Map" section door (OpenRealmMap, gated on the
+        // deleted MapTab feature flag) is GONE. The Realm Map has exactly ONE public door - the
+        // Journey deck's Realm Map card (PlayerDeckWorkspace). The RailMap pseudo-section keeps
+        // its authored locked sentence (KeyEmptyMapLocked) and never routes.
 
         // The "Skills" section: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
         // Routes through PanelRouter so the inventory needs NO reference to the Talents panel type.

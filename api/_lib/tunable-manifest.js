@@ -508,6 +508,52 @@ const PRESENTATION = {
               'value above 7 is clamped back to 7.',
     },
 
+    // ---- WO-1366: the Arena wager. Four price knobs. Filed under Misc for the
+    // same reason as the glow knobs: the four areas are pinned by the test.
+    'arena.wagerTier1': {
+        area: 'misc',
+        label: 'Arena: Crystals staked against the first opponent',
+        what: 'How many Crystals a player puts down to fight the Ironhold Marauders, the ' +
+              'easiest Arena opponent. The game ships at 50. Lose and the stake is gone; ' +
+              'win and the purse below pays out.',
+        min: 1,
+        max: 100000,
+        risk: 'Crystals are bought with real money, so this is a price. Raising it makes ' +
+              'the first fight a real bet; lowering it makes the Arena a free spin. It ' +
+              'cannot go to 0 - the game clamps it to at least 1.',
+    },
+    'arena.wagerTier2': {
+        area: 'misc',
+        label: 'Arena: Crystals staked against the second opponent',
+        what: 'The stake to fight the Grimwatch Reavers, the middle Arena opponent. The ' +
+              'game ships at 100.',
+        min: 1,
+        max: 100000,
+        risk: 'The gap between this and the first tier is what decides whether the next ' +
+              'fight feels like a step up or a wall. Keep it above tier 1.',
+    },
+    'arena.wagerTier3': {
+        area: 'misc',
+        label: 'Arena: Crystals staked against the third opponent',
+        what: 'The stake to fight the Blackbanner Host, the hardest Arena opponent. The ' +
+              'game ships at 200.',
+        min: 1,
+        max: 100000,
+        risk: 'This is the one stake a player probably had to buy Crystals to afford. ' +
+              'Raising it is asking for a bigger purchase; keep it above tier 2.',
+    },
+    'arena.winPursePct': {
+        area: 'misc',
+        label: 'Arena: what a win pays, as a percent of the stake',
+        what: 'How much a winner gets back, measured against what they staked. The game ' +
+              'ships at 200 - the stake back plus the same again. 100 hands back only the ' +
+              'stake, so a win pays nothing. 300 pays the stake plus twice over.',
+        min: 100,
+        max: 1000,
+        risk: 'Below 100 a win would lose money, so the game refuses it. Well above 200 the ' +
+              'Arena starts printing Crystals, which undercuts the store.',
+    },
+
     // ---- the PROD-022 loading knobs. Not balance. They live under Misc because
     // they are numbers that ship, and the owner asked for "almost anything (misc)",
     // but every one of them says out loud that it is a bug-hunting lever.

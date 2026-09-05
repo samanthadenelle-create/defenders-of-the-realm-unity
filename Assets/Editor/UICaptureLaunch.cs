@@ -6593,13 +6593,16 @@ namespace DeNelle.Editor
             count += CaptureReflectedSecondary("DefenseReport", "DeNelle.Village.UI.DefenseReportPanel", "Open");
             count += CaptureReflectedSecondary("GameGuide", "DeNelle.Village.GameGuidePanel", "Open");
             count += CaptureReflectedSecondary("MonthlyLedger", "DeNelle.Wallet.MonthlyLedgerPanel", "OnEnable", null, true);
+            // WO-1394: the Season Track gets its first capture the day it gets its first door (the
+            // Journey deck's Season card). Same host-free OnEnable recipe as its ledger sibling.
+            count += CaptureReflectedSecondary("SeasonTrack", "DeNelle.Wallet.SeasonTrackPanel", "OnEnable", null, true);
 
             ReportFidelity();
             ReportGeometry();
             ReportTouchOracle();
-            const int expected = 33;
+            const int expected = 36;
             if (count == expected && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
-                Debug.Log("REGISTERED_SECONDARY_CAPTURE_OK 33/33 frames; routes=11; touch=clean");
+                Debug.Log("REGISTERED_SECONDARY_CAPTURE_OK 36/36 frames; routes=12; touch=clean");
             else
                 Debug.LogError("REGISTERED_SECONDARY_CAPTURE_FAIL frames=" + count + "/" + expected +
                     " fidelity=" + _fidelityDegraded + " geometry=" + _geoFailures.Count +
@@ -6752,10 +6755,22 @@ namespace DeNelle.Editor
                 PanelId.RumorBoard, PanelId.RealmMap, PanelId.BattlePass, PanelId.RealmStore,
                 PanelId.DefenseReport, PanelId.MonthlyLedger, PanelId.GameGuide
             };
+            // WO-1376: the Journey deck's Dungeons card is Available only while the fail-closed
+            // status rail says at least one gated portal is open. Edit mode has no cache and no
+            // network, so without a fixture the card captures LOCKED every time and the capture
+            // could never show the open face. The fixture below is the shape /api/dungeon-status
+            // served on 2026-09-05 (5 open / 1 sealed) applied under its own provenance label, and
+            // it is CLEARED in finally so no other capture inherits an open table.
+            const string dungeonFixture =
+                "{\"version\":1,\"dungeons\":{" +
+                "\"dg_starter_loop\":{\"status\":\"open\"},\"dg_sunken_vault\":{\"status\":\"open\"}," +
+                "\"dg_bonecrypt\":{\"status\":\"open\"},\"dg_ember_deep\":{\"status\":\"open\"}," +
+                "\"dg_folks_granary\":{\"status\":\"open\"},\"dg_healers_cottage\":{\"status\":\"sealed\"}}}";
             try
             {
                 PanelManager.CloseAll();
                 foreach (var id in fixtureDoors) PanelRouter.Register(id, captureDoor);
+                DeNelle.Core.World.DungeonStatusCatalog.ApplyPayload(dungeonFixture, "capture-fixture");
                 Type type = ResolveType("DeNelle.HUD.PlayerDeckWorkspace");
                 if (type == null)
                 {
@@ -6786,6 +6801,7 @@ namespace DeNelle.Editor
                 if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
                 if (host != null) UnityEngine.Object.DestroyImmediate(host);
                 foreach (var id in fixtureDoors) PanelRouter.Unregister(id, captureDoor);
+                DeNelle.Core.World.DungeonStatusCatalog.Clear();
                 PanelManager.CloseAll();
             }
         }

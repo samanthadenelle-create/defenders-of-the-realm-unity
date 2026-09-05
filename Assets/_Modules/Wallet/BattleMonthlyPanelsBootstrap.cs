@@ -105,6 +105,18 @@ namespace DeNelle.Wallet
         {
             using var _ = FlowTrace.Enter("BattlePass", "BattleMonthlyPanelsBootstrap.OpenSeasonTrack");
 
+            // WO-1394: the door trace. The Journey deck's Season card is the ONLY public caller of
+            // PanelId.BattlePass, so this line is the proof a player reached the track - and the
+            // tier it reads is the number the screen shows, so device logcat and the screen can be
+            // compared after one raid. Guarded: the tier read touches PlayerPrefs.
+            int tier = -1, tiers = 0;
+            Guard.Try("BattlePass", "read season tier for the door trace", () =>
+            {
+                tier = BattlePassService.HighestTierReached;
+                tiers = BattlePassService.TierCount;
+            });
+            FlowTrace.Step("BattlePass", "Season Track opened from Journey deck tier=" + tier + "/" + tiers);
+
             var panel = UnityEngine.Object.FindAnyObjectByType<SeasonTrackPanel>(FindObjectsInactive.Include);
             if (panel == null)
             {

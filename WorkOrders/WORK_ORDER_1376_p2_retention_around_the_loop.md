@@ -1,6 +1,6 @@
 # WORK ORDER 1376 - P2: build retention around the loop
 
-**Status:** READY TO IMPLEMENT — ⛔ **sequenced AFTER WO-1375**
+**Status:** IN PROGRESS 2026-09-05 07:50 - the NAVIGATION slice landed + gated (COMPILE_GATE_OK, REGRESSION_OK 383/383, UI_CAPTURE_OK: Journey deck = five cards - Quests, Raids, Dungeons, Realm Map, Season - at 114 ref px on the derived-row grid); the dungeon-status gate is PROVEN OPEN (`/api/dungeon-status` HTTP 200, 5 open / 1 sealed, dispatcher pass 07:20). Still open in this WO: the weekly ladder, dungeon rewards, and troops-in-wave-defence (owner: "Not P0" - split into its own WO on her word). Was: READY TO IMPLEMENT - sequenced AFTER WO-1375 (now FIXED).
 **Silo / Lane:** Retention / Journey navigation + weekly ladder + dungeons + troop defence
 **Type:** NEW BEHAVIOUR on existing systems, owner-ruled
 **Minted:** 2026-09-04 (CLI)

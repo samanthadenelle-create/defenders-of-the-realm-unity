@@ -100,6 +100,22 @@ namespace DeNelle.Core.UI
         /// A face that opens the store says exactly what the store's own title says.</summary>
         public const string KeyStoreWordmark = "storeWordmark";
 
+        // -- The Journey deck's three new cards (WO-1376 / WO-1394 / WO-1396, 2026-09-05) --
+        // The purpose lines are the WO-1378 canon record (creative canon section 8.4: five
+        // FANTASIES, not five mechanics). Quests and Raids keep their live subtitles; these three
+        // are the first readers of their rows.
+
+        /// <summary>Journey deck, Dungeons card purpose line.</summary>
+        public const string KeyJourneyDungeons = "journeyCardDungeonsSubtitle";
+        /// <summary>Journey deck, Realm Map card purpose line.</summary>
+        public const string KeyJourneyRealmMap = "journeyCardRealmMapSubtitle";
+        /// <summary>Journey deck, Season card purpose line.</summary>
+        public const string KeyJourneySeason = "journeyCardSeasonSubtitle";
+        /// <summary>The Dungeons card's locked reason - the WO-1114 ruled WORLD copy for a sealed
+        /// door ("The way is barred."), the same row DungeonSealedDoorPanel falls back to. A closed
+        /// dungeon reads as world, never as build status (CLAUDE.md section 7).</summary>
+        public const string KeyDungeonSealedHeadline = "dungeonSealedHeadline";
+
         /// <summary>Every key this class names, so an oracle can prove each one resolves
         /// AND measure each one against the box it renders in.</summary>
         public static readonly string[] AllKeys =
@@ -108,6 +124,8 @@ namespace DeNelle.Core.UI
             KeyCollectorsNearlyLine, KeyCollectorsWaitingLine,
             KeyManageIdleAll, KeyManageIdleSome,
             KeyStoreWordmark,
+            KeyJourneyDungeons, KeyJourneyRealmMap, KeyJourneySeason,
+            KeyDungeonSealedHeadline,
         };
 
         /// <summary>

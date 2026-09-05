@@ -403,5 +403,9 @@
   "journeyCardRaidsSubtitle": "March beyond the Heart. Reclaim what was lost.",
   "journeyCardDungeonsSubtitle": "Descend into forgotten places. Return with what survived.",
   "journeyCardRealmMapSubtitle": "Explore the lands beyond the Heart's light.",
-  "journeyCardSeasonSubtitle": "Face the challenge shaping the Realm now."
+  "journeyCardSeasonSubtitle": "Face the challenge shaping the Realm now.",
+
+  "_realmMapTravelStubNote": "WO-1396 (2026-09-05). The Realm Map opens READ-ONLY from the Journey deck while travel is the WO-827 stub. The detail pane CTA slot carries these WORDS instead of a greyed button that never enables. realmMapClearRewardLine {0} = the region clear reward read off realm-map.json clearReward (a tunable, never typed). ASCII only; RealmMapRegression [travel-stub] pins both rows in both copies.",
+  "realmMapTravelStub": "Travel opens with the realm roads.",
+  "realmMapClearRewardLine": "Clearing this land pays {0}."
 }

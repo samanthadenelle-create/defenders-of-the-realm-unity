@@ -78,7 +78,9 @@ namespace DeNelle.Village
         private const int RailPotions  = 5;
         /// <summary>Rail — the talent tree. A PSEUDO-section: it routes out via PanelRouter.</summary>
         private const int RailSkills   = 6;
-        /// <summary>Rail — realm travel. DORMANT behind FeatureFlags.MapTab (WO-827 stub).</summary>
+        /// <summary>Rail - realm travel. DORMANT and never built as an entry; it does NOT route
+        /// (the flag-gated Bag door was deleted 2026-09-05, WO-1396 - the Realm Map's one door is the
+        /// Journey deck card). Kept so the pseudo-section's authored locked sentence still resolves.</summary>
         private const int RailMap      = 7;
 
         /// <summary>The selected rail entry. Weapons is the landing section, as before.</summary>
@@ -380,7 +382,8 @@ namespace DeNelle.Village
         // ── RAIL SELECTION (WO-1133 D2) ──────────────────────────────────────
         // Content sections route to the VM (it owns Slots + selection); the two pseudo-sections
         // route OUT through PanelRouter exactly as the old pseudo-tabs did. The dormant Map
-        // entry selects to its authored locked sentence and does NOT route — the flag stays off.
+        // entry selects to its authored locked sentence and NEVER routes: its flag-gated door
+        // was deleted (WO-1396) - the Realm Map is opened from the Journey deck only.
         private void SelectRail(int railIndex)
         {
             FlowTrace.Step("Inventory", "Rail select index=" + railIndex + " (was " + _railIndex + ")");
@@ -388,7 +391,6 @@ namespace DeNelle.Village
             if (railIndex == RailSkills) { OpenSkillTree(); return; }
             if (railIndex == RailMap)
             {
-                if (DeNelle.Core.FeatureFlags.MapTab) { OpenRealmMap(); return; }
                 _railIndex = RailMap;
                 Render();
                 return;

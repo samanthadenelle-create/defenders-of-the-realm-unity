@@ -120,10 +120,10 @@ namespace DeNelle.Editor.Regression
         /// WO-1374 raid-reward knobs (two bases + the five-rung performance ladder), and the
         /// WO-1374 free-starter-squad size, the two WO-1379 Heartfire pacing knobs, and the
         /// WO-1388 Builder's Hour crew duration, and the three WO-1384b Night Market glow
-        /// feel knobs.
+        /// feel knobs, and the four WO-1366 Arena wager price knobs.
         /// Pinned as a literal, not as Registry.Length - an oracle that measures the thing
         /// against itself certifies nothing.</summary>
-        private const int ExpectedKnobCount = 38;
+        private const int ExpectedKnobCount = 42;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -239,6 +239,15 @@ namespace DeNelle.Editor.Regression
             new KeyValuePair<string, int>("hud.nightMarketGlowLapSec", 5),
             new KeyValuePair<string, int>("hud.nightMarketGlowAlphaPct", 35),
             new KeyValuePair<string, int>("hud.nightMarketGlowPaletteMask", 7),
+            // WO-1366 - THE ARENA WAGER. Four PRICE knobs: Crystals staked per opponent tier
+            // (50 / 100 / 200) and the win purse as a percent of the stake (200 = 2x). Exactly
+            // what ArenaCatalog.cs hardcoded, deliberately not re-picked. ArenaWagerTunables is
+            // the consumer (clamped 1..100000 / 100..1000 there; it answers these same defaults
+            // itself while a key has no spec, so the rail's unregistered 0 can never zero a wager).
+            new KeyValuePair<string, int>("arena.wagerTier1", 50),
+            new KeyValuePair<string, int>("arena.wagerTier2", 100),
+            new KeyValuePair<string, int>("arena.wagerTier3", 200),
+            new KeyValuePair<string, int>("arena.winPursePct", 200),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
@@ -343,7 +352,8 @@ namespace DeNelle.Editor.Regression
                          "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps + the four " +
                          "WO-1343 night-store aura knobs + the seven WO-1374 raid-reward knobs + the " +
                          "WO-1374 starter-squad size + the two WO-1379 Heartfire knobs + the WO-1388 " +
-                         "Builder's Hour crew duration + the three WO-1384b Night Market glow knobs) resolve to " +
+                         "Builder's Hour crew duration + the three WO-1384b Night Market glow knobs + the " +
+                         "four WO-1366 Arena wager price knobs) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +

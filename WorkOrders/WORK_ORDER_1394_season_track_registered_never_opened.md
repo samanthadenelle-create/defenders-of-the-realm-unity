@@ -1,6 +1,6 @@
 # WO-1394: the Season Track (PanelId.BattlePass) is registered and nothing opens it - give it its ruled Journey door
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the UI screen graph (overnight STRETCH). Sequenced WITH WO-1376 (P2 "Season Pass navigation"): this is that line's concrete door slice, and it may not land before WO-1375's raid-XP feed is proven (a track that never moves is a second dead end).
+**Status:** IN PROGRESS 2026-09-05 07:50 - landed + gated (Journey-deck "Season" card -> PanelId.BattlePass; PublicNavigationRetirementRegression re-pointed and stricter; trace `Season Track opened from Journey deck tier=T/30`). The first-ever capture of the Season Track screen reds the geometry oracle (its CloseButton sits over the header texts) - a follow-up lane is fixing the panel header before the build. Owner question: purpose copy uses the existing canon row "Face the challenge shaping the Realm now." (the WO proposed "Raid to climb this month's track") - one word picks. Minted 2026-09-05 from the UI screen graph (overnight STRETCH).. Sequenced WITH WO-1376 (P2 "Season Pass navigation"): this is that line's concrete door slice, and it may not land before WO-1375's raid-XP feed is proven (a track that never moves is a second dead end).
 
 ## Evidence
 - Graph: `docs/qa/UI_SCREEN_GRAPH_2026-09-04.md:211` (node row: "NONE - no PanelRouter.Open(PanelId.BattlePass) in Assets/_Modules") and `:243` (dead end 1); capture gap `:274`.

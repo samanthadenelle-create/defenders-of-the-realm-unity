@@ -191,6 +191,26 @@
             "key": "hud.nightMarketGlowPaletteMask",
             "kind": "int",
             "default": 7
+        },
+        {
+            "key": "arena.wagerTier1",
+            "kind": "int",
+            "default": 50
+        },
+        {
+            "key": "arena.wagerTier2",
+            "kind": "int",
+            "default": 100
+        },
+        {
+            "key": "arena.wagerTier3",
+            "kind": "int",
+            "default": 200
+        },
+        {
+            "key": "arena.winPursePct",
+            "kind": "int",
+            "default": 200
         }
     ]
 }

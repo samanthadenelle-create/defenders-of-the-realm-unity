@@ -333,6 +333,73 @@ namespace DeNelle.Editor
                 log.AppendLine("pin board: per-source replace idempotent, sources additive, fog fail-closed");
             }
 
+            // -- (h) WO-1396: THE TRAVEL STUB IS A CANON-STRINGS WORD, NOT A DISABLED BUTTON --
+            // The map now has a public door (the Journey deck card) and ships READ-ONLY: travel is
+            // the WO-827 stub. Before this pin the CTA slot drew a Gray obsidian button with
+            // interactable = TravelEnabled (always false) and face.color = ElarionUi.Disabled - a
+            // control that never enables, i.e. a door to a no-op. The pin asserts the slot's
+            // stub path reads its words from canon-strings (RealmMapPanel.TravelStubKey /
+            // ClearRewardKey resolve in BOTH canonical copies, non-empty, ASCII) and that the
+            // greyed-button shape is gone from the source. RED-FIRST on the pre-WO-1396 tree: no
+            // TravelStubKey, no canon rows, and the Disabled-face line present. ONE-LINE MUTATION
+            // that reds it on the fixed tree: put `face.color = ElarionUi.Disabled` back in
+            // RenderDetail, or delete the realmMapTravelStub row from one canonical copy.
+            {
+                string panelSrc = Path.Combine(Application.dataPath, "_Modules/Village/Hero/RealmMapPanel.cs");
+                string panel = File.Exists(panelSrc) ? File.ReadAllText(panelSrc) : null;
+                if (panel == null)
+                    failures.Add("[travel-stub] cannot read " + panelSrc);
+                else
+                {
+                    if (panel.IndexOf("VillageStrings.Canon(TravelStubKey)", System.StringComparison.Ordinal) < 0)
+                        failures.Add("[travel-stub] RealmMapPanel.RenderDetail no longer words the travel stub from " +
+                                     "canon-strings (VillageStrings.Canon(TravelStubKey)) - a typed or missing " +
+                                     "sentence puts the read-only map back to a silent slot");
+                    if (panel.IndexOf("face.color = ElarionUi.Disabled", System.StringComparison.Ordinal) >= 0)
+                        failures.Add("[travel-stub] RealmMapPanel draws the greyed never-enabling Travel button " +
+                                     "again (face.color = ElarionUi.Disabled) - the WO-1396 read-only map words " +
+                                     "the stub instead; a disabled button that never enables is a door to a no-op");
+                    if (panel.IndexOf("cta.interactable = _vm.TravelEnabled", System.StringComparison.Ordinal) >= 0)
+                        failures.Add("[travel-stub] the Travel CTA is built with interactable = TravelEnabled " +
+                                     "(false until WO-827) - the stub state must be a WORD, not a dead control");
+                }
+
+                string[] stubKeys = { RealmMapPanel.TravelStubKey, RealmMapPanel.ClearRewardKey };
+                string[] canonPaths =
+                {
+                    Path.Combine(Application.dataPath, "Resources/Data/Canonical/canon-strings.json"),
+                    Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/canon-strings.json"),
+                };
+                foreach (string canonPath in canonPaths)
+                {
+                    JObject canon = ParseCopy("canon-strings", canonPath, failures);
+                    if (canon == null) continue;
+                    foreach (string key in stubKeys)
+                    {
+                        string value = canon[key]?.ToString();
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            failures.Add("[travel-stub] canon-strings key '" + key + "' missing or empty in " + canonPath +
+                                         " - the map's CTA slot would render a [[missing:...]] marker");
+                            continue;
+                        }
+                        foreach (char c in value)
+                            if (c > 127)
+                            {
+                                failures.Add("[travel-stub] canon-strings '" + key + "' carries a non-ASCII glyph (U+" +
+                                             ((int)c).ToString("X4") + ") - the bundled SDF font renders it as tofu");
+                                break;
+                            }
+                    }
+                    string rewardLine = canon[RealmMapPanel.ClearRewardKey]?.ToString();
+                    if (!string.IsNullOrEmpty(rewardLine) && rewardLine.IndexOf("{0}", System.StringComparison.Ordinal) < 0)
+                        failures.Add("[travel-stub] canon-strings '" + RealmMapPanel.ClearRewardKey + "' has no {0} - " +
+                                     "the clear reward sentence would drop the reward");
+                }
+                log.AppendLine("travel stub: worded from canon-strings (" + string.Join(", ", stubKeys) +
+                               ") in both copies; greyed never-enabling CTA absent from RealmMapPanel");
+            }
+
             // -- verdict --------------------------------------------------------
             if (failures.Count == 0)
             {

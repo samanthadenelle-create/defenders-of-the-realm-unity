@@ -48,6 +48,7 @@
 // ASCII-only strings, all from canon-strings.json via StoreStrings.
 // =============================================================================
 
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -61,14 +62,44 @@ namespace DeNelle.Wallet
     public sealed class SeasonTrackPanel : MonoBehaviour
     {
         // ── Zones, as fractions of the WO's 2670 x 1200 landscape canvas ──────
-        // Header 120 / Track 660 / Footer 420, top-down. Written as the division so
+        // Header 200 / Track 580 / Footer 420, top-down. Written as the division so
         // the wireframe number stays readable next to the fraction it produced.
-        private static readonly Vector2 HeaderMin = new Vector2(0.015f, 1f - 120f / 1200f);
+        //
+        // WHY THE HEADER IS 200 AND NOT THE WIREFRAME'S 120 (first capture, 2026-09-05):
+        // the shared Close is a FIXED 360 x 132 reference-px box (ElarionUiKit.CanonCtaWidth
+        // x CanonCtaHeight - every Close is the same size on every screen, owner F8 x3), and
+        // the modal canvas is 1080 x 1920 matched 0.5, so a 120/1200 header RESOLVES to only
+        // 82..91 ref px on the three capture canvases (2670x1200 / 2340x1080 / 1920x1080).
+        // A 132 px control cannot be seated inside an 82 px band by any anchor arithmetic;
+        // it overhung the header and the geometry oracle read BUTTON OVER TEXT on all four
+        // header texts at all three resolutions. 200/1200 resolves to 142 / 144 / 159 ref px
+        // (body 0.94 of canvas height, header 0.99 - 0.8333 of body), which holds the 132 px
+        // box with 10 px to spare at the tightest. The track gives up the 80 px: it needs
+        // strip 46 + two cells 150 + spacing 12 + padding 16 = 374, and keeps >= 438.
+        private static readonly Vector2 HeaderMin = new Vector2(0.015f, 1f - 200f / 1200f);
         private static readonly Vector2 HeaderMax = new Vector2(0.985f, 0.99f);
         private static readonly Vector2 TrackMin  = new Vector2(0.015f, 420f / 1200f);
-        private static readonly Vector2 TrackMax  = new Vector2(0.985f, 1f - 120f / 1200f);
+        private static readonly Vector2 TrackMax  = new Vector2(0.985f, 1f - 200f / 1200f);
         private static readonly Vector2 FooterMin = new Vector2(0.015f, 0.02f);
         private static readonly Vector2 FooterMax = new Vector2(0.985f, 420f / 1200f);
+
+        /// <summary>The panel body inside the modal canvas. Public so the regression probe builds
+        /// the body from the view's numbers instead of a copy of them.</summary>
+        public static readonly Vector2 BodyMin = new Vector2(0.02f, 0.03f);
+        public static readonly Vector2 BodyMax = new Vector2(0.98f, 0.97f);
+
+        // -- The header's two bands, in REFERENCE px (not fractions) ------------
+        // The Close is a fixed-px box, so the band that owns it is fixed-px too: a
+        // fraction of the header would hand the Close a different share of the row at
+        // every resolution and the text band's edge would drift toward it. CloseBand is
+        // right-aligned in the header and CanonCtaWidth + 2 gutters wide; TextBand is
+        // the header minus exactly CloseBandPx. The two rects therefore cannot intersect
+        // at ANY canvas size - the gutter (12 px) is the guaranteed clearance, and it is
+        // deliberately larger than LayoutOracle.OverlapPadPx (2 px).
+        /// <summary>Clear space on each side of the Close inside its band, reference px.</summary>
+        public const float CloseBandGutterPx = 12f;
+        /// <summary>Width of the header's close band: the kit's canonical Close plus a gutter each side.</summary>
+        public static readonly float CloseBandPx = ElarionUiKit.CanonCtaWidth + 2f * CloseBandGutterPx;
 
         /// <summary>Lane label gutter: 200 of 2670 px, inside the track.</summary>
         private const float LaneGutterFraction = 200f / 2670f;
@@ -156,47 +187,192 @@ namespace DeNelle.Wallet
             }
 
             ElarionUiKit.Scrim(_canvas.transform, Close);
-            var panel = ElarionUiKit.Panel(_canvas.transform, new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
-                                           deep: true);
-            _body = panel.transform;
-            Plate(_body, NightMarketPalette.Ground);
-
-            BuildHeader();
-            BuildTrack();
-            BuildFooter();
-
-            _canvas.SetActive(false);
-            FlowTrace.Step("BattlePass", "SeasonTrackPanel built: header, two-lane rail, footer.");
-        }
-
-        private void BuildHeader()
-        {
-            var host = Zone(_body, "Header", HeaderMin, HeaderMax);
+            _body = BuildBodyInto(_canvas.transform);
 
             var season = BattlePassService.Season;
             string title = season != null && !string.IsNullOrEmpty(season.Name)
                 ? StoreStrings.Get(StoreStrings.KeySeasonTrackTitle) + " - " + season.Name
                 : StoreStrings.Get(StoreStrings.KeySeasonTrackTitle);
+            var header = BuildHeaderInto(_body, title, season != null ? season.Tagline : null, Close);
+            _tierLine = header.TierLine;
+            _xpLine   = header.XpLine;
+            _daysLine = header.DaysLine;
 
-            Text(host, title, 20, ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Left,
-                 new Vector2(0f, 0.35f), new Vector2(0.42f, 1f));
+            BuildTrack();
+            BuildFooter();
 
-            if (season != null && !string.IsNullOrEmpty(season.Tagline))
-                Text(host, season.Tagline, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
-                     TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.42f, 0.35f));
+            // The bands, MEASURED, before the canvas goes dark: a resolved close rect that
+            // intersects a resolved text rect is the defect the first capture found, and this
+            // line is written so that defect prints as a Warn instead of an "ok".
+            var root = _canvas.GetComponent<RectTransform>();
+            Canvas.ForceUpdateCanvases();
+            LogHeaderBands(header, root);
 
-            _tierLine = Text(host, string.Empty, 15, NightMarketPalette.Patronage, FontStyles.Bold,
-                             TextAlignmentOptions.Center, new Vector2(0.42f, 0.35f), new Vector2(0.72f, 1f));
-            _xpLine   = Text(host, string.Empty, 11, ElarionUi.ParchmentDim, FontStyles.Normal,
-                             TextAlignmentOptions.Center, new Vector2(0.42f, 0f), new Vector2(0.72f, 0.35f));
+            _canvas.SetActive(false);
+            FlowTrace.Step("BattlePass", "SeasonTrackPanel built: header, two-lane rail, footer.");
+        }
+
+        /// <summary>The header's parts. Returned by <see cref="BuildHeaderInto"/> so a probe can
+        /// measure the view's OWN construction rather than a copy of it.</summary>
+        public sealed class HeaderParts
+        {
+            public Transform Host;
+            public Transform TextBand;
+            public Transform CloseBand;
+            public Button Close;
+            public TextMeshProUGUI Title, Tagline, TierLine, XpLine, DaysLine;
+
+            /// <summary>Every header text, in reading order. Tagline is null when the season has none.</summary>
+            public TextMeshProUGUI[] Texts
+            {
+                get { return new[] { Title, Tagline, TierLine, XpLine, DaysLine }; }
+            }
+        }
+
+        /// <summary>
+        /// The panel body (glass plate + ground) inside a modal canvas, at <see cref="BodyMin"/>..
+        /// <see cref="BodyMax"/>. Static and public for the same reason as
+        /// <see cref="BuildHeaderInto"/>: the regression probe must build the body the way the
+        /// screen does, not the way a test author remembers it.
+        /// </summary>
+        public static Transform BuildBodyInto(Transform canvasRoot)
+        {
+            var panel = ElarionUiKit.Panel(canvasRoot, BodyMin, BodyMax, deep: true);
+            var body = panel.transform;
+            Plate(body, NightMarketPalette.Ground);
+            return body;
+        }
+
+        /// <summary>
+        /// Builds the header into <paramref name="body"/>: a TextBand carrying the five header
+        /// texts and, to its right, a CloseBand carrying the kit's shared Close. The two bands
+        /// are disjoint BY CONSTRUCTION (see the CloseBandPx comment): the text band's right
+        /// edge is inset by exactly the close band's width, so no anchor fraction, font size or
+        /// resolution can put the Close over a header text.
+        /// <para>Static so the layout regression measures this exact construction.</para>
+        /// </summary>
+        public static HeaderParts BuildHeaderInto(Transform body, string title, string tagline, Action onClose)
+        {
+            var parts = new HeaderParts();
+            parts.Host = Zone(body, "Header", HeaderMin, HeaderMax);
+
+            // -- TextBand: the header minus the close band, on the left ----------
+            var textBand = Zone(parts.Host, "TextBand", Vector2.zero, Vector2.one);
+            var trt = textBand.GetComponent<RectTransform>();
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = new Vector2(-CloseBandPx, 0f);
+            parts.TextBand = textBand;
+
+            parts.Title = Text(textBand, title, 20, ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Left,
+                               new Vector2(0f, 0.35f), new Vector2(0.42f, 1f));
+            parts.Title.gameObject.name = "Title";
+            // A single-line fact: bounded auto-size then the kit's Ellipsis, never a wrap that
+            // stacks the season name under the word "Season".
+            ElarionUiKit.FitSingleLine(parts.Title);
+
+            if (!string.IsNullOrEmpty(tagline))
+            {
+                parts.Tagline = Text(textBand, tagline, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
+                                     TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.42f, 0.35f));
+                parts.Tagline.gameObject.name = "Tagline";
+            }
+
+            parts.TierLine = Text(textBand, string.Empty, 15, NightMarketPalette.Patronage, FontStyles.Bold,
+                                  TextAlignmentOptions.Center, new Vector2(0.42f, 0.35f), new Vector2(0.72f, 1f));
+            parts.TierLine.gameObject.name = "TierLine";
+            ElarionUiKit.FitSingleLine(parts.TierLine);
+
+            parts.XpLine = Text(textBand, string.Empty, 11, ElarionUi.ParchmentDim, FontStyles.Normal,
+                                TextAlignmentOptions.Center, new Vector2(0.42f, 0f), new Vector2(0.72f, 0.35f));
+            parts.XpLine.gameObject.name = "XpLine";
 
             // A COUNT OF DAYS, never a ticking clock. Nothing is lost at season close (earned
             // rewards are kept and unclaimed ones auto-grant), so a countdown here would be
             // manufactured urgency over a deadline that does not exist.
-            _daysLine = Text(host, string.Empty, 12, ElarionUi.ParchmentDim, FontStyles.Normal,
-                             TextAlignmentOptions.Right, new Vector2(0.72f, 0.35f), new Vector2(1f, 1f));
+            parts.DaysLine = Text(textBand, string.Empty, 12, ElarionUi.ParchmentDim, FontStyles.Normal,
+                                  TextAlignmentOptions.Right, new Vector2(0.72f, 0.35f), new Vector2(1f, 1f));
+            parts.DaysLine.gameObject.name = "DaysLine";
+            ElarionUiKit.FitSingleLine(parts.DaysLine);
 
-            ElarionUiKit.ObsidianCloseButton(host, Close);
+            // -- CloseBand: fixed px, right-aligned, vertically centred in the header --
+            // Sized to the Close itself (CanonCtaHeight tall) so SeatSharedCloseInside, which
+            // seats the box's BOTTOM at the zone floor and grows it UP by CanonCtaHeight, fills
+            // the band exactly: the Close is centred in the header row at every resolution.
+            var closeBandGo = new GameObject("CloseBand", typeof(RectTransform));
+            closeBandGo.transform.SetParent(parts.Host, false);
+            var crt = closeBandGo.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(1f, 0.5f);
+            crt.anchorMax = new Vector2(1f, 0.5f);
+            crt.pivot = new Vector2(1f, 0.5f);
+            crt.anchoredPosition = Vector2.zero;
+            crt.sizeDelta = new Vector2(CloseBandPx, ElarionUiKit.CanonCtaHeight);
+            parts.CloseBand = closeBandGo.transform;
+
+            parts.Close = ElarionUiKit.ObsidianCloseButton(closeBandGo.transform, onClose,
+                                                           new Vector4(0f, 0f, 1f, 1f));
+            return parts;
+        }
+
+        /// <summary>
+        /// One <c>[Flow:BattlePass] header bands</c> line with the RESOLVED close and text rects
+        /// (reference px, root-canvas space), plus a Warn per header text the Close intersects.
+        /// Returns false, and says so, when the root canvas has not resolved a size yet - an
+        /// unmeasured header is reported as unmeasured, never as fine.
+        /// </summary>
+        public static bool LogHeaderBands(HeaderParts header, RectTransform root)
+        {
+            if (header == null || header.Close == null || header.TextBand == null || root == null)
+            {
+                FlowTrace.Warn("BattlePass", "header bands: UNMEASURED - header parts or canvas root missing.");
+                return false;
+            }
+            try
+            {
+                Rect closeR, textR;
+                if (!LayoutOracle.TryRectInRoot((RectTransform)header.Close.transform, root, out closeR) ||
+                    !LayoutOracle.TryRectInRoot((RectTransform)header.TextBand, root, out textR))
+                {
+                    FlowTrace.Warn("BattlePass", "header bands: UNMEASURED - close/text rects did not resolve " +
+                                                 "(root canvas not sized yet).");
+                    return false;
+                }
+
+                Rect hostR;
+                bool hostOk = LayoutOracle.TryRectInRoot((RectTransform)header.Host, root, out hostR);
+                float gap = closeR.xMin - textR.xMax;
+                FlowTrace.Step("BattlePass",
+                    "header bands: close y" + closeR.yMin.ToString("0.#") + ".." + closeR.yMax.ToString("0.#") +
+                    " x" + closeR.xMin.ToString("0.#") + ".." + closeR.xMax.ToString("0.#") +
+                    ", text y" + textR.yMin.ToString("0.#") + ".." + textR.yMax.ToString("0.#") +
+                    " x" + textR.xMin.ToString("0.#") + ".." + textR.xMax.ToString("0.#") +
+                    ", gap " + gap.ToString("0.#") + " px, header " +
+                    (hostOk ? hostR.height.ToString("0.#") : "?") + " px tall (resolved ref px).");
+
+                if (hostOk && LayoutOracle.OutsideBy(closeR, hostR) > LayoutOracle.ContainSlackPx)
+                    FlowTrace.Warn("BattlePass", "header bands: the Close escapes the header by " +
+                                                 LayoutOracle.OutsideBy(closeR, hostR).ToString("0.#") +
+                                                 " px - the header band is shorter than CanonCtaHeight.");
+
+                bool clean = true;
+                foreach (var t in header.Texts)
+                {
+                    if (t == null) continue;
+                    Rect tr;
+                    if (!LayoutOracle.TryRectInRoot(t.rectTransform, root, out tr)) continue;
+                    float ow, oh;
+                    if (!LayoutOracle.Overlaps(closeR, tr, LayoutOracle.OverlapPadPx, out ow, out oh)) continue;
+                    clean = false;
+                    FlowTrace.Warn("BattlePass", "header bands: Close covers '" + t.gameObject.name + "' by " +
+                                                 ow.ToString("0.#") + "x" + oh.ToString("0.#") +
+                                                 " ref px - the capture oracle will red this as BUTTON OVER TEXT.");
+                }
+                return clean;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("BattlePass", "header bands: measurement THREW " + ex.GetType().Name + ": " + ex.Message);
+                return false;
+            }
         }
 
         private void BuildTrack()

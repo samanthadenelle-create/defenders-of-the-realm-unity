@@ -4,33 +4,141 @@ using System.IO;
 
 namespace DeNelle.Editor.Regression
 {
-    /// <summary>Owner ruling: Realm Map and Season Pass have no public navigation entry points.</summary>
+    /// <summary>
+    /// RE-POINTED 2026-09-05 (WO-1376 / WO-1394 / WO-1396) - STRICTER, NEVER DELETED.
+    /// <para>
+    /// Until 2026-09-04 the owner's ruling was "Realm Map and Season Pass have no public navigation
+    /// entry points" and this suite asserted their ABSENCE. PROGRAM_RAID_ECONOMY_2026-09-04 section 8
+    /// re-ruled Journey as five cards (Quests / Raids / Dungeons / Realm Map / Season) and section 12
+    /// item 4 says of this oracle: "re-points that oracle; it does not delete it". So the shape is now
+    /// PRESENT EXACTLY ONCE, ON THE JOURNEY DECK, AND NOWHERE ELSE:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>PlayerDeckWorkspace.cs carries exactly one `Route("Realm Map", ...)` and one
+    /// `Route("Season", ...)`, both inside the `case PlayerDeckKind.Journey:` block; PanelId.BattlePass
+    /// is named by code exactly once (that route) and PanelId.RealmMap by no code outside the Journey
+    /// block (the Dungeons card in that block reads the map's registration too); the Dungeons card
+    /// is in the same block and reads DungeonStatusCatalog.</item>
+    /// <item>PackStore.cs still never names PanelId.BattlePass / "Season Track" (the FREE band stays
+    /// two tabs - NightMarketUiRegression).</item>
+    /// <item>The Bag has NO Realm Map door: InventoryUIBuilder.cs never builds a RailMap entry and
+    /// never opens PanelId.RealmMap; HeroInventoryController.cs never reads FeatureFlags.MapTab or
+    /// calls OpenRealmMap; FeatureFlags.cs no longer declares MapTab; InventoryPaperDoll.cs has no
+    /// Map header chip.</item>
+    /// <item>The HUD has NO face or dock row for either: HudKitController.cs never names
+    /// PanelId.RealmMap or PanelId.BattlePass in code (the bar's Map face is separately pinned dormant
+    /// by HudActionBarRegression).</item>
+    /// </list>
+    /// RED-FIRST: on the pre-lane tree the Journey block has neither route (fails), FeatureFlags
+    /// declares MapTab (fails) and InventoryUIBuilder opens PanelId.RealmMap (fails). ONE-LINE
+    /// MUTATIONS that red it on the fixed tree: delete the `Route("Realm Map", ...)` or the
+    /// `Route("Season", ...)` line from the Journey block; add a second `PanelId.BattlePass` anywhere
+    /// in PlayerDeckWorkspace.cs (e.g. a Realm deck card); restore `public static bool MapTab` to
+    /// FeatureFlags.cs.
+    /// </summary>
     public static class PublicNavigationRetirementRegression
     {
+        private const string DeckSrc = "Assets/_Modules/HUD/PlayerDeckWorkspace.cs";
+
         public static bool Run(out string result)
         {
             try
             {
-                AssertAbsent("Assets/_Modules/HUD/PlayerDeckWorkspace.cs",
-                    "Realm Map", "PanelId.BattlePass", "Season Track");
+                // -- The doors exist, once each, on the Journey deck ----------------------
+                string deck = File.ReadAllText(DeckSrc);
+                string journey = SliceJourneyCase(deck, out _);
+                // Counted on CODE (comment lines stripped): the Season route is the only line that
+                // may name PanelId.BattlePass; the Realm Map is named by its own Route AND by the
+                // Dungeons card (Available / LockReason / Open all read the map's registration),
+                // so the invariant for it is ONE Route line and ZERO code mentions outside Journey.
+                string deckCode = StripLineComments(deck);
+                string journeyCode = SliceJourneyCase(deckCode, out int journeyStart);
+                string outsideJourney = deckCode.Remove(journeyStart, journeyCode.Length);
+                AssertCountExactly(DeckSrc + " (code)", deckCode, "PanelId.BattlePass", 1);
+                AssertCountExactly(DeckSrc + " (code)", deckCode, "Route(\"Realm Map\",", 1);
+                AssertCountExactly(DeckSrc + " (code)", deckCode, "Route(\"Season\",", 1);
+                AssertCountExactly(DeckSrc + " (code outside the Journey block)", outsideJourney, "PanelId.RealmMap", 0);
+                AssertCountExactly(DeckSrc + " (code outside the Journey block)", outsideJourney, "PanelId.BattlePass", 0);
+                AssertPresent(DeckSrc + " (Journey block)", journey,
+                    "PanelId.RealmMap", "PanelId.BattlePass",
+                    "Route(\"Realm Map\",", "Route(\"Season\",",
+                    "Title = \"Dungeons\"", "DungeonStatusCatalog");
+                // The Season card purpose comes from canon-strings, never a literal (WO-1394).
+                AssertPresent(DeckSrc + " (Journey block)", journey,
+                    "HudStrings.Get(HudStrings.KeyJourneySeason)",
+                    "HudStrings.Get(HudStrings.KeyJourneyRealmMap)",
+                    "HudStrings.Get(HudStrings.KeyJourneyDungeons)");
+                AssertAbsent(DeckSrc, "Season Track");
+
+                // -- Nowhere else ---------------------------------------------------------
                 AssertAbsent("Assets/_Modules/Wallet/PackStore.cs",
                     "PanelId.BattlePass", "Season Track");
                 AssertAbsent("Assets/_Modules/Village/Hero/InventoryUIBuilder.cs",
-                    "BuildRailEntry(content.transform, RailMap");
+                    "BuildRailEntry(content.transform, RailMap", "PanelId.RealmMap", "FeatureFlags.MapTab");
+                AssertAbsent("Assets/_Modules/Village/Hero/HeroInventoryController.cs",
+                    "FeatureFlags.MapTab", "OpenRealmMap(");
+                AssertAbsent("Assets/_Modules/Core/FeatureFlags.cs",
+                    "public static bool MapTab", "Get(\"maptab\"");
                 AssertAbsent("Assets/_Modules/Village/Hero/InventoryPaperDoll.cs",
                     "BuildHeaderChip(headerRow.transform, \"Map\"");
+                AssertAbsentInCode("Assets/_Modules/HUD/Kit/HudKitController.cs",
+                    "PanelId.RealmMap", "PanelId.BattlePass");
+
+                // -- The Realm deck's four illustrated destinations are untouched ---------
                 AssertRealmCard("realm-store", "PanelId.RealmStore");
                 AssertRealmCard("defense-report", "PanelId.DefenseReport");
                 AssertRealmCard("monthly-ledger", "PanelId.MonthlyLedger");
                 AssertRealmCard("game-guide", "PanelId.GameGuide");
                 AssertRealmCardPackagingIsMasked();
-                result = "Realm Map and Season Pass remain absent; four illustrated Realm destinations retain live routes and mask delivered packaging margins.";
+                result = "Realm Map and Season each have exactly ONE public door, on the Journey deck (with Dungeons); " +
+                         "no Bag route, no MapTab flag, no HUD face; four illustrated Realm destinations retain live " +
+                         "routes and mask delivered packaging margins.";
                 return true;
             }
             catch (Exception ex)
             {
                 result = ex.Message;
                 return false;
+            }
+        }
+
+        /// <summary>The text of `case PlayerDeckKind.Journey:` inside CardsFor, up to the next case
+        /// or default. Anchored on CardsFor first so the SubtitleFor switch cannot satisfy it.
+        /// <paramref name="start"/> is the slice's offset in <paramref name="deck"/>.</summary>
+        private static string SliceJourneyCase(string deck, out int start)
+        {
+            int cardsFor = deck.IndexOf("List<Card> CardsFor(", StringComparison.Ordinal);
+            if (cardsFor < 0)
+                throw new InvalidOperationException(DeckSrc + " has no 'List<Card> CardsFor(' - the deck table was renamed");
+            const string label = "case PlayerDeckKind.Journey:";
+            int a = deck.IndexOf(label, cardsFor, StringComparison.Ordinal);
+            if (a < 0)
+                throw new InvalidOperationException(DeckSrc + " has no '" + label + "' block inside CardsFor");
+            a += label.Length;
+            int next = deck.IndexOf("case PlayerDeckKind.", a, StringComparison.Ordinal);
+            int def = deck.IndexOf("default:", a, StringComparison.Ordinal);
+            int end = next < 0 ? def : def < 0 ? next : Math.Min(next, def);
+            start = a;
+            return end < 0 ? deck.Substring(a) : deck.Substring(a, end - a);
+        }
+
+        private static void AssertCountExactly(string path, string source, string token, int expected)
+        {
+            int count = 0, at = 0;
+            while ((at = source.IndexOf(token, at, StringComparison.Ordinal)) >= 0) { count++; at += token.Length; }
+            if (count != expected)
+                throw new InvalidOperationException(
+                    path + " names " + token + " " + count + " time(s), expected exactly " + expected +
+                    " - the Journey deck card is the ONE public door (owner ruling 2026-09-04, PROGRAM section 8)");
+        }
+
+        private static void AssertPresent(string what, string source, params string[] required)
+        {
+            foreach (string token in required)
+            {
+                if (source.IndexOf(token, StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException(
+                        "Ruled public navigation is MISSING from " + what + ": " + token);
             }
         }
 
@@ -45,12 +153,40 @@ namespace DeNelle.Editor.Regression
             }
         }
 
+        /// <summary>Everything after a `//` on each line is dropped. Good enough for these files:
+        /// none of the asserted tokens sits inside a string literal that also carries `//`.</summary>
+        private static string StripLineComments(string source)
+        {
+            var sb = new System.Text.StringBuilder(source.Length);
+            foreach (string raw in source.Split('\n'))
+            {
+                string line = raw;
+                int slash = line.IndexOf("//", StringComparison.Ordinal);
+                if (slash >= 0) line = line.Substring(0, slash);
+                sb.Append(line).Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>Like AssertAbsent, but comment lines are stripped first - a note that NAMES a
+        /// retired route is documentation, a line that calls it is the regression.</summary>
+        private static void AssertAbsentInCode(string path, params string[] forbidden)
+        {
+            string code = StripLineComments(File.ReadAllText(path));
+            foreach (string token in forbidden)
+            {
+                if (code.IndexOf(token, StringComparison.Ordinal) >= 0)
+                    throw new InvalidOperationException(
+                        "Retired public navigation returned in " + path + " (code, not comment): " + token);
+            }
+        }
+
         private static void AssertRealmCard(string artKey, string routeToken)
         {
             string asset = "Assets/Resources/UI/ElarionMedieval/cards/" + artKey + ".png";
             if (!File.Exists(asset))
                 throw new InvalidOperationException("Realm destination art is missing: " + asset);
-            string source = File.ReadAllText("Assets/_Modules/HUD/PlayerDeckWorkspace.cs");
+            string source = File.ReadAllText(DeckSrc);
             if (source.IndexOf("\"" + artKey + "\"", StringComparison.Ordinal) < 0 ||
                 source.IndexOf(routeToken, StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException(
@@ -59,7 +195,7 @@ namespace DeNelle.Editor.Regression
 
         private static void AssertRealmCardPackagingIsMasked()
         {
-            string source = File.ReadAllText("Assets/_Modules/HUD/PlayerDeckWorkspace.cs");
+            string source = File.ReadAllText(DeckSrc);
             if (source.IndexOf("RectMask2D", StringComparison.Ordinal) < 0 ||
                 source.IndexOf("IllustratedCardSurface", StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException(

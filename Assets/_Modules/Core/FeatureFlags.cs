@@ -829,17 +829,13 @@ namespace DeNelle.Core
         public static bool RewardedAdSkip => Get("rewardedadskip", defaultOn: true);
 #endif
 
-        /// <summary>WO-911 (owner 2026-08-06) — gates the MAP TAB inside the Bag/Inventory panel.
-        /// The Q10+Q13 ruling moved Map OFF the bottom action bar and INTO Bag as a tab (net 7 -> 6
-        /// faces); that ruling STANDS and this flag does not re-open it. What the flag controls is
-        /// only whether the tab is OFFERED right now. Default OFF: the realm's areas do not connect
-        /// yet — <c>RealmMapPanel</c>'s own header records travel as a DISABLED stub until WO-827 —
-        /// so a visible tab would promise a journey the game cannot take. When OFF the tab is ABSENT
-        /// (not greyed): <c>ElarionUiKit.BuildTabRow</c> divides width by the tab count, so the
-        /// remaining tabs reflow with no dead gap. Flip back ON without a rebuild via PlayerPrefs
-        /// "ff.maptab" = 1 (or the Defenders/Debug menu). The suppression is FlowTrace'd at the build
-        /// site so a UI capture shows WHY the tab is missing instead of reading as a vanished tab.</summary>
-        public static bool MapTab => Get("maptab", defaultOn: false);
+        // RETIRED 2026-09-05 (WO-1396): the MapTab flag (PlayerPrefs "ff.maptab", default OFF) is DELETED.
+        // It gated a Bag-side Realm Map door (InventoryUIBuilder.OpenRealmMap) that shipped OFF by
+        // default and was never offered, so the map had a dormant second door and no live one.
+        // The Realm Map's ONE public door is now the Journey deck card (PlayerDeckWorkspace, case
+        // PlayerDeckKind.Journey -> PanelId.RealmMap); PublicNavigationRetirementRegression pins
+        // that this flag and the Bag route stay gone. The WO-911 Q10+Q13 ruling that took Map OFF
+        // the bottom bar STANDS - ActionBarButtonId.Map stays dormant at ordinal 4 (never renumber).
 
         /// <summary>
         /// WO-1050 — the player's REDUCED-MOTION preference. Turn it ON and every decorative
@@ -910,8 +906,9 @@ namespace DeNelle.Core
         /// <summary>
         /// WO-828 — the corner minimap plate (<c>HudMinimapWidget</c>) in the calm postures.
         ///
-        /// <para>Default ON. Unlike <see cref="MapTab"/> — which is OFF because realm travel is a
-        /// WO-827 stub and a visible tab would promise a journey the game cannot take — the minimap
+        /// <para>Default ON. Unlike the retired Bag MapTab flag (deleted 2026-09-05, WO-1396; the
+        /// Realm Map is now reached from the Journey deck) - which shipped OFF because realm travel
+        /// is a WO-827 stub and a visible tab would promise a journey the game cannot take - the minimap
         /// promises nothing it cannot deliver: it reads the hero, the seam objective and the live
         /// threats that ALREADY drive <c>HudCompassWidget</c>, so it is correct the moment it is
         /// drawn. It adds no camera and no RenderTexture (WO-828's cost rule), so there is no
@@ -1233,8 +1230,9 @@ namespace DeNelle.Core
         /// Core does not reference, so a cref to them cannot resolve from this assembly.)
         /// <para>
         /// DEFAULT ON, and the reasoning is worth keeping because the obvious precedent points the
-        /// other way. The Map tab ships OFF (ff.maptab) because realm travel is a WO-827 STUB and the
-        /// areas genuinely do not connect. This is NOT that case: the four destinations
+        /// other way. The Bag's Map tab shipped OFF (the retired ff.maptab, deleted 2026-09-05) because
+        /// realm travel is a WO-827 STUB and the areas genuinely do not connect - the map itself is
+        /// now reached read-only from the Journey deck. This is NOT that case: the four destinations
         /// (Goldfields / Stoneback / Mirewood / Ashwood) are REAL walkable ground in the merged
         /// overworld today -- painted by ExteriorTerrainBuilder as four directional terrain biomes,
         /// covered by the single baked navmesh, classified by ZoneManager and already roamed by

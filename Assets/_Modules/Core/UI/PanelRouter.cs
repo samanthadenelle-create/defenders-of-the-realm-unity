@@ -86,9 +86,10 @@ namespace DeNelle.Core.UI
         Inventory = 14,
         /// <summary>Realm Map — the WO-826 full-screen parchment overworld (Elarion + the five
         /// fog-shrouded regions from dual-copy realm-map.json). Registered scene-independently
-        /// by RealmMapPanel (spawned by RealmMapPanelBootstrap); opened by the HUD kit Map
-        /// button and the DevPanel "Open Realm Map" entry. Travel stays a disabled stub
-        /// until the WO-827 discovery/travel ledger.</summary>
+        /// by RealmMapPanel (spawned by RealmMapPanelBootstrap); opened by the Journey deck's
+        /// "Realm Map" card (WO-1396, 2026-09-05 - the ONE public door; the HUD kit Map button and
+        /// the flag-gated Bag route are both retired) and the DevPanel "Open Realm Map" entry.
+        /// Travel stays a WORDED stub until the WO-827 discovery/travel ledger.</summary>
         RealmMap = 15,
         /// <summary>WO-911 — the unified MANAGE / QUEUES screen: one tabbed door onto all three
         /// production lines (Builder / Train / Research) with per-item Finish Now, cancel-with-

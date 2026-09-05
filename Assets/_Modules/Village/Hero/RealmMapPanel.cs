@@ -7,8 +7,11 @@
 // Code-built uGUI on the Obsidian master frame (BuildObsidianModal — the
 // RumorBoardPanel reference recipe): FrameCore chrome + the ONE shared Close +
 // tap-outside scrim, registered with PanelManager (modal arbiter) AND
-// PanelRouter (PanelId.RealmMap) so the HUD Map button / DevPanel open it
-// reflection-free from any assembly.
+// PanelRouter (PanelId.RealmMap) so the Journey deck's "Realm Map" card (WO-1396,
+// the ONE public door) / DevPanel open it reflection-free from any assembly.
+// The map ships READ-ONLY: travel is the WO-827 stub, and while it is the detail
+// pane WORDS that state from canon-strings (TravelStubKey) instead of showing a
+// greyed button that never enables - a door to a no-op is the named failure.
 //
 // Layout (landscape): the parchment MAP fills the left ~58% of the body well;
 // the obsidian DETAIL pane sits right, always bound to the selection (home
@@ -344,6 +347,19 @@ namespace DeNelle.Village.Hero
 
             FlowTrace.Step("RealmMap", "opened with " + _vm.Nodes.Count +
                 " nodes, selected '" + (_vm.SelectedId ?? "<none>") + "'");
+
+            // WO-1396: the door trace. Names the travel state and the fog count so a device log
+            // proves what the player met: a read-only map with N of M regions discovered.
+            int discovered = 0, regions = 0;
+            for (int i = 0; i < _vm.Nodes.Count; i++)
+            {
+                var n = _vm.Nodes[i];
+                if (n.IsHome) continue;
+                regions++;
+                if (n.State != RealmMapVM.NodeState.Locked) discovered++;
+            }
+            FlowTrace.Step("RealmMap", "opened from Journey deck; travel=" +
+                (_vm.TravelEnabled ? "enabled" : "stub") + "; nodes discovered=" + discovered + "/" + regions);
         }
 
         public void Close()
@@ -804,8 +820,7 @@ namespace DeNelle.Village.Hero
 
             if (!_vm.ShowTravel) return;
 
-            // Reserved Travel CTA slot (WO-827 lands the real travel). Disabled stub:
-            // non-interactable + dimmed, and the LABEL carries the state (colorblind law).
+            // The Travel CTA slot (WO-827 lands the real travel).
             _travelCtaGo = new GameObject("TravelCta", typeof(RectTransform));
             _travelCtaGo.transform.SetParent(_detailPane, false);
             var crt = (RectTransform)_travelCtaGo.transform;
@@ -813,18 +828,41 @@ namespace DeNelle.Village.Hero
             crt.anchorMax = new Vector2(0.94f, 0.20f);
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
 
-            var cta = ElarionUiKit.BuildObsidianButton(_travelCtaGo.transform, _vm.TravelLabel,
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                Vector2.zero, Vector2.one, () => { });
-            if (cta != null)
+            if (!_vm.TravelEnabled)
             {
-                cta.interactable = _vm.TravelEnabled;   // false until WO-827
-                var face = cta.targetGraphic as Image;
-                if (face != null) face.color = ElarionUi.Disabled;
-                var label = cta.GetComponentInChildren<TMPro.TMP_Text>(true);
-                if (label != null) label.color = ElarionUi.ParchmentDim;
+                // WO-1396 - READ-ONLY MAP. While travel is the WO-827 stub the slot carries WORDS
+                // from canon-strings, not a greyed button: the previous build drew a disabled
+                // "Travel - coming with discovery" button that never enabled, which is a door to a
+                // no-op. Two lines: the promise (TravelStubKey) and the next reason to tap - what
+                // clearing this land pays (ClearRewardKey, {0} = the VM's reward sentence, sourced
+                // from realm-map.json clearReward - a tunable, never a typed number). Both plain
+                // text; the state is carried by the word, so it survives full greyscale.
+                string stub = VillageStrings.Canon(TravelStubKey);
+                string reward = _vm.DetailReward;
+                if (!string.IsNullOrEmpty(reward))
+                    stub += "\n" + string.Format(VillageStrings.Canon(ClearRewardKey), reward);
+                var words = MakeDetailLabel(_travelCtaGo.transform, "TravelStubWords",
+                    Vector2.zero, Vector2.one, ElarionUi.Parchment, 13, bold: false);
+                words.text = stub;
+                words.alignment = TMPro.TextAlignmentOptions.Center;
+                FlowTrace.Step("RealmMap", "travel stub worded from canon-strings (" + TravelStubKey +
+                    ") for '" + (_vm.SelectedId ?? "<none>") + "'; reward='" + reward + "'");
+                return;
             }
+
+            var cta = ElarionUiKit.BuildObsidianButton(_travelCtaGo.transform, _vm.TravelLabel,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                Vector2.zero, Vector2.one, () => { });
+            if (cta != null) cta.interactable = true;
         }
+
+        /// <summary>WO-1396 - canon-strings key for the travel-stub words the CTA slot shows while
+        /// <see cref="RealmMapVM.TravelEnabled"/> is false. Public so RealmMapRegression can pin
+        /// that the key resolves in both canonical copies.</summary>
+        public const string TravelStubKey = "realmMapTravelStub";
+
+        /// <summary>WO-1396 - canon-strings format key, {0} = the region's clear reward sentence.</summary>
+        public const string ClearRewardKey = "realmMapClearRewardLine";
 
         // ── uGUI helpers (mirror RumorBoardPanel / ClanChatPanel) ───────────────
 

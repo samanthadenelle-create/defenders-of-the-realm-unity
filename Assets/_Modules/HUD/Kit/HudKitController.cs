@@ -852,13 +852,15 @@ namespace DeNelle.HUD.Kit
             if (_raidsButtonLabel != null) ElarionUiKit.FitBlock(_raidsButtonLabel);
 
             // MAP — ⚠ NO LONGER A BAR FACE (WO-911, owner ruling Q10+Q13, 2026-08-06).
-            // The Realm Map moved INTO Bag as a tab, which is half of how the bar went 7 -> 6
-            // faces without needing an 8th slot. The route itself is unchanged and still live:
-            // PanelId.RealmMap -> RealmMapPanel (registered by DeNelle.Village at boot), now
-            // reached from the Bag tab row. Nothing is built here, so no widget is registered
-            // under "mapButton" and the hud-areas.json calm(town) row drops it in the same
-            // commit. ActionBarButtonId.Map stays DORMANT at ordinal 4 (never masked in) so the
-            // other faces keep their indices.
+            // Taking Map off the bar is half of how it went 7 -> 6 faces without needing an
+            // 8th slot. CORRECTED 2026-09-05 (WO-1396): this note used to say the map was "now
+            // reached from the Bag tab row" - that Bag route shipped behind a default-OFF flag
+            // and was never offered, so it was false against the default. The Realm Map's ONE
+            // public door is the Journey deck's "Realm Map" card (PlayerDeckWorkspace), which
+            // routes through PanelRouter to RealmMapPanel (registered by DeNelle.Village at boot).
+            // Nothing is built here, so no widget is registered under "mapButton" and the
+            // hud-areas.json calm(town) row has no Map entry. ActionBarButtonId.Map stays DORMANT
+            // at ordinal 4 (never masked in) so the other faces keep their indices.
 
             // QUESTS (WO-835 §3c): its OWN always-in-town face — the 07-06 Quests<->Upgrade
             // relabel hijack is retired (owner: "allows quests to be active more often").

@@ -516,6 +516,48 @@ namespace DeNelle.Core.Ops
         public const string KeyHudNightMarketGlowPaletteMask = "hud.nightMarketGlowPaletteMask";
 
         // ---------------------------------------------------------------------
+        //  WO-1366 - THE ARENA WAGER. Four knobs: the three opponent-tier wagers
+        //  and the win purse as a percent of the stake. 50 / 100 / 200 / 200 were
+        //  hardcoded in ArenaCatalog.cs; with Crystals wagered on Google Play they
+        //  are the price of a REAL currency, so they ride the rail (owner
+        //  2026-09-02: "make it tweakable from a db call"). The defaults are
+        //  TODAY'S VALUES EXACTLY - they were authored against a free 500-seed stub
+        //  and are deliberately not re-picked here; the owner feels them live.
+        //  Bare int consts, because tools/gen-tunable-manifest.mjs resolves ONLY
+        //  that shape (see RaidHeartfireMaxChargesDefault above).
+        //
+        //  The consumer is DeNelle.Village.Arena.ArenaWagerTunables, which owns
+        //  the clamps (wagers 1..100000, purse 100..1000) and reads the rail only
+        //  once SpecFor(key) answers - so registering the keys here is the whole
+        //  wiring; nothing in the Arena changes.
+        // ---------------------------------------------------------------------
+
+        /// <summary>SHIPPED tier-1 wager (Ironhold Marauders): 50 Crystals.</summary>
+        public const int ArenaWagerTier1Default = 50;
+
+        /// <summary>SHIPPED tier-2 wager (Grimwatch Reavers): 100 Crystals.</summary>
+        public const int ArenaWagerTier2Default = 100;
+
+        /// <summary>SHIPPED tier-3 wager (Blackbanner Host): 200 Crystals.</summary>
+        public const int ArenaWagerTier3Default = 200;
+
+        /// <summary>SHIPPED win purse: 200 % of the wager = stake back plus theirs.</summary>
+        public const int ArenaWinPursePctDefault = 200;
+
+        /// <summary>Int Crystals. The tier-1 Arena wager. Clamped 1..100000 at the consumer.</summary>
+        public const string KeyArenaWagerTier1 = "arena.wagerTier1";
+
+        /// <summary>Int Crystals. The tier-2 Arena wager. Clamped 1..100000 at the consumer.</summary>
+        public const string KeyArenaWagerTier2 = "arena.wagerTier2";
+
+        /// <summary>Int Crystals. The tier-3 Arena wager. Clamped 1..100000 at the consumer.</summary>
+        public const string KeyArenaWagerTier3 = "arena.wagerTier3";
+
+        /// <summary>Int percent. The win purse as a percent of the wager; 100 = stake back only.
+        /// Clamped 100..1000 at the consumer, so a WIN can never lose money.</summary>
+        public const string KeyArenaWinPursePct = "arena.winPursePct";
+
+        // ---------------------------------------------------------------------
         //  WO-1343 - THE NIGHT STORE'S AURA. Four knobs, and they exist because
         //  the owner asked a QUESTION SHE HAS EXPLICITLY NOT ANSWERED.
         //
@@ -997,6 +1039,36 @@ namespace DeNelle.Core.Ops
                 "Gold alone (logged once), never to nothing.",
                 "NOT a PROD-022 hypothesis - 'take that colour out of the cycle' as one number, no " +
                 "code change, no schema change, on the same integer rail as the WO-1343 aura mask."),
+
+            new TunableSpec(KeyArenaWagerTier1, TunableKind.Int, ArenaWagerTier1Default,
+                "Crystals staked to fight the tier-1 Arena opponent (Ironhold Marauders, WO-1366). " +
+                "Ships at 50 - exactly what ArenaCatalog.cs hardcoded. Clamped to 1..100000 at " +
+                "ArenaWagerTunables; a wager of 0 would make the Arena free, so 1 is the floor.",
+                "NOT a PROD-022 hypothesis - a PRICE. With Crystals bought on Google Play the wager " +
+                "is real money at one remove, and the three amounts were authored against a free " +
+                "500-seed stub. Whether 50 reads as a flutter or a gamble is felt on device, not derived."),
+
+            new TunableSpec(KeyArenaWagerTier2, TunableKind.Int, ArenaWagerTier2Default,
+                "Crystals staked to fight the tier-2 Arena opponent (Grimwatch Reavers, WO-1366). " +
+                "Ships at 100. Clamped to 1..100000 at ArenaWagerTunables.",
+                "NOT a PROD-022 hypothesis - the middle rung of the same price ladder. Its own knob " +
+                "rather than a multiple of tier 1 because the step between tiers is what decides " +
+                "whether a harder fight reads as a step up or as a wall."),
+
+            new TunableSpec(KeyArenaWagerTier3, TunableKind.Int, ArenaWagerTier3Default,
+                "Crystals staked to fight the tier-3 Arena opponent (Blackbanner Host, WO-1366). " +
+                "Ships at 200. Clamped to 1..100000 at ArenaWagerTunables.",
+                "NOT a PROD-022 hypothesis - the top of the wager ladder, and the one amount a " +
+                "player must actually have bought Crystals to reach. Set by feel, moved by a row."),
+
+            new TunableSpec(KeyArenaWinPursePct, TunableKind.Int, ArenaWinPursePctDefault,
+                "The purse an Arena WIN pays, as a PERCENT of the wager (WO-1366). Ships at 200 - " +
+                "stake back plus the same again, exactly the 2x ArenaCatalog.cs hardcoded. Clamped " +
+                "to 100..1000 at ArenaWagerTunables: 100 returns only the stake, and below that a " +
+                "win would lose money, which the clamp refuses.",
+                "NOT a PROD-022 hypothesis - the house edge as one number. Whether 2x is generous " +
+                "enough to make a Crystal wager feel worth the risk, or so generous the Arena becomes " +
+                "a Crystal faucet, is the balance question this row answers without a rebuild."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

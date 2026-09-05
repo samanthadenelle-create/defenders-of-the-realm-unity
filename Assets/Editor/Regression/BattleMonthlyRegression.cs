@@ -59,6 +59,9 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using DeNelle.Core.UI;
 using DeNelle.Wallet;
 
 namespace DeNelle.Editor.Regression
@@ -134,6 +137,7 @@ namespace DeNelle.Editor.Regression
             try
             {
                 string rawText = CaseDualCopy(failures, log);
+                JObject parsed = null;
 
                 if (rawText != null)
                 {
@@ -150,6 +154,7 @@ namespace DeNelle.Editor.Regression
 
                     if (root != null)
                     {
+                        parsed = root;
                         CaseSeasons(root, failures, log);
                         CaseCards(root, failures, log);
                         CaseGrantsAreSanctioned(root, failures, log);
@@ -163,6 +168,7 @@ namespace DeNelle.Editor.Regression
                 CaseNoCountdown(failures, log);
                 CaseScreensAreCodeBuilt(failures, log);
                 CaseOneScreenOwner(failures, log);
+                CaseSeasonHeaderBands(parsed, failures, log);
             }
             catch (Exception ex)
             {
@@ -179,9 +185,10 @@ namespace DeNelle.Editor.Regression
                          "increasing and stays so when scaled to a 28..31 day month; every card is the pool model " +
                          "with a complete 1..N table under the anti-inflation ceiling; the firewall is actually " +
                          "invoked at load; XP has exactly one door and it takes an outcome, not an amount; the " +
-                         "Monthly Ledger screen has no countdown because nothing on it expires; and each screen " +
+                         "Monthly Ledger screen has no countdown because nothing on it expires; each screen " +
                          "has exactly ONE implementation which is reachable through PanelRouter and carries the " +
-                         "modal-arbiter lifecycle.";
+                         "modal-arbiter lifecycle; and the Season Track header's Close intersects no header " +
+                         "text at 1920x1080, 2340x1080 or 2670x1200 (measured, not authored).";
                 Debug.Log("BATTLE_MONTHLY_OK\n" + log);
                 return true;
             }
@@ -1178,6 +1185,211 @@ namespace DeNelle.Editor.Regression
                                  "open; a screen that ignores that refusal stays on top of a live battle. Close " +
                                  "on false.");
             }
+        }
+
+        // =====================================================================
+        //  [header-bands] -- THE SEASON TRACK HEADER'S CLOSE OWNS ITS OWN BAND.
+        // ---------------------------------------------------------------------
+        //  The screen's first-ever headless capture (2026-09-05, WO-1394 made it
+        //  reachable) redded the geometry oracle at all three resolutions: the kit's
+        //  fixed 360x132 Close was seated INSIDE an 82..91 ref-px header, centred over
+        //  the title/tier boundary, and covered every header text ("Season Track -
+        //  Emberwake", the tagline, "Tier 0 of 30", "0 of 100 XP to the next tier").
+        //
+        //  This case is NOT a re-derivation of the fix's arithmetic. It builds THE VIEW'S
+        //  OWN body and header (SeasonTrackPanel.BuildBodyInto + BuildHeaderInto) into an
+        //  edit-mode canvas at each of the three capture canvases, fills the live lines
+        //  with the same canon-strings the screen formats, settles layout and measures the
+        //  resolved rects with the same LayoutOracle the capture harness runs. If the
+        //  construction drifts, this measures the drift; a copy would only measure the copy.
+        //
+        //    (a) LayoutOracle.Audit reports no BUTTON OVER TEXT / BUTTONS OVERLAP.
+        //    (b) the close rect intersects NO header text rect it does not own
+        //        (LayoutOracle.Overlaps with OverlapPadPx - the brief's law, verbatim), and
+        //        clears the text band by >= CloseBandGutterPx.
+        //    (c) the close is >= MinTouchPx on both sides and sits INSIDE the header
+        //        (OutsideBy <= ContainSlackPx) - the header is tall enough to hold it.
+        //
+        //  RED FIRST: in SeasonTrackPanel.BuildHeaderInto change
+        //      trt.offsetMax = new Vector2(-CloseBandPx, 0f);
+        //  to  trt.offsetMax = Vector2.zero;
+        //  and (a) + (b) fail at all three resolutions with the Close measured over
+        //  TierLine and DaysLine. A second one-liner - HeaderMin back to 1f - 120f/1200f -
+        //  fails (c) with the 132 px Close escaping a header that resolves under 92 px.
+        // =====================================================================
+        private static readonly int[][] HeaderProbeSizes =
+        {
+            new[] { 1920, 1080 }, new[] { 2340, 1080 }, new[] { 2670, 1200 },
+        };
+
+        private static void CaseSeasonHeaderBands(JObject root, List<string> failures, StringBuilder log)
+        {
+            // The real season's name + tagline, read off the same file the screen loads, so the
+            // title is the length the player sees. A missing season is a data state the screen
+            // handles (title alone); the probe then uses the bare title and says so.
+            string name = null, tagline = null;
+            try
+            {
+                var seasons = root?["battlePassSeasons"] as JArray;
+                if (seasons != null && seasons.Count > 0)
+                {
+                    name = (string)seasons[0]["name"];
+                    tagline = (string)seasons[0]["tagline"];
+                }
+            }
+            catch (Exception ex)
+            {
+                log.AppendLine("  [header-bands] season name/tagline unreadable (" + ex.Message + ") - probing the bare title");
+            }
+            string title = string.IsNullOrEmpty(name)
+                ? StoreStrings.Get(StoreStrings.KeySeasonTrackTitle)
+                : StoreStrings.Get(StoreStrings.KeySeasonTrackTitle) + " - " + name;
+
+            float minTouch = ElarionUiKit.MinTouchPx;
+
+            foreach (int[] size in HeaderProbeSizes)
+            {
+                int w = size[0], h = size[1];
+                string tag = "[header-bands @" + w + "x" + h + "] ";
+                GameObject canvasGo = null;
+                try
+                {
+                    canvasGo = HeaderProbeCanvas(w, h);
+                    var rootRt = canvasGo.GetComponent<RectTransform>();
+
+                    // THE VIEW'S OWN BUILDERS - not copies of them.
+                    Transform body = SeasonTrackPanel.BuildBodyInto(canvasGo.transform);
+                    var header = SeasonTrackPanel.BuildHeaderInto(body, title, tagline, () => { });
+                    if (header == null || header.Close == null || header.TextBand == null || header.Host == null)
+                    {
+                        failures.Add(tag + "BuildHeaderInto returned no close/text band/host - the builder the " +
+                                     "capture measures is gone; re-point this oracle rather than deleting it");
+                        continue;
+                    }
+
+                    // The live lines, formatted through the same keys the screen uses. The oracle
+                    // skips EMPTY text, so an unfilled line would pass for the wrong reason.
+                    header.TierLine.text = StoreStrings.Format(StoreStrings.KeySeasonTrackTierLine, 0, 30);
+                    header.XpLine.text = StoreStrings.Format(StoreStrings.KeySeasonTrackXpLine, 0, 100);
+                    header.DaysLine.text = StoreStrings.Format(StoreStrings.KeySeasonTrackDaysLeft, 30);
+
+                    SettleHeaderProbe(canvasGo);
+
+                    // (a) the harness's oracle, verbatim.
+                    var found = LayoutOracle.Audit(canvasGo, "SeasonHeaderProbe", w, h);
+                    for (int i = 0; i < found.Count; i++)
+                    {
+                        if (found[i].Kind == LayoutOracle.FindingKind.ButtonOverText ||
+                            found[i].Kind == LayoutOracle.FindingKind.ButtonsOverlap)
+                            failures.Add(tag + found[i].Message);
+                    }
+
+                    Rect closeR, textR, hostR;
+                    if (!LayoutOracle.TryRectInRoot((RectTransform)header.Close.transform, rootRt, out closeR) ||
+                        !LayoutOracle.TryRectInRoot((RectTransform)header.TextBand, rootRt, out textR) ||
+                        !LayoutOracle.TryRectInRoot((RectTransform)header.Host, rootRt, out hostR))
+                    {
+                        failures.Add(tag + "could not resolve the close / text band / header rects in root space " +
+                                     "- unmeasured is a FAIL, not an unknown");
+                        continue;
+                    }
+
+                    // (b) the close intersects no header text it does not own.
+                    int textsSeen = 0;
+                    foreach (var t in header.Texts)
+                    {
+                        if (t == null) continue;
+                        textsSeen++;
+                        if (string.IsNullOrEmpty(t.text))
+                            failures.Add(tag + "header text '" + t.gameObject.name + "' is EMPTY in the probe - the " +
+                                         "oracle skips empty text, so this rect was not measured");
+                        Rect tr;
+                        if (!LayoutOracle.TryRectInRoot(t.rectTransform, rootRt, out tr))
+                        {
+                            failures.Add(tag + "header text '" + t.gameObject.name + "' has no resolvable rect");
+                            continue;
+                        }
+                        float ow, oh;
+                        if (LayoutOracle.Overlaps(closeR, tr, LayoutOracle.OverlapPadPx, out ow, out oh))
+                            failures.Add(tag + "the Close " + RectStr(closeR) + " covers header text '" +
+                                         t.gameObject.name + "' (\"" + t.text + "\") " + RectStr(tr) + " by " +
+                                         ow.ToString("0.#") + "x" + oh.ToString("0.#") + " ref px");
+                    }
+                    if (textsSeen < 4)
+                        failures.Add(tag + "only " + textsSeen + " header texts were built (expected the title, " +
+                                     "tier, xp and days lines at least) - the construction changed under this oracle");
+
+                    float gap = closeR.xMin - textR.xMax;
+                    if (gap < SeasonTrackPanel.CloseBandGutterPx - 0.5f)
+                        failures.Add(tag + "the Close (x " + closeR.xMin.ToString("0.#") + ") clears the text band (x.." +
+                                     textR.xMax.ToString("0.#") + ") by only " + gap.ToString("0.#") +
+                                     " px - under CloseBandGutterPx " + SeasonTrackPanel.CloseBandGutterPx);
+
+                    // (c) the touch floor, and the header actually holds the fixed-size box.
+                    if (closeR.width < minTouch - 0.5f || closeR.height < minTouch - 0.5f)
+                        failures.Add(tag + "the Close resolves " + closeR.width.ToString("0.#") + "x" +
+                                     closeR.height.ToString("0.#") + " - under MinTouchPx " + minTouch);
+                    float outside = LayoutOracle.OutsideBy(closeR, hostR);
+                    if (outside > LayoutOracle.ContainSlackPx)
+                        failures.Add(tag + "the Close " + RectStr(closeR) + " escapes the header " + RectStr(hostR) +
+                                     " by " + outside.ToString("0.#") + " px - the header band (" +
+                                     hostR.height.ToString("0.#") + " px) is shorter than the kit's CanonCtaHeight " +
+                                     ElarionUiKit.CanonCtaHeight);
+
+                    log.AppendLine("  [header-bands] @" + w + "x" + h + ": header " + hostR.height.ToString("0.#") +
+                                   " px tall, close " + RectStr(closeR) + ", text band " + RectStr(textR) +
+                                   ", gap " + gap.ToString("0.#") + " px, oracle findings " + found.Count +
+                                   ", texts " + textsSeen);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add(tag + "probe THREW " + ex.GetType().Name + ": " + ex.Message);
+                }
+                finally
+                {
+                    if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                }
+            }
+        }
+
+        /// <summary>A world-space probe canvas whose rect is the reference-px size the game's
+        /// 1080x1920 / match-0.5 scaler resolves at <paramref name="w"/>x<paramref name="h"/>
+        /// (the same math as SkillsPanelLayoutRegression's rail probe).</summary>
+        private static GameObject HeaderProbeCanvas(int w, int h)
+        {
+            const float refW = 1080f, refH = 1920f, match = 0.5f;
+            float logW = Mathf.Log(w / refW, 2f);
+            float logH = Mathf.Log(h / refH, 2f);
+            float sf = Mathf.Pow(2f, Mathf.Lerp(logW, logH, match));
+            if (!(sf > 0f) || float.IsNaN(sf) || float.IsInfinity(sf)) sf = 1f;
+
+            var go = new GameObject("~SeasonHeaderProbe", typeof(RectTransform), typeof(Canvas));
+            go.hideFlags = HideFlags.HideAndDontSave;
+            var canvas = go.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w / sf, h / sf);
+            rt.position = Vector3.zero;
+            rt.localScale = Vector3.one;
+            return go;
+        }
+
+        /// <summary>Two synchronous layout passes, matching the capture harness.</summary>
+        private static void SettleHeaderProbe(GameObject canvas)
+        {
+            var rt = canvas.GetComponent<RectTransform>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                Canvas.ForceUpdateCanvases();
+                if (rt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+            }
+        }
+
+        private static string RectStr(Rect r)
+        {
+            return "(x " + r.xMin.ToString("0.#") + ".." + r.xMax.ToString("0.#") +
+                   ", y " + r.yMin.ToString("0.#") + ".." + r.yMax.ToString("0.#") + ")";
         }
 
         /// <summary>A call only a Season Track screen makes.</summary>

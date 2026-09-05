@@ -195,6 +195,27 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        /// <summary>WO-1396: the selected region's one-time clear reward as an ASCII list
+        /// ("120 crystals, 40 food"), read off realm-map.json clearReward - the numbers are data,
+        /// never typed here. "" for home, a fogged (Locked) region, or a region with no reward,
+        /// so a locked node never leaks what it pays.</summary>
+        public string DetailReward
+        {
+            get
+            {
+                var n = FindNode(SelectedId);
+                if (!n.HasValue || n.Value.IsHome || n.Value.State == NodeState.Locked) return "";
+                var region = FindRegion(n.Value.Id);
+                var r = region != null ? region.ClearReward : null;
+                if (r == null) return "";
+                var parts = new List<string>(3);
+                if (r.Crystals > 0) parts.Add(r.Crystals + " crystals");
+                if (r.Food > 0) parts.Add(r.Food + " food");
+                if (r.Coins > 0) parts.Add(r.Coins + " gold");
+                return string.Join(", ", parts);
+            }
+        }
+
         /// <summary>Detail: the authored region/home description (scrolls in the View when long).</summary>
         public string DetailBody
         {
