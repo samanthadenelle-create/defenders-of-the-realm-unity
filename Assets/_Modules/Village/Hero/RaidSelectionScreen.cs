@@ -300,6 +300,30 @@ namespace DeNelle.Village.Hero
 
             IsScreenOpen = true;   // WO-725: arm the Herald's prompt-suppression + close-edge trace
             Debug.Log("[RaidSelectionScreen] Opened — raid card grid.");
+
+            // =============================================================
+            // WO-1415 - THE ONE MOMENT HEARTFIRE MEANS SOMETHING.
+            // =============================================================
+            // Owner felt-test 2026-09-05: "Heartfire is full, i dont understand as a new
+            // player what to do with that. No one in game has introduced me to heartfire."
+            // The introduction beat (tutorial-steps.json ctx_heartfire) hangs off THIS raise
+            // and not off founding, because a player who has just founded a town has nothing
+            // to spend a charge on; a player looking at the camp list is one tap away from
+            // spending one.
+            //
+            // (!) RAISED HERE AND NOT AT THE TOP OF Open(): everything above this line can
+            // still refuse (the capability gate, the army gate, a battle-lock rejection from
+            // NotifyOpened), and a player who never reaches the grid must not be taught about
+            // the charge that is not their blocker.
+            //
+            // (!) KNOWN AND STATED RATHER THAN HIDDEN: this panel owns the modal arbiter, so
+            // DialogueView starts the beat HIDDEN and restores it the frame the grid closes
+            // (the WO-795 truce, DialogueView.cs:161 + TickModalTruce :574-599 - the VM stays
+            // open and Ended is NOT fired). The player therefore reads the panel as they come
+            // back out of the grid, with its door offering to take them straight back in. It
+            // never blocks and never steals the grid.
+            DeNelle.Core.Tutorial.TutorialSignals.Raise(
+                DeNelle.Core.Tutorial.TutorialSignals.RaidsGridOpened);
         }
 
         private void BuildCards()

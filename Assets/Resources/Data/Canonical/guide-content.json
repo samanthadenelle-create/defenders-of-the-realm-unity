@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Game Guide content for Defenders of the Realm: Echoes of Elarion. Authored content for the in-game opt-in help codex (WO-588). The guide panel (GuideVM + View) renders whatever sections this file declares: tabs down the left, body + tips on the right. Adding or editing a section is a DATA change, no code. Each section is grounded in the SHIPPED game; any not-yet-built system is marked status 'coming' rather than described as live. Building entries are enumerated one-per-real-building from Assets/Resources/Data/Canonical/buildings.json (plus the Heart of Elarion, the village's central structure). Display names follow canon-strings.json. Tone: warm, concise, encouraging. FRESHNESS PASS 2026-08-02: corrected the Echo roster cap (6, not 4), dropped the unbuilt silo-upgrade promise, retired the old 'hold the last light' tagline line, and added echo_affinity / echo_synergy / work_queue / raids / dungeons / saves_signin. Player-facing naming law: the timed-work system is called the Work Queue with Builders / Training / Research channels -- never 'Obsidian' (ObsidianQueueHud.cs). The GLOSSARY tabs are NOT in this file: they are appended by GuideVM from glossary.json (same Canonical folder).",
+  "_comment": "Canonical Game Guide content for Defenders of the Realm: Echoes of Elarion. Authored content for the in-game opt-in help codex (WO-588). The guide panel (GuideVM + View) renders whatever sections this file declares: tabs down the left, body + tips on the right. Adding or editing a section is a DATA change, no code. Each section is grounded in the SHIPPED game; any not-yet-built system is marked status 'coming' rather than described as live. Building entries are enumerated one-per-real-building from Assets/Resources/Data/Canonical/buildings.json (plus the Heart of Elarion, the village's central structure). Display names follow canon-strings.json. Tone: warm, concise, encouraging. HEARTFIRE PASS 2026-09-05 (WO-1415): added the 'heartfire' section. It had ZERO mentions here while being the ONE gate on raiding (WO-1379), which is the copy gap the owner found in felt-test. The ruled sentence 'each one sends you on a raid' is shared verbatim with the introduction beat and HeartfireCharges.SpendSentence. FRESHNESS PASS 2026-08-02: corrected the Echo roster cap (6, not 4), dropped the unbuilt silo-upgrade promise, retired the old 'hold the last light' tagline line, and added echo_affinity / echo_synergy / work_queue / raids / dungeons / saves_signin. Player-facing naming law: the timed-work system is called the Work Queue with Builders / Training / Research channels -- never 'Obsidian' (ObsidianQueueHud.cs). The GLOSSARY tabs are NOT in this file: they are appended by GuideVM from glossary.json (same Canonical folder).",
   "version": 1,
   "sections": [
     {
@@ -285,6 +285,22 @@
         "Build a Barracks and your first squad is free; with no troops the Raids card in Journey dims until you train more.",
         "Retreat saves the survivors -- a bad raid does not have to be a total loss.",
         "Raids are your troops; Arena battles are your hero alone."
+      ]
+    },
+    {
+      "id": "heartfire",
+      "tab": "Heartfire",
+      "title": "Heartfire",
+      "status": "live",
+      "_note": "WO-1415 (owner ruling 2026-09-05). Measured before this edit, grep -ci for 'heartfire' in this file returned ZERO: the mechanic that decides whether a player may raid at all (WO-1379 made Heartfire the ONE gate) was the one mechanic the guide never explained. The owner's own words from the felt-test on build 2026.09.05.356468: 'Heartfire is full, i dont understand as a new player what to do with that. No one in game has introduced me to heartfire.' THE SENTENCE 'each one sends you on a raid' IS THE OWNER'S RULING AND IS VERBATIM - it also lives as DeNelle.Core.State.HeartfireCharges.SpendSentence, is carried by the introduction beat (dialogues.json tut_ctx_heartfire) and is asserted in both files by HeartfireRegression PIN H, so the three surfaces cannot drift. The numbers (three charges, four hours) are the shipped defaults pinned by HeartfireRegression A0 against RemoteTunables.RaidHeartfireMaxChargesDefault / RaidHeartfireRegenSecondsDefault; they are tunable, so re-read them there before editing this copy.",
+      "body": [
+        "Heartfire is the Heart of Elarion reaching past its own borders to keep an expedition alive, and each one sends you on a raid. You hold up to three. It is not a resource: nothing produces it, nothing sells it, nothing else can spend it, and no amount of anything will buy one.",
+        "One charge rekindles every four hours, whether the game is open or not, and the pool stacks to three - a day away from the game is never wasted. A charge is spent when you set out, so a raid costs one whether you win or lose. With none left the Heart is not ready to send you back yet, and the raid door tells you how long the wait is."
+      ],
+      "tips": [
+        "The Heart plate on the left of the town screen reads Heartfire 3/3 (raids); the marks beside it are your charges, filled or empty.",
+        "Heartfire is the only thing that decides WHEN you may raid - a camp you cleared an hour ago is not closed to you.",
+        "Sitting at three? Nothing accrues past the cap, so a full pool is a raid you have not taken yet."
       ]
     },
     {

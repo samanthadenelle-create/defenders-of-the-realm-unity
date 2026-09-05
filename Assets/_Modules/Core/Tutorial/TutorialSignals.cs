@@ -134,6 +134,22 @@ namespace DeNelle.Core.Tutorial
         /// OPENED (ManageScreenPanel.ToggleQueueDrawer). Completion of the TRAINING NOW beat.</summary>
         public const string ManageQueueOpened = "manage.queue_opened";
 
+        // -- WO-1415: the Heartfire introduction beat --
+        /// <summary>WO-1415 - the RAIDS GRID is on screen (RaidSelectionScreen.OpenInternal, raised
+        /// after the capability/army gates have passed and the panel has taken the modal arbiter).
+        /// The moment Heartfire first means something: a new player looking at the camp list is
+        /// about to spend a charge, while at founding they have nothing to spend one on.
+        ///
+        /// <para>(!) IT IS NOT panel.opened:&lt;PanelId&gt;. The raid grid registers with
+        /// PanelManager ("Raids"), NOT PanelRouter, so no member of that family is ever raised for
+        /// it - a beat authored against panel.opened:Raids would never fire once.</para>
+        ///
+        /// <para>RAISED ON EVERY OPEN, deliberately: the beat's tutorial_ctx one-shot latch dedupes,
+        /// and TryTriggerContextual refuses while another hint is live (TutorialFlow.cs:2492), so a
+        /// single raise could be swallowed by a hint that happened to be up. Re-raising per open
+        /// makes the next visit the retry - no timer, no second mechanism.</para></summary>
+        public const string RaidsGridOpened = "raids.grid_opened";
+
         private static readonly HashSet<string> _fired =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

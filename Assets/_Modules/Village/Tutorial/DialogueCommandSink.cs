@@ -202,6 +202,18 @@ namespace DeNelle.Village
                     if (!PanelBlockedByBattle("OpenJourney")) PanelRouter.Open(PanelId.JourneyDeck);
                     break;
 
+                // -- WO-1415: the Heartfire introduction beat's ONE door ------------
+                // <<OpenRaids>> lands on the raid card grid itself, not the deck the card
+                // sits on - the beat is read on the way OUT of that grid (the WO-795 modal
+                // truce), so its door has to be able to put the player straight back in.
+                // (!) NO SECOND CAPABILITY CHECK HERE. RaidSelectionScreen.Open is the single
+                // door every raid entry passes through and it asks PostureSignals.RaidCapable
+                // FIRST (WO-1374); a hand-rolled check beside it is the second predicate that
+                // header forbids by name, and the drift between two checks IS the defect.
+                case "OpenRaids":
+                    if (!PanelBlockedByBattle("OpenRaids")) DeNelle.Village.Hero.RaidSelectionScreen.Open();
+                    break;
+
                 // ── HUD objective / hint / highlight → TutorialHudOverlay ─────────
                 case "set_hud_objective": EnsureOverlay()?.SetObjective(a0, ParseInt(a1), ParseInt(a2)); break;
                 case "set_hud_hint":      EnsureOverlay()?.SetHint(a0); break;

@@ -142,6 +142,30 @@ rekindles every four hours. Stacks to three, so sleeping or working is not punis
 > The same integer, and a completely different experience. Not *you may not raid because TIMER*, but
 > **the Heart is not ready to send you back yet.**
 
+### ✅ RULED 2026-09-05 — THE PLATE SAYS WHAT A CHARGE **BUYS**, AND SOMETHING FINALLY INTRODUCES IT (WO-1415)
+
+> Owner, felt-test on build 2026.09.05.356468: ***"Heartfire is full, i dont understand as a new
+> player what to do with that. No one in game has introduced me to heartfire."***
+
+⚠ **The mock above is superseded as SHIPPED COPY** (its fiction stands; only the words on the plate
+moved). Measured that morning: `guide-content.json`, `dialogues.json` and `tutorial-steps.json`
+returned **ZERO** mentions of "heartfire" between them, while WO-1379 had just made it the ONE gate on
+raiding — so the mechanic that decides access to the core loop was the one mechanic the game never
+explained, and `Heartfire is full` reported a STATE with no consequence attached.
+
+- **THE SENTENCE, in the owner's words: *"each one sends you on a raid"*.** One owner in code —
+  `DeNelle.Core.State.HeartfireCharges.SpendSentence` — carried verbatim by the guide entry and by the
+  introduction beat; `HeartfireRegression` PIN H reds if either file stops carrying it.
+- **THE PLATE USES PARENTHESES, NOT THE SENTENCE** (owner ruling, and the reason is measured): the
+  Heartfire row is ONE fitted line inside the WO-1384 Heart plate, and a sentence ellipsises there.
+  Charged: **`Heartfire 3/3 (raids)`**. Spent: **`Heartfire 0/3 (raids) - next in 3h 12m`**. The three
+  greyscale-safe marks stay; a full pool no longer paints a second row at all. Both strings are
+  composed by `HeartfireCharges.PlateLabel` / `PlateRekindle` and pinned byte-exact (PIN G).
+- **INTRODUCED AT THE FIRST RAIDS-GRID OPEN, never at founding** — a new player has no raid to spend a
+  charge on. One non-mandatory, one-shot dialogue beat (`ctx_heartfire` → `tut_ctx_heartfire`), latched
+  on `seenTutorials`, no schema bump; the mandatory chain stays at eight.
+- The refusal (`HeartfireService.BlockedMessage`) is UNCHANGED and still names the precise wait.
+
 ⛔ **Heartfire is a CHARGE, not a currency.** It is never earned, traded, stored, gifted or bought.
 Economy map §3 (*do not add another currency*) is **not** violated and must not be read as licence to
 add one.

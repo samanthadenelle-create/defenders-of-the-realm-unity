@@ -1385,8 +1385,14 @@ namespace DeNelle.Editor.Regression
         //        floor >= the objective line's ceiling - it cannot be the plate's smallest text;
         //   10c  at both aspects every row's band seats its floor line (floor x 1.2), so the
         //        post-layout guard has no reason to relax a font below its floor;
-        //   10d  the widest marks row ("[*] [*] [*]" + gap + "Heartfire", plus the authored
-        //        letter-spacing) measures inside the row at the floor.
+        //   10d  the widest marks row ("[*] [*] [*]" + gap + "Heartfire 0/3 (raids)", plus the
+        //        authored letter-spacing) measures inside the row at the floor.
+        //        (!) WO-1415 WIDENED THAT ROW. The owner ruled the plate must name what a
+        //        charge buys - HeartfireCharges.PlateLabel, "Heartfire 3/3 (raids)" - so the
+        //        measured string is now the PlateLabel form, 12 characters longer than the
+        //        bare Name it used to be. It is composed from the SAME Core methods the View
+        //        paints with, so a reworded plate is re-measured here rather than silently
+        //        ellipsised on the device.
         // RED, one line each: put HeartfireBandY0/Y1 back to 0.04f/0.32f (10a: overlaps the
         // rekindle band and leaves the frame); set HeartfireFontMin = 16f (10b); or set
         // HudLayoutBands.HeartMount back to y 0.700 (10c: the four rows no longer seat).
@@ -1490,8 +1496,12 @@ namespace DeNelle.Editor.Regression
             }
 
             // 10d - the widest marks row measures inside the row at the floor.
-            string marks = DeNelle.Core.State.HeartfireCharges.FlameRow(3, 3) + "   " +
-                           DeNelle.Core.State.HeartfireCharges.Name;
+            // WO-1415: the row is now marks + PlateLabel ("Heartfire 0/3 (raids)"), not marks +
+            // Name. The SPENT pool is the widest case (0/3 and 3/3 are the same length, but the
+            // spent form is what a new player stares at), and it is composed here from the same
+            // Core methods HudKitController paints with.
+            string marks = DeNelle.Core.State.HeartfireCharges.FlameRow(0, 3) + "   " +
+                           DeNelle.Core.State.HeartfireCharges.PlateLabel(0, 3);
             float rowX0, rowX1;
             if (!TryFloatConst(src, "HeartRowX0", out rowX0)) rowX0 = 0.05f;
             if (!TryFloatConst(src, "HeartRowX1", out rowX1)) rowX1 = 0.95f;

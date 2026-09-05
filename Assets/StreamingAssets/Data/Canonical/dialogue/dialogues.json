@@ -1,6 +1,6 @@
 {
-  "version": 10,
-  "_note": "v10 (WO-1389, 2026-09-05): ONE post-first-raid teaching record added - tut_ctx_post_raid - the WHY half of the reason-to-train-and-upgrade beat (tutorial-steps.json ctx_post_raid). Three panels, each ONE image (a portrait command in a lines-less setup node, because DialogueRunner fires a node's commands AFTER its lines) + ONE sentence + ONE door (an option whose goto lands on a commands-only node: OpenManageTroops / OpenManageTroops troop-footman / OpenJourney - the brom_intro open_board pattern). THE NUMBERS ARE LIVE TEXT TOKENS - {army.used}, {army.cap}, {army.missing}, {footman.next}, {camp.next.line} - resolved at surface time by DialogueTextTokens (Core) with resolvers registered by PostRaidBeatTokens (Village) from the raid gate, troop-upgrades.json and scene-configs.json; unknown tokens pass through untouched so every earlier line is byte-identical. Speaks as {guide} and nothing else, per the invariant below. Voice is the plain HUD voice pending owner Q1. PRIOR: v9 (WO-1378, 2026-09-04): two RAID-LOOP teaching records added - tut_ctx_raid_barracks (three lines) and tut_ctx_raid_first - carrying the exact strings from docs/CREATIVE_CANON_ELARION_2026-09-04.md section 8.1. They exist because the FTUE never mentioned the loop at all: barracks/raid/army/troop each returned ZERO occurrences in tutorial-steps.json before this edit. All three speak as the {guide} token and nothing else, per the invariant below. PRIOR: v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
+  "version": 11,
+  "_note": "v11 (WO-1415, 2026-09-05): ONE Heartfire INTRODUCTION record added - tut_ctx_heartfire - one panel, one sentence, one door (OpenRaids), fired by tutorial-steps.json ctx_heartfire the first time the player opens the raid grid. The sentence 'each one sends you on a raid' is the OWNER'S RULING, verbatim, and is shared with the guide entry and DeNelle.Core.State.HeartfireCharges.SpendSentence so the three surfaces cannot drift (HeartfireRegression PIN G). Speaks as {guide} and nothing else, per the invariant below. PRIOR: v10 (WO-1389, 2026-09-05): ONE post-first-raid teaching record added - tut_ctx_post_raid - the WHY half of the reason-to-train-and-upgrade beat (tutorial-steps.json ctx_post_raid). Three panels, each ONE image (a portrait command in a lines-less setup node, because DialogueRunner fires a node's commands AFTER its lines) + ONE sentence + ONE door (an option whose goto lands on a commands-only node: OpenManageTroops / OpenManageTroops troop-footman / OpenJourney - the brom_intro open_board pattern). THE NUMBERS ARE LIVE TEXT TOKENS - {army.used}, {army.cap}, {army.missing}, {footman.next}, {camp.next.line} - resolved at surface time by DialogueTextTokens (Core) with resolvers registered by PostRaidBeatTokens (Village) from the raid gate, troop-upgrades.json and scene-configs.json; unknown tokens pass through untouched so every earlier line is byte-identical. Speaks as {guide} and nothing else, per the invariant below. Voice is the plain HUD voice pending owner Q1. PRIOR: v9 (WO-1378, 2026-09-04): two RAID-LOOP teaching records added - tut_ctx_raid_barracks (three lines) and tut_ctx_raid_first - carrying the exact strings from docs/CREATIVE_CANON_ELARION_2026-09-04.md section 8.1. They exist because the FTUE never mentioned the loop at all: barracks/raid/army/troop each returned ZERO occurrences in tutorial-steps.json before this edit. All three speak as the {guide} token and nothing else, per the invariant below. PRIOR: v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
   "speakers": [
     {
       "name": "Mother Wren",
@@ -1437,6 +1437,35 @@
         {
           "id": "door_journey",
           "commands": [ { "verb": "OpenJourney", "args": [] } ]
+        }
+      ]
+    },
+    {
+      "id": "tut_ctx_heartfire",
+      "_note": "WO-1415 - THE INTRODUCTION. Nothing in the game had ever said what Heartfire is: grep -ci 'heartfire' returned ZERO across this file, tutorial-steps.json and guide-content.json, while the HUD plate printed the word and WO-1379 made it the ONE gate on raiding. ONE panel, ONE sentence, ONE door - the tut_ctx_post_raid shape at its smallest. THE SENTENCE IS THE OWNER'S RULING, VERBATIM: 'each one sends you on a raid' (DeNelle.Core.State.HeartfireCharges.SpendSentence; HeartfireRegression PIN H asserts this record and the guide entry both still carry it). IMAGE: the portrait command rides a lines-less setup node because DialogueRunner fires a node's commands AFTER its lines - the same reason tut_ctx_post_raid has img1/img2/img3 - and the sprite is one already proven to load (tut_ctx_post_raid img3 uses it; DataRegression.CheckDialogueSpeakers loads every portrait path). DOOR: an option whose goto lands on a commands-only node (the brom_intro open_board pattern), firing the OpenRaids verb added to DialogueCommandSink for this beat - it calls RaidSelectionScreen.Open, which is the ONE door that asks the WO-1374 capability gate first, so the beat can never hand a player a camp list they may not use. 'Later' goes to 'end', which is deliberately not a node: an unresolved goto ends the dialogue, the same convention tut_ctx_post_raid's Later option uses. NO LIVE TOKENS: the count and the interval are tunables but this copy states the SHIPPED defaults, which HeartfireRegression A0 pins - a retune that changed them would red that pin before it reached a player. Speaks as {guide} and nothing else (TutorialGuideIdentityRegression Case 2). Voice is the plain HUD voice.",
+      "startNode": "img1",
+      "nodes": [
+        {
+          "id": "img1",
+          "commands": [ { "verb": "portrait", "args": [ "UI/ElarionMedieval/cards/raids-locked" ] } ],
+          "next": "p1"
+        },
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Heartfire is the Heart's strength beyond its own reach. You hold three, and each one sends you on a raid - one rekindles every four hours."
+            }
+          ],
+          "options": [
+            { "text": "Open Raids", "goto": "door_raids" },
+            { "text": "Later", "goto": "end" }
+          ]
+        },
+        {
+          "id": "door_raids",
+          "commands": [ { "verb": "OpenRaids", "args": [] } ]
         }
       ]
     },

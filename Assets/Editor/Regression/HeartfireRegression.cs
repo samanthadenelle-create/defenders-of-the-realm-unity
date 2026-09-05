@@ -122,6 +122,8 @@ namespace DeNelle.Editor.Regression
             ClockLintCases(f);         // PIN D
             SpendRoomCases(f);         // PIN E
             DoorGateCases(f);          // PIN F
+            PlateCopyCases(f);         // PIN G (the plate says what a charge BUYS)
+            IntroducedCases(f);        // PIN H (the game introduces the word at all)
 
             if (f.Count == 0)
             {
@@ -134,7 +136,9 @@ namespace DeNelle.Editor.Regression
                          "is no longer than the shortest authored (retained, superseded) camp cooldown; " +
                          "and the raid door consults HasCharge ONLY -- no RaidCooldownService reference " +
                          "anywhere on RaidSelectionScreen, the refusal is the Heart's sentence, the door " +
-                         "reads and the entry seam spends, with its empty-pool Fail tripwire intact";
+                         "reads and the entry seam spends, with its empty-pool Fail tripwire intact; " +
+                         "the plate names what a charge BUYS at both states; and the guide, the " +
+                         "introduction dialogue and the tutorial step all carry the ruled sentence";
                 return true;
             }
             reason = "HEARTFIRE FAIL x" + f.Count + ": " + string.Join(" | ", f);
@@ -582,6 +586,103 @@ namespace DeNelle.Editor.Regression
         {
             try { return File.Exists(path) ? File.ReadAllText(path) : null; }
             catch (IOException) { return null; }
+        }
+
+        // =====================================================================
+        //  PIN G -- THE PLATE SAYS WHAT A CHARGE BUYS, NOT ONLY THAT IT IS FULL
+        // =====================================================================
+        // WO-1415, owner felt-test 2026-09-05 on build 2026.09.05.356468, verbatim:
+        // "Heartfire is full, i dont understand as a new player what to do with that."
+        // The plate reported a STATE with no consequence attached while Heartfire was the
+        // ONE gate on raiding (WO-1379). The owner ruled the exact plate strings, and they
+        // are asserted BYTE-EXACT here because "roughly this" is how copy drifts back.
+        //
+        // MUTATION THAT REDS IT (one line): delete the " + SpendTag" from
+        // HeartfireCharges.PlateLabel - the plate goes back to a bare state word and G1/G2
+        // both fail by name.
+        private static void PlateCopyCases(List<string> f)
+        {
+            string charged = HeartfireCharges.PlateLabel(3, 3);
+            string spentLabel = HeartfireCharges.PlateLabel(0, 3);
+            string spentTail = HeartfireCharges.PlateRekindle(0, 3, 3d * 3600d + 12d * 60d);
+
+            // G1 - the ruled charged string, exactly.
+            if (!string.Equals(charged, "Heartfire 3/3 (raids)", StringComparison.Ordinal))
+                f.Add("G1 the charged plate row reads '" + charged + "' -- the owner ruled " +
+                      "'Heartfire 3/3 (raids)' (WO-1415). The parenthetical is what makes the row say " +
+                      "what a charge BUYS in a width that seats on one fitted line");
+
+            // G2 - the ruled spent string, composed exactly as the View composes it.
+            string spent = spentLabel + " - " + spentTail;
+            if (!string.Equals(spent, "Heartfire 0/3 (raids) - next in 3h 12m", StringComparison.Ordinal))
+                f.Add("G2 the spent plate reads '" + spent + "' -- the owner ruled " +
+                      "'Heartfire 0/3 (raids) - next in 3h 12m'");
+
+            // G3 - it is not a bare state word. This is the ticket in one assertion: a row that
+            // says only "Heartfire" or only "Heartfire is full" is the defect being fixed.
+            if (charged.IndexOf(HeartfireCharges.SpendTag, StringComparison.Ordinal) < 0 ||
+                string.Equals(charged, HeartfireCharges.Name, StringComparison.Ordinal))
+                f.Add("G3 the plate row '" + charged + "' carries no consequence clause -- a state word " +
+                      "with nothing attached is exactly what the owner could not act on");
+
+            // G4 - a full pool shows NO countdown row (there is nothing to count down to), and a
+            // live wait is never rendered as zero (the Clock(0.4s) rule, one row down).
+            if (HeartfireCharges.PlateRekindle(3, 3, 0d).Length != 0)
+                f.Add("G4 a FULL pool still paints a rekindle row ('" +
+                      HeartfireCharges.PlateRekindle(3, 3, 0d) + "') -- there is nothing pending to name");
+            if (HeartfireCharges.ShortWait(20d) == "0m")
+                f.Add("G4 ShortWait(20s) rounded a live wait down to '0m' -- a refused march with a zeroed " +
+                      "wait reads as a broken button");
+
+            AssertAscii(f, "plate row", charged);
+            AssertAscii(f, "plate rekindle row", spentTail);
+        }
+
+        // =====================================================================
+        //  PIN H -- SOMETHING IN THE GAME ACTUALLY INTRODUCES THE WORD
+        // =====================================================================
+        // THE MEASURED RED THIS TICKET WAS MINTED ON (2026-09-05): grep -ci "heartfire"
+        // returned ZERO in guide-content.json, dialogues.json AND tutorial-steps.json. The
+        // word was introduced to the player by being printed on a HUD plate. This pin holds
+        // all three closed at once, and holds the SENTENCE identical across them -- the
+        // three surfaces are copy, and copy in three files is exactly the duplicated state
+        // CLAUDE.md sections 2/5/16 exist for. One owner: HeartfireCharges.SpendSentence.
+        //
+        // MUTATION THAT REDS IT (one line each): delete the "heartfire" section from
+        // guide-content.json (H1); reword the sentence in tut_ctx_heartfire's line (H2);
+        // delete the ctx_heartfire step (H3).
+        private const string GuideResRel  = "Resources/Data/Canonical/guide-content.json";
+        private const string DlgResRel    = "Resources/Data/Canonical/dialogue/dialogues.json";
+        private const string StepsResRel  = "Resources/Data/Canonical/tutorial/tutorial-steps.json";
+
+        private static void IntroducedCases(List<string> f)
+        {
+            CheckIntroFile(f, "H1", GuideResRel, "the Game Guide", true);
+            CheckIntroFile(f, "H2", DlgResRel, "the introduction dialogue", true);
+            // The STEP file carries the beat, not the copy: it names the word and the dialogue
+            // it plays, while the sentence itself lives in the dialogue record.
+            CheckIntroFile(f, "H3", StepsResRel, "the tutorial beat", false);
+        }
+
+        private static void CheckIntroFile(List<string> f, string tag, string relativeToAssets,
+                                           string what, bool mustCarrySentence)
+        {
+            string text = TryReadText(Path.Combine(Application.dataPath, relativeToAssets));
+            if (text == null)
+            {
+                f.Add(tag + " " + relativeToAssets + " is missing -- " + what + " cannot be checked");
+                return;
+            }
+            if (text.IndexOf(HeartfireCharges.Name, StringComparison.OrdinalIgnoreCase) < 0)
+                f.Add(tag + " " + relativeToAssets + " never says '" + HeartfireCharges.Name + "' -- " +
+                      what + " is back to introducing the ONE gate on raiding by printing it on a HUD " +
+                      "plate and hoping (the measured WO-1415 red: zero mentions in all three files)");
+            if (mustCarrySentence &&
+                text.IndexOf(HeartfireCharges.SpendSentence, StringComparison.Ordinal) < 0)
+                f.Add(tag + " " + relativeToAssets + " does not carry the owner's sentence '" +
+                      HeartfireCharges.SpendSentence + "' verbatim -- the plate, the guide and the " +
+                      "introduction must say the same thing about what a charge buys, and a reworded " +
+                      "copy in a data file is how that drifts");
         }
 
         // =====================================================================

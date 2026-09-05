@@ -350,9 +350,82 @@ namespace DeNelle.Core.State
         public static string CountLabel(int charges, int maxCharges) =>
             Name + " " + charges + "/" + maxCharges;
 
+        // ---------------------------------------------------------------------
+        //  WO-1415 - WHAT A CHARGE BUYS. The owner's sentence, and the plate form.
+        // ---------------------------------------------------------------------
+        // The felt-test that opened WO-1415: "Heartfire is full, i dont understand as a
+        // new player what to do with that. No one in game has introduced me to heartfire."
+        // The plate reported a STATE with no consequence attached, and Heartfire is the ONE
+        // gate on whether the player may raid at all (WO-1379). So the consequence is now
+        // said out loud, and it is said in exactly ONE place - here - because the guide
+        // entry, the introduction beat and the plate must never drift apart.
+
         /// <summary>
-        /// The line UNDER the flames: what the Heart is doing. "Heartfire is full" when
-        /// nothing is pending, otherwise the rekindle countdown.
+        /// THE OWNER'S SENTENCE (ruling 2026-09-05, WO-1415): what one charge buys, in her
+        /// words. The guide entry and the introduction dialogue carry it VERBATIM, and
+        /// HeartfireRegression asserts both files still do - a reworded copy in a JSON file
+        /// is the drift this const exists to make impossible.
+        /// <para>(!) The PLATE deliberately does NOT use the sentence. That row is a single
+        /// FITTED line inside the WO-1384 Heart plate, and a sentence ellipsises there; the
+        /// owner ruled the parenthetical form for the plate instead (see
+        /// <see cref="PlateLabel"/>). Same fact, two lengths, one owner.</para>
+        /// </summary>
+        public const string SpendSentence = "each one sends you on a raid";
+
+        /// <summary>The plate's consequence tag - the short form of
+        /// <see cref="SpendSentence"/>, ruled by the owner for the fitted row.</summary>
+        public const string SpendTag = "(raids)";
+
+        /// <summary>
+        /// THE PLATE'S FIRST ROW, minus the marks: "Heartfire 3/3 (raids)" (owner ruling
+        /// 2026-09-05). It names the count AND what a charge is for, at a width that seats
+        /// at the row's font floor - which "Heartfire - each one sends you on a raid" does
+        /// not.
+        /// </summary>
+        public static string PlateLabel(int charges, int maxCharges) =>
+            CountLabel(charges, maxCharges) + " " + SpendTag;
+
+        /// <summary>
+        /// THE PLATE'S SECOND ROW: "next in 3h 12m" while a charge is pending, and EMPTY on
+        /// a full pool. Empty rather than "Heartfire is full" because a state word with no
+        /// consequence is the exact thing WO-1415 was raised about; the first row already
+        /// says 3/3, which is the same fact without the dead end.
+        /// </summary>
+        public static string PlateRekindle(int charges, int maxCharges, double secondsToNext)
+        {
+            if (maxCharges < 1) maxCharges = 1;
+            if (charges >= maxCharges) return string.Empty;
+            return "next in " + ShortWait(secondsToNext);
+        }
+
+        /// <summary>
+        /// A COARSE wait, for a row read at a glance: "3h 12m", "12m". Distinct from
+        /// <see cref="Clock"/> (h:mm:ss) on purpose - the refusal toast names a precise wait
+        /// because a refused player is deciding whether to stay, while the plate is ambient.
+        /// <para>Rounds UP to the minute and NEVER renders "0m": a live wait shown as zero
+        /// reads as a broken button (the same rule <see cref="Clock"/> carries).</para>
+        /// </summary>
+        public static string ShortWait(double seconds)
+        {
+            if (double.IsNaN(seconds) || seconds < 0d) seconds = 0d;
+            long totalMinutes = (long)Math.Ceiling(seconds / 60d);
+            if (totalMinutes < 1) totalMinutes = 1;
+            long h = totalMinutes / 60;
+            long m = totalMinutes % 60;
+            return h > 0 ? h + "h " + m + "m" : m + "m";
+        }
+
+        /// <summary>
+        /// The COMPOSED one-line form: "Heartfire is full" / "Heartfire rekindles in
+        /// 3:42:18".
+        /// <para>(!) WO-1415 MOVED THE PLATE OFF THIS. The Heart plate now paints
+        /// <see cref="PlateLabel"/> on its marks row and <see cref="PlateRekindle"/> on the
+        /// row beneath, because the owner ruled the plate must name what a charge BUYS and
+        /// not only its state. This composer is retained as the single-line form for any
+        /// surface that has one row rather than two - HudKitController's own fallback branch
+        /// (a factory failure that leaves the second label null) still composes the ruled
+        /// pair with " - " rather than calling this, so the ruled string survives there
+        /// too.</para>
         /// </summary>
         public static string RekindleLine(int charges, int maxCharges, double secondsToNext)
         {

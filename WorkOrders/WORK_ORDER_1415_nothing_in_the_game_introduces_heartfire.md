@@ -1,6 +1,6 @@
 # WO-1415: nothing in the game ever introduces Heartfire - and it is now the ONE gate on raiding
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the owner's felt-test on build 2026.09.05.356468. ⭐ **RULED 2026-09-05: the sentence is "each one sends you on a raid"** (owner: "yes use that sentence"). Merged-review ruling #3 is CLOSED; the copy below is now canon, not a proposal.
+**Status:** IN PROGRESS 2026-09-05 11:02 - landed + gated (COMPILE_GATE_OK 10:58, REGRESSION_OK 383/383 11:01 incl. HeartfireRegression PIN G/PIN H and TutorialStepReachability case 9); building to the device now. ⭐ **RULED 2026-09-05: the sentence is "each one sends you on a raid"** (owner: "yes use that sentence"). Merged-review ruling #3 is CLOSED; the copy below is now canon, not a proposal.
 
 ## Owner, verbatim (2026-09-05 10:2x)
 > "Heartfire is full, i dont understand as a new player what to do with that. No one in game has

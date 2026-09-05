@@ -4532,28 +4532,37 @@ namespace DeNelle.HUD.Kit
             _heartfireSecondsPainted = secs;
 
             string flames = DeNelle.Core.State.HeartfireCharges.FlameRow(lit, max);
-            string line = DeNelle.Core.State.HeartfireCharges.RekindleLine(lit, max, secs);
+            // WO-1415 (owner ruling 2026-09-05): the plate says what a charge BUYS, not only
+            // that it is full - "Heartfire 3/3 (raids)" / "Heartfire 0/3 (raids) - next in
+            // 3h 12m". The PARENTHETICAL form and not the sentence, because this row is one
+            // FITTED line (FitSingleLine at its own floor) and a sentence ellipsises there;
+            // both strings are composed in DeNelle.Core.State.HeartfireCharges, which is the
+            // ONE owner of every Heartfire word, so the guide entry and the introduction beat
+            // cannot drift from what the plate says.
+            string label = DeNelle.Core.State.HeartfireCharges.PlateLabel(lit, max);
+            string line = DeNelle.Core.State.HeartfireCharges.PlateRekindle(lit, max, secs);
             // WO-1384: two rows, two labels. The marks row keeps the words; the rekindle line
             // has its own band so neither is shrunk to seat the other. If the second label is
-            // absent (it is built in the same method, so only a factory failure) the old
-            // combined text is painted rather than dropping the line.
+            // absent (it is built in the same method, so only a factory failure) the combined
+            // text is painted rather than dropping the line - and the combined form is the
+            // owner's ruled spent string exactly, "<label> - <line>".
             if (_heartfireRekindleLabel != null)
             {
-                _heartfireLabel.text = flames + HeartfireMarksGap + DeNelle.Core.State.HeartfireCharges.Name;
+                _heartfireLabel.text = flames + HeartfireMarksGap + label;
                 _heartfireRekindleLabel.text = line;
             }
             else
             {
-                _heartfireLabel.text = flames + HeartfireMarksGap + DeNelle.Core.State.HeartfireCharges.Name +
-                                       "\n" + line;
+                _heartfireLabel.text = flames + HeartfireMarksGap + label +
+                                       (string.IsNullOrEmpty(line) ? string.Empty : " - " + line);
             }
 
             // Only the COUNT is worth a line; the countdown moves every second and would
             // otherwise be a per-second firehose in every capture (the lesson of the
             // [Flow:Offset] ring-buffer eviction, memory logcat-ring-buffer-destroys-evidence).
             if (force || countMoved)
-                FlowTrace.Step("HudKit", "heartfire painted -> " + flames + " (" + lit + "/" + max +
-                               "), line '" + line + "'");
+                FlowTrace.Step("HudKit", "heartfire painted -> " + flames + " '" + label +
+                               "' (" + lit + "/" + max + "), rekindle row '" + line + "'");
         }
 
         private static string Cap(string s) =>

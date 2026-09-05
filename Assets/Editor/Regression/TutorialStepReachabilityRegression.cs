@@ -188,6 +188,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "arc-shape", () => Case6_ArcShape(steps, failures, notes));
                     Case(failures, "loop-taught", () => Case7_LoopTaught(steps, failures, notes));
                     Case(failures, "post-raid-beat", () => Case8_PostRaidBeat(steps, failures, notes));
+                    Case(failures, "heartfire-intro", () => Case9_HeartfireIntro(steps, failures, notes));
                 }
                 Case(failures, "arm-safety", () => Case4_ArmSafety(failures, notes));
             }
@@ -1300,6 +1301,164 @@ namespace DeNelle.Editor.Regression
                 if (string.IsNullOrEmpty(training.Hint))
                     failures.Add("[post-raid-beat] '" + PostRaidTrainingBeatId + "' has no hint - a spotlight with no dialogue must SAY something");
             }
+        }
+
+        // =====================================================================
+        //  CASE 9 - the HEARTFIRE INTRODUCTION is reachable, and is not mandatory (WO-1415)
+        // =====================================================================
+        // THE MEASURED RED THIS CASE WAS WRITTEN ON: grep -ci "heartfire" returned ZERO in
+        // tutorial-steps.json, dialogues.json and guide-content.json, while WO-1379 had just
+        // made Heartfire the ONE gate on whether the player may raid at all. The word was
+        // introduced to the player by being printed on a HUD plate.
+        //
+        // What this pins:
+        //   (a) the beat exists, is CONTEXTUAL, oneShot and non-pausing - the mandatory chain
+        //       stays the eight WO-1012 founding beats (Case 6 owns that count; this case does
+        //       NOT restate it, it only refuses to join it);
+        //   (b) it triggers on the live raids.grid_opened raise - the FIRST raid-grid open,
+        //       which is the first moment a charge has anywhere to go;
+        //   (c) RaidSelectionScreen actually raises it (the emitter scan), and the raise sits
+        //       in the file that owns the door;
+        //   (d) the dialogue exists, speaks ONE line carrying the owner's ruled sentence
+        //       verbatim, and its ONE door verb is routed by DialogueCommandSink.
+        // MUTATIONS, one line each: delete the ctx_heartfire object from tutorial-steps.json
+        // (a); change its trigger to panel.opened:Raids, which nothing raises (b); delete the
+        // TutorialSignals.Raise line in RaidSelectionScreen.OpenInternal (c); reword the
+        // sentence in tut_ctx_heartfire, or delete the sink's case "OpenRaids" (d).
+        private const string HeartfireBeatId = "ctx_heartfire";
+        private const string HeartfireDialogueId = "tut_ctx_heartfire";
+        private const string RaidSelectionSrc = "Assets/_Modules/Village/Hero/RaidSelectionScreen.cs";
+        private const string HeartfireDoorVerb = "OpenRaids";
+
+        private static void Case9_HeartfireIntro(List<Step> steps, List<string> failures, List<string> notes)
+        {
+            Step beat = null;
+            foreach (var s in steps)
+                if (string.Equals(s.Id, HeartfireBeatId, StringComparison.OrdinalIgnoreCase)) { beat = s; break; }
+
+            string wantTrigger = DeNelle.Core.Tutorial.TutorialSignals.RaidsGridOpened;
+
+            if (beat == null)
+            {
+                failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' is GONE from tutorial-steps.json - " +
+                             "nothing in the game introduces Heartfire again, and it is the ONE gate on " +
+                             "whether the player may raid (WO-1379). The owner's felt-test sentence was " +
+                             "'No one in game has introduced me to heartfire'");
+            }
+            else
+            {
+                // (a) never mandatory, never a gate.
+                if (!beat.Contextual)
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' is not flowId 'contextual' - a " +
+                                 "MANDATORY beat awaiting a raid-grid open the player may never perform strands " +
+                                 "the FTUE, and it would break the eight-beat chain Case 6 pins");
+                if (!beat.OneShot)
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' is not oneShot:true - the raise fires " +
+                                 "on EVERY grid open, so without the latch the panel returns forever");
+                if (beat.PausePressure)
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' sets pausePressure - an introduction never gates");
+                // (skippable is authored true on the step and is not parsed by this suite's Step
+                // model; contextual beats are released by TutorialFlow.TickContextual regardless,
+                // so the escape does not depend on that flag.)
+
+                // (b) + (c) the trigger, and something real that raises it.
+                var exact = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var prefixes = new List<string>();
+                int sites = ScanEmitters(exact, prefixes, failures);
+                if (!string.Equals(beat.TriggerSignal, wantTrigger, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' triggers on '" +
+                                 (beat.TriggerSignal ?? "<none>") + "' - it fires on '" + wantTrigger +
+                                 "'. It is NOT a panel.opened id: the raid grid registers with PanelManager, " +
+                                 "not PanelRouter, so no panel.opened raise ever exists for it");
+                if (!exact.Contains(wantTrigger))
+                    failures.Add("[heartfire-intro] nothing under " + ModulesRoot + " raises '" + wantTrigger +
+                                 "' (" + sites + " Raise sites scanned) - the beat can never be REACHED; " +
+                                 "RaidSelectionScreen.OpenInternal is the emitter");
+
+                if (!string.Equals(beat.IntroDialogue, HeartfireDialogueId, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' plays intro '" +
+                                 (beat.IntroDialogue ?? "<none>") + "' - the panel lives in '" + HeartfireDialogueId + "'");
+                if (string.IsNullOrEmpty(beat.ObjectiveText))
+                    failures.Add("[heartfire-intro] '" + HeartfireBeatId + "' authors no objective text");
+            }
+
+            // (c) the raise lives in the file that owns the door, not in some drive-by helper.
+            string doorSrc = ReadText(RaidSelectionSrc, failures);
+            if (doorSrc != null &&
+                StripComments(doorSrc).IndexOf("TutorialSignals.RaidsGridOpened", StringComparison.Ordinal) < 0)
+                failures.Add("[heartfire-intro] " + RaidSelectionSrc + " no longer raises TutorialSignals" +
+                             ".RaidsGridOpened - the grid is the only surface that knows it opened, and the " +
+                             "beat hangs off that raise");
+
+            // (d) the panel: one line, the ruled sentence verbatim, one routed door.
+            string dlgRaw = ReadText(DialoguesRes, failures);
+            string sinkSrc = ReadText(CommandSinkSrc, failures);
+            if (dlgRaw == null) return;
+
+            JObject rec = null;
+            try
+            {
+                var arr = JObject.Parse(dlgRaw)["dialogues"] as JArray;
+                if (arr != null)
+                    foreach (var d in arr.OfType<JObject>())
+                        if (string.Equals((string)d["id"], HeartfireDialogueId, StringComparison.Ordinal)) { rec = d; break; }
+            }
+            catch (Exception ex) { failures.Add("[heartfire-intro] dialogues.json is not valid JSON: " + ex.Message); }
+
+            if (rec == null)
+            {
+                failures.Add("[heartfire-intro] dialogues.json has no record '" + HeartfireDialogueId +
+                             "' - the beat fires with nothing to say");
+                return;
+            }
+
+            int lines = 0, doors = 0;
+            bool carriesSentence = false;
+            var verbs = new HashSet<string>(StringComparer.Ordinal);
+            var nodes = rec["nodes"] as JArray;
+            if (nodes != null)
+                foreach (var n in nodes.OfType<JObject>())
+                {
+                    if (n["lines"] is JArray ls)
+                        foreach (var l in ls.OfType<JObject>())
+                        {
+                            lines++;
+                            string text = (string)l["text"] ?? "";
+                            if (text.IndexOf(DeNelle.Core.State.HeartfireCharges.SpendSentence,
+                                             StringComparison.Ordinal) >= 0) carriesSentence = true;
+                        }
+                    if (n["commands"] is JArray cs)
+                        foreach (var c in cs.OfType<JObject>())
+                        {
+                            string verb = (string)c["verb"] ?? "";
+                            verbs.Add(verb);
+                            if (string.Equals(verb, HeartfireDoorVerb, StringComparison.Ordinal)) doors++;
+                        }
+                }
+
+            if (lines < 1)
+                failures.Add("[heartfire-intro] '" + HeartfireDialogueId + "' has no lines");
+            if (!carriesSentence)
+                failures.Add("[heartfire-intro] '" + HeartfireDialogueId + "' does not carry the owner's " +
+                             "sentence '" + DeNelle.Core.State.HeartfireCharges.SpendSentence + "' verbatim - " +
+                             "the plate, the guide and this panel must say the same thing about what a " +
+                             "charge buys (HeartfireCharges.SpendSentence is the one owner)");
+            if (doors < 1)
+                failures.Add("[heartfire-intro] '" + HeartfireDialogueId + "' fires no '" + HeartfireDoorVerb +
+                             "' door - the panel is read on the way OUT of the grid (the WO-795 modal truce " +
+                             "hides it while the grid owns the arbiter), so it has to be able to put the " +
+                             "player back in");
+            if (sinkSrc != null)
+            {
+                string code = StripComments(sinkSrc);
+                foreach (var v in verbs)
+                    if (v != "portrait" && code.IndexOf("case \"" + v + "\"", StringComparison.Ordinal) < 0)
+                        failures.Add("[heartfire-intro] '" + HeartfireDialogueId + "' fires verb '" + v +
+                                     "' which DialogueCommandSink does not route - a dead tap");
+            }
+            notes.Add("heartfire-intro: '" + HeartfireBeatId + "' fires on " + wantTrigger + " -> '" +
+                      HeartfireDialogueId + "' = " + lines + " line(s), " + doors + " door(s); the ruled " +
+                      "sentence is carried verbatim");
         }
 
         // =====================================================================
