@@ -335,21 +335,20 @@ namespace DeNelle.Village.Hero
             string id = item.Id;
             Color tint = DifficultyColor(_vm.DifficultyFor(id));
 
-            // WO-728 — is this camp still recovering from its last clear? Read ONCE per card
-            // build (the service prunes/re-stamps as a side effect; calling it per-label would
-            // repeat that work three times for one card). Cards are rebuilt on every Open, so
-            // the countdown refreshes each time the screen is entered.
-            double cooldownRemaining =
-                DeNelle.Village.World.Camps.RaidCooldownService.RemainingSeconds(id);
-            bool onCooldown = cooldownRemaining > 0d;
+            // WO-1379 (2026-09-05) - THE PER-CAMP WALL IS RETIRED ON THIS SURFACE. This card
+            // used to read RaidCooldownService.RemainingSeconds(id) here and paint "Recovering -
+            // raidable in 12h" plus a dim; the owner ruled "Heartfire replaces the camp wall"
+            // (WO-1379 section 3), so the ONE gate on WHEN you may raid is the Heartfire charge,
+            // checked at the door (OnCardTapped). A card that still said "Recovering" while the
+            // door let the player through would be the wrong-advice failure the lock copy below
+            // exists to stop. The recovery RECORD is still stamped on every clear
+            // (RaidCooldownService.BeginAfterClear) - it is save evidence, not a gate - and
+            // nothing on this screen reads it. HeartfireRegression PIN F reds this file if a
+            // RaidCooldownService reference reappears.
 
             // 2026-09-04 — THE ESCALATION GATE. item.Locked / item.LockReason come from
             // RaidSelectionVM.ResolveLock (authored unlockVictories, then scene availability).
             // The ItemVM fields were always here; nothing read them, so every tier showed open.
-            //
-            // LOCKED WINS OVER COOLDOWN when both apply: a camp the player has not earned is
-            // not "recovering", and telling them to wait 12h for something they cannot enter
-            // at all is the wrong-advice failure the capability gate above exists to stop.
             bool locked = item.Locked;
             string lockCopy = item.LockReason;
             if (locked && string.IsNullOrEmpty(lockCopy))
@@ -362,7 +361,8 @@ namespace DeNelle.Village.Hero
                     "without player-facing copy. Showing a placeholder sentence.");
                 lockCopy = "This expedition is not available yet.";
             }
-            bool dimmed = locked || onCooldown;
+            // Locked is the ONLY dimmed state left on a card (WO-1379 retired the cooldown dim).
+            bool dimmed = locked;
 
             // Card root: a Cell tile (LayoutElement-sized for the scroll layout) with a
             // difficulty-tinted inner rim, and a Button so the whole plaque taps.
@@ -459,27 +459,27 @@ namespace DeNelle.Village.Hero
                     "nor a garrison composition for it, so the locked card cannot say what the wins buy.");
             }
 
-            // Bottom band — the reward hint when the camp is available, the RECOVERY SENTENCE
+            // Bottom band - the reward hint when the camp is available, the LOCK SENTENCE
             // when it is not.
             //
             // ⛔ THE STATE IS CARRIED BY THE WORDS, NOT BY THE COLOUR (WO-728). The owner is
-            // red/green colourblind, so a card that signalled "on cooldown" by going grey or
-            // by tinting the badge red would say NOTHING to her — and a card that just stops
+            // red/green colourblind, so a card that signalled its state by going grey or by
+            // tinting the badge red would say NOTHING to her - and a card that just stops
             // responding to taps reads as a frozen game (the WO-1110 §2 dead-tap defect, found
-            // on this very screen). So a recovering camp SAYS it is recovering and NAMES the
-            // wait; the dimming below is decoration on top of a sentence that already stands
-            // on its own in greyscale.
+            // on this very screen). So a locked camp SAYS what unlocks it; the dimming below is
+            // decoration on top of a sentence that already stands on its own in greyscale.
+            // (WO-1379: the "Recovering - raidable in {0}" branch that used to sit here is
+            // retired with the per-camp wall; an empty Heartfire pool is answered at the door,
+            // in the Heart's words, by OnCardTapped.)
             string bottomLine = locked
                 ? lockCopy
-                : onCooldown
-                    ? DeNelle.Village.World.Camps.RaidCooldownService.DescribeState(id)
-                    : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
+                : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
             var rewardLabel = ElarionUiKit.Label(card.transform,
                 bottomLine, 0.18f, 0.34f,
                 dimmed ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
                 22, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
-            // §1.14 fit-never-truncate: "Recovering - raidable in 12h 45m" must never clip.
+            // Kit 1.14 fit-never-truncate: the longest lock sentence must never clip.
             ElarionUiKit.FitSingleLine(rewardLabel);
 
             // THE CANON LINE — one sentence of target copy under the reward/lock band
@@ -501,9 +501,10 @@ namespace DeNelle.Village.Hero
             if (dimmed)
             {
                 // Decoration only — the sentence above is the signal. The card stays TAPPABLE
-                // on purpose: OnCardTapped answers with the refusal (the remaining time, or the
-                // unlock requirement), which is strictly more useful than an inert button (and
-                // is what makes the state discoverable for a player who did not read the line).
+                // on purpose: OnCardTapped answers with the refusal (the unlock requirement, or
+                // the Heart's rekindle sentence), which is strictly more useful than an inert
+                // button (and is what makes the state discoverable for a player who did not
+                // read the line).
                 cardImg.color = new Color(0.05f, 0.05f, 0.055f, 0.98f);
                 nameLabel.color = ElarionUi.ParchmentDim;
             }
@@ -526,10 +527,11 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
-            // 2026-09-04 — THE ESCALATION GATE, checked BEFORE the cooldown gate. An unearned
-            // camp is not "recovering"; answering with a recovery time would be advice that
-            // cannot possibly work. Never a silent no-op: the toast repeats the exact sentence
-            // already printed on the card, so the two can never drift.
+            // 2026-09-04 - THE ESCALATION GATE, checked BEFORE the Heartfire gate. An unearned
+            // camp cannot be marched on however many charges the Heart holds; answering with
+            // a rekindle time would be advice that cannot possibly work. Never a silent no-op:
+            // the toast repeats the exact sentence already printed on the card, so the two can
+            // never drift.
             string tapLock = _vm != null ? _vm.LockReasonFor(id) : null;
             if (!string.IsNullOrEmpty(tapLock))
             {
@@ -541,23 +543,41 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
-            // WO-728 — THE ENTRY GATE. A camp still recovering from its last clear cannot be
-            // entered, and the refusal SAYS SO and NAMES THE WAIT. Never a silent no-op: a
-            // card that depresses and does nothing is the dead-tap defect this screen already
-            // shipped once. Kept here, at the ONE door into RaidDeployScreen, rather than
-            // inside the deploy screen — refusing after the player has committed a warband
-            // would be a worse moment to say no.
-            if (DeNelle.Village.World.Camps.RaidCooldownService.IsOnCooldown(id))
+            // WO-1379 (2026-09-05) - THE ONE GATE ON WHEN YOU MAY RAID, AND IT IS HEARTFIRE.
+            // Owner, asked directly: "Heartfire replaces the camp wall." This block used to
+            // refuse on RaidCooldownService.IsOnCooldown(id) (the WO-728 per-camp wall); that
+            // gate is RETIRED here and must never come back beside this one - two lockouts
+            // "reads as a bug" (WO-1379 section 3), and HeartfireRegression PIN F reds the
+            // file if a second WHEN gate reappears.
+            //
+            // THE CHECK IS A READ, NOT THE SPEND. HeartfireService.HasCharge reconciles the
+            // pool against the server-anchored clock and answers; the charge itself is spent
+            // ONCE, at the raid ENTRY seam (RaidDeployController.TryInstall -> TrySpend), the
+            // same seam every RaidBase_* entry funnels through. Spending here would double-
+            // charge a player who backs out of the deploy screen. The Fail line that seam
+            // logs on an empty pool is now unreachable from this door and stays in the code
+            // (CLAUDE.md section 12: never strip FlowTrace) as the tripwire for any OTHER
+            // door that opens a raid scene without passing this one.
+            //
+            // THE REFUSAL IS THE HEART'S SENTENCE, IN WORDS, WITH THE WAIT NAMED - never a
+            // bare timer, never a colour (the owner is red/green colourblind), never a silent
+            // no-op (the WO-1110 dead-tap defect this screen already shipped once). Kept at
+            // the ONE door into RaidDeployScreen rather than inside the deploy screen:
+            // refusing after the player has committed a warband would be a worse moment to
+            // say no.
+            int heartfireCharges = DeNelle.Village.World.Camps.HeartfireService.Charges;
+            if (!DeNelle.Village.World.Camps.HeartfireService.HasCharge)
             {
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                    "raid card tap REFUSED - '" + id + "' is on cooldown for another " +
-                    DeNelle.Village.World.Camps.RaidCooldownService.RemainingSeconds(id).ToString("F0") +
-                    "s. The player was told, with the remaining time.");
-                ElarionUiKit.ShowToast(
-                    DeNelle.Village.World.Camps.RaidCooldownService.BlockedMessage(id),
-                    ElarionUiKit.ToastTone.Info);
+                string heartfireBlocked = DeNelle.Village.World.Camps.HeartfireService.BlockedMessage();
+                DeNelle.Core.Diagnostics.FlowTrace.Step(DeNelle.Village.World.Camps.HeartfireService.Sys,
+                    "door refused: " + heartfireBlocked + " (camp='" + id + "', charges " +
+                    heartfireCharges + "/" + DeNelle.Village.World.Camps.HeartfireService.Max + ")");
+                ElarionUiKit.ShowToast(heartfireBlocked, ElarionUiKit.ToastTone.Info);
                 return;
             }
+            DeNelle.Core.Diagnostics.FlowTrace.Step(DeNelle.Village.World.Camps.HeartfireService.Sys,
+                "door: charges " + heartfireCharges + " -> open (camp='" + id + "'). The charge is " +
+                "spent at raid entry, not here.");
 
             RaidDeployScreen.Open(def);
             // UIF-01: the deploy screen registers with the single-modal arbiter, so opening it

@@ -271,7 +271,7 @@ namespace DeNelle.Village.Arena
             var skrWell = AddImage(parent, "SkrWell", new Vector2(0.06f, y0), new Vector2(0.49f, y1), Track);
             AddLabel(skrWell.transform, "BALANCE", 0.55f, 0.95f, ElarionUi.ParchmentDim,
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 3f);
-            _headerSkr = AddLabel(skrWell.transform, (_vm != null ? _vm.Balance : 0) + " SKR", 0.06f, 0.55f,
+            _headerSkr = AddLabel(skrWell.transform, BalanceText(), 0.06f, 0.55f,
                      ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
 
             var recWell = AddImage(parent, "RecWell", new Vector2(0.51f, y0), new Vector2(0.94f, y1), Track);
@@ -301,12 +301,13 @@ namespace DeNelle.Village.Arena
             // Stake -> purse line in a recessed well across the card bottom.
             var stakeWell = AddImage(card.transform, "Stake", new Vector2(0.035f, 0.08f), new Vector2(0.66f, 0.34f), Track);
             AddLabel(stakeWell.transform,
-                     $"Garrison 1 boss + {_vm.GuardCountFor(id)}   |   Stake {_vm.WagerFor(id)}  ->  Win {_vm.WinPurseFor(id)} SKR",
+                     $"Garrison 1 boss + {_vm.GuardCountFor(id)}   |   Stake {_vm.WagerFor(id)}  ->  Win {_vm.WinPurseFor(id)} {_vm.CurrencyLabel}",
                      0f, 1f, ElarionUi.Gold, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
 
             // RAID button — green when affordable, dimmed red gate otherwise.
             bool canAfford = opp.Affordable;
-            string btnLabel = canAfford ? $"RAID   {_vm.WagerFor(id)} SKR" : "NEED MORE SKR";
+            // WO-1366: the unit follows the channel (Crystals on Play, SKR on the dApp Store).
+            string btnLabel = canAfford ? $"RAID   {_vm.WagerFor(id)} {_vm.CurrencyLabel}" : $"NEED MORE {_vm.CurrencyLabel.ToUpperInvariant()}";
             ButtonKind kind = canAfford ? ButtonKind.Confirm : ButtonKind.Danger;
             Color btnColor = canAfford
                 ? new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.92f)
@@ -335,9 +336,13 @@ namespace DeNelle.Village.Arena
 
         private void RefreshHeader()
         {
-            if (_headerSkr != null) _headerSkr.text = (_vm != null ? _vm.Balance : 0) + " SKR";
+            if (_headerSkr != null) _headerSkr.text = BalanceText();
             if (_headerRecord != null && _vm != null) _headerRecord.text = _vm.RecordLine;
         }
+
+        // Balance + the channel's unit label (WO-1366) - the View never names a currency.
+        private string BalanceText() =>
+            _vm != null ? _vm.Balance + " " + _vm.CurrencyLabel : "0";
 
         // ====================================================================
         // RESULT SCREEN
@@ -379,8 +384,8 @@ namespace DeNelle.Village.Arena
                      0.62f, 0.73f, ElarionUi.Parchment, ElarionUi.FontBody,
                      TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
 
-            // SKR delta in a recessed well.
-            string deltaTxt = (skrDelta >= 0 ? "+" : "") + skrDelta + " SKR";
+            // Wager delta in a recessed well, in the channel's currency.
+            string deltaTxt = (skrDelta >= 0 ? "+" : "") + skrDelta + " " + (_vm != null ? _vm.CurrencyLabel : "-");
             var deltaWell = AddImage(_resultRoot.transform, "Delta", new Vector2(0.28f, 0.44f), new Vector2(0.72f, 0.58f), Track);
             AddLabel(deltaWell.transform, deltaTxt, 0f, 1f,
                      win ? ElarionUi.Gilt : ElarionUi.Danger, ElarionUi.FontTitle + 4,

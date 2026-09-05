@@ -38,14 +38,22 @@
 //          PUNISHES an unanchored clock: a cold launch is always unanchored, so a
 //          client-side penalty would tax every honest offline player (WO-1128).
 //
-//   PIN D  A CAMP ON COOLDOWN CANNOT BE ENTERED, AND IS TOLD SO IN WORDS.
-//          Behavioural (IsOnCooldown) plus a source-lint on the ONE door
-//          (RaidSelectionScreen.OnCardTapped) proving the gate precedes
-//          RaidDeployScreen.Open. Plus: the refusal is a SENTENCE from canon, in
-//          BOTH canonical copies, ASCII-only. The owner is red/green colourblind -
-//          a card that signals its state by tint says nothing to her, and one that
-//          silently ignores taps reads as a frozen game (the WO-1110 dead-tap
-//          defect, found on this exact screen).
+//   PIN D  THE STAMP SURVIVES, THE RECORD READS BACK, AND ITS WORDS ARE SENTENCES.
+//          (!) RE-POINTED 2026-09-05 by WO-1379. This pin USED to read "a camp on
+//          cooldown cannot be entered" and source-linted RaidSelectionScreen.
+//          OnCardTapped for an IsOnCooldown( check ahead of RaidDeployScreen.Open.
+//          The owner ruled "Heartfire replaces the camp wall", so that lint was the
+//          exact thing that had to go RED under the new canon - it has been REMOVED
+//          from this suite, and the door is now owned by HeartfireRegression PIN F,
+//          which reds the opposite (any RaidCooldownService reference on the raid
+//          surface). Not duplicated here: one door, one pin owner.
+//          What this pin still holds: BOTH victory paths stamp BeginAfterClear (the
+//          record is save evidence - SaveMigrator v41 derives everCompletedRaid from
+//          it); the state machine reads back (IsOnCooldown / RemainingSeconds as
+//          RECORD queries); and the record's canon copy is still a SENTENCE in BOTH
+//          canonical copies, ASCII-only, while those keys exist - no runtime surface
+//          shows them any more, but a placeholder marker in a shipped string table
+//          is a defect regardless of who reads it.
 //
 //   PIN E  THE BALANCE NUMBERS ARE THE OWNER'S, AND THE DATA AGREES WITH THE CODE.
 //          Cooldown 4h/8h/12h and attrition 5/20/45min are OWNER RULINGS
@@ -74,7 +82,8 @@ namespace DeNelle.Editor.Regression
     {
         // Relative to Application.dataPath.
         private const string ServiceRel  = "_Modules/Village/World/Camps/RaidCooldownService.cs";
-        private const string SelectRel   = "_Modules/Village/Hero/RaidSelectionScreen.cs";
+        // SelectRel (RaidSelectionScreen.cs) was removed 2026-09-05: the door lint moved to
+        // HeartfireRegression PIN F (WO-1379). This suite no longer reads that file.
         private const string VictoryRel  = "_Modules/Village/World/Camps/RaidVictoryController.cs";
         private const string V2Rel       = "_Modules/Village/World/Camps/Village2RaidController.cs";
         private const string DeployRel   = "_Modules/Village/Troops/RaidDeployController.cs";
@@ -125,10 +134,12 @@ namespace DeNelle.Editor.Regression
                 reason = "RAID COOLDOWN OK -- the window survives a real save/load cold boot; a BACKWARDS " +
                          "clock re-stamps to exactly one full window (never shorter, never unbounded); the " +
                          "service reads TimeSource only (no DateTime.UtcNow) and RECORDS the anchor without " +
-                         "punishing an unanchored one; a camp on cooldown is refused at the one door and " +
-                         "SAYS SO in canon words present in both canonical copies, ASCII-only; and the owner-" +
-                         "ruled numbers (cooldown 4h/8h/12h, attrition 5/20/45min, not flat) agree between " +
-                         "scene-configs.json and the code fallback table";
+                         "punishing an unanchored one; both victory paths still STAMP the record (WO-1379 " +
+                         "retired the gate, not the stamp - the door is Heartfire's, pinned in " +
+                         "HeartfireRegression PIN F) and its canon words are sentences in both canonical " +
+                         "copies, ASCII-only; and the owner-ruled numbers (cooldown 4h/8h/12h retained as " +
+                         "superseded, attrition 5/20/45min, not flat) agree between scene-configs.json and " +
+                         "the code fallback table";
                 return true;
             }
             reason = "RAID COOLDOWN FAIL x" + f.Count + ": " + string.Join(" | ", f);
@@ -278,34 +289,14 @@ namespace DeNelle.Editor.Regression
                           "re-stamp would be a SILENT repair, and CLAUDE.md forbids silent failures");
             }
 
-            // -- The entry gate must precede the door ------------------------------
-            string select = SourceLint.ReadCode(SelectRel, f);
-            if (!string.IsNullOrEmpty(select))
-            {
-                var tap = SourceLint.Body(select, @"private\s+void\s+OnCardTapped\s*\(\s*string\s+id\s*\)");
-                if (string.IsNullOrEmpty(tap))
-                {
-                    f.Add("RaidSelectionScreen.OnCardTapped(string) not found -- the ONE door into " +
-                          "RaidDeployScreen moved, and the cooldown gate may no longer be on it");
-                }
-                else
-                {
-                    int iGate = tap.IndexOf("IsOnCooldown(", StringComparison.Ordinal);
-                    int iOpen = tap.IndexOf("RaidDeployScreen.Open(", StringComparison.Ordinal);
-                    if (iGate < 0)
-                        f.Add("OnCardTapped never checks IsOnCooldown -- a camp on cooldown can be entered");
-                    else if (iOpen < 0)
-                        f.Add("OnCardTapped no longer opens RaidDeployScreen -- the lint has lost its anchor");
-                    else if (iGate > iOpen)
-                        f.Add("OnCardTapped checks the cooldown AFTER opening the deploy screen -- the gate " +
-                              "is downstream of the door it is supposed to guard");
-                    if (tap.IndexOf("ShowToast(", StringComparison.Ordinal) < 0)
-                        f.Add("OnCardTapped has no ShowToast -- a refused tap would be a SILENT no-op, which " +
-                              "is the WO-1110 dead-tap defect this screen already shipped once");
-                }
-            }
+            // -- The door lint that USED to sit here is gone on purpose (WO-1379, 2026-09-05) --
+            // It asserted "OnCardTapped checks IsOnCooldown( before RaidDeployScreen.Open(" -
+            // the per-camp wall AT THE DOOR. The owner ruled "Heartfire replaces the camp wall",
+            // so under the new canon that assertion is the defect. HeartfireRegression PIN F
+            // now owns the door and pins the OPPOSITE (no RaidCooldownService reference on the
+            // raid surface; HasCharge before Open). Not duplicated here: one door, one owner.
 
-            // -- Every victory path must OPEN the window ---------------------------
+            // -- Every victory path must still STAMP the record (the gate went, the stamp stays) --
             string victory = SourceLint.ReadCode(VictoryRel, f);
             if (!string.IsNullOrEmpty(victory) && victory.IndexOf("RaidCooldownService.BeginAfterClear(", StringComparison.Ordinal) < 0)
                 f.Add("RaidVictoryController never calls RaidCooldownService.BeginAfterClear -- clearing a " +
@@ -346,8 +337,9 @@ namespace DeNelle.Editor.Regression
                 string v = RaidStrings.Get(key);
                 if (string.IsNullOrEmpty(v) || v.StartsWith("[[missing:", StringComparison.Ordinal))
                 {
-                    f.Add("canon key '" + key + "' does not resolve -- the raid card would show a " +
-                          "placeholder marker instead of telling the player when the camp is raidable");
+                    f.Add("canon key '" + key + "' does not resolve -- a shipped string table carries a " +
+                          "placeholder marker (no runtime surface shows the cooldown copy since WO-1379, " +
+                          "but a key that exists must resolve)");
                     continue;
                 }
                 if (!IsAscii(v))
@@ -451,7 +443,10 @@ namespace DeNelle.Editor.Regression
                     f.Add("case2 an ANCHORED open recorded ServerAnchored=false -- a trustworthy window " +
                           "would be reported as provisional");
 
-                // ── Case 2b: the refusal SAYS the wait, in words ──────────────────
+                // -- Case 2b: the record's copy is still a SENTENCE naming the wait --
+                // (WO-1379: no runtime surface shows these any more - the door refuses in
+                // HeartfireService.BlockedMessage words - but while the keys exist in
+                // canon-strings.json they must resolve to sentences, not placeholder markers.)
                 string blocked = RaidCooldownService.BlockedMessage(ScratchId);
                 if (string.IsNullOrEmpty(blocked) || blocked.StartsWith("[[missing:", StringComparison.Ordinal))
                     f.Add("case2b the blocked-tap refusal is a placeholder, not a sentence");

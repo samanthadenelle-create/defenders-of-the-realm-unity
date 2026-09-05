@@ -14,26 +14,39 @@
 //       it is wrong.
 //
 // =============================================================================
-//  THE THIRD RAID GATE - and it is deliberately the only GLOBAL one
+//  THE ONE ENTRY GATE - and it is deliberately GLOBAL, not per camp
 // =============================================================================
-// Three pacing gates now stand between the player and a raid, each with its own
-// true reason, and they are siblings rather than duplicates:
+// Two pacing gates stand between the player and a raid, each with its own true
+// reason, and they are siblings rather than duplicates:
 //
 //   RaidClaimService.CrystalsPaidToday  "have I already been paid TODAY?"   (loot)
-//   RaidCooldownService                 "may I raid THIS CAMP again yet?"   (entry)
 //   HeartfireService (this file)        "can the HEART sustain a march?"    (entry)
 //
-// (!) THE CRITERION THAT KEEPS THAT STACK HONEST, and it is behavioural:
-//     A PLAYER HOLDING HEARTFIRE ALWAYS HAS SOMEWHERE TO SPEND IT.
-// The rekindle interval therefore ships EQUAL to the SHORTEST authored per-camp
-// cooldown (scene-configs.json raider_camp_small = 14400 s), so a charge never
-// lands into a world with every door shut. HeartfireRegression pins that relation
-// and goes red if either number moves alone.
+// (!) THE PER-CAMP WALL IS RETIRED AS A GATE (WO-1379, owner ruling 2026-09-04,
+//     landed at the door 2026-09-05: "Heartfire replaces the camp wall").
+// RaidCooldownService used to be the third row here ("may I raid THIS CAMP again
+// yet?"). It is now a RECORD, not a gate: BeginAfterClear still stamps every clear
+// (save evidence for SaveMigrator v41 / the first-raid soft gate), but
+// RaidSelectionScreen.OnCardTapped consults ONLY HasCharge below, and
+// HeartfireRegression PIN F reds that file if a RaidCooldownService reference comes
+// back. One gate on WHEN you may raid - two lockouts "reads as a bug".
 //
-// (!) DO NOT SHORTEN raidCooldownSeconds TO MAKE ROOM. That file's own authoring
-// note explains at length why those hours are not the lever: crystals buy
-// instant-finish on the Obsidian queue, so a shorter camp cooldown defunds the
-// timer ladder the whole game is paced by.
+// WHY ONE GATE IS SAFE (worked through in the WO, not assumed): re-clearing the
+// easiest camp is not optimal, because camps carry an escalating rewardMultiplier
+// (1.0 / 1.5 / 2.2), so the best use of a charge is the hardest camp you can beat.
+//
+// (!) THE CRITERION THAT KEPT THE OLD STACK HONEST is now structural:
+//     A PLAYER HOLDING HEARTFIRE ALWAYS HAS SOMEWHERE TO SPEND IT
+// - with no per-camp door, every unlocked camp is somewhere. HeartfireRegression
+// PIN E still pins the rekindle interval <= the SHORTEST authored raidCooldownSeconds
+// (14400 s) as a tripwire on the RETAINED field: WO-1379 forbids retuning it, and a
+// superseded number that drifts is how the next seat reads a value that means
+// nothing.
+//
+// (!) DO NOT SHORTEN raidCooldownSeconds. That file's own authoring note explains at
+// length why those hours were never the lever: crystals buy instant-finish on the
+// Obsidian queue, so a shorter camp cooldown defunds the timer ladder the whole game
+// is paced by. Retired as a gate; NOT retuned.
 //
 // =============================================================================
 //  (!) CLOCK DISCIPLINE - READ BEFORE TOUCHING ANY TIME LINE

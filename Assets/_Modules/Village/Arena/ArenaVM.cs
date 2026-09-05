@@ -7,7 +7,8 @@
 // ALL Arena game state + flow lives here, view-agnostic:
 //   * ArenaCatalog opponent projection (name / tier / flavour / garrison / stake ->
 //     purse + affordability) exposed as ItemVM cards + per-id helpers.
-//   * The SKR wallet balance + W/L record (ArenaWalletService + ArenaProgressStore).
+//   * The wager-wallet balance (in the channel's currency - WO-1366) + W/L record
+//     (ArenaWalletService + ArenaProgressStore).
 //   * The "Use My Castle" toggle write (ArenaMode.UsePlayerCastle).
 //   * Start-raid + begin-attack/defend commands (ArenaMode.TryStartRaid + the recruit/
 //     defense controllers).
@@ -34,6 +35,12 @@ namespace DeNelle.Village.Arena
     {
         IReadOnlyList<ArenaOpponentDef> Opponents { get; }
         long Balance { get; }
+        /// <summary>
+        /// The unit label of the wager currency ("Crystals" on Google Play, the SKR skin name
+        /// on the dApp Store - WO-1366). Default implementation reads the one seam so an
+        /// existing fake backend keeps compiling; the live backend overrides explicitly.
+        /// </summary>
+        string CurrencyLabel => ArenaWalletService.CurrencyLabel;
         int Wins { get; }
         int Losses { get; }
         int Streak { get; }
@@ -82,6 +89,8 @@ namespace DeNelle.Village.Arena
         public IReadOnlyList<ItemVM> Opponents => _opponents;
 
         public long Balance => _backend != null ? _backend.Balance : 0L;
+        /// <summary>Unit label for Balance / stakes / deltas (the View never hardcodes a currency).</summary>
+        public string CurrencyLabel => _backend != null ? _backend.CurrencyLabel : "-";
         public int Wins => _backend != null ? _backend.Wins : 0;
         public int Losses => _backend != null ? _backend.Losses : 0;
         public int Streak => _backend != null ? _backend.Streak : 0;
@@ -90,7 +99,7 @@ namespace DeNelle.Village.Arena
         public string RecordLine => Wins + "W / " + Losses + "L   (" + Streak + " streak)";
 
         /// <summary>The result-screen footer stats line.</summary>
-        public string StatsLine => "SKR " + Balance + "      " + Wins + "W / " + Losses + "L      Streak " + Streak;
+        public string StatsLine => CurrencyLabel + " " + Balance + "      " + Wins + "W / " + Losses + "L      Streak " + Streak;
 
         /// <summary>Whether the raid fights the player's own castle (ArenaMode toggle).</summary>
         public bool UsePlayerCastle => _backend != null && _backend.UsePlayerCastle;
@@ -188,7 +197,7 @@ namespace DeNelle.Village.Arena
                 _byId[o.Id] = o;
                 string name = string.IsNullOrEmpty(o.DisplayName) ? o.Id : o.DisplayName;
                 bool afford = _backend.CanAfford(o.Wager);
-                _opponents.Add(new ItemVM(o.Id, name, IconRoleOpponent, o.Id, (int)o.Wager, "SKR",
+                _opponents.Add(new ItemVM(o.Id, name, IconRoleOpponent, o.Id, (int)o.Wager, _backend.CurrencyLabel,
                                           afford, rarity: null, equipped: false, locked: false));
             }
         }
@@ -206,6 +215,7 @@ namespace DeNelle.Village.Arena
     {
         public IReadOnlyList<ArenaOpponentDef> Opponents => ArenaCatalog.All;
         public long Balance => ArenaWalletService.Balance;
+        public string CurrencyLabel => ArenaWalletService.CurrencyLabel;
         public int Wins => ArenaProgressStore.Current.Wins;
         public int Losses => ArenaProgressStore.Current.Losses;
         public int Streak => ArenaProgressStore.Current.Streak;

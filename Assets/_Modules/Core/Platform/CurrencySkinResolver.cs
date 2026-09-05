@@ -258,6 +258,85 @@ namespace DeNelle.Core.Platform
             catch (Exception e) { FlowTrace.Fail("Wallet", $"WalletConnectionChanged subscriber threw: {e.Message}"); }
         }
 
+        // =====================================================================
+        //  Wager currency per payment channel (WO-1366)
+        // =====================================================================
+        //
+        // Owner rulings 2026-09-04: "the arena will go to the google play store, just needs
+        // to remove crypto" / "both to use same logic just different curency for wagers".
+        // ONE Arena, ONE code path; the CURRENCY is the only thing that varies by channel,
+        // and it is resolved HERE - the existing per-channel currency seam - never by a
+        // #if GOOGLE_PLAY inside the Arena module. Arena asks this resolver what it wagers
+        // in and never branches on the channel itself.
+        //
+        //   GooglePlay       -> Crystals (GameState.Resources.Crystals; Play's own rail)
+        //   SolanaDappStore  -> SKR (the existing client-stub wallet, byte-identical to today)
+        //   Unknown          -> REFUSED, with a worded sentence (fail-closed, the same shape
+        //                       as WO-1386's "Unknown channel: fail-closed like Solana")
+        //   PiBrowser        -> REFUSED (Pi has no SKR and no Crystals-IAP rail; a crypto
+        //                       account per the 2026-09-04 23:32 ruling - see the owner
+        //                       question in the WO-1366 lane report)
+
+        /// <summary>What the Arena wagers in on the current payment channel.</summary>
+        public enum WagerCurrency
+        {
+            /// <summary>No wager rail on this channel - every wager is refused with a sentence.</summary>
+            Refused = 0,
+            /// <summary>The Seeker / dApp Store client-stub SKR balance (today's behaviour).</summary>
+            Skr = 1,
+            /// <summary>Google Play - the player's real Crystals (GameState.Resources.Crystals).</summary>
+            Crystals = 2,
+        }
+
+        /// <summary>
+        /// Resolves the wager currency for the RESOLVED payment channel
+        /// (<see cref="Payments.PaymentChannelResolver.Current"/>).
+        /// </summary>
+        public static WagerCurrency ResolveWagerCurrency(out string refusal) =>
+            ResolveWagerCurrency(Payments.PaymentChannelResolver.Current, out refusal);
+
+        /// <summary>
+        /// Resolves the wager currency for an explicit channel. Never throws. When the answer
+        /// is <see cref="WagerCurrency.Refused"/>, <paramref name="refusal"/> carries the
+        /// player-readable sentence (never empty - a refusal with no words is a dead button).
+        /// </summary>
+        public static WagerCurrency ResolveWagerCurrency(Payments.PaymentChannel channel, out string refusal)
+        {
+            switch (channel)
+            {
+                case Payments.PaymentChannel.GooglePlay:
+                    refusal = string.Empty;
+                    return WagerCurrency.Crystals;
+                case Payments.PaymentChannel.SolanaDappStore:
+                    refusal = string.Empty;
+                    return WagerCurrency.Skr;
+                case Payments.PaymentChannel.PiBrowser:
+                    refusal = "Arena wagers are not available in the Pi Browser build.";
+                    FlowTrace.Warn("Skin", "Wager currency REFUSED: channel=PiBrowser has no wager rail.");
+                    return WagerCurrency.Refused;
+                default:
+                    refusal = "Arena wagers are unavailable: this build has no payment channel stamped.";
+                    FlowTrace.Warn("Skin", $"Wager currency REFUSED: channel={channel} is not a wager rail (fail-closed).");
+                    return WagerCurrency.Refused;
+            }
+        }
+
+        /// <summary>
+        /// The player-facing unit label for a wager currency. The SKR label comes from the
+        /// SKR skin's CurrencyName so no crypto literal has to live in the Arena module;
+        /// under GOOGLE_PLAY that skin's name is the neutral "Store credit" and the Skr
+        /// branch is never resolved anyway.
+        /// </summary>
+        public static string WagerCurrencyName(WagerCurrency currency)
+        {
+            switch (currency)
+            {
+                case WagerCurrency.Crystals: return "Crystals";
+                case WagerCurrency.Skr: return CurrencySkin.SkrDefault.CurrencyName;
+                default: return "-";
+            }
+        }
+
         /// <summary>Forces a re-resolve (tests / a config hot-swap). Rarely needed.</summary>
         public static void Reload() { _active = null; Resolve(); }
 

@@ -3,6 +3,35 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
 //
+// =============================================================================
+//  (!) WO-1379 (owner ruling 2026-09-04, landed 2026-09-05): RETIRED AS A GATE.
+// =============================================================================
+// Owner, asked directly: "Heartfire replaces the camp wall." The ONE gate on WHEN
+// the player may raid is now HeartfireService (a global charge pool), checked at
+// the one door, RaidSelectionScreen.OnCardTapped. NOTHING player-facing reads this
+// service any more: the door does not refuse on IsOnCooldown, the raid card does
+// not paint "Recovering", and BlockedMessage / DescribeState / BadgeFor have no
+// runtime caller (retained for RaidCooldownRegression's state-machine cases only).
+// HeartfireRegression PIN F reds RaidSelectionScreen if any reference to this
+// service reappears there - two lockouts "reads as a bug" (WO-1379 section 3).
+//
+// WHAT SURVIVES, and why it is not dead code:
+//   * THE STAMP. BeginAfterClear still runs on every clear (RaidVictoryController,
+//     Village2RaidController). The record is SAVE EVIDENCE: SaveMigrator.MigrateToV41
+//     derives everCompletedRaid from any raidCooldowns record, and
+//     FirstRaidSoftGateRegression reads it as proof a raid happened. Removing the
+//     stamp would silently soften a veteran's first-raid gate on the next migration.
+//   * THE NUMBERS. raidCooldownSeconds stays authored per camp (marked superseded in
+//     scene-configs.json, not deleted) and the duration table below stays pinned to
+//     it - WO-1379 forbids shortening them, and a retired field that drifts is how
+//     the next seat reads a number that means nothing.
+//   * THE CLOCK DISCIPLINE. The record is still stamped and re-stamped off
+//     TimeSource, so a server can reconcile what it means later.
+// Everything below this banner describes the mechanic AS IT WAS BUILT; read "gate"
+// as "record" from here on. The prose is kept because the clock and persistence
+// reasoning is still true of the record, and because HeartfireService's header
+// points here for it.
+//
 // THE GAP THIS CLOSES: raids were repeatable INSTANTLY. RaidClaimService already
 // separates a first clear from a replay (a replay pays a fraction of ordinary
 // resources and never crystals), but nothing stopped the player re-entering the
@@ -53,7 +82,8 @@
 // task 4 calls for it in the save, and a cooldown that survives a reinstall but not
 // a cloud restore is worse than one that survives neither.
 //
-// ⚠ THE DURATIONS BELOW ARE A PROPOSAL AWAITING AN OWNER RULING — see DurationTable.
+// The durations below are OWNER-RULED (2026-08-21) - see the BALANCE block. (This line
+// used to say they were "a proposal awaiting an owner ruling"; that was stale.)
 //
 // ASCII-only. Canon: the village is Elarion (never Avalon).
 // =============================================================================
@@ -255,13 +285,22 @@ namespace DeNelle.Village.World.Camps
             return remaining;
         }
 
-        /// <summary>True when the camp is still recovering and MUST NOT be entered.</summary>
+        /// <summary>
+        /// True while this camp's recovery RECORD is live. NOT AN ENTRY GATE (WO-1379,
+        /// 2026-09-05): the door does not consult it and never may again - Heartfire is the
+        /// one gate on WHEN you may raid. Kept as a record query for the state-machine
+        /// regression and for tooling; HeartfireRegression PIN F reds the door if this
+        /// name reappears in RaidSelectionScreen.
+        /// </summary>
         public static bool IsOnCooldown(string configId) => RemainingSeconds(configId) > 0d;
 
         /// <summary>
-        /// The player-facing sentence for this camp's state, ALWAYS in words — "Recovering:
+        /// The sentence for this camp's record state, ALWAYS in words - "Recovering:
         /// raidable in 2h 15m" or "Ready to raid". Never colour alone (the owner is
         /// red/green colourblind; see RaidStrings' header).
+        /// <para>RETIRED FROM THE PLAYER'S SCREEN (WO-1379): no runtime caller. The raid card
+        /// used to print this; it now prints the reward hint, because a card saying
+        /// "Recovering" over a door that opens is wrong advice. Do not wire it back.</para>
         /// </summary>
         public static string DescribeState(string configId)
         {
@@ -270,13 +309,20 @@ namespace DeNelle.Village.World.Camps
             return RaidStrings.Format(RaidStrings.KeyCooldownCardLine, RaidStrings.Humanise(remaining));
         }
 
-        /// <summary>The short badge word for this camp's state ("RECOVERING" / "READY").</summary>
+        /// <summary>The short badge word for this camp's record state ("RECOVERING" / "READY").
+        /// RETIRED FROM THE PLAYER'S SCREEN (WO-1379): no runtime caller.</summary>
         public static string BadgeFor(string configId) =>
             IsOnCooldown(configId)
                 ? RaidStrings.Get(RaidStrings.KeyCooldownBadge)
                 : RaidStrings.Get(RaidStrings.KeyReadyBadge);
 
-        /// <summary>The refusal sentence for a tap on a recovering camp; names the wait.</summary>
+        /// <summary>
+        /// The refusal sentence a tap on a recovering camp USED to get; names the wait.
+        /// RETIRED FROM THE DOOR (WO-1379, 2026-09-05): RaidSelectionScreen.OnCardTapped now
+        /// refuses only on HeartfireService.HasCharge and shows HeartfireService.BlockedMessage.
+        /// No runtime caller; retained for RaidCooldownRegression case 2b (the words are still
+        /// authored in canon-strings.json and must still be sentences while they exist).
+        /// </summary>
         public static string BlockedMessage(string configId) =>
             RaidStrings.Format(RaidStrings.KeyCooldownBlocked,
                 RaidStrings.Humanise(RemainingSeconds(configId)));
@@ -288,8 +334,11 @@ namespace DeNelle.Village.World.Camps
         /// <summary>
         /// Opens (or re-opens) the cooldown window on <paramref name="configId"/> using this
         /// camp's authored/derived duration, stamped from the server-anchored clock seam.
-        /// Called by the raid VICTORY paths — a clear is what starts the wait. Returns the
+        /// Called by the raid VICTORY paths - a clear is what starts the record. Returns the
         /// duration actually stamped (0 = nothing was started, and the reason is traced).
+        /// <para>THE STAMP SURVIVES WO-1379 (the gate did not): the record is save evidence
+        /// (SaveMigrator v41 everCompletedRaid derivation, FirstRaidSoftGateRegression) and
+        /// both victory callers must keep calling this - RaidCooldownRegression pins them.</para>
         /// Idempotent per clear: re-calling simply restarts the window, which is the correct
         /// behaviour when a camp is cleared twice.
         /// </summary>

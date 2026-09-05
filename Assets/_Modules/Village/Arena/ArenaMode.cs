@@ -4,8 +4,10 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Arena
 //
 // THE LOOP (first bite of async-PvP): enter Arena -> pick a SEEDED opponent
-// (ArenaCatalog) -> STAKE a SKR wager (ArenaWalletService.Debit; blocked if you
-// can't afford) -> GENERATE the opponent's base (REUSE EnemyOutpost pointed at the
+// (ArenaCatalog) -> STAKE a wager (ArenaWalletService.Debit; blocked if you can't
+// afford; the CURRENCY is the channel's - Crystals on Google Play, SKR on the dApp
+// Store - resolved by CurrencySkinResolver, never branched on here; WO-1366)
+// -> GENERATE the opponent's base (REUSE EnemyOutpost pointed at the
 // opponent's base-recipe via ConfigureArena -> OutpostFoundationGenerator.Realize +
 // the existing garrison spawn) at a raid anchor near the hero -> RAID (FULL COMBAT
 // REUSE: the garrison are real Enemy; the hero + party auto-fight via TargetManager
@@ -105,8 +107,9 @@ namespace DeNelle.Village.Arena
         public bool UsePlayerCastle;
 
         /// <summary>
-        /// Raised when a raid ends: (opponent, result, skrDelta). skrDelta is +purse
-        /// on a win (net of the staked wager already debited) or -wager on a loss.
+        /// Raised when a raid ends: (opponent, result, wagerDelta). wagerDelta is +purse
+        /// on a win (net of the staked wager already debited) or -wager on a loss, in the
+        /// channel's wager currency (ArenaWalletService.CurrencyLabel names it).
         /// </summary>
         public event Action<ArenaOpponentDef, ArenaResult, long> OnRaidEnded;
 
@@ -138,7 +141,8 @@ namespace DeNelle.Village.Arena
         /// <summary>
         /// Stake the wager and start the raid against <paramref name="opponent"/>.
         /// Returns false (no charge, no spawn) if a raid is already running, the
-        /// opponent is null, or the SKR balance can't cover the stake.
+        /// opponent is null, the channel has no wager rail, or the wager balance can't
+        /// cover the stake.
         /// </summary>
         public bool TryStartRaid(ArenaOpponentDef opponent)
         {
@@ -156,15 +160,17 @@ namespace DeNelle.Village.Arena
                 return false;
             }
 
-            // STAKE: debit the SKR wager up front. Blocked if insufficient.
-            // STUB — replace with WalletService (CurrencyKind.Skr) backend escrow when deployed.
-            if (!ArenaWalletService.Debit(opponent.Wager))
+            // STAKE: debit the wager up front in the CHANNEL'S currency (WO-1366: the
+            // wallet resolves Crystals vs SKR through CurrencySkinResolver; Arena does not
+            // branch). Blocked - with the wallet's worded reason - if refused/insufficient.
+            string unit = ArenaWalletService.CurrencyLabel;
+            if (!ArenaWalletService.Debit(opponent.Wager, out string refusal))
             {
-                FlowTrace.Warn("Arena", $"TryStartRaid blocked: cannot afford {opponent.Wager} SKR wager (no debit, no spawn)");
-                Debug.LogWarning($"[ArenaMode] cannot afford {opponent.Wager} SKR wager - raid blocked.");
+                FlowTrace.Warn("Arena", $"TryStartRaid blocked: wager {opponent.Wager} {unit} not debited - {refusal} (no debit, no spawn)");
+                Debug.LogWarning($"[ArenaMode] wager {opponent.Wager} {unit} refused - raid blocked: {refusal}");
                 return false;
             }
-            FlowTrace.Step("Arena", $"staked {opponent.Wager} SKR — spawning opponent base");
+            FlowTrace.Step("Arena", $"staked {opponent.Wager} {unit} (balance now {ArenaWalletService.Balance}) - spawning opponent base");
 
             CurrentOpponent = opponent;
             _stakedWager = opponent.Wager;
@@ -190,7 +196,7 @@ namespace DeNelle.Village.Arena
             // the Core seam. ReturnToAmbient on EndRaid restores the explore music.
             CoreServices.Audio?.PlayMusic(MusicTrack.Arena);
 
-            Debug.Log($"[ArenaMode] Raid started vs '{opponent.DisplayName}' (tier {opponent.Tier}, stake {opponent.Wager} SKR).");
+            Debug.Log($"[ArenaMode] Raid started vs '{opponent.DisplayName}' (tier {opponent.Tier}, stake {opponent.Wager} {unit}).");
             return true;
         }
 
@@ -376,11 +382,15 @@ namespace DeNelle.Village.Arena
             if (_resolved) return;
             _resolved = true;
 
-            long opponentWager = CurrentOpponent != null ? CurrentOpponent.Wager : _stakedWager;
-            long purse = opponentWager * 2L;   // your stake back + theirs
+            // The purse is the STAKED wager scaled by the tunable purse percent (default
+            // 200% = your stake back + theirs; ArenaWagerTunables.WinPursePct). Staked, not
+            // the live catalog value, so a knob change mid-raid cannot pay a different
+            // amount than was risked.
+            long purse = ArenaWagerTunables.PurseFor(_stakedWager);
+            string unit = ArenaWalletService.CurrencyLabel;
 
-            FlowTrace.Step("Arena", $"WIN — outpost cleared; crediting purse {purse} SKR (stake {_stakedWager})");
-            // CREDIT the won purse. STUB — replace with WalletService payout on deploy.
+            FlowTrace.Step("Arena", $"WIN - outpost cleared; crediting purse {purse} {unit} (stake {_stakedWager}, pursePct {ArenaWagerTunables.WinPursePct})");
+            // CREDIT the won purse in the channel's currency (ArenaWalletService resolves it).
             ArenaWalletService.Credit(purse);
             // RECORD the win (W/L ledger + total purse).
             ArenaProgressStore.RecordWin(purse);
@@ -388,8 +398,8 @@ namespace DeNelle.Village.Arena
             // of the purse (full reuse of EnemyOutpost's loot table).
             if (_outpost != null) _outpost.GrantArenaLoot();
 
-            Debug.Log($"[ArenaMode] WIN vs '{NameOf()}' - purse {purse} SKR credited.");
-            // skrDelta = net SKR gained = purse - staked wager (the +profit on the screen).
+            Debug.Log($"[ArenaMode] WIN vs '{NameOf()}' - purse {purse} {unit} credited (balance now {ArenaWalletService.Balance}).");
+            // wagerDelta = net gained = purse - staked wager (the +profit on the screen).
             EndRaid(ArenaResult.Win, purse - _stakedWager);
         }
 
@@ -428,11 +438,12 @@ namespace DeNelle.Village.Arena
             if (_resolved) return;
             _resolved = true;
 
-            FlowTrace.Step("Arena", $"LOSS ({reason}) — forfeiting staked {_stakedWager} SKR (no refund)");
+            string unit = ArenaWalletService.CurrencyLabel;
+            FlowTrace.Step("Arena", $"LOSS ({reason}) - forfeiting staked {_stakedWager} {unit} (no refund; balance stays {ArenaWalletService.Balance})");
             // FORFEIT: the stake was already debited at start, so a loss just records
-            // it (no refund). STUB — backend escrow keeps the real stake on deploy.
+            // it (no refund). STUB - backend escrow keeps the real stake on deploy.
             ArenaProgressStore.RecordLoss();
-            Debug.Log($"[ArenaMode] LOSS vs '{NameOf()}' ({reason}) - forfeited {_stakedWager} SKR.");
+            Debug.Log($"[ArenaMode] LOSS vs '{NameOf()}' ({reason}) - forfeited {_stakedWager} {unit}.");
             EndRaid(ArenaResult.Loss, -_stakedWager);
         }
 
@@ -449,18 +460,20 @@ namespace DeNelle.Village.Arena
             if (_resolved) return;
             _resolved = true;
 
-            FlowTrace.Fail("Arena", $"raid vs '{NameOf()}' ABORTED — garrison failed to spawn (no NavMesh at anchor); refunding staked {_stakedWager} SKR (no-contest, NOT a win)");
-            // Refund the staked wager — the raid never actually happened (spawn failure),
-            // so the player should not forfeit. STUB wallet mirror of TryStartRaid's Debit.
+            string unit = ArenaWalletService.CurrencyLabel;
+            FlowTrace.Fail("Arena", $"raid vs '{NameOf()}' ABORTED - garrison failed to spawn (no NavMesh at anchor); refunding staked {_stakedWager} {unit} (no-contest, NOT a win)");
+            // Refund the staked wager - the raid never actually happened (spawn failure),
+            // so the player should not forfeit. Mirror of TryStartRaid's Debit, same wallet.
             ArenaWalletService.Credit(_stakedWager);
+            FlowTrace.Step("Arena", $"refund landed - balance now {ArenaWalletService.Balance} {unit}");
             Debug.LogError($"[ArenaMode] Raid vs '{NameOf()}' ABORTED - opponent garrison failed to spawn " +
                            "(no NavMesh at the raid anchor). NOT a win; stake refunded.");
-            // skrDelta 0 = no net change (stake refunded); result None = no-contest abort.
+            // wagerDelta 0 = no net change (stake refunded); result None = no-contest abort.
             EndRaid(ArenaResult.None, 0L);
         }
 
         // -- teardown --------------------------------------------------------
-        private void EndRaid(ArenaResult result, long skrDelta)
+        private void EndRaid(ArenaResult result, long wagerDelta)
         {
             if (_watcher != null) { StopCoroutine(_watcher); _watcher = null; }
             if (_outpost != null)
@@ -490,7 +503,7 @@ namespace DeNelle.Village.Arena
             // all funnel through EndRaid).
             CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
 
-            OnRaidEnded?.Invoke(opponent, result, skrDelta);
+            OnRaidEnded?.Invoke(opponent, result, wagerDelta);
         }
 
         private string NameOf() => CurrentOpponent != null ? CurrentOpponent.DisplayName : "opponent";

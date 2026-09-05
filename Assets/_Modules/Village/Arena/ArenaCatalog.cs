@@ -7,7 +7,8 @@
 // the SAME OutpostFoundationGenerator.GenerateFootprintRecipe the village build
 // mode + open-world camps use, at 3 sizes) + a garrison spec (boss is implicit in
 // EnemyOutpost; N guards here, rising 1/4/8) + a rising threat tier (1/4/8 — drives
-// stat scaling) + a wager tier (50/100/200 SKR) + a display name + flavour.
+// stat scaling) + a wager tier (ArenaWagerTunables, defaults 50/100/200, in the channel's
+// wager currency per CurrencySkinResolver - WO-1366) + a display name + flavour.
 //
 // These are HAND-AUTHORED, SEEDED opponents — NOT real matchmaking / a backend
 // roster (that is a later bite). The base-as-opponent payload is the SAME
@@ -39,13 +40,18 @@ namespace DeNelle.Village.Arena
         public int Threat;
         /// <summary>Guard count (excludes the implicit boss): 3 / 6 / 9.</summary>
         public int GuardCount;
-        /// <summary>SKR stake to raid this opponent (50 / 100 / 200). Win pays 2x.</summary>
+        /// <summary>
+        /// Stake to raid this opponent, in the channel's wager currency (WO-1366: Crystals on
+        /// Google Play, SKR on the dApp Store - resolved by CurrencySkinResolver, never here).
+        /// Refreshed from <see cref="ArenaWagerTunables"/> on every <see cref="ArenaCatalog.All"/>
+        /// read, so a rail knob reaches a running client; today's defaults are 50 / 100 / 200.
+        /// </summary>
         public long Wager;
         /// <summary>The opponent's base layout (LOCAL grid cells) — realized as the fort.</summary>
         public List<PlacedStructureData> BaseRecipe;
 
-        /// <summary>The purse paid on a win (the stake doubled — your stake back + theirs).</summary>
-        public long WinPurse => Wager * 2L;
+        /// <summary>The purse paid on a win (default 200% = your stake back + theirs; ArenaWagerTunables.WinPursePct).</summary>
+        public long WinPurse => ArenaWagerTunables.PurseFor(Wager);
     }
 
     /// <summary>The 3 seeded Arena opponents (rising tier / garrison / wager).</summary>
@@ -59,7 +65,22 @@ namespace DeNelle.Village.Arena
             get
             {
                 if (_opponents == null) _opponents = Build();
+                // WO-1366: the wager tiers are TUNABLES. Re-read them on every access so a
+                // rail knob change reaches a running client without a rebuild; the forts and
+                // garrisons are still built once. Cheap: three reads.
+                ApplyWagerTunables(_opponents);
                 return _opponents;
+            }
+        }
+
+        // The ONE place the authored tier index becomes an amount. Tier 1/2/3 map to
+        // ArenaWagerTunables.WagerTier1/2/3 (defaults 50 / 100 / 200 = today's constants).
+        private static void ApplyWagerTunables(List<ArenaOpponentDef> opponents)
+        {
+            for (int i = 0; i < opponents.Count; i++)
+            {
+                var o = opponents[i];
+                if (o != null) o.Wager = ArenaWagerTunables.WagerForTier(o.Tier);
             }
         }
 
@@ -84,7 +105,7 @@ namespace DeNelle.Village.Arena
                     Tier = 1,
                     Threat = 1,
                     GuardCount = 3,
-                    Wager = 50L,
+                    Wager = ArenaWagerTunables.WagerTier1Default,   // live value applied in All (tunable)
                     // SAME generator the village build + open-world camps use, small footprint.
                     BaseRecipe = OutpostFoundationGenerator.GenerateFootprintRecipe(5, 5, OutpostTier.Wood),
                 },
@@ -98,7 +119,7 @@ namespace DeNelle.Village.Arena
                     Tier = 2,
                     Threat = 4,
                     GuardCount = 6,
-                    Wager = 100L,
+                    Wager = ArenaWagerTunables.WagerTier2Default,   // live value applied in All (tunable)
                     BaseRecipe = OutpostFoundationGenerator.GenerateFootprintRecipe(7, 7, OutpostTier.Wood),
                 },
 
@@ -111,7 +132,7 @@ namespace DeNelle.Village.Arena
                     Tier = 3,
                     Threat = 8,
                     GuardCount = 9,
-                    Wager = 200L,
+                    Wager = ArenaWagerTunables.WagerTier3Default,   // live value applied in All (tunable)
                     BaseRecipe = OutpostFoundationGenerator.GenerateFootprintRecipe(9, 9, OutpostTier.Stone),
                 },
             };

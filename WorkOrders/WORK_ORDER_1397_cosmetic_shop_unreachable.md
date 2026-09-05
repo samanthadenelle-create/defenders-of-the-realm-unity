@@ -1,6 +1,6 @@
 # WO-1397: the Cosmetic Shop (PanelId.CosmeticShop) is unreachable by any player - its only opener is a dialogue verb no dialogue uses
 
-**Status:** IN PROGRESS 2026-09-05 07:01 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 383/383 incl. the new cosmetic-shop-reach suite): Hero-deck "Wardrobe" card routes to the existing PanelId.CosmeticShop; the deck grid derives rows from the card count (2x3 for five). Owner question at the WO default: Wardrobe CARD on the Hero deck (implemented) vs a Cosmetics TAB in the Night Market (WO-1164 "one store") - one line moves it. Awaiting the next APK. Minted 2026-09-05 from the UI screen graph (overnight STRETCH).
+**Status:** FIXED - on Firebase App Distribution as build 2026.09.05.356411 (07:3x); awaiting owner felt-test (Hero deck: five cards, WARDROBE opens the cosmetic shop; CLOSE returns to the deck) and the ruling below. Landed + gated (COMPILE_GATE_OK, REGRESSION_OK 383/383 incl. the new cosmetic-shop-reach suite): Hero-deck "Wardrobe" card routes to the existing PanelId.CosmeticShop; the deck grid derives rows from the card count (2x3 for five). Owner question at the WO default: Wardrobe CARD on the Hero deck (implemented) vs a Cosmetics TAB in the Night Market (WO-1164 "one store") - one line moves it. Awaiting the next APK. Minted 2026-09-05 from the UI screen graph (overnight STRETCH).
 
 ## Evidence
 - Graph: `docs/qa/UI_SCREEN_GRAPH_2026-09-04.md:56` (verb `OpenCosmetics :107 -> CosmeticShop (NOT present)`), `:228` (node row) and `:246` (dead end 4).

@@ -139,16 +139,24 @@ namespace DeNelle.Village
         public float shardDropChance;
 
         /// <summary>
-        /// WO-728 — per-camp raid cooldown, in seconds: how long this camp stays un-raidable
-        /// after a clear. Authored per camp in scene-configs.json (owner ruling 2026-08-21:
+        /// WO-728 - per-camp raid cooldown, in seconds: the recovery RECORD window a clear
+        /// stamps on this camp. Authored per camp in scene-configs.json (owner ruling 2026-08-21:
         /// Regular 14400 / Hard 28800 / Extreme 43200 = 4h / 8h / 12h). 0 / absent falls back
         /// to the identical difficulty table in <c>RaidCooldownService.DurationForDifficulty</c>.
         ///
-        /// <para>⛔ THIS IS THE CRYSTAL BOUND, NOT A PACING KNOB. Raid loot is food + crystals
-        /// only, so crystals are the one unbounded faucet in the game and this window is the
-        /// only thing bounding them — and crystals buy instant-finish, so shortening it defunds
-        /// the timer ladder the whole game is paced by. Read the ruling recorded in
-        /// RaidCooldownService before changing a value here.</para>
+        /// <para>(!) RETIRED AS A GATE - WO-1379 (owner ruling 2026-09-04, landed 2026-09-05):
+        /// "Heartfire replaces the camp wall." The raid door (RaidSelectionScreen.OnCardTapped)
+        /// no longer refuses on this window; HeartfireService is the one gate on WHEN you may
+        /// raid. The field is RETAINED, not deleted: RaidCooldownService.BeginAfterClear still
+        /// stamps the record (save evidence - SaveMigrator v41 derives everCompletedRaid from
+        /// it), and scene-configs.json marks each row _raidCooldownSecondsSuperseded so the next
+        /// seat reads why. DO NOT SHORTEN OR DELETE - retired is not retuned.</para>
+        ///
+        /// <para>(This doc used to say "THIS IS THE CRYSTAL BOUND, NOT A PACING KNOB". That was
+        /// already false before WO-1379: the UTC-day crystal stamp (RaidClaimService.
+        /// CrystalsPaidToday, WO-1134) is the crystal bound, and RaidScoring.ComputeLoot now
+        /// pays wood and iron too (WO-1374). Read the ruling recorded in RaidCooldownService's
+        /// BALANCE block before changing a value here.)</para>
         /// </summary>
         public float raidCooldownSeconds;
 

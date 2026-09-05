@@ -42,13 +42,31 @@
 //          RaidCooldownRegression PIN C.
 //
 //   PIN E  A PLAYER HOLDING HEARTFIRE ALWAYS HAS SOMEWHERE TO SPEND IT.
-//          THE behavioural acceptance criterion of the three-gate stack, and the
-//          only one that cannot be read off a single number. Pinned as the
-//          relation the shipped values encode: the rekindle interval is <= the
-//          SHORTEST authored per-camp cooldown, measured out of scene-configs.json
-//          rather than restated here, so a charge can never land into a world with
-//          every door shut. It goes red if either side moves alone - which is the
-//          point, because the WO forbids fixing that by shortening the cooldowns.
+//          Since WO-1379 retired the per-camp wall AS A GATE (PIN F) this is
+//          structural - no camp door is ever shut by a timer - so the pin is now a
+//          TRIPWIRE ON THE RETAINED FIELD: the rekindle interval is <= the SHORTEST
+//          authored raidCooldownSeconds, measured out of scene-configs.json rather
+//          than restated here. The WO forbids retuning that field ("retired is not
+//          retuned"), and a superseded number that drifts is how the next seat
+//          reads a value that means nothing. Goes red if either side moves alone.
+//
+//   PIN F  ONE GATE ON WHEN YOU MAY RAID, AT THE ONE DOOR, AND IT IS HEARTFIRE.
+//          Owner, asked directly: "Heartfire replaces the camp wall" (WO-1379
+//          section 3). Source-lint on RaidSelectionScreen, because a second gate
+//          cannot be seen by any behavioural case: (1) the file references NO
+//          RaidCooldownService / IsOnCooldown at all - not the door, and not the
+//          card, which used to paint "Recovering - raidable in 12h" over a door that
+//          would now open; (2) OnCardTapped consults HeartfireService.HasCharge
+//          BEFORE RaidDeployScreen.Open, refuses in HeartfireService.BlockedMessage
+//          words through a toast, and traces; (3) the door READS and never SPENDS -
+//          the spend is at the entry seam (RaidDeployController.TryInstall), which
+//          still spends and still carries its empty-pool FlowTrace.Fail tripwire
+//          (never strip FlowTrace). Proven RED first against the pre-WO tree: that
+//          tree's OnCardTapped refused on IsOnCooldown(id) and had zero Heartfire
+//          mentions, so F1 and F2 both fired. One-line mutation that must red it:
+//          re-insert `if (RaidCooldownService.IsOnCooldown(id)) return;` in
+//          OnCardTapped (F1), or replace `!HeartfireService.HasCharge` with `false`
+//          (F2). Two lockouts "reads as a bug" - this is the pin that keeps it one.
 //
 // Standalone:
 //   -Method DeNelle.Editor.Regression.HeartfireRegression.RunStandalone
@@ -69,6 +87,9 @@ namespace DeNelle.Editor.Regression
         private const string ServiceRel = "_Modules/Village/World/Camps/HeartfireService.cs";
         private const string SceneCfgResRel    = "Resources/Data/Canonical/scene-configs.json";
         private const string SceneCfgStreamRel = "StreamingAssets/Data/Canonical/scene-configs.json";
+        // PIN F: the ONE door and the ONE entry seam.
+        private const string SelectRel = "_Modules/Village/Hero/RaidSelectionScreen.cs";
+        private const string DeployRel = "_Modules/Village/Troops/RaidDeployController.cs";
 
         private const double Hour = 3600d * 1000d;   // one hour in unix-MS
 
@@ -100,6 +121,7 @@ namespace DeNelle.Editor.Regression
             NamingCases(f);            // PIN C
             ClockLintCases(f);         // PIN D
             SpendRoomCases(f);         // PIN E
+            DoorGateCases(f);          // PIN F
 
             if (f.Count == 0)
             {
@@ -108,9 +130,11 @@ namespace DeNelle.Editor.Regression
                          "does not restart the accrual window; a backwards clock can neither shorten the " +
                          "wait nor conjure a charge; Heartfire has no balance, no wallet row, no cap and " +
                          "no vendor anywhere; no shipped string says 'Raid Order' and 'Marches' is not a " +
-                         "noun for the pool; the service reads TimeSource only; and the rekindle interval " +
-                         "is no longer than the shortest authored camp cooldown, so a held charge always " +
-                         "has somewhere to go";
+                         "noun for the pool; the service reads TimeSource only; the rekindle interval " +
+                         "is no longer than the shortest authored (retained, superseded) camp cooldown; " +
+                         "and the raid door consults HasCharge ONLY -- no RaidCooldownService reference " +
+                         "anywhere on RaidSelectionScreen, the refusal is the Heart's sentence, the door " +
+                         "reads and the entry seam spends, with its empty-pool Fail tripwire intact";
                 return true;
             }
             reason = "HEARTFIRE FAIL x" + f.Count + ": " + string.Join(" | ", f);
@@ -476,9 +500,11 @@ namespace DeNelle.Editor.Regression
 
         private static void SpendRoomCases(List<string> f)
         {
-            // The shortest authored per-camp cooldown, MEASURED out of the canonical data
-            // rather than restated here -- a number copied from a doc is hearsay
-            // (CLAUDE.md section 11B).
+            // WO-1379 retired the per-camp wall AS A GATE (PIN F), so "somewhere to spend it"
+            // is structural now. This case stays as the TRIPWIRE on the retained field:
+            // raidCooldownSeconds is superseded, not deleted and not retuned, and the shortest
+            // authored value is MEASURED out of the canonical data rather than restated here --
+            // a number copied from a doc is hearsay (CLAUDE.md section 11B).
             double shortest = ShortestAuthoredCooldownSeconds(SceneCfgResRel, out int campCount, f);
 
             if (campCount <= 0)
@@ -556,6 +582,97 @@ namespace DeNelle.Editor.Regression
         {
             try { return File.Exists(path) ? File.ReadAllText(path) : null; }
             catch (IOException) { return null; }
+        }
+
+        // =====================================================================
+        //  PIN F -- ONE gate on WHEN you may raid, at the ONE door, and it is Heartfire
+        // =====================================================================
+
+        private static void DoorGateCases(List<string> f)
+        {
+            // Comments and string literals are STRIPPED by ReadCode, so the retirement notes in
+            // RaidSelectionScreen that NAME RaidCooldownService cannot trip F1, and a
+            // HeartfireService.HasCharge that appears only in a log message cannot satisfy F2.
+            string select = SourceLint.ReadCode(SelectRel, f);
+            if (!string.IsNullOrEmpty(select))
+            {
+                // F1 -- the WHOLE raid surface, not only the door. The card used to paint
+                // "Recovering - raidable in 12h" off the same service; a card that says "wait"
+                // over a door that opens is wrong advice, so the file must not touch it at all.
+                if (select.IndexOf("RaidCooldownService", StringComparison.Ordinal) >= 0)
+                    f.Add("F1 RaidSelectionScreen references RaidCooldownService -- the per-camp wall is " +
+                          "back on the raid surface. Owner ruling (WO-1379 section 3): Heartfire replaces " +
+                          "the camp wall; one gate on WHEN you may raid. Two lockouts reads as a bug");
+                if (select.IndexOf("IsOnCooldown(", StringComparison.Ordinal) >= 0)
+                    f.Add("F1 RaidSelectionScreen calls IsOnCooldown -- a second WHEN-you-may-raid gate has " +
+                          "reappeared. The recovery record is save evidence, never a door");
+
+                var tap = SourceLint.Body(select, @"private\s+void\s+OnCardTapped\s*\(\s*string\s+id\s*\)");
+                if (string.IsNullOrEmpty(tap))
+                {
+                    f.Add("F2 RaidSelectionScreen.OnCardTapped(string) not found -- the ONE door into " +
+                          "RaidDeployScreen moved, and the Heartfire gate may no longer be on it");
+                }
+                else
+                {
+                    // F2 -- the door consults the charge, and does so BEFORE it opens.
+                    int iGate = tap.IndexOf("HeartfireService.HasCharge", StringComparison.Ordinal);
+                    int iOpen = tap.IndexOf("RaidDeployScreen.Open(", StringComparison.Ordinal);
+                    if (iGate < 0)
+                        f.Add("F2 OnCardTapped never consults HeartfireService.HasCharge -- a player with an " +
+                              "EMPTY Heart can march, and the only thing left to notice is the entry seam's " +
+                              "Fail line after the scene has already loaded");
+                    else if (iOpen < 0)
+                        f.Add("F2 OnCardTapped no longer opens RaidDeployScreen -- the lint has lost its anchor");
+                    else if (iGate > iOpen)
+                        f.Add("F2 OnCardTapped consults HasCharge AFTER opening the deploy screen -- the gate " +
+                              "is downstream of the door it is supposed to guard");
+
+                    // F3 -- the refusal is the Heart's sentence, on screen, and traced. Words, never
+                    // a colour (the owner is red/green colourblind); never a silent no-op (the
+                    // WO-1110 dead-tap defect shipped on this exact screen).
+                    if (tap.IndexOf("HeartfireService.BlockedMessage(", StringComparison.Ordinal) < 0)
+                        f.Add("F3 OnCardTapped does not show HeartfireService.BlockedMessage -- the refusal is " +
+                              "not the Heart's sentence, so the rename did not reach the one place a player " +
+                              "is actually told no");
+                    if (tap.IndexOf("ShowToast(", StringComparison.Ordinal) < 0)
+                        f.Add("F3 OnCardTapped has no ShowToast -- a refused tap would be a SILENT no-op");
+                    if (tap.IndexOf("FlowTrace.Step(", StringComparison.Ordinal) < 0)
+                        f.Add("F3 OnCardTapped has no FlowTrace line -- a refused or opened door leaves no " +
+                              "[Flow:Heartfire] breadcrumb, and CLAUDE.md section 12 forbids that");
+
+                    // F4 -- the door READS; only the entry seam SPENDS. A spend here would charge a
+                    // player who backs out of the deploy screen without marching.
+                    if (tap.IndexOf("HeartfireService.TrySpend(", StringComparison.Ordinal) >= 0)
+                        f.Add("F4 OnCardTapped SPENDS Heartfire -- the spend belongs at the raid ENTRY seam " +
+                              "(RaidDeployController.TryInstall); spending at the door double-charges a " +
+                              "player who backs out of the deploy screen");
+                }
+            }
+
+            // F5 -- the entry seam still spends, and its empty-pool tripwire is still there.
+            // From the door that Fail is unreachable; it stays as the detector for any OTHER
+            // path that loads a RaidBase_* scene without passing the door. Never strip FlowTrace.
+            string deploy = SourceLint.ReadCode(DeployRel, f);
+            if (!string.IsNullOrEmpty(deploy))
+            {
+                var install = SourceLint.Body(deploy, @"private\s+static\s+void\s+TryInstall\s*\(\s*string\s+sceneName\s*\)");
+                if (string.IsNullOrEmpty(install))
+                {
+                    f.Add("F5 RaidDeployController.TryInstall(string) not found -- the raid ENTRY seam moved " +
+                          "and the Heartfire spend may have gone with it");
+                }
+                else
+                {
+                    if (install.IndexOf("HeartfireService.TrySpend(", StringComparison.Ordinal) < 0)
+                        f.Add("F5 RaidDeployController.TryInstall no longer spends Heartfire -- the door reads " +
+                              "a charge that nothing ever consumes, so the pool is decoration");
+                    if (install.IndexOf("FlowTrace.Fail(", StringComparison.Ordinal) < 0)
+                        f.Add("F5 the empty-pool FlowTrace.Fail in TryInstall is gone -- instrumentation was " +
+                              "STRIPPED (CLAUDE.md section 12 forbids it), and a bypassed door would now be " +
+                              "silent");
+                }
+            }
         }
     }
 }

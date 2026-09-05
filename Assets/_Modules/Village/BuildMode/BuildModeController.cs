@@ -508,19 +508,60 @@ namespace DeNelle.Village
             EnsureGrid();
             SeedBaseLayoutIfFirstEntry();
 
-            // F8-39: census on build ENTRY — how many placed structures are LIVE in the scene vs how
-            // many the persisted BaseLayout says should exist. If live << persisted here (before any
-            // placement), the structures were already torn down (e.g. on the preceding death) and the
-            // upcoming place is what makes them visually "return" — captures the vanish BEFORE the add.
+            // F8-39 / WO-1361: census on build ENTRY - how many placed structures are LIVE in the
+            // scene vs how many the persisted BaseLayout says should exist.
+            //
+            // WO-1361 (2026-09-04): the old line here read "live << persisted = structures already
+            // gone" - a cause the emitter cannot see. Every such census in the device logs was
+            // the FOUNDING load, where the StrategicPlacementMigration.BakedRows records have no
+            // PlacedStructure because the BAKED TWIN stands in for them until the next hub load
+            // (ShouldReplayRecord == false while standdown is inactive; BaseLayoutLoader.Rebuild
+            // WITHHOLDS them for the same reason). A PlacedStructure count can never see a baked
+            // twin, so persisted - live == bake-owned is the design working, not a loss.
+            // The census now subtracts what it is not allowed to count and NAMES the rest:
+            //   replayable  = records ShouldReplayRecord says must have a live body
+            //   bake-owned  = migration-managed records the bake owns this load (no body expected)
+            //   unaccounted = replayable records with NO live body at their (itemId, cell)
+            // Only unaccounted > 0 is a loss, and only that is a Fail - a founding load never Warns.
+            // Classification is pure (BaseLayoutCensus.Classify) so the regression pins it headless.
             {
-                int liveNow = FindObjectsByType<PlacedStructure>().Length;
+                var liveBodies = FindObjectsByType<PlacedStructure>();
+                int liveNow = liveBodies.Length;
                 int loadedNow = BaseLayoutLoader.Instance != null ? BaseLayoutLoader.Instance.Loaded.Count : -1;
                 var stEnter = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-                int persistedNow = stEnter != null && stEnter.BaseLayout != null ? stEnter.BaseLayout.Count : 0;
-                FlowTrace.Step("BaseLayout",
-                    $"Enter build mode CENSUS: live PlacedStructure(s) in scene={liveNow}, loader.Loaded={loadedNow}, " +
-                    $"persisted BaseLayout={persistedNow}, scene='{DeNelle.Village.SceneOwnership.IsEnemyOwned}'-enemyOwned. " +
-                    "live << persisted = structures already gone before this build session (F8-39 vanish happened earlier).");
+                var layoutNow = stEnter != null ? stEnter.BaseLayout : null;
+
+                var census = Guard.Try("BuildMode", "census classify replayable vs bake-owned", () =>
+                {
+                    var bodies = new List<(string itemId, int cellX, int cellZ)>(liveBodies.Length);
+                    for (int i = 0; i < liveBodies.Length; i++)
+                    {
+                        var ps = liveBodies[i];
+                        if (ps == null) continue;
+                        bodies.Add((ps.itemId, ps.gridCell.x, ps.gridCell.y));
+                    }
+                    return BaseLayoutCensus.Classify(layoutNow, bodies, StrategicPlacementMigration.ShouldReplayRecord);
+                }, fallback: null);
+
+                if (census == null)
+                {
+                    // Guard already emitted the exception via FlowTrace.Fail; this names the consequence.
+                    FlowTrace.Fail("BuildMode",
+                        $"census: live={liveNow} persisted={(layoutNow != null ? layoutNow.Count : 0)} " +
+                        "- classification THREW (see the Guard line above); replayable/bake-owned split unknown this entry.");
+                }
+                else
+                {
+                    FlowTrace.Step("BuildMode",
+                        BaseLayoutCensus.FormatLine(liveNow, census) +
+                        $" loader.Loaded={loadedNow} bake-owned=[{string.Join(",", census.BakeOwnedIds)}]" +
+                        $" scene='{DeNelle.Village.SceneOwnership.IsEnemyOwned}'-enemyOwned");
+                    if (BaseLayoutCensus.IsLoss(census))
+                        FlowTrace.Fail("BuildMode",
+                            $"census: {census.Unaccounted} REPLAYABLE record(s) have NO live body = " +
+                            $"[{string.Join(", ", census.UnaccountedIds)}] - a genuine loss; " +
+                            "the step is in the preceding [Flow:BaseLayout] Rebuild/Spawn FAILED lines (WO-1361).");
+                }
             }
 
             FreezeWaves();
@@ -4048,6 +4089,88 @@ namespace DeNelle.Village
                 var svc = GameStateService.Instance;
                 return svc != null && svc.State != null ? svc.State.Resources.Crystals : 0;
             }
+        }
+    }
+
+    /// <summary>
+    /// WO-1361 - the build-entry census classifier, PURE so it runs headless under
+    /// BaseLayoutRoundTripRegression with no scene. Splits the persisted BaseLayout into
+    /// REPLAYABLE records (the replay gate says a live body must exist), BAKE-OWNED records
+    /// (migration-managed while standdown is inactive - the baked twin stands in, no
+    /// PlacedStructure is ever expected) and UNACCOUNTED records (replayable, yet no live
+    /// body at that (itemId, cellX, cellZ)). Only the last is a loss. Bodies are consumed
+    /// one-to-one so two records at the same id+cell cannot both claim one body.
+    /// The gate is injected (BuildModeController passes StrategicPlacementMigration.ShouldReplayRecord,
+    /// the same predicate BaseLayoutLoader.Rebuild withholds on) so the suite can exercise it.
+    /// </summary>
+    public static class BaseLayoutCensus
+    {
+        public sealed class Result
+        {
+            public int Persisted;
+            public int Replayable;
+            public int BakeOwned;
+            public int Unaccounted;
+            public readonly List<string> BakeOwnedIds = new List<string>();
+            /// <summary>Each as "itemId@(cellX,cellZ)" - the capture must name the record.</summary>
+            public readonly List<string> UnaccountedIds = new List<string>();
+        }
+
+        public static Result Classify(
+            IReadOnlyList<PlacedStructureData> layout,
+            IReadOnlyList<(string itemId, int cellX, int cellZ)> liveBodies,
+            System.Func<string, bool> shouldReplay)
+        {
+            if (shouldReplay == null) throw new System.ArgumentNullException(nameof(shouldReplay));
+            var r = new Result();
+            if (layout == null) return r;
+            r.Persisted = layout.Count;
+
+            int bodyCount = liveBodies != null ? liveBodies.Count : 0;
+            var consumed = new bool[bodyCount];
+
+            for (int i = 0; i < layout.Count; i++)
+            {
+                var rec = layout[i];
+                if (!shouldReplay(rec.itemId))
+                {
+                    r.BakeOwned++;
+                    r.BakeOwnedIds.Add(rec.itemId ?? "<null>");
+                    continue;
+                }
+                r.Replayable++;
+                bool found = false;
+                for (int b = 0; b < bodyCount; b++)
+                {
+                    if (consumed[b]) continue;
+                    var body = liveBodies[b];
+                    if (body.itemId == rec.itemId && body.cellX == rec.cellX && body.cellZ == rec.cellZ)
+                    {
+                        consumed[b] = true;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    r.Unaccounted++;
+                    r.UnaccountedIds.Add($"{rec.itemId ?? "<null>"}@({rec.cellX},{rec.cellZ})");
+                }
+            }
+            return r;
+        }
+
+        /// <summary>True only when a replayable record has no live body - the one shape that is a loss.</summary>
+        public static bool IsLoss(Result r) => r != null && r.Unaccounted > 0;
+
+        /// <summary>
+        /// The mandated line shape (WO-1361):
+        /// "census: live=N persisted=M = R replayable + B bake-owned (+ X unaccounted)".
+        /// </summary>
+        public static string FormatLine(int live, Result r)
+        {
+            if (r == null) return $"census: live={live} persisted=? (classification unavailable)";
+            return $"census: live={live} persisted={r.Persisted} = {r.Replayable} replayable + {r.BakeOwned} bake-owned (+ {r.Unaccounted} unaccounted)";
         }
     }
 }

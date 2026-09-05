@@ -1,6 +1,6 @@
 # WORK ORDER 1379 - Heartfire replaces "Raid Orders"
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS 2026-09-05 07:43 - the remaining half landed + gated (COMPILE_GATE_OK, REGRESSION_OK 383/383 incl. HeartfireRegression PIN F): the ONE raid door reads HeartfireService.HasCharge and toasts BlockedMessage in words; the per-camp cooldown is a record, never a gate; scene-configs.json notes corrected. Awaiting the next APK + device proof (tap a camp cleared under 4 h ago holding a charge -> RaidDeploy opens). Owner question: a Heartfire header on the Raids grid itself? (not built). Was READY TO IMPLEMENT.
 > 2026-09-04 (board note, not a flip): `[heartfire]` is GREEN on the 2026.09.05.355872 tree, but `RaidSelectionScreen.cs:527` still gates the raid card tap on `RaidCooldownService.IsOnCooldown(id)` - the per-camp wall (fenced item 3 in the earlier WO-1379 gap note) is NOT retired at the door, so this stays READY. (Measured, same read: `scene-configs.json:287` `iron_bastion` carries `raidCooldownSeconds: 43200` with NO `_raidCooldownSecondsSuperseded` note, unlike the other three camps.)
 **Silo / Lane:** Raid pacing / HUD charge display
 **Type:** NEW GATE + naming, owner-ruled creative direction

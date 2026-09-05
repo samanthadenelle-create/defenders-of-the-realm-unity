@@ -1,6 +1,6 @@
 # WORK ORDER 1366 - One Arena, one code path: the wager CURRENCY is the only per-channel difference
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS 2026-09-05 07:43 - landed + gated (COMPILE_GATE_OK, REGRESSION_OK 383/383 incl. ArenaCatalogRegression case 8): wager currency resolved per channel through CurrencySkinResolver (Play -> Crystals, Solana dApp -> SKR, Pi / Unknown -> refused in words); four tunable keys handed to the rail (wiring lane in flight). **FINDING / RULING:** the Editor and the desktop exe resolve PaymentChannel.Unknown, so they now REFUSE arena wagers as specified - keep, or map a dev channel? Also: should Pi wager at all, and in what? Awaiting the next APK; the artifact metadata scan stays a CLI AAB step behind WO-1362. Was READY TO IMPLEMENT.
 **Silo / Lane:** Economy / Arena - `Assets/_Modules/Village/Arena/*` + the existing channel seam
 **Type:** EXISTING system, currency abstraction + a real balance change
 **Minted:** 2026-09-04 (CLI), on owner rulings

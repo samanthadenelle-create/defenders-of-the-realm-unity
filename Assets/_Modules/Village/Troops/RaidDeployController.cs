@@ -150,25 +150,27 @@ namespace DeNelle.Village
             // Guarded (a charge-accounting throw must never stop a raid from installing
             // its controls) but never swallowed - Guard logs through FlowTrace.Fail.
             //
-            // ⚠ THIS SPENDS; IT DOES NOT REFUSE, AND THAT IS A DELIBERATE, REPORTED GAP.
+            // (!) THIS SPENDS; IT DOES NOT REFUSE, AND THAT IS DELIBERATE.
             // By the time a RaidBase scene is loaded the player is already there, so
             // refusing here would strand them in a scene with nothing to do - strictly
-            // worse than letting an over-spend through. The REFUSAL belongs one step
-            // earlier, at the same door that already refuses a camp on cooldown:
-            // RaidSelectionScreen.OnCardTapped (Village/Hero/RaidSelectionScreen.cs:457),
-            // which is outside this lane's file fence. Until that lands, an empty pool
-            // logs a Fail line naming exactly this, and the gate is observable rather
-            // than merely absent.
+            // worse than letting an over-spend through. The REFUSAL lives one step
+            // earlier, at the ONE door: RaidSelectionScreen.OnCardTapped checks
+            // HeartfireService.HasCharge and shows BlockedMessage (WO-1379, landed
+            // 2026-09-05; it REPLACED the per-camp RaidCooldownService.IsOnCooldown gate
+            // there - one gate on WHEN you may raid, owner ruling). From that door this
+            // Fail line is UNREACHABLE. It stays in the code on purpose (CLAUDE.md
+            // section 12: never strip FlowTrace) as the tripwire for any OTHER path that
+            // loads a RaidBase_* scene without passing the door - a dev shortcut, a
+            // stale deep link, a future second entry. If it fires, the door was bypassed.
             DeNelle.Core.Diagnostics.Guard.Try("Heartfire", "spend heartfire on raid entry", () =>
             {
                 if (DeNelle.Village.World.Camps.HeartfireService.TrySpend(sceneName)) return;
                 DeNelle.Core.Diagnostics.FlowTrace.Fail("Heartfire",
                     "a raid scene ('" + sceneName + "') was ENTERED with an EMPTY Heartfire pool. " +
                     "The march is allowed to proceed on purpose - refusing inside an already-loaded " +
-                    "raid scene would strand the player - but this line means the entry gate did not " +
-                    "run at the door. Wire HeartfireService.HasCharge / BlockedMessage into " +
-                    "RaidSelectionScreen.OnCardTapped beside the RaidCooldownService.IsOnCooldown " +
-                    "check (WO-1379).");
+                    "raid scene would strand the player - but this line means the door gate did not " +
+                    "run: RaidSelectionScreen.OnCardTapped refuses on HeartfireService.HasCharge " +
+                    "(WO-1379), so whatever loaded this scene BYPASSED the one door. Find that path.");
             });
 
             var go = new GameObject("RaidDeployController");

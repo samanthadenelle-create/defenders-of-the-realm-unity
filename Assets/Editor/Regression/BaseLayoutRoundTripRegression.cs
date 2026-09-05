@@ -84,6 +84,21 @@
 //                             and SeedBlankFoundingOnMissingSave (private,
 //                             WO-1250). Any occurrence inside a different
 //                             PUBLIC method is a failure.
+//   5 [census-splits-replayable-from-bake-owned] (WO-1361 instrument, 2026-09-05)
+//                             BaseLayoutCensus.Classify (BuildModeController.cs)
+//                             over a FOUNDING-shaped layout - one record per
+//                             StrategicPlacementMigration.BakedRows id with NO
+//                             body (the baked twin stands in) + the fixture's
+//                             non-managed records each WITH a body - through the
+//                             REAL ShouldReplayRecord gate reads unaccounted=0
+//                             (IsLoss false; the emitter must not Fail). Named
+//                             mutations: drop-one-body -> unaccounted=1 naming
+//                             id@(x,z); replay-all gate -> the bake records
+//                             become unaccounted (split is gate-driven, not
+//                             id-driven); wrong-cell body -> unaccounted=1.
+//                             Plus a source lint: the census block Fails only
+//                             on IsLoss, never Warns, and the retired sentence
+//                             "structures already gone" is absent.
 //
 // Global-state discipline: swaps GameStateService.Provider to an in-memory
 // provider and restores it; stashes and restores the developer's live
@@ -118,6 +133,7 @@ using DeNelle.Core;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Village;   // WO-1361 case 5: BaseLayoutCensus + StrategicPlacementMigration (the real replay gate)
 
 namespace DeNelle.Editor.Regression
 {
@@ -182,6 +198,7 @@ namespace DeNelle.Editor.Regression
                 RunCase(2, "migrator-from-oldest-supported", failures, log, () => Case2MigratorFromOldest(memory, created, failures, log));
                 RunCase(3, "null-and-empty-are-distinct", failures, log, () => Case3NullAndEmptyDistinct(memory, created, failures, log));
                 RunCase(4, "new-game-clears-everything-else-not", failures, log, () => Case4NewGameClears(memory, created, failures, log));
+                RunCase(5, "census-splits-replayable-from-bake-owned", failures, log, () => Case5CensusSplitsBakeOwned(failures, log));
             }
             catch (Exception ex)
             {
@@ -199,7 +216,7 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "BASELAYOUT_ROUNDTRIP_OK");
-                reason = $"BASELAYOUT ROUND-TRIP OK - {ExpectedRecordCount} records survive save->reload (v{SaveSchema.CurrentVersion}) and migrate (v{OldestBaseLayoutVersion}->v{SaveSchema.CurrentVersion}); null/empty distinct; ResetToNewGame is the only public clearer";
+                reason = $"BASELAYOUT ROUND-TRIP OK - {ExpectedRecordCount} records survive save->reload (v{SaveSchema.CurrentVersion}) and migrate (v{OldestBaseLayoutVersion}->v{SaveSchema.CurrentVersion}); null/empty distinct; ResetToNewGame is the only public clearer; census splits replayable from bake-owned and names a dropped record";
                 return true;
             }
             reason = "baselayout-roundtrip: " + string.Join("; ", failures);
@@ -553,6 +570,163 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Fixture - 17 real-catalog records, 12 distinct ids
         // =====================================================================
+        // =====================================================================
+        //  Case 5 - the build-entry census (WO-1361 instrument): a founding-shaped
+        //  layout with baked twins is NOT a loss; a dropped replayable record IS
+        // =====================================================================
+        // Founding shape (freeze-20260904-095249.log:394358-394441 + 568505): the
+        // migration writer appends one record per StrategicPlacementMigration.BakedRows
+        // id with NO PlacedStructure body (the baked twin stands in until the next hub
+        // load), and the starter/adopted pieces each have a body. The old census called
+        // that "structures already gone". The classifier must read it as
+        // unaccounted=0 (no Fail), and must name a genuinely missing replayable body.
+        private static void Case5CensusSplitsBakeOwned(List<string> failures, StringBuilder log)
+        {
+            int baseline = failures.Count;
+
+            // The gate under test. On a founding load ShouldReplayRecord(id) == !IsManagedId(id)
+            // (StrategicPlacementMigration.cs:239-243: non-managed -> true; managed -> StanddownActive,
+            // which is false on the migration load). StanddownActive depends on the ACTIVE SCENE
+            // (scene.name == SceneRouter.Castle) and on the live GameStateService, and other suites
+            // in the same DataRegression pass open scenes - so when the harness happens to have
+            // standdown active, the REAL method cannot model a founding load. Then the founding
+            // gate is the method's own inactive-standdown body, and the substitution is logged by
+            // name; every assertion below still runs against the classifier either way.
+            Func<string, bool> gate;
+            bool realGate = !StrategicPlacementMigration.StanddownActive;
+            if (realGate)
+            {
+                gate = StrategicPlacementMigration.ShouldReplayRecord;
+                log.AppendLine("  gate = StrategicPlacementMigration.ShouldReplayRecord (standdown inactive in the harness = founding shape)");
+            }
+            else
+            {
+                gate = id => !StrategicPlacementMigration.IsManagedId(id);
+                log.AppendLine("  gate = !IsManagedId (harness has standdown ACTIVE; using ShouldReplayRecord's inactive-standdown body for the founding shape)");
+            }
+
+            var bakes = StrategicPlacementMigration.BakedStorefronts();
+            if (bakes == null || bakes.Count == 0)
+            {
+                failures.Add("[case 5] StrategicPlacementMigration.BakedStorefronts() returned no rows - the bake table moved; re-point the fixture");
+                return;
+            }
+
+            // Bake-owned records: one per BakedRows id (what RunIfNeeded writes on the founding load).
+            var layout = new List<PlacedStructureData>();
+            for (int i = 0; i < bakes.Count; i++)
+                layout.Add(new PlacedStructureData(bakes[i].itemId, 20 + i, -20, 0, 1));
+            int expectedBakeOwned = layout.Count;
+
+            // Replayable records: every non-managed id of the 17-record fixture, each WITH a live body.
+            var bodies = new List<(string itemId, int cellX, int cellZ)>();
+            foreach (var rec in BuildFixture())
+            {
+                if (StrategicPlacementMigration.IsManagedId(rec.itemId)) continue;
+                layout.Add(rec);
+                bodies.Add((rec.itemId, rec.cellX, rec.cellZ));
+            }
+            int expectedReplayable = bodies.Count;
+            if (expectedReplayable < 2)
+            {
+                failures.Add($"[case 5] fixture carries only {expectedReplayable} non-managed records - the mutation below needs at least 2");
+                return;
+            }
+            // Every BakedRows id must be bake-owned under the founding gate; if the real gate says
+            // otherwise the founding-load rule itself changed shape and the split would be wrong.
+            for (int i = 0; i < bakes.Count; i++)
+                if (gate(bakes[i].itemId))
+                    failures.Add($"[case 5] {(realGate ? "ShouldReplayRecord" : "!IsManagedId")}('{bakes[i].itemId}') is TRUE for the founding shape - the gate changed shape; the census split would be wrong");
+            if (failures.Count > baseline) return;
+
+            // (a) founding shape: every replayable has a body, every bake-owned has none -> no loss.
+            var founding = BaseLayoutCensus.Classify(layout, bodies, gate);
+            if (founding.Persisted != layout.Count)
+                failures.Add($"[case 5a] Persisted={founding.Persisted}, expected {layout.Count}");
+            if (founding.BakeOwned != expectedBakeOwned)
+                failures.Add($"[case 5a] BakeOwned={founding.BakeOwned}, expected {expectedBakeOwned} (one per BakedRows id)");
+            if (founding.Replayable != expectedReplayable)
+                failures.Add($"[case 5a] Replayable={founding.Replayable}, expected {expectedReplayable}");
+            if (founding.Unaccounted != 0 || founding.UnaccountedIds.Count != 0)
+                failures.Add($"[case 5a] founding shape read as a LOSS: Unaccounted={founding.Unaccounted} [{string.Join(", ", founding.UnaccountedIds)}] - baked twins counted as missing (the WO-1361 mis-read)");
+            if (BaseLayoutCensus.IsLoss(founding))
+                failures.Add("[case 5a] IsLoss is TRUE on the founding shape - BuildModeController would Fail on every new game");
+            for (int i = 0; i < bakes.Count; i++)
+                if (!founding.BakeOwnedIds.Contains(bakes[i].itemId))
+                    failures.Add($"[case 5a] bake-owned list does not name '{bakes[i].itemId}'");
+            string line = BaseLayoutCensus.FormatLine(bodies.Count, founding);
+            string expectedLine = $"census: live={bodies.Count} persisted={layout.Count} = {expectedReplayable} replayable + {expectedBakeOwned} bake-owned (+ 0 unaccounted)";
+            if (line != expectedLine)
+                failures.Add($"[case 5a] FormatLine shape drifted: got '{line}', expected '{expectedLine}'");
+            log.AppendLine("  5a founding shape: " + line);
+
+            // (b) MUTATION 1 - drop ONE replayable body (the starter piece never spawned / was torn
+            //     down): the census must read exactly one unaccounted and NAME it by id@cell.
+            var dropped = bodies[bodies.Count - 1];
+            var mutatedBodies = new List<(string itemId, int cellX, int cellZ)>(bodies);
+            mutatedBodies.RemoveAt(mutatedBodies.Count - 1);
+            var loss = BaseLayoutCensus.Classify(layout, mutatedBodies, gate);
+            string expectedName = $"{dropped.itemId}@({dropped.cellX},{dropped.cellZ})";
+            if (loss.Unaccounted != 1)
+                failures.Add($"[case 5b] MUTATION drop-one-body: Unaccounted={loss.Unaccounted}, expected 1");
+            if (loss.UnaccountedIds.Count != 1 || loss.UnaccountedIds[0] != expectedName)
+                failures.Add($"[case 5b] MUTATION drop-one-body: named [{string.Join(", ", loss.UnaccountedIds)}], expected exactly '{expectedName}' - a capture must name the record");
+            if (loss.Replayable != expectedReplayable || loss.BakeOwned != expectedBakeOwned)
+                failures.Add($"[case 5b] MUTATION drop-one-body moved the split: replayable={loss.Replayable} bake-owned={loss.BakeOwned}");
+            if (!BaseLayoutCensus.IsLoss(loss))
+                failures.Add("[case 5b] IsLoss is FALSE with a replayable record missing - the Fail would never fire");
+            log.AppendLine("  5b mutation drop-one-body: " + BaseLayoutCensus.FormatLine(mutatedBodies.Count, loss) + $" -> [{string.Join(", ", loss.UnaccountedIds)}]");
+
+            // (c) MUTATION 2 - a gate that replays EVERYTHING (standdown active, no bake stands in):
+            //     the bake records now have no body and MUST count as unaccounted. Proves the split
+            //     is driven by the gate, not by the id - a classifier that hardcoded the 8 ids as
+            //     "never a loss" would hide a real post-standdown loss of a storefront.
+            var allReplay = BaseLayoutCensus.Classify(layout, bodies, _ => true);
+            if (allReplay.BakeOwned != 0)
+                failures.Add($"[case 5c] MUTATION replay-all: BakeOwned={allReplay.BakeOwned}, expected 0 - the classifier ignores the gate");
+            if (allReplay.Unaccounted != expectedBakeOwned)
+                failures.Add($"[case 5c] MUTATION replay-all: Unaccounted={allReplay.Unaccounted}, expected {expectedBakeOwned} (the storefront records with no body)");
+
+            // (d) MUTATION 3 - a body at the RIGHT id but the WRONG cell must not satisfy the record
+            //     (the census matches id+cell, as BaseLayoutLoader.Spawn sets both on the marker).
+            var wrongCell = new List<(string itemId, int cellX, int cellZ)>(bodies);
+            wrongCell[0] = (wrongCell[0].itemId, wrongCell[0].cellX + 1, wrongCell[0].cellZ);
+            var shifted = BaseLayoutCensus.Classify(layout, wrongCell, gate);
+            if (shifted.Unaccounted != 1)
+                failures.Add($"[case 5d] MUTATION wrong-cell: Unaccounted={shifted.Unaccounted}, expected 1 - a body at another cell was accepted for the record");
+
+            // (e) SOURCE LINT (the case-4 pattern): the emitter Fails ONLY on a loss and never Warns
+            //     in the census block, and the retired sentence is gone.
+            string ctlPath = Path.Combine(Application.dataPath, "_Modules/Village/BuildMode/BuildModeController.cs");
+            if (!File.Exists(ctlPath))
+            {
+                failures.Add("[case 5e] lint: BuildModeController.cs not found under Assets/_Modules/Village/BuildMode - the emitter moved; re-point this case");
+            }
+            else
+            {
+                string src = File.ReadAllText(ctlPath);
+                if (src.Contains("structures already gone before this build session"))
+                    failures.Add("[case 5e] lint: the retired census sentence 'structures already gone before this build session' is back in BuildModeController.cs");
+                int at = src.IndexOf("BaseLayoutCensus.Classify(", StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    failures.Add("[case 5e] lint: BuildModeController.cs no longer calls BaseLayoutCensus.Classify - the census instrument was removed (CLAUDE.md s12: never strip)");
+                }
+                else
+                {
+                    int end = src.IndexOf("FreezeWaves();", at, StringComparison.Ordinal);
+                    string block = end > at ? src.Substring(at, end - at) : src.Substring(at);
+                    if (block.Contains("FlowTrace.Warn("))
+                        failures.Add("[case 5e] lint: the census block Warns - a founding load must never read as an anomaly (WO-1361)");
+                    if (!block.Contains("BaseLayoutCensus.IsLoss(census)") || !block.Contains("FlowTrace.Fail("))
+                        failures.Add("[case 5e] lint: the census block does not gate FlowTrace.Fail on BaseLayoutCensus.IsLoss(census) - a genuine loss would not fire");
+                }
+            }
+
+            if (failures.Count == baseline)
+                log.AppendLine($"  census: {expectedReplayable} replayable + {expectedBakeOwned} bake-owned reads as no loss; drop-one / replay-all / wrong-cell mutations each surface as unaccounted; emitter Fails only on loss");
+        }
+
         // Ids read from Assets/Resources/Data/Canonical/structures-catalog.json
         // (2026-09-04): walls/gate (wall_wood, wall_stone, gate_stone), towers
         // (tower_ground_archer, tower_ballista), collectors (collector_lumbermill,
