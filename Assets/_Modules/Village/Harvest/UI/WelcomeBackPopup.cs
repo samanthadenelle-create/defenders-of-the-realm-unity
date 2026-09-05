@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -288,12 +289,44 @@ namespace DeNelle.Village.UI
                 remaining++;
                 remainingUnits += lines[i].Pending;
             }
-            if (remaining <= 0) return;
-            if (HasRoom(y)) AddPlateRow(body, ref y, "ALSO WAITING", "+" + remainingUnits + " MORE", ElarionUi.Gold);
-            else
-                FlowTrace.Warn("Offline",
-                    $"welcome-back: {remaining} more resource row(s) ({remainingUnits} units) had no room left " +
-                    "in the report body -- not lost, only unlisted (COLLECT still banks it).");
+            if (remaining > 0)
+            {
+                if (HasRoom(y)) AddPlateRow(body, ref y, "ALSO WAITING", "+" + remainingUnits + " MORE", ElarionUi.Gold);
+                else
+                    FlowTrace.Warn("Offline",
+                        $"welcome-back: {remaining} more resource row(s) ({remainingUnits} units) had no room left " +
+                        "in the report body -- not lost, only unlisted (COLLECT still banks it).");
+            }
+            AddCollectWaitRows(body, ref y);
+        }
+
+        /// <summary>
+        /// WO-1392 - WARN BEFORE COLLECT. One line per resource whose pending exceeds the town
+        /// bank's headroom right now: "Storage nearly full - 414 wood will wait". Words, not
+        /// colour, ASCII. The prediction is OfflineHarvestService.PredictCollectWaits (pure,
+        /// pinned); this method only seats it. Those units are not lost on the tap any more
+        /// (ResourceCollector.Collect leaves them pending) - the line is so COLLECT is informed.
+        /// </summary>
+        private void AddCollectWaitRows(Transform body, ref float y)
+        {
+            List<OfflineHarvestService.CollectWait> waits = null;
+            Guard.Try("Offline", "predict collect waits for the welcome-back warning",
+                () => waits = OfflineHarvestService.PredictCollectWaits(_result));
+            if (waits == null || waits.Count == 0) return;
+            foreach (var w in waits)
+            {
+                string line = OfflineHarvestService.CollectWaitLine(w);
+                FlowTrace.Step("Offline",
+                    $"welcome-back warn-before-collect: {w.Word} pending={w.Pending} headroom={w.Headroom} -> '{line}'.");
+                if (!HasRoom(y))
+                {
+                    FlowTrace.Warn("Offline",
+                        $"welcome-back: the warning '{line}' had no room left in the report body -- the units " +
+                        "still stay in the collectors on COLLECT (never burned), only the warning is unlisted.");
+                    return;
+                }
+                AddMendLine(body, ref y, line, ElarionUi.Gold);
+            }
         }
 
         /// <summary>The shared two-column plate row: label left, value right. Extracted so a

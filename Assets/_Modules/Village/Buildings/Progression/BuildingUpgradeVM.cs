@@ -341,6 +341,84 @@ namespace DeNelle.Village.Buildings.Progression
             public int Missing => Short ? Amount - Have : 0;
         }
 
+        // ── WO-1391 (2026-09-05) — THE ONE AFFORDABILITY PREDICATE, and the sentence it feeds ──
+        //
+        // THE DEFECT THIS RETIRES (owner's Seeker capture 14-research-door-result.png, build 355952):
+        // "Cathedral of Magic" showed "1280 Wood" against 4000 wood on the strip and STILL read
+        // "Missing resources". PROVEN BY READING, not theorised: building-tiers.json 'arcane-tower'
+        // tier 1 authors costGold 800 / costCrystal 1280 / costWood 0. ComposeNextCity emitted ONE
+        // cost line (the PrimaryMaterialCost, 1280) and NO Gold line, while the predicate it trusted
+        // - BuildingUpgradeService.CanAffordTier (:207-212) - ALSO requires state.Resources.Coins >=
+        // CostGold, i.e. 706 >= 800, which is false. So the state was MissingResources, no cost
+        // LINE was short (wood 4000 >= 1280), WorstShortMissing was 0, and BuildShortfallBand had
+        // nothing to say beyond the bare "Missing resources". The strip and the predicate read the
+        // SAME GameState (EconomyService.Coins => state.Resources.Coins; ResourceLedger.Balance =>
+        // state.Wood / Resources.*) - the ledgers never disagreed. The Gold term was simply hidden.
+        //
+        // THE FIX: every term the tap will charge is a cost LINE (Gold included), and
+        // _nextAffordable is DERIVED FROM THOSE LINES by AffordableFromLines - one predicate, one
+        // ledger (GameState via ResourceLedger / EconomyService), so the sentence, the chips and
+        // the button state cannot disagree again. The service predicate is still consulted as a
+        // CROSS-CHECK and a disagreement is a traced Warn, never a silent divergence.
+
+        /// <summary>WO-1391 — true when every cost line's HAVE covers its AMOUNT. Pure; the pin
+        /// [shortfall-named] drives it with fixture lines.</summary>
+        public static bool AffordableFromLines(IReadOnlyList<UpgradeCostLine> lines)
+        {
+            if (lines == null) return true;
+            for (int i = 0; i < lines.Count; i++)
+                if (lines[i].Short) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// WO-1391 — the shortfall IN WORDS from the cost lines: "Short 94 Gold", or
+        /// "Short 300 Iron, 120 Crystals" when several are short (largest gap first, then the
+        /// panel's own left-to-right order). "" when nothing is short. ASCII only. Pure.
+        /// </summary>
+        public static string ShortfallSentence(IReadOnlyList<UpgradeCostLine> lines)
+        {
+            if (lines == null || lines.Count == 0) return "";
+            int worstIdx = -1, worst = 0;
+            for (int i = 0; i < lines.Count; i++)
+                if (lines[i].Short && lines[i].Missing > worst) { worst = lines[i].Missing; worstIdx = i; }
+            if (worstIdx < 0) return "";
+
+            var sb = new System.Text.StringBuilder(48);
+            sb.Append("Short ").Append(DeNelle.Core.UI.ElarionUi.CompactNumber(lines[worstIdx].Missing))
+              .Append(' ').Append(Ascii(lines[worstIdx].Label ?? ""));
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (i == worstIdx || !lines[i].Short || lines[i].Missing <= 0) continue;
+                sb.Append(", ").Append(DeNelle.Core.UI.ElarionUi.CompactNumber(lines[i].Missing))
+                  .Append(' ').Append(Ascii(lines[i].Label ?? ""));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>WO-1391 — the live shortfall sentence for the next upgrade ("" when affordable).
+        /// The View puts THIS on the face - never a bare "Missing resources".</summary>
+        public string NextShortfallSentence => ShortfallSentence(_nextCostLines);
+
+        /// <summary>
+        /// WO-1391 — the ONE action-state resolver, pure so a fixture can drive it. Same order the
+        /// tap path checks: no ladder -> Unavailable; maxed -> Maxed; a job here -> Queued /
+        /// InProgress; village gate -> VillageGated; cost -> MissingResources; full line -> QueueFull;
+        /// else Ready. <see cref="ActionState"/> is a thin read of the live inputs into this.
+        /// </summary>
+        public static UpgradeActionState ResolveActionState(bool hasLadder, bool hasNext,
+            bool jobHere, bool jobPending, int requiresVillageTier, int villageTierNow,
+            bool affordable, bool lineFull)
+        {
+            if (!hasLadder) return UpgradeActionState.Unavailable;
+            if (!hasNext) return UpgradeActionState.Maxed;
+            if (jobHere) return jobPending ? UpgradeActionState.Queued : UpgradeActionState.InProgress;
+            if (requiresVillageTier > villageTierNow) return UpgradeActionState.VillageGated;
+            if (!affordable) return UpgradeActionState.MissingResources;
+            if (lineFull) return UpgradeActionState.QueueFull;
+            return UpgradeActionState.Ready;
+        }
+
         private string _currentTierName = "";
         private string _nextTierName = "";
         private string _nextDescription = "";
@@ -487,28 +565,23 @@ namespace DeNelle.Village.Buildings.Progression
         {
             get
             {
-                if (!_isCity && !_isResource && !_isPlaced) return UpgradeActionState.Unavailable;
-                if (!HasNextUpgrade) return UpgradeActionState.Maxed;
-
                 var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
-                if (t != null && t.IsBuilding(_buildingId))
-                    return IsPendingInBuilderQueue(t) ? UpgradeActionState.Queued : UpgradeActionState.InProgress;
-
-                if (_nextRequiresVillageTier > _villageTierNow) return UpgradeActionState.VillageGated;
-                if (!_nextAffordable) return UpgradeActionState.MissingResources;
-
-                // WO-1045 — THE LAST GATE, and the one that was missing. Everything above passed:
-                // affordable, ungated, nothing running here. All three tap paths STILL refuse when
-                // the Builders line is at its depth cap, and until now this getter answered Ready
-                // to that — a bright, tappable button over a guaranteed refusal.
-                //
-                // ⚠ Checked LAST on purpose. A player who is also broke or village-gated has a
-                // blocker they can act on sooner; naming the queue to them would be true but not
-                // the most useful thing to say. This state is reached ONLY when a full line is the
-                // sole remaining reason the tap cannot succeed.
-                if (t != null && t.IsLineFull(ChannelId.Builder)) return UpgradeActionState.QueueFull;
-
-                return UpgradeActionState.Ready;
+                bool jobHere = t != null && t.IsBuilding(_buildingId);
+                // WO-1045 — the DEPTH cap is THE LAST GATE, checked only when everything else passed
+                // (affordable, ungated, nothing running here): a player who is also broke or
+                // village-gated has a blocker they can act on sooner. ResolveActionState keeps that
+                // order; this getter only feeds it the live inputs (WO-1391 made it pure so the
+                // [shortfall-named] pin can prove Ready/MissingResources from fixture lines).
+                bool lineFull = t != null && t.IsLineFull(ChannelId.Builder);
+                return ResolveActionState(
+                    hasLadder: _isCity || _isResource || _isPlaced,
+                    hasNext: HasNextUpgrade,
+                    jobHere: jobHere,
+                    jobPending: jobHere && IsPendingInBuilderQueue(t),
+                    requiresVillageTier: _nextRequiresVillageTier,
+                    villageTierNow: _villageTierNow,
+                    affordable: _nextAffordable,
+                    lineFull: lineFull);
             }
         }
 
@@ -1369,10 +1442,56 @@ namespace DeNelle.Village.Buildings.Progression
                     if (!string.IsNullOrEmpty(pn)) _nextBonuses.Add("Opens research: " + Ascii(pn));
                 }
 
+            // The primary-material LANE is chosen by tier NUMBER because that is what the spend
+            // does (BuildingUpgradeService.TierCost :195-197 / TryUpgrade :133-135): T1 Wood,
+            // T2 Stone(Food), T3+ Iron. The page shows what will be CHARGED.
             if (nextDef.Tier == 1) AddCostLine(HarvestResource.Wood, nextDef.PrimaryMaterialCost);
             else if (nextDef.Tier == 2) AddCostLine(HarvestResource.Food, nextDef.PrimaryMaterialCost);
             else AddCostLine(HarvestResource.Iron, nextDef.PrimaryMaterialCost);
-            _nextAffordable = BuildingUpgradeService.CanAffordTier(nextDef);
+
+            // WO-1391 (2026-09-05) — the AUTHORED lane vs the CHARGED lane. 'arcane-tower' T1 authors
+            // costCrystal 1280 / costWood 0, and PrimaryMaterialCost = Max(CostWood, CostCrystal)
+            // erases which one it was; the service then charges it as WOOD. The page is honest
+            // about the charge; the data/service disagreement is surfaced here for the owner, not
+            // silently resolved by either side (a catalog/service ruling, not a View fix).
+            if (nextDef.CostCrystal > 0 && nextDef.CostWood <= 0 && nextDef.Tier <= 2)
+                FlowTrace.Once("Upgrade", "lane-mismatch-" + _buildingId + "-" + next,
+                    _buildingId + " tier-" + next + " authors costCrystal=" + nextDef.CostCrystal
+                    + " (costWood=0) but BuildingUpgradeService.TierCost charges the primary as "
+                    + (nextDef.Tier == 1 ? "WOOD" : "STONE") + " by tier number - the page shows the "
+                    + "CHARGED lane. Data/service disagreement; needs a catalog ruling.");
+
+            // WO-1391 — the GOLD term the tap charges (TryUpgrade :115-118) and CanAffordTier
+            // requires (:210). It was never a cost line, which is the whole 'Missing resources
+            // with 4000 wood' defect. Same GameState field the strip's Coins pill reads.
+            AddCoinCostLine(nextDef.CostGold);
+
+            // ONE predicate: the lines. The service's own answer is a cross-check, traced on
+            // disagreement so a future divergence between the two is one read, not a re-theorise.
+            _nextAffordable = AffordableFromLines(_nextCostLines);
+            bool svcSays = BuildingUpgradeService.CanAffordTier(nextDef);
+            if (svcSays != _nextAffordable)
+                FlowTrace.Warn("Upgrade", _buildingId + " tier-" + next + " affordability DISAGREES: lines="
+                    + _nextAffordable + " (" + ShortfallSentence(_nextCostLines) + ") vs CanAffordTier="
+                    + svcSays + " - a cost term is missing from one side (WO-1391).");
+        }
+
+        /// <summary>WO-1391 — the Gold (Coins) cost line, read from the SAME GameState field
+        /// <see cref="BuildingUpgradeService.CanAffordTier"/> checks and TryUpgrade debits
+        /// (state.Resources.Coins), which is also what the strip's Coins pill shows via
+        /// EconomyService.Coins. One ledger, three readers.</summary>
+        private void AddCoinCostLine(int amount)
+        {
+            if (amount <= 0) return;
+            int have = GameStateService.Instance?.State?.Resources.Coins ?? 0;
+            _nextCostLines.Add(new UpgradeCostLine
+            {
+                ConceptId = "gold",
+                Label = "Gold",
+                Amount = amount,
+                Have = have,
+                Short = have < amount,
+            });
         }
 
         private void ComposeNextResource()
@@ -1413,8 +1532,14 @@ namespace DeNelle.Village.Buildings.Progression
                         Have = ResourceLedger.MagicBalance(),
                         Short = ResourceLedger.MagicBalance() < cur.MagicCost,
                     });
-                _nextAffordable = ResourceLedger.CanAfford(cur.UpgradeCost)
-                                  && (cur.MagicCost <= 0 || ResourceLedger.MagicBalance() >= cur.MagicCost);
+                // WO-1391 — ONE predicate (the lines); the ledger's own answer is a cross-check.
+                _nextAffordable = AffordableFromLines(_nextCostLines);
+                bool svcSays = ResourceLedger.CanAfford(cur.UpgradeCost)
+                               && (cur.MagicCost <= 0 || ResourceLedger.MagicBalance() >= cur.MagicCost);
+                if (svcSays != _nextAffordable)
+                    FlowTrace.Warn("Upgrade", _buildingId + " level-" + next + " affordability DISAGREES: lines="
+                        + _nextAffordable + " (" + ShortfallSentence(_nextCostLines) + ") vs ResourceLedger="
+                        + svcSays + " (WO-1391).");
             }
         }
 
@@ -1455,7 +1580,18 @@ namespace DeNelle.Village.Buildings.Progression
             AddWalletCostLine("Stone", cost.food, _economy?.Food ?? 0);
             AddWalletCostLine("Iron", cost.iron, _economy?.Iron ?? 0);
             AddWalletCostLine("Crystals", cost.crystals, _economy?.Crystals ?? 0);
-            _nextAffordable = BuildModeController.CanAfford(cost);
+            // WO-1391 — ONE predicate (the lines); the placer's own answer is a cross-check. With no
+            // economy handle (headless suites) the lines read Have=0 and the cross-check is skipped:
+            // there is no wallet to disagree with.
+            _nextAffordable = AffordableFromLines(_nextCostLines);
+            if (_economy != null)
+            {
+                bool svcSays = BuildModeController.CanAfford(cost);
+                if (svcSays != _nextAffordable)
+                    FlowTrace.Warn("Upgrade", _buildingId + " level-" + next + " affordability DISAGREES: lines="
+                        + _nextAffordable + " (" + ShortfallSentence(_nextCostLines) + ") vs BuildModeController.CanAfford="
+                        + svcSays + " (WO-1391).");
+            }
         }
 
         /// <summary>

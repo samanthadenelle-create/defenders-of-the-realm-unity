@@ -10,15 +10,19 @@
 // made the panel read as a mess).  The owner wants the OBSIDIAN palette (dark
 // near-black panel + runic gold + green accents) rendered CLEAN — a flat rounded
 // dark rectangle with thin subtle borders, NOT the ornate FrameTalent stone
-// chrome.  So this View builds its OWN clean container (code-built uGUI, no UXML,
-// no BuildObsidianPanel) and only borrows the kit's clean primitives (Label,
-// AddImage/ApplyRounded, StyleButtonColors, FitSingleLine/FitBlock).
+// chrome.  ⚠ SUPERSEDED 2026-09-05 (WO-1391): the owner's ruling is now "same building, ONE
+// visual language one tap apart" — the panel is the kit's BuildObsidianPanel (FrameCore +
+// MedievalUiSkin shell) and every button is BuildObsidianButton, exactly as ManageScreenPanel.
+// The body beneath keeps the 060241 fraction layout and the kit's clean primitives (Label,
+// AddImage/ApplyRounded, FitSingleLine/FitBlock).
 //
-// LAYOUT (matches 060241 exactly, BUILDING-AGNOSTIC — every field is VM data):
-//   HEADER   : shield medallion top-left + centered GOLD "<Building> Enhancements".
-//   CURRENCY : a row of pill chips (icon left, value right) — the spendable set.
-//   TABS     : "Upgrade" | "Skills". 50/50. Selected = gold UNDERLINE + gold text on
-//              the dark plate (WO-832: a tab NEVER wears the CTA's gold fill).
+// LAYOUT (BUILDING-AGNOSTIC — every field is VM data):
+//   HEADER   : the kit frame's gold title "<Building> Enhancements" + the ONE shared Close.
+//   FOOTER   : currency pill chips LEFT of the shared Close + TABS "Upgrade" | "Skills" RIGHT of
+//              it, in the kit's Close band (WO-1391 follow-up: the frame's wallet/actions strip;
+//              the dead columns beside the Close box are the only height that keeps the bonus
+//              rows a zone at 2670x1200). Selected tab = gold UNDERLINE + gold text on the dark
+//              plate (WO-832: a tab NEVER wears the CTA fill).
 //   BODY (Upgrade tab) = WO-895 "NEXT UPGRADE ONLY", ONE full-width column:
 //     1. PROGRESS STRIP — "Tier N of 6" + a 6-SEGMENT bar (filled = owned, hollow =
 //        not yet; the segments differ by SHAPE/fill, never by hue alone) + "Now:
@@ -30,7 +34,7 @@
 //     3. MAX TIER — the card becomes "Fully enhanced" (no action), bar full.
 //   BODY (Skills tab) = the per-tier RESEARCH PERKS as a scroll list (unchanged
 //           row grammar), so the Skills side keeps its existing content/behaviour.
-//   FOOTER   : one centered gold-bordered "Close".
+//   FOOTER   : the kit's ONE shared Close (ObsidianCloseButton), seated in the Close band.
 //
 // WO-895 (2026-08-05) — WHY THE 6-CARD RAIL DIED: at 6-across every tier card
 // truncated mid-word ("Muster the Bar", "Unlock 'Muste") and the detail pane clipped
@@ -44,12 +48,28 @@
 // uses (BuildTimerService active/pending + catalog gates + the GameState wallet).
 // Four player states, each distinguishable with COLOUR REMOVED (the owner is red/
 // green colourblind — CLAUDE.md law):
-//   Ready            "Upgrade to <Name>"      bright plate, ARROW glyph, TAPPABLE
-//   Missing resources"Missing resources"      dark plate, EMPTY-BOX glyph, inert
-//   Queued           "Queued - waiting..."    dark plate, HOLLOW-ARROW glyph, inert
-//   In progress      "In progress - M:SS"     dark plate, live COUNTDOWN + a FILL BAR
+//   Ready            "Upgrade to <Name>"      Yellow kit plate, ARROW glyph, TAPPABLE
+//   Missing resources"Short <n> <Resource>"   Gray kit plate, NO glyph, inert (WO-1391)
+//   Queued           "Queued - waiting..."    Gray kit plate, HOLLOW-ARROW glyph, inert
+//   In progress      "In progress - M:SS"     Gray kit plate, live COUNTDOWN + a FILL BAR
 // Only "In progress" carries a growing fill bar; only "Ready" is interactable; every
 // label is unique TEXT. Hue is decoration, never the signal.
+//
+// WO-1391 (2026-09-05, owner's Seeker capture 14-research-door-result.png) — FOUR CORRECTIONS:
+//   * CHROME: the hand-rolled RoundedCard panel + medallion + rivets + own Close are GONE. The
+//     panel is the kit's BuildObsidianPanel (FrameCore + MedievalUiSkin shell, the frame every
+//     other screen wears) and every button is BuildObsidianButton (Yellow primary / Gray inert
+//     and Close). The fraction layout beneath is unchanged.
+//   * THE EMPTY-BOX GLYPH IS DELETED. RpgUiCatalog.ElementToggleBoxOff read as a broken
+//     checkbox; the inert face now carries words only (Queued / In progress keep their own
+//     shapes). It is not to come back — the [preview-never-uninitialised] pin greps for it.
+//   * THE FACE NAMES THE SHORTFALL: "Short 94 Gold", from BuildingUpgradeVM.NextShortfallSentence
+//     (the same cost lines the chips render, the same GameState the strip reads). Never a bare
+//     "Missing resources" - see the VM header for the proven cause.
+//   * THE PREVIEW IS NEVER RAW GPU MEMORY: the RT is GL.Cleared to the plate colour before its
+//     first read, the rig is traced (model source / RT size+format+created / first frame), and a
+//     model that does not resolve or render falls back to the building's icon through the SAME
+//     QueueIconResolver chain the Manage queue rows use.
 //
 // WO-841 live tick carried forward: Update() rewrites JUST the countdown label's text
 // (and the fill bar's width) when the whole second changes; ContentSignature excludes
@@ -74,13 +94,12 @@ namespace DeNelle.Village.Buildings.Progression
     public sealed class BuildingUpgradePanelMvvm : MonoBehaviour, IPanelView
     {
         // ── Clean obsidian palette (dark near-black + runic gold + green accent) ──
-        private static readonly Color PanelFill    = new Color(0.043f, 0.041f, 0.049f, 0.985f); // near-black obsidian
-        private static readonly Color SubPanelFill = new Color(0.055f, 0.052f, 0.060f, 1f);      // left/right body sub-panels
+        // (WO-1391: PanelFill / BorderGold died with the hand-rolled panel - the kit frame owns the chrome.)
+        private static readonly Color SubPanelFill = new Color(0.055f, 0.052f, 0.060f, 1f);      // body sub-panels + the preview RT clear colour
         // (WO-895: the CardFill/CardFillLit/CardFillDim tier-card tints died with the rail.)
         private static readonly Color TabDark      = new Color(0.085f, 0.082f, 0.078f, 1f);      // unselected tab
         private static readonly Color PillFill     = new Color(0.062f, 0.059f, 0.055f, 1f);      // currency pill
         private static readonly Color BorderDim    = new Color(0.42f, 0.40f, 0.36f, 0.45f);      // subtle rule
-        private static readonly Color BorderGold   = new Color(0.831f, 0.686f, 0.216f, 1f);      // gold rim (selected)
         private static readonly Color BorderGoldDim= new Color(0.58f, 0.48f, 0.22f, 0.75f);      // gold rim (available)
 
         // WO-1195: the currency-icon ROLE constant is gone with the switch it fed. Naming a role
@@ -205,6 +224,24 @@ namespace DeNelle.Village.Buildings.Progression
         private TowerPreviewCamera _previewRig;
         private string _previewKey;               // "<id>@<level>" the live rig was built for
         private float _previewYaw;
+        // WO-1391 §12 — frames the rig has drawn since it was built. Traced at the second frame so
+        // a device log proves the turntable is being driven (Update is the only thing that draws).
+        private int _previewFrames;
+        // WO-1391 — the kit chrome (title + shared Close + zones); null between opens.
+        private ElarionUiKit.PanelChrome _chrome;
+        // WO-1391 follow-up (capture oracle RED, 2026-09-05 00:23): the body's height in POST-SCALE
+        // ref px, computed in BuildChrome the deterministic way (PostScaleCanvasHeight x fractions).
+        // A live rect.height read on the creation frame returned a taller zone than the settled
+        // one, so BuildBonusList placed two rows into height that did not exist and the action
+        // plate painted over "Structure HP +20%". The bonus zone is now budgeted from THIS number
+        // (never larger than the measurement), so a row is only placed where the band provably is.
+        private float _bodyPx;
+        /// <summary>Mean glyph advance as a fraction of the font size that <see cref="ChooseFace"/>
+        /// budgets for an UPPERCASE bold face. NOT a measurement of the project font - it is a
+        /// deliberately conservative estimate (wide caps run ~0.6-0.7em, narrow ones ~0.3em), so
+        /// the choice errs toward the SHORT face; the kit's FitSingleLine floor + ellipsis remains
+        /// the backstop either way. If a face still ellipsizes at 2670x1200, raise this.</summary>
+        public const float FaceGlyphAdvanceEm = 0.62f;
         /// <summary>Fraction of the body the model column takes when a model resolved.</summary>
         public const float PreviewColumnWidth = 0.32f;
         /// <summary>Idle turntable speed (deg/sec) — motion, never a colour signal.</summary>
@@ -300,6 +337,12 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 _previewYaw = Mathf.Repeat(_previewYaw + PreviewSpinDegPerSec * Time.unscaledDeltaTime, 360f);
                 _previewRig.SetRotation(Quaternion.Euler(0f, _previewYaw, 0f));
+                _previewFrames++;
+                // WO-1391 §12 — the device log had NO [Flow:UpgradeUI] line at open, only 'close'.
+                // One line at the second driven frame proves the turntable is actually drawing
+                // (Update is the ONLY draw call after the first frame in RebuildPreview).
+                if (_previewFrames == 2)
+                    FlowTrace.Step("UpgradeUI", "preview rig '" + _previewKey + "' drew frame 2 from Update (turntable live)");
             }
 
             // WO-841 — the cheap per-second countdown tick. If the button is showing the
@@ -358,12 +401,25 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static string FormatActionLabel(UpgradeActionState state, int seconds, string nextName,
                                                int queueDepth, int queueLimit)
+            => FormatActionLabel(state, seconds, nextName, queueDepth, queueLimit, null);
+
+        /// <summary>
+        /// WO-1391 — the full composer. <paramref name="shortfall"/> is the VM's
+        /// <see cref="BuildingUpgradeVM.NextShortfallSentence"/> ("Short 94 Gold"); when the state is
+        /// MissingResources and it is non-empty it IS the face. The bare "Missing resources" survives
+        /// only as the crash-mat for an empty sentence (kept distinct so the ASCII/uniqueness oracle
+        /// over the 5-arg form still sees one unique string per state), and the View WARNS when it
+        /// has to use it, because the VM derives the state from the very lines the sentence reads.
+        /// </summary>
+        public static string FormatActionLabel(UpgradeActionState state, int seconds, string nextName,
+                                               int queueDepth, int queueLimit, string shortfall)
         {
             switch (state)
             {
                 case UpgradeActionState.Ready:
                     return string.IsNullOrEmpty(nextName) ? "Upgrade" : ("Upgrade to " + nextName);
-                case UpgradeActionState.MissingResources: return "Missing resources";
+                case UpgradeActionState.MissingResources:
+                    return string.IsNullOrEmpty(shortfall) ? "Missing resources" : shortfall;
                 case UpgradeActionState.Queued:           return "Queued - waiting for a builder";
                 case UpgradeActionState.InProgress:       return "In progress - " + FormatMinutesSeconds(seconds);
                 case UpgradeActionState.VillageGated:     return "Raise Village Tier";
@@ -501,6 +557,12 @@ namespace DeNelle.Village.Buildings.Progression
 
         // ── Chrome — CLEAN flat dark panel (no ornate frame) + zones ──────────────
 
+        // WO-1391 — the kit's shared-Close band, mirrored from ManageScreenPanel (:86-87) so this
+        // page's body floor is derived the SAME way Manage derives its well: the Close is a fixed
+        // CanonCtaHeight box growing UP from y = 0.050 of the panel; content ends a gap above it.
+        private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
+        private const float CloseGapY   = 0.020f;   // body floor clears the Close box by this much
+
         private void BuildChrome()
         {
             _ui = ElarionUiKit.BuildModalCanvas("BuildingUpgradePanelMvvmUI", 31000);
@@ -510,31 +572,76 @@ namespace DeNelle.Village.Buildings.Progression
 
             string titleText = (_vm != null ? _vm.Title : "Building") + " Enhancements";
 
-            // CLEAN flat obsidian panel: a rounded near-black rectangle with a thin subtle
-            // gold rim + corner rivets (mockup 060241) — NOT the ornate stone frame.
-            RectTransform panel = RoundedCard(_ui.transform, "Panel",
-                new Vector2(0.035f, 0.05f), new Vector2(0.965f, 0.95f),
-                PanelFill, new Color(BorderGold.r, BorderGold.g, BorderGold.b, 0.32f), 2.5f);
-            AddCornerRivets(panel);
+            // WO-1391 — THE KIT'S PANEL, not a hand-rolled one: FrameCore + the MedievalUiSkin shell
+            // (BuildObsidianPanel applies it), the gold title in the frame's header band, and the ONE
+            // shared Close (ObsidianCloseButton -> BuildObsidianButton Gray) seated in the close band.
+            // Same call, same anchors, same frame as ManageScreenPanel.BuildChrome, so the door and
+            // the page it opens wear one visual language. The scrim above is ours (BuildObsidianPanel
+            // does not draw one); withBackdrop is off for the same reason.
+            // 0.03..0.97 tall (Manage is 0.05..0.95): the kit's Close-band reservation costs ~0.18 of
+            // the panel at the bottom, and the WO-895 bonus rows are the content this page exists
+            // to show, so the frame takes the extra height rather than the rows.
+            var panelMin = new Vector2(0.035f, 0.03f);
+            var panelMax = new Vector2(0.965f, 0.97f);
+            _chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, titleText, panelMin, panelMax,
+                () => { FlowTrace.Step("UpgradeUI", "close"); _vm?.Close(); },
+                withBackdrop: false, frameName: RpgUiCatalog.FrameCore, medallionIcon: "shield");
+            if (_chrome == null || _chrome.content == null)
+            {
+                FlowTrace.Fail("UpgradeUI", "BuildObsidianPanel returned no chrome - the page has no host.");
+                return;
+            }
+            RectTransform panel = (RectTransform)_chrome.content.transform;
 
-            // HEADER — shield medallion (top-left) + centered gold title.
-            BuildMedallion(panel);
-            var title = ElarionUiKit.Label(panel, titleText, 0.905f, 0.995f,
-                ElarionUi.Gilt, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center,
-                0.11f, 0.89f, bold: true);
-            title.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(title);
+            // FrameCore is border-heavy and its centre lets the world through (Manage found the same);
+            // one full-rect obsidian backing behind every zone keeps the page one continuous field.
+            var fill = ElarionUiKit.AddImage(panel, "UpgradeBodyFill", Vector2.zero, Vector2.one,
+                ElarionUiKit.ObsidianFill, rounded: false);
+            var fillImg = fill.GetComponent<Image>();
+            if (fillImg != null) fillImg.raycastTarget = false;
+            fill.transform.SetAsFirstSibling();
 
-            // CURRENCY pill row.
-            var walletStrip = MakeZone(panel, "CurrencyRow", new Vector2(0.012f, 0.815f), new Vector2(0.988f, 0.888f));
+            // ── The body floor: derived from the Close band exactly as Manage does (post-scale
+            //    canvas height, never a live rect on the creation frame), so nothing here can end
+            //    under the shared Close at any aspect.
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(
+                _chrome.root != null ? _chrome.root.transform : _ui.transform);
+            float panelFracH = Mathf.Max(0.05f, panelMax.y - panelMin.y);
+            float panelPx = Mathf.Max(1f, canvasH * panelFracH);
+            float closeBandTop = CloseBandY0 + ElarionUiKit.CanonCtaHeight / panelPx;
+            float bodyFloor = Mathf.Min(closeBandTop + CloseGapY, 0.45f);
+
+            // ── THE FOOTER: CURRENCY pills (left column) + TABS (right column) in the Close band.
+            // WO-1391 follow-up (capture oracle RED 2026-09-05 00:23): at 2670x1200 the post-scale
+            // panel is ~900 ref px; the kit's Close-band reservation takes ~0.20 of it and a band
+            // for pills + tabs above the body took another 0.07 - which left the next-upgrade card
+            // ~360 px, not enough for ONE bonus row after the fixed header/description/cost/action
+            // bands, so rows were painted under the action plate. The Close band is CanonCtaHeight
+            // tall but the Close BOX is only CanonCtaWidth wide and centred: the columns either side
+            // of it are dead height (Manage seats its notice there, :470-472), and the FrameCore
+            // design names that base strip the WALLET / ACTIONS footer (ElarionUiKit.FrameLayout.
+            // footer). So the wallet goes left of the Close, the tabs right of it, and the body runs
+            // from the Close-band floor to the frame's body top - the height the bonus rows need.
+            // (The frame's sub-header seat was rejected: documented as partially covered by the
+            // ornate shell on Seeker captures, ManageScreenPanel:461-465.)
+            float canvasW = CanvasWidthPx(canvasH);
+            float panelWpx = Mathf.Max(1f, canvasW * Mathf.Max(0.05f, panelMax.x - panelMin.x));
+            float closeHalfFrac = (ElarionUiKit.CanonCtaWidth * 0.5f) / panelWpx;
+            const float footerGapX = 0.015f;
+            float footerY0 = CloseBandY0 + 0.006f;
+            float footerY1 = Mathf.Max(footerY0 + 0.05f, closeBandTop - 0.006f);
+            float closeX0 = 0.5f - closeHalfFrac - footerGapX;
+            float closeX1 = 0.5f + closeHalfFrac + footerGapX;
+            var walletStrip = MakeZone(panel, "CurrencyRow", new Vector2(0.055f, footerY0), new Vector2(closeX0, footerY1));
             BuildCurrencyPills(walletStrip);
-
-            // TAB row: Upgrade | Skills.
-            var tabHost = MakeZone(panel, "TabRow", new Vector2(0.012f, 0.720f), new Vector2(0.988f, 0.800f));
+            var tabHost = MakeZone(panel, "TabRow", new Vector2(closeX1, footerY0), new Vector2(0.945f, footerY1));
             BuildTabs(tabHost);
 
-            // BODY host (below tabs, above footer).
-            _bodyHost = MakeZone(panel, "BodyHost", new Vector2(0.012f, 0.095f), new Vector2(0.988f, 0.705f));
+            // BODY host: from the Close-band floor up to the frame's body top (0.835, the region
+            // Manage proved visible on the device), less a hairline under the title band.
+            const float bodyTop = 0.823f;
+            _bodyHost = MakeZone(panel, "BodyHost", new Vector2(0.055f, bodyFloor), new Vector2(0.945f, bodyTop));
+            _bodyPx = Mathf.Max(0f, (bodyTop - bodyFloor) * panelPx);
             _upgradePage = BuildUpgradePage(_bodyHost);
             // No Skills tab => no Skills page. RebuildSkills/ApplyTabVisibility are null-safe.
             _skillsContent = null;
@@ -543,8 +650,11 @@ namespace DeNelle.Village.Buildings.Progression
             else _activeTab = 0;
             ApplyTabVisibility();
 
-            // FOOTER — one centered gold-bordered Close.
-            BuildCloseButton(panel);
+            FlowTrace.Step("UpgradeUI", "chrome: kit FrameCore panel, canvasH=" + canvasH.ToString("0")
+                + " panelPx=" + panelPx.ToString("0") + "x" + panelWpx.ToString("0")
+                + " closeBandTop=" + closeBandTop.ToString("0.000") + " bodyFloor=" + bodyFloor.ToString("0.000")
+                + " bodyPx=" + _bodyPx.ToString("0") + " footer x " + closeX0.ToString("0.000") + "|" + closeX1.ToString("0.000")
+                + " close=" + (_chrome.close != null));
 
             // Capture the open-time status as the toast baseline (do NOT toast the idle hint).
             _lastStatus = _vm != null ? _vm.Status : null;
@@ -555,70 +665,33 @@ namespace DeNelle.Village.Buildings.Progression
             // out (the RumorBoard "unknowable at build time" trap).
             Canvas.ForceUpdateCanvases();
 
-            // Eased open: scale 0.92->1 + fade 0->1, ease-out (scale the outer card incl. border).
+            // Eased open: scale 0.92->1 + fade 0->1, ease-out (scale the frame root).
             var fx = _ui.AddComponent<PanelOpenCloseFx>();
-            fx.PlayOpen((panel.parent as RectTransform) ?? panel);
+            fx.PlayOpen(_chrome.root != null ? (RectTransform)_chrome.root.transform : panel);
         }
 
-        // Small shield medallion disc, top-left (mockup 060241).
-        private void BuildMedallion(RectTransform panel)
+        /// <summary>Post-scale canvas WIDTH from its height and the live surface aspect (the same
+        /// helper Manage and EquipmentPanel carry); headless falls back to the kit portrait reference.</summary>
+        private static float CanvasWidthPx(float canvasH)
         {
-            RectTransform disc = RoundedCard(panel, "Medallion",
-                new Vector2(0.014f, 0.905f), new Vector2(0.058f, 0.985f),
-                new Color(0.10f, 0.075f, 0.03f, 1f), BorderGoldDim, 2.5f);
-            var shield = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
-            if (shield != null)
-            {
-                var g = new GameObject("Shield", typeof(Image));
-                g.transform.SetParent(disc, false);
-                var rt = g.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.18f, 0.18f); rt.anchorMax = new Vector2(0.82f, 0.82f);
-                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-                var img = g.GetComponent<Image>();
-                img.sprite = shield; img.preserveAspect = true; img.raycastTarget = false;
-                img.color = ElarionUi.Gilt;
-            }
-            else
-            {
-                var glyph = ElarionUiKit.Label(disc, ElarionUi.CrestGlyph, 0.10f, 0.90f,
-                    ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-                glyph.raycastTarget = false;
-                ElarionUiKit.FitSingleLine(glyph);
-            }
+            float sw = ElarionUiKit.SurfaceWidth, sh = ElarionUiKit.SurfaceHeight;
+            if (sw < 1f || sh < 1f) return canvasH * (1080f / 1920f);
+            return canvasH * (sw / sh);
         }
 
-        // Four subtle corner rivet dots (mockup 060241 flat-panel detail).
-        private static void AddCornerRivets(RectTransform panel)
+        /// <summary>
+        /// WO-1391 — pick the face that FITS: the full label when its estimated width at the fit
+        /// floor seats inside <paramref name="bandPx"/>, else <paramref name="shortFace"/>. The kit's
+        /// FitSingleLine shrinks to <see cref="ElarionUiKit.FontFloor"/> and then ELLIPSIZES — which
+        /// is how "UPGRAD..." shipped at 2670x1200. Deciding the wording here, before the fit, means
+        /// the player reads a whole word ("UPGRADE") instead of a cut one. Pure; pinned.
+        /// </summary>
+        public static string ChooseFace(string full, string shortFace, float bandPx, float fontPx, float charSpacingPx = 0f)
         {
-            var pts = new[]
-            {
-                new Vector2(0.012f, 0.972f), new Vector2(0.988f, 0.972f),
-                new Vector2(0.012f, 0.020f), new Vector2(0.988f, 0.020f)
-            };
-            foreach (var p in pts)
-            {
-                var go = ElarionUiKit.AddImage(panel, "Rivet",
-                    new Vector2(p.x - 0.006f, p.y - 0.010f), new Vector2(p.x + 0.006f, p.y + 0.010f),
-                    new Color(0.30f, 0.28f, 0.25f, 0.9f));
-                go.GetComponent<Image>().raycastTarget = false;
-            }
-        }
-
-        private void BuildCloseButton(RectTransform panel)
-        {
-            RectTransform frame = RoundedCard(panel, "Close",
-                new Vector2(0.40f, 0.018f), new Vector2(0.60f, 0.082f),
-                new Color(0.10f, 0.095f, 0.088f, 1f), BorderGold, 2.5f);
-            var host = frame.parent as RectTransform ?? frame;   // bordered outer carries the button
-            var b = host.gameObject.AddComponent<Button>();
-            b.targetGraphic = host.GetComponent<Image>();
-            ElarionUiKit.StyleButtonColors(b);
-            SoftenButton(b);
-            b.onClick.AddListener(() => { FlowTrace.Step("UpgradeUI", "close"); _vm?.Close(); });
-            var lbl = ElarionUiKit.Label(frame, "Close", 0.10f, 0.90f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-            lbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(lbl);
+            if (string.IsNullOrEmpty(full)) return shortFace ?? "";
+            if (bandPx <= 0f || fontPx <= 0f) return full;     // unknown geometry: never shorten blind
+            float est = full.Length * (fontPx * FaceGlyphAdvanceEm + charSpacingPx);
+            return est <= bandPx ? full : (shortFace ?? full);
         }
 
         // ── Currency pill row (clean: dark rounded pill, icon left, value right) ──
@@ -1026,6 +1099,35 @@ namespace DeNelle.Village.Buildings.Progression
         private void BuildBonusList(RectTransform zone)
         {
             var bonuses = _vm.NextBonuses;
+
+            // WO-1391 follow-up — the zone's TRUE height. Two sources, take the SMALLER positive:
+            //   * BUDGET: the post-scale body height from BuildChrome minus every fixed band above
+            //     and below this zone (strip, gaps, card border, header, description, cost row,
+            //     action band). Deterministic - the same arithmetic the bands are pinned by.
+            //   * MEASURED: zone.rect.height after a forced canvas pass. On the creation frame it
+            //     read TALLER than the settled layout (the capture oracle caught the action plate
+            //     over "Structure HP +20%"), so it may only ever SHRINK the budget, never grow it.
+            // Rows are placed only inside that height; a trailing row that does not fully seat is
+            // DROPPED (WO-832 §4), which is what keeps the cost row and the action band disjoint.
+            bool budgetKnown = _bodyPx > 0f;
+            float budget = BonusZoneBudgetPx();     // may be NEGATIVE: a known card with no room
+            Canvas.ForceUpdateCanvases();           // settle the zone so rect.height is real
+            float measured = zone.rect.height;
+            float zoneH;
+            if (budgetKnown) zoneH = measured > 0f ? Mathf.Min(budget, measured) : budget;
+            else             zoneH = measured > 0f ? measured : BonusRow1Px;
+            FlowTrace.Step("UpgradeUI", "bonus zone: budget=" + (budgetKnown ? budget.ToString("0") : "unknown")
+                + "px measured=" + measured.ToString("0") + "px -> using " + zoneH.ToString("0") + "px for "
+                + (bonuses != null ? bonuses.Count : 0) + " bonus line(s)");
+            if (zoneH < BonusRow1Px)
+            {
+                // The card cannot seat ONE row here. Nothing is placed - a row over the cost row or
+                // the action band is the overlap the capture oracle rejects. Said aloud, not hidden.
+                FlowTrace.Warn("UpgradeUI", "bonus zone is " + zoneH.ToString("0") + "px (< " + BonusRow1Px.ToString("0")
+                    + "px row) - NO bonus rows placed; the card needs more height at this aspect");
+                return;
+            }
+
             if (bonuses == null || bonuses.Count == 0)
             {
                 var none = ElarionUiKit.Label(zone, "No listed bonuses for this tier.", 0f, 1f,
@@ -1035,10 +1137,6 @@ namespace DeNelle.Village.Buildings.Progression
                 PinBandFromTop(none.rectTransform, 0f, BonusRow1Px);
                 return;
             }
-
-            Canvas.ForceUpdateCanvases();           // settle the zone so rect.height is real
-            float zoneH = zone.rect.height;
-            if (zoneH < BonusRow1Px) zoneH = BonusRow1Px * 4f;   // pre-layout fallback
 
             float cursor = 0f;
             int shown = 0;
@@ -1057,6 +1155,23 @@ namespace DeNelle.Village.Buildings.Progression
             if (shown < bonuses.Count)
                 FlowTrace.Warn("UpgradeUI", "bonus list showed " + shown + " of " + bonuses.Count
                     + " rows (zone " + zoneH.ToString("0") + "px) - trailing rows dropped rather than clipped");
+        }
+
+        /// <summary>
+        /// WO-1391 follow-up — the bonus zone's height from the deterministic post-scale budget:
+        /// body - progress strip - its gaps - the card's border - (header + description + their
+        /// gaps) - (cost row + action band + their gaps). Mirrors BuildNextCard's pins exactly, so
+        /// it is the height the zone WILL have after layout, not what a creation-frame rect says.
+        /// 0 when the chrome has not been built (a headless/unknown geometry).
+        /// </summary>
+        private float BonusZoneBudgetPx()
+        {
+            if (_bodyPx <= 0f) return 0f;
+            const float cardBorderPx = 2f * 2f;                       // RoundedCard inset, top + bottom
+            float cardPx = _bodyPx - ProgressStripPx - BandGapPx * 2f - cardBorderPx;
+            float above = BandGapPx * 3f + NextHeaderBandPx + NextDescBandPx;
+            float below = ActionBottomPx + ActionBandPx + CostGapPx + CostBandPx + BandGapPx;
+            return cardPx - above - below;
         }
 
         // One bonus line: a solid square bullet (SHAPE, not hue) + wrapping text.
@@ -1100,7 +1215,13 @@ namespace DeNelle.Village.Buildings.Progression
             // Caption on the LEFT of the same band as the chips (a stacked caption cost a
             // whole line the bonus rows needed).
             const float chipsX0 = 0.17f;
-            var head = ElarionUiKit.Label(zone, "UPGRADE COST", 0f, 1f,
+            // WO-1391 — this caption is the "UPGRAD..." in the owner's capture: at 2670x1200 the
+            // 0.155-wide caption band cannot seat "UPGRADE COST" at the fit floor, so FitSingleLine
+            // ellipsized it mid-word. Choose the wording BEFORE the fit: "COST" when the band is
+            // too narrow. The zone rect is real here (BuildChrome forced the canvas layout).
+            float captionPx = zone.rect.width * (chipsX0 - 0.015f);
+            string caption = ChooseFace("UPGRADE COST", "COST", captionPx, ElarionUiKit.FontFloor, 3f);
+            var head = ElarionUiKit.Label(zone, caption, 0f, 1f,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, 0f, chipsX0 - 0.015f, bold: true);
             head.characterSpacing = 3f;
             head.raycastTarget = false;
@@ -1137,25 +1258,10 @@ namespace DeNelle.Village.Buildings.Progression
                 textX0 = 0.17f;
             }
 
-            // SHORTFALL MARKER — an EMPTY-BOX glyph at the chip's right edge (shape), paired
-            // with the words below. Two colour-free signals; the tint is decoration only.
-            float textX1 = 0.97f;
-            if (line.Short)
-            {
-                var mark = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementToggleBoxOff);
-                if (mark != null)
-                {
-                    var mg = new GameObject("ShortMark", typeof(Image));
-                    mg.transform.SetParent(chip, false);
-                    var mrt = mg.GetComponent<RectTransform>();
-                    mrt.anchorMin = new Vector2(0.87f, 0.18f); mrt.anchorMax = new Vector2(0.98f, 0.82f);
-                    mrt.offsetMin = Vector2.zero; mrt.offsetMax = Vector2.zero;
-                    var mimg = mg.GetComponent<Image>();
-                    mimg.sprite = mark; mimg.preserveAspect = true; mimg.raycastTarget = false;
-                    mimg.color = new Color(0.72f, 0.70f, 0.66f, 1f);
-                    textX1 = 0.85f;
-                }
-            }
+            // SHORTFALL MARKER (WO-1391): the empty-box glyph that used to sit here read as a broken
+            // checkbox, so it is gone. The shortfall is carried by the WORDS ("- need 240 more") and
+            // by the chip's dimmer rim + non-bold face - two colour-free signals remain.
+            const float textX1 = 0.97f;
 
             // The shortfall is TEXT, never a tint: "1.2k Wood - need 240 more".
             string text = ElarionUi.CompactNumber(line.Amount) + " " + line.Label;
@@ -1173,9 +1279,29 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var state = _vm.ActionState;
             int sec = _vm.ActionRemainingSeconds;
+            // WO-1391 — the shortfall sentence rides the label; a MissingResources state with NO
+            // sentence is a contradiction (the VM derives the state from the same lines), so it
+            // is warned, not silently rendered as the bare fallback.
+            string shortfall = _vm.NextShortfallSentence;
+            if (state == UpgradeActionState.MissingResources && string.IsNullOrEmpty(shortfall))
+                FlowTrace.Warn("UpgradeUI", "'" + _vm.Title + "' is MissingResources but no cost line is short - "
+                    + "a cost term the predicate checks is missing from the lines (WO-1391). Rendering the fallback face.");
             string label = FormatActionLabel(state, sec, _vm.NextTierName,
-                                             _vm.BuilderQueueDepth, _vm.BuilderQueueLimit);
+                                             _vm.BuilderQueueDepth, _vm.BuilderQueueLimit, shortfall);
             const float x0 = 0.03f, x1 = 0.97f;
+
+            // WO-1391 — the Ready face must FIT at 2670x1200: pick "Upgrade to <Name>" only when it
+            // seats at the fit floor inside the band, else the whole word "UPGRADE" (the kit's
+            // MedievalUiSkin uppercases the face and fits 30..44px). The card rect is real here.
+            if (state == UpgradeActionState.Ready)
+            {
+                float bandPx = card.rect.width * (x1 - x0) * 0.84f;   // glyph + label insets
+                string chosen = ChooseFace(label, "Upgrade", bandPx, ElarionUiKit.FontFloor, 2f);
+                if (!ReferenceEquals(chosen, label))
+                    FlowTrace.Step("UpgradeUI", "ready face '" + label + "' shortened to '" + chosen
+                        + "' (band " + bandPx.ToString("0") + "px at the " + ElarionUiKit.FontFloor + "px floor)");
+                label = chosen;
+            }
 
             TraceActionState(state);
 
@@ -1212,9 +1338,11 @@ namespace DeNelle.Village.Buildings.Progression
 
             // Every remaining state is INERT and wears the dark plate. They are told apart by
             // unique TEXT + a unique GLYPH SHAPE (+ a fill bar for In progress) — never by hue.
+            // WO-1391: no empty-box default any more - a state without its own shape carries
+            // words only.
             string glyph = state == UpgradeActionState.InProgress ? RpgUiCatalog.ElementHandle
                          : state == UpgradeActionState.Queued ? RpgUiCatalog.ElementArrowBox
-                         : RpgUiCatalog.ElementToggleBoxOff;
+                         : null;
             var lockLbl = BuildLockButton(card, label, x0, x1, 0f, 1f, null, glyph);
             var lockRoot = (RectTransform)lockLbl.transform.parent;
             PinActionBand(lockRoot);
@@ -1362,18 +1490,18 @@ namespace DeNelle.Village.Buildings.Progression
             // Composed in FULL before the button is built: BuildLockButton runs FitBlock, which
             // sizes to the string it is handed, so a later .text assignment would leave a stale fit.
             float deadX1 = offering ? x0 + (x1 - x0) * 0.60f : x1;
+            // WO-1391 — the FACE is the shortfall sentence itself ("Short 94 Gold", or "Short 300
+            // Iron, 120 Crystals"), composed by the VM from the same lines the chips draw. The
+            // CopyKeyShortDetail line that used to repeat it underneath is therefore gone; the
+            // harvest hint stays as the second line (WO-1037 §1: the existing path reads first).
             string dead = label;
             if (worstMissing > 0 && !string.IsNullOrEmpty(worstLabel))
-            {
-                dead += "\n" + string.Format(Copy(CopyKeyShortDetail, "Short {0} {1}"),
-                                             ElarionUi.CompactNumber(worstMissing), worstLabel);
                 dead += "\n" + string.Format(Copy(CopyKeyShortHarvest, "Harvest more {0}, or set an Echo to gather it."),
                                              worstLabel.ToLowerInvariant());
-            }
 
-            // onClick null => interactable false. The dead half is never tappable.
-            var lockLbl = BuildLockButton(card, dead, x0, deadX1, 0f, 1f, null,
-                                          RpgUiCatalog.ElementToggleBoxOff);
+            // onClick null => interactable false. The dead half is never tappable. No glyph: the
+            // empty box read as a broken checkbox (WO-1391); the words carry the state.
+            var lockLbl = BuildLockButton(card, dead, x0, deadX1, 0f, 1f, null, null);
             PinActionBand((RectTransform)lockLbl.transform.parent);
 
             if (!offering)
@@ -1512,54 +1640,60 @@ namespace DeNelle.Village.Buildings.Progression
 
         // ── Shared clean buttons (gold CTA + dim lock) ────────────────────────────
 
-        // Returns the button's root RectTransform so callers can re-pin it (WO-832 §4).
+        // WO-1391 — THE ONE bright plate is the kit's Yellow Obsidian button (BuildObsidianButton ->
+        // MedievalUiSkin primary face), never a hand-tinted Image. Returns the button's root
+        // RectTransform so callers can re-pin it (WO-832 §4). The kit stamps + fits the label
+        // (uppercase, 30..44px, ellipsis) and applies the MinTouchPx floor.
         private RectTransform BuildGoldButton(Transform parent, string label, bool enabled,
             float x0, float x1, float y0, float y1, System.Action onClick)
         {
-            var go = ElarionUiKit.AddImage(parent, "GoldBtn", new Vector2(x0, y0), new Vector2(x1, y1),
-                enabled ? ElarionUi.GoldButton : new Color(0.30f, 0.28f, 0.22f, 1f));
-            var img = go.GetComponent<Image>();
-            var btn = go.AddComponent<Button>();
-            btn.targetGraphic = img;
-            ElarionUiKit.StyleButtonColors(btn);
-            SoftenButton(btn);
+            var btn = ElarionUiKit.BuildObsidianButton(parent, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(x0, y0), new Vector2(x1, y1), onClick);
+            if (btn == null)
+            {
+                FlowTrace.Fail("UpgradeUI", "BuildObsidianButton returned null for '" + label + "' - no action plate built");
+                return MakeZone(parent, "GoldBtnMissing", new Vector2(x0, y0), new Vector2(x1, y1));
+            }
+            btn.gameObject.name = "GoldBtn";
             btn.interactable = enabled && onClick != null;
-            if (onClick != null) btn.onClick.AddListener(() => onClick());
-            var lbl = ElarionUiKit.Label(go.transform, label, 0.06f, 0.94f,
-                enabled ? ElarionUi.Ink : ElarionUi.ParchmentDim,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            lbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(lbl);
-            return (RectTransform)go.transform;
+            return (RectTransform)btn.transform;
         }
 
-        // Returns the reason LABEL (a direct child of the button root) — WO-841 caches it
-        // for the live countdown tick; callers reach the root via label.transform.parent.
-        // WO-895: <paramref name="glyphKey"/> picks the state SHAPE (empty box = missing
-        // resources, hollow arrow = queued, handle = in progress) — the colourblind-safe
-        // signal that tells the inert states apart without any hue.
+        // WO-1391 — the INERT plate is the kit's Gray Obsidian button with interactable=false, so
+        // the dead states wear the same family as every other screen (the kit's disabled sprite is
+        // the "not now" look). The kit stamps ONE single-line label; the dead states carry two or
+        // three lines (state / reason / hint), so - exactly like ManageScreenPanel.BuildTwoLineCta -
+        // the kit's label is reseated as a wrapping block rather than a second label invented.
+        // Returns the reason LABEL (a direct child of the button root) — WO-841 caches it for the
+        // live countdown tick; callers reach the root via label.transform.parent.
+        // <paramref name="glyphKey"/> picks the state SHAPE (hollow arrow = queued, handle = in
+        // progress, cross = queue full). NULL = NO GLYPH: the old empty-box default read as a
+        // broken checkbox and is deleted (WO-1391).
         private TMPro.TextMeshProUGUI BuildLockButton(Transform parent, string reason, float x0, float x1, float y0, float y1,
             System.Action onClick, string glyphKey = null)
         {
-            var go = ElarionUiKit.AddImage(parent, "LockBtn", new Vector2(x0, y0), new Vector2(x1, y1),
-                new Color(0.11f, 0.105f, 0.10f, 1f));
-            var img = go.GetComponent<Image>();
-            var btn = go.AddComponent<Button>();
-            btn.targetGraphic = img;
-            ElarionUiKit.StyleButtonColors(btn);
-            SoftenButton(btn);
+            var btn = ElarionUiKit.BuildObsidianButton(parent, reason,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(x0, y0), new Vector2(x1, y1), onClick);
+            if (btn == null)
+            {
+                FlowTrace.Fail("UpgradeUI", "BuildObsidianButton returned null for the inert plate '" + reason + "'");
+                var zone = MakeZone(parent, "LockBtnMissing", new Vector2(x0, y0), new Vector2(x1, y1));
+                var fallback = ElarionUiKit.Label(zone, reason, 0.06f, 0.94f, ElarionUi.ParchmentDim,
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.96f);
+                ElarionUiKit.FitBlock(fallback);
+                return fallback;
+            }
+            btn.gameObject.name = "LockBtn";
             btn.interactable = onClick != null;
-            btn.transition = Selectable.Transition.None;
-            if (onClick != null) btn.onClick.AddListener(() => onClick());
 
-            // Lock glyph (empty toggle box reads "not yet" — colorblind-safe shape) + text.
-            var glyph = RpgUiCatalog.Get(RpgUiCatalog.RoleElement,
-                string.IsNullOrEmpty(glyphKey) ? RpgUiCatalog.ElementToggleBoxOff : glyphKey);
+            var glyph = string.IsNullOrEmpty(glyphKey) ? null : RpgUiCatalog.Get(RpgUiCatalog.RoleElement, glyphKey);
             float textX0 = 0.06f;
             if (glyph != null)
             {
                 var g = new GameObject("LockGlyph", typeof(Image));
-                g.transform.SetParent(go.transform, false);
+                g.transform.SetParent(btn.transform, false);
                 var rt = g.GetComponent<RectTransform>();
                 rt.anchorMin = new Vector2(0.04f, 0.22f); rt.anchorMax = new Vector2(0.16f, 0.78f);
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
@@ -1568,10 +1702,30 @@ namespace DeNelle.Village.Buildings.Progression
                 gi.color = new Color(0.62f, 0.60f, 0.56f, 1f);
                 textX0 = 0.18f;
             }
-            var lbl = ElarionUiKit.Label(go.transform, reason, 0.06f, 0.94f,
-                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, textX0, 0.96f);
+
+            // Reseat the kit's own label as a left-aligned WRAPPING block (the reason + hint lines).
+            var lbl = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            if (lbl == null)
+            {
+                FlowTrace.Warn("UpgradeUI", "inert plate '" + reason + "': the kit button has no TMP label - adding one");
+                lbl = ElarionUiKit.Label(btn.transform, reason, 0.06f, 0.94f, ElarionUi.ParchmentDim,
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft, textX0, 0.96f);
+            }
+            lbl.text = reason;   // the skin uppercased the stamped copy; the sentence stays as authored
+            var lrt = lbl.rectTransform;
+            lrt.anchorMin = new Vector2(textX0, 0.06f); lrt.anchorMax = new Vector2(0.96f, 0.94f);
+            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            lbl.alignment = TMPro.TextAlignmentOptions.MidlineLeft;
+            lbl.color = ElarionUi.ParchmentDim;
+            lbl.fontSize = ElarionUi.FontLabel;
+            lbl.characterSpacing = 0f;
             lbl.raycastTarget = false;
             ElarionUiKit.FitBlock(lbl);
+            // WO-1391 follow-up: the offer plate's third line ("Coming soon - tap to dismiss") was
+            // cut mid-word by FitBlock's Truncate. Wrapping + the bounded auto-size stay; the
+            // overflow past the floor becomes an ELLIPSIS, never a cut word (the kit's own rule
+            // for single-line faces, applied to this block).
+            lbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             return lbl;
         }
 
@@ -1836,24 +1990,18 @@ namespace DeNelle.Village.Buildings.Progression
             ElarionUiKit.FitSingleLine(lbl);
         }
 
-        // Grey/white kit CTA seated at the row's right edge (Skills rows).
+        // Kit CTA seated at the row's right edge (Skills rows) — WO-1391: BuildObsidianButton,
+        // Yellow when the research is affordable, Gray otherwise (the same Yellow/Gray rule the
+        // Manage browse rows use), never a hand-tinted plate.
         private void BuildRowCta(Transform parent, string label, bool enabled, System.Action onClick)
         {
-            var go = ElarionUiKit.AddImage(parent, "RowCta", new Vector2(0.815f, 0.16f), new Vector2(0.985f, 0.84f),
-                new Color(0.13f, 0.125f, 0.115f, 1f));
-            var plate = go.GetComponent<Image>();
-            var btn = go.AddComponent<Button>();
-            btn.targetGraphic = plate;
-            ElarionUiKit.StyleButtonColors(btn);
-            SoftenButton(btn);
+            var btn = ElarionUiKit.BuildObsidianButton(parent, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                enabled ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.815f, 0.10f), new Vector2(0.985f, 0.90f), onClick);
+            if (btn == null) return;
+            btn.gameObject.name = "RowCta";
             btn.interactable = enabled;
-            if (onClick != null) btn.onClick.AddListener(() => onClick());
-
-            var lbl = ElarionUiKit.Label(go.transform, label, 0.05f, 0.95f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
-                0.05f, 0.95f, bold: true);
-            lbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(lbl);
         }
 
         private void EmptyNote(Transform parent, string text)
@@ -1969,6 +2117,7 @@ namespace DeNelle.Village.Buildings.Progression
             _nextCardHost = null;
             _skillsContent = null;
             _previewHost = null;
+            _chrome = null;              // WO-1391 — the kit chrome dies with the canvas
             PanelManager.NotifyClosed(_panelHandle);
         }
 
@@ -1977,6 +2126,19 @@ namespace DeNelle.Village.Buildings.Progression
         // Update's per-frame ApplyRotation): URP will NOT auto-render an off-screen Base
         // camera, so TowerPreviewCamera keeps its camera disabled and renders on demand;
         // every SetRotation call IS the draw. Rebuilt only when the subject changes.
+        //
+        // WO-1391 (2026-09-05) — THE NOISE SQUARE. The owner's Seeker capture showed random coloured
+        // blocks where the Cathedral should stand: the RawImage was displaying a RenderTexture whose
+        // memory had never been written (on a tiled mobile GPU an unwritten RT IS whatever was in
+        // that memory). The device log carried NO [Flow:UpgradeUI] line at open, so WHICH step died
+        // (model resolve? Begin? the first Render?) could not be read. This rebuild does three things,
+        // in this order, and traces each: (1) it CLEARS the RT to the plate colour with GL.Clear
+        // before anything reads it, so even a camera that never draws shows a flat plate, never
+        // memory; (2) it names the model source, the RT size/format/created flag and whether the
+        // first Render() completed; (3) when the model does not resolve OR the rig cannot draw, it
+        // shows the building's ICON through QueueIconResolver - the SAME Portraits chain the Manage
+        // queue rows use - in the same viewport, and only when no icon exists either does the card
+        // take the full width. The column is never left blank and never left as noise.
         private void RebuildPreview()
         {
             if (_vm == null || _previewHost == null) return;
@@ -1984,62 +2146,144 @@ namespace DeNelle.Village.Buildings.Progression
             string id = _vm.PreviewId;
             int level = _vm.PreviewLevel;
             string key = (id ?? "") + "@" + level;
-            if (key == _previewKey && _previewImage != null) return;   // same subject — keep the rig
+            if (key == _previewKey) return;   // same subject — keep the rig / icon (the key is nulled on dispose)
 
             DisposePreviewRig();
             ClearChildren(_previewHost);
             _previewKey = key;
+            _previewFrames = 0;
+
+            FlowTrace.Step("UpgradeUI", "preview rig IN: building='" + (id ?? "<null>") + "' level=" + level
+                + " title='" + _vm.Title + "'");
 
             GameObject prefab = null;
             DeNelle.Core.Catalog.OrientationFix orientation = null;
             bool resolved = Guard.Try("UpgradeUI", "resolve preview model for '" + (id ?? "?") + "'",
                 () => StructurePreviewSource.TryResolve(id, level, out prefab, out orientation))
                 && prefab != null;
+            // (StructurePreviewSource traces the row + the prefab path on a hit, and the reason on a miss.)
+            FlowTrace.Step("UpgradeUI", "preview model " + (resolved ? "RESOLVED '" + prefab.name + "'" : "NOT resolved")
+                + " for '" + key + "'" + (orientation != null && orientation.manual ? " (manual upright fix applied)" : ""));
 
+            bool live = false;
             if (resolved)
             {
                 _previewRig = new TowerPreviewCamera();
-                // A rig that fails to build leaves Texture null — treated exactly like an
-                // unresolved model (2D portrait, full-width card), never a black box.
-                if (!Guard.Try("UpgradeUI", "begin preview rig", () => _previewRig.Begin(prefab, orientation))
-                    || _previewRig.Texture == null)
+                bool began = Guard.Try("UpgradeUI", "begin preview rig", () => _previewRig.Begin(prefab, orientation));
+                var rt = _previewRig.Texture;
+                if (!began || rt == null)
                 {
-                    FlowTrace.Warn("UpgradeUI", "preview rig failed to start for '" + key
-                        + "' - falling back to the 2D portrait");
+                    FlowTrace.Warn("UpgradeUI", "preview rig failed to START for '" + key + "' (began=" + began
+                        + " rt=" + (rt != null) + ") - falling back to the icon");
                     DisposePreviewRig();
-                    resolved = false;
+                }
+                else
+                {
+                    // (1) NEVER an uninitialised RT: clear it to the plate colour BEFORE any read.
+                    bool cleared = Guard.Try("UpgradeUI", "clear preview RT", () => ClearRenderTexture(rt, SubPanelFill));
+                    FlowTrace.Step("UpgradeUI", "preview RT " + rt.width + "x" + rt.height + " fmt=" + rt.format
+                        + " depth=" + rt.depth + " aa=" + rt.antiAliasing + " created=" + rt.IsCreated()
+                        + " cleared=" + cleared);
+
+                    // (2) The first driven frame. SetRotation IS the draw (URP never auto-renders an
+                    //     off-screen Base camera); a throw here is the "camera cannot render" case.
+                    _previewYaw = 0f;
+                    bool drew = Guard.Try("UpgradeUI", "preview first frame", () => _previewRig.SetRotation(Quaternion.identity));
+                    live = drew && _previewRig.IsValid && rt.IsCreated();
+                    FlowTrace.Step("UpgradeUI", "preview camera first Render() " + (drew ? "completed" : "THREW")
+                        + " valid=" + _previewRig.IsValid + " -> " + (live ? "LIVE model" : "icon fallback"));
+                    if (!live)
+                    {
+                        FlowTrace.Warn("UpgradeUI", "preview rig cannot render '" + key + "' - falling back to the icon");
+                        DisposePreviewRig();
+                    }
                 }
             }
 
-            if (!resolved)
+            // (3) The viewport: the live RT, else the building's icon (the Manage rows' resolver),
+            //     else no column at all (full-width card, the WO-895 geometry) - traced either way.
+            Sprite icon = live ? null : ResolvePreviewIcon(id, level);
+            if (!live && icon == null)
             {
-                // No model column: give the card the full body width (the WO-895 geometry).
+                FlowTrace.Warn("UpgradeUI", "no model AND no icon for '" + key
+                    + "' - model column not built; card takes the full width");
                 if (_nextCardHost != null) _nextCardHost.anchorMin = new Vector2(0f, _nextCardHost.anchorMin.y);
                 return;
             }
 
-            // A framed viewport in the kit's chrome vocabulary (RoundedCard) with ONE RawImage
+            // A framed viewport in the kit's chrome vocabulary (RoundedCard) with ONE image
             // inside it — the same shape the rotate menu uses, no new widget invented.
             RectTransform frame = RoundedCard(_previewHost, "ModelViewport",
                 new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.98f), SubPanelFill, BorderGoldDim, 2f);
-            var viewGo = new GameObject("ModelView", typeof(RawImage));
-            viewGo.transform.SetParent(frame, false);
-            var vrt = (RectTransform)viewGo.transform;
-            vrt.anchorMin = new Vector2(0.04f, 0.06f);
-            vrt.anchorMax = new Vector2(0.96f, 0.94f);
-            vrt.offsetMin = Vector2.zero; vrt.offsetMax = Vector2.zero;
-            _previewImage = viewGo.GetComponent<RawImage>();
-            _previewImage.texture = _previewRig.Texture;
-            _previewImage.color = Color.white;       // show the RT unmodulated
-            _previewImage.raycastTarget = false;
-
-            _previewYaw = 0f;
-            _previewRig.SetRotation(Quaternion.identity);
+            if (live)
+            {
+                var viewGo = new GameObject("ModelView", typeof(RawImage));
+                viewGo.transform.SetParent(frame, false);
+                var vrt = (RectTransform)viewGo.transform;
+                vrt.anchorMin = new Vector2(0.04f, 0.06f);
+                vrt.anchorMax = new Vector2(0.96f, 0.94f);
+                vrt.offsetMin = Vector2.zero; vrt.offsetMax = Vector2.zero;
+                _previewImage = viewGo.GetComponent<RawImage>();
+                _previewImage.texture = _previewRig.Texture;
+                _previewImage.color = Color.white;       // show the RT unmodulated
+                _previewImage.raycastTarget = false;
+            }
+            else
+            {
+                var iconGo = new GameObject("ModelIcon", typeof(Image));
+                iconGo.transform.SetParent(frame, false);
+                var irt = (RectTransform)iconGo.transform;
+                irt.anchorMin = new Vector2(0.12f, 0.12f);
+                irt.anchorMax = new Vector2(0.88f, 0.88f);
+                irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+                var img = iconGo.GetComponent<Image>();
+                img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
+                img.color = Color.white;
+            }
 
             if (_nextCardHost != null)
                 _nextCardHost.anchorMin = new Vector2(PreviewColumnWidth, _nextCardHost.anchorMin.y);
 
-            FlowTrace.Step("UpgradeUI", "model band built for '" + key + "'");
+            FlowTrace.Step("UpgradeUI", "model band built for '" + key + "' as " + (live ? "LIVE 3D rig" : "ICON '" + icon.name + "'"));
+        }
+
+        /// <summary>
+        /// WO-1391 — the building's icon for the preview slot when no model renders: the SAME
+        /// resolver + Portraits chain the Manage queue rows draw their art from
+        /// (<see cref="QueueIconResolver.Resolve"/>, keyed on the job/ladder id + level), then the
+        /// panel's own per-tier portrait lookup. Null when nothing on disk names this building.
+        /// </summary>
+        private Sprite ResolvePreviewIcon(string id, int level)
+        {
+            Sprite s = null;
+            Guard.Try("UpgradeUI", "resolve preview icon for '" + (id ?? "?") + "'", () =>
+            {
+                s = QueueIconResolver.Resolve(new ObsidianQueueGate.QueueEntry
+                {
+                    JobId = id ?? "",
+                    Label = _vm != null ? _vm.Title : "",
+                    TargetTier = level,
+                    Free = false,
+                });
+                if (s == null) s = BuildingArt(level);
+            });
+            FlowTrace.Step("UpgradeUI", "preview icon for '" + (id ?? "?") + "@" + level + "': "
+                + (s != null ? "'" + s.name + "'" : "none"));
+            return s;
+        }
+
+        /// <summary>
+        /// WO-1391 — write the plate colour into every texel of <paramref name="rt"/> so it can
+        /// never be displayed uninitialised. Restores the previously active RT.
+        /// </summary>
+        private static void ClearRenderTexture(RenderTexture rt, Color color)
+        {
+            if (rt == null) return;
+            if (!rt.IsCreated()) rt.Create();
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            GL.Clear(true, true, color);
+            RenderTexture.active = prev;
         }
 
         private void DisposePreviewRig()
@@ -2048,6 +2292,7 @@ namespace DeNelle.Village.Buildings.Progression
             _previewImage = null;
             if (_previewRig != null) { _previewRig.Dispose(); _previewRig = null; }
             _previewKey = null;
+            _previewFrames = 0;
         }
 
         private static RectTransform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)

@@ -706,16 +706,21 @@ namespace DeNelle.Editor
                 Fail($"DumpSilos returned {banked} but the wallets moved by {measuredIntoWallets} " +
                      "— the return value must be what was BANKED, never the pre-clamp pool (WO-1207).");
 
-            // Production is still asserted, but through the silo it emptied rather than through a
-            // return value whose meaning is now 'what landed'. The per-lane split maths is asserted
-            // by the individual wallet deltas above and below.
-            if (state.SiloResources > 0.5)
-                Fail($"DumpSilos left {state.SiloResources:0} in the silo (expected the full one-hour " +
-                     $"pool {fullRosterOneHour} consumed and the silo reset).");
+            // RE-PINNED 2026-09-05 (WO-1392): the silo RETAINS whatever the town-bank clamp refused.
+            // This used to read `if (state.SiloResources > 0.5) Fail("...silo reset")` - it pinned the
+            // BURN: DumpSilos drained the whole pool and the clamped remainder was lost, which is the
+            // owner's covenant broken (a harvest is never silently burned). The honest invariant is
+            // conservation: pool == banked + retained, to the unit.
+            double retained = state.SiloResources;
+            double expectedRetained = fullRosterOneHour - measuredIntoWallets;
+            if (Math.Abs(retained - expectedRetained) > 0.5)
+                Fail($"DumpSilos left {retained:0} in the silo but pool {fullRosterOneHour} - banked " +
+                     $"{measuredIntoWallets} = {expectedRetained:0}; the clamped remainder must STAY in the " +
+                     "silo, never be burned (WO-1392) and never be double-counted.");
             if (measuredIntoWallets < fullRosterOneHour)
                 notes.Add($"[echo-spec] the town bank cap trimmed this dump: pool {fullRosterOneHour}, " +
-                          $"banked {measuredIntoWallets}, {fullRosterOneHour - measuredIntoWallets} lost " +
-                          "to the clamp — EXPECTED at default capacity, and recorded rather than hidden.");
+                          $"banked {measuredIntoWallets}, {retained:0} retained in the silo for the next " +
+                          "dump - EXPECTED at default capacity, and recorded rather than hidden.");
             // Wood/Iron/Food may be trimmed by the real town-bank capacity. Gold and
             // crystals are uncapped; their movement is asserted individually above.
             foreach (int other in new[] { dWood, dIron, dFood, dGold })

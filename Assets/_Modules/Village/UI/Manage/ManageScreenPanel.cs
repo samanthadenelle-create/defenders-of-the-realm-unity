@@ -176,6 +176,44 @@ namespace DeNelle.Village.UI
         private const float TroopCtaY0 = 0.01f, TroopCtaY1 = 0.445f;   // 0.435 * 260 = 113.1px >= MinTouchPx
         private const float BandCtrlY0 = 0.03f, BandCtrlY1 = 0.97f;   // 0.94 * 120 = 112.8px >= MinTouchPx
 
+        // =====================================================================
+        //  WO-1393 (2026-09-05) - THE QUEUE DRAWER AS ITS OWN BAND ON THE TROOPS TAB.
+        // ---------------------------------------------------------------------
+        // PROVEN (docs/qa/UI_REVIEW_2026-09-05/10-troops-after-upgrade.png): OPEN QUEUE put the
+        // full-body drawer OVER the selected-troop card; the UPGRADE TO L4 tap hit the drawer, the
+        // top-right QUEUE tap closed nothing (the toggle was hidden while open), and the
+        // "IN QUEUE - TRAINING" header rendered clipped under the drawer's own 200px rail.
+        //
+        // THE ARITHMETIC, read off the captured bands(px) line (Builds/manage-capture.log,
+        // 2670x1200): well=533, strip 120 + gap 12 => LIST=401. A 260px workspace plus a usable
+        // drawer (64px header + one 132px row + 20px scroll padding = 216) cannot share 401px
+        // with the 120px TRAINING NOW band, and cannot share it at all if the whole workspace
+        // stays in view (401 - 280 - 12 = 109 < 216). So on the Troops tab, while the drawer is
+        // open:
+        //   * the TRAINING NOW band collapses - the drawer SUPERSEDES it (it is the line's mirror);
+        //   * the list band keeps a viewport of DrawerModeListKeepPx: the scroll padding plus
+        //     everything ABOVE the card's CTA line (rail rows, portrait, name, level, facts),
+        //     unsquashed - the row keeps its 260px inside the scroll content, so TRAIN / UPGRADE
+        //     are one drag away and are NEVER under the drawer (ruling #6: the card stays
+        //     readable; queue verbs live in the drawer);
+        //   * the drawer is a sibling band BELOW that viewport, top-anchored at
+        //     listTop + keep + BandGapPx, running to the well floor: 401 - 154 - 12 = 235px at
+        //     2670x1200 (244 at 2340x1080, 314 at 1920x1080), which seats the header and the
+        //     first row at rest; further rows and the slot offer scroll;
+        //   * the drawer carries NO rail in this mode (the workspace rail and the strip's counts
+        //     are already on screen; a 200px rail is exactly what clipped the header).
+        // Other tabs keep the WO-1368 full-body drawer. Both modes put the slot offer LAST in the
+        // drawer's scroll list, which is what frees the full-body list zone (0.02-0.86) so the
+        // header sits inside the well under the rail at rest (0.84 * 437 - 20 = 347 >= 272).
+        // ManageQueueDrawerRegression [queue-toggle-closes] / [drawer-clear-of-card] pin this.
+        // =====================================================================
+        /// <summary>Scroll padding + everything above the card's CTA line: 10 + 260 * (1 - 0.445)
+        /// = 154.3px. The CTA's top edge is exactly the viewport's floor at rest.</summary>
+        private const float DrawerModeListKeepPx = 10f + TroopWorkspacePx * (1f - TroopCtaY1);
+        /// <summary>The least the drawer band may be given: header + one row + scroll padding.</summary>
+        private const float DrawerModeMinPx = SectionHeaderPx + RowHeightPx + 20f;
+        private const string TrainingNowPrefix = "TroopTrainingNow";   // band + its extra rows
+
         private ManageScreenVM _vm;
         private int _browsePage;
         private string _selectedTroopId;
@@ -200,6 +238,17 @@ namespace DeNelle.Village.UI
         private GameObject _queueDrawer;
         private Button _queueDrawerToggle;
         private bool _queueDrawerOpen;
+        // WO-1393 - the drawer's band placement. The three px numbers are captured in the ONE
+        // geometry pass (the same cursor that seats every band), so the drawer band is placed
+        // from the measured well, never from a second copy of the arithmetic.
+        private float _wellPx;
+        private float _listBandTopPx;
+        private float _listBandPx;
+        private RectTransform _drawerList;        // the drawer's scroll zone host
+        private RectTransform _drawerSlotOffer;   // Buy-Builder offer; the drawer list's LAST row
+        private GameObject _drawerHeading;        // "BUILDERS / QUEUE" + HIDE: full-body mode only
+        private GameObject _drawerHide;
+        private bool _drawerBandMode;             // true while the drawer is seated as a band
         private RectTransform _tabsHost;
         private readonly TextMeshProUGUI[] _stripCells = new TextMeshProUGUI[3];
         private RectTransform _stripHost;
@@ -348,6 +397,12 @@ namespace DeNelle.Village.UI
             _queueDrawer = null;
             _queueDrawerToggle = null;
             _queueDrawerOpen = false;
+            _drawerList = null;
+            _drawerSlotOffer = null;
+            _drawerHeading = null;
+            _drawerHide = null;
+            _drawerBandMode = false;
+            _wellPx = _listBandTopPx = _listBandPx = 0f;
             _railPinned = false;
             _tabsHost = null;
             for (int i = 0; i < _stripCells.Length; i++) _stripCells[i] = null;
@@ -541,6 +596,10 @@ namespace DeNelle.Village.UI
                 new Vector2(0f, 0.835f), new Vector2(1f, 0.965f));
             BuildTabs();
 
+            // WO-1393: the drawer band is seated from these three numbers (ApplyDrawerPlacement).
+            _wellPx = wellPx;
+            _listBandTopPx = cursor;
+            _listBandPx = listPx;
             var listBand = Band(well, "Band_List", ref cursor, listPx);
             _operationalListBand = listBand.gameObject;
             var scroll = ElarionUiKit.MakeScrollZone(listBand, spacing: 8f, padding: 10);
@@ -1021,18 +1080,24 @@ namespace DeNelle.Village.UI
                 ElarionUi.Gold, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
                 0.04f, 0.66f, bold: true);
             ElarionUiKit.FitSingleLine(heading);
+            _drawerHeading = heading != null ? heading.gameObject : null;
             var hide = ElarionUiKit.BuildObsidianButton(drawer, "HIDE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.70f, 0.70f), new Vector2(0.97f, 0.99f), ToggleQueueDrawer);
             ElarionUiKit.ClampMinTouch(hide);
+            _drawerHide = hide != null ? hide.gameObject : null;
 
             // WO-1368: the rail no longer owns a fixed band of its own — it is mounted as the
             // first row of the list below (see RenderQueueDrawer), so the 200px of card art can
             // never eat the space the ACTION rows need. _railBand stays null, which is what makes
             // the legacy pinned path (RenderRail) inert.
             _railBand = null;
+            // WO-1393: the list zone runs from the drawer floor to the heading (0.02-0.86); the
+            // slot offer is no longer a fixed zone under it but the list's LAST ROW (see
+            // RenderQueueDrawer), which is what gives the rail + header + first row room at rest.
             var drawerList = MakeZone(drawer, "Drawer_QueueList",
-                new Vector2(0.02f, 0.30f), new Vector2(0.98f, 0.86f));
+                new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));
+            _drawerList = drawerList;
             var drawerScroll = ElarionUiKit.MakeScrollZone(drawerList, spacing: 8f, padding: 10);
             _drawerContent = drawerScroll != null ? drawerScroll.content : null;
             if (_drawerContent == null)
@@ -1041,26 +1106,140 @@ namespace DeNelle.Village.UI
                     "site, which is exactly the WO-1368 defect (Finish Now / Ad / Cancel / Move up " +
                     "unreachable). The rail alone carries no actions.");
 
-            BuildSlotRow(MakeZone(drawer, "Drawer_SlotOffer",
-                new Vector2(0.035f, 0.03f), new Vector2(0.965f, 0.27f)));
+            // Built ONCE (its label/button are fields RenderSlotOffer refreshes) and parked on the
+            // drawer between renders; RenderQueueDrawer re-seats it as the last scroll row.
+            _drawerSlotOffer = MakeZone(drawer, "Drawer_SlotOffer", Vector2.zero, Vector2.one);
+            BuildSlotRow(_drawerSlotOffer);
+            _drawerSlotOffer.gameObject.SetActive(false);
 
             _queueDrawer.SetActive(false);
+        }
+
+        /// <summary>WO-1393: the drawer is a BAND (sibling of the list, below the kept workspace
+        /// viewport) on the Troops tab, and the WO-1368 full-body workspace on every other tab.</summary>
+        private bool DrawerInBandMode => _vm != null && _vm.Tab == ManageTab.Troops;
+
+        /// <summary>
+        /// ⛔ WO-1393 - THE ONE PLACE THE DRAWER, THE LIST BAND AND THE TRAINING NOW BAND ARE
+        /// SEATED RELATIVE TO EACH OTHER. Called on every toggle and after every RenderList (which
+        /// rebuilds the TRAINING NOW band active), so the placement can never drift from the tab
+        /// or the queue. Idempotent. See the DrawerModeListKeepPx block for the arithmetic.
+        /// </summary>
+        private void ApplyDrawerPlacement()
+        {
+            if (_queueDrawer == null) return;
+            var drawer = (RectTransform)_queueDrawer.transform;
+            bool band = _queueDrawerOpen && DrawerInBandMode;
+            _drawerBandMode = band;
+
+            // The TRAINING NOW band (and its extra rows) is the line's MIRROR; the drawer
+            // supersedes it while open. Inactive rows drop out of the vertical layout, so the
+            // list content shrinks to padding + workspace + padding.
+            if (_listContent != null)
+                for (int i = 0; i < _listContent.childCount; i++)
+                {
+                    var child = _listContent.GetChild(i);
+                    if (child.name.StartsWith(TrainingNowPrefix, StringComparison.Ordinal))
+                        child.gameObject.SetActive(!band);
+                }
+
+            if (_operationalListBand != null)
+            {
+                // Full-body mode hides the browse list under the opaque drawer (WO-1368: a browse
+                // list left actionable under a panel carrying paid verbs is a mis-tap surface).
+                // Band mode keeps it, shrunk to the viewport ABOVE the card's CTA line.
+                _operationalListBand.SetActive(!_queueDrawerOpen || band);
+                var listRt = (RectTransform)_operationalListBand.transform;
+                float keep = band ? Mathf.Min(DrawerModeListKeepPx, _listBandPx) : _listBandPx;
+                listRt.sizeDelta = new Vector2(listRt.sizeDelta.x, keep);
+            }
+
+            if (_drawerHeading != null) _drawerHeading.SetActive(!band);
+            if (_drawerHide != null) _drawerHide.SetActive(!band);
+            if (_drawerList != null)
+            {
+                _drawerList.anchorMin = new Vector2(0.02f, band ? 0.0f : 0.02f);
+                _drawerList.anchorMax = new Vector2(0.98f, band ? 1.0f : 0.86f);
+                _drawerList.offsetMin = _drawerList.offsetMax = Vector2.zero;
+            }
+
+            var image = _queueDrawer.GetComponent<Image>();
+            if (band)
+            {
+                float top = _listBandTopPx + Mathf.Min(DrawerModeListKeepPx, _listBandPx) + BandGapPx;
+                float drawerPx = Mathf.Max(0f, _wellPx - top);
+                drawer.anchorMin = new Vector2(0.01f, 1f);
+                drawer.anchorMax = new Vector2(0.99f, 1f);
+                drawer.pivot = new Vector2(0.5f, 1f);
+                drawer.sizeDelta = new Vector2(0f, drawerPx);
+                drawer.anchoredPosition = new Vector2(0f, -top);
+                // A flat plate, not the framed sprite: frames/content-panel carries ~90px of
+                // transparent margin above its gold line (the WO-1382 RCA), which on a band this
+                // short would draw the first row outside the visible frame.
+                if (image != null)
+                {
+                    image.sprite = null;
+                    image.color = new Color(0.05f, 0.04f, 0.03f, 0.70f);
+                }
+                FlowTrace.Step("Manage", string.Format(
+                    "drawer band(px): listTop={0:0} keep={1:0} gap={2:0} => drawer top={3:0} height={4:0} " +
+                    "of well {5:0} (needs {6:0}: header {7:0} + row {8:0} + pad 20). TRAINING NOW " +
+                    "collapsed; the card's CTAs stay in the list viewport above the drawer, never under it.",
+                    _listBandTopPx, Mathf.Min(DrawerModeListKeepPx, _listBandPx), BandGapPx, top, drawerPx,
+                    _wellPx, DrawerModeMinPx, SectionHeaderPx, RowHeightPx));
+                if (drawerPx < DrawerModeMinPx)
+                    FlowTrace.Warn("Manage", string.Format(
+                        "drawer band is {0:0}px, under the {1:0}px it needs to seat the header and one " +
+                        "row at rest - the rows still scroll, but the first verb is under the fold.",
+                        drawerPx, DrawerModeMinPx));
+            }
+            else
+            {
+                drawer.anchorMin = new Vector2(0.02f, 0.02f);
+                drawer.anchorMax = new Vector2(0.998f, 0.84f);
+                drawer.pivot = new Vector2(0.5f, 0.5f);
+                drawer.offsetMin = drawer.offsetMax = Vector2.zero;
+                if (image != null && image.sprite == null)
+                {
+                    image.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                    image.type = Image.Type.Sliced;
+                    image.color = Color.white;
+                }
+            }
+        }
+
+        /// <summary>WO-1393: the title-row QUEUE face stays on screen while the drawer is open and
+        /// reads as the close ("HIDE QUEUE"); its onClick is ToggleQueueDrawer either way, so the
+        /// top-right tap always toggles. Called from BuildTabs (rebuilds) and ToggleQueueDrawer.</summary>
+        private void SyncQueueToggleFace()
+        {
+            if (_queueDrawerToggle == null) return;
+            _queueDrawerToggle.gameObject.SetActive(_vm != null && _vm.Channels.Count > 0);
+            var label = _queueDrawerToggle.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.text = _queueDrawerOpen ? "HIDE QUEUE" : "QUEUE";
+                ElarionUiKit.FitSingleLine(label);
+            }
         }
 
         private void ToggleQueueDrawer()
         {
             _queueDrawerOpen = !_queueDrawerOpen;
             if (_queueDrawer != null) _queueDrawer.SetActive(_queueDrawerOpen);
-            if (_operationalListBand != null) _operationalListBand.SetActive(!_queueDrawerOpen);
-            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(!_queueDrawerOpen);
-            // WO-1368: hiding the browse band while the drawer is open STILL holds, and now holds
-            // for a stronger reason than when it was written. The drawer is a full-body workspace
-            // (anchors 0.02-0.84 of the well) and it now carries DESTRUCTIVE and PAID verbs; a
-            // browse list left actionable underneath an opaque panel is a mis-tap surface. Opt-in
-            // is preserved by the QUEUE affordance, not by leaving both surfaces alive at once.
+            // WO-1393: the toggle STAYS visible while open - it was hidden here before, which is
+            // why the top-right QUEUE tap in 10-troops-after-upgrade.png closed nothing.
+            SyncQueueToggleFace();
+            // WO-1368: hiding the browse band while the drawer is open STILL holds on the browse
+            // tabs (the drawer is a full-body workspace carrying DESTRUCTIVE and PAID verbs; a
+            // browse list left actionable underneath an opaque panel is a mis-tap surface). On the
+            // Troops tab the drawer is a BAND under the kept card viewport instead (WO-1393), and
+            // ApplyDrawerPlacement owns both shapes.
+            ApplyDrawerPlacement();
             if (_queueDrawerOpen) RenderQueueDrawer();
             FlowTrace.Step("Manage", "queue drawer " + (_queueDrawerOpen ? "expanded" : "collapsed") +
-                " (rows " + (_queueDrawerOpen ? (_vm != null ? _vm.QueueRows.Count : 0) : 0) + ")");
+                " (rows " + (_queueDrawerOpen ? (_vm != null ? _vm.QueueRows.Count : 0) : 0) + ")" +
+                (_queueDrawerOpen ? (_drawerBandMode ? " as a band under the Troops workspace" : " full-body") : ""));
         }
 
         private void BuildNotice(RectTransform band)
@@ -1105,7 +1284,8 @@ namespace DeNelle.Village.UI
             if (_queueDrawerToggle != null)
             {
                 _queueDrawerToggle.gameObject.name = "ManageQueueDrawerToggle";
-                _queueDrawerToggle.gameObject.SetActive(!_queueDrawerOpen && _vm.Channels.Count > 0);
+                // WO-1393: visible whether the drawer is open or closed - a second tap closes it.
+                SyncQueueToggleFace();
                 ElarionUiKit.ClampMinTouch(_queueDrawerToggle);
             }
         }
@@ -1124,6 +1304,9 @@ namespace DeNelle.Village.UI
                 RenderRail();
                 BuildTabs();
                 RenderList();
+                // WO-1393: RenderList rebuilt the TRAINING NOW band active and the tab may have
+                // changed - re-seat the drawer / list band / band before the drawer renders.
+                ApplyDrawerPlacement();
                 // WO-1368 — AFTER RenderList, which clears the tick/progress cells. The drawer's
                 // rows register their own countdown cells and must survive that clear.
                 if (_queueDrawerOpen) RenderQueueDrawer();
@@ -1302,6 +1485,13 @@ namespace DeNelle.Village.UI
         {
             if (_drawerContent == null || _vm == null) return;
 
+            // WO-1393: the slot offer is built once and rides the list as its LAST row - park it
+            // back on the drawer before the clear below so its label/button fields survive.
+            if (_drawerSlotOffer != null && _queueDrawer != null)
+            {
+                _drawerSlotOffer.SetParent(_queueDrawer.transform, false);
+                _drawerSlotOffer.gameObject.SetActive(false);
+            }
             for (int i = _drawerContent.childCount - 1; i >= 0; i--)
             {
                 var child = _drawerContent.GetChild(i).gameObject;
@@ -1317,14 +1507,29 @@ namespace DeNelle.Village.UI
                 var channel = ManageScreenVM.ChannelOf(_vm.Tab);
 
                 // The rail leads as the FIRST ROW: a status glance (ruling §7, display-only) above
-                // the rows that carry every action.
-                MountRail(MakeRowHost("Drawer_QueueRail", _railBandPx), forceRebuild: true);
+                // the rows that carry every action. WO-1393: NOT in band mode - the Troops
+                // workspace rail and the strip's counts are already on screen, and a 200px rail
+                // in a ~235px band is exactly what clipped the header under it.
+                if (!_drawerBandMode)
+                    MountRail(MakeRowHost("Drawer_QueueRail", _railBandPx), forceRebuild: true);
 
                 AddSectionHeader("IN QUEUE - " + BuildTimerService.ChannelWord(channel).ToUpperInvariant());
                 if (_vm.QueueRows.Count == 0)
                     AddNoteRow("Nothing is queued on this line. Start an upgrade to see it here.");
                 else
                     for (int i = 0; i < _vm.QueueRows.Count; i++) AddQueueRow(_vm.QueueRows[i]);
+
+                // WO-1393: the Buy-Builder offer is the list's LAST row in both modes (it scrolls;
+                // it no longer owns a fixed zone that starved the rows of height).
+                if (_drawerSlotOffer != null)
+                {
+                    var offerRow = MakeRowHost("Drawer_SlotOfferRow", SlotBandPx);
+                    _drawerSlotOffer.SetParent(offerRow, false);
+                    _drawerSlotOffer.anchorMin = new Vector2(0.035f, 0f);
+                    _drawerSlotOffer.anchorMax = new Vector2(0.965f, 1f);
+                    _drawerSlotOffer.offsetMin = _drawerSlotOffer.offsetMax = Vector2.zero;
+                    _drawerSlotOffer.gameObject.SetActive(true);
+                }
 
                 MakeRowHost("DrawerTailSpacer", ListTailPx);
             }

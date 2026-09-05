@@ -272,7 +272,9 @@ namespace DeNelle.Editor
 
         // Strip comments AND string/char literals: several oracles have matched their own
         // prose and reported a false result, so nothing grepped here may come from a comment.
-        private static string StripCommentsAndStrings(string src)
+        // internal (2026-09-05, WO-1391): BuildingUpgradeRegression's [preview-never-uninitialised]
+        // pin lints the same View with the same stripper rather than growing a second copy.
+        internal static string StripCommentsAndStrings(string src)
         {
             if (string.IsNullOrEmpty(src)) return string.Empty;
             var sb = new StringBuilder(src.Length);

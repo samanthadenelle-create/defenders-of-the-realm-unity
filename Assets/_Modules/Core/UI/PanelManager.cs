@@ -76,6 +76,41 @@ namespace DeNelle.Core.UI
         public static string OpenPanelName => _open != null ? _open.Name : null;
 
         // =====================================================================
+        //  WO-1393 (2026-09-05) - THE CLOSE-FRAME GRACE.
+        // ---------------------------------------------------------------------
+        //  PROVEN on the headed walk 2026-09-04 23:47 (docs/qa/UI_REVIEW_2026-09-05/
+        //  11-research-upgrade-door.png): a tap issued at the Research door's coordinates while
+        //  Manage was closing opened THE NIGHT MARKET - the HUD card beneath the modal caught the
+        //  pointer-down that the modal had been covering a frame earlier. NotifyClosed clears the
+        //  record in the same frame; the EventSystem raycasts the in-flight tap on the NEXT frame,
+        //  by which time the only surface under the finger is the HUD.
+        //
+        //  The seam: NotifyClosed (and CloseOpen, the ESC / back path) record the frame the close
+        //  happened in. HUD tap handlers consult InCloseGrace and drop the tap - ONE frame only,
+        //  with one trace line - so the world beneath a closing modal never inherits its tap.
+        //  Panels never consult it (a tap ON the panel that is still open is legitimate); only the
+        //  layer UNDER a modal does. Reset on domain reload like every static here.
+        // =====================================================================
+
+        /// <summary>The last frame on which a tap should still be treated as belonging to the
+        /// modal that just closed: <c>Time.frameCount + 1</c> at the moment of the close. -1 when
+        /// no close has happened this session.</summary>
+        public static int CloseGraceUntilFrame { get; private set; } = -1;
+
+        /// <summary>True on the close frame and the one after it - the window in which an
+        /// in-flight tap reaches the layer beneath the modal that just closed (WO-1393).</summary>
+        public static bool InCloseGrace => UnityEngine.Time.frameCount <= CloseGraceUntilFrame;
+
+        /// <summary>Stamp the grace window from the current frame (WO-1393).</summary>
+        private static void ArmCloseGrace(string panelName)
+        {
+            CloseGraceUntilFrame = UnityEngine.Time.frameCount + 1;
+            FlowTrace.Step("UI", "PanelManager: '" + panelName + "' closed on frame " +
+                UnityEngine.Time.frameCount + " - taps beneath it are swallowed through frame " +
+                CloseGraceUntilFrame + " (WO-1393 close-frame grace).");
+        }
+
+        // =====================================================================
         //  WO-1337 — ATTRIBUTION FOR THE MODAL INVARIANT.
         // ---------------------------------------------------------------------
         //  BattleQuiescenceGate's modal finding said a panel handle was still open and could
@@ -247,6 +282,8 @@ namespace DeNelle.Core.UI
             if (handle == null) return;
             if (!ReferenceEquals(_open, handle)) return;
             _open = null;
+            // WO-1393: the tap that dismissed this panel may still be in flight - see ArmCloseGrace.
+            ArmCloseGrace(handle.Name);
             // F8-15: window-gated close record (who dismissed which panel during the death window).
             DeathTrace.ScreenClosed(handle.Name, DeathTrace.Describe(closerMember, closerFile));
             OpenStateChanged?.Invoke();
@@ -274,6 +311,10 @@ namespace DeNelle.Core.UI
             var open = _open;
             if (open == null) return;
             _open = null;
+            // WO-1393: the panel's own Close action below calls NotifyClosed with a record that is
+            // already cleared (the ReferenceEquals guard returns early), so the grace is armed HERE
+            // for the ESC / back / CloseAll path.
+            ArmCloseGrace(open.Name);
             // F8-15: name who forced the close during the death window (ESC/back/CloseAll).
             if (DeathTrace.Active)
                 DeathTrace.ScreenClosed(open.Name, "PanelManager.CloseOpen <- " + DeathTrace.Caller());

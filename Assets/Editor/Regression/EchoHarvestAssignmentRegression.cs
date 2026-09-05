@@ -119,13 +119,174 @@ namespace DeNelle.Editor.Regression
                 UnityEngine.Object.DestroyImmediate(capSiteGo);
             }
 
+            CheckSiloOverflowStays(failures);
+
             if (failures.Count > 0)
             {
                 reason = "ECHO_HARVEST_ASSIGNMENT_FAIL: " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "ECHO_HARVEST_ASSIGNMENT_OK - Unity-null pruning, yield, replacement and recall pinned";
+            reason = "ECHO_HARVEST_ASSIGNMENT_OK - Unity-null pruning, yield, replacement, recall and [silo-overflow-stays] pinned";
             return true;
+        }
+
+        // =====================================================================
+        //  [silo-overflow-stays] -- WO-1392: the Echo silo NEVER burns a clamped remainder.
+        // =====================================================================
+        //
+        // Owner's Seeker, 2026-09-04: COLLECT dumped 2393 wood from the Echo silo into a bank at
+        // 2021/4000. TownBankCapacity.ClampGrant applied 1979; EchoService.DumpSilos then did
+        // `s.SiloResources -= pool` -- subtracting the REQUEST -- so the 414 that never entered the
+        // bank were destroyed. The covenant (HarvestBoostService header): never burn silently.
+        //
+        // Fixture: the REAL DumpSilos / GrantSpendable / ClampGrant against a throwaway GameState
+        // (editmode never runs Awake, so the singletons are installed by reflection exactly as
+        // EchoSpecializationRegression does). One Echo assigned to wood so the whole pool is a wood
+        // request; the wallet is seated at (MaxOf(Wood) - 1979) so the clamp banks exactly 1979 of a
+        // 2393 silo whatever storage-caps.json authors as the base cap.
+        //   dump 1 : wallet +1979, silo keeps 414
+        //   spend 500, dump 2 : wallet +414, silo empty
+        // RED BY: restoring `s.SiloResources -= pool;` in EchoService.DumpSilos (the named mutation)
+        // -- dump 1 then leaves 0 in the silo and dump 2 banks 0.
+        private const string SaveKey = "dotr-save";
+
+        private static void CheckSiloOverflowStays(List<string> failures)
+        {
+            const int siloWood = 2393;
+            const int expectBanked = 1979;
+            const int expectStays = siloWood - expectBanked;   // 414
+            const int spend = 500;
+
+            bool hadSave = PlayerPrefs.HasKey(SaveKey);
+            string rawSave = hadSave ? PlayerPrefs.GetString(SaveKey, null) : null;
+            DeNelle.Core.State.GameStateService priorInstance = DeNelle.Core.State.GameStateService.Instance;
+            EchoService priorEcho = EchoService.Instance;
+            EconomyService priorEco = EconomyService.Instance;
+
+            GameObject gssGo = null;
+            GameObject svcGo = null;
+            DeNelle.Core.State.GameState throwaway = null;
+            bool installedState = false;
+            bool installedEcho = false;
+            bool installedEco = false;
+            try
+            {
+                throwaway = ScriptableObject.CreateInstance<DeNelle.Core.State.GameState>();
+                gssGo = new GameObject("GameStateService (silo-overflow-oracle)");
+                var gss = gssGo.AddComponent<DeNelle.Core.State.GameStateService>();
+                var stateField = typeof(DeNelle.Core.State.GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (stateField == null || !TrySetGssInstance(gss))
+                {
+                    failures.Add("[silo-overflow-stays] GameStateService _state/_instance seam not found by reflection -- the fixture cannot install a headless state");
+                    return;
+                }
+                stateField.SetValue(gss, throwaway);
+                installedState = true;
+                var state = gss.State;
+                if (state == null)
+                {
+                    failures.Add("[silo-overflow-stays] throwaway GameState did not install");
+                    return;
+                }
+
+                svcGo = new GameObject("EchoDump (silo-overflow-oracle)");
+                var echo = svcGo.AddComponent<EchoService>();
+                var eco = svcGo.AddComponent<EconomyService>();
+                if (EchoService.Instance == null) installedEcho = TrySetStaticProperty(typeof(EchoService), "Instance", echo);
+                if (EconomyService.Instance == null) installedEco = TrySetStaticProperty(typeof(EconomyService), "Instance", eco);
+                if (EchoService.Instance == null || EconomyService.Instance == null)
+                {
+                    failures.Add("[silo-overflow-stays] EchoService/EconomyService Instance seam not installable headless");
+                    return;
+                }
+
+                // One Echo, harvesting WOOD (a match bonus is never a lock -- any Echo may pick wood),
+                // so HarvestTargetWeights routes the ENTIRE pool to the wood request.
+                state.EchoCount = 1;
+                state.EchoLanes = "wood:1";
+                var weights = EchoBonusCalculator.HarvestTargetWeights();
+                float woodW = weights.TryGetValue(HarvestTarget.Wood, out var vw) ? vw : 0f;
+                float otherW = 0f;
+                foreach (var kv in weights) if (kv.Key != HarvestTarget.Wood) otherW += kv.Value;
+                if (woodW <= 0f || otherW > 0f)
+                {
+                    failures.Add($"[silo-overflow-stays] fixture could not route the pool to wood (wood weight {woodW:0.###}, other {otherW:0.###}) -- the case never reached the state it pins");
+                    return;
+                }
+
+                int max = DeNelle.Core.Economy.TownBankCapacity.MaxOf(DeNelle.Core.Economy.BankResource.Wood);
+                if (max == int.MaxValue || max <= expectBanked)
+                {
+                    failures.Add($"[silo-overflow-stays] Wood is not capped, or MaxOf(Wood)={max} leaves no room for the fixture -- the town bank cap is the premise");
+                    return;
+                }
+                state.Wood = max - expectBanked;            // 2021 at a 4000 bank; the same 1979 of room at any authored cap
+                state.SiloResources = siloWood;
+
+                int woodBefore = state.Wood;
+                int banked1 = echo.DumpSilos();
+                int dWood1 = state.Wood - woodBefore;
+                double siloAfter1 = state.SiloResources;
+
+                if (dWood1 != expectBanked)
+                    failures.Add($"[silo-overflow-stays] dump 1 moved the wallet by {dWood1}, expected {expectBanked} (wallet {woodBefore}/{max}, silo {siloWood})");
+                if (banked1 != dWood1)
+                    failures.Add($"[silo-overflow-stays] dump 1 returned {banked1} but the wallet moved {dWood1} -- the return must be what was BANKED (WO-1207)");
+                if (Math.Abs(siloAfter1 - expectStays) > 0.5)
+                    failures.Add($"[silo-overflow-stays] dump 1 left {siloAfter1:0} in the silo, expected {expectStays} -- the clamped remainder was BURNED "
+                               + "(EchoService.DumpSilos is subtracting the request, not the applied basket: `s.SiloResources -= pool`)");
+
+                // The player spends, then dumps again: the retained 414 banks now.
+                state.Wood -= spend;
+                int woodBefore2 = state.Wood;
+                int banked2 = echo.DumpSilos();
+                int dWood2 = state.Wood - woodBefore2;
+                if (dWood2 != expectStays)
+                    failures.Add($"[silo-overflow-stays] dump 2 (after spending {spend}) moved the wallet by {dWood2}, expected the retained {expectStays}");
+                if (banked2 != dWood2)
+                    failures.Add($"[silo-overflow-stays] dump 2 returned {banked2} but the wallet moved {dWood2}");
+                if (state.SiloResources > 0.5)
+                    failures.Add($"[silo-overflow-stays] dump 2 left {state.SiloResources:0} in the silo, expected it empty");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[silo-overflow-stays] oracle threw " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                if (svcGo != null) UnityEngine.Object.DestroyImmediate(svcGo);
+                if (installedEcho) TrySetStaticProperty(typeof(EchoService), "Instance", priorEcho);
+                if (installedEco) TrySetStaticProperty(typeof(EconomyService), "Instance", priorEco);
+                if (gssGo != null) UnityEngine.Object.DestroyImmediate(gssGo);
+                if (throwaway != null) UnityEngine.Object.DestroyImmediate(throwaway);
+                if (installedState) TrySetGssInstance(priorInstance);
+                // GrantSpendable Save()d the throwaway -- restore the persisted blob.
+                if (hadSave) PlayerPrefs.SetString(SaveKey, rawSave);
+                else PlayerPrefs.DeleteKey(SaveKey);
+                PlayerPrefs.Save();
+            }
+        }
+
+        private static bool TrySetGssInstance(DeNelle.Core.State.GameStateService svc)
+        {
+            var f = typeof(DeNelle.Core.State.GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f == null) return false;
+            f.SetValue(null, svc);
+            return true;
+        }
+
+        private static bool TrySetStaticProperty(Type type, string name, object value)
+        {
+            try
+            {
+                var p = type.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (p != null && p.CanWrite) { p.SetValue(null, value, null); return true; }
+                var f = type.GetField($"<{name}>k__BackingField", BindingFlags.NonPublic | BindingFlags.Static);
+                if (f == null) return false;
+                f.SetValue(null, value);
+                return true;
+            }
+            catch { return false; }
         }
 
         private static GameObject Worker(string name, List<GameObject> workers)

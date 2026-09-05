@@ -186,9 +186,17 @@ namespace DeNelle.Editor.Regression
                         service.IndexOf("JobCompleted += OnAnyJobCompleted", StringComparison.Ordinal) < 0)
                         failures.Add("case6 [service-records-and-never-banks] OfflineHarvestService does not attach to " +
                                      "BuildTimerService.JobCompleted -- finished jobs cannot reach the away summary");
-                    if (service.IndexOf("ResourceCollectorRegistry.All", StringComparison.Ordinal) < 0)
-                        failures.Add("case6 [service-records-and-never-banks] the pending-collector total is not read from " +
-                                     "ResourceCollectorRegistry -- the 'waiting' row cannot be populated");
+                    // WO-1392: the rows read the ONE per-resource producer (ResourceCollectorService.
+                    // PendingByResource, which itself walks ResourceCollectorRegistry.All). A private
+                    // Floor(c.PendingAmount) loop here is the second producer that put "+672" on this
+                    // screen and "of 2393" on the next.
+                    if (service.IndexOf("ResourceCollectorService.PendingByResource()", StringComparison.Ordinal) < 0)
+                        failures.Add("case6 [service-records-and-never-banks] the pending-collector rows are not read from " +
+                                     "the one producer ResourceCollectorService.PendingByResource() -- the 'waiting' row " +
+                                     "cannot agree with the harvest result (WO-1392)");
+                    if (service.IndexOf("Floor(c.PendingAmount)", StringComparison.Ordinal) >= 0)
+                        failures.Add("case6 [service-records-and-never-banks] OfflineHarvestService floors collector pending " +
+                                     "in its own loop again -- a second producer, the WO-1392 defect");
                     // 2026-09-04 22:30 owner felt-test: the popup fired OVER the Title screen. The reveal
                     // must defer until a hub scene is active (HubScenes.IsHub) and re-check on load.
                     if (service.IndexOf("HubScenes.IsHub", StringComparison.Ordinal) < 0 ||

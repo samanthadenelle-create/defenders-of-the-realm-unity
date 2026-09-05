@@ -114,6 +114,54 @@ namespace DeNelle.Editor
                 }
                 if (state.LastHarvestClaimMs > future)
                     failures.Add($"case3 clock left in the future ({state.LastHarvestClaimMs}) — monotonic guard did not re-stamp to now");
+
+                // --- Case 4 [warn-before-collect] (WO-1392): the popup can warn BEFORE the tap ---
+                // The owner's 2026-09-04 popup promised +672 wood / +403 iron / +874 stone and the
+                // loss was decided at COLLECT with no warning. PredictCollectWaits is the pure
+                // prediction (the popup's own rows x a headroom reader); with wood headroom 258,
+                // iron 5000 and stone 0 it must name 414 wood and 874 stone, in rail order, and
+                // CollectWaitLine must be the exact ASCII sentence the popup seats.
+                // RED before WO-1392: neither method existed and the popup had no such row.
+                var r4 = new OfflineHarvestResult();
+                r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Wood", Pending = 672, Collectors = 1 });
+                r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Iron", Pending = 403, Collectors = 1 });
+                r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Stone", Pending = 874, Collectors = 1 });
+                r4.PendingCollectorTotal = 1949;
+                r4.PendingCollectorCount = 3;
+                var waits = OfflineHarvestService.PredictCollectWaits(r4, res =>
+                {
+                    switch (res)
+                    {
+                        case DeNelle.Village.Buildings.Progression.HarvestResource.Wood: return 258;
+                        case DeNelle.Village.Buildings.Progression.HarvestResource.Iron: return 5000;
+                        case DeNelle.Village.Buildings.Progression.HarvestResource.Food: return 0;
+                        default: return int.MaxValue;
+                    }
+                });
+                if (waits == null || waits.Count != 2)
+                    failures.Add($"case4 [warn-before-collect] expected 2 predicted waits (wood 414, stone 874), got {(waits == null ? -1 : waits.Count)}");
+                else
+                {
+                    if (waits[0].Word != "wood" || waits[0].Wait != 414 || waits[0].Pending != 672 || waits[0].Headroom != 258)
+                        failures.Add($"case4 [warn-before-collect] first wait = {waits[0].Word}/{waits[0].Wait} (pending {waits[0].Pending}, headroom {waits[0].Headroom}); expected wood/414");
+                    if (waits[1].Word != "stone" || waits[1].Wait != 874)
+                        failures.Add($"case4 [warn-before-collect] second wait = {waits[1].Word}/{waits[1].Wait}; expected stone/874 (Stone is the Food slot, rail order Wood/Iron/Stone)");
+                    string line = OfflineHarvestService.CollectWaitLine(waits[0]);
+                    if (line != "Storage nearly full - 414 wood will wait")
+                        failures.Add($"case4 [warn-before-collect] CollectWaitLine = '{line}', expected 'Storage nearly full - 414 wood will wait'");
+                    foreach (var ch in line) if (ch > 126) { failures.Add("case4 [warn-before-collect] the warning line is not ASCII"); break; }
+                }
+                var none = OfflineHarvestService.PredictCollectWaits(r4, res => int.MaxValue);
+                if (none == null || none.Count != 0)
+                    failures.Add("case4 [warn-before-collect] with unlimited headroom a wait was still predicted (false alarm)");
+                string popupPath = System.IO.Path.Combine(Application.dataPath, "_Modules/Village/Harvest/UI/WelcomeBackPopup.cs");
+                string popupSrc = System.IO.File.Exists(popupPath) ? System.IO.File.ReadAllText(popupPath) : null;
+                if (popupSrc == null)
+                    failures.Add("case4 [warn-before-collect] could not read WelcomeBackPopup.cs");
+                else if (popupSrc.IndexOf("PredictCollectWaits(_result)", System.StringComparison.Ordinal) < 0 ||
+                         popupSrc.IndexOf("AddCollectWaitRows(body, ref y)", System.StringComparison.Ordinal) < 0)
+                    failures.Add("case4 [warn-before-collect] WelcomeBackPopup does not seat the predicted waits " +
+                                 "(PredictCollectWaits(_result) / AddCollectWaitRows) - COLLECT is not informed before the tap");
             }
             catch (System.Exception ex)
             {

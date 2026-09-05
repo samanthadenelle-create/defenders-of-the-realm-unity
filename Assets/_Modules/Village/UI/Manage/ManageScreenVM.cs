@@ -1618,10 +1618,12 @@ namespace DeNelle.Village.UI
                 // §12 proving line: the id, what it cost, and the job that now exists. BarracksService
                 // logs the jobId itself at enqueue ("train job enqueued 1/1 ... jobId=barracks-train:...");
                 // this line names the SCREEN the request came from so the two can be paired in a capture.
+                // WO-1387: training charges NOTHING - the trace says so, so a device capture can never
+                // read a "cost=[550 gold]" that was not charged (it did, on 2026-09-04 23:44).
                 var def = TroopCatalog.Find(troopId);
                 string costText = def != null
-                    ? def.CostGold + " gold"
-                    : "unknown cost";
+                    ? "time only, " + Mathf.RoundToInt(def.BuildSeconds) + "s"
+                    : "unknown troop";
                 FlowTrace.Step("Manage",
                     $"train enqueued from Manage: id={troopId} qty={enqueued} cost=[{costText}] " +
                     $"channel=Train jobIdPrefix={BarracksService.TrainPrefix}{troopId}");

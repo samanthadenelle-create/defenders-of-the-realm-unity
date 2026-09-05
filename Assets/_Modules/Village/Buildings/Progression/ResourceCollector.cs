@@ -416,24 +416,48 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
-        /// <summary>CoC collect — pending → spendable wallet at home.</summary>
-        public int Collect()
+        /// <summary>CoC collect - pending to spendable wallet at home. Returns what BANKED.</summary>
+        public int Collect() => Collect(out _, out _);
+
+        /// <summary>
+        /// WO-1392 - NEVER BURN. Banks up to the town bank's headroom and LEAVES THE REMAINDER
+        /// PENDING on this collector, re-collectable once the player spends or builds storage.
+        ///
+        /// <para>THE DEFECT (owner captures 2026-09-04 23:41): this method granted the whole
+        /// floor(pending) through EconomyService.GrantSpendable - which CLAMPS earned income at
+        /// TownBankCapacity.ClampGrant - and then subtracted the whole REQUEST from the pool
+        /// (`_pending -= amount`), so every unit the cap refused was silently discarded. It ran
+        /// outside any BankOverflowToastPresenter scope too, so the loss never reached a screen.
+        /// The grant path has returned the APPLIED basket since 2026-08-16 precisely so callers
+        /// read what landed; this was the one caller still trusting its own request local.</para>
+        ///
+        /// <para>The arithmetic is <see cref="SettleCollect"/> (pure, pinned by
+        /// CollectorIncomeRegression [overflow-stays-pending]). The collector's own capacity is
+        /// untouched - the pool simply does not drain below what the bank could not take.</para>
+        /// </summary>
+        /// <param name="requested">The whole units this collector held before the tap.</param>
+        /// <param name="leftPending">Whole units still waiting here after the tap.</param>
+        public int Collect(out int requested, out int leftPending)
         {
+            requested = 0;
+            leftPending = 0;
             if (_pending <= 0.0) return 0;
             int amount = (int)System.Math.Floor(_pending);
             if (amount <= 0) return 0;
+            requested = amount;
             int stepsBefore = FilledSteps;
 
             var eco = EconomyService.Instance;
             var res = ResolveResource();
+            int banked = amount;
             if (eco != null)
             {
                 switch (res)
                 {
-                    case HarvestResource.Wood:     eco.GrantSpendable(wood: amount);     break;
-                    case HarvestResource.Iron:     eco.GrantSpendable(iron: amount);     break;
-                    case HarvestResource.Food:     eco.GrantSpendable(food: amount);     break;
-                    case HarvestResource.Crystals: eco.GrantSpendable(crystals: amount); break;
+                    case HarvestResource.Wood:     banked = eco.GrantSpendable(wood: amount).Wood;         break;
+                    case HarvestResource.Iron:     banked = eco.GrantSpendable(iron: amount).Iron;         break;
+                    case HarvestResource.Food:     banked = eco.GrantSpendable(food: amount).Food;         break;
+                    case HarvestResource.Crystals: banked = eco.GrantSpendable(crystals: amount).Crystals; break;
                 }
             }
             else
@@ -441,10 +465,24 @@ namespace DeNelle.Village.Buildings.Progression
                 ResourceLedger.Credit(res, amount);
             }
 
-            _pending -= amount;
-            if (_pending < 0) _pending = 0;
+            _pending = SettleCollect(_pending, banked, out leftPending);
             SaveState();
-            FlowTrace.Step("Harvest", $"collect building={_buildingId} +{amount} {res} wallet");
+            if (banked < amount)
+            {
+                FlowTrace.Warn("Harvest",
+                    $"collect building={_buildingId} +{banked} of {amount} {res} banked; {leftPending} STILL PENDING " +
+                    "here (bank full) - NOT burned, banks on the next collect once there is room (WO-1392).");
+                if (banked <= 0)
+                {
+                    RaiseStepChangedIfMoved(stepsBefore);
+                    return 0;                         // nothing moved: no "+0" popup
+                }
+            }
+            else
+            {
+                FlowTrace.Step("Harvest", $"collect building={_buildingId} +{banked} {res} wallet");
+            }
+            amount = banked;
 
             // WO-890 - THE COLLECT TAP HAD NO FEEDBACK AT ALL, and it is the most repeated
             // action in the town loop. Verified at source before this line existed: Collect
@@ -473,6 +511,24 @@ namespace DeNelle.Village.Buildings.Progression
 
             RaiseStepChangedIfMoved(stepsBefore);
             return amount;
+        }
+
+        /// <summary>
+        /// WO-1392 - the never-burn arithmetic, PURE so it can be pinned without a wallet.
+        /// The pool drains by exactly what BANKED, never by what was asked for; the remainder
+        /// (whole units) is reported as still pending. A negative or over-request bank is clamped
+        /// so a mis-reporting grant can never mint or over-drain.
+        /// </summary>
+        public static double SettleCollect(double pendingBefore, int banked, out int leftPending)
+        {
+            if (pendingBefore < 0.0) pendingBefore = 0.0;
+            int requested = (int)System.Math.Floor(pendingBefore);
+            if (banked < 0) banked = 0;
+            if (banked > requested) banked = requested;
+            double after = pendingBefore - banked;
+            if (after < 0.0) after = 0.0;
+            leftPending = (int)System.Math.Floor(after);
+            return after;
         }
 
         /// <summary>

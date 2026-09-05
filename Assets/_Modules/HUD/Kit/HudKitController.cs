@@ -770,7 +770,11 @@ namespace DeNelle.HUD.Kit
             var build = ElarionUiKit.BuildObsidianButton(pool, "Build",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 slot0Min, slot0Max,
-                () => { if (_owner != null) _owner.BuildRequested?.Invoke(); });
+                () =>
+                {
+                    if (SwallowedByCloseGrace("Build face")) return;   // WO-1393
+                    if (_owner != null) _owner.BuildRequested?.Invoke();
+                });
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.build_button", (RectTransform)build.transform);
             RegisterBarButton(ActionBarButtonId.Build, "buildButton", build);
@@ -779,6 +783,7 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
                 slot0Min, slot0Max, () =>
                 {
+                    if (SwallowedByCloseGrace("Talk face")) return;   // WO-1393
                     FlowTrace.Step("HudKit", "Talk tapped -> HudCommands.Talk + TalkRequested");
                     HudCommands.Talk();
                     if (_owner != null) _owner.TalkRequested?.Invoke();   // legacy bridge compat
@@ -796,6 +801,7 @@ namespace DeNelle.HUD.Kit
                     // is scene-whitelisted and never spawned). Route through PanelRouter — the
                     // scene-independent Core opener HeroInventoryController registers at boot.
                     // The legacy events still fire for any listener that DOES exist (hub scenes).
+                    if (SwallowedByCloseGrace("Hero face")) return;   // WO-1393
                     FlowTrace.Step("HudKit", "Hero tapped -> PanelRouter.Open(HeroDeck)");
                     PanelRouter.Open(PanelId.HeroDeck);
                 });
@@ -822,6 +828,7 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 slot0Min, slot0Max, () =>
                 {
+                    if (SwallowedByCloseGrace("Raids face")) return;   // WO-1393
                     FlowTrace.Step("HudKit", "Raids tapped -> RaidEntryGate.RequestOpen");
                     RaidEntryGate.RequestOpen();
                 });
@@ -1154,6 +1161,7 @@ namespace DeNelle.HUD.Kit
         /// </summary>
         private void OpenNightMarket()
         {
+            if (SwallowedByCloseGrace("Night Market card")) return;
             Guard.Try("Store", "open the Night Market from the HUD card", () =>
             {
                 if (PanelRouter.Open(PanelId.RealmStore))
@@ -1163,6 +1171,27 @@ namespace DeNelle.HUD.Kit
                         "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the HUD card - the " +
                         "PackStoreBootstrap opener is not registered in this scene.");
             });
+        }
+
+        // =====================================================================
+        //  WO-1393 (2026-09-05) - THE CLOSE-FRAME GRACE, CONSULTED BY EVERY HUD TAP HANDLER.
+        // ---------------------------------------------------------------------
+        //  PROVEN (docs/qa/UI_REVIEW_2026-09-05/11-research-upgrade-door.png): a tap issued as
+        //  Manage was closing landed on the Night Market card beneath it and opened the store -
+        //  no "research locked door" line, a store instead. PanelManager now stamps the close
+        //  frame (PanelManager.CloseGraceUntilFrame = Time.frameCount + 1 in NotifyClosed); the
+        //  HUD - the layer UNDER every modal - drops any tap that arrives inside that window.
+        //  One frame, one trace line, and only here: panels never consult it, so a tap on a
+        //  panel that is still open is untouched. Pinned by ModalArbiterRegistrationRegression
+        //  [close-frame-grace].
+        // =====================================================================
+        private static bool SwallowedByCloseGrace(string face)
+        {
+            if (!PanelManager.InCloseGrace) return false;
+            FlowTrace.Step("HUD", "tap swallowed: panel closed this frame (grace) - " + face +
+                " on frame " + Time.frameCount + ", grace until " + PanelManager.CloseGraceUntilFrame +
+                " (WO-1393)");
+            return true;
         }
 
         // Wire the compass' presentation-only world readers. DeNelle.HUD keeps its
@@ -1479,6 +1508,7 @@ namespace DeNelle.HUD.Kit
         // The chip's own oracle row (queueStatusChip in hud-areas.json) is unaffected.
         private void OnBuildersChipTapped()
         {
+            if (SwallowedByCloseGrace("Builders chip")) return;   // WO-1393
             // Plain toggle: tap to peek the inline card rail, tap again to collapse it.
             if (_railOpen == RailSection.Builders)
             {
@@ -1524,6 +1554,7 @@ namespace DeNelle.HUD.Kit
 
         private void OnCollectorsChipTapped()
         {
+            if (SwallowedByCloseGrace("Harvest chip")) return;   // WO-1393
             if (!CollectorStatusGate.HasSubscriber)
             {
                 // A boot race (tapped before the Village publisher installs) must not read as a
@@ -3509,6 +3540,7 @@ namespace DeNelle.HUD.Kit
         // argument — not an applicability predicate; visibility lives in the model.)
         private void OnQuestsAction()
         {
+            if (SwallowedByCloseGrace("Journey face")) return;   // WO-1393
             if (!PanelRouter.Open(PanelId.JourneyDeck))
                 FlowTrace.Warn("HudKit", "Journey workspace opener not registered - journey destinations unreachable");
         }
@@ -3530,6 +3562,7 @@ namespace DeNelle.HUD.Kit
         /// </summary>
         private void OnManageAction()
         {
+            if (SwallowedByCloseGrace("Manage face")) return;   // WO-1393
             FlowTrace.Step("HudKit", "Manage face tapped -> ObsidianQueueGate.RequestToggle (WO-911 single door)");
             if (ObsidianQueueGate.HasSubscriber)
             {
@@ -3553,6 +3586,20 @@ namespace DeNelle.HUD.Kit
             _slideDock = ElarionUiKit.BuildSlideTab(pool, ElarionUiKit.SlideEdge.Left,
                 tabYCenter: 0.5f, panelWidthFrac: 0.22f, panelHeightFrac: 0.52f,
                 tabIconConcept: "settings");   // GEAR tab (owner: replaces the down "v/>" trigger)
+
+            // WO-1393: the gear HANDLE is a HUD tap surface under every modal, and the kit wires
+            // its onClick to SetExpanded directly (ElarionUiKit.BuildSlideTab). Re-wire it through
+            // the close-frame grace so a tap in flight when a modal closes cannot pop the dock.
+            if (_slideDock != null && _slideDock.tab != null)
+            {
+                var dock = _slideDock;
+                dock.tab.onClick.RemoveAllListeners();
+                dock.tab.onClick.AddListener(() =>
+                {
+                    if (SwallowedByCloseGrace("gear dock handle")) return;
+                    dock.SetExpanded(!dock.Expanded);
+                });
+            }
 
             // F8-12 (owner 2026-07-07 "very small font and cells"): this widget re-parents into
             // the Dock AREA mount — only 23% x 10% of the screen (HudAreasHost Dock rect) — and
@@ -3731,9 +3778,15 @@ namespace DeNelle.HUD.Kit
             float x1 = innerX0 + (column + 1) * cellW - DockRowGapFrac;
             float y1 = innerY1 - row * cellH - DockRowGapFrac;
             float y0 = innerY1 - (row + 1) * cellH + DockRowGapFrac;
+            // WO-1393: every dock row consults the close-frame grace before its own command.
+            string face = "gear dock '" + label + "'";
             ElarionUiKit.BuildObsidianButton(panel, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(x0, y0), new Vector2(x1, y1), onTap);
+                new Vector2(x0, y0), new Vector2(x1, y1), () =>
+                {
+                    if (SwallowedByCloseGrace(face)) return;
+                    onTap?.Invoke();
+                });
         }
 
         // Settings tab -> the Help/Settings card (same target as the gear/Menu button).

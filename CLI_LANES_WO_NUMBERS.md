@@ -180,7 +180,16 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, sixty-seventh pass): main line next free = **1391**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, sixty-eighth pass): main line next free = **1394**.
+> *(CLI minted from the headed walk on build 355952, 23:40-23:52: **1391** the building upgrade page - noise
+> texture in the 3D preview (RenderTexture never rendered), 'Missing resources' with 4000 wood on the strip vs
+> 1280 cost, UPGRAD... truncated, empty-box glyph, off-kit styling; **1392** the harvest result modal reports
+> 414 wood / 1163 iron LOST on a collect the popup had just promised (+672 / +403) - the numbers do not
+> reconcile and the loss is silent at COLLECT time; **1393** a tap in the frame a modal closes lands on the HUD
+> beneath (the queue drawer eats the card's UPGRADE; Manage's close handed a tap to the Night Market card).
+> Bumped 1391 -> 1394 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-seventh pass): main line next free = **1391**.
 > *(CLI minted **1390**: Manage - Research shows NOTHING when no perk is researchable (device: '6 with a tier
 > ladder -> 0 perk row(s)'); owner 23:33: show Tier 1 locked with the prerequisite and a door to upgrade it.
 > Bumped 1390 -> 1391 in this SAME edit.)*

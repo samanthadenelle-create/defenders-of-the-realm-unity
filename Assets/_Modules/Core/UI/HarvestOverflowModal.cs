@@ -14,9 +14,71 @@ namespace DeNelle.Core.UI
         private PanelHandle _panel;
         private WorldHold.Handle _hold;
 
+        /// <summary>
+        /// WO-1392 - the <see cref="BankOverflowStatus.Source"/> tag of a row produced by the
+        /// COLLECTOR sweep (ResourceCollectorService.BuildCollectorRows). Those rows report units
+        /// that are STILL WAITING in the collectors - nothing was burned - so the body copy for
+        /// them says "waiting", never "lost". Every other source (the Echo silo dump's
+        /// TownBankCapacity clamp, the offline haul) still burns its overflow today and keeps
+        /// the "lost" sentence.
+        /// </summary>
+        public const string CollectorSource = "Collectors";
+
+        // WO-1392 - ONE screen per tap. CollectAll banks the collectors AND dumps the Echo silo,
+        // and each half used to reach Present on its own (the silo through its warn scope), so
+        // the second call closed the first. While a batch is open, Present only QUEUES; the
+        // outermost EndBatch presents everything once, collector rows first.
+        private static readonly List<BankOverflowStatus> _batch = new List<BankOverflowStatus>();
+        private static int _batchDepth;
+        private static string _batchTag;
+
+        /// <summary>Open a presentation batch (nesting counted; dispose it - prefer <c>using</c>).</summary>
+        public static Batch BeginBatch(string tag) => new Batch(tag);
+
+        /// <summary>True while a batch is open (the oracle seam for [one-modal-per-tap]).</summary>
+        public static bool BatchOpen => _batchDepth > 0;
+
+        /// <summary>Rows queued in the open batch (the oracle seam; empty outside a batch).</summary>
+        public static IReadOnlyList<BankOverflowStatus> BatchedRows => _batch;
+
+        public struct Batch : System.IDisposable
+        {
+            private bool _open;
+            internal Batch(string tag)
+            {
+                _open = true;
+                if (_batchDepth == 0) { _batch.Clear(); _batchTag = string.IsNullOrEmpty(tag) ? "?" : tag; }
+                _batchDepth++;
+            }
+            public void Dispose()
+            {
+                if (!_open) return;
+                _open = false;
+                if (_batchDepth > 0) _batchDepth--;
+                if (_batchDepth == 0) EndBatch();
+            }
+        }
+
+        private static void EndBatch()
+        {
+            if (_batch.Count == 0) { _batchTag = null; return; }
+            var rows = new List<BankOverflowStatus>(_batch);
+            _batch.Clear();
+            FlowTrace.Step("Bank", $"harvest-result batch [{_batchTag ?? "?"}] closing with {rows.Count} row(s) -> one modal.");
+            _batchTag = null;
+            Present(rows);
+        }
+
         public static void Present(IReadOnlyList<BankOverflowStatus> results)
         {
-            if (!Application.isPlaying || results == null || results.Count == 0) return;
+            if (results == null || results.Count == 0) return;
+            if (_batchDepth > 0)
+            {
+                for (int i = 0; i < results.Count; i++) _batch.Add(results[i]);
+                FlowTrace.Step("Bank", $"harvest-result: {results.Count} row(s) queued into batch [{_batchTag ?? "?"}].");
+                return;
+            }
+            if (!Application.isPlaying) return;
             if (_active != null) _active.Close();
             var host = new GameObject("HarvestOverflowModalHost");
             DontDestroyOnLoad(host);
@@ -96,25 +158,53 @@ namespace DeNelle.Core.UI
                 // LINE 1 - the resource and ITS storage figure, on one line, in that order. This
                 // is the whole fix: "3000 / 3000" can never again float free of the word it
                 // describes. The state word is TEXT, never a tint.
-                string state = s.OverCap ? " (over capacity)" : (s.Current >= s.Max ? " (full)" : "");
+                //
+                // WO-1392 - the figure is the store AFTER this collect. BankOverflowStatus.Current
+                // is the wallet BEFORE the grant was applied (that is what the clamp weighed), and
+                // printing it raw put "Wood storage: 2021 / 4000" beside "414 lost" on the owner's
+                // 2026-09-04 screen - 2021 + 414 < 4000, so the cap that bit looked like a lie.
+                // The number the player can check against the rail is Current + Granted (= 4000).
+                long after = (long)Mathf.Max(0, s.Current) + Mathf.Max(0, s.Granted);
+                string state = s.OverCap ? " (over capacity)" : (after >= s.Max ? " (full)" : "");
+                bool fromCollectors = string.Equals(s.Source, CollectorSource, System.StringComparison.Ordinal);
+                string from = fromCollectors ? " from your collectors"
+                    : (!string.IsNullOrEmpty(s.Source) && s.Source.IndexOf("DumpSilos", System.StringComparison.Ordinal) >= 0
+                        ? " from the Echo silo" : "");
                 var block = new List<string>
                 {
-                    $"{name} storage: {s.Current} / {s.Max}{state}",
-                    $"Collected: {s.Granted} of {s.Requested}   |   Uncollected: {s.Lost}",
+                    $"{name} storage: {after} / {s.Max}{state}",
+                    $"Collected: {s.Granted} of {s.Requested}{from}   |   Uncollected: {s.Lost}",
                 };
 
-                // LINE 3 - the loss, said out loud. Two authored branches rather than one
-                // interpolated verb, so the singular reads "was" and the plural reads "were"
-                // without a template that can only be right for one of them.
-                block.Add(s.Lost == 1
-                    ? $"That 1 {unit} was not added to storage - it is lost."
-                    : $"Those {s.Lost} {unit} were not added to storage - they are lost.");
+                if (fromCollectors)
+                {
+                    // WO-1392 - NEVER BURN. A collector row's "uncollected" units are STILL IN THE
+                    // COLLECTOR (ResourceCollector.Collect only drains what banked), so the copy
+                    // says WAITING and names the real cap by its player word - the storage figure
+                    // the rail shows - never "lost". Singular and plural authored separately.
+                    block.Add(s.Lost == 1
+                        ? $"That 1 {unit} is still waiting in your collectors - nothing was lost."
+                        : $"Those {s.Lost} {unit} are still waiting in your collectors - nothing was lost.");
+                    block.Add(s.OverCap
+                        ? $"{name} storage {s.Max} is exceeded. It banks by itself once you spend below {s.Max} and collect again."
+                        : $"{name} storage {s.Max} is full. Spend {unit}, or upgrade a {s.ContainerName}, then collect again.");
+                }
+                else
+                {
+                    // LINE 3 - the loss, said out loud. Two authored branches rather than one
+                    // interpolated verb, so the singular reads "was" and the plural reads "were"
+                    // without a template that can only be right for one of them.
+                    block.Add(s.Lost == 1
+                        ? $"That 1 {unit} was not added to storage - it is lost."
+                        : $"Those {s.Lost} {unit} were not added to storage - they are lost.");
 
-                // LINE 4 - what to do about it. Over-cap is a DIFFERENT situation from a full
-                // bank (see BankOverflowStatus.OverCap) and keeps its own, non-punitive wording.
-                block.Add(s.OverCap
-                    ? $"Earned {unit} resumes once you spend below {s.Max}."
-                    : $"Upgrade a {s.ContainerName}, or spend {unit}, before collecting again.");
+                    // LINE 4 - what to do about it. Over-cap is a DIFFERENT situation from a full
+                    // bank (see BankOverflowStatus.OverCap) and keeps its own, non-punitive wording.
+                    // WO-1392: the cap that bit is named by its player word ("Wood storage 4000").
+                    block.Add(s.OverCap
+                        ? $"Earned {unit} resumes once you spend below {s.Max}."
+                        : $"{name} storage {s.Max} is full. Upgrade a {s.ContainerName}, or spend {unit}, before collecting again.");
+                }
 
                 blocks.Add(string.Join("\n", block));
             }

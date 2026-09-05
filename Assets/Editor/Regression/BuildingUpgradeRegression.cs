@@ -156,6 +156,9 @@ namespace DeNelle.Editor
             Case(failures, "echo-scaling", () => CheckEchoScaling(failures));
             Case(failures, "upgrader-reaches-receiver", () => CheckUpgraderReachesReceiver(failures));
             Case(failures, "yield-reachable-at-founding", () => CheckYieldReachableAtFounding(failures));
+            // WO-1391 (2026-09-05) — the upgrade PAGE's two player-facing truths.
+            Case(failures, "shortfall-named", () => CheckShortfallNamed(failures));
+            Case(failures, "preview-never-uninitialised", () => CheckPreviewNeverUninitialised(failures));
 
             if (failures.Count == 0)
             {
@@ -163,7 +166,10 @@ namespace DeNelle.Editor
                          "speeds monotone, costs terminal at max, only Forge Magic-gated (unlocks arcane_forge); " +
                          "WO-855 faucet bands hold (early/mid/late income, production stacks under +80%, " +
                          "echo 1->6 scaling inside the WO-709 quadratic band); every authored yield curve " +
-                         "pays at its founding level and stays inside a reachable upgrade ladder";
+                         "pays at its founding level and stays inside a reachable upgrade ladder; " +
+                         "[shortfall-named] the page's face names the short resource and the Gold term is a " +
+                         "cost line; [preview-never-uninitialised] the preview RT is cleared, traced and " +
+                         "icon-backed, and the empty-box glyph is gone";
                 return true;
             }
             reason = $"BUILDING UPGRADE FAIL x{failures.Count}: " + string.Join(" | ", failures);
@@ -512,6 +518,182 @@ namespace DeNelle.Editor
                     if ((string)e["id"] == catalogId) return e["repo"] as JObject;
             }
             return null;
+        }
+
+        // =====================================================================
+        //  Case 11 - [shortfall-named] (WO-1391, 2026-09-05).
+        //
+        //  THE DEFECT: the Cathedral page read "Missing resources" beside "1280 Wood"
+        //  with 4000 wood on the strip. building-tiers.json 'arcane-tower' T1 authors
+        //  costGold 800; BuildingUpgradeService.CanAffordTier requires Coins >= 800
+        //  (the strip showed 706) but BuildingUpgradeVM.ComposeNextCity never emitted a
+        //  Gold cost LINE - so no line was short, WorstShortMissing was 0, and the face
+        //  had nothing to name. The fix makes the lines THE predicate and the sentence
+        //  a pure function of them. This case drives those pure functions with fixtures
+        //  and lints that the Gold term reaches the lines.
+        //
+        //  RED-FIRST MUTATIONS (each was applied mentally against the pre-fix tree):
+        //    * delete the AddCoinCostLine( call in ComposeNextCity      -> [gold-line] fails
+        //    * make ShortfallSentence return ""                           -> [sentence] fails
+        //    * make AffordableFromLines ignore Short                      -> [ready] fails
+        //    * return the bare "Missing resources" from the 6-arg composer -> [face] fails
+        // =====================================================================
+
+        private static BuildingUpgradeVM.UpgradeCostLine Line(string label, int amount, int have)
+            => new BuildingUpgradeVM.UpgradeCostLine
+            {
+                ConceptId = label.ToLowerInvariant(), Label = label, Amount = amount, Have = have, Short = have < amount,
+            };
+
+        private static void CheckShortfallNamed(List<string> failures)
+        {
+            // Wood covered (4000 >= 1280), iron short by 300 - the owner's shape, on a different term.
+            var shortLines = new[] { Line("Wood", 1280, 4000), Line("Iron", 300, 0) };
+            string sentence = BuildingUpgradeVM.ShortfallSentence(shortLines);
+            if (BuildingUpgradeVM.AffordableFromLines(shortLines))
+                failures.Add("[shortfall-named] AffordableFromLines said TRUE with iron 0/300 - the predicate ignores a short line");
+            if (string.IsNullOrEmpty(sentence) || !sentence.Contains("Short ") || !sentence.Contains("300") || !sentence.Contains("Iron"))
+                failures.Add($"[shortfall-named] ShortfallSentence = '{sentence}' for wood 4000/1280 + iron 0/300; expected it to contain 'Short ', '300' and 'Iron'");
+            foreach (char ch in sentence ?? "")
+                if (ch >= 128) failures.Add($"[shortfall-named] sentence '{sentence}' is not ASCII ('{ch}')");
+
+            var st = BuildingUpgradeVM.ResolveActionState(hasLadder: true, hasNext: true, jobHere: false, jobPending: false,
+                requiresVillageTier: 0, villageTierNow: 0,
+                affordable: BuildingUpgradeVM.AffordableFromLines(shortLines), lineFull: false);
+            if (st != UpgradeActionState.MissingResources)
+                failures.Add($"[shortfall-named] state with a short iron line = {st}, expected MissingResources");
+
+            // The face the View renders for that state IS the sentence - never the bare fallback.
+            string face = BuildingUpgradePanelMvvm.FormatActionLabel(UpgradeActionState.MissingResources, 0, "Drill Yard", 0, 0, sentence);
+            if (face != sentence)
+                failures.Add($"[shortfall-named] the MissingResources face is '{face}', expected the sentence '{sentence}' (a bare 'Missing resources' is the retired defect)");
+
+            // Everything covered -> Ready, and the sentence is empty.
+            var okLines = new[] { Line("Wood", 1280, 4000), Line("Iron", 300, 300), Line("Gold", 800, 806) };
+            if (!BuildingUpgradeVM.AffordableFromLines(okLines))
+                failures.Add("[shortfall-named] AffordableFromLines said FALSE with every line covered (iron 300/300 is NOT short)");
+            if (BuildingUpgradeVM.ShortfallSentence(okLines) != "")
+                failures.Add($"[shortfall-named] ShortfallSentence = '{BuildingUpgradeVM.ShortfallSentence(okLines)}' with nothing short; expected ''");
+            var ready = BuildingUpgradeVM.ResolveActionState(true, true, false, false, 0, 0,
+                BuildingUpgradeVM.AffordableFromLines(okLines), false);
+            if (ready != UpgradeActionState.Ready)
+                failures.Add($"[shortfall-named] state with every line covered = {ready}, expected Ready");
+
+            // The LARGEST gap leads, then the rest in line order (the panel's own left-to-right).
+            var two = new[] { Line("Iron", 300, 0), Line("Crystals", 620, 120) };
+            string twoS = BuildingUpgradeVM.ShortfallSentence(two);
+            if (twoS == null || !twoS.StartsWith("Short 500 Crystals", StringComparison.Ordinal) || !twoS.Contains("300 Iron"))
+                failures.Add($"[shortfall-named] two-short sentence = '{twoS}'; expected 'Short 500 Crystals, 300 Iron' (largest gap first)");
+
+            // The Gold term must reach the lines in the CITY composer - the exact omission that shipped.
+            string vmSrc = ReadStrippedSource("_Modules/Village/Buildings/Progression/BuildingUpgradeVM.cs", failures);
+            if (vmSrc != null)
+            {
+                if (!vmSrc.Contains("AddCoinCostLine("))
+                    failures.Add("[shortfall-named][gold-line] BuildingUpgradeVM no longer emits the Gold (CostGold) cost line - " +
+                                 "CanAffordTier checks Coins >= CostGold, so the page would again read MissingResources with no short line to name");
+                if (!vmSrc.Contains("AffordableFromLines(_nextCostLines)"))
+                    failures.Add("[shortfall-named] BuildingUpgradeVM no longer derives _nextAffordable from its own cost lines - " +
+                                 "the sentence and the button state can disagree again");
+            }
+            string viewSrc = ReadStrippedSource("_Modules/Village/Buildings/Progression/BuildingUpgradePanelMvvm.cs", failures);
+            if (viewSrc != null && !viewSrc.Contains("NextShortfallSentence"))
+                failures.Add("[shortfall-named] the View no longer reads BuildingUpgradeVM.NextShortfallSentence for the face");
+        }
+
+        // =====================================================================
+        //  Case 12 - [preview-never-uninitialised] (WO-1391, 2026-09-05).
+        //
+        //  THE DEFECT: the page's 3D preview square was GPU noise on the owner's Seeker -
+        //  a RenderTexture displayed before anything had written it, and NO [Flow:UpgradeUI]
+        //  line at open to say which step died. The rule this pins: the RT is CLEARED before
+        //  it is read, the rig is TRACED (model / RT / first frame), a failure falls back to
+        //  the building's ICON through the Manage rows' resolver, and the "empty-box" glyph
+        //  that read as a broken checkbox is gone. Linted on the View's source with comments
+        //  and string literals stripped (the trace TOKENS are checked with only comments
+        //  stripped, since they ARE strings) - a PlayMode capture is the owner's half.
+        //
+        //  RED-FIRST MUTATIONS:
+        //    * delete the GL.Clear( line in ClearRenderTexture              -> fails
+        //    * replace QueueIconResolver.Resolve( with Resources.Load        -> fails
+        //    * restore RpgUiCatalog.ElementToggleBoxOff on the inert plate   -> fails
+        //    * remove the "preview RT " trace line                           -> fails
+        //    * ChooseFace returns full when the band is too narrow           -> fails
+        // =====================================================================
+
+        private const string ViewRel = "_Modules/Village/Buildings/Progression/BuildingUpgradePanelMvvm.cs";
+
+        private static void CheckPreviewNeverUninitialised(List<string> failures)
+        {
+            string stripped = ReadStrippedSource(ViewRel, failures);
+            if (stripped != null)
+            {
+                if (!stripped.Contains("GL.Clear(") || !stripped.Contains("RenderTexture.active"))
+                    failures.Add("[preview-never-uninitialised] the View no longer clears the preview RenderTexture (GL.Clear via RenderTexture.active) before it is displayed - an unwritten RT is raw GPU memory on a tiled mobile GPU");
+                if (!stripped.Contains("QueueIconResolver.Resolve("))
+                    failures.Add("[preview-never-uninitialised] the View no longer falls back to the building's icon through QueueIconResolver (the Manage rows' resolver) when the model does not render");
+                if (stripped.Contains("ElementToggleBoxOff"))
+                    failures.Add("[preview-never-uninitialised] RpgUiCatalog.ElementToggleBoxOff is back in the View - the empty-box glyph read as a broken checkbox to the owner (WO-1391 defect 4)");
+                if (!stripped.Contains("BuildObsidianPanel(") || !stripped.Contains("BuildObsidianButton("))
+                    failures.Add("[preview-never-uninitialised] the View no longer builds its chrome/buttons through the kit (BuildObsidianPanel / BuildObsidianButton) - two visual languages one tap apart again");
+                if (!stripped.Contains("ChooseFace("))
+                    failures.Add("[preview-never-uninitialised] the View no longer chooses a face that FITS before the kit fit (ChooseFace) - 'UPGRAD...' returns");
+            }
+
+            // The trace tokens are strings, so lint them with ONLY comments stripped.
+            string traced = ReadCommentStrippedSource(ViewRel, failures);
+            if (traced != null)
+            {
+                foreach (var token in new[] { "preview rig IN:", "preview RT ", "preview camera first Render()", "model band built for" })
+                    if (!traced.Contains(token))
+                        failures.Add($"[preview-never-uninitialised] the rig trace '{token}' is gone from the View - a device log could no longer say which preview step died");
+            }
+
+            // The face-fit chooser: too narrow -> the short whole word; wide -> the full face;
+            // unknown geometry -> never shorten blind.
+            float floor = DeNelle.Core.UI.ElarionUiKit.FontFloor;
+            if (BuildingUpgradePanelMvvm.ChooseFace("UPGRADE COST", "COST", 120f, floor, 3f) != "COST")
+                failures.Add("[preview-never-uninitialised] ChooseFace kept 'UPGRADE COST' in a 120px band at the fit floor - the caption will ellipsize to 'UPGRAD...' again");
+            if (BuildingUpgradePanelMvvm.ChooseFace("UPGRADE COST", "COST", 4000f, floor, 3f) != "UPGRADE COST")
+                failures.Add("[preview-never-uninitialised] ChooseFace shortened 'UPGRADE COST' in a 4000px band - it shortens when there is room");
+            if (BuildingUpgradePanelMvvm.ChooseFace("Upgrade to Awaken the Cathedral", "Upgrade", 0f, floor) != "Upgrade to Awaken the Cathedral")
+                failures.Add("[preview-never-uninitialised] ChooseFace shortened with UNKNOWN geometry (band 0) - it must never shorten blind");
+        }
+
+        private static string ReadStrippedSource(string rel, List<string> failures)
+        {
+            string path = Path.Combine(Application.dataPath, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                failures.Add("[source] Assets/" + rel + " not found - the oracle cannot pin its invariant (file moved? update this suite)");
+                return null;
+            }
+            return PlacedUpgradePageTruthRegression.StripCommentsAndStrings(File.ReadAllText(path));
+        }
+
+        /// <summary>Source with // and /* */ comments removed but STRING LITERALS kept (for
+        /// trace-token pins). Naive on purpose: a "//" inside a string literal would cut that
+        /// line, so the tokens pinned above are chosen to contain no comment marker.</summary>
+        private static string ReadCommentStrippedSource(string rel, List<string> failures)
+        {
+            string path = Path.Combine(Application.dataPath, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path)) { failures.Add("[source] Assets/" + rel + " not found"); return null; }
+            string src = File.ReadAllText(path);
+            var sb = new System.Text.StringBuilder(src.Length);
+            int i = 0, n = src.Length;
+            while (i < n)
+            {
+                if (src[i] == '/' && i + 1 < n && src[i + 1] == '/') { while (i < n && src[i] != '\n') i++; continue; }
+                if (src[i] == '/' && i + 1 < n && src[i + 1] == '*')
+                {
+                    i += 2;
+                    while (i + 1 < n && !(src[i] == '*' && src[i + 1] == '/')) i++;
+                    i = i + 2 <= n ? i + 2 : n;
+                    continue;
+                }
+                sb.Append(src[i]); i++;
+            }
+            return sb.ToString();
         }
 
         // =====================================================================

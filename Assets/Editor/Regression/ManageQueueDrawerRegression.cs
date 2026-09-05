@@ -158,6 +158,113 @@ namespace DeNelle.Editor.Regression
             if (TownsfolkDialogue.ShouldOfferBuildHelp(3, TownsfolkDialogue.Archetype.Trader, 0))
                 failures.Add("[townsfolk-paths] onboarding help continues after the opening waves");
 
+            // ── 8 [queue-toggle-closes] — WO-1393 (2026-09-05) ───────────────────────────
+            // PROVEN (docs/qa/UI_REVIEW_2026-09-05/10-troops-after-upgrade.png): the top-right
+            // QUEUE tap closed nothing, because ToggleQueueDrawer HID the toggle while the drawer
+            // was open and BuildTabs rebuilt it hidden. The face must be wired to ToggleQueueDrawer,
+            // must stay on screen while open, and a second call must flip the state back.
+            // RED mutations: restore `_queueDrawerToggle.gameObject.SetActive(!_queueDrawerOpen)`
+            // in either site; change `_queueDrawerOpen = !_queueDrawerOpen` to `= true`.
+            string tabs = Body(panel, "private void BuildTabs()", "//  RENDER");
+            if (tabs == null || !tabs.Contains("ManageQueueDrawerToggle") ||
+                !tabs.Contains("new Vector2(0.965f, 1f), ToggleQueueDrawer);"))
+                failures.Add("[queue-toggle-closes] the title-row QUEUE face is not wired to ToggleQueueDrawer");
+            if (tabs != null && tabs.Contains("SetActive(!_queueDrawerOpen"))
+                failures.Add("[queue-toggle-closes] BuildTabs rebuilds the QUEUE face HIDDEN while the drawer is " +
+                             "open - the top-right tap closes nothing (10-troops-after-upgrade.png)");
+            if (toggle != null && toggle.Contains("SetActive(!_queueDrawerOpen"))
+                failures.Add("[queue-toggle-closes] ToggleQueueDrawer hides the QUEUE face while open - the one " +
+                             "affordance that closes the drawer is removed by opening it");
+            if (toggle == null || !toggle.Contains("_queueDrawerOpen = !_queueDrawerOpen;") ||
+                !toggle.Contains("\"collapsed\""))
+                failures.Add("[queue-toggle-closes] ToggleQueueDrawer is not a flip (a second call must collapse " +
+                             "and trace 'queue drawer collapsed')");
+            string sync = Body(panel, "private void SyncQueueToggleFace()", "private void ToggleQueueDrawer()");
+            if (sync == null || !sync.Contains("SetActive(_vm != null && _vm.Channels.Count > 0)") ||
+                !sync.Contains("\"HIDE QUEUE\""))
+                failures.Add("[queue-toggle-closes] SyncQueueToggleFace does not keep the QUEUE face visible " +
+                             "(and reading as the close) while the drawer is open");
+            if (toggle != null && !toggle.Contains("SyncQueueToggleFace()"))
+                failures.Add("[queue-toggle-closes] ToggleQueueDrawer does not re-sync the QUEUE face");
+
+            // ── 9 [drawer-clear-of-card] — WO-1393 (2026-09-05) ──────────────────────────
+            // The drawer used to be a full-body overlay on every tab; on Troops it sat OVER the
+            // selected-troop card and the UPGRADE tap hit the drawer. Now, on the Troops tab, the
+            // drawer is its own BAND under a list viewport that keeps everything ABOVE the card's
+            // CTA line, and the TRAINING NOW band collapses. This is a SOURCE pin on the band
+            // constants + the placement literals, with the arithmetic replayed at the reference
+            // 2670x1200 (well=533 off Builds/manage-capture.log bands(px)) - DataRegression cannot
+            // instantiate the panel. RED mutations: keep the whole workspace in view
+            // (`DrawerModeListKeepPx = 10f + TroopWorkspacePx`) -> the band drops under 216px;
+            // drop the `if (!_drawerBandMode)` off the drawer's rail mount; restore the old
+            // full-body list zone (0.30-0.86) -> the header no longer fits under the rail.
+            float ws = Const(panel, "TroopWorkspacePx"), cta1 = Const(panel, "TroopCtaY1"),
+                  gap = Const(panel, "BandGapPx"), header = Const(panel, "SectionHeaderPx"),
+                  row = Const(panel, "RowHeightPx"), band = Const(panel, "TrainingNowBandPx"),
+                  strip = Const(panel, "StripBandPx"), rail = 200f;
+            if (ws <= 0 || cta1 <= 0 || gap <= 0 || header <= 0 || row <= 0 || band <= 0 || strip <= 0)
+                failures.Add("[drawer-clear-of-card] could not read the band constants off the source - the " +
+                             "arithmetic cannot be replayed, reported as a FAILURE rather than passing vacuously");
+            else
+            {
+                const float wellRef = 533f;                  // 2670x1200, captured bands(px)
+                float list = wellRef - (strip + gap);        // 401
+                float keep = 10f + ws * (1f - cta1);         // 154.3: pad + everything above the CTA line
+                float drawerPx = list - keep - gap;          // 234.7
+                float need = header + row + 20f;             // 216: header + one verb row + scroll pad
+                if (10f + ws + 8f + band > list)
+                    failures.Add("[drawer-clear-of-card] WO-1382 fold broken: 10 + workspace + 8 + TRAINING NOW = " +
+                                 (10f + ws + 8f + band) + " > LIST " + list + " at 2670x1200");
+                if (drawerPx < need)
+                    failures.Add("[drawer-clear-of-card] the Troops drawer band is " + drawerPx + "px at 2670x1200, " +
+                                 "under the " + need + "px a header and one verb row need - the first verb is " +
+                                 "under the fold");
+                // Full-body mode: list zone 0.02-0.86 of a 0.82-well drawer must seat rail + header at rest.
+                float fullBodyList = 0.84f * (0.82f * wellRef) - 20f;   // 347
+                if (fullBodyList < rail + 8f + header)
+                    failures.Add("[drawer-clear-of-card] the full-body drawer list zone (" + fullBodyList +
+                                 "px) cannot seat the rail and the IN QUEUE header at rest - the header clips");
+            }
+            if (!panel.Contains("DrawerModeListKeepPx = 10f + TroopWorkspacePx * (1f - TroopCtaY1)"))
+                failures.Add("[drawer-clear-of-card] DrawerModeListKeepPx is not derived from the card's CTA line - " +
+                             "the kept viewport and the CTA rect are no longer tied together");
+            string place = Body(panel, "private void ApplyDrawerPlacement()", "private void SyncQueueToggleFace()");
+            if (place == null)
+                failures.Add("[drawer-clear-of-card] ApplyDrawerPlacement is missing - nothing seats the drawer band");
+            else
+            {
+                if (!place.Contains("_listBandTopPx + Mathf.Min(DrawerModeListKeepPx, _listBandPx) + BandGapPx"))
+                    failures.Add("[drawer-clear-of-card] the drawer band is not seated BELOW the kept list viewport " +
+                                 "plus the gutter - it can overlap the card's CTAs");
+                if (!place.Contains("child.name.StartsWith(TrainingNowPrefix") || !place.Contains("SetActive(!band)"))
+                    failures.Add("[drawer-clear-of-card] the TRAINING NOW band does not collapse while the drawer " +
+                                 "is open - the drawer supersedes it and needs its height");
+                if (!place.Contains("_operationalListBand.SetActive(!_queueDrawerOpen || band)"))
+                    failures.Add("[drawer-clear-of-card] band mode hides the list band - the card is gone instead " +
+                                 "of readable (ruling #6)");
+            }
+            if (!panel.Contains("TrainingNowPrefix = \"TroopTrainingNow\"") ||
+                !panel.Contains("MakeRowHost(\"TroopTrainingNowBand\"") ||
+                !panel.Contains("MakeRowHost(\"TroopTrainingNowRow_\""))
+                failures.Add("[drawer-clear-of-card] the TRAINING NOW row names no longer match the collapse prefix");
+            if (drawerRender != null)
+            {
+                if (!drawerRender.Contains("if (!_drawerBandMode)\n                    MountRail(MakeRowHost(\"Drawer_QueueRail\"") &&
+                    !drawerRender.Contains("if (!_drawerBandMode)\r\n                    MountRail(MakeRowHost(\"Drawer_QueueRail\""))
+                    failures.Add("[drawer-clear-of-card] the drawer mounts its 200px rail in band mode - that is " +
+                                 "what clipped the IN QUEUE header under it");
+                if (!drawerRender.Contains("MakeRowHost(\"Drawer_SlotOfferRow\""))
+                    failures.Add("[drawer-clear-of-card] the Buy-Builder offer is not the drawer list's last row - " +
+                                 "a fixed offer zone starves the verb rows of height");
+            }
+            if (!panel.Contains("new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));"))
+                failures.Add("[drawer-clear-of-card] the full-body drawer list zone is not 0.02-0.86 - the header " +
+                             "clips under the rail again");
+            if (!panel.Contains("ApplyDrawerPlacement();\n                // WO-1368") &&
+                !panel.Contains("ApplyDrawerPlacement();\r\n                // WO-1368"))
+                failures.Add("[drawer-clear-of-card] Render() does not re-seat the drawer after RenderList rebuilt " +
+                             "the TRAINING NOW band - it comes back active under the drawer");
+
             reason = failures.Count == 0
                 ? "MANAGE_QUEUE_DRAWER_OK tower choices lead; queue administration is opt-in AND REACHABLE " +
                   "(Finish Now / Ad / Cancel / Move up are built in the drawer, never in the browse list); " +
@@ -186,6 +293,17 @@ namespace DeNelle.Editor.Regression
             if (a < 0) return null;
             int b = src.IndexOf(until, a + from.Length, StringComparison.Ordinal);
             return b < 0 ? null : src.Substring(a, b - a);
+        }
+
+        /// <summary>WO-1393: read a `private const float NAME = 123f;` off the source, or -1.
+        /// The arithmetic is replayed from the LIVE constants, never from a copy in this file.</summary>
+        private static float Const(string src, string name)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(src,
+                @"\b" + name + @"\s*=\s*([0-9]+(?:\.[0-9]+)?)f");
+            return m.Success && float.TryParse(m.Groups[1].Value,
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
+                out float v) ? v : -1f;
         }
 
         private static int Count(string src, string needle)

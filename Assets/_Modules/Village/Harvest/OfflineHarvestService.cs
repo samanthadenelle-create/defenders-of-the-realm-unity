@@ -580,46 +580,106 @@ namespace DeNelle.Village
         /// </summary>
         private static void AttachPendingCollectors(OfflineHarvestResult result)
         {
-            int total = 0, count = 0;
             result.PendingCollectors.Clear();
             // Owner rulings 2026-09-04 22:30: the collectors are SEPARATED, "Wood Iron Stone
             // different rows" -- one row per RESOURCE (not per building), in the HUD rail's fixed
-            // order (HudKitController names[] = Wood, Iron, Stone, Crystals; HarvestResource.Food
-            // IS the Stone slot). The resource word is the game's canon LabelFor -- the same word
-            // the rail and the collector's own "+N Wood" gain popup say. Never a second vocabulary.
-            var railOrder = new[] { HarvestResource.Wood, HarvestResource.Iron, HarvestResource.Food, HarvestResource.Crystals };
-            var pendingByResource = new Dictionary<HarvestResource, int>();
-            var collectorsByResource = new Dictionary<HarvestResource, int>();
-            Guard.Try("Offline", "read pending collectors for the away summary", () =>
-            {
-                foreach (var c in ResourceCollectorRegistry.All)
-                {
-                    if (c == null) continue;
-                    int pending = (int)System.Math.Floor(c.PendingAmount);
-                    if (pending <= 0) continue;
-                    total += pending;
-                    count++;
-                    var res = c.Resource;
-                    pendingByResource.TryGetValue(res, out int had);
-                    pendingByResource[res] = had + pending;
-                    collectorsByResource.TryGetValue(res, out int n);
-                    collectorsByResource[res] = n + 1;
-                }
-            });
-            foreach (var res in railOrder)
-            {
-                if (!pendingByResource.TryGetValue(res, out int held) || held <= 0) continue;
-                collectorsByResource.TryGetValue(res, out int n);
-                result.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine
-                {
-                    Resource = ResourceBuildingProgression.LabelFor(res),
-                    Pending = held,
-                    Collectors = n,
-                });
-            }
+            // order. The resource word is the game's canon LabelFor -- the same word the rail and
+            // the collector's own "+N Wood" gain popup say. Never a second vocabulary.
+            //
+            // WO-1392 - THE ROWS READ THE ONE PRODUCER. This method used to walk
+            // ResourceCollectorRegistry.All itself and floor each PendingAmount; the collect path
+            // then reported a DIFFERENT number ("of 2393" against this screen's "+672") because it
+            // never read this loop. ResourceCollectorService.PendingByResource() is now the single
+            // source both screens consume; a second loop here is the defect coming back.
+            List<ResourceCollectorService.PendingLine> lines = null;
+            Guard.Try("Offline", "read pending collectors for the away summary",
+                () => lines = ResourceCollectorService.PendingByResource());
+            result.PendingCollectors.AddRange(LinesFrom(lines));
+            int total = 0, count = 0;
+            foreach (var line in result.PendingCollectors) { total += line.Pending; count += line.Collectors; }
             result.PendingCollectorTotal = total;
             result.PendingCollectorCount = count;
         }
+
+        /// <summary>The popup's rows from the shared producer's lines, PURE (pinned by
+        /// CollectorIncomeRegression [popup-and-result-agree]). Word = the canon LabelFor.</summary>
+        public static List<OfflineHarvestResult.OfflineCollectorLine> LinesFrom(
+            IReadOnlyList<ResourceCollectorService.PendingLine> lines)
+        {
+            var rows = new List<OfflineHarvestResult.OfflineCollectorLine>();
+            if (lines == null) return rows;
+            foreach (var line in lines)
+            {
+                if (line == null || line.Pending <= 0) continue;
+                rows.Add(new OfflineHarvestResult.OfflineCollectorLine
+                {
+                    Resource = ResourceBuildingProgression.LabelFor(line.Resource),
+                    Pending = line.Pending,
+                    Collectors = line.Collectors,
+                });
+            }
+            return rows;
+        }
+
+        // =====================================================================
+        //  WO-1392 -- WARN BEFORE COLLECT
+        // =====================================================================
+
+        /// <summary>One predicted wait: this many units of this resource will NOT bank on COLLECT
+        /// because the town bank has no room for them (they stay in the collectors).</summary>
+        public struct CollectWait
+        {
+            public HarvestResource Resource;
+            /// <summary>Lowercase player word ("wood" / "stone").</summary>
+            public string Word;
+            public int Pending;
+            public int Headroom;
+            public int Wait;
+        }
+
+        /// <summary>Live overload: headroom from the town bank (ResourceCollectorService.HeadroomFor).</summary>
+        public static List<CollectWait> PredictCollectWaits(OfflineHarvestResult result)
+            => PredictCollectWaits(result, ResourceCollectorService.HeadroomFor);
+
+        /// <summary>
+        /// WO-1392 - the loss used to be decided AT COLLECT with no warning before the tap. The
+        /// popup already knows the pending per resource (its own rows) and the bank's headroom, so
+        /// it can say "Storage nearly full - 414 wood will wait" BEFORE the button. PURE given a
+        /// headroom reader (pinned by OfflineHarvestRegression [warn-before-collect]). Rows are
+        /// matched back to their resource through the same LabelFor word they were built from.
+        /// </summary>
+        public static List<CollectWait> PredictCollectWaits(OfflineHarvestResult result,
+            System.Func<HarvestResource, int> headroom)
+        {
+            var waits = new List<CollectWait>();
+            if (result == null || result.PendingCollectors == null || headroom == null) return waits;
+            foreach (var res in ResourceCollectorService.RailOrder)
+            {
+                string word = ResourceBuildingProgression.LabelFor(res);
+                int pending = 0;
+                foreach (var line in result.PendingCollectors)
+                    if (line != null && string.Equals(line.Resource, word, System.StringComparison.OrdinalIgnoreCase))
+                        pending += line.Pending;
+                if (pending <= 0) continue;
+                int room = headroom(res);
+                if (room < 0) room = 0;
+                if (pending <= room) continue;
+                waits.Add(new CollectWait
+                {
+                    Resource = res,
+                    Word = word.ToLowerInvariant(),
+                    Pending = pending,
+                    Headroom = room,
+                    Wait = pending - room,
+                });
+            }
+            return waits;
+        }
+
+        /// <summary>The one pre-COLLECT sentence. ASCII, words not colour, names the amount and the
+        /// resource: "Storage nearly full - 414 wood will wait".</summary>
+        public static string CollectWaitLine(CollectWait w)
+            => $"Storage nearly full - {w.Wait} {w.Word} will wait";
 
         /// <summary>
         /// Every consumer has applied and the clock has advanced: attach passive mending's

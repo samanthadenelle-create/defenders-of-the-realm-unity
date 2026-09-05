@@ -150,6 +150,9 @@ namespace DeNelle.Editor
             }
 
             log.AppendLine($"  top-band modal builders: {topBandBuilders} ({registered} register)");
+
+            CheckCloseFrameGrace(failures, log);
+
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
 
             if (failures.Count == 0)
@@ -161,6 +164,106 @@ namespace DeNelle.Editor
             reason = "modal-registration: " + string.Join("; ", failures) + noteStr;
             Debug.LogError(log.ToString() + "MODAL_REGISTRATION_FAIL: " + reason);
             return false;
+        }
+
+        // =====================================================================
+        //  [close-frame-grace] — WO-1393 (2026-09-05)
+        // ---------------------------------------------------------------------
+        // PROVEN (docs/qa/UI_REVIEW_2026-09-05/11-research-upgrade-door.png): a tap issued as
+        // Manage was closing reached the HUD Night Market card beneath it and opened the store.
+        // The arbiter clears its record in NotifyClosed the same frame; the EventSystem raycasts
+        // the in-flight tap the next frame against whatever is left under the finger. The seam:
+        // NotifyClosed (and CloseOpen, the back/ESC path) stamp
+        // `CloseGraceUntilFrame = Time.frameCount + 1`, and EVERY HUD tap handler early-returns
+        // through one helper (SwallowedByCloseGrace) that emits the one trace line. Panels never
+        // consult it - a tap on a panel that is still open is legitimate.
+        // RED mutations: delete `ArmCloseGrace(` from NotifyClosed's body; change `+ 1` to `+ 2`;
+        // remove any one `SwallowedByCloseGrace(` call site; add `InCloseGrace` to ManageScreenPanel.
+        // =====================================================================
+        private const int GraceCallSites = 11;   // Night Market, Build, Talk, Hero, Raids, Journey,
+                                                 // Manage, Builders chip, Harvest chip, dock row, gear handle
+
+        private static void CheckCloseFrameGrace(List<string> failures, StringBuilder log)
+        {
+            string pmPath = Path.Combine(Application.dataPath, "_Modules", "Core", "UI", "PanelManager.cs");
+            string hudPath = Path.Combine(Application.dataPath, "_Modules", "HUD", "Kit", "HudKitController.cs");
+            string managePath = Path.Combine(Application.dataPath, "_Modules", "Village", "UI", "Manage", "ManageScreenPanel.cs");
+            string pm = File.Exists(pmPath) ? File.ReadAllText(pmPath) : "";
+            string hud = File.Exists(hudPath) ? File.ReadAllText(hudPath) : "";
+            string manage = File.Exists(managePath) ? File.ReadAllText(managePath) : "";
+            if (pm.Length == 0 || hud.Length == 0)
+            {
+                failures.Add("[close-frame-grace] PanelManager.cs or HudKitController.cs is missing - the seam cannot be verified");
+                return;
+            }
+
+            // The seam: NotifyClosed arms it, and the stamp is exactly frameCount + 1.
+            string notifyClosed = Between(pm, "public static void NotifyClosed(", "public static void CloseAll()");
+            // (end markers are brace-free on purpose: the CLAUDE.md section 1 gate counts raw braces)
+            string closeOpen = Between(pm, "public static void CloseOpen()", "OpenStateChanged?.Invoke();");
+            string arm = Between(pm, "private static void ArmCloseGrace(", "public static PanelHandle Register(");
+            if (notifyClosed == null || !notifyClosed.Contains("ArmCloseGrace("))
+                failures.Add("[close-frame-grace] PanelManager.NotifyClosed does not arm the close-frame grace - a tap in " +
+                             "flight when a modal closes lands on the HUD beneath (11-research-upgrade-door.png)");
+            if (closeOpen == null || !closeOpen.Contains("ArmCloseGrace("))
+                failures.Add("[close-frame-grace] PanelManager.CloseOpen (back/ESC) does not arm the close-frame grace");
+            if (arm == null || !arm.Contains("CloseGraceUntilFrame = UnityEngine.Time.frameCount + 1;"))
+                failures.Add("[close-frame-grace] the grace is not exactly ONE frame (CloseGraceUntilFrame = Time.frameCount + 1)");
+            if (!pm.Contains("public static int CloseGraceUntilFrame { get; private set; }") ||
+                !pm.Contains("public static bool InCloseGrace => UnityEngine.Time.frameCount <= CloseGraceUntilFrame;"))
+                failures.Add("[close-frame-grace] PanelManager.CloseGraceUntilFrame / InCloseGrace are not the public readables");
+
+            // The consumers: one helper, one trace literal, every HUD tap handler through it.
+            string helper = Between(hud, "private static bool SwallowedByCloseGrace(", "// Wire the compass");
+            if (helper == null || !helper.Contains("PanelManager.InCloseGrace") ||
+                !helper.Contains("FlowTrace.Step(\"HUD\", \"tap swallowed: panel closed this frame (grace)"))
+                failures.Add("[close-frame-grace] HudKitController.SwallowedByCloseGrace does not consult " +
+                             "PanelManager.InCloseGrace with the one 'tap swallowed' trace line");
+            int calls = CountOf(hud, "SwallowedByCloseGrace(") - 1;   // minus the definition
+            if (calls < GraceCallSites)
+                failures.Add($"[close-frame-grace] only {calls} HUD tap handlers consult the close-frame grace; " +
+                             $"{GraceCallSites} must (Night Market card, the bar faces, both rail chips, the gear dock rows and handle)");
+            foreach (var handler in new[] { "private void OpenNightMarket()", "private void OnQuestsAction()",
+                                            "private void OnManageAction()", "private void OnCollectorsChipTapped()",
+                                            "private void OnBuildersChipTapped()" })
+            {
+                // Scope = this member up to the next 8-space `private ` declaration, and the guard
+                // must be the OPENING statement (within the first 400 chars), never a late check.
+                string body = Between(hud, handler, "\n        private ");
+                int at = body != null ? body.IndexOf("SwallowedByCloseGrace(", StringComparison.Ordinal) : -1;
+                if (at < 0 || at > 400)
+                    failures.Add("[close-frame-grace] " + handler + " does not open by consulting the close-frame grace");
+            }
+            // The dock ROW builder wires the guard into the lambda it builds, so presence is the test.
+            string dockTab = Between(hud, "private void AddDockTab(", "\n        private ");
+            if (dockTab == null || !dockTab.Contains("SwallowedByCloseGrace(face)"))
+                failures.Add("[close-frame-grace] AddDockTab does not route every gear-dock row through the close-frame grace");
+            if (!hud.Contains("SwallowedByCloseGrace(\"Build face\")") || !hud.Contains("SwallowedByCloseGrace(\"Hero face\")") ||
+                !hud.Contains("SwallowedByCloseGrace(\"Raids face\")") || !hud.Contains("SwallowedByCloseGrace(\"Talk face\")") ||
+                !hud.Contains("SwallowedByCloseGrace(\"gear dock handle\")"))
+                failures.Add("[close-frame-grace] a bar face lambda or the gear handle bypasses the close-frame grace");
+
+            // Never the panel's own taps: the grace belongs to the layer UNDER a modal only.
+            if (manage.Contains("InCloseGrace") || manage.Contains("CloseGraceUntilFrame"))
+                failures.Add("[close-frame-grace] ManageScreenPanel consults the close-frame grace - it must never " +
+                             "affect taps on the panel itself");
+
+            log.AppendLine($"  close-frame grace: NotifyClosed/CloseOpen arm it, {calls} HUD handlers consult it");
+        }
+
+        private static string Between(string src, string from, string until)
+        {
+            int a = src.IndexOf(from, StringComparison.Ordinal);
+            if (a < 0) return null;
+            int b = src.IndexOf(until, a + from.Length, StringComparison.Ordinal);
+            return b < 0 ? null : src.Substring(a, b - a);
+        }
+
+        private static int CountOf(string src, string needle)
+        {
+            int n = 0, i = 0;
+            while ((i = src.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+            return n;
         }
 
         private static bool BuildsTopBandModal(string text)

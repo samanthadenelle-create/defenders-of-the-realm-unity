@@ -44,3 +44,21 @@ thumbnail with "NIGHT MA..." truncated, visually indistinguishable from the FLAG
 
 ## Not in scope
 The Heartfire mechanics (WO-1379), the Night Market store itself (WO-1050/1335), the raid door.
+
+## Owner refinement 2026-09-04 23:59 (verbatim, after seeing build 355952)
+> "instead of just dropping a yellow box around the store on the left of UI can we round the edges and have a
+> chasing soft color changing vfx, subtle but inviting?"
+
+Ruling applied to the Night Market card (follow-up lane, WO-1384b in this WO):
+- The rectangular gold `AddImage` frame goes; the card gets ROUNDED corners (the kit's rounded sprite, or a
+  9-slice with radius) and a soft CHASING glow that runs around the edge and drifts through a warm palette
+  (gold -> amber -> rose -> gold), slow (a lap every ~4-6 s), low alpha - "subtle but inviting".
+- Colourblind law still binds: the size/rounding/glow-MOTION carry the standout; hue is never the only cue.
+- Built with what exists: the `RadialGlowSprite` aura already mounted + a UV-scrolling ring (a second Image
+  with a soft ring sprite rotated per frame, or `Material.mainTextureOffset`), driven from the HUD's existing
+  Update at <= 1 ms/frame - the VFX budget line `[Flow:Store] aurora cost` is the pin. No particle system on
+  the HUD canvas.
+- Knobs on the tunables rail (owner 09-02: a balance/feel value is a tunable): `hud.nightMarketGlowLapSec`,
+  `hud.nightMarketGlowAlphaPct`, `hud.nightMarketGlowPaletteMask` - all four sources in one change, oracle pinned.
+- Headless capture cannot see motion: acceptance is the device (a 3 s screen recording via `adb shell
+  screenrecord`) plus the frame-cost trace.

@@ -142,6 +142,8 @@ namespace DeNelle.Editor.Regression
             Case(failures, "no-crystal-faucet", () => Case11_NoCrystalFaucet(failures, notes));
             Case(failures, "tell-wired", () => Case12_TellWired(failures, notes));
             Case(failures, "configure-rekeys", () => Case13_ConfigureRekeys(failures, notes));
+            Case(failures, "popup-and-result-agree", () => Case14_PopupAndResultAgree(failures, notes));
+            Case(failures, "overflow-stays-pending", () => Case15_OverflowStaysPending(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count > 0)
@@ -876,6 +878,157 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
 
         /// <summary>repo.capacity per progression building id, read from the canonical catalog.</summary>
+        // =====================================================================
+        //  CASE 14 - [popup-and-result-agree] (WO-1392): ONE producer, one number per resource
+        // =====================================================================
+        //
+        //  Measured 2026-09-04 23:41 (build 355952): the welcome-back popup said "WOOD WAITING
+        //  +672"; one tap later the harvest result said "Collected 1979 of 2393". The popup summed
+        //  Floor(PendingAmount) in its own loop; the modal's "of N" was the Echo silo's clamp
+        //  (the only warn scope in the tree). Both surfaces now consume
+        //  ResourceCollectorService.PendingByResource(); this case drives the PURE halves with
+        //  fixture samples and asserts the popup row and the result row carry the SAME number.
+        //  RED before WO-1392: AggregatePending / LinesFrom / BuildCollectorRows did not exist,
+        //  and the service's Collect() reported nothing per resource at all.
+
+        private static void Case14_PopupAndResultAgree(List<string> failures, List<string> notes)
+        {
+            var samples = new List<KeyValuePair<HarvestResource, double>>
+            {
+                new KeyValuePair<HarvestResource, double>(HarvestResource.Wood, 500.9),
+                new KeyValuePair<HarvestResource, double>(HarvestResource.Wood, 172.7),
+                new KeyValuePair<HarvestResource, double>(HarvestResource.Iron, 403.2),
+                new KeyValuePair<HarvestResource, double>(HarvestResource.Food, 874.99),
+                new KeyValuePair<HarvestResource, double>(HarvestResource.Crystals, 0.4),
+            };
+            var agg = ResourceCollectorService.AggregatePending(samples);
+            if (agg == null || agg.Count != 3)
+            {
+                failures.Add("[popup-and-result-agree] AggregatePending returned " + (agg == null ? "null" : agg.Count.ToString()) +
+                             " line(s) for wood/wood/iron/stone/crystals(0.4) - expected 3 (a sub-unit crystal pending is not a row)");
+                return;
+            }
+            // Rail order and PER-COLLECTOR floors (500 + 172 = 672, never floor(673.6) = 673 - the
+            // sum of the rows must be exactly what a tap can bank).
+            if (agg[0].Resource != HarvestResource.Wood || agg[0].Pending != 672 || agg[0].Collectors != 2)
+                failures.Add($"[popup-and-result-agree] line 0 = {agg[0].Resource}/{agg[0].Pending}/{agg[0].Collectors}; expected Wood/672/2 (per-collector floor)");
+            if (agg[1].Resource != HarvestResource.Iron || agg[1].Pending != 403)
+                failures.Add($"[popup-and-result-agree] line 1 = {agg[1].Resource}/{agg[1].Pending}; expected Iron/403");
+            if (agg[2].Resource != HarvestResource.Food || agg[2].Pending != 874)
+                failures.Add($"[popup-and-result-agree] line 2 = {agg[2].Resource}/{agg[2].Pending}; expected Food(Stone)/874 - rail order Wood/Iron/Stone");
+
+            // The popup's rows, from the same lines.
+            var popup = DeNelle.Village.OfflineHarvestService.LinesFrom(agg);
+            if (popup == null || popup.Count != 3)
+            {
+                failures.Add("[popup-and-result-agree] LinesFrom did not yield one popup row per aggregate line");
+                return;
+            }
+            if (popup[0].Resource != "Wood" || popup[2].Resource != "Stone")
+                failures.Add($"[popup-and-result-agree] popup words = '{popup[0].Resource}'/'{popup[2].Resource}'; expected the canon LabelFor words Wood / Stone");
+
+            // The result's rows: wood partly fit (258 of 672), iron fit entirely, stone banked nothing.
+            var bankedBy = new Dictionary<HarvestResource, int>
+                { { HarvestResource.Wood, 258 }, { HarvestResource.Iron, 403 }, { HarvestResource.Food, 0 } };
+            var store = new Dictionary<HarvestResource, int>
+                { { HarvestResource.Wood, 3742 }, { HarvestResource.Iron, 100 }, { HarvestResource.Food, 3000 } };
+            var rows = ResourceCollectorService.BuildCollectorRows(agg, bankedBy, store);
+            if (rows == null || rows.Count != 2)
+            {
+                failures.Add("[popup-and-result-agree] BuildCollectorRows returned " + (rows == null ? "null" : rows.Count.ToString()) +
+                             " row(s); expected 2 (wood + stone - iron fit entirely and must NOT be scolded)");
+                return;
+            }
+            foreach (var row in rows)
+            {
+                DeNelle.Village.OfflineHarvestResult.OfflineCollectorLine match = null;
+                foreach (var p in popup) if (p.Resource == row.ResourceName) { match = p; break; }
+                if (match == null)
+                    failures.Add($"[popup-and-result-agree] result row '{row.ResourceName}' has no popup row with the same word");
+                else if (match.Pending != row.Requested)
+                    failures.Add($"[popup-and-result-agree] {row.ResourceName}: popup says +{match.Pending}, result says 'of {row.Requested}' - " +
+                                 "two numbers for one resource on one tap, the WO-1392 defect");
+                if (row.Source != DeNelle.Core.UI.HarvestOverflowModal.CollectorSource)
+                    failures.Add($"[popup-and-result-agree] collector row Source = '{row.Source}', expected HarvestOverflowModal.CollectorSource " +
+                                 "- without it the modal reads the row as a burned loss");
+            }
+            if (rows[0].ResourceName != "Wood" || rows[0].Granted != 258 || rows[0].Lost != 414 || rows[0].Current != 3742)
+                failures.Add($"[popup-and-result-agree] wood row = granted {rows[0].Granted} / waiting {rows[0].Lost} / store {rows[0].Current}; expected 258 / 414 / 3742");
+            if (rows[1].ResourceName != "Stone" || rows[1].Granted != 0 || rows[1].Lost != 874)
+                failures.Add($"[popup-and-result-agree] stone row = {rows[1].ResourceName} granted {rows[1].Granted} / waiting {rows[1].Lost}; expected Stone 0 / 874");
+
+            // At SOURCE: both live paths consume the one producer, and the collect path snapshots
+            // it BEFORE the first Collect so 'of N' is the pre-tap number the popup showed.
+            string svc = ReadText("Assets/_Modules/Village/Buildings/Progression/ResourceCollectorService.cs", failures);
+            string ohs = ReadText("Assets/_Modules/Village/Harvest/OfflineHarvestService.cs", failures);
+            if (svc != null)
+            {
+                string code = StripComments(svc);
+                int snap = code.IndexOf("var before = PendingByResource();", StringComparison.Ordinal);
+                int collect = code.IndexOf(".Collect(", StringComparison.Ordinal);
+                if (snap < 0 || collect < 0 || snap > collect)
+                    failures.Add("[popup-and-result-agree] CollectAll does not snapshot PendingByResource() BEFORE the first Collect - " +
+                                 "the result's 'of N' would be read after the pools drained");
+                if (code.IndexOf("HarvestOverflowModal.BeginBatch(", StringComparison.Ordinal) < 0)
+                    failures.Add("[popup-and-result-agree] CollectAll does not open a HarvestOverflowModal batch - the collector rows and " +
+                                 "the silo dump's rows would fight for one modal and the second would close the first");
+                if (code.IndexOf("BuildCollectorRows(before, bankedBy, storeBefore)", StringComparison.Ordinal) < 0)
+                    failures.Add("[popup-and-result-agree] CollectAll does not build its result rows from the snapshot");
+            }
+            if (ohs != null)
+            {
+                string code = StripComments(ohs);
+                if (code.IndexOf("ResourceCollectorService.PendingByResource()", StringComparison.Ordinal) < 0)
+                    failures.Add("[popup-and-result-agree] OfflineHarvestService.AttachPendingCollectors does not read PendingByResource()");
+                if (code.IndexOf("Floor(c.PendingAmount)", StringComparison.Ordinal) >= 0)
+                    failures.Add("[popup-and-result-agree] OfflineHarvestService floors collector pending in its own loop - the second producer is back");
+            }
+        }
+
+        // =====================================================================
+        //  CASE 15 - [overflow-stays-pending] (WO-1392): a collect NEVER burns
+        // =====================================================================
+        //
+        //  ResourceCollector.Collect granted floor(pending) through GrantSpendable - which CLAMPS
+        //  at the town bank cap and RETURNS the applied basket - and then did `_pending -= amount`
+        //  with the REQUEST, discarding every refused unit. It now drains the pool by what BANKED
+        //  (SettleCollect, pure) and leaves the remainder pending. RED before WO-1392: SettleCollect
+        //  did not exist and the source carried `_pending -= amount`.
+
+        private static void Case15_OverflowStaysPending(List<string> failures, List<string> notes)
+        {
+            double after = ResourceCollector.SettleCollect(672.9, 258, out int left);
+            if (Math.Abs(after - 414.9) > 1e-6 || left != 414)
+                failures.Add($"[overflow-stays-pending] SettleCollect(672.9, banked 258) -> pending {after:0.###} / left {left}; expected 414.9 / 414 " +
+                             "(the pool drains by what BANKED, never by what was asked)");
+            after = ResourceCollector.SettleCollect(672.0, 672, out left);
+            if (Math.Abs(after) > 1e-9 || left != 0)
+                failures.Add($"[overflow-stays-pending] a full bank of 672 left {after:0.###}/{left} pending; expected 0");
+            after = ResourceCollector.SettleCollect(10.5, 999, out left);
+            if (Math.Abs(after - 0.5) > 1e-6 || left != 0)
+                failures.Add($"[overflow-stays-pending] an over-reported bank (999 of 10.5) drained to {after:0.###}; expected 0.5 (clamped to the request)");
+            after = ResourceCollector.SettleCollect(10.0, -5, out left);
+            if (Math.Abs(after - 10.0) > 1e-9 || left != 10)
+                failures.Add($"[overflow-stays-pending] a negative bank moved the pool to {after:0.###}; expected 10 untouched");
+            after = ResourceCollector.SettleCollect(4000.0, 0, out left);
+            if (Math.Abs(after - 4000.0) > 1e-9 || left != 4000)
+                failures.Add($"[overflow-stays-pending] a bank-full collect (0 banked) drained the pool to {after:0.###}; expected 4000 still waiting");
+
+            string raw = ReadText(CollectorSrc, failures);
+            if (raw == null) return;
+            string code = StripComments(raw);
+            if (Regex.IsMatch(code, @"_pending\s*-=\s*amount"))
+                failures.Add("[overflow-stays-pending] ResourceCollector.Collect still does `_pending -= amount` - it drains the REQUEST, " +
+                             "so every unit the town bank cap refused is burned (the owner's 414 wood, 2026-09-04)");
+            if (code.IndexOf("SettleCollect(_pending, banked", StringComparison.Ordinal) < 0)
+                failures.Add("[overflow-stays-pending] Collect does not settle the pool through SettleCollect(_pending, banked, ...)");
+            if (!Regex.IsMatch(code, @"GrantSpendable\(wood:\s*amount\)\s*\.Wood") ||
+                !Regex.IsMatch(code, @"GrantSpendable\(iron:\s*amount\)\s*\.Iron") ||
+                !Regex.IsMatch(code, @"GrantSpendable\(food:\s*amount\)\s*\.Food"))
+                failures.Add("[overflow-stays-pending] Collect does not read the APPLIED basket back from GrantSpendable for wood/iron/food - " +
+                             "it is trusting its own request local, which is how a silent loss hides");
+        }
+
         private static Dictionary<string, double> CatalogCapacities(List<string> failures)
         {
             string raw = ReadText(StructuresRes, failures);

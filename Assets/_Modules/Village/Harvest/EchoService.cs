@@ -418,10 +418,24 @@ namespace DeNelle.Village
                     applied = eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
                 }
                 if (gold > 0) eco.AddCoins(gold);
-                if (applied.Wood != wood || applied.Iron != iron || applied.Food != food)
-                    FlowTrace.Warn("Echo",
-                        $"DumpSilos: town bank cap trimmed the dump -- requested W{wood}/I{iron}/F{food}, " +
-                        $"applied W{applied.Wood}/I{applied.Iron}/F{applied.Food}. The overflow is LOST (clamp-and-warn).");
+                // WO-1392 (owner's Seeker, 2026-09-04): the silo SETTLES AGAINST THE APPLIED BASKET.
+                // The clamp above banked 1979 of 2393 wood; the old line below then did
+                // `s.SiloResources -= pool`, subtracting the REQUEST, so the 414 that never entered
+                // the bank were destroyed. The covenant (HarvestBoostService header): NEVER BURN
+                // SILENTLY. What the cap refused STAYS IN THE SILO -- the next dump after the
+                // player spends banks it. One Warn per clamped resource so the retained remainder
+                // is named in the trace, not inferred from a delta.
+                int stayedWood = wood - applied.Wood;
+                int stayedIron = iron - applied.Iron;
+                int stayedFood = food - applied.Food;
+                if (stayedWood > 0)
+                    FlowTrace.Warn("Harvest", $"silo dump: {stayedWood} wood stayed in the silo - Wood storage full");
+                if (stayedIron > 0)
+                    FlowTrace.Warn("Harvest", $"silo dump: {stayedIron} iron stayed in the silo - Iron storage full");
+                if (stayedFood > 0)
+                    FlowTrace.Warn("Harvest", $"silo dump: {stayedFood} food stayed in the silo - Food storage full");
+                if (stayedWood <= 0 && stayedIron <= 0 && stayedFood <= 0)
+                    FlowTrace.Step("Harvest", $"silo dump: everything fit -- W{applied.Wood}/I{applied.Iron}/F{applied.Food} banked in full.");
                 wood = applied.Wood;
                 iron = applied.Iron;
                 food = applied.Food;
@@ -440,9 +454,19 @@ namespace DeNelle.Village
                 if (crystals > 0 && gs != null) gs.AddCrystals(crystals);
             }
 
-            // Reset the silo (keep the sub-1 fractional remainder so slow rates aren't lost).
-            s.SiloResources -= pool;
+            // Drain ONLY WHAT LEFT THE SILO (keep the sub-1 fractional remainder so slow rates
+            // aren't lost). Every local here is post-settle: the applied basket when EconomyService
+            // banked, the direct write in the fallback. `pool - banked` is the clamped remainder and
+            // it STAYS in the pooled silo (WO-1392). The silo is ONE scalar, so a retained share is
+            // re-split by the harvest weights on the next dump -- it is never destroyed.
+            // STOP: NEVER `s.SiloResources -= pool` here: that subtracts the REQUEST and burns the
+            // remainder (the 414-wood defect on the owner's Seeker, 2026-09-04).
+            int bankedFromSilo = wood + iron + food + gold + crystals;
+            int stayedInSilo = pool - bankedFromSilo;
+            s.SiloResources -= bankedFromSilo;
             if (s.SiloResources < 0) s.SiloResources = 0;
+            if (stayedInSilo > 0)
+                FlowTrace.Warn("Harvest", $"silo dump: {stayedInSilo} of {pool} stayed in the silo (storage full) -- silo now {s.SiloResources:0}; spend, then dump again.");
 
             // Advance the silo clock to now so the next offline window starts fresh (the
             // come-back-RESET). WO-1147: routed through the ONE clock owner
@@ -451,7 +475,7 @@ namespace DeNelle.Village
             // stamp persists atomically with the dump.
             OfflineClaimCoordinator.StampClock("EchoService.DumpSilos");
 
-            FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food, +{gold} gold, +{crystals} crystals (pool {pool}); silo reset, clock advanced.");
+            FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food, +{gold} gold, +{crystals} crystals (pool {pool}, {stayedInSilo} retained); silo now {s.SiloResources:0}, clock advanced.");
 
             // WO-953: the felt moment — "+N <resource>" pops for every banked share,
             // through the ONE pooled damage-number spawner (owner ruling: "we can use
@@ -467,8 +491,9 @@ namespace DeNelle.Village
             // number it had just disproved. Captured: 17 iron discarded at a full bank while
             // ResourceCollectorService summed 17 and CollectorStatusPublisher printed "banked=17".
             // WO-978's class ("logged the amount requested as though it were credited"), one layer up.
-            // `pool` still owns the SILO RESET above - that is correct, the silo really did empty.
-            // Only the caller-facing answer changes: what the town actually received.
+            // WO-1392: the silo drain above is ALSO settled against the applied basket now -- `pool`
+            // no longer owns it, because the silo did NOT empty when the cap bit; the remainder stays.
+            // The caller-facing answer is what the town actually received.
             return wood + iron + food + gold + crystals;
         }
 
