@@ -46,6 +46,17 @@ screenshot), then `capture-device-20260905-100245-seq4682.md`:
 ... RESCUED via watchdog and recorded as SKIPPED - the step was NOT completed`.
 So the first-run tutorial is silently skipped on every new game that shows this popup.
 
+### D. The popup fires again on a sub-minute resume, and it proves B on screen
+`logs/f8-inbox/device/live-0905-1015.png` (live capture 10:15, owner mid-session): the welcome-back
+popup is up AGAIN reading **"YOUR REALM WORKED FOR under 1m"** with a single row `IRON WAITING +36`.
+Two findings in one frame:
+- The popup raises for a window the player did not experience as being away. It should not open
+  below a threshold (the owner: "screenshot closed but reports out resources" - she closes it and it
+  comes back). One rule, on the window, in the coordinator.
+- **Only IRON is listed.** Wood and Food are missing because their collectors are the two the harvest
+  tick is HOLDING (`farm`, `lumbermill`), so B is visible to the player as a popup that quietly
+  stopped reporting two of three resources.
+
 ## The shape (this is the FIFTH instance)
 `GameStateService.cs:1543-1547` already records the pattern by name: WO-860 equip, WO-1019 hot-swap
 bar, WO-1220 talents, WO-1371 collector prefs - **state that lives outside the save envelope, or
