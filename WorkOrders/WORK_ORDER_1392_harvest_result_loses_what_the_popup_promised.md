@@ -1,6 +1,6 @@
 # WO-1392: COLLECT loses resources the welcome-back popup just promised - the harvest result does not reconcile
 
-**Status:** IN PROGRESS 2026-09-05 00:21 - landed + gated (REGRESSION_OK 378/378; `echo-spec` re-pinned from "silo reset" to conservation, new [silo-overflow-stays]; WELCOME_BACK_CAPTURE_OK 3/3); awaiting the next APK + the device collect. Known gap left visible: `BankOverflowStatus` has no retained-vs-lost field, so the silo row still reads with the generic sentence (ruling on the morning list). Found on the headed walk 2026-09-04 23:41 (build 355952).
+**Status:** FIXED - in da90ddc0f, on Firebase App Distribution as build 2026.09.05.356329 (05:55). Gated: REGRESSION_OK 378/378 (`echo-spec` re-pinned from "silo reset" to conservation, new [silo-overflow-stays]), WELCOME_BACK_CAPTURE_OK 3/3. Awaiting owner felt-test: with storage nearly full, the popup warns before COLLECT and the result reports the remainder as still waiting, never lost. Known gap left visible: `BankOverflowStatus` has no retained-vs-lost field, so the silo row still reads with the generic sentence (ruling on the morning list). Found on the headed walk 2026-09-04 23:41 (build 355952).
 
 ## Evidence (two consecutive captures, one tap apart)
 - `docs/qa/UI_REVIEW_2026-09-05/00-title-or-hub.png`: welcome-back "YOUR REALM WORKED FOR 27m - WOOD WAITING

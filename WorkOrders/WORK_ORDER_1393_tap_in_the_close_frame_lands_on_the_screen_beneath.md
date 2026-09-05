@@ -1,6 +1,6 @@
 # WO-1393: a tap in the frame a panel closes lands on the screen beneath; the queue drawer overlays the Troops card and QUEUE does not close it
 
-**Status:** IN PROGRESS 2026-09-05 00:21 - landed + gated (REGRESSION_OK 378/378 incl. [queue-toggle-closes], [drawer-clear-of-card], [close-frame-grace]); awaiting the next APK + the device proof (queued tap on the Night Market area must NOT open the store). Found on the headed walk 2026-09-04 23:45-23:47 (build 355952).
+**Status:** FIXED - in da90ddc0f, on Firebase App Distribution as build 2026.09.05.356329 (05:55). Gated: REGRESSION_OK 378/378 incl. [queue-toggle-closes], [drawer-clear-of-card], [close-frame-grace]. Awaiting owner felt-test: close Manage with a tap over the Night Market card's area - the store must NOT open; on Troops, OPEN QUEUE pushes the card down and QUEUE/HIDE QUEUE closes it. Found on the headed walk 2026-09-04 23:45-23:47 (build 355952).
 
 ## Evidence
 - `docs/qa/UI_REVIEW_2026-09-05/10-troops-after-upgrade.png`: after OPEN QUEUE the drawer sits OVER the

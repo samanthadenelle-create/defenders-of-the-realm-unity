@@ -180,7 +180,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI docs lane, sixty-ninth pass): main line next free = **1401**.
+> ## RECONCILED 2026-09-05 (CLI, seventieth pass): main line next free = **1402**.
+> *(CLI minted **1401** - HeroSkillTree quick-swap rail draws over the hint text (nine `[UICap-GEO]` lines at
+> 05:13 on all three resolutions; pre-existing since 3b3f28354). Assigned to a worktree lane by the orchestrator;
+> bumped 1401 -> 1402 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI docs lane, sixty-ninth pass): main line next free = **1401**.
 > *(CLI docs lane minted **1394 through 1400** from the UI screen graph's dead ends
 > (docs/qa/UI_SCREEN_GRAPH_2026-09-04.md section c; OVERNIGHT_ORDERS_2026-09-05 STRETCH): **1394** the
 > Season Track is registered and never opened (ruled Journey card, re-point PublicNavigationRetirementRegression);
