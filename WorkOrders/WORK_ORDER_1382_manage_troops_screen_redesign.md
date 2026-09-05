@@ -1,6 +1,6 @@
 # WO-1382: Manage - Troops screen - the troop detail card floats over the roster; redesign the screen
 
-**Status:** READY TO IMPLEMENT - owner picked the independent review's wireframe 2026-09-04 22:45 (pasted back verbatim, section below); View-only lane on ManageScreenPanel.cs once the RCA section lands
+**Status:** FIXED - landed in 65d5a7eae (2026-09-04 23:5x; `_troopMode` deleted, TroopWorkspacePx 260, TRAINING NOW band; pinned by ManageTroopsTrainDoorRegression case 6 + ManageQueueDrawerRegression [drawer-clear-of-card]), on the Seeker as build 355952 and proven there on the headed walk (`docs/qa/UI_REVIEW_2026-09-05/INDEX.md` rows 07-09: Train CTA -> enqueued 45s -> TRAINING NOW rows=1); also in every Firebase build since. Awaiting owner felt-test. (The status flip was missed in the landing commit - corrected 2026-09-05 07:30 by the dispatcher pass.) Owner picked the independent review's wireframe 2026-09-04 22:45 (pasted back verbatim, section below); View-only lane on ManageScreenPanel.cs once the RCA section lands
 
 **Owner (2026-09-04 22:34, felt-test on the Seeker, build 2026.09.05.355872), verbatim:**
 > "something is wrong with manage troops screen i think its the box around train, can you have UI
