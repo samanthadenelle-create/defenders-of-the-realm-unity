@@ -17,6 +17,14 @@
 //      config facts (walls/gates/garrison/boss), and NEVER surfaces
 //      rewardMultiplier / shardDropChance (cosmetic-only fields the loot math
 //      ignores — RAID_BATTLEFIELD_ANATOMY_2026-08-02: showing them would lie).
+//   4. WO-1385 (2026-09-04) BAND CONTRACT [deploy-bands-disjoint] - the right
+//      column's three bands (SCOUT / ECHO GUIDE / ENEMY BASE) are literal
+//      constants in RaidDeployScreen.cs and stack strictly, with a gap, never
+//      intersecting. Owner's Seeker screenshot: the guide block was drawn over
+//      the ENEMY BASE tail and CHANGE over the Echo name.
+//   5. WO-1385 (2026-09-04) DEPLOY-BAR CONTRACT [deploy-bar-kit-button] - BEGIN
+//      ASSAULT is the kit's primary button (BuildObsidianButton, Yellow) and the
+//      raw flat "DeployGlow" AddImage slab is gone. Owner, verbatim: "yuck".
 //
 // REGISTRATION: not yet wired into DataRegression.RunAll (that file is the
 // sole-committer's lane). Wire there as:
@@ -45,6 +53,8 @@ namespace DeNelle.Editor
                 CheckFrameCoreZones(failures, notes);
                 CheckCaptureFieldDevGuard(failures, notes);
                 CheckScoutReportContract(failures, notes);
+                CheckDeployBandsDisjoint(failures, notes);
+                CheckDeployBarKitButton(failures, notes);
             }
             catch (Exception ex)
             {
@@ -220,6 +230,121 @@ namespace DeNelle.Editor
 
             if (failures.Count == before)
                 notes.Add("ScoutReport contract holds (walls/garrison/boss honest, no cosmetic reward fields, safe null-def fallback)");
+        }
+
+        // -- 4. WO-1385 BAND CONTRACT [deploy-bands-disjoint] (source-lint) ------
+        // This suite has no headless screen build (source-lint + pure VM only), so the
+        // pin reads the literal band constants the View lays the right column from and
+        // asserts the geometry that the owner's 2026-09-04 screenshot violated:
+        //   0 <= ScoutY0 < ScoutY1 < GuideY0 < GuideY1 < EnemyY0 < EnemyY1 <= 1
+        // with a real gap (>= 0.005) between neighbouring bands. RED if any two bands
+        // touch or cross (e.g. GuideBandY1 set back to 0.600 above a 0.44 scout top).
+        const string DeployScreenRel = "_Modules/Village/Hero/RaidDeployScreen.cs";
+
+        static void CheckDeployBandsDisjoint(List<string> failures, List<string> notes)
+        {
+            const string Tag = "[deploy-bands-disjoint]";
+            int before = failures.Count;
+            string path = Path.Combine(Application.dataPath, DeployScreenRel);
+            if (!File.Exists(path)) { failures.Add(Tag + " RaidDeployScreen.cs not found at " + path); return; }
+            string text;
+            try { text = File.ReadAllText(path); }
+            catch (Exception ex) { failures.Add(Tag + " RaidDeployScreen.cs unreadable (" + ex.Message + ")"); return; }
+
+            string[] names = { "ScoutBandY0", "ScoutBandY1", "GuideBandY0", "GuideBandY1", "EnemyBandY0", "EnemyBandY1" };
+            var vals = new float[names.Length];
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (!TryReadConstFloat(text, names[i], out vals[i]))
+                {
+                    failures.Add(Tag + " could not read 'private const float " + names[i] + " = <literal>f;' from " +
+                                 "RaidDeployScreen.cs - the band constants must stay literal so this oracle can judge them");
+                    return;
+                }
+            }
+
+            if (vals[0] < 0f) failures.Add(Tag + " ScoutBandY0=" + vals[0] + " is below the body bottom");
+            if (vals[5] > 1f) failures.Add(Tag + " EnemyBandY1=" + vals[5] + " is above the body top");
+            for (int i = 0; i + 1 < names.Length; i++)
+            {
+                if (vals[i + 1] <= vals[i])
+                    failures.Add(Tag + " " + names[i + 1] + "=" + vals[i + 1] + " is not above " + names[i] + "=" + vals[i] +
+                                 " - the right-column bands intersect (WO-1385: ENEMY BASE / ECHO GUIDE / SCOUT REPORT " +
+                                 "each own a vertical band; the owner's screenshot had three elements in one)");
+            }
+            // The gaps BETWEEN bands (scout->guide, guide->enemy) must be real, not zero.
+            if (vals[2] - vals[1] < 0.005f)
+                failures.Add(Tag + " SCOUT top " + vals[1] + " and GUIDE bottom " + vals[2] + " have no gap");
+            if (vals[4] - vals[3] < 0.005f)
+                failures.Add(Tag + " GUIDE top " + vals[3] + " and ENEMY bottom " + vals[4] + " have no gap");
+
+            if (failures.Count == before)
+                notes.Add("right-column bands disjoint (scout " + vals[0] + "-" + vals[1] + " / guide " + vals[2] + "-" +
+                          vals[3] + " / enemy " + vals[4] + "-" + vals[5] + ")");
+        }
+
+        static bool TryReadConstFloat(string text, string name, out float value)
+        {
+            value = 0f;
+            var m = System.Text.RegularExpressions.Regex.Match(text,
+                @"private\s+const\s+float\s+" + name + @"\s*=\s*([0-9]*\.?[0-9]+)f?\s*;");
+            if (!m.Success) return false;
+            return float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out value);
+        }
+
+        // -- 5. WO-1385 DEPLOY-BAR CONTRACT [deploy-bar-kit-button] (source-lint) -
+        // Owner 2026-09-04 (Seeker build 355905, on the BEGIN ASSAULT row): "yuck". The
+        // button sat on a flat yellow AddImage slab ("DeployGlow", the WO-839 halo) beside
+        // ARMY READY?'s framed kit button - two visual languages on one row. Contract:
+        // BuildDeployBar builds BEGIN ASSAULT through BuildObsidianButton with the Yellow
+        // primary face, wires OnDeploy, and contains NO AddImage / "DeployGlow" at all.
+        // RED if the slab literal returns or the CTA goes back to ElarionUiKit.Button(Confirm).
+        static void CheckDeployBarKitButton(List<string> failures, List<string> notes)
+        {
+            const string Tag = "[deploy-bar-kit-button]";
+            int before = failures.Count;
+            string path = Path.Combine(Application.dataPath, DeployScreenRel);
+            if (!File.Exists(path)) { failures.Add(Tag + " RaidDeployScreen.cs not found at " + path); return; }
+            string text;
+            try { text = File.ReadAllText(path); }
+            catch (Exception ex) { failures.Add(Tag + " RaidDeployScreen.cs unreadable (" + ex.Message + ")"); return; }
+
+            int start = text.IndexOf("private void BuildDeployBar(", StringComparison.Ordinal);
+            if (start < 0) { failures.Add(Tag + " RaidDeployScreen.BuildDeployBar not found - the CTA builder moved"); return; }
+            // The next method after the bar is the seating helper; bound the body there.
+            int end = text.IndexOf("private static void SeatFooterCtaAtCanonicalHeight(", start, StringComparison.Ordinal);
+            if (end < 0) end = Math.Min(start + 6000, text.Length);
+            string bar = text.Substring(start, end - start);
+
+            if (bar.IndexOf("\"DeployGlow\"", StringComparison.Ordinal) >= 0)
+                failures.Add(Tag + " the \"DeployGlow\" slab literal is back in BuildDeployBar (owner: \"yuck\")");
+            if (bar.IndexOf("AddImage(", StringComparison.Ordinal) >= 0)
+                failures.Add(Tag + " BuildDeployBar paints an AddImage behind a CTA - the row must be kit buttons only");
+
+            int obs = bar.IndexOf("BuildObsidianButton(", StringComparison.Ordinal);
+            if (obs < 0)
+                failures.Add(Tag + " BEGIN ASSAULT is no longer built by ElarionUiKit.BuildObsidianButton");
+            else
+            {
+                int callEnd = bar.IndexOf("OnDeploy", obs, StringComparison.Ordinal);
+                string call = callEnd > obs ? bar.Substring(obs, callEnd - obs) : bar.Substring(obs);
+                if (call.IndexOf("ObsidianButtonColor.Yellow", StringComparison.Ordinal) < 0)
+                    failures.Add(Tag + " the BEGIN ASSAULT BuildObsidianButton call is not the Yellow primary face");
+                if (call.IndexOf("\"BEGIN ASSAULT\"", StringComparison.Ordinal) < 0)
+                    failures.Add(Tag + " the BuildObsidianButton call in BuildDeployBar is not labelled \"BEGIN ASSAULT\"");
+                if (callEnd < 0)
+                    failures.Add(Tag + " the BEGIN ASSAULT button no longer wires OnDeploy");
+            }
+            // Both CTAs on the row share the seating call (same row geometry).
+            int seats = 0, at = 0;
+            while ((at = bar.IndexOf("SeatFooterCtaAtCanonicalHeight(", at, StringComparison.Ordinal)) >= 0) { seats++; at++; }
+            if (seats < 2)
+                failures.Add(Tag + " BuildDeployBar seats " + seats + " CTA(s) at the canonical height; ARMY READY? and " +
+                             "BEGIN ASSAULT must share the row geometry (2 expected)");
+
+            if (failures.Count == before)
+                notes.Add("BEGIN ASSAULT = BuildObsidianButton Yellow, no DeployGlow slab, both CTAs seated on one row");
         }
 
         static string Join(IReadOnlyList<string> lines)

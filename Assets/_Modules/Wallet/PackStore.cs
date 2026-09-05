@@ -301,6 +301,11 @@ namespace DeNelle.Wallet
         private string _focusSku;
         private string _pendingShortfallLabel;
         private int _pendingShortfallMissing;
+        // WO-1386 - armed by FocusShortfall, consumed ONCE by RouteGuestShortfallToWalletConnect on
+        // the next open. A bool rather than re-reading the label, because the label is never
+        // cleared and a route that re-fired on every later open would throw a connect sheet at a
+        // player who came back to browse.
+        private bool _shortfallWalletRouteArmed;
         // WO-1253 — Manage "Buy builder" sets a pending SKU before opening the store so the
         // spotlight lands on the permanent-builder SKU even when the host is spawned in the same
         // call (OnEnable -> Render runs before an instance method could).
@@ -402,6 +407,9 @@ namespace DeNelle.Wallet
             LatchPiSpotlightOnOpen();
 
             Render();
+            // WO-1386 - AFTER the first Render, because the connect door writes the commerce banner
+            // and the banner must exist; the spotlight it lands beside was resolved by that Render.
+            RouteGuestShortfallToWalletConnect();
             RefreshWalletMirror().Forget();
             RefreshQuotedPrices().Forget();
             // WO-1323 — the Pi shelf's figures come from /api/pi/quote, and this is the one place
@@ -628,7 +636,60 @@ namespace DeNelle.Wallet
         {
             _pendingShortfallLabel = resourceLabel;
             _pendingShortfallMissing = missing;
+            _shortfallWalletRouteArmed = missing > 0 && !string.IsNullOrEmpty(resourceLabel);
             FlowTrace.Step("Store", $"FocusShortfall requested: {missing} {resourceLabel}.");
+        }
+
+        /// <summary>
+        /// WO-1386 (owner ruling 2026-09-04, verbatim: <i>"nothing should be guest buyable on a
+        /// crypto account otherwise we can never persist change"</i>). A GUEST whose shortfall
+        /// remedy the wallet rule refuses is routed to the WALLET-CONNECT surface, not left on a
+        /// pack checkout they cannot complete. On the Solana rail that is EVERY impulse pack, so
+        /// the "Short N wood" door would otherwise open onto a card whose Buy is withheld and whose
+        /// only way forward is reading a banner.
+        ///
+        /// <para>Fires ONCE per <see cref="FocusShortfall"/> request (armed there, consumed here) -
+        /// never per Render, never on an open the caller did not tie to a shortfall - so a player
+        /// browsing for any other reason is not handed a connect sheet. The spotlight STILL lands
+        /// on the remedy pack (<see cref="ResolveFocusSku"/> is untouched), so when the connect
+        /// completes the pack they came for is the card in front of them, and the Buy face on it
+        /// is now real.</para>
+        ///
+        /// <para>Asks the ONE predicate the CTA asks, <see cref="PurchaseGate.WalletIsTheBlocker"/>,
+        /// so this door can never disagree with the button: rail closed => no route (connecting
+        /// would not help); wallet attested => no route; Pi skin => no route, because the connect
+        /// door is a SOLANA door and a Pi player has no use for it (WO-1323).</para>
+        /// </summary>
+        private void RouteGuestShortfallToWalletConnect()
+        {
+            if (!_shortfallWalletRouteArmed) return;
+            _shortfallWalletRouteArmed = false;
+            if (string.IsNullOrEmpty(_pendingShortfallLabel) || _pendingShortfallMissing <= 0) return;
+
+            var offer = ShortfallPackOffer.Resolve(_pendingShortfallLabel, _pendingShortfallMissing);
+            if (!offer.HasOffer || offer.Pack == null) return;
+
+            if (PiDisplay)
+            {
+                // Pi needs the wallet too (owner 2026-09-04: "same logic based on USD"), but the
+                // door below is _wallet.Connect() - a SOLANA handshake a Pi player cannot complete.
+                // The Pi plate on the spotlight card (StoreStrings.PiWalletRequired) carries the
+                // refusal; a Pi-native connect surface is not in this lane.
+                FlowTrace.Step("Store", "shortfall door: Pi skin - the Solana wallet-connect route stands " +
+                                        "down; the Pi plate on the card is the refusal (WO-1323 / WO-1386).");
+                return;
+            }
+
+            if (!PurchaseGate.WalletIsTheBlocker(offer.Pack)) return;
+
+            PaymentChannel channel = PaymentChannelResolver.Current;
+            string sentence = PurchaseGate.WalletRefusalSentence(channel);
+            FlowTrace.Step("Store",
+                $"shortfall door: GUEST on channel {channel} asked for '{offer.Pack.Sku}' " +
+                $"({_pendingShortfallMissing} {_pendingShortfallLabel} short) and the wallet rule refuses it - " +
+                "routing to the wallet-connect surface instead of a pack checkout (WO-1386). " +
+                $"Sentence shown: \"{sentence}\"");
+            ConnectForWalletGate(sentence).Forget();
         }
 
         /// <summary>
@@ -2411,10 +2472,12 @@ namespace DeNelle.Wallet
 
             // WO-1121: the flag test lives BEHIND PurchaseGate.CanBuy() and is not read here. The
             // gate answers the same question plus two more the raw flag cannot (a flag-ON build whose
-            // rail has no resolvable mint; and the owner's 2026-08-21 wallet rule above $4.99) — and,
-            // the load-bearing part, PackStore.Purchase() consults the SAME method, so the button and
+            // rail has no resolvable mint; and the owner's wallet rule - above $4.99 off-chain
+            // (2026-08-21), EVERY price on the Solana rail (WO-1386, 2026-09-04)) — and, the
+            // load-bearing part, PackStore.Purchase() consults the SAME method, so the button and
             // the charge path can never disagree. Re-reading FeatureFlags here would re-open exactly
-            // the UI-only gate the ruling forbids.
+            // the UI-only gate the ruling forbids. The refusal sentence is chosen by
+            // PurchaseGate.WalletRefusalSentence per channel - never worded here.
             if (!PurchaseGate.CanBuy(pack, out string gateReason))
             {
                 // Two shapes of refusal, and the difference matters to the player:
@@ -2428,16 +2491,20 @@ namespace DeNelle.Wallet
                 bool walletIsTheBlocker = PurchaseGate.WalletIsTheBlocker(pack);
 
                 // ⛔ WO-1323 — THE "CONNECT WALLET" DOOR IS A SOLANA DOOR AND MUST NOT OPEN FOR A PI
-                // PLAYER. PurchaseGate is UNTOUCHED: the rule (the $4.99 guest ceiling) still refuses
-                // exactly the same packs for exactly the same reason, and nothing about walletAllowed
+                // PLAYER. PurchaseGate is UNTOUCHED by WO-1323: the rule (the $4.99 guest ceiling
+                // then; wallet at EVERY price on Pi since WO-1386, 2026-09-04) refuses the same packs
+                // the gate refuses on every other surface, and nothing about walletAllowed
                 // or the SKR charge path moves. What changes is only the FACE this store puts on that
                 // refusal — a plate that names the Pi truth, instead of a button that would send a Pi
                 // player into a Solana wallet-connect flow they have no use for. A refusal is a PLATE
                 // (UI-002); this is that rule applied to an audience the button was never written for.
                 if (walletIsTheBlocker && PiDisplay)
                 {
-                    string piGate = StoreStrings.Format(StoreStrings.KeyPiWalletGate,
-                        PurchaseGate.FormatUsd(PurchaseGate.WalletRequiredAboveUsd));
+                    // WO-1386 (owner 2026-09-04: "mark anything for Pi as same logic based on USD"):
+                    // Pi has no guest tier either, so the plate no longer formats the $4.99 line
+                    // (StoreStrings.KeyPiWalletGate is STALE - see its note); it says wallet-at-any-
+                    // price, Pi-worded, still a PLATE and not the Solana connect button.
+                    string piGate = StoreStrings.PiWalletRequired();
                     FitInto(MakeText(host, piGate, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
                         TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
                     FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': wallet-rule refusal, PI wording — " +

@@ -70,14 +70,23 @@ namespace DeNelle.Core.UI
         /// SKILL (Wisdom) chip beneath it. They are separate sub-rects, never a shared box.</summary>
         public static readonly Rect VitalsMount = Rect.MinMaxRect(0.011f, 0.800f, 0.240f, 0.983f);
 
-        /// <summary>Heart of Elarion bar mount.</summary>
-        public static readonly Rect HeartMount = Rect.MinMaxRect(0.011f, 0.700f, 0.240f, 0.790f);
+        /// <summary>Heart of Elarion plate mount. WO-1384 (owner felt-test 2026-09-04, Seeker):
+        /// the plate now seats FOUR text rows - name, objective, the Heartfire marks row and the
+        /// rekindle line - so it GREW from 0.700 to 0.655 (0.090 -> 0.135 of screen = 130 ref
+        /// units at 2670x1200, 146 at 1920x1080). The owner's ruling was "grow the plate, never
+        /// shrink the text": the old 87-unit band had two Heartfire lines forced into a
+        /// 23-unit slot, which is why the marks drew half off the plate at the plate's smallest
+        /// size. The 0.010 gap to the Minimap mount below is deliberate breathing room for the
+        /// Night Market card's gold frame (HudKitController.NightMarketCardFramePx).</summary>
+        public static readonly Rect HeartMount = Rect.MinMaxRect(0.011f, 0.655f, 0.240f, 0.790f);
 
         /// <summary>Minimap mount - holds TWO exclusive bands: the square plate hanging from
         /// the mount's top-left, and the region STATUS LINE in its own band BELOW the plate.
         /// ⛔ The status line is never drawn ACROSS the plate and never beside it: the owner
-        /// captured "Elarion - Safe - N threats" competing with both the map and the gear.</summary>
-        public static readonly Rect MinimapMount = Rect.MinMaxRect(0.011f, 0.420f, 0.240f, 0.685f);
+        /// captured "Elarion - Safe - N threats" competing with both the map and the gear.
+        /// WO-1384: yMax 0.685 -> 0.645 to hand the Heart plate above the room it needed; the
+        /// Night Market card hangs from this edge, so its band moved down with it.</summary>
+        public static readonly Rect MinimapMount = Rect.MinMaxRect(0.011f, 0.420f, 0.240f, 0.645f);
 
         /// <summary>Dock mount - the gear + Store row (side by side, never stacked) and the
         /// slide-out drawer that opens to the right of both.</summary>
@@ -132,23 +141,28 @@ namespace DeNelle.Core.UI
         //
         // ⚠ THEREFORE THIS BAND TAKES THE PLATE'S SEAT, AND THAT CONFLICT IS STATED, NOT HIDDEN.
         // If the minimap plate is ever constructed again, these two collide and MUST be re-split
-        // in this file - and the seat to move the card to is already measured: the pocket to the
-        // RIGHT of the plate inside the same mount is 291.7 x 200 units
-        // (x from MinimapMount.xMin + MinimapPlatePx, y the plate's own band), which still holds
-        // a 272 x 132 card. Do not resolve that day by drawing the card across the plate.
+        // in this file. The pocket to the RIGHT of the plate inside the same mount is
+        // 291.7 x 200 units (x from MinimapMount.xMin + MinimapPlatePx, y the plate's own band);
+        // it held the original 272 x 132 card but does NOT hold the WO-1384 320 x 156 one, so
+        // that day the card and the plate must be re-split vertically or the plate must go
+        // elsewhere. Do not resolve it by drawing the card across the plate.
         //
         // ⛔ CLEAR OF THE MOVEMENT STICK BY CONSTRUCTION, WHICH IS THE ONE NON-NEGOTIABLE. The
-        // card's band bottoms out at y 0.548 of screen; the MoveCluster mount tops out at 0.330.
-        // Covering the stick breaks the game's only movement control, so the oracle asserts this
-        // rather than trusting the arithmetic above to stay true.
+        // card's band bottoms out at y 0.483 of screen (WO-1384: 0.645 - 156 / 965.4); the gear
+        // row tops out at 0.473 and the MoveCluster mount at 0.330. Covering the stick breaks the
+        // game's only movement control, so the oracle asserts this rather than trusting the
+        // arithmetic above to stay true.
 
-        /// <summary>Night Market card width in reference units. 272 x 132 keeps the 1798x875
-        /// `realm-store` card art at its authored 2.055:1 aspect, fits the Minimap mount's
-        /// 491.9-unit width with room to spare, and clears the touch floor on BOTH axes.</summary>
-        public const float NightMarketCardWidthPx = 272f;
-        /// <summary>See <see cref="NightMarketCardWidthPx"/>. 132 = 272 / 2.055, the card art's
-        /// own aspect - never an independently chosen number.</summary>
-        public const float NightMarketCardHeightPx = 132f;
+        /// <summary>Night Market card width in reference units. WO-1384 (owner, 2026-09-04:
+        /// "it needs to be the shining gem ... above all stands out"): 272 -> 320, so the card is
+        /// the LARGEST control in the column by construction - 320 x 156 = 49920 units^2 against
+        /// the gear's 112 x 112 = 12544. 320 x 156 keeps the 1798x875 `realm-store` card art at
+        /// its authored 2.055:1 aspect, fits the Minimap mount's 491.9-unit width, and clears
+        /// the touch floor on BOTH axes. Pinned by HudLabelFitRegression [night-market-standout].</summary>
+        public const float NightMarketCardWidthPx = 320f;
+        /// <summary>See <see cref="NightMarketCardWidthPx"/>. 156 = 320 / 2.055 (155.7), the
+        /// card art's own aspect - never an independently chosen number.</summary>
+        public const float NightMarketCardHeightPx = 156f;
 
         /// <summary>
         /// The Night Market card's screen band, hung from the TOP-LEFT of

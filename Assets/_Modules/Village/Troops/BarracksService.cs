@@ -95,20 +95,11 @@ namespace DeNelle.Village
         private static bool CanAfford(ResourceCost cost) => State != null &&
             State.Resources.Coins >= cost.Coins && Ledger.ResourceLedger.CanAfford(LedgerCost(cost));
 
-        private static bool TrySpend(ResourceCost cost)
-        {
-            if (!CanAfford(cost)) return false;
-            State.Resources.Coins -= cost.Coins;
-            if (Ledger.ResourceLedger.TrySpend(LedgerCost(cost))) return true;
-            State.Resources.Coins += cost.Coins;
-            return false;
-        }
-
-        private static void Refund(ResourceCost cost)
-        {
-            RefundLedgerCost(LedgerCost(cost));
-            if (State != null) State.Resources.Coins += Mathf.Max(0, cost.Coins);
-        }
+        // WO-1387 (2026-09-04 23:16): the private TrySpend/Refund pair that debited GameState
+        // Coins for a TRAIN unit is DELETED, not disabled. Training and troop upgrades charge
+        // nothing (owner: "training free ... just time"); the one coins debit in the game is
+        // BuildTimerService.SpendCoins behind TryInstantFinish (gold hires mercenaries = skips
+        // the clock). Re-adding a coins debit here is the reversal chain on WO-1387 repeating.
 
         /// <summary>
         /// WO-911 — hand a charged basket straight back when the ENQUEUE that followed it is
@@ -206,7 +197,9 @@ namespace DeNelle.Village
 
         /// <summary>
         /// True when <paramref name="troopId"/> can be upgraded now: unlocked, below its max
-        /// level, not already upgrading, and affordable. <paramref name="reason"/> carries the block.
+        /// level and not already upgrading. <paramref name="reason"/> carries the block.
+        /// WO-1387 (owner 2026-09-04 23:16, "just time"): there is NO affordability test - a troop
+        /// upgrade costs wall-clock time on the Research line and nothing else.
         /// </summary>
         public static bool CanUpgradeTroop(string troopId, out string reason)
         {
@@ -219,16 +212,14 @@ namespace DeNelle.Village
             int level = TroopLevel(troopId);
             if (!BarracksProgression.HasNextTroopLevel(troopId, level)) { reason = "Troop is at max level."; return false; }
             if (IsUpgradingTroop(troopId)) { reason = "Upgrade already in progress."; return false; }
-
-            var cost = LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, level + 1));
-            if (!Ledger.ResourceLedger.CanAfford(cost)) { reason = MissingOf(cost); return false; }
             return true;
         }
 
         /// <summary>
-        /// Spends the next troop-level cost and ENQUEUES a TroopUpgrade job on the Research channel
-        /// (the level applies at completion via <see cref="TroopUpgradeEffect"/>). Returns false
-        /// (no spend/enqueue) when <see cref="CanUpgradeTroop"/> refuses or the spend fails.
+        /// ENQUEUES a TroopUpgrade job on the Research channel (the level applies at completion via
+        /// <see cref="TroopUpgradeEffect"/>). Charges NOTHING (WO-1387): the price is
+        /// <see cref="BarracksProgression.TroopUpgradeSeconds"/>. Returns false (no enqueue) when
+        /// <see cref="CanUpgradeTroop"/> refuses or the Research line is at its depth cap.
         /// </summary>
         public static bool UpgradeTroop(string troopId)
         {
@@ -239,23 +230,18 @@ namespace DeNelle.Village
             }
 
             int level = TroopLevel(troopId);
-            var cost = LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, level + 1));
             float seconds = BarracksProgression.TroopUpgradeSeconds(troopId, level + 1);
 
-            // Queue check BEFORE the spend (charge-loss window — see UpgradeBarracks).
             var queue = BuildTimerService.Instance;
-            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeTroop: no BuildTimerService (nothing charged)."); return false; }
+            if (queue == null) { FlowTrace.Warn("Barracks", "UpgradeTroop: no BuildTimerService."); return false; }
 
-            if (!Ledger.ResourceLedger.TrySpend(cost)) { FlowTrace.Warn("Barracks", "UpgradeTroop spend failed."); return false; }
             // JobKind.TroopUpgrade's default channel is Research (JobChannels) — the single-arg overload routes it there.
-            // WO-911 (M2) records the basket for the 100% refund; (M1) a full Research line refuses,
-            // and the charge above must be handed back rather than lost.
-            if (queue.Enqueue(JobKind.TroopUpgrade, TroopUpgradePrefix + troopId, seconds, level + 1,
-                              BuildTimerService.ToJobCost(cost)) == null)
+            // WO-1387: no basket rides the job because nothing was paid; a cancel refunds zero, honestly.
+            // (M1) a full Research line still refuses at its depth cap.
+            if (queue.Enqueue(JobKind.TroopUpgrade, TroopUpgradePrefix + troopId, seconds, level + 1) == null)
             {
-                RefundLedgerCost(cost);
                 FlowTrace.Warn("Barracks",
-                    "UpgradeTroop enqueue refused (" + (queue.LastEnqueueFailure ?? "unknown") + ") — charge refunded.");
+                    "UpgradeTroop enqueue refused (" + (queue.LastEnqueueFailure ?? "unknown") + ").");
                 return false;
             }
 
@@ -268,10 +254,15 @@ namespace DeNelle.Village
 
         /// <summary>
         /// COC-parity TIMED training: for each of <paramref name="qty"/> units, checks the troop is
-        /// unlocked + there is army room + the resource cost is affordable, spends the cost, and
-        /// ENQUEUES a TrainTroop job on the Train channel (the unit lands in the army at completion
-        /// via <see cref="TrainTroopEffect"/> — NOT instantly, NO private timer). Stops early when a
-        /// gate fails (that unit is neither spent nor enqueued). Returns the number enqueued.
+        /// unlocked + there is army room, and ENQUEUES a TrainTroop job on the Train channel (the
+        /// unit lands in the army at completion via <see cref="TrainTroopEffect"/> - NOT instantly,
+        /// NO private timer). Stops early when a gate fails (that unit is not enqueued). Returns
+        /// the number enqueued.
+        /// WO-1387 (owner 2026-09-04 23:16): training CHARGES NOTHING - no coins, no resources.
+        /// "we agreed earlier training free ... just time ... and gold is to hire mercenaries if
+        /// they dont want to wait". The price is TroopDef.BuildSeconds on the Train line; gold is
+        /// spent only by BuildTimerService.TryInstantFinish to skip it. TroopDef.CostGold is NOT
+        /// read here (it stays authored as the raid-reward anchor / hire basis).
         /// This is the sanctioned timed path; the existing instant TroopTrainingVM/DialogueCommands
         /// path is untouched (its felt-behaviour flip to this queue is WO-771.8 / PO-gated).
         /// </summary>
@@ -305,10 +296,8 @@ namespace DeNelle.Village
             var queue = BuildTimerService.Instance;
             if (queue == null) { stopReason = "Training queue is not running."; return 0; }
 
-            // ResourceCost ctor order: (wood, food, iron, crystals, coins). Charged via the
-            // GameState ledger (see the wallet comment above), never the in-session pool.
-            var rawCost = new ResourceCost(coins: def.CostGold);
-            var cost = LedgerCost(rawCost);
+            // WO-1387: no cost is built and nothing is charged. The old lines here priced the
+            // unit at `new ResourceCost(coins: def.CostGold)` and TrySpend'd it per unit - deleted.
 
             // OVER-QUEUE FIX (full-army gate lane): the old per-unit army.CanTrain check read
             // the LIVE roster only — in-flight Train jobs were invisible to it, so 20+ units
@@ -317,9 +306,7 @@ namespace DeNelle.Village
             // that would push roster + committed past the cap. The SEED numbers (roster incl.
             // wounded, committed Train slots, cap) come from ArmyReadiness.Compute — the ONE
             // readiness formula (owner review 2026-08-01); only the per-unit growth of
-            // `committed` inside the loop stays local. Charge semantics are unchanged: the
-            // spend still happens per unit, only AFTER that unit passes the cap check, so a
-            // refused unit is neither charged nor enqueued.
+            // `committed` inside the loop stays local.
             var readiness = ArmyReadiness.Compute(state);
             int unitSlots = TroopDialogueCommands.SlotOf(troopId);
             int rosterSlots = readiness.RosterSlots;
@@ -353,24 +340,16 @@ namespace DeNelle.Village
                     stopReason = "Army is full.";                       // cap full (incl. in-flight jobs)
                     break;
                 }
-                if (!TrySpend(rawCost))
-                {
-                    stopReason = rawCost.Coins > (State?.Resources.Coins ?? 0)
-                        ? "Need more gold." : MissingOf(cost);          // unaffordable - names the SHORT resource
-                    break;
-                }
                 string jobId = TrainPrefix + troopId + ":" + Guid.NewGuid().ToString("N").Substring(0, 8);
-                // WO-911 (M2): each unit is charged individually, so each unit's job carries its OWN
-                // basket — cancelling ONE expanded item refunds exactly that unit (ruling Q12), never
-                // the whole stack. (M1): the Train line refuses at its depth cap; this unit is
-                // refunded and the muster stops with a readable reason rather than truncating silently.
-                if (queue.Enqueue(JobKind.TrainTroop, jobId, def.BuildSeconds, 0,
-                                  BuildTimerService.ToJobCost(rawCost)) == null)
+                // WO-1387: the job carries NO basket because nothing was paid (a cancel refunds zero,
+                // honestly - WO-911 Q1 "100% of what was paid" is 100% of nothing). (M1): the Train
+                // line refuses at its depth cap; the muster stops with a readable reason rather than
+                // truncating silently.
+                if (queue.Enqueue(JobKind.TrainTroop, jobId, def.BuildSeconds, 0) == null)
                 {
-                    Refund(rawCost);
                     stopReason = queue.LastEnqueueFailure ?? "Training queue is full.";
                     FlowTrace.Warn("Barracks",
-                        $"train enqueue refused at {enqueued}/{qty} '{troopId}' ({stopReason}) — this unit's charge refunded.");
+                        $"train enqueue refused at {enqueued}/{qty} '{troopId}' ({stopReason}).");
                     break;
                 }
                 committed += unitSlots;

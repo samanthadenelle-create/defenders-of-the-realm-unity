@@ -26,6 +26,10 @@
 //   E. SOURCE LINT (comments AND string literals stripped first, so a doc-comment or a
 //      trace string can never satisfy it): no consumer file assigns LastHarvestClaimMs;
 //      OfflineClaimCoordinator.cs does.
+//   Case 4/5 (2026-09-04 22:29, owner felt-test "YOUR REALM WORKED FOR 0m"): the
+//      cold-load and resume LIFECYCLE TRIGGERS in one launch window produce ONE claim,
+//      ONE advance and ONE completion (OfflineHarvestService's latch); a resume after a
+//      real pause edge (OpenClaimWindow) still claims.
 //
 // SAFETY: snapshots the PlayerPrefs save blob, installs a THROWAWAY GameState as the
 // active state by reflection (editmode never runs Awake -- the CoreSaveContract /
@@ -75,6 +79,13 @@ namespace DeNelle.Editor
             GameState throwaway = null;
             bool installed = false;
 
+            // Case 4/5 readouts: how many times the completion seam and the away-summary
+            // event fired for ONE launch window. Declared here so the finally can unsubscribe.
+            int completions = 0, reveals = 0;
+            System.Action<OfflineClaimWindow> onCompleted = _ => completions++;
+            System.Action<OfflineHarvestResult> onRevealed = _ => reveals++;
+            OfflineHarvestService ohsForEvents = null;
+
             try
             {
                 throwaway = ScriptableObject.CreateInstance<GameState>();
@@ -102,6 +113,9 @@ namespace DeNelle.Editor
                 ohsGo = new GameObject("OfflineHarvestService (fanout-oracle)");
                 var ohs = ohsGo.AddComponent<OfflineHarvestService>();
                 ohs.OfflineCapHours = 10f;
+                ohsForEvents = ohs;
+                OfflineClaimCoordinator.ClaimCompleted += onCompleted;
+                ohs.Claimed += onRevealed;
 
                 echoGo = new GameObject("EchoService (fanout-oracle)");
                 var echo = echoGo.AddComponent<EchoService>();
@@ -219,6 +233,75 @@ namespace DeNelle.Editor
                     failures.Add("backwards clock left the claim clock in the future (monotonic guard did not re-stamp)");
 
                 // =============================================================
+                //  Case 4 -- cold-load AND resume in the SAME launch window:
+                //  ONE claim, ONE advance, ONE completion (owner felt-test 2026-09-04 22:29)
+                // -------------------------------------------------------------
+                //  THE MEASURED RED (device log, cold launch, pid 28564): Android delivered
+                //  OnApplicationPause(false) during boot, so "-> Claim(resume)" ran FIRST
+                //  ("Claim #1 (resume): ONE delta = 45328s (12.59h) ... clock advanced ONCE
+                //  ... => REVEAL") and 17 ms later "-> Claim(cold-load)" ran AGAIN ("Claim #2
+                //  (cold-load): ONE delta = 0s ... => REVEAL"). The second reveal is the
+                //  "YOUR REALM WORKED FOR 0m" the owner saw. The coordinator did its job
+                //  (one delta per claim); the defect is TWO lifecycle triggers for ONE window.
+                //  OfflineHarvestService.ClaimDeferred now latches: the second trigger in a
+                //  window is SKIPPED. ClaimDeferredNow is that trigger with the two-frame
+                //  coroutine wait collapsed (editmode never pumps coroutines).
+                //
+                //  RED-FIRST: delete the `if (_windowClaimed) { ... return false; }` block in
+                //  OfflineHarvestService.TryLatchClaim and this case fails four ways -- the
+                //  second trigger returns Sequence N+2, the probe is called twice, ClaimCount
+                //  moves by 2 and the clock is advanced a second time to the second "now".
+                // =============================================================
+                probe.Calls = 0;
+                double away12hMs = 45328.0 * 1000.0;                 // the owner's exact absence
+                state.LastHarvestClaimMs = TimeSource.NowUnixMs() - away12hMs;
+                int claimsBefore4 = OfflineClaimCoordinator.ClaimCount;
+                completions = 0;
+                reveals = 0;
+
+                var first = ohs.ClaimDeferredNow("cold-load");
+                var second = ohs.ClaimDeferredNow("resume");
+
+                if (first.Sequence != claimsBefore4 + 1)
+                    failures.Add($"case4 [one-claim-per-window] the FIRST trigger (cold-load) did not claim (Sequence {first.Sequence}, expected {claimsBefore4 + 1})");
+                if (first.ElapsedSeconds < 45328.0 - 5.0 || first.ElapsedSeconds > 45328.0 + 60.0)
+                    failures.Add($"case4 [one-claim-per-window] first claim measured {first.ElapsedSeconds:0}s, expected ~45328s (12.59h)");
+                if (second.Sequence != 0)
+                    failures.Add($"case4 [one-claim-per-window] the SECOND trigger (resume) in the same window CLAIMED AGAIN " +
+                                 $"(Sequence {second.Sequence}) -- this is the '0m' popup: the second claim measures ~0s and re-reveals");
+                if (!ohs.LastDeferredClaimSkipped)
+                    failures.Add("case4 [one-claim-per-window] the service did not report the resume trigger as SKIPPED");
+                if (ohs.WindowClaimSequence != first.Sequence || ohs.WindowClaimReason != "cold-load")
+                    failures.Add($"case4 [one-claim-per-window] the window is recorded as covered by #{ohs.WindowClaimSequence} " +
+                                 $"({ohs.WindowClaimReason}), expected #{first.Sequence} (cold-load)");
+                if (probe.Calls != 1)
+                    failures.Add($"case4 [one-claim-per-window] consumers were fanned out to {probe.Calls}x for one launch window (expected exactly 1)");
+                if (OfflineClaimCoordinator.ClaimCount != claimsBefore4 + 1)
+                    failures.Add($"case4 [one-claim-per-window] ClaimCount went {claimsBefore4} -> {OfflineClaimCoordinator.ClaimCount} " +
+                                 "for one launch window (expected +1: ONE clock advance)");
+                if (System.Math.Abs(state.LastHarvestClaimMs - first.NowUnixMs) > 0.5)
+                    failures.Add($"case4 [one-claim-per-window] the clock was advanced AGAIN after the first claim " +
+                                 $"({state.LastHarvestClaimMs:0} != first claim's now {first.NowUnixMs:0})");
+                if (completions != 1)
+                    failures.Add($"case4 [one-claim-per-window] ClaimCompleted fired {completions}x for one launch window (expected 1: ONE reveal seam)");
+                if (reveals > 1)
+                    failures.Add($"case4 [one-claim-per-window] the away summary was raised {reveals}x for one launch window (at most 1)");
+
+                // =============================================================
+                //  Case 5 -- a GENUINE resume (a real pause edge first) still claims
+                // =============================================================
+                probe.Calls = 0;
+                ohs.OpenClaimWindow("regression-pause");             // what OnApplicationPause(true) does
+                var third = ohs.ClaimDeferredNow("resume");
+                if (third.Sequence != claimsBefore4 + 2)
+                    failures.Add($"case5 [resume-after-pause-claims] a resume AFTER a real pause did not claim (Sequence {third.Sequence}, " +
+                                 $"expected {claimsBefore4 + 2}) -- the latch is stuck and a backgrounded player would never accrue on return");
+                if (ohs.LastDeferredClaimSkipped)
+                    failures.Add("case5 [resume-after-pause-claims] the post-pause resume was reported as SKIPPED");
+                if (probe.Calls != 1)
+                    failures.Add($"case5 [resume-after-pause-claims] the post-pause resume fanned out {probe.Calls}x (expected 1)");
+
+                // =============================================================
                 //  E. Source lint -- one writer, and only one
                 // =============================================================
                 LintSingleWriter(failures);
@@ -229,6 +312,9 @@ namespace DeNelle.Editor
             }
             finally
             {
+                OfflineClaimCoordinator.ClaimCompleted -= onCompleted;
+                if (ohsForEvents != null) ohsForEvents.Claimed -= onRevealed;
+
                 // EchoRepairService self-installs a logic-only WallRepairController host.
                 var stray = GameObject.Find("WallRepair_EchoRepairEngine");
                 if (stray != null) Object.DestroyImmediate(stray);

@@ -56,6 +56,43 @@ namespace DeNelle.Editor
                 !panel.Contains("EnterBuildMode(DeNelle.Core.Catalog.BuildType.Town)"))
                 failures.Add("absent building categories have no real secondary Town-build route");
 
+            // [research-locked-visible] ADDED 2026-09-04 (WO-1390, owner on the Seeker, build 355905:
+            // "under manage research it shows nothing, should it show Tier one and show locked with a
+            // link to upgrade the prerequisite"). Device log: `research browse ... 6 with a tier
+            // ladder -> 0 perk row(s)`. The cause was ONE line in BuildResearchBrowse -
+            // `if (!can) continue;` - which dropped every tier-locked perk and discarded the
+            // CanResearch reason as `_`. The Manage rule the Troops tab already follows ("Build a
+            // Barracks to unlock" + BuildLockBadge) is now the Research rule too: a locked perk is a
+            // LOCKED row whose StateText is the CanResearch reason verbatim and whose CTA is the
+            // DOOR to the prerequisite (OpenUpgradePanel -> PanelId.BuildingUpgrade, the one existing
+            // start path), never a dead button.
+            //
+            // This suite is a SOURCE oracle (no VM fixture), so the pin is scoped to the method body.
+            // RED PROOF: restore `if (!can) continue;` in place of the locked-row block (the exact
+            // pre-WO-1390 text) -> "Research drops locked perks" fires; drop the `Locked = true`
+            // assignment -> the row-builder check fires; drop `r.Locked` from BuildBrowseRowContent
+            // -> the panel check fires.
+            int rbStart = vm.IndexOf("private void BuildResearchBrowse()", StringComparison.Ordinal);
+            int rbEnd   = rbStart >= 0 ? vm.IndexOf("        private ", rbStart + 32, StringComparison.Ordinal) : -1;
+            string researchBody = (rbStart >= 0 && rbEnd > rbStart) ? vm.Substring(rbStart, rbEnd - rbStart) : "";
+            if (rbStart < 0)
+                failures.Add("[research-locked-visible] BuildResearchBrowse not found - the locked-row pin cannot be scoped");
+            if (researchBody.Contains("if (!can) continue;"))
+                failures.Add("[research-locked-visible] Research drops locked perks (`if (!can) continue;` is back) - the owner sees an empty tab again");
+            if (!researchBody.Contains("CanResearch(bId, pId, out string reason)") ||
+                !researchBody.Contains("Locked = true,") ||
+                !researchBody.Contains("StateText = gate") ||
+                !researchBody.Contains("? \"Locked.\" : reason)") ||
+                !researchBody.Contains("OpenUpgradePanel(bId)") ||
+                !researchBody.Contains("\"UPGRADE THE HEART\"") ||
+                !researchBody.Contains(" locked)."))
+                failures.Add("[research-locked-visible] the locked research row is not built from the CanResearch reason with the upgrade-page door and the (M locked) trace");
+            int bbStart = panel.IndexOf("private void BuildBrowseRowContent(", StringComparison.Ordinal);
+            int bbEnd   = bbStart >= 0 ? panel.IndexOf("        private ", bbStart + 36, StringComparison.Ordinal) : -1;
+            string browseRowBody = (bbStart >= 0 && bbEnd > bbStart) ? panel.Substring(bbStart, bbEnd - bbStart) : "";
+            if (!browseRowBody.Contains("r.Locked") || !browseRowBody.Contains("BuildLockBadge("))
+                failures.Add("[research-locked-visible] a locked browse row does not dim + seat BuildLockBadge like the Troops rail");
+
             reason = failures.Count == 0
                 ? "Manage keeps four stable worded cards, derives availability from live placements, renders after VM population, and preserves actions/paging/Build-new."
                 : "Manage progressive disclosure regression failed: " + string.Join("; ", failures);

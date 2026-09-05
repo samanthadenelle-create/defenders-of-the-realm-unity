@@ -51,11 +51,49 @@ namespace DeNelle.Wallet
         public const string KeyBuyRailNotReady = "storeBuyRailNotReady";
 
         /// <summary>
-        /// The price-gated refusal: above <see cref="PurchaseGate.WalletRequiredAboveUsd"/> a
-        /// connected wallet is required. {0} = the threshold, formatted from that constant so the
-        /// copy can never drift from the rule it describes.
+        /// The price-gated refusal on the NON-crypto channels: above
+        /// <see cref="PurchaseGate.WalletRequiredAboveUsd"/> a connected wallet is required. {0} = the
+        /// threshold, formatted from that constant so the copy can never drift from the rule it
+        /// describes. On the Solana rail the sentence is <see cref="CryptoWalletRequired"/> instead -
+        /// <see cref="PurchaseGate.WalletRefusalSentence"/> is the one place that chooses.
         /// </summary>
         public const string KeyBuyWalletRequired = "storeBuyWalletRequired";
+
+        /// <summary>
+        /// WO-1386 (owner ruling 2026-09-04, verbatim: <i>"nothing should be guest buyable on a crypto
+        /// account otherwise we can never persist change"</i>). The refusal a Seeker GUEST sees on ANY
+        /// pack: it says WHY in the owner's sense - the purchase must be yours on every device - and it
+        /// is never a bare "wallet required". Deliberately carries no {0}: on the Solana rail there is
+        /// no threshold left to name, so a formatted price would be a lie about a tier that no longer
+        /// exists.
+        /// <para>⚠ A SENTENCE, NOT A KEY - the one exception in this file, and why: WO-1386's edit lane
+        /// did not include canon-strings.json, and a key without its canon row would render as
+        /// "[[missing:...]]" on the one screen where that reads as a scam. So the words live HERE, as
+        /// the single authority, read through <see cref="CryptoWalletRequired"/>. If a later change
+        /// moves them into canon-strings.json it must MOVE them (delete this const), never copy them -
+        /// two homes for one sentence is the drift this file's header forbids.</para>
+        /// </summary>
+        public const string BuyWalletRequiredCryptoSentence =
+            "Connect a wallet so this purchase is yours on every device.";
+
+        /// <summary>The WO-1386 refusal on every channel but Google Play (Solana, Pi, Unknown).
+        /// See <see cref="BuyWalletRequiredCryptoSentence"/>.</summary>
+        public static string CryptoWalletRequired() => BuyWalletRequiredCryptoSentence;
+
+        /// <summary>
+        /// WO-1386, second ruling the same evening (owner 2026-09-04, verbatim: <i>"mark anything for
+        /// Pi as same logic based on USD"</i>). The Pi-worded card plate for the wallet rule: Pi has
+        /// NO guest tier either, so the plate can no longer name a $4.99 line. Still Pi-worded per
+        /// WO-1323 (a Pi player is not sent to a Solana wallet flow by a button; this is a PLATE), and
+        /// still ASCII, SKR-free and distinct from the Solana sentence. Same one-exception rule as
+        /// <see cref="BuyWalletRequiredCryptoSentence"/>: a sentence here because canon-strings.json was
+        /// outside the lane; MOVE it to canon later, never copy it.
+        /// </summary>
+        public const string PiWalletRequiredSentence =
+            "Connect a wallet before buying in Pi, at any price, so this purchase is yours on every device.";
+
+        /// <summary>The Pi card plate for the wallet rule. See <see cref="PiWalletRequiredSentence"/>.</summary>
+        public static string PiWalletRequired() => PiWalletRequiredSentence;
 
         /// <summary>Short button face when the wallet rule is the blocker ("Connect Wallet").</summary>
         public const string KeyBuyWalletRequiredCta = "storeBuyWalletRequiredCta";
@@ -178,7 +216,14 @@ namespace DeNelle.Wallet
         public const string KeyPiNotOnSale = "storePiNotOnSale";
         /// <summary>Pi itself is not reachable, so nothing here can be priced or bought.</summary>
         public const string KeyPiRailUnavailable = "storePiRailUnavailable";
-        /// <summary>{0} = PurchaseGate.WalletRequiredAboveUsd. The guest ceiling, reworded for Pi.</summary>
+        /// <summary>{0} = PurchaseGate.WalletRequiredAboveUsd. The guest ceiling, reworded for Pi.
+        /// <para>⚠ STALE SINCE 2026-09-04 (WO-1386, owner: <i>"mark anything for Pi as same logic
+        /// based on USD"</i>): Pi has NO guest tier any more, so the canon row this key names
+        /// ("Packs over {0} are not on sale in Pi yet...") is no longer true and NOTHING renders it.
+        /// PackStore's Pi plate reads <see cref="PiWalletRequired"/> instead. The key and its canon
+        /// row are kept only because canon-strings.json was outside the edit lane; the follow-up is
+        /// to reword the row to the <see cref="PiWalletRequiredSentence"/> text and re-point the
+        /// plate at the key (MOVE the sentence, do not keep both).</para></summary>
         public const string KeyPiWalletGate = "storePiWalletGate";
         /// <summary>NOTHING on the shelf is Pi-purchasable — shown as the honest state it is.</summary>
         public const string KeyPiShelfEmpty = "storePiShelfEmpty";

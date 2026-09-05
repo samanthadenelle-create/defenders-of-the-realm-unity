@@ -208,6 +208,13 @@ namespace DeNelle.Village.UI
         public Action Activate;
         /// <summary>ASCII verb for the drill-in control ("Open" / "Upgrade").</summary>
         public string ActionText;
+        /// <summary>
+        /// WO-1390 - true when the row is a LOCKED prerequisite (a research perk whose building or
+        /// Village Tier is too low). The View dims it and seats the lock badge; StateText carries the
+        /// gate sentence verbatim and Activate is the DOOR to the prerequisite (the upgrade page),
+        /// never a dead "Locked" button. Sorts after every unlocked row.
+        /// </summary>
+        public bool Locked;
     }
 
     /// <summary>One authoritative troop selector entry for Manage → Troops.</summary>
@@ -220,6 +227,36 @@ namespace DeNelle.Village.UI
         public int Level;
         public bool Unlocked;
         public string Requirement;
+
+        // ── WO-1382 (2026-09-04) — the selected-troop CARD's facts, composed HERE (MVVM strict:
+        //    the View is a skin). Every state is a SENTENCE, never a tint (owner colourblind).
+        /// <summary>Barracks tier that unlocks this troop (shown as "Locked . T2" / "LOCKED . TIER 2").</summary>
+        public int LockTier = 1;
+        /// <summary>WO-1387 (2026-09-04): ALWAYS "" - training charges nothing (owner: "just time").
+        /// Kept as a field so the View's contract is unchanged; it used to read "550 gold".</summary>
+        public string TrainCostText = "";
+        /// <summary>"45s" - the authored BuildSeconds, formatted. The ONLY price of a train.</summary>
+        public string TrainTimeText = "";
+        /// <summary>"Ready" / "Training line full . 5/5 queued" (ruling #4; no gold term since WO-1387).</summary>
+        public string TrainStateText = "";
+        /// <summary>True when a TRAIN tap would be accepted right now (line depth only, WO-1387).</summary>
+        public bool TrainReady;
+        /// <summary>The whole fact sentence: "Train one: 45s . Ready" (WO-1387 shape).</summary>
+        public string TrainFactText = "";
+        /// <summary>False at max level - the View then shows a non-interactable MAX LEVEL face.</summary>
+        public bool HasNextLevel;
+        /// <summary>True while a TroopUpgrade job for this troop is on the Research line.</summary>
+        public bool UpgradeInProgress;
+        /// <summary>WO-1387 (2026-09-04): the upgrade's price is its TIME ("1m 30s"), or "" at max level.
+        /// The View composes its sub-line as UpgradeCostText + " . " + UpgradeStateText, so the time
+        /// rides this field (the Panel is another lane's file). It used to read "300 wood, 120 iron".</summary>
+        public string UpgradeCostText = "";
+        /// <summary>"Ready" / "Upgrading now" / "At max level" (no shortfall term since WO-1387).</summary>
+        public string UpgradeStateText = "";
+        /// <summary>True when an UPGRADE tap would be accepted right now.</summary>
+        public bool UpgradeReady;
+        /// <summary>The whole fact sentence: "Upgrade: 1m 30s . Ready" (WO-1387 shape).</summary>
+        public string UpgradeFactText = "";
     }
 
     /// <summary>
@@ -652,6 +689,10 @@ namespace DeNelle.Village.UI
             // player sees what they can act on immediately without doing arithmetic.
             BrowseRows.Sort((a, b) =>
             {
+                // WO-1390: a LOCKED prerequisite row (Research) always sorts after every row the
+                // player can act on; within the locked group CostWeight is the unlock tier, so
+                // the nearest door comes first. Non-Research tabs never set Locked.
+                if (a.Locked != b.Locked) return a.Locked ? 1 : -1;
                 if (a.Affordable != b.Affordable) return a.Affordable ? -1 : 1;
                 // Troops has two actions on the same unit. Training is the primary reason this
                 // destination exists and must not be paged behind zero-cost upgrade rows. The
@@ -976,7 +1017,7 @@ namespace DeNelle.Village.UI
                     string id = def.Id;
                     string name = NameOfTroop(def);
                     int level = BarracksService.TroopLevel(id);
-                    TroopChoices.Add(new TroopChoiceVM
+                    var choice = new TroopChoiceVM
                     {
                         Id = id,
                         Name = name,
@@ -987,22 +1028,32 @@ namespace DeNelle.Village.UI
                         Requirement = unlocked && trainable
                             ? "Available"
                             : "Requires Barracks Tier " + Mathf.Max(1, def.UnlockBarracksTier),
-                    });
+                        LockTier = Mathf.Max(1, def.UnlockBarracksTier),
+                    };
+                    TroopChoices.Add(choice);
                     if (!unlocked || !trainable)
                     {
                         locked++;
                         return;
                     }
 
+                    // ── WO-1382: the card's facts, in plain English (owner ruling #4). The depth
+                    //    test is the SAME gate EnqueueTraining applies (queue.Enqueue -> line full),
+                    //    read here so the sentence is on screen BEFORE the tap. WO-1387: there is
+                    //    no gold test any more - training charges nothing.
+                    FillTrainFacts(choice, def);
+                    FillUpgradeFacts(choice, id, level);
+
                     // ── TRAIN ──────────────────────────────────────────────────
-                    // Cost is the authored per-unit build cost (TroopDef.costWood/Food/Iron) —
-                    // the SAME numbers BarracksService.EnqueueTraining charges. No balance is
-                    // decided here; this only displays and routes.
-                    AddGoldBrowseRow("Train " + name, default, def.CostGold, "Train", () => TrainTroop(id));
+                    // WO-1387 (owner 2026-09-04 23:16, "training free ... just time"): a FREE row.
+                    // This was AddGoldBrowseRow(..., def.CostGold, ...) - the gold row builder is
+                    // NOT used here any more; the label "Train <name>" is byte-identical (pinned by
+                    // ManageTroopsTrainDoorRegression). TroopDef.CostGold is deliberately not read.
+                    AddBrowseRow("Train " + name, default, "Train", () => TrainTroop(id));
                     BrowseRows[BrowseRows.Count - 1].SubjectId = id;
                     trainRows++;
 
-                    // ── UPGRADE (unchanged path) ───────────────────────────────
+                    // -- UPGRADE (unchanged path; the cost is EMPTY since WO-1387) --
                     if (!BarracksProgression.HasNextTroopLevel(id, level)) return;
 
                     var econCost = BarracksProgression.TroopUpgradeCost(id, level + 1);
@@ -1030,6 +1081,92 @@ namespace DeNelle.Village.UI
                 FlowTrace.Warn("Manage",
                     "troops browse produced NO Train row - every troop is locked or the catalog is empty. " +
                     "This is the PROD-013 defect shape: the Troops tab is the ONLY door to training.");
+        }
+
+        /// <summary>
+        /// WO-1382 - the TRAIN half of the selected-troop card. WO-1387 (owner 2026-09-04 23:16,
+        /// "training free ... just time"): "Train one: 45s . Ready" - NO gold term. The state is
+        /// ruling #4's shape minus the gold arm: `Ready` / `Training line full . q/depth queued`.
+        /// The depth test is the ONE gate EnqueueTraining still applies for a unit that fits.
+        /// </summary>
+        private static void FillTrainFacts(TroopChoiceVM choice, TroopDef def)
+        {
+            var svc = BuildTimerService.Instance;
+            bool lineFull = svc != null && svc.IsLineFull(ChannelId.Train);
+
+            choice.TrainCostText = "";
+            choice.TrainTimeText = FormatTime(def.BuildSeconds);
+            if (lineFull)
+            {
+                int depth = svc.QueueDepth(ChannelId.Train);
+                int cap = svc.QueueDepthLimit(ChannelId.Train);
+                choice.TrainStateText = "Training line full . " + depth + "/" + cap + " queued";
+                choice.TrainReady = false;
+            }
+            else
+            {
+                choice.TrainStateText = "Ready";
+                choice.TrainReady = true;
+            }
+            choice.TrainFactText = "Train one: " + choice.TrainTimeText + " . " + choice.TrainStateText;
+        }
+
+        /// <summary>
+        /// WO-1382 - the UPGRADE half of the card. Reads the SAME gates as
+        /// <see cref="BarracksService.CanUpgradeTroop"/> (next level exists, not already upgrading)
+        /// so the sentence can never disagree with the refusal. WO-1387: the upgrade's only price is
+        /// <see cref="BarracksProgression.TroopUpgradeSeconds"/>, so the line reads
+        /// "Upgrade: 1m 30s . Ready" and there is no affordability arm.
+        /// </summary>
+        private static void FillUpgradeFacts(TroopChoiceVM choice, string id, int level)
+        {
+            choice.HasNextLevel = BarracksProgression.HasNextTroopLevel(id, level);
+            if (!choice.HasNextLevel)
+            {
+                choice.UpgradeCostText = "";
+                choice.UpgradeStateText = "At max level";
+                choice.UpgradeReady = false;
+                choice.UpgradeFactText = "This troop is at its current maximum level.";
+                return;
+            }
+
+            // The time IS the price (WO-1387); it rides UpgradeCostText because the View composes
+            // its sub-line from that field (see the TroopChoiceVM field comment).
+            choice.UpgradeCostText = FormatTime(BarracksProgression.TroopUpgradeSeconds(id, level + 1));
+            choice.UpgradeInProgress = BarracksService.IsUpgradingTroop(id);
+            if (choice.UpgradeInProgress)
+            {
+                choice.UpgradeStateText = "Upgrading now";
+                choice.UpgradeReady = false;
+            }
+            else
+            {
+                choice.UpgradeStateText = "Ready";
+                choice.UpgradeReady = true;
+            }
+            choice.UpgradeFactText = "Upgrade: " + choice.UpgradeCostText + " . " + choice.UpgradeStateText;
+        }
+
+        /// <summary>
+        /// WO-1382 ruling #1 — the Training chip's copy with the line's DEPTH in it:
+        /// "Training 1/2 . 1/5 queued" (or "Training 1/2 . 1 queued" on an uncapped line).
+        /// Null when the Train line is not summarised (no BuildTimerService) - the View then
+        /// keeps its occupancy-only fallback.
+        /// </summary>
+        public string TrainingChipText
+        {
+            get
+            {
+                for (int i = 0; i < Channels.Count; i++)
+                {
+                    var c = Channels[i];
+                    if (c.Channel != ChannelId.Train) continue;
+                    return c.DepthCap > 0
+                        ? c.Name + " " + c.Busy + "/" + c.Slots + " . " + c.Depth + "/" + c.DepthCap + " queued"
+                        : c.Name + " " + c.Busy + "/" + c.Slots + " . " + c.Depth + " queued";
+                }
+                return null;
+            }
         }
 
         /// <summary>
@@ -1095,6 +1232,7 @@ namespace DeNelle.Village.UI
             var placedThisTown = CountPlacedThisTown();
             int owned = 0;
             int before = BrowseRows.Count;
+            int locked = 0;
 
             for (int i = 0; i < all.Count; i++)
             {
@@ -1120,10 +1258,60 @@ namespace DeNelle.Village.UI
                         string pId = perk.Id;
                         if (Buildings.Progression.BuildingPerkService.IsOwned(bId, pId)) continue;
 
-                        bool can = Buildings.Progression.BuildingPerkService.CanResearch(bId, pId, out _);
-                        // Progressive disclosure: prerequisites teach themselves when satisfied;
-                        // a locked perk is not a manageable structure action yet.
-                        if (!can) continue;
+                        bool can = Buildings.Progression.BuildingPerkService.CanResearch(bId, pId, out string reason);
+                        if (!can)
+                        {
+                            // WO-1390 (owner, Seeker 2026-09-04: "under manage research it shows
+                            // nothing, should it show Tier one and show locked with a link to
+                            // upgrade the prerequisite"). This used to be a bare `continue` on
+                            // !can under a "progressive disclosure" comment - so with six laddered
+                            // buildings at tier 1 the tab rendered ZERO rows, and the one sentence
+                            // that teaches the loop (the CanResearch reason) was discarded as `_`.
+                            // The Troops tab already shows its locked choice with the badge and
+                            // "Build a Barracks to unlock"; Research now follows the same rule.
+                            //
+                            // Only a TIER gate becomes a row. "Research already in progress." is
+                            // not a prerequisite - that perk is a queue row on this very screen -
+                            // so it stays skipped, as does anything unexpected.
+                            int unlock = BuildingTierCatalog.PerkUnlockTier(bId, pId);
+                            bool buildingLocked = ModifierService.TierOf(bId) < unlock;
+                            bool villageLocked = !buildingLocked &&
+                                                 Buildings.Progression.VillageTierService.Current < unlock;
+                            if (!buildingLocked && !villageLocked) continue;
+
+                            // THE DOOR, not a dead button. Both gates open the SAME page through the
+                            // one existing start path (PanelId.BuildingUpgrade + the ladder id, the
+                            // id BuildModeController hands it too): the building's upgrade page,
+                            // whose FIRST tile is the Heart-of-Elarion "Unlock Village Tier" control
+                            // (BuildingUpgradeVM.PrependVillageTierRow, WO-481) - there is no
+                            // separate Heart panel. The face names which prerequisite the player is
+                            // going to. This screen still charges NOTHING: the page does.
+                            string upperName = buildingName.ToUpperInvariant();
+                            string face = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
+                            string gate = Ascii(string.IsNullOrEmpty(reason) ? "Locked." : reason);
+
+                            locked++;
+                            BrowseRows.Add(new BrowseRowVM
+                            {
+                                Label = Ascii(string.IsNullOrEmpty(perk.Name) ? pId : perk.Name),
+                                CostText = buildingName + " - Tier " + unlock,
+                                StateText = gate,                 // the CanResearch reason, verbatim
+                                Affordable = false,
+                                Locked = true,
+                                // Within the locked group the sort key is the unlock tier, so the
+                                // nearest prerequisite (Tier 2 before Tier 3) lists first.
+                                CostWeight = unlock,
+                                ActionText = face,
+                                Activate = () =>
+                                {
+                                    FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
+                                        "' (" + (villageLocked ? "village" : "building") + " tier " + unlock +
+                                        ") -> BuildingUpgrade page '" + bId + "'");
+                                    OpenUpgradePanel(bId);
+                                },
+                            });
+                            continue;
+                        }
                         int price = Mathf.Max(0, perk.GoldCost);
                         bool affordable = can && gold >= price;
                         float seconds = Buildings.Progression.BuildingPerkService.ResearchSeconds(bId, pId);
@@ -1158,7 +1346,7 @@ namespace DeNelle.Village.UI
             // building-tiers.json id — see the [Flow:Manage] "no upgrade ladder authored" warnings.
             FlowTrace.Step("Manage",
                 "research browse (this town): " + placedThisTown.Count + " placed type(s), " + owned +
-                " with a tier ladder -> " + (BrowseRows.Count - before) + " perk row(s).");
+                " with a tier ladder -> " + (BrowseRows.Count - before) + " perk row(s) (" + locked + " locked).");
         }
 
         private void AddBrowseRow(string label, CoreCost cost, string actionText, Action activate)

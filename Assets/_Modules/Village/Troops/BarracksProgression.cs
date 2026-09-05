@@ -18,10 +18,15 @@
 // UnlockBarracksTier == N); the union is defensive against a one-sided authoring gap.
 //
 // TROOP UPGRADE COST/TIME: troop-upgrades.json carries stat CURVES + abilities only,
-// NOT per-level cost/time. So the troop-upgrade cost/time are DERIVED from the troop's
-// base train economy (TroopDef.CostWood/Food/Iron + BuildSeconds) scaled by the target
-// level. These are deliberate, clearly-tunable placeholders — WO-771.14 owns final
-// balance; the numbers live here, not hard-coded in the service/UI.
+// NOT per-level cost/time. The troop-upgrade TIME is DERIVED from the troop's base
+// BuildSeconds scaled by the target level (placeholder curve; WO-771.14 owns balance).
+//
+// WO-1387 (owner ruling 2026-09-04 23:16): a troop upgrade has NO resource/gold cost -
+// TroopUpgradeCost returns an EMPTY basket and TroopUpgradeSeconds is the ONLY price.
+// "we agreed earlier training free ... just time ... and gold is to hire mercenaries if
+// they dont want to wait". The previous CostGold*level curve (commit 281902df0) mis-read
+// her; do not restore it. Gold is spent ONLY through BuildTimerService.TryInstantFinish
+// (FinishPaysGold = TrainTroop) to skip the clock.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -147,16 +152,18 @@ namespace DeNelle.Village
             currentLevel < MaxTroopLevel(troopId);
 
         /// <summary>
-        /// DERIVED resource cost to upgrade <paramref name="troopId"/> TO
-        /// <paramref name="targetLevel"/> — the troop's base train cost scaled by the target
-        /// level (L2 = 2× base, L3 = 3× base, …). Placeholder curve; WO-771.14 owns final balance.
+        /// The resource cost to upgrade <paramref name="troopId"/> TO <paramref name="targetLevel"/>:
+        /// ALWAYS EMPTY. WO-1387, owner 2026-09-04 23:16, verbatim: "we agreed earlier training
+        /// free" / "just time" / "and gold is to hire mercenaries if they dont want to wait".
+        /// The only price of a troop upgrade is <see cref="TroopUpgradeSeconds"/>; the only gold
+        /// spend is the instant-finish skip in BuildTimerService. This used to return
+        /// <c>coins: CostGold * targetLevel</c> (commit 281902df0, "the last CLI did bad changes") -
+        /// TroopDef.CostGold STAYS on the row as the raid-reward anchor / mercenary-hire basis and
+        /// is never charged here. Pinned by TrainingCostsTimeOnlyRegression.
         /// </summary>
         public static ResourceCost TroopUpgradeCost(string troopId, int targetLevel)
         {
-            var def = TroopCatalog.Find(troopId);
-            if (def == null) return new ResourceCost();
-            int m = targetLevel < 2 ? 1 : targetLevel;
-            return new ResourceCost(coins: def.CostGold * m);
+            return new ResourceCost();
         }
 
         /// <summary>

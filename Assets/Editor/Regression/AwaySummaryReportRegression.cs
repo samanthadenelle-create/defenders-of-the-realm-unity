@@ -43,6 +43,12 @@
 //   6b. [never-on-title]  the reveal defers until HubScenes.IsHub and re-checks on sceneLoaded.
 //   7.  the collector literals became per-RESOURCE rows ("<WORD> WAITING" / "ALSO WAITING").
 //
+// 2026-09-04 22:29 (owner felt-test, "YOUR REALM WORKED FOR 0m" after 12.6h): one pin added --
+//   8.  [away-text-h-m]   WelcomeBackPopup.FormatAwaySpan is a pure hours-AND-minutes formatter
+//       (45328 s -> "12h 35m", 59 s -> "under 1m", 3600 s -> "1h 0m", 90000 s -> "1d 1h") and
+//       the instance AwayText() delegates to it. The "0m" itself came from a SECOND claim in the
+//       same launch window; that half is pinned in OfflineClaimFanOutRegression case 4.
+//
 // Cases 1-3 drive the real DeNelle.Village.OfflineHarvestResult type. Cases 4-7 are source
 // assertions, which is the right instrument for "the wiring is present": the modal cannot be
 // constructed in editmode batchmode (no canvas/PanelSettings), and asserting on a screenshot
@@ -199,6 +205,42 @@ namespace DeNelle.Editor.Regression
                 if (result == null) failures.Add($"case1 could not read {ResultSrc}");
                 else if (result.IndexOf("HasSummaryContent", StringComparison.Ordinal) < 0)
                     failures.Add("case1 OfflineHarvestResult carries no HasSummaryContent -- the one gate does not exist");
+
+                // -- 8. [away-text-h-m] the summary line shows hours AND minutes --
+                // Owner felt-test 2026-09-04 22:29 (Seeker): "YOUR REALM WORKED FOR 0m" after
+                // ~12.6h away -- "minutes and hours if applicable should show". The old
+                // formatter printed whole hours OR rounded minutes, never both, and rounded a
+                // sub-minute window to the literal "0m". Pure function, pinned by table:
+                //   45328 s -> "12h 35m" (the owner's exact absence)   59 s -> "under 1m"
+                //    3600 s -> "1h 0m" (pinned: an exact hour still says its minutes)
+                //   90000 s -> "1d 1h" (day-scale carries hours only)  2100 s -> "35m"
+                var table = new (double seconds, string expected)[]
+                {
+                    (45328.0, "12h 35m"),
+                    (59.0, "under 1m"),
+                    (0.0, "under 1m"),
+                    (3600.0, "1h 0m"),
+                    (90000.0, "1d 1h"),
+                    (2100.0, "35m"),
+                };
+                foreach (var row in table)
+                {
+                    string got = DeNelle.Village.UI.WelcomeBackPopup.FormatAwaySpan(row.seconds);
+                    if (got != row.expected)
+                        failures.Add($"case8 [away-text-h-m] FormatAwaySpan({row.seconds:0}) = '{got}', expected '{row.expected}'");
+                    else if (!IsAscii(got))
+                        failures.Add($"case8 [away-text-h-m] FormatAwaySpan({row.seconds:0}) = '{got}' is not ASCII");
+                }
+                string line = DeNelle.Village.UI.WelcomeBackPopup.AwayTextFor(45328.0, wasCapped: true);
+                if (line != "YOUR REALM WORKED FOR 12h 35m (STORAGE FULL)")
+                    failures.Add($"case8 [away-text-h-m] capped summary line = '{line}', expected " +
+                                 "'YOUR REALM WORKED FOR 12h 35m (STORAGE FULL)' (the STORAGE FULL suffix must survive)");
+                if (DeNelle.Village.UI.WelcomeBackPopup.AwayTextFor(45328.0, wasCapped: false) != "YOUR REALM WORKED FOR 12h 35m")
+                    failures.Add("case8 [away-text-h-m] uncapped summary line is not 'YOUR REALM WORKED FOR 12h 35m'");
+                // The popup's own instance path must delegate, not keep a second formatter.
+                if (popup != null && popup.IndexOf("AwayText() => AwayTextFor(", StringComparison.Ordinal) < 0)
+                    failures.Add("case8 [away-text-h-m] WelcomeBackPopup.AwayText no longer delegates to AwayTextFor -- " +
+                                 "a second copy of the formatter is the drift");
             }
             catch (Exception ex)
             {

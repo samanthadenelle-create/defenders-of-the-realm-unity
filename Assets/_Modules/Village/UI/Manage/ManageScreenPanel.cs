@@ -71,7 +71,12 @@ namespace DeNelle.Village.UI
         // =====================================================================
         private const float RowHeightPx = 132f;     // >= MinTouchPx (112) with room for three text lines
         private const float SectionHeaderPx = 64f;
-        private const float StripBandPx = 56f;      // band 1a: one FontLabel(40) line box (~46px) + air
+        // WO-1382 ruling #1 (2026-09-04): "Training becomes tappable and opens the existing queue
+        // drawer." A tap target must clear MinTouchPx (112) WITHOUT ClampMinTouch growing it into
+        // the list band below (a growth is a WO-1060 Assert A failure), so the strip is now a
+        // touch-height band. Was 56 (one FontLabel line box + air); the 64px difference comes out
+        // of the scrolling list on every tab, which is the honest price of a real tap target.
+        private const float StripBandPx = 120f;     // band 1a: chips at 0.02-0.98 = 115px >= MinTouchPx
         private const float SlotBandPx = 120f;      // band 2: 0.96 * 120 = 115px button >= MinTouchPx
         private const float TabsBandPx = 0f;        // destination is already named in the title; Queue lives in that title row
         private const float NoticeBandPx = 56f;     // in-body fallback seat for the notice line
@@ -150,11 +155,30 @@ namespace DeNelle.Village.UI
         /// the scrolling content, so the panel's fixed-band budget is untouched.</summary>
         private const float ListTailPx = 28f;
 
+        // =====================================================================
+        //  WO-1382 (owner ruling 2026-09-04 22:50) — the TROOPS workspace bands, fixed px.
+        // ---------------------------------------------------------------------
+        // Rail (left, scrolls) + selected-troop card (right) share ONE row host; the
+        // TRAINING NOW band is its own header row + one informational row per job. No mode
+        // switch exists any more ("That should not be a mode switch"): the two verbs are two
+        // buttons with two different words, TRAIN 1 <NAME> and UPGRADE TO L<n>.
+        // =====================================================================
+        // THE FOLD ARITHMETIC (measured off Builds/manage-capture.log, 2026-09-04): at 2670x1200
+        // the list viewport is LIST=401 ref px (well 533 - fixed 132); the scroll zone pads 10 and
+        // gaps rows by 8. Everything the "screen visibly reacts" ruling (#5) needs must sit above
+        // that fold at scroll 0:  10 + 260 (workspace) + 8 + 120 (TRAINING NOW band with its first
+        // job and OPEN QUEUE) = 398 <= 401. Only extra jobs (88 each) and the Saved-armies row
+        // fall under the fold. 2340x1080 gives LIST=410 and 1920x1080 LIST=480, so it fits everywhere.
+        private const float TroopWorkspacePx = 260f;      // rail + card row
+        private const float TroopRailRowPx = 112f;        // one troop per rail row, == MinTouchPx
+        private const float TrainingNowBandPx = 120f;     // label + first job + OPEN QUEUE, one row
+        private const float TrainingNowRowPx = 88f;       // extra jobs, informational only - no control
+        private const float TroopCtaY0 = 0.01f, TroopCtaY1 = 0.445f;   // 0.435 * 260 = 113.1px >= MinTouchPx
+        private const float BandCtrlY0 = 0.03f, BandCtrlY1 = 0.97f;   // 0.94 * 120 = 112.8px >= MinTouchPx
+
         private ManageScreenVM _vm;
         private int _browsePage;
         private string _selectedTroopId;
-        private int _troopMode; // 0 = Train, 1 = Upgrade
-        private int _troopChoicePage;
         private GameObject _ui;
         private RectTransform _listContent;
         private GameObject _operationalListBand;
@@ -192,6 +216,18 @@ namespace DeNelle.Village.UI
 
         // Live countdown cells: the cheap tick rewrites ONLY these strings.
         private readonly List<TickCell> _tickCells = new List<TickCell>(16);
+
+        // WO-1382 — the TRAINING NOW band's "<n>s left" cells. Its own list, NOT _tickCells:
+        // the queue-row tick writes the drawer's "Building - 2m 10s left (63% done)" grammar and
+        // the band's cell is the short form the owner's mockup shows. Same 1 Hz tick, strings only.
+        private readonly List<TrainingNowCell> _trainingNowCells = new List<TrainingNowCell>(8);
+
+        private struct TrainingNowCell
+        {
+            public TextMeshProUGUI Text;
+            public ChannelId Channel;
+            public string JobId;
+        }
 
         private struct TickCell
         {
@@ -295,6 +331,7 @@ namespace DeNelle.Village.UI
             if (svc != null) svc.QueueChanged -= OnQueueChanged;
 
             _tickCells.Clear();
+            _trainingNowCells.Clear();
             _rail = null;
             _listContent = null;
             _operationalListBand = null;
@@ -869,8 +906,10 @@ namespace DeNelle.Village.UI
                 var panel = new GameObject("ManageLineStatus_" + i, typeof(RectTransform), typeof(Image));
                 var panelRt = (RectTransform)panel.transform;
                 panelRt.SetParent(host, false);
-                panelRt.anchorMin = new Vector2(x, 0.04f);
-                panelRt.anchorMax = new Vector2(x + w, 0.96f);
+                // 0.02-0.98 of the 120px band = 115px: the Training chip's tap target clears the
+                // touch floor by construction, so ClampMinTouch never fires on it (WO-1382).
+                panelRt.anchorMin = new Vector2(x, 0.02f);
+                panelRt.anchorMax = new Vector2(x + w, 0.98f);
                 panelRt.offsetMin = panelRt.offsetMax = Vector2.zero;
                 var panelImage = panel.GetComponent<Image>();
                 panelImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/status-panel-icon-socket");
@@ -893,11 +932,29 @@ namespace DeNelle.Village.UI
                 var t = ElarionUiKit.Label(panelRt, "", 0.08f, 0.92f, ElarionUi.Parchment,
                                            (int)ElarionUi.FontMicro, TextAlignmentOptions.Center,
                                            0.27f, 0.97f, bold: true);
-                // The shared header carries only line occupancy. Queue depth belongs in the
-                // explicit Queue drawer; repeating "0/5 queued" here weakened hierarchy and
-                // contradicted the approved Manage references.
-                ElarionUiKit.FitSingleLine(t, 28f, 34f);
+                // Builders / Research carry line occupancy only. The TRAINING chip is the one
+                // exception (WO-1382 ruling #1): it shows the line's depth and is TAPPABLE - the
+                // longer copy is why the fit floor is 24 here rather than the old 28.
+                ElarionUiKit.FitSingleLine(t, 24f, 34f);
                 _stripCells[i] = t;
+
+                if (i == 1)
+                {
+                    // WO-1382 ruling #1: "Training becomes tappable and opens the existing queue
+                    // drawer." A transparent kit plate carrying the Button, over the chip - the
+                    // same door as the title-row QUEUE face (ToggleQueueDrawer), never a second
+                    // queue surface. Named ManageLineStatus_* so the bulk medieval-skin pass skips
+                    // it (it has no label of its own and would otherwise be painted as a gold CTA).
+                    var tapGo = ElarionUiKit.AddImage(panelRt, "ManageLineStatus_TrainTap",
+                        Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0f), rounded: false);
+                    var tapImage = tapGo.GetComponent<Image>();
+                    tapImage.raycastTarget = true;
+                    var tap = tapGo.AddComponent<Button>();
+                    tap.targetGraphic = tapImage;
+                    tap.transition = Selectable.Transition.None;
+                    tap.onClick.AddListener(ToggleQueueDrawer);
+                    ElarionUiKit.ClampMinTouch(tap);
+                }
             }
         }
 
@@ -1095,7 +1152,12 @@ namespace DeNelle.Village.UI
                     string.Equals(objectName, "CloseButton", StringComparison.Ordinal) ||
                     objectName.StartsWith("ManageCard_", StringComparison.Ordinal) ||
                     objectName.StartsWith("TroopChoice_", StringComparison.Ordinal) ||
-                    objectName.StartsWith("TroopMode_", StringComparison.Ordinal)) continue;
+                    // WO-1382: the two card CTAs are skinned by their builder (TRAIN primary,
+                    // UPGRADE secondary) - the copy-keyed pass below would promote "UPGRADE TO L2"
+                    // to primary and erase the one-primary hierarchy the owner asked for. The
+                    // Training-chip tap plate has no label and must never be painted as a CTA.
+                    objectName.StartsWith("TroopCta_", StringComparison.Ordinal) ||
+                    objectName.StartsWith("ManageLineStatus_", StringComparison.Ordinal)) continue;
 
                 var label = button.GetComponentInChildren<TMP_Text>(true);
                 string copy = label != null ? label.text ?? string.Empty : string.Empty;
@@ -1172,6 +1234,9 @@ namespace DeNelle.Village.UI
                 string text = i < _vm.Channels.Count
                     ? _vm.Channels[i].Name + " " + _vm.Channels[i].Busy + "/" + _vm.Channels[i].Slots
                     : (i == 0 ? "Builders 0/0" : i == 1 ? "Training 0/0" : "Research 0/0");
+                // WO-1382 ruling #1: the Training chip carries the line's DEPTH ("Training 1/2 .
+                // 1/5 queued") - the VM composes it; this only paints it.
+                if (i == 1 && _vm.TrainingChipText != null) text = _vm.TrainingChipText;
                 cell.text = ManageScreenVM.Ascii(text);
             }
             for (int i = 0; i < _launcherSummaries.Length; i++)
@@ -1338,6 +1403,7 @@ namespace DeNelle.Village.UI
             // already skips a Unity-null fill, so this never crashed — but without the clear the
             // list grew by every rebuild for the life of the open panel.
             _progressCells.Clear();
+            _trainingNowCells.Clear();   // WO-1382: the band's cells die with its rows too
 
             var channel = ManageScreenVM.ChannelOf(_vm.Tab);
 
@@ -1440,7 +1506,13 @@ namespace DeNelle.Village.UI
                 _selectedTroopId = selected.Id;
             }
 
-            AddTroopSplitWorkspace(selected);
+            // WO-1382 (owner ruling 2026-09-04 22:50): rail + card in ONE reserved row, then the
+            // TRAINING NOW band (its own rows, built by AddTroopTrainingNowBand - never by
+            // AddQueueRow, which is drawer-only by ManageQueueDrawerRegression's pin), then the
+            // one Saved-armies row. Four verbs on the whole screen: BACK, TRAIN 1 <NAME>,
+            // UPGRADE TO L<n>, OPEN QUEUE / OPEN ARMIES. Nothing here is a mode switch.
+            AddTroopWorkspaceRow(selected);
+            AddTroopTrainingNowBand();
 
             for (int i = 0; i < _vm.BrowseRows.Count; i++)
             {
@@ -1449,324 +1521,401 @@ namespace DeNelle.Village.UI
                 AddActionNoteRow("Saved army compositions", "Open armies", row.Activate);
                 break;
             }
+
+            // §12 — the geometry and the verb count, PROVEN off a capture rather than eyeballed.
+            FlowTrace.Step("Manage", string.Format(
+                "troops workspace: {0} troop(s) in the rail, selected={1} (unlocked={2} trainReady={3} " +
+                "upgradeReady={4} hasNext={5}), TRAINING NOW rows={6}. Bands(px): workspace={7:0} " +
+                "railRow={8:0} band={9:0} extraRow={10:0}; above-the-fold = 10 + {7:0} + 8 + {9:0} = {11:0}. " +
+                "Verbs on screen: TRAIN 1 / UPGRADE TO L / OPEN QUEUE.",
+                _vm.TroopChoices.Count, selected.Id, selected.Unlocked, selected.TrainReady,
+                selected.UpgradeReady, selected.HasNextLevel, _vm.QueueRows.Count,
+                TroopWorkspacePx, TroopRailRowPx, TrainingNowBandPx, TrainingNowRowPx,
+                10f + TroopWorkspacePx + 8f + TrainingNowBandPx));
         }
 
-        private void AddTroopSelectorRow(int pageSize, int pageCount)
+        // =====================================================================
+        //  WO-1382 — THE TROOPS WORKSPACE: rail (left, scrolls) + selected-troop card (right)
+        // ---------------------------------------------------------------------
+        // ⚠ WHY THE ROW CARRIES NO ApplyRowSurface. The RCA on WO-1382 proved the owner's
+        // "box around train": frames/content-panel (1672x941, spriteBorder 96) carries ~90px of
+        // transparent margin above its gold line and ~140px below, so on any TALL row the 9-slice
+        // draws its frame ~100px INSIDE the row's top and bottom edges and every child outside
+        // that band looks like it is floating over a card. The sprite's .meta is shared by every
+        // other consumer and is not re-authored here; the rail and the card sit on kit
+        // AddImage plates instead, which draw edge-to-edge by construction.
+        // =====================================================================
+
+        private void AddTroopWorkspaceRow(TroopChoiceVM selected)
         {
-            var row = MakeRowHost("TroopSelector", 232f);
-            ApplyRowSurface(row);
-            int first = _troopChoicePage * pageSize;
-            int end = Mathf.Min(first + pageSize, _vm.TroopChoices.Count);
-            int count = Mathf.Max(1, end - first);
-            float gap = 0.012f;
-            float width = (0.96f - gap * (count - 1)) / count;
-            for (int i = first; i < end; i++)
+            var workspace = MakeRowHost("TroopSplitWorkspace", TroopWorkspacePx);
+
+            // ── RAIL: one row per troop def, vertical scroll, NO pager arrows (ruling #2) ──
+            var railZone = MakeZone(workspace, "TroopSelectorRail", new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+            var railPlate = ElarionUiKit.AddImage(railZone, "RailPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            railPlate.GetComponent<Image>().raycastTarget = false;
+            var railScroll = ElarionUiKit.MakeScrollZone(railZone, spacing: 6f, padding: 8);
+            if (railScroll == null || railScroll.content == null)
             {
-                TroopChoiceVM choice = _vm.TroopChoices[i];
-                int local = i - first;
-                float x0 = 0.02f + local * (width + gap);
-                var buttonGo = new GameObject("TroopChoice_" + choice.Id,
-                    typeof(RectTransform), typeof(Image), typeof(Button));
-                var buttonRt = (RectTransform)buttonGo.transform;
-                buttonRt.SetParent(row, false);
-                buttonRt.anchorMin = new Vector2(x0, 0.05f);
-                buttonRt.anchorMax = new Vector2(x0 + width, 0.95f);
-                buttonRt.offsetMin = buttonRt.offsetMax = Vector2.zero;
-                var face = buttonGo.GetComponent<Image>();
-                face.color = new Color(0f, 0f, 0f, 0f);
-                var button = buttonGo.GetComponent<Button>();
-                button.targetGraphic = face;
-                button.onClick.AddListener(() =>
-                {
-                    _selectedTroopId = choice.Id;
-                    _browsePage = 0;
-                    Render();
-                });
-
-                var bezelGo = new GameObject("Bezel", typeof(RectTransform), typeof(Image));
-                var bezelRt = (RectTransform)bezelGo.transform;
-                bezelRt.SetParent(buttonRt, false);
-                bezelRt.anchorMin = new Vector2(0.12f, 0.25f);
-                bezelRt.anchorMax = new Vector2(0.88f, 1f);
-                bezelRt.offsetMin = bezelRt.offsetMax = Vector2.zero;
-                var bezel = bezelGo.GetComponent<Image>();
-                bezel.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
-                bezel.preserveAspect = true;
-                bezel.color = choice.Unlocked ? Color.white : new Color(0.38f, 0.38f, 0.38f, 1f);
-                bezel.raycastTarget = false;
-                if (string.Equals(choice.Id, _selectedTroopId, StringComparison.OrdinalIgnoreCase))
-                {
-                    var outline = bezelGo.AddComponent<Outline>();
-                    outline.effectColor = ElarionUi.Gold;
-                    outline.effectDistance = new Vector2(4f, -4f);
-                }
-
-                var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
-                var iconRt = (RectTransform)iconGo.transform;
-                iconRt.SetParent(bezelRt, false);
-                iconRt.anchorMin = new Vector2(0.22f, 0.22f);
-                iconRt.anchorMax = new Vector2(0.78f, 0.78f);
-                iconRt.offsetMin = iconRt.offsetMax = Vector2.zero;
-                var icon = iconGo.GetComponent<Image>();
-                icon.sprite = RpgUiCatalog.Get(RpgUiCatalog.RoleTroop, choice.IconId)
-                    ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
-                icon.preserveAspect = true;
-                icon.color = choice.Unlocked ? Color.white : new Color(0.34f, 0.34f, 0.34f, 1f);
-                icon.raycastTarget = false;
-
-                var label = ElarionUiKit.Label(buttonRt, choice.Name.ToUpperInvariant(), 0.01f, 0.25f,
-                    choice.Unlocked ? ElarionUi.Gold : ElarionUi.ParchmentDim,
-                    (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
-                ElarionUiKit.FitSingleLine(label, 24f, 32f);
-                if (!choice.Unlocked) BuildLockBadge(bezelRt);
-                ElarionUiKit.ClampMinTouch(button);
-            }
-
-        }
-
-        private void AddTroopSplitWorkspace(TroopChoiceVM selected)
-        {
-            const int pageSize = 3;
-            const float workspaceHeight = 420f;
-            int pageCount = Mathf.Max(1, Mathf.CeilToInt(_vm.TroopChoices.Count / (float)pageSize));
-            int selectedIndex = _vm.TroopChoices.IndexOf(selected);
-            if (selectedIndex >= 0) _troopChoicePage = selectedIndex / pageSize;
-            _troopChoicePage = Mathf.Clamp(_troopChoicePage, 0, pageCount - 1);
-
-            var workspace = MakeRowHost("TroopSplitWorkspace", workspaceHeight);
-            ApplyRowSurface(workspace);
-
-            var rail = MakeZone(workspace, "TroopSelectorRail", new Vector2(0.01f, 0.03f), new Vector2(0.18f, 0.97f));
-            int first = _troopChoicePage * pageSize;
-            int end = Mathf.Min(first + pageSize, _vm.TroopChoices.Count);
-            int count = Mathf.Max(1, end - first);
-            float gap = 0.018f;
-            float slotHeight = (1f - gap * (count - 1)) / count;
-            for (int i = first; i < end; i++)
-            {
-                int local = i - first;
-                float y1 = 1f - local * (slotHeight + gap);
-                float y0 = y1 - slotHeight;
-                BuildTroopRailChoice(rail, _vm.TroopChoices[i],
-                    new Vector2(0f, y0), new Vector2(1f, y1));
-            }
-
-            var title = ElarionUiKit.Label(workspace,
-                selected.Name.ToUpperInvariant() + " - LEVEL " + selected.Level,
-                0.82f, 0.98f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
-                TextAlignmentOptions.Left, 0.235f, 0.72f, bold: true);
-            ElarionUiKit.FitSingleLine(title, 34f, 46f);
-            var desc = ElarionUiKit.Label(workspace,
-                string.IsNullOrEmpty(selected.Description) ? selected.Requirement : selected.Description,
-                0.61f, 0.71f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
-                TextAlignmentOptions.Left, 0.235f, 0.76f);
-            ElarionUiKit.FitSingleLine(desc, 26f, 32f);
-            var requirement = ElarionUiKit.Label(workspace, selected.Requirement,
-                0.72f, 0.81f,
-                selected.Unlocked ? new Color(0.58f, 0.83f, 0.43f, 1f) : new Color(0.82f, 0.40f, 0.30f, 1f),
-                (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.235f, 0.76f, bold: true);
-            ElarionUiKit.FitSingleLine(requirement, 26f, 32f);
-
-            if (pageCount > 1)
-            {
-                BuildTroopWorkspacePager(workspace, pageSize, pageCount, -1,
-                    new Vector2(0.78f, 0.72f), new Vector2(0.875f, 0.99f), "<");
-                BuildTroopWorkspacePager(workspace, pageSize, pageCount, 1,
-                    new Vector2(0.885f, 0.72f), new Vector2(0.98f, 0.99f), ">");
-            }
-
-            if (!selected.Unlocked)
-            {
-                var locked = ElarionUiKit.Label(workspace, selected.Requirement,
-                    0.18f, 0.62f, new Color(0.82f, 0.40f, 0.30f, 1f),
-                    (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.28f, 0.96f, bold: true);
-                ElarionUiKit.FitBlock(locked, 30f, 42f);
-                return;
-            }
-
-            BuildTroopWorkspaceModes(workspace);
-            string desiredAction = _troopMode == 0 ? "Train" : "Upgrade";
-            BrowseRowVM action = null;
-            for (int i = 0; i < _vm.BrowseRows.Count; i++)
-            {
-                var candidate = _vm.BrowseRows[i];
-                if (candidate == null || !string.Equals(candidate.SubjectId, selected.Id, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(candidate.ActionText, desiredAction, StringComparison.OrdinalIgnoreCase)) continue;
-                action = candidate;
-                break;
-            }
-            if (action == null)
-            {
-                var empty = ElarionUiKit.Label(workspace,
-                    _troopMode == 0 ? "Training is unavailable for this troop." : "This troop is at its current maximum level.",
-                    0.10f, 0.42f, ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
-                    TextAlignmentOptions.Center, 0.235f, 0.98f);
-                ElarionUiKit.FitBlock(empty, 30f, 40f);
+                FlowTrace.Fail("Manage", "troop rail MakeScrollZone returned no content - the rail has no build site.");
             }
             else
             {
-                var actionHost = MakeZone(workspace, "TroopSelectedAction",
-                    new Vector2(0.225f, 0.00f), new Vector2(0.985f, 0.34f));
-                BuildBrowseRowContent(actionHost, action);
+                int selectedIndex = 0;
+                // Redirect the shared row factory at the rail for the length of this build (the
+                // drawer's proven idiom) so every rail row is a fixed-pixel MakeRowHost band.
+                _rowParent = railScroll.content;
+                try
+                {
+                    for (int i = 0; i < _vm.TroopChoices.Count; i++)
+                    {
+                        var choice = _vm.TroopChoices[i];
+                        if (choice == null) continue;
+                        bool isSelected = string.Equals(choice.Id, selected.Id, StringComparison.OrdinalIgnoreCase);
+                        if (isSelected) selectedIndex = i;
+                        Guard.Try("Manage", "troop rail row " + choice.Id, () => BuildTroopRailRow(choice, isSelected));
+                    }
+                }
+                finally
+                {
+                    _rowParent = null;
+                }
+
+                // Keep the selected troop in view when the rail is longer than the row: a fresh
+                // Render rebuilds the column at the top, and a selection on row 7 of 9 would
+                // otherwise open scrolled away from itself.
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(railScroll.content);
+                int count = _vm.TroopChoices.Count;
+                if (railScroll.scroll != null)
+                    railScroll.scroll.verticalNormalizedPosition = count > 1 ? 1f - selectedIndex / (float)(count - 1) : 1f;
             }
 
-            // Paging is expressed by the adjacent previous/next controls. A second page caption
-            // in the action band duplicated that affordance and collided with the primary CTA.
+            // ── CARD: the selected troop, everything readable without a tap ──
+            var card = MakeZone(workspace, "TroopSelectedCard", new Vector2(0.275f, 0f), new Vector2(1f, 1f));
+            BuildTroopCard(card, selected);
         }
 
-        private void BuildTroopRailChoice(Transform parent, TroopChoiceVM choice, Vector2 anchorMin, Vector2 anchorMax)
+        /// <summary>
+        /// One rail entry: portrait medallion + NAME + "Level n" (or "Locked . T2" + padlock, dimmed).
+        /// Selected = gold outline AND a ">" chevron - state by shape and words, never hue alone
+        /// (owner colourblind). The row is the tap target (>= MinTouchPx by its 120px band).
+        /// </summary>
+        private void BuildTroopRailRow(TroopChoiceVM choice, bool isSelected)
         {
-            var go = new GameObject("TroopChoice_" + choice.Id, typeof(RectTransform), typeof(Image), typeof(Button));
-            var rt = (RectTransform)go.transform;
-            rt.SetParent(parent, false);
-            rt.anchorMin = anchorMin;
-            rt.anchorMax = anchorMax;
-            rt.offsetMin = rt.offsetMax = Vector2.zero;
-            var face = go.GetComponent<Image>();
-            face.color = new Color(0f, 0f, 0f, 0f);
-            var button = go.GetComponent<Button>();
+            var row = MakeRowHost("TroopChoiceRow_" + choice.Id, TroopRailRowPx);
+            // ⚠ The BUTTON's own object carries the TroopChoice_ name. The first capture (2026-09-04)
+            // showed a gold plate slicing through every "Level 1": ApplyOperationalMedievalSkin
+            // keys its skip-list off button.gameObject.name, the Button lived on a child called
+            // "Face", so the bulk pass painted button-normal-empty (Simple, stretched) over the
+            // whole row. A FLAT face (rounded: false) is the design; the name fixes the skip.
+            var faceGo = ElarionUiKit.AddImage(row, "TroopChoice_" + choice.Id, Vector2.zero, Vector2.one,
+                isSelected ? new Color(0.24f, 0.18f, 0.08f, 0.90f) : new Color(0f, 0f, 0f, 0.28f), rounded: false);
+            var face = faceGo.GetComponent<Image>();
+            face.raycastTarget = true;
+            var button = faceGo.AddComponent<Button>();
             button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
             button.onClick.AddListener(() => { _selectedTroopId = choice.Id; _browsePage = 0; Render(); });
-
-            var bezelGo = new GameObject("Bezel", typeof(RectTransform), typeof(Image));
-            var bezelRt = (RectTransform)bezelGo.transform;
-            bezelRt.SetParent(rt, false);
-            bezelRt.anchorMin = new Vector2(0.12f, 0.04f);
-            bezelRt.anchorMax = new Vector2(0.88f, 0.96f);
-            bezelRt.offsetMin = bezelRt.offsetMax = Vector2.zero;
-            var bezel = bezelGo.GetComponent<Image>();
-            bezel.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
-            bezel.preserveAspect = true;
-            bezel.color = choice.Unlocked ? Color.white : new Color(0.38f, 0.38f, 0.38f, 1f);
-            bezel.raycastTarget = false;
-            if (string.Equals(choice.Id, _selectedTroopId, StringComparison.OrdinalIgnoreCase))
+            if (isSelected)
             {
-                var outline = bezelGo.AddComponent<Outline>();
+                // Frames the WHOLE row (the face fills it). useGraphicAlpha off so the outline is
+                // full gold and not dimmed by the face's own alpha.
+                var outline = faceGo.AddComponent<Outline>();
                 outline.effectColor = ElarionUi.Gold;
                 outline.effectDistance = new Vector2(4f, -4f);
+                outline.useGraphicAlpha = false;
             }
 
-            var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
-            var iconRt = (RectTransform)iconGo.transform;
-            iconRt.SetParent(bezelRt, false);
-            iconRt.anchorMin = new Vector2(0.22f, 0.22f);
-            iconRt.anchorMax = new Vector2(0.78f, 0.78f);
-            iconRt.offsetMin = iconRt.offsetMax = Vector2.zero;
-            var icon = iconGo.GetComponent<Image>();
-            icon.sprite = RpgUiCatalog.Get(RpgUiCatalog.RoleTroop, choice.IconId)
+            // Two clear TEXT bands beside the medallion: name on the upper band (0.52-0.96), the
+            // level / lock word on its own lower band (0.06-0.48). Nothing is drawn between them.
+            var medallion = MakeZone(faceGo.transform, "Medallion", new Vector2(0.03f, 0.08f), new Vector2(0.27f, 0.92f));
+            var portrait = ElarionUiKit.Portrait(medallion, TroopSprite(choice.IconId), active: isSelected);
+            if (!choice.Unlocked && portrait?.image != null)
+                portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);   // dim + padlock + tier WORD below
+            if (!choice.Unlocked) BuildLockBadge(medallion);
+
+            var name = ElarionUiKit.Label(faceGo.transform, ManageScreenVM.Ascii(choice.Name ?? ""), 0.52f, 0.96f,
+                choice.Unlocked ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.30f, 0.84f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 26f, 38f);
+            var sub = ElarionUiKit.Label(faceGo.transform,
+                choice.Unlocked ? "Level " + choice.Level : "Locked . T" + choice.LockTier,
+                0.06f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.30f, 0.84f);
+            ElarionUiKit.FitSingleLine(sub, 22f, 30f);
+
+            if (isSelected)
+            {
+                var chevron = ElarionUiKit.Label(faceGo.transform, ">", 0.10f, 0.90f, ElarionUi.Gold,
+                    (int)ElarionUi.FontBody, TextAlignmentOptions.Center, 0.84f, 0.98f, bold: true);
+                ElarionUiKit.FitSingleLine(chevron, 30f, 50f);
+            }
+            ElarionUiKit.ClampMinTouch(button);
+        }
+
+        /// <summary>Troop portrait art by icon id, with the kit's sword icon as the last resort.</summary>
+        private static Sprite TroopSprite(string iconId)
+        {
+            return RpgUiCatalog.Get(RpgUiCatalog.RoleTroop, iconId)
                 ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
-            icon.preserveAspect = true;
-            icon.color = choice.Unlocked ? Color.white : new Color(0.34f, 0.34f, 0.34f, 1f);
-            icon.raycastTarget = false;
-
-            // The rail is an icon selector, matching the approved troop portraits. Full identity
-            // and requirement copy live in the selected detail pane; squeezing duplicate names
-            // beside the medallions produced truncation at every supported landscape ratio.
-            if (!choice.Unlocked) BuildLockBadge(bezelRt);
-            ElarionUiKit.ClampMinTouch(button);
         }
 
-        private void BuildTroopWorkspacePager(Transform parent, int pageSize, int pageCount, int delta,
-            Vector2 anchorMin, Vector2 anchorMax, string copy)
+        /// <summary>
+        /// The SELECTED TROOP card (ruling #3/#4/#8): portrait medallion, NAME at title size with
+        /// LEVEL n right-aligned in the same band, the status word, the description, the fact
+        /// sentence "Train one: cost . time . state", TWO verb buttons on one line, and the
+        /// upgrade fact sentence under them. A locked troop is selectable and shows ONE Gray
+        /// non-interactable LOCKED . TIER n face instead ("Don't hide future content").
+        /// </summary>
+        private void BuildTroopCard(RectTransform card, TroopChoiceVM selected)
         {
-            var button = ElarionUiKit.BuildObsidianButton(parent, copy,
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                anchorMin, anchorMax, () =>
+            var plate = ElarionUiKit.AddImage(card, "CardPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            plate.GetComponent<Image>().raycastTarget = false;
+
+            // Card bands at TroopWorkspacePx = 260 (see the fold arithmetic on the constants):
+            //   name + LEVEL   0.745-1.000 -> 66px   (title line box <= 48 fits)
+            //   desc + status  0.585-0.735 -> 39px   (one line, 24-30)
+            //   train fact     0.455-0.575 -> 31px   (one line, 22-26)
+            //   CTAs           0.010-0.445 -> 113px  >= MinTouchPx
+            // Portrait medallion, top-left, spanning the name and description bands.
+            var medallion = MakeZone(card, "TroopPortrait", new Vector2(0.02f, 0.59f), new Vector2(0.16f, 0.99f));
+            var portrait = ElarionUiKit.Portrait(medallion, TroopSprite(selected.IconId), active: true);
+            if (!selected.Unlocked && portrait?.image != null)
+                portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);
+            if (!selected.Unlocked) BuildLockBadge(medallion);
+
+            // NAME band at title size + LEVEL n right-aligned, always on screen (it is the first
+            // band of a row that starts at scroll 0 - the name can no longer scroll off the top).
+            var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
+                0.745f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                TextAlignmentOptions.Left, 0.19f, 0.74f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 30f, 48f);
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.745f, 1.0f, ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.75f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(level, 26f, 36f);
+
+            // Description left, status WORD ("Available" / "Requires Barracks Tier 2") right, one
+            // band - words carry the state; the old green/red tint pair was the same colour to a
+            // red/green colourblind owner.
+            var desc = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Description ?? ""), 0.585f, 0.735f,
+                ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.19f, 0.70f);
+            ElarionUiKit.FitSingleLine(desc, 22f, 30f);
+            var status = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), 0.585f, 0.735f,
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.71f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(status, 22f, 30f);
+
+            if (!selected.Unlocked)
+            {
+                // Ruling #8: selectable, dim, the requirement in words, ONE Gray non-interactable
+                // face, no Train / Upgrade buttons at all.
+                var fact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), 0.455f, 0.575f,
+                    ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
+                ElarionUiKit.FitSingleLine(fact, 22f, 26f);
+                var lockedFace = ElarionUiKit.BuildObsidianButton(card, "LOCKED . TIER " + selected.LockTier,
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1), null);
+                if (lockedFace != null)
                 {
-                    _troopChoicePage = (_troopChoicePage + delta + pageCount) % pageCount;
-                    int idx = _troopChoicePage * pageSize;
-                    if (idx < _vm.TroopChoices.Count) _selectedTroopId = _vm.TroopChoices[idx].Id;
-                    Render();
-                });
-            ElarionUiKit.ClampMinTouch(button);
+                    lockedFace.gameObject.name = "TroopCta_Locked";
+                    lockedFace.interactable = false;
+                    MedievalUiSkin.ApplyButton(lockedFace, false);
+                }
+                return;
+            }
+
+            // The fact SENTENCE (ruling #4) - composed by the VM, painted here, directly ABOVE the
+            // TRAIN button it explains.
+            var trainFact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.TrainFactText ?? ""), 0.455f, 0.575f,
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(trainFact, 22f, 26f);
+
+            // THE DOOR is unchanged: the VM's verb-led "Train <name>" row -> TrainTroop ->
+            // BarracksService.EnqueueTraining -> the Train line. One job per tap, no count picker
+            // (owner: "No count picker. At least for now."). The button face is the owner's
+            // wording; the row's Activate is the same delegate the old browse row invoked.
+            BrowseRowVM trainRow = FindTroopRow(selected.Id, "Train");
+            BrowseRowVM upgradeRow = FindTroopRow(selected.Id, "Upgrade");
+
+            bool trainOn = trainRow != null && selected.TrainReady;
+            var train = ElarionUiKit.BuildObsidianButton(card,
+                "TRAIN 1 " + ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                trainOn ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1),
+                () => { Guard.Try("Manage", "train one", () => trainRow?.Activate?.Invoke()); });
+            if (train != null)
+            {
+                train.gameObject.name = "TroopCta_Train";
+                // Disabled + the sentence above says why (ruling #4). Never colour alone.
+                train.interactable = trainOn;
+                MedievalUiSkin.ApplyButton(train, true);
+            }
+
+            // The upgrade fact ("300 wood, 120 iron . Ready" / "Short 40 iron" / "At max level")
+            // rides the UPGRADE face as its SUB-LINE through the panel's existing two-line CTA -
+            // the 260px card has no spare band under the buttons, and the sentence stays with the
+            // button it explains (ruling #4: "directly above or beneath the button").
+            Button upgrade;
+            if (selected.HasNextLevel)
+            {
+                bool upgradeOn = upgradeRow != null && selected.UpgradeReady;
+                string upgradeSub = string.IsNullOrEmpty(selected.UpgradeCostText)
+                    ? selected.UpgradeStateText
+                    : selected.UpgradeCostText + " . " + selected.UpgradeStateText;
+                upgrade = BuildTwoLineCta(card, "UPGRADE TO L" + (selected.Level + 1), upgradeSub,
+                    ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                    () => { Guard.Try("Manage", "upgrade troop", () => upgradeRow?.Activate?.Invoke()); });
+                if (upgrade != null) upgrade.interactable = upgradeOn;
+            }
+            else
+            {
+                upgrade = BuildTwoLineCta(card, "MAX LEVEL", selected.UpgradeStateText,
+                    ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1), null);
+                if (upgrade != null) upgrade.interactable = false;
+            }
+            if (upgrade != null)
+            {
+                upgrade.gameObject.name = "TroopCta_Upgrade";
+                MedievalUiSkin.ApplyButton(upgrade, false);   // the SECONDARY verb, by construction
+            }
         }
 
-        private void BuildTroopWorkspaceModes(Transform parent)
+        /// <summary>The VM's verb-led browse row for a troop ("Train"/"Upgrade"), or null.</summary>
+        private BrowseRowVM FindTroopRow(string troopId, string actionText)
         {
-            var train = ElarionUiKit.BuildObsidianButton(parent, "TRAIN",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                _troopMode == 0 ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.29f, 0.33f), new Vector2(0.57f, 0.61f), () => { _troopMode = 0; Render(); });
-            var upgrade = ElarionUiKit.BuildObsidianButton(parent, "UPGRADE OPTIONS",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                _troopMode == 1 ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.59f, 0.33f), new Vector2(0.93f, 0.61f), () => { _troopMode = 1; Render(); });
-            if (train != null) train.gameObject.name = "TroopMode_Train";
-            if (upgrade != null) upgrade.gameObject.name = "TroopMode_Upgrade";
-            MedievalUiSkin.ApplyButton(train, _troopMode == 0);
-            MedievalUiSkin.ApplyButton(upgrade, _troopMode == 1);
-            ElarionUiKit.ClampMinTouch(train);
-            ElarionUiKit.ClampMinTouch(upgrade);
+            for (int i = 0; i < _vm.BrowseRows.Count; i++)
+            {
+                var candidate = _vm.BrowseRows[i];
+                if (candidate == null) continue;
+                if (!string.Equals(candidate.SubjectId, troopId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals(candidate.ActionText, actionText, StringComparison.OrdinalIgnoreCase)) continue;
+                return candidate;
+            }
+            return null;
         }
 
-        private void AddTroopPagerRow(int pageSize, int pageCount)
-        {
-            var row = MakeRowHost("TroopPager", 120f);
-            string pageText = "TROOPS " + (_troopChoicePage + 1) + " OF " + pageCount;
-            var page = ElarionUiKit.Label(row, pageText, 0.08f, 0.92f, ElarionUi.ParchmentDim,
-                (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.32f, 0.68f, bold: true);
-            ElarionUiKit.FitSingleLine(page, 26f, 32f);
+        // =====================================================================
+        //  WO-1382 — THE TRAINING NOW BAND (ruling #5/#6): an informational MIRROR of the line.
+        // ---------------------------------------------------------------------
+        // ⛔ Built by THIS method from RenderTroopsDestination, NEVER by AddQueueRow and never
+        // from RenderList: AddQueueRow is the drawer's build site for Finish Now / Ad / Cancel /
+        // Move up (ManageQueueDrawerRegression pins both halves). Those verbs stay OUT of this
+        // screen ("Keep advanced queue actions OUT of this screen"); the ONE door here is OPEN
+        // QUEUE -> ToggleQueueDrawer. The band re-renders on QueueChanged (Rebuild -> Changed ->
+        // Render), so the tap's consequence is visible without opening the drawer.
+        // =====================================================================
 
-            var previous = ElarionUiKit.BuildObsidianButton(row, "PREVIOUS",
+        private void AddTroopTrainingNowBand()
+        {
+            // ONE 120px row carries the label, the FIRST job and OPEN QUEUE, so the band and at
+            // least one job are above the fold at 2670x1200 (see the constants' arithmetic). The
+            // first capture (2026-09-04) had a separate 128px header and the band fell below the
+            // viewport - ruling #5 ("the screen visibly reacts") failed at scroll 0.
+            var band = MakeRowHost("TroopTrainingNowBand", TrainingNowBandPx);
+            var bandPlate = ElarionUiKit.AddImage(band, "BandPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            bandPlate.GetComponent<Image>().raycastTarget = false;
+            var title = ElarionUiKit.Label(band, "TRAINING NOW", 0.15f, 0.85f, ElarionUi.Gold,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.01f, 0.165f, bold: true);
+            ElarionUiKit.FitSingleLine(title, 22f, 32f);
+            var open = ElarionUiKit.BuildObsidianButton(band, "OPEN QUEUE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, 0.03f), new Vector2(0.28f, 0.97f), () =>
+                new Vector2(PrimaryX0, BandCtrlY0), new Vector2(PrimaryX1, BandCtrlY1), ToggleQueueDrawer);
+            if (open != null) open.gameObject.name = "TroopOpenQueue";
+            ElarionUiKit.ClampMinTouch(open);
+
+            if (_vm.QueueRows.Count == 0)
+            {
+                var t = ElarionUiKit.Label(band, "Nothing training. Tap TRAIN to start.", 0.15f, 0.85f,
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.18f, ClusterX1 + 0.01f);
+                ElarionUiKit.FitSingleLine(t, 24f, 34f);
+                return;
+            }
+
+            // First job shares the band row, right of the label and left of the primary slot.
+            var first = _vm.QueueRows[0];
+            if (first != null)
+                Guard.Try("Manage", "training now job 1", () => BuildTroopTrainingNowJob(band, 1, first,
+                    0.175f, 0.205f, 0.21f, 0.27f, 0.28f, 0.45f, 0.46f, 0.60f, 0.61f, ClusterX1 + 0.01f));
+
+            // Every further job is its own 88px informational row under the fold.
+            for (int i = 1; i < _vm.QueueRows.Count; i++)
+            {
+                var r = _vm.QueueRows[i];
+                if (r == null) continue;
+                int ordinal = i + 1;
+                Guard.Try("Manage", "training now row " + ordinal, () =>
                 {
-                    _troopChoicePage = (_troopChoicePage - 1 + pageCount) % pageCount;
-                    int idx = _troopChoicePage * pageSize;
-                    if (idx < _vm.TroopChoices.Count) _selectedTroopId = _vm.TroopChoices[idx].Id;
-                    Render();
+                    var row = MakeRowHost("TroopTrainingNowRow_" + ordinal, TrainingNowRowPx);
+                    var plate = ElarionUiKit.AddImage(row, "RowPlate", Vector2.zero, Vector2.one,
+                        new Color(0f, 0f, 0f, 0.28f));
+                    plate.GetComponent<Image>().raycastTarget = false;
+                    BuildTroopTrainingNowJob(row, ordinal, r,
+                        0.005f, 0.05f, 0.055f, 0.115f, 0.13f, 0.46f, 0.48f, 0.78f, 0.80f, 0.99f);
                 });
-            var next = ElarionUiKit.BuildObsidianButton(row, "NEXT",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.72f, 0.03f), new Vector2(0.98f, 0.97f), () =>
-                {
-                    _troopChoicePage = (_troopChoicePage + 1) % pageCount;
-                    int idx = _troopChoicePage * pageSize;
-                    if (idx < _vm.TroopChoices.Count) _selectedTroopId = _vm.TroopChoices[idx].Id;
-                    Render();
-                });
-            ElarionUiKit.ClampMinTouch(previous);
-            ElarionUiKit.ClampMinTouch(next);
+            }
         }
 
-        private void AddTroopDetailRow(TroopChoiceVM choice)
+        /// <summary>
+        /// One numbered, read-only job: "<n>." + portrait + name, then for the ACTIVE job the kit
+        /// <see cref="ElarionUiKit.Bar"/> + "<n>s left" (ticked at 1 Hz), and for a pending job
+        /// "Queued <ordinal>". The x-bands are passed in because the first job shares the band
+        /// row with the label and OPEN QUEUE while later jobs own a full row. No control here.
+        /// </summary>
+        private void BuildTroopTrainingNowJob(RectTransform row, int ordinal, QueueRowVM r,
+            float numX0, float numX1, float medX0, float medX1, float nameX0, float nameX1,
+            float barX0, float barX1, float timeX0, float timeX1)
         {
-            var row = MakeRowHost("TroopDetail", 112f);
-            ApplyRowSurface(row);
-            var title = ElarionUiKit.Label(row, choice.Name.ToUpperInvariant() + " - LEVEL " + choice.Level,
-                0.50f, 0.98f, ElarionUi.Gold, (int)ElarionUi.FontLabel,
-                TextAlignmentOptions.Left, 0.025f, 0.62f, bold: true);
-            ElarionUiKit.FitSingleLine(title, 30f, 40f);
-            var desc = ElarionUiKit.Label(row,
-                string.IsNullOrEmpty(choice.Description) ? choice.Requirement : choice.Description,
-                0.05f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
-                TextAlignmentOptions.Left, 0.025f, 0.74f);
-            ElarionUiKit.FitSingleLine(desc, 26f, 32f);
-            var state = ElarionUiKit.Label(row, choice.Requirement, 0.12f, 0.88f,
-                choice.Unlocked ? new Color(0.58f, 0.83f, 0.43f, 1f) : new Color(0.82f, 0.40f, 0.30f, 1f),
-                (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.72f, 0.975f, bold: true);
-            ElarionUiKit.FitBlock(state, 26f, 32f);
-        }
+            var number = ElarionUiKit.Label(row, ordinal + ".", 0.15f, 0.85f, ElarionUi.Gold,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, numX0, numX1, bold: true);
+            ElarionUiKit.FitSingleLine(number, 24f, 36f);
 
-        private void AddTroopModeRow()
-        {
-            // 132px x 0.90 = 118.8px: both mode tabs clear the 112px mobile touch floor
-            // without relying on ClampMinTouch to inflate into adjacent content.
-            var row = MakeRowHost("TroopModes", 132f);
-            var train = ElarionUiKit.BuildObsidianButton(row, "TRAIN",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                _troopMode == 0 ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.18f, 0.05f), new Vector2(0.49f, 0.95f), () => { _troopMode = 0; Render(); });
-            var upgrade = ElarionUiKit.BuildObsidianButton(row, "UPGRADE OPTIONS",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                _troopMode == 1 ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.51f, 0.05f), new Vector2(0.82f, 0.95f), () => { _troopMode = 1; Render(); });
-            if (train != null) train.gameObject.name = "TroopMode_Train";
-            if (upgrade != null) upgrade.gameObject.name = "TroopMode_Upgrade";
-            MedievalUiSkin.ApplyButton(train, _troopMode == 0);
-            MedievalUiSkin.ApplyButton(upgrade, _troopMode == 1);
-            ElarionUiKit.ClampMinTouch(train);
-            ElarionUiKit.ClampMinTouch(upgrade);
+            var medallion = MakeZone(row, "Medallion", new Vector2(medX0, 0.12f), new Vector2(medX1, 0.88f));
+            Sprite art = !string.IsNullOrEmpty(r.IconRole) ? RpgUiCatalog.Get(r.IconRole, r.IconKey) : null;
+            ElarionUiKit.Portrait(medallion, art, active: !r.Queued);
+
+            var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.15f, 0.85f, ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, nameX0, nameX1, bold: true);
+            ElarionUiKit.FitSingleLine(name, 24f, 36f);
+
+            bool running = !r.Queued && !r.IsStackHeader && r.Progress01 >= 0f && r.JobId != null;
+            if (running)
+            {
+                var bar = ElarionUiKit.Bar(row, ElarionUiKit.BarKind.Castle,
+                    new Vector2(barX0, 0.32f), new Vector2(barX1, 0.68f));
+                if (bar?.fill != null)
+                {
+                    bar.fill.fillAmount = Mathf.Clamp01(r.Progress01);
+                    bar.fill.raycastTarget = false;
+                }
+                if (bar?.track != null) _progressCells.Add(new ProgressCell
+                {
+                    Handle = bar,
+                    Channel = r.Channel,
+                    JobId = r.JobId,
+                    Queued = false,
+                });
+
+                var svc = BuildTimerService.Instance;
+                double rem = svc != null ? svc.RemainingSeconds(r.Channel, r.JobId) : 0d;
+                var left = ElarionUiKit.Label(row, ManageScreenVM.FormatTime(rem) + " left", 0.15f, 0.85f,
+                    ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, timeX0, timeX1, bold: true);
+                ElarionUiKit.FitSingleLine(left, 20f, 30f);
+                _trainingNowCells.Add(new TrainingNowCell { Text = left, Channel = r.Channel, JobId = r.JobId });
+            }
+            else
+            {
+                string state = r.IsStackHeader
+                    ? "Queued x" + r.StackCount
+                    : "Queued " + ManageScreenVM.Ordinal(r.PendingIndex + 1);
+                var queued = ElarionUiKit.Label(row, state, 0.15f, 0.85f, ElarionUi.ParchmentDim,
+                    (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, barX0, timeX1, bold: true);
+                ElarionUiKit.FitSingleLine(queued, 22f, 30f);
+            }
         }
 
         private static string BrowseHeading(ManageTab tab)
@@ -2157,16 +2306,37 @@ namespace DeNelle.Village.UI
             // slot as the queue row's "Finish Now". The affordability column was pulled back from
             // 0.82 to 0.73 in the same edit — leaving it at 0.82 would have put a text box under
             // the widened button ("BUTTON OVER TEXT", the WO-1060 oracle's own failure class).
-            var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.52f, 0.98f, ElarionUi.Parchment,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.50f, bold: true);
+            // WO-1390: a LOCKED prerequisite row (Research) reads dim + carries the same padlock the
+            // Troops rail seats on a locked choice (BuildLockBadge), so "locked" is stated by words
+            // AND a shape, never a tint alone (colourblind law). The name column gives up its right
+            // edge to the badge; the CTA stays live because it is the DOOR to the prerequisite.
+            bool locked = r.Locked;
+            float nameX1 = locked ? 0.42f : 0.50f;
+            var nameColor = locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment;
+            var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.52f, 0.98f, nameColor,
+                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, nameX1, bold: true);
             ElarionUiKit.FitSingleLine(name);
             var cost = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.CostText ?? ""), 0.04f, 0.48f, ElarionUi.ParchmentDim,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.50f);
+                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, nameX1);
             ElarionUiKit.FitSingleLine(cost);
             // Affordability is a SENTENCE ("Ready" / "Not enough Wood (400)") — never a tint alone.
-            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.20f, 0.80f, ElarionUi.Parchment,
+            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.20f, 0.80f, nameColor,
                                            (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.52f, ClusterX1 + 0.01f);
             ElarionUiKit.FitBlock(state);   // a shortfall sentence may need two lines inside its box
+            if (locked)
+            {
+                // BuildLockBadge fills a fixed sub-rect of its parent (x 0.345-0.50, y 0.20-0.76),
+                // so a host rect is sized to land the padlock in the gap between the name column
+                // (ends 0.42) and the state column (starts 0.52): host x 0.306-0.693 puts the badge
+                // at row x 0.44-0.50. Reuses the badge verbatim rather than a second padlock.
+                var host = new GameObject("LockBadgeHost", typeof(RectTransform));
+                var hrt = (RectTransform)host.transform;
+                hrt.SetParent(row, false);
+                hrt.anchorMin = new Vector2(0.306f, 0.0f);
+                hrt.anchorMax = new Vector2(0.693f, 1.0f);
+                hrt.offsetMin = hrt.offsetMax = Vector2.zero;
+                BuildLockBadge(hrt);
+            }
 
             var act = ElarionUiKit.BuildObsidianButton(row, r.ActionText ?? "Open",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -2232,6 +2402,14 @@ namespace DeNelle.Village.UI
                 cell.Text.text = cell.Queued
                     ? "Queued - " + ManageScreenVM.Ordinal(cell.PendingIndex + 1) + " in line (" + ManageScreenVM.FormatTime(rem) + " of work)"
                     : "Building - " + ManageScreenVM.FormatTime(rem) + " left" + ManageScreenVM.PercentSuffix(svc, cell.Channel, cell.JobId);
+            }
+
+            // WO-1382: the TRAINING NOW band's short countdown ("32s left"), same tick, strings only.
+            for (int i = 0; i < _trainingNowCells.Count; i++)
+            {
+                var cell = _trainingNowCells[i];
+                if (cell.Text == null) continue;
+                cell.Text.text = ManageScreenVM.FormatTime(svc.RemainingSeconds(cell.Channel, cell.JobId)) + " left";
             }
 
             // WO-898 item 1: advance the fills on the same tick as the timers.

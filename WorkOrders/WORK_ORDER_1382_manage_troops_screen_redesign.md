@@ -376,3 +376,12 @@ Binding points, in the owner's words:
 9. "There are only four obvious verbs on the entire screen": BACK, TRAIN 1 <NAME>, UPGRADE TO L<n>,
    OPEN QUEUE / OPEN ARMIES. "Nothing masquerades as a button whose actual job is to switch another
    button."
+
+## Owner felt-test 2026-09-04 23:19 (build 355905, the OLD layout): "clicking train on footman doesnt start a training bar o seem to do anything"
+Device trace (adb logcat, same minute): `[Flow:Manage] tab -> Troops (line Train)` ... `troops browse: 9 troop
+def(s) -> 2 Train row(s)` ... `queue drawer BUILT 0 row(s)` - and NO `[Flow:Manage] -> Train CTA 'troop-footman'`
+line, which `ManageScreenVM.TrainTroop` emits on every real tap. Her tap never reached the VM. Screenshot:
+`docs/qa/seeker-manage-troops-train-noop-2026-09-04.png` (FOOTMAN - LEVEL 3; the boxed TRAIN is the mode toggle;
+the priced row's TRAIN sits at the frame's lower edge). This is the defect this WO's rebuild removes: one
+`TRAIN 1 FOOTMAN` face wired to the VM row's Activate, no toggle, no frame over the row. Acceptance adds: on
+the device, a TRAIN tap logs `Train CTA` + `train enqueued from Manage` and the Training chip moves 0/2 -> 1/2.

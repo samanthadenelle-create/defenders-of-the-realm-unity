@@ -232,11 +232,66 @@ namespace DeNelle.Editor.Regression
                 // The Solana connect door.
                 Require(store, "if (walletIsTheBlocker && PiDisplay)",
                     "a Pi player can still be sent into the Solana wallet-connect flow", fail, ref checks);
-                Require(store, "StoreStrings.KeyPiWalletGate",
-                    "the wallet-ceiling refusal has no Pi wording", fail, ref checks);
-                Require(store, "PurchaseGate.FormatUsd(PurchaseGate.WalletRequiredAboveUsd)",
-                    "the Pi wallet-gate sentence hardcodes its threshold instead of formatting the constant",
-                    fail, ref checks);
+                // ⚠ RE-PINNED 2026-09-04 (WO-1386), TWICE IN ONE EVENING - read both rulings.
+                //   23:12 - "nothing should be guest buyable on a crypto account otherwise we can
+                //           never persist change" -> Solana requires a wallet at every price.
+                //   later - "mark anything for Pi as same logic based on USD" -> Pi is the SAME:
+                //           no guest tier, wallet at every price, USD stays the one authority.
+                // So the Pi plate can no longer say "Packs over $4.99 are not on sale in Pi yet"
+                // - that names a guest tier Pi does not have. The two pins this block REPLACES
+                // (`StoreStrings.KeyPiWalletGate` + `PurchaseGate.FormatUsd(WalletRequiredAboveUsd)`
+                // in PackStore) pinned exactly that stale sentence, and a pin that keeps a lie on
+                // screen is not a pin. What still holds under the Pi skin, each pinned below:
+                //   (1) the Pi plate SAYS "wallet" and names any-price (no {0}: there is no
+                //       threshold left to format) - the reverse of the pin that stood here for
+                //       one hour;
+                //   (2) it is Pi-worded and DISTINCT from the Solana connect sentence (two
+                //       audiences, two plates), ASCII, SKR-free;
+                //   (3) the plate is what PackStore renders under PiDisplay, not the stale key;
+                //   (4) the WO-1386 shortfall route into the SOLANA connect door still stands down
+                //       on PiDisplay BEFORE it asks PurchaseGate - a Pi player cannot complete a
+                //       _wallet.Connect() handshake, so the plate is the refusal, not the button.
+                // PROVEN RED (one line each): (1) drop "wallet" from PiWalletRequiredSentence;
+                // (2) set PiWalletRequiredSentence to BuyWalletRequiredCryptoSentence;
+                // (3) restore `StoreStrings.Format(StoreStrings.KeyPiWalletGate, ...)` in the plate;
+                // (4) delete the `if (PiDisplay)` block in RouteGuestShortfallToWalletConnect.
+                string piGateCopy = StoreStrings.PiWalletRequiredSentence;
+                checks++;
+                if (string.IsNullOrWhiteSpace(piGateCopy) || piGateCopy.IndexOf("wallet", StringComparison.OrdinalIgnoreCase) < 0)
+                    fail.Add("the Pi wallet plate no longer says 'wallet' - Pi has no guest tier (owner 2026-09-04: " +
+                             "'mark anything for Pi as same logic based on USD'), so the remedy must be NAMED: " + piGateCopy);
+                checks++;
+                if (!string.IsNullOrEmpty(piGateCopy) && piGateCopy.IndexOf("{0}", StringComparison.Ordinal) >= 0)
+                    fail.Add("the Pi wallet plate formats {0} - there is no $4.99 guest tier on Pi to name any more");
+                checks++;
+                if (!string.IsNullOrEmpty(piGateCopy) && piGateCopy.IndexOf("Pi", StringComparison.Ordinal) < 0)
+                    fail.Add("the Pi wallet plate is not Pi-worded (WO-1323 kept the Pi audience its own words)");
+                checks++;
+                foreach (char c in piGateCopy ?? "")
+                    if (c > 127) { fail.Add("the Pi wallet plate is not ASCII-clean"); break; }
+                checks++;
+                if (!string.IsNullOrEmpty(piGateCopy) && piGateCopy.IndexOf("SKR", StringComparison.OrdinalIgnoreCase) >= 0)
+                    fail.Add("the Pi wallet plate names SKR");
+                checks++;
+                if (string.Equals(StoreStrings.BuyWalletRequiredCryptoSentence, piGateCopy, StringComparison.Ordinal))
+                    fail.Add("the Solana connect sentence and the Pi wallet plate are the SAME sentence - " +
+                             "two audiences, two plates (WO-1386 / WO-1323)");
+                RequireOrdered(store,
+                    "if (walletIsTheBlocker && PiDisplay)",
+                    "StoreStrings.PiWalletRequired()",
+                    "FlowTrace.Step(\"Store\", $\"BuildSpotlightCta '{pack.Sku}': wallet-rule refusal, PI wording",
+                    "the Pi plate no longer renders StoreStrings.PiWalletRequired() - it would be back on the " +
+                    "stale storePiWalletGate row that names a $4.99 guest tier Pi no longer has", fail, ref checks);
+                checks++;
+                if (store.IndexOf("StoreStrings.Format(StoreStrings.KeyPiWalletGate", StringComparison.Ordinal) >= 0)
+                    fail.Add("PackStore formats the STALE storePiWalletGate row again - it says 'Packs over $4.99 are " +
+                             "not on sale in Pi yet', which the 2026-09-04 ruling made false");
+                RequireOrdered(store,
+                    "private void RouteGuestShortfallToWalletConnect()",
+                    "if (PiDisplay)",
+                    "PurchaseGate.WalletIsTheBlocker(offer.Pack)",
+                    "the WO-1386 shortfall route can send a Pi player into the Solana wallet-connect door - " +
+                    "the PiDisplay stand-down must precede the wallet predicate", fail, ref checks);
 
                 // No Pi rail -> no Buy control, and NO fallback to the Solana path.
                 Require(store, "if (PiDisplay && !PiRailOwnsTheStore)",

@@ -138,6 +138,10 @@ namespace DeNelle.HUD.Kit
         // plate. Repainted from the Core posture rail (PostureSignals.SetHeartfire), the
         // same cheap poll as the collectors chip; the View derives NOTHING.
         private TMP_Text _heartfireLabel;
+        /// <summary>WO-1384: the rekindle line ("Heartfire is full" / "Heartfire rekindles in
+        /// m:ss") on its OWN row under the marks row. It used to be the second line of
+        /// _heartfireLabel, which forced two lines into a one-line band and shrank both.</summary>
+        private TMP_Text _heartfireRekindleLabel;
         private int _heartfireLitPainted = -1;
         private int _heartfireMaxPainted = -1;
         private long _heartfireSecondsPainted = -1L;
@@ -956,9 +960,27 @@ namespace DeNelle.HUD.Kit
         //  it is taken rather than reinterpreted: the same authored art key `realm-store` and the
         //  same obsidian card treatment PlayerDeckWorkspace.BuildCard gives the "Realm Store"
         //  route inside settings > Night Market. What "smaller" removes is the deck card's
-        //  secondary purpose line ("Browse clearly priced realm offers"): on a 272 x 132 HUD
+        //  secondary purpose line ("Browse clearly priced realm offers"): on a 320 x 156 HUD
         //  element a second line of body copy is decoration that costs the title its size, and
         //  the title is the part that carries the meaning.
+        //
+        //  ⭐ WO-1384 - "THE SHINING GEM" (owner felt-test 2026-09-04: "it needs to be the shining
+        //  gem, it should draw attention to it so it above all stands out"). The captured card was
+        //  a dark 272 x 132 thumbnail reading "NIGHT MA..." and indistinguishable from the FLAG
+        //  chip beneath it. It stands out now by SIZE, FRAME and LIGHT - never by hue alone, the
+        //  owner is red/green colourblind (CLAUDE.md section 7):
+        //    SIZE  - HudLayoutBands.NightMarketCardWidthPx/HeightPx grew to 320 x 156, the
+        //            largest control in the column (gear 112 x 112, FLAG chip 120 x 84).
+        //    FRAME - a solid ElarionUi.Gold border NightMarketCardFramePx wide drawn OUTSIDE the
+        //            art (an inside border would be painted over by the opaque card surface).
+        //    LIGHT - ElarionUiKit.RadialGlowSprite, the kit's one bloom primitive (the same aura
+        //            StorePackCard mounts behind every pack, StorePackCard.cs:689), tinted gold
+        //            behind the frame. Its rim is alpha 0, so the overshoot past the band is a
+        //            transparent halo; the OPAQUE frame stays inside the band's neighbours.
+        //    WORD  - "NIGHT MARKET" on ONE line, never truncated: the label plate widened to
+        //            x 0.30..0.97 and the fit floor stays the kit's 20 px hard floor.
+        //  No pulse: the kit has no reusable pulse primitive (UiSpotlight's PulseRing is private
+        //  to the spotlight), and WO-1384 forbids authoring animation code for this.
         //
         //  ⛔ ONE DESTINATION, TWO DOORWAYS (WO-1164). This opens PanelId.RealmStore - the SAME
         //  door RealmStoreVendor walks the player through and the same one PackStoreBootstrap
@@ -972,10 +994,30 @@ namespace DeNelle.HUD.Kit
         //
         //  ⛔ AND IT DOES NOT TOUCH THE MOVEMENT STICK. Its band comes from
         //  HudLayoutBands.ResolveNightMarketCard - the column's one authority - which seats it in
-        //  the Minimap mount, bottoming out at y 0.548 of screen against the MoveCluster mount's
-        //  top edge at 0.330. Covering the stick would break the game's only movement control, so
-        //  the seat is DERIVED from the shared table and asserted by the oracle, never eyeballed.
+        //  the Minimap mount, bottoming out at y 0.483 of screen against the gear row's top at
+        //  0.473 and the MoveCluster mount's top edge at 0.330. Covering the stick would break the
+        //  game's only movement control, so the seat is DERIVED from the shared table and asserted
+        //  by the oracle, never eyeballed.
         // =====================================================================
+
+        /// <summary>WO-1384: the gold frame's thickness in reference units, drawn OUTSIDE the
+        /// card band. 4 units on every side; the band keeps a 9.7-unit gap to the Heart plate
+        /// above and a 10-unit gap to the gear below at 2670x1200, so the opaque frame never
+        /// enters a neighbour's band.</summary>
+        private const float NightMarketCardFramePx = 4f;
+        /// <summary>WO-1384: the aura's reach past the card as a fraction of the card, per axis.
+        /// The radial sprite is alpha 1 at centre and 0 at its rim, so only the transparent tail
+        /// crosses the band edge.</summary>
+        private const float NightMarketAuraReachX = 0.08f;
+        private const float NightMarketAuraReachY = 0.16f;
+        /// <summary>WO-1384: the aura's peak alpha (gold-tinted). Kept under the pack cards'
+        /// art radial so the halo lights the card rather than washing the art beside it.</summary>
+        private const float NightMarketAuraAlpha = 0.55f;
+        /// <summary>WO-1384: the label plate's left edge as a fraction of the card (was 0.36).
+        /// realm-store.png is illustration-left with an EMPTY text plate right, so widening the
+        /// plate leftward costs a sliver of illustration and buys the whole word one line.</summary>
+        private const float NightMarketLabelPlateX0 = 0.30f;
+
         private void BuildNightMarketCard(Transform pool)
         {
             var root = new GameObject("NightMarketCard", typeof(RectTransform));
@@ -992,6 +1034,41 @@ namespace DeNelle.HUD.Kit
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(HudLayoutBands.NightMarketCardWidthPx,
                                        HudLayoutBands.NightMarketCardHeightPx);
+
+            // WO-1384 LIGHT: the kit's radial bloom, gold-tinted, behind everything else on the
+            // card. Built FIRST so it stays the bottom sibling. Null-checked exactly as the kit
+            // demands (a null sprite would draw a white quad).
+            var auraSprite = ElarionUiKit.RadialGlowSprite;
+            if (auraSprite != null)
+            {
+                var aura = ElarionUiKit.AddImage(root.transform, "NightMarketCardAura",
+                    new Vector2(-NightMarketAuraReachX, -NightMarketAuraReachY),
+                    new Vector2(1f + NightMarketAuraReachX, 1f + NightMarketAuraReachY),
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, NightMarketAuraAlpha),
+                    rounded: false);
+                var auraImage = aura.GetComponent<Image>();
+                auraImage.sprite = auraSprite;
+                auraImage.type = Image.Type.Simple;
+                auraImage.preserveAspect = false;
+                auraImage.raycastTarget = false;
+            }
+            else
+            {
+                // Never silent (CLAUDE.md section 12): the frame + size still carry the standout.
+                FlowTrace.Warn("Store", "HUD Night Market card: RadialGlowSprite is null - the card " +
+                                        "ships with its gold frame but no aura this session.");
+            }
+
+            // WO-1384 FRAME: a solid gold border OUTSIDE the art. AddImage anchors it to the card
+            // and zeroes the offsets; the offsets are then pushed outward by the frame width so
+            // the border is visible around an opaque surface.
+            var frame = ElarionUiKit.AddImage(root.transform, "NightMarketCardFrame",
+                Vector2.zero, Vector2.one, ElarionUi.Gold, rounded: false);
+            var frameRt = (RectTransform)frame.transform;
+            frameRt.offsetMin = new Vector2(-NightMarketCardFramePx, -NightMarketCardFramePx);
+            frameRt.offsetMax = new Vector2(NightMarketCardFramePx, NightMarketCardFramePx);
+            var frameImage = frame.GetComponent<Image>();
+            frameImage.raycastTarget = false;
 
             var button = ElarionUiKit.BuildObsidianButton(root.transform, "Night Market",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -1038,8 +1115,13 @@ namespace DeNelle.HUD.Kit
             var face = button.GetComponentInChildren<TMP_Text>(true);
             if (face != null)
             {
+                // WO-1384: plate x0 widened (0.36 -> NightMarketLabelPlateX0) so "NIGHT MARKET"
+                // measures inside it at the 20 px floor on one line - the captured "NIGHT MA..."
+                // was the plate being 153 units wide for a word that needs more at any legible
+                // size. Pinned by HudLabelFitRegression [night-market-standout], which MEASURES
+                // the word's glyph advances against this plate.
                 var plate = ElarionUiKit.AddImage(button.transform, "NightMarketCardLabelPlate",
-                    new Vector2(0.36f, 0.46f), new Vector2(0.97f, 0.92f),
+                    new Vector2(NightMarketLabelPlateX0, 0.46f), new Vector2(0.97f, 0.92f),
                     new Color(0f, 0f, 0f, .66f), false);
                 var plateImage = plate.GetComponent<Image>();
                 if (plateImage != null) plateImage.raycastTarget = false;
@@ -1604,6 +1686,42 @@ namespace DeNelle.HUD.Kit
             return line;
         }
 
+        // ── WO-1384: THE HEART PLATE'S ROWS, top to bottom, as fractions of _heartPlate.Root ──
+        // Read by HudLabelFitRegression [heartfire-inside-plate] as literals, so a band that
+        // leaves the plate or overlaps a neighbour is a red gate, not a felt-test report. The
+        // plate is 0.96 of HudLayoutBands.HeartMount = 125 ref units at 2670x1200 (140 at
+        // 1920x1080), so every row below seats its font floor times the 1.2 line factor with
+        // room over: name 27.5 units (floor 20 x 1.2 = 24), objective 23.8 (its kit-clamped
+        // floor is 18 -> 21.6), Heartfire 27.5 (24), rekindle 23.8 (21.6).
+        private const float HeartNameBandY0 = 0.74f;
+        private const float HeartNameBandY1 = 0.96f;
+        private const float HeartObjectiveBandY0 = 0.53f;
+        private const float HeartObjectiveBandY1 = 0.72f;
+        private const float HeartfireBandY0 = 0.29f;
+        private const float HeartfireBandY1 = 0.51f;
+        private const float HeartfireRekindleBandY0 = 0.08f;
+        private const float HeartfireRekindleBandY1 = 0.27f;
+        /// <summary>The rows' shared x band inside the plate (inside the visible frame).</summary>
+        private const float HeartRowX0 = 0.05f;
+        private const float HeartRowX1 = 0.95f;
+        /// <summary>The plate's name size - and, by the owner's ruling, the Heartfire row's.</summary>
+        private const float HeartNameFontMin = 20f;
+        private const float HeartNameFontMax = 26f;
+        // (Literals, not aliases of the name constants: the regression pin parses these as
+        // numbers and asserts HeartfireFontMin >= HeartNameFontMin itself.)
+        private const float HeartfireFontMin = 20f;
+        private const float HeartfireFontMax = 26f;
+        /// <summary>The objective line and the rekindle line: the plate's small text.
+        /// (FitSingleLine clamps the floor up to ElarionUiKit.FontHardFloor, so 16 resolves
+        /// to a fixed 18 - stated here as authored, the kit owns the clamp.)</summary>
+        private const float HeartObjectiveFontMin = 16f;
+        private const float HeartObjectiveFontMax = 18f;
+        /// <summary>TMP characterSpacing on the marks row: MedievalUiSkin titles use 3, the kit's
+        /// stamp labels 4..6. 5 opens "[*] [*] [ ]" into three separate brackets at 20..26 px.</summary>
+        private const float HeartfireMarkSpacing = 5f;
+        /// <summary>The gap between the marks and the word "Heartfire" on the same row.</summary>
+        private const string HeartfireMarksGap = "   ";
+
         // WO-432: Heart of Elarion status cluster — a tree-of-life glyph + "Elarion" caption
         // sitting ABOVE its own gold Heart bar, so the whole widget reads as the world-tree /
         // heart status (occupied into the HeartStatus area on the left, below the nameplate)
@@ -1638,15 +1756,34 @@ namespace DeNelle.HUD.Kit
             // (ASCII name; the old "♥" heart glyph tofu'd on the build font.)
             _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "Heart of Elarion",
                 new Vector2(0.02f, 0.02f), new Vector2(0.99f, 0.98f));
-            // The objective line moves UP a band to make room for Heartfire beneath it.
-            // The plate's health + mana rows are hidden (below), so this band was empty
-            // furniture, not something being displaced.
+            // ── WO-1384: FOUR ROWS, ONE PLATE, EVERY BAND STATED ONCE ──────────────────
+            // Owner felt-test 2026-09-04 (Seeker, build 355905): "there is something under the
+            // Heart of Elarion, but i cannot read it its too small on screen". The capture
+            // (docs/qa/seeker-hud-left-2026-09-04.png) shows "[*] [*] [*]  Heartfire" drawn
+            // ACROSS the plate's bottom edge at the plate's smallest size. The cause was
+            // geometric, not a font choice: the Heartfire label carried TWO lines (marks row +
+            // rekindle line) inside a band 0.04..0.32 of an 83-unit plate = 23 units, so the fit
+            // guard relaxed the font to seat two lines in one line's height and the centred
+            // block still overflowed the rect - half of it below the plate.
+            //
+            // The fix follows the owner's ruling verbatim - "grow the plate, never shrink the
+            // text": HudLayoutBands.HeartMount grew 0.090 -> 0.135 of screen (the cluster root
+            // this plate fills), and the rows below are stated as constants so the regression
+            // pin reads the SAME numbers this code lays out (HudLabelFitRegression
+            // [heartfire-inside-plate]). All four rows sit inside y 0.08..0.96 of the plate,
+            // which is inside the visible frame of the content-panel sprite.
+            if (_heartPlate.NameLabel != null)
+            {
+                var nameRt = _heartPlate.NameLabel.rectTransform;
+                nameRt.anchorMin = new Vector2(nameRt.anchorMin.x, HeartNameBandY0);
+                nameRt.anchorMax = new Vector2(nameRt.anchorMax.x, HeartNameBandY1);
+            }
             _heartObjectiveLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
-                "Prepare the realm for the next wave.", 0.34f, 0.58f,
+                "Prepare the realm for the next wave.", HeartObjectiveBandY0, HeartObjectiveBandY1,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
-                0.05f, 0.95f);
+                HeartRowX0, HeartRowX1);
             _heartObjectiveLabel.enableAutoSizing = true;
-            ElarionUiKit.FitSingleLine(_heartObjectiveLabel, 16f, 18f);
+            ElarionUiKit.FitSingleLine(_heartObjectiveLabel, HeartObjectiveFontMin, HeartObjectiveFontMax);
 
             // ── WO-1379 HEARTFIRE ────────────────────────────────────────────────────
             // Canon docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4 draws three flames
@@ -1663,17 +1800,30 @@ namespace DeNelle.HUD.Kit
             // the owner's colourblindness sets (memory owner-colorblind-delegate-visual-
             // creative) - a flame sprite and a dark/lit tint drop straight onto it later
             // without changing a single predicate.
+            //
+            // WO-1384 MARKS: the kit has no flame glyph (concept-icons.json's real icons are
+            // combat/sword/shield/heart/inventory/quest/compass/talk/tree/settings), so the
+            // "[*] [ ]" words stay the marks and are made to READ: the row is a SINGLE line
+            // (FitSingleLine at the plate's name size, 20..26, never FitBlock), bold, with
+            // HeartfireMarkSpacing of letter-spacing so three brackets are three distinct marks
+            // in greyscale. The rekindle line is its own label on the row beneath.
             _heartfireLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
-                string.Empty, 0.04f, 0.32f,
+                string.Empty, HeartfireBandY0, HeartfireBandY1,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
-                0.05f, 0.95f);
+                HeartRowX0, HeartRowX1, spacing: HeartfireMarkSpacing, bold: true);
             _heartfireLabel.enableAutoSizing = true;
-            ElarionUiKit.FitBlock(_heartfireLabel);
+            ElarionUiKit.FitSingleLine(_heartfireLabel, HeartfireFontMin, HeartfireFontMax);
+            _heartfireRekindleLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
+                string.Empty, HeartfireRekindleBandY0, HeartfireRekindleBandY1,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
+                HeartRowX0, HeartRowX1);
+            _heartfireRekindleLabel.enableAutoSizing = true;
+            ElarionUiKit.FitSingleLine(_heartfireRekindleLabel, HeartObjectiveFontMin, HeartObjectiveFontMax);
             RepaintHeartfire(force: true);
             if (_heartPlate.NameLabel != null)
             {
-                _heartPlate.NameLabel.fontSizeMin = 20f;
-                _heartPlate.NameLabel.fontSizeMax = 26f;
+                _heartPlate.NameLabel.fontSizeMin = HeartNameFontMin;
+                _heartPlate.NameLabel.fontSizeMax = HeartNameFontMax;
             }
             var heartHealthRow = _heartPlate.HealthFill != null
                 ? _heartPlate.HealthFill.transform.parent : null;
@@ -4035,8 +4185,20 @@ namespace DeNelle.HUD.Kit
 
             string flames = DeNelle.Core.State.HeartfireCharges.FlameRow(lit, max);
             string line = DeNelle.Core.State.HeartfireCharges.RekindleLine(lit, max, secs);
-            _heartfireLabel.text = flames + "  " + DeNelle.Core.State.HeartfireCharges.Name +
-                                   "\n" + line;
+            // WO-1384: two rows, two labels. The marks row keeps the words; the rekindle line
+            // has its own band so neither is shrunk to seat the other. If the second label is
+            // absent (it is built in the same method, so only a factory failure) the old
+            // combined text is painted rather than dropping the line.
+            if (_heartfireRekindleLabel != null)
+            {
+                _heartfireLabel.text = flames + HeartfireMarksGap + DeNelle.Core.State.HeartfireCharges.Name;
+                _heartfireRekindleLabel.text = line;
+            }
+            else
+            {
+                _heartfireLabel.text = flames + HeartfireMarksGap + DeNelle.Core.State.HeartfireCharges.Name +
+                                       "\n" + line;
+            }
 
             // Only the COUNT is worth a line; the countdown moves every second and would
             // otherwise be a per-second firehose in every capture (the lesson of the

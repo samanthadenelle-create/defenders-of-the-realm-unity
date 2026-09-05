@@ -175,6 +175,8 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "deck-card-packaging", () => Case7_DeckCardPackagingMargin(failures, notes));
                 Case(failures, "bar-face-icons", () => Case8_BarFaceIcons(failures, notes));
                 Case(failures, "raids-locked-face", () => Case9_RaidsLockedFace(failures, notes));
+                Case(failures, "heartfire-inside-plate", () => Case10_HeartfireInsidePlate(failures, notes));
+                Case(failures, "night-market-standout", () => Case11_NightMarketStandout(failures, notes));
             }
             catch (Exception ex)
             {
@@ -1357,6 +1359,269 @@ namespace DeNelle.Editor.Regression
 
             notes.Add("raids locked face: plate " + (ink * 100f).ToString("F2") + "% ink, mean luminance " +
                       lum.ToString("F4") + " - live title and reason render over authored art");
+        }
+
+        // =====================================================================
+        // CASE 10  [heartfire-inside-plate]  THE HEARTFIRE ROW SITS INSIDE THE HEART
+        //          PLATE, AT THE PLATE'S NAME SIZE, ON ITS OWN ROW.        (WO-1384, 2026-09-04)
+        // ---------------------------------------------------------------------
+        // Owner felt-test (Seeker, build 355905): "there is something under the Heart of
+        // Elarion, but i cannot read it its too small on screen". The capture showed
+        // "[*] [*] [*]  Heartfire" drawn ACROSS the plate's bottom edge at the smallest size on
+        // the plate. Cause: two lines forced into a 0.04..0.32 band of an 83-unit plate.
+        //
+        // DeNelle.EditorRegression cannot reference DeNelle.HUD, so this is the suite's honest
+        // shape: the bands and font floors are read as LITERALS out of HudKitController.cs
+        // (the same constants the code lays out with), the plate height comes from the REAL
+        // HudLayoutBands.HeartMount in Core at both aspects, and the marks row's WIDTH is
+        // measured from real glyph advances. What it pins:
+        //   10a  every Heart row band lies inside the plate's visible frame (y 0.06..0.97) and
+        //        no two rows overlap - the row cannot straddle the plate edge again;
+        //   10b  the Heartfire row is fitted as ONE line (FitSingleLine, never FitBlock) with a
+        //        floor >= the objective line's ceiling - it cannot be the plate's smallest text;
+        //   10c  at both aspects every row's band seats its floor line (floor x 1.2), so the
+        //        post-layout guard has no reason to relax a font below its floor;
+        //   10d  the widest marks row ("[*] [*] [*]" + gap + "Heartfire", plus the authored
+        //        letter-spacing) measures inside the row at the floor.
+        // RED, one line each: put HeartfireBandY0/Y1 back to 0.04f/0.32f (10a: overlaps the
+        // rekindle band and leaves the frame); set HeartfireFontMin = 16f (10b); or set
+        // HudLayoutBands.HeartMount back to y 0.700 (10c: the four rows no longer seat).
+        // =====================================================================
+        private const float HeartPlateInsetY0 = 0.06f;
+        private const float HeartPlateInsetY1 = 0.97f;
+        /// <summary>BuildHeartStatus places the plate at y 0.02..0.98 of the cluster root.</summary>
+        private const float HeartPlateOfMount = 0.96f;
+
+        private static void Case10_HeartfireInsidePlate(List<string> failures, List<string> notes)
+        {
+            string src = ReadSrc(HudSrc);
+            if (src == null) { failures.Add("[heartfire-inside-plate] cannot read " + HudSrc); return; }
+
+            string[] rows = { "HeartName", "HeartObjective", "Heartfire", "HeartfireRekindle" };
+            var y0 = new float[rows.Length];
+            var y1 = new float[rows.Length];
+            bool parsed = true;
+            for (int i = 0; i < rows.Length; i++)
+            {
+                parsed &= TryFloatConst(src, rows[i] + "BandY0", out y0[i]);
+                parsed &= TryFloatConst(src, rows[i] + "BandY1", out y1[i]);
+            }
+            float fireMin, fireMax, objMin, objMax, nameMin, spacing;
+            parsed &= TryFloatConst(src, "HeartfireFontMin", out fireMin);
+            parsed &= TryFloatConst(src, "HeartfireFontMax", out fireMax);
+            parsed &= TryFloatConst(src, "HeartObjectiveFontMin", out objMin);
+            parsed &= TryFloatConst(src, "HeartObjectiveFontMax", out objMax);
+            parsed &= TryFloatConst(src, "HeartNameFontMin", out nameMin);
+            parsed &= TryFloatConst(src, "HeartfireMarkSpacing", out spacing);
+            if (!parsed)
+            {
+                failures.Add("[heartfire-inside-plate] " + HudSrc + " no longer declares the Heart plate row " +
+                             "constants (Heart{Name,Objective}BandY0/Y1, Heartfire{,Rekindle}BandY0/Y1, " +
+                             "HeartfireFontMin/Max, HeartObjectiveFontMin/Max, HeartNameFontMin, " +
+                             "HeartfireMarkSpacing) as float literals - this pin reads the layout off them");
+                return;
+            }
+
+            // 10a - inside the frame, and disjoint.
+            for (int i = 0; i < rows.Length; i++)
+            {
+                if (y0[i] < HeartPlateInsetY0 || y1[i] > HeartPlateInsetY1 || y0[i] >= y1[i])
+                    failures.Add("[heartfire-inside-plate] the " + rows[i] + " row band " + y0[i].ToString("0.00") +
+                                 ".." + y1[i].ToString("0.00") + " leaves the Heart plate's visible frame (" +
+                                 HeartPlateInsetY0 + ".." + HeartPlateInsetY1 + " of _heartPlate.Root) - that " +
+                                 "is the captured row straddling the plate edge");
+                for (int j = i + 1; j < rows.Length; j++)
+                    if (y0[i] < y1[j] && y0[j] < y1[i])
+                        failures.Add("[heartfire-inside-plate] the " + rows[i] + " and " + rows[j] +
+                                     " rows overlap (" + y0[i] + ".." + y1[i] + " vs " + y0[j] + ".." + y1[j] +
+                                     ") - two rows in one band is how the marks became unreadable");
+            }
+
+            // 10b - one line, at the name size, never the plate's smallest text.
+            RequirePin(failures, "[heartfire-inside-plate]", src,
+                "FitSingleLine(_heartfireLabel, HeartfireFontMin, HeartfireFontMax)",
+                "the Heartfire row must be fitted as ONE line at its own floor; FitBlock with two lines " +
+                "in a one-line band is the exact defect");
+            if (src.IndexOf("FitBlock(_heartfireLabel", StringComparison.Ordinal) >= 0)
+                failures.Add("[heartfire-inside-plate] _heartfireLabel is FitBlock'd again - a wrapped block " +
+                             "in a single row shrinks to whatever seats two lines");
+            RequirePin(failures, "[heartfire-inside-plate]", src,
+                "_heartfireLabel = ElarionUiKit.Label(_heartPlate.Root.transform,",
+                "the Heartfire row must be a child of _heartPlate.Root so its band is a fraction of the plate");
+            RequirePin(failures, "[heartfire-inside-plate]", src,
+                "_heartfireRekindleLabel = ElarionUiKit.Label(_heartPlate.Root.transform,",
+                "the rekindle line must have its OWN row on the plate, not ride as line two of the marks row");
+            if (fireMin < objMax)
+                failures.Add("[heartfire-inside-plate] HeartfireFontMin " + fireMin + " is under the objective " +
+                             "line's ceiling " + objMax + " - the owner's ruling is the marks row reads at the " +
+                             "plate's NAME size (20..26), never smaller than the objective");
+            if (fireMin < nameMin || fireMin < ElarionUiKit.FontHardFloor)
+                failures.Add("[heartfire-inside-plate] HeartfireFontMin " + fireMin + " is under the name floor " +
+                             nameMin + " / the kit hard floor " + ElarionUiKit.FontHardFloor);
+            if (fireMax < fireMin)
+                failures.Add("[heartfire-inside-plate] HeartfireFontMax " + fireMax + " < HeartfireFontMin " + fireMin);
+
+            // 10c - every row seats its floor line at both aspects (the real HeartMount, from Core).
+            // The EFFECTIVE floor is the kit's: FitSingleLine clamps min up to FontHardFloor and
+            // then down to max, so an authored 16..18 resolves to a fixed 18.
+            float objFloor = Math.Min(Math.Max(objMin, ElarionUiKit.FontHardFloor), objMax);
+            float fireFloor = Math.Min(Math.Max(fireMin, ElarionUiKit.FontHardFloor), fireMax);
+            float[] floors = { nameMin, objFloor, fireFloor, objFloor };
+            foreach (var a in Aspects)
+            {
+                var refSize = HudLayoutBands.CanvasReferenceSize(a.W, a.H);
+                float plateH = HudLayoutBands.HeartMount.height * refSize.y * HeartPlateOfMount;
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    float bandH = (y1[i] - y0[i]) * plateH;
+                    float need = floors[i] * LineHeightFactor;
+                    if (bandH < need)
+                        failures.Add("[heartfire-inside-plate] at " + a.Name + " the " + rows[i] + " row is " +
+                                     bandH.ToString("0.0") + " ref px tall but its " + floors[i] + "px floor line " +
+                                     "needs " + need.ToString("0.0") + " - the fit guard would relax the font " +
+                                     "under its floor (the captured 'too small'). Grow HudLayoutBands.HeartMount, " +
+                                     "never the font down");
+                }
+                notes.Add("Heart plate " + plateH.ToString("0") + " ref px at " + a.Name);
+            }
+
+            // 10d - the widest marks row measures inside the row at the floor.
+            string marks = DeNelle.Core.State.HeartfireCharges.FlameRow(3, 3) + "   " +
+                           DeNelle.Core.State.HeartfireCharges.Name;
+            float rowX0, rowX1;
+            if (!TryFloatConst(src, "HeartRowX0", out rowX0)) rowX0 = 0.05f;
+            if (!TryFloatConst(src, "HeartRowX1", out rowX1)) rowX1 = 0.95f;
+            string detail;
+            float w = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, marks, fireMin, out detail);
+            if (w < 0f) notes.Add("marks row not measurable headlessly: " + detail);
+            else
+            {
+                // MeasureLineWidthPx ignores characterSpacing (0 on kit labels); the marks row
+                // authors some, and TMP applies it as spacing/100 em per glyph.
+                w += marks.Length * spacing * 0.01f * fireMin;
+                foreach (var a in Aspects)
+                {
+                    var refSize = HudLayoutBands.CanvasReferenceSize(a.W, a.H);
+                    float plateW = HudLayoutBands.HeartMount.width * refSize.x * 0.97f;
+                    float rowW = (rowX1 - rowX0) * plateW;
+                    if (w > rowW)
+                        failures.Add("[heartfire-inside-plate] at " + a.Name + " the marks row '" + marks +
+                                     "' MEASURES " + w.ToString("0.0") + " ref px at its " + fireMin + "px floor " +
+                                     "(spacing " + spacing + ") but the row is " + rowW.ToString("0.0") +
+                                     " px wide (" + detail + ") - it would ellipsise");
+                }
+                notes.Add("marks row '" + marks + "' " + w.ToString("0.0") + " px at " + fireMin + "px");
+            }
+        }
+
+        // =====================================================================
+        // CASE 11  [night-market-standout]  THE NIGHT MARKET CARD IS THE LARGEST,
+        //          FRAMED, LIT CONTROL IN THE LEFT COLUMN, WITH ITS WHOLE WORD.
+        //                                                          (WO-1384, 2026-09-04)
+        // ---------------------------------------------------------------------
+        // Owner: "night market ... needs to be the shining gem, it should draw attention to it
+        // so it above all stands out". Standout by SIZE, FRAME and LIGHT - never hue alone (the
+        // owner is red/green colourblind). The card's band is REAL (HudLayoutBands, Core); the
+        // frame and aura are source pins; the word is measured.
+        //   11a  the card's resolved area exceeds every other left-column band that is drawn
+        //        (gear) and the FLAG capture chip (its size parsed from FlagCaptureButton.cs);
+        //   11b  HudKitController mounts the gold frame and the kit's RadialGlowSprite aura;
+        //   11c  "NIGHT MARKET" measures inside the label plate at the 20 px hard floor.
+        // RED, one line each: HudLayoutBands.NightMarketCardWidthPx = 112f (11a); delete the
+        // "NightMarketCardFrame" AddImage (11b); NightMarketLabelPlateX0 = 0.60f (11c).
+        // =====================================================================
+        private const string FlagSrc = "Assets/_Modules/Core/Dev/FlagCaptureButton.cs";
+
+        private static void Case11_NightMarketStandout(List<string> failures, List<string> notes)
+        {
+            string src = ReadSrc(HudSrc);
+            if (src == null) { failures.Add("[night-market-standout] cannot read " + HudSrc); return; }
+
+            // 11a - size, from the real table at both aspects.
+            float cardArea = HudLayoutBands.NightMarketCardWidthPx * HudLayoutBands.NightMarketCardHeightPx;
+            float gearArea = HudLayoutBands.DockControlPx * HudLayoutBands.DockControlPx;
+            if (cardArea <= gearArea)
+                failures.Add("[night-market-standout] the Night Market card (" + HudLayoutBands.NightMarketCardWidthPx +
+                             " x " + HudLayoutBands.NightMarketCardHeightPx + ") is not larger than the gear (" +
+                             HudLayoutBands.DockControlPx + " sq) - it is not the column's standout by size");
+            string flag = ReadSrc(FlagSrc);
+            var flagSize = flag == null ? null
+                : System.Text.RegularExpressions.Regex.Match(flag,
+                    @"sizeDelta\s*=\s*new\s+Vector2\(\s*([0-9.]+)f?\s*,\s*([0-9.]+)f?\s*\)");
+            if (flagSize != null && flagSize.Success)
+            {
+                float fw = float.Parse(flagSize.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                float fh = float.Parse(flagSize.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                if (cardArea <= fw * fh)
+                    failures.Add("[night-market-standout] the Night Market card is not larger than the FLAG chip (" +
+                                 fw + " x " + fh + ") it was captured indistinguishable from");
+                notes.Add("card " + cardArea.ToString("0") + " vs gear " + gearArea.ToString("0") + " vs FLAG " +
+                          (fw * fh).ToString("0") + " ref px^2");
+            }
+            else notes.Add("FLAG chip size not parsed from " + FlagSrc + " - compared against the gear only");
+
+            foreach (var a in Aspects)
+            {
+                var bands = HudLayoutBands.ResolveLeftColumn(a.W, a.H);
+                var names = HudLayoutBands.LeftColumnNames;
+                Rect card = default; bool haveCard = false;
+                for (int i = 0; i < bands.Length && i < names.Length; i++)
+                    if (names[i] == "Night Market card") { card = bands[i]; haveCard = true; }
+                if (!haveCard) { failures.Add("[night-market-standout] ResolveLeftColumn has no 'Night Market card' band"); break; }
+                for (int i = 0; i < bands.Length && i < names.Length; i++)
+                {
+                    if (names[i] != "gear") continue;   // the one other band that is actually drawn
+                    if (card.width * card.height <= bands[i].width * bands[i].height)
+                        failures.Add("[night-market-standout] at " + a.Name + " the card's resolved band is not " +
+                                     "larger than the gear's");
+                }
+            }
+
+            // 11b - frame + light, by source pin.
+            RequirePin(failures, "[night-market-standout]", src, "\"NightMarketCardFrame\"",
+                "the card lost its gold frame - standout by FRAME is one of the three legs");
+            RequirePin(failures, "[night-market-standout]", src, "\"NightMarketCardAura\"",
+                "the card lost its aura - standout by LIGHT is one of the three legs");
+            RequirePin(failures, "[night-market-standout]", src, "ElarionUiKit.RadialGlowSprite",
+                "the aura must be the kit's one bloom primitive, not a second glow texture");
+            string cardMethod = Between(src, "private void BuildNightMarketCard(", "private void OpenNightMarket(");
+            if (cardMethod == null)
+                notes.Add("BuildNightMarketCard..OpenNightMarket slice not found - the ElarionUi.Gold law was not sliced");
+            else if (cardMethod.IndexOf("ElarionUi.Gold", StringComparison.Ordinal) < 0)
+                failures.Add("[night-market-standout] BuildNightMarketCard no longer uses ElarionUi.Gold - the " +
+                             "frame must be the kit gold, the same tone as the card's title");
+
+            // 11c - the whole word, one line, at the hard floor.
+            float plateX0;
+            if (!TryFloatConst(src, "NightMarketLabelPlateX0", out plateX0))
+            { failures.Add("[night-market-standout] NightMarketLabelPlateX0 is no longer a float literal in " + HudSrc); return; }
+            float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
+            string d;
+            float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, "NIGHT MARKET",
+                                                        ElarionUiKit.FontHardFloor, out d);
+            if (ww < 0f) notes.Add("'NIGHT MARKET' not measurable headlessly: " + d);
+            else if (ww > plateW)
+                failures.Add("[night-market-standout] 'NIGHT MARKET' MEASURES " + ww.ToString("0.0") +
+                             " ref px at the " + ElarionUiKit.FontHardFloor + "px hard floor but the label plate is " +
+                             plateW.ToString("0.0") + " px wide (" + d + ") - that is the captured 'NIGHT MA...'");
+            else notes.Add("'NIGHT MARKET' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
+        }
+
+        /// <summary>Read a <c>private const float NAME = 1.23f;</c> literal out of a source file.</summary>
+        private static bool TryFloatConst(string src, string name, out float value)
+        {
+            value = 0f;
+            var m = System.Text.RegularExpressions.Regex.Match(src,
+                @"const\s+float\s+" + System.Text.RegularExpressions.Regex.Escape(name) + @"\s*=\s*(-?[0-9]*\.?[0-9]+)f?\s*;");
+            if (!m.Success) return false;
+            return float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                                  System.Globalization.CultureInfo.InvariantCulture, out value);
+        }
+
+        private static void RequirePin(List<string> failures, string tag, string src, string literal, string why)
+        {
+            if (src.IndexOf(literal, StringComparison.Ordinal) < 0)
+                failures.Add(tag + " " + HudSrc + " no longer contains '" + literal + "' - " + why);
         }
 
         /// <summary>WCAG 2.x contrast of one authored sRGB text colour against the measured plate.</summary>

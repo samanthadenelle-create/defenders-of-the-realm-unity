@@ -156,7 +156,8 @@
 >   token list, and there is no bare `skr` token anywhere. ⭐ **Fix the GATE first or the purge just
 >   produces another green marker nobody can trust — which is how we got here.**
 > - **CORRECTED 2026-09-04: THE AAB LANE NOW HAS A SHIP CHAIN** - `google-play-aab-build.ps1` at the REPO ROOT (not under `tools/`), landed in commit `da9694c86` (WO-1365): it expects the `[AndroidBuild] SUCCEEDED` marker (`:270`), calls the one-file `tools/r2-ship.ps1` (`:316`) and asserts size (`AAB_SIZE_OK` / `AAB_SIZE_FAIL`, exit 6). *(The line below is the pre-fix wording, kept per s15:)* ⛔ THE AAB LANE HAS NO SHIP CHAIN (WO-1365): no script invokes `BuildGooglePlayAab`, it never
->   calls `tools2-ship.ps1` (so its own content-hashed catalog is never pushed — §16 occurrence FIVE
+>   calls `tools
+2-ship.ps1` (so its own content-hashed catalog is never pushed — §16 occurrence FIVE
 >   waiting), and nothing asserts size.
 > - ⚠ **THE AAB CANNOT CARRY A CHOSEN VERSION.** `AndroidBuild.ApplyVersionStamp` (`:350-365`) is
 >   parameterless, called unconditionally, and computes the code from `DateTime.UtcNow`. A fresh build
@@ -378,6 +379,30 @@
   `docs/ARCHITECTURE_NORTH_STAR.md` (does the foundation grow into the dream).
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
+
+
+> ### ⛔ OWNER RULING 2026-09-04 23:12 - NOTHING IS GUEST-BUYABLE ON THE CRYPTO RAIL (WO-1386)
+> Verbatim: *"nothing should be guest buyable on a crypto account otherwise we can never persist change"*.
+> `PurchaseGate.WalletRequiredAboveUsd = 4.99` (the WO-1121 "wallet above $4.99" line) is **SUPERSEDED on the
+> Solana dApp Store channel**: every purchase, at any price, requires an attested wallet, because a guest-local
+> key does not survive a reinstall and the entitlement can never persist. Google Play is a different rail
+> (Play's own account persists) and keeps its own gate. **Pi (23:32, verbatim "mark anything for Pi as same logic based on
+> USD"): the PiBrowser channel follows the SAME rule as Solana - a crypto account, wallet required at every USD
+> price; the USD ladder is the one price authority on every channel.** Unknown channel: fail-closed like Solana. The $1.99/$2.99 impulse packs stop being guest-buyable
+> on Seeker; the store's refusal copy must say WHY (connect a wallet so the purchase is yours forever).
+
+
+> ### ⛔ OWNER RULING 2026-09-04 23:16 - TRAINING IS FREE: TIME ONLY. GOLD ONLY BUYS THE SKIP. (WO-1387)
+> Verbatim, on seeing "Train one: 550 gold" and a ~4000 upgrade price on the Seeker: *"seems brutal ...
+> Seems should be resources and the speed up is gold"* then *"we agreed earlier training free"* / *"just time"*.
+> This REVERSES commit `281902df0` (this afternoon: "troops cost gold, and gold also hires mercenaries"),
+> which itself struck WO-1372's "FREE. Time only." The chain is recorded on WO-1372 and WO-1387 so no seat
+> re-derives it. Standing rule now: a troop TRAIN or UPGRADE costs zero resources and zero gold - it costs
+> wall-clock time on the Train line; gold is spent ONLY through the one instant-finish mechanism
+> (BuildTimerService.TryInstantFinish, FinishPaysGold=TrainTroop) to skip that clock. The raid gold reward
+> (WO-1374, sized 125-140% of "1,650 for three starters") loses its cost anchor - the map's gold table is
+> now a faucet whose only sink is the skip, the daily chest and the Cathedral ladder; that is the owner's
+> accepted trade tonight, not an oversight - re-ask before re-sizing the reward.
 
 ## Latest (2026-08-23) — GO LIVE: the pay path is activated
 

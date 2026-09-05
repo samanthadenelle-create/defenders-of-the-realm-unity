@@ -15,10 +15,16 @@
 //      failure mode WO-1121 sec.3.5 names; so is a silent no-op on a broke-case
 //      Finish Now.
 //
-//   2. THE WALLET RULE (owner ruling 2026-08-21). A pack priced ABOVE $4.99 needs a
-//      connected, ATTESTED wallet; $4.99 and under stays guest-buyable. See
-//      WalletRequiredAboveUsd for the reasoning, which is about DURABILITY of the
-//      entitlement, not about trust.
+//   2. THE WALLET RULE (owner ruling 2026-08-21, made CHANNEL-AWARE by WO-1386 on
+//      2026-09-04). On the Solana dApp Store rail EVERY purchase needs a connected,
+//      ATTESTED wallet - owner, verbatim: "nothing should be guest buyable on a
+//      crypto account otherwise we can never persist change" - and Pi is the same
+//      ("mark anything for Pi as same logic based on USD"), as is an Unknown channel
+//      (fail-closed). ONLY Google Play keeps the 2026-08-21 threshold: a pack priced
+//      ABOVE $4.99 needs the wallet, $4.99 and under stays guest-buyable, because
+//      Play's account is the durable key. See WalletRequiredAboveUsd and
+//      RequiresWallet(double, PaymentChannel); the reasoning is about DURABILITY of
+//      the entitlement, not about trust.
 //
 //   3. AN IDEMPOTENT GRANT LEDGER keyed by paymentId, so a retried or duplicated
 //      settlement can NEVER grant a pack twice. This is the half of "charged and
@@ -50,6 +56,7 @@
 using System;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Payments;   // WO-1386 - PaymentChannel / PaymentChannelResolver, read, never re-derived
 using DeNelle.Core.State;
 using UnityEngine;
 
@@ -102,15 +109,65 @@ namespace DeNelle.Wallet
         /// duplicated-state failure as the stale WO-number block and the retired dependency table,
         /// CLAUDE.md sec.2/sec.5). The player-facing sentence formats this same number, so the copy
         /// cannot drift from the rule either.</para>
+        ///
+        /// <para>⚠ WO-1386 (owner ruling 2026-09-04): THIS CONSTANT NO LONGER GATES THE SOLANA RAIL.
+        /// On <see cref="PaymentChannel.SolanaDappStore"/> <see cref="RequiresWallet(double, PaymentChannel)"/>
+        /// is TRUE at every price - owner, verbatim: <i>"nothing should be guest buyable on a crypto
+        /// account otherwise we can never persist change"</i>. The number is kept as the documented
+        /// HISTORY of the 2026-08-21 ruling and as the LIVE threshold for Google Play ONLY (its
+        /// account is the durable key, so its guest tier stays; Pi and Unknown take the strict rule
+        /// too - owner, same evening: "mark anything for Pi as same logic based on USD"). It is still the one
+        /// authority for that threshold - the channel switch lives in the predicate, not in a
+        /// second number and not in a per-pack field.</para>
         /// </summary>
         public const double WalletRequiredAboveUsd = 4.99d;
 
         /// <summary>
-        /// True when <paramref name="priceUsd"/> is above the guest ceiling. A tiny epsilon guards
-        /// the binary-float representation of 4.99 so an exactly-$4.99 pack can never tip over the
-        /// line by a rounding hair and refuse a purchase the ruling allows.
+        /// True when a purchase at <paramref name="priceUsd"/> needs an attested wallet on the
+        /// channel this artifact resolved (<see cref="PaymentChannelResolver.Current"/>). Delegates
+        /// to <see cref="RequiresWallet(double, PaymentChannel)"/> - ONE predicate, two entry points.
         /// </summary>
-        public static bool RequiresWallet(double priceUsd) => priceUsd > WalletRequiredAboveUsd + 0.0001d;
+        public static bool RequiresWallet(double priceUsd) =>
+            RequiresWallet(priceUsd, PaymentChannelResolver.Current);
+
+        /// <summary>
+        /// THE wallet predicate, channel-aware (WO-1386, owner ruling 2026-09-04).
+        /// <list type="bullet">
+        /// <item><see cref="PaymentChannel.SolanaDappStore"/>: ALWAYS true. A guest save on the
+        /// crypto rail is a device-derived key with no restore path, and the owner ruled that no
+        /// price is small enough to accept losing: <i>"nothing should be guest buyable on a crypto
+        /// account otherwise we can never persist change"</i>.</item>
+        /// <item><see cref="PaymentChannel.PiBrowser"/>: ALWAYS true. Owner, same evening
+        /// (2026-09-04), verbatim: <i>"mark anything for Pi as same logic based on USD"</i>.</item>
+        /// <item><see cref="PaymentChannel.Unknown"/>: ALWAYS true - FAIL-CLOSED. A channel this
+        /// artifact cannot name gets the strict rule, never the lenient one.</item>
+        /// <item><see cref="PaymentChannel.GooglePlay"/> ONLY: the 2026-08-21 threshold - true only
+        /// ABOVE <see cref="WalletRequiredAboveUsd"/>, because Play's account is the durable key. A
+        /// tiny epsilon guards the binary-float representation of 4.99 so an exactly-$4.99 pack can
+        /// never tip over the line by a rounding hair and refuse a purchase that ruling allows.</item>
+        /// </list>
+        /// The USD price is the one authority on every channel - there is no per-rail price logic,
+        /// only a per-rail answer to "is there a guest tier at all".
+        /// </summary>
+        public static bool RequiresWallet(double priceUsd, PaymentChannel channel)
+        {
+            if (channel != PaymentChannel.GooglePlay) return true;
+            return priceUsd > WalletRequiredAboveUsd + 0.0001d;
+        }
+
+        /// <summary>
+        /// The player-facing refusal for the wallet rule on <paramref name="channel"/> - ONE place,
+        /// so the card banner, the charge path and the shortfall door can never word it three ways.
+        /// <para>Every channel but Google Play (Solana, Pi, Unknown - owner 2026-09-04: <i>"mark
+        /// anything for Pi as same logic based on USD"</i>): the WO-1386 sentence, which says WHY in
+        /// the owner's sense (the purchase is yours on every device) and never a bare "wallet
+        /// required". Google Play: the threshold sentence, with {0} formatted from the constant so it
+        /// cannot drift.</para>
+        /// </summary>
+        public static string WalletRefusalSentence(PaymentChannel channel) =>
+            channel != PaymentChannel.GooglePlay
+                ? StoreStrings.CryptoWalletRequired()
+                : StoreStrings.Format(StoreStrings.KeyBuyWalletRequired, FormatUsd(WalletRequiredAboveUsd));
 
         /// <summary>
         /// True when this device has a REAL, provider-attested wallet keying the save - the same
@@ -231,14 +288,18 @@ namespace DeNelle.Wallet
 #endif
 
             double usd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
-            if (RequiresWallet(usd) && !HasDurableIdentity)
+            PaymentChannel channel = PaymentChannelResolver.Current;
+            if (RequiresWallet(usd, channel) && !HasDurableIdentity)
             {
-                reason = StoreStrings.Format(StoreStrings.KeyBuyWalletRequired, FormatUsd(WalletRequiredAboveUsd));
+                reason = WalletRefusalSentence(channel);
+                string why = channel != PaymentChannel.GooglePlay
+                    ? $"the channel is {channel}, where NO price is guest-buyable (WO-1386, owner 2026-09-04)"
+                    : $"it is above the ${WalletRequiredAboveUsd:0.00} guest ceiling (owner 2026-08-21)";
                 FlowTrace.Warn("Store",
-                    $"PurchaseGate: '{pack.Sku}' is ${usd:0.00}, above the ${WalletRequiredAboveUsd:0.00} guest " +
-                    "ceiling, and this save has NO attested wallet identity (it is a guest/device key with no " +
-                    "proven restore path). Refusing BEFORE any charge, with the connect-a-wallet remedy named. " +
-                    "This is the owner ruling of 2026-08-21, not a rail failure.");
+                    $"PurchaseGate: '{pack.Sku}' is ${usd:0.00} on channel {channel}; {why}, and this save has " +
+                    "NO attested wallet identity (it is a guest/device key with no proven restore path). " +
+                    "Refusing BEFORE any charge, with the connect-a-wallet remedy named. This is an owner " +
+                    "ruling, not a rail failure.");
                 return false;
             }
 
@@ -374,6 +435,14 @@ namespace DeNelle.Wallet
             string rail = PrimaryRail();
             bool mint = SkrMintResolvable();
             bool buy = FeatureFlags.RealmStorePurchase;
+            PaymentChannel channel = PaymentChannelResolver.Current;
+            bool cryptoRail = channel != PaymentChannel.GooglePlay;
+            string walletRule = cryptoRail
+                ? "EVERY price (WO-1386: channel is " + channel + ", nothing is guest-buyable)"
+                : "above $" + WalletRequiredAboveUsd.ToString("0.00") + " (channel " + channel + ")";
+            string guestCanBuy = cryptoRail
+                ? "NOTHING is buyable until a wallet is connected"
+                : "only <= $" + WalletRequiredAboveUsd.ToString("0.00") + " is buyable";
 
             return
                 "PurchaseGate checklist (WO-1121 sec.2):\n" +
@@ -384,8 +453,9 @@ namespace DeNelle.Wallet
                 $"  Idempotent grant by paymentId        : YES (PurchaseGate.TryClaimGrant)\n" +
                 $"  Mainnet policy                       : blocked in SolanaWalletProvider.SendPayment (deliberate)\n" +
                 $"  Price ceiling                        : ${49.99d:0.00} (owner 2026-08-21 - the ${WalletRequiredAboveUsd:0.00} cap was EARLY-ACCESS, not permanent)\n" +
-                $"  Wallet required above                : ${WalletRequiredAboveUsd:0.00}\n" +
-                $"  This save has an attested wallet     : {(HasDurableIdentity ? "YES" : "NO - guest/device key, so only <= $" + WalletRequiredAboveUsd.ToString("0.00") + " is buyable")}\n" +
+                $"  Payment channel                      : {channel}\n" +
+                $"  Wallet required                      : {walletRule}\n" +
+                $"  This save has an attested wallet     : {(HasDurableIdentity ? "YES" : "NO - guest/device key, so " + guestCanBuy)}\n" +
                 "  NOT VERIFIABLE FROM CODE (owner actions): one settled transfer test, the mainnet\n" +
                 "  decision itself, and the pay -> grant -> save -> relaunch device proof.";
         }
@@ -419,9 +489,10 @@ namespace DeNelle.Wallet
         /// <summary>Invariant-culture "$4.99" for the refusal sentence's {0}. Never the device
         /// locale: the price on the card is authored in USD, so the threshold must read the same.
         /// <para>⚠ WIDENED private -> internal by WO-1323, and ONLY the accessor moved: the rule, the
-        /// threshold and every caller behave identically. PackStore words the SAME refusal for the Pi
-        /// skin (storePiWalletGate), and a second copy of this one-line formatter is exactly the
-        /// duplicated state that lets one of the two drift into a device locale.</para></summary>
+        /// threshold and every caller behave identically. PackStore used to word the SAME refusal for
+        /// the Pi skin (storePiWalletGate) through it - retired 2026-09-04 by WO-1386 (Pi has no guest
+        /// tier to name) - and it stays internal because a second copy of this one-line formatter is
+        /// exactly the duplicated state that lets one of the two drift into a device locale.</para></summary>
         internal static string FormatUsd(double usd) =>
             "$" + usd.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 

@@ -168,12 +168,149 @@ namespace DeNelle.Village
             // stamp the persisted clock at pause: a hard kill while backgrounded must still
             // leave a claimable window for the next cold load.
             OfflineClaimCoordinator.NotePaused(paused);
+            if (paused) OpenClaimWindow("app paused");
             if (!paused && ClaimOnResume) ClaimDeferred("resume");
+        }
+
+        // =====================================================================
+        //  ONE CLAIM PER LAUNCH WINDOW -- the cold-load / resume latch
+        // ---------------------------------------------------------------------
+        //  Owner felt-test 2026-09-04 22:29 (Seeker, cold launch, pid 28564): the popup
+        //  said "YOUR REALM WORKED FOR 0m" after ~12.6h away. The device log names it:
+        //      -> Claim(resume)     Claim #1 (resume): ONE delta = 45328s (12.59h) ...
+        //                           clock advanced ONCE to 1788578999262 ... => REVEAL
+        //      -> Claim(cold-load)  Claim #2 (cold-load): ONE delta = 0s ... => REVEAL   (17 ms later)
+        //  Android delivers OnApplicationPause(false) DURING boot, so the "resume" trigger
+        //  raced the Start() "cold-load" trigger; both went through ClaimAfterTwoFrames, both
+        //  reached the coordinator, and the coordinator (correctly) advanced the clock on the
+        //  first, so the second measured ~0 and its reveal REPLACED the real one.
+        //
+        //  THE RULE: a launch window (process start, or the most recent OnApplicationPause(true))
+        //  is claimed AT MOST ONCE, whichever trigger gets there first. The latch lives HERE,
+        //  not in the coordinator: the coordinator's job is ONE delta per claim (WO-1147) and
+        //  its arithmetic is untouched; deciding whether a second TRIGGER is the same window
+        //  is this service's business, because this service is the one that owns both
+        //  triggers. A genuine resume after a real pause re-opens the window (OpenClaimWindow
+        //  in OnApplicationPause(true)) and still claims.
+        //
+        //  Two states, deliberately separate:
+        //    _claimPending  -- a deferred claim is in its two-frame wait; ANY second trigger
+        //                      is skipped, pause edge or not (the pending claim will cover it).
+        //    _windowClaimed -- a claim completed since the window opened; a second trigger is
+        //                      skipped until OnApplicationPause(true) opens a new window.
+        //  ClaimAccrual() (the public oracle/legacy verb) deliberately bypasses the latch: it
+        //  is an explicit, named claim, never a lifecycle trigger.
+        // =====================================================================
+
+        private bool _claimPending;
+        private bool _windowClaimed;
+        private string _pendingReason;
+        private float _windowClaimedAtRealtime;
+
+        /// <summary>Sequence of the claim that covered the current launch window (0 = none yet).</summary>
+        public int WindowClaimSequence { get; private set; }
+
+        /// <summary>Trigger reason of the claim that covered the current launch window.</summary>
+        public string WindowClaimReason { get; private set; }
+
+        /// <summary>True when the most recent lifecycle trigger was SKIPPED by the latch (diagnostic / oracle readout).</summary>
+        public bool LastDeferredClaimSkipped { get; private set; }
+
+        /// <summary>
+        /// Opens a NEW launch window: the next deferred trigger will claim again. Called from
+        /// OnApplicationPause(true); public so a headless oracle can model a real pause edge.
+        /// Does not cancel a claim already in flight -- that claim will cover the new window.
+        /// </summary>
+        public void OpenClaimWindow(string why)
+        {
+            if (!_windowClaimed && WindowClaimSequence == 0)
+            {
+                FlowTrace.Step("Offline", $"claim window opened ({why}) -- nothing claimed yet this process.");
+                return;
+            }
+            FlowTrace.Step("Offline",
+                $"claim window re-opened ({why}) -- claim #{WindowClaimSequence} ({WindowClaimReason}) covered the previous " +
+                $"window; the next trigger will claim again.");
+            _windowClaimed = false;
+            WindowClaimSequence = 0;
+            WindowClaimReason = null;
+        }
+
+        /// <summary>
+        /// The latch. Returns true (and marks the claim pending) when this trigger may run a
+        /// claim; false when a claim is already pending or already covered this window, in
+        /// which case the skip is traced with the covering claim's number and age.
+        /// </summary>
+        private bool TryLatchClaim(string reason)
+        {
+            if (_claimPending)
+            {
+                LastDeferredClaimSkipped = true;
+                FlowTrace.Step("Offline",
+                    $"claim({reason}) SKIPPED - claim ({_pendingReason}) is already pending for this window " +
+                    "(the second trigger of a cold launch; see the 2026-09-04 22:29 '0m' capture).");
+                return false;
+            }
+            if (_windowClaimed)
+            {
+                float ageMs = (Time.realtimeSinceStartup - _windowClaimedAtRealtime) * 1000f;
+                LastDeferredClaimSkipped = true;
+                FlowTrace.Step("Offline",
+                    $"claim({reason}) SKIPPED - claim #{WindowClaimSequence} ({WindowClaimReason}) already covered this window " +
+                    $"{ageMs:0} ms ago");
+                return false;
+            }
+            LastDeferredClaimSkipped = false;
+            _claimPending = true;
+            _pendingReason = reason;
+            return true;
+        }
+
+        /// <summary>
+        /// Runs the latched claim through the ONE authority and closes the window on it.
+        /// The coordinator fans the window out to every consumer and advances the clock
+        /// once; our own share lands in ApplyOfflineWindow, the reveal in OnClaimCompleted.
+        /// </summary>
+        private OfflineClaimWindow RunLatchedClaim(string reason)
+        {
+            OfflineClaimWindow window = default;
+            try
+            {
+                window = OfflineClaimCoordinator.Claim(reason);
+            }
+            finally
+            {
+                _claimPending = false;
+                _pendingReason = null;
+                _windowClaimed = true;
+                _windowClaimedAtRealtime = Time.realtimeSinceStartup;
+                WindowClaimSequence = window.Sequence;
+                WindowClaimReason = reason;
+            }
+            return window;
         }
 
         private void ClaimDeferred(string reason)
         {
-            if (isActiveAndEnabled) StartCoroutine(ClaimAfterTwoFrames(reason));
+            if (!isActiveAndEnabled) return;
+            if (!TryLatchClaim(reason)) return;
+            StartCoroutine(ClaimAfterTwoFrames(reason));
+        }
+
+        /// <summary>
+        /// TEST SEAM: the lifecycle trigger with the two-frame wait collapsed, so a headless
+        /// oracle (editmode never pumps coroutines) can drive "cold-load" then "resume" in the
+        /// same window and read what the latch did. Returns the coordinator's window, or
+        /// <c>default</c> (Sequence 0) when the latch skipped this trigger. Never called by
+        /// gameplay -- the lifecycle path is ClaimDeferred.
+        /// </summary>
+        public OfflineClaimWindow ClaimDeferredNow(string reason)
+        {
+            // Idempotent registration, as ClaimAccrual: editmode AddComponent never ran Awake.
+            OfflineClaimCoordinator.Register(this);
+            EnsureSubscribed();
+            if (!TryLatchClaim(reason)) return default;
+            return RunLatchedClaim(reason);
         }
 
         private System.Collections.IEnumerator ClaimAfterTwoFrames(string reason)
@@ -191,8 +328,8 @@ namespace DeNelle.Village
             EnsureJobSubscription();
             // ONE claim for the whole game: the coordinator fans the window out to every
             // consumer and advances the clock once. Our own share lands in
-            // ApplyOfflineWindow (which raises Claimed + the welcome-back popup).
-            OfflineClaimCoordinator.Claim(reason);
+            // ApplyOfflineWindow; the reveal is raised from OnClaimCompleted.
+            RunLatchedClaim(reason);
         }
 
         // =====================================================================

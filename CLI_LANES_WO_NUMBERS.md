@@ -180,7 +180,46 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, sixtieth pass): main line next free = **1383**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, sixty-seventh pass): main line next free = **1391**.
+> *(CLI minted **1390**: Manage - Research shows NOTHING when no perk is researchable (device: '6 with a tier
+> ladder -> 0 perk row(s)'); owner 23:33: show Tier 1 locked with the prerequisite and a door to upgrade it.
+> Bumped 1390 -> 1391 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-sixth pass): main line next free = **1390**.
+> *(CLI minted **1389**: "then introduce the reason to upgrade" - the free 3 open the raid door; the empty 7
+> slots and the escalation ladder are the reasons to train and upgrade, and the game never SHOWS them. Spec.
+> Bumped 1389 -> 1390 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-fifth pass): main line next free = **1389**.
+> *(CLI minted **1387** (training is FREE, time only; gold only skips - reverses 281902df0, restores WO-1372's
+> original line; upgrades likewise) and **1388** (the $1.99 Builder's Hour starter pack: small basket + the
+> temporary builder for 6 h - owner rulings 23:14 - plus store funnel telemetry store_opened / pack_tapped /
+> checkout_started / checkout_failed). Bumped 1387 -> 1389 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-fourth pass): main line next free = **1387**.
+> *(CLI minted **1386**: owner ruling 23:12 "nothing should be guest buyable on a crypto account otherwise we
+> can never persist change" - PurchaseGate.WalletRequiredAboveUsd=4.99 (WO-1121) is SUPERSEDED on the Solana
+> channel: every price requires an attested wallet; Google Play keeps its own persisted account. Bumped
+> 1386 -> 1387 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-third pass): main line next free = **1386**.
+> *(CLI minted **1385**: the raid deploy screen (RAID: THE FORSAKEN CAMP) - Echo Guide block collides with
+> CHANGE + the enemy-base line, hero portraits behind their labels, quote truncated, BEGIN ASSAULT on a raw
+> yellow slab. Owner 23:06: "screenshot. yuck". docs/qa/seeker-raid-deploy-2026-09-04.png. Bumped 1385 -> 1386
+> in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-second pass): main line next free = **1385**.
+> *(CLI minted **1384**: HUD left column - the Heartfire charge row `[*] [*] [*] Heartfire` renders half
+> outside the Heart of Elarion plate at body size (owner: "cannot read it its too small"), and the Night
+> Market chip must be the shining gem of the HUD (owner: "it should draw attention to it so it above all
+> stands out"). Both on HudKitController - one lane. Bumped 1384 -> 1385 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixty-first pass): main line next free = **1384**.
+> *(CLI minted **1383**: the away summary said "0m" after 12.6 h - on a cold launch the resume claim races
+> the cold-load claim, consumes the window and the second reveal replaces the first; plus the label never
+> shows hours AND minutes. Owner felt-test 22:29 / question 23:02. Bumped 1383 -> 1384 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, sixtieth pass): main line next free = **1383**.
 > *(CLI minted **1381** (the owner's autonomy directive - execute an order to completion, never pause at an
 > approval gate) and **1382** (Manage - Troops screen redesign: the troop detail card floats OVER the roster,
 > two TRAIN buttons for one unit, clipped scroll arrows - device screenshot docs/qa/seeker-manage-troops-2026-09-04.png).

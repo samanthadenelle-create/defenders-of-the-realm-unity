@@ -49,6 +49,7 @@ namespace DeNelle.Editor
     {
         private const string VmPath = "Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs";
         private const string InteractablePath = "Assets/_Modules/Village/Buildings/BuildingInteractable.cs";
+        private const string PanelPath = "Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs";
 
         public static bool Run(out string reason)
         {
@@ -125,6 +126,10 @@ namespace DeNelle.Editor
                 var bal = throwaway.Resources;
                 bal.Food = 100000;
                 bal.Crystals = 100000;
+                // 2026-09-04 WO-1387: Coins is NOT load-bearing for the door any more - training
+                // charges nothing (owner: "training free ... just time"). Left rich only because this
+                // fixture is "every gate wide open"; the zero-gold train is pinned by
+                // TrainingCostsTimeOnlyRegression, not here.
                 bal.Coins = 100000;
                 throwaway.Resources = bal;
                 throwaway.ObsidianQueue = ObsidianQueueState.Empty();
@@ -266,6 +271,32 @@ namespace DeNelle.Editor
                                  "PROD-002 + canon §7 (one entry). If training is unreachable, fix ManageScreenVM.");
                 else
                     log.AppendLine("  case 5 OK - barracks talk-door still closed; Manage is the single door");
+            }
+
+            // ── CASE 6 (added 2026-09-04, WO-1382): the door has TWO VERBS and NO MODE SWITCH ──
+            // Owner ruling 2026-09-04 22:50, verbatim: "Delete this entirely: TRAIN | UPGRADE
+            // OPTIONS. That should not be a mode switch." and "The review recommends removing
+            // _troopMode entirely rather than trying to make the segmented control prettier. I
+            // strongly agree." The old boxed TRAIN face was a view toggle that never enqueued
+            // anything, sitting above the real priced CTA - three things said TRAIN and one
+            // trained. This pin fails the build if the toggle field returns, or if either verb
+            // face ("TRAIN 1 <NAME>" / "UPGRADE TO L<n>") is no longer authored on the panel.
+            string panel = ReadSource(PanelPath, failures);
+            if (panel != null)
+            {
+                string code = StripLineComments(panel);
+                if (code.IndexOf("_troopMode", StringComparison.Ordinal) >= 0)
+                    failures.Add("[case 6] ManageScreenPanel carries a _troopMode field again - the TRAIN | UPGRADE " +
+                                 "OPTIONS mode switch was deleted by owner ruling (WO-1382): \"That should not be a " +
+                                 "mode switch.\" Two verbs, two buttons, no toggle.");
+                if (code.IndexOf("\"TRAIN 1 \"", StringComparison.Ordinal) < 0)
+                    failures.Add("[case 6] the primary verb face \"TRAIN 1 <NAME>\" is not authored on the panel - the " +
+                                 "Troops card must carry ONE priced TRAIN verb with the unit count in its label.");
+                if (code.IndexOf("\"UPGRADE TO L\"", StringComparison.Ordinal) < 0)
+                    failures.Add("[case 6] the secondary verb face \"UPGRADE TO L<n>\" is not authored on the panel - " +
+                                 "upgrade is a second BUTTON on the same card, never a mode.");
+                if (failures.Count == 0 || !failures.Exists(f => f.StartsWith("[case 6]", StringComparison.Ordinal)))
+                    log.AppendLine("  case 6 OK - no _troopMode; TRAIN 1 <NAME> and UPGRADE TO L<n> are both authored");
             }
         }
 

@@ -16,8 +16,9 @@
 //            then a scrollable troop-card list from ArmyStorage.GetDeployable()
 //            grouped by TroopDefId (icon glyph, name, owned count), with an army-cap
 //            indicator (SlotsUsed / MaxArmySize).
-//   Center   a battle-preview placeholder + an "Estimated Clear Time" readout
-//            (FIRST PASS: static from the config; TODO live update as troops change).
+//   Right    three DISJOINT bands (WO-1385): the ENEMY BASE line (crest + stats +
+//            copy), the ECHO GUIDE block (header / name + CHANGE / two-line quote),
+//            then the SCOUT REPORT well. Band constants above BuildCenterColumn.
 //   Bottom   total troops / a simple power rating (sum of deployable), an
 //            a quiet "Army Ready?" peek (the old "Auto Recommend" stub was REMOVED in
 //            the 2026-08-09 honesty pass — it was toast-only with no loadout AI; the
@@ -214,13 +215,17 @@ namespace DeNelle.Village.Hero
         // The fallback (no sub-header) keeps the legacy offsets below the body-top row.
         private void BuildLeftColumn(Transform body, bool hasSubHeader)
         {
+            // WO-1385 #2: the party row deepens 0.735 -> 0.690 (62 -> 80 px on the 411 px
+            // phone body) so a hero portrait PLATE and a 36 px name row can stack without
+            // the label painting over the plate; the cap line and the list top slide down
+            // by the same 0.035. YOUR FORCES and the cap line's content are untouched.
             float forcesY0 = hasSubHeader ? 0.900f : 0.855f;
             float forcesY1 = hasSubHeader ? 0.960f : 0.915f;
-            float partyY0  = hasSubHeader ? 0.735f : 0.700f;
+            float partyY0  = hasSubHeader ? 0.690f : 0.655f;
             float partyY1  = hasSubHeader ? 0.885f : 0.845f;
-            float capY0    = hasSubHeader ? 0.665f : 0.635f;
-            float capY1    = hasSubHeader ? 0.715f : 0.685f;
-            float listY1   = hasSubHeader ? 0.645f : 0.615f;
+            float capY0    = hasSubHeader ? 0.630f : 0.600f;
+            float capY1    = hasSubHeader ? 0.680f : 0.650f;
+            float listY1   = hasSubHeader ? 0.610f : 0.580f;
 
             var lbl = ElarionUiKit.Label(body, "YOUR FORCES", forcesY0, forcesY1, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
@@ -285,21 +290,33 @@ namespace DeNelle.Village.Hero
             float slot = Mathf.Min(0.30f, 0.92f / Mathf.Max(n, 1));
             float rowWidth = slot * n;
             float rowStart = (1f - rowWidth) * 0.5f;
+            // WO-1385 #2 (owner screenshot: "Thrain" / "Grom" painted OVER the olive plates).
+            // The old niche was the whole slot width (225 px) by 0.18-0.98 of a 62 px row,
+            // and the name sat in the 11 px left under it -- a FontMicro glyph cannot seat in
+            // 11 px, so it overflowed upward onto the plate. Now the plate is a SQUARE-ish
+            // alcove centred in the slot (0.028 half-width of the 749 px row = 42 px, y 0.47-
+            // 1.00 = 42 px on the 80 px row) and the name owns the bottom 0.00-0.45 (36 px),
+            // fitted single-line. Plate is decorative (no Button, raycast off), so the touch
+            // floor does not apply to it.
+            const float plateHalfW = 0.028f;
             for (int i = 0; i < n; i++)
             {
                 string cls = classes[i];
                 float x0 = rowStart + i * slot + 0.015f;
                 float x1 = rowStart + (i + 1) * slot - 0.015f;
+                float cx = (x0 + x1) * 0.5f;
 
-                // Framed portrait niche.
-                var niche = ElarionUiKit.Niche(rowHost.transform, new Vector2(x0, 0.18f), new Vector2(x1, 0.98f));
+                // Framed portrait niche -- the PLATE, above the label.
+                var niche = ElarionUiKit.Niche(rowHost.transform,
+                    new Vector2(cx - plateHalfW, 0.47f), new Vector2(cx + plateHalfW, 1.00f));
                 niche.GetComponent<Image>().raycastTarget = false;
                 var portrait = ElarionUiKit.Portrait(niche.transform, ElarionUiKit.PortraitForClass(cls), active: i == 0);
 
-                // Name under the portrait (the canon companion name for the class).
+                // Name BELOW the portrait plate (the canon companion name for the class).
                 var nameLbl = ElarionUiKit.Label(rowHost.transform, _vm != null ? _vm.CompanionName(cls) : cls,
-                    0f, 0.18f, ElarionUi.Parchment,
+                    0.00f, 0.45f, ElarionUi.Parchment,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, x0, x1, bold: true);
+                ElarionUiKit.FitSingleLine(nameLbl);
                 nameLbl.raycastTarget = false;
             }
         }
@@ -383,25 +400,58 @@ namespace DeNelle.Village.Hero
         // Fractions are OF THE BODY ZONE (WO-714 W4). WO-839 #3: the column widens to
         // RightColX0 (seam closed) and the bare lower band becomes the SCOUT REPORT
         // intel area (the header TODO's intended occupant).
+        // =====================================================================
+        //  WO-1385 (owner 2026-09-04, Seeker build 355905: "screenshot. yuck") --
+        //  THE RIGHT COLUMN IS THREE DISJOINT BANDS, AND THE BUDGET IS 411 PX.
+        // ---------------------------------------------------------------------
+        //  The body zone is NOT the 0.075-0.835 that ZonesFor declares. On the phone
+        //  canvas (1080x1920 ref, match 0.5, 2670x1200 -> scale 1.243, canvasH 965)
+        //  the Close-band reservation in BuildObsidianPanel lifts the footer to
+        //  0.217-0.347 and the body floor to 0.362, so the body is 0.473 x 869 =
+        //  ~411 ref px tall. The old bands were authored against a taller body:
+        //  the guide band (0.455-0.600) was 60 px, its CHANGE button carried a
+        //  MinTouchPx=112 floor, and ClampMinTouch grew it symmetrically over the
+        //  ENEMY BASE copy above and the SCOUT REPORT header below -- the three
+        //  elements the owner saw sharing one band. The fix is a real pixel
+        //  budget, top to bottom, with every single-line row >= 36 px so the
+        //  30 px FontFloor seats WITHOUT the runtime relax guard (which does not
+        //  run in a headless capture):
+        //     ENEMY BASE  0.785-0.960  (72 px: 2 rows of 36)
+        //     gap         0.775-0.785  ( 4 px)
+        //     ECHO GUIDE  0.390-0.775  (158 px: hdr 36 / name 40 / quote 76 -- 2 lines)
+        //     gap         0.380-0.390  ( 4 px)
+        //     SCOUT       0.000-0.380  (156 px: hdr 37 / 3 lines in 109)
+        //  Pinned by RaidDeployUiRegression [deploy-bands-disjoint]. These are body
+        //  fractions; the left column is untouched except the party row (see
+        //  BuildPartyRow).
+        private const float ScoutBandY0 = 0.000f;
+        private const float ScoutBandY1 = 0.380f;
+        private const float GuideBandY0 = 0.390f;
+        private const float GuideBandY1 = 0.775f;
+        private const float EnemyBandY0 = 0.785f;
+        private const float EnemyBandY1 = 0.960f;
+
         private void BuildCenterColumn(Transform body, bool hasSubHeader)
         {
-            // Battle preview well. WO-839 #4: an INTENTIONAL framed pre-battle state
-            // instead of the raw "(enemy base)" stub copy. No runtime thumbnail exists yet
-            // (RaidBaseGenerator is a BAKE-TIME editor tool — nothing renders the target
-            // base at runtime), so the well frames a crest + honest copy until a thumbnail
-            // pipeline lands. With the meta row gone to the sub-header the well also grows
-            // upward to the column top.
-            // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
-            // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
-            float prevTop = hasSubHeader ? 0.960f : 0.845f;
-            // WO-1380: the ECHO GUIDE band takes the strip the preview well used to end on
-            // (0.46-0.60). The preview keeps the whole span above it; the SCOUT REPORT well
-            // below is untouched, because the honest config intel is not the thing to shrink.
-            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, GuideBandY1 + 0.02f), new Vector2(1.00f, prevTop));
+            // ENEMY BASE line. WO-839 #4: an INTENTIONAL framed pre-battle state instead of
+            // the raw "(enemy base)" stub copy. No runtime thumbnail exists yet
+            // (RaidBaseGenerator is a BAKE-TIME editor tool -- nothing renders the target
+            // base at runtime), so the band carries a small crest + honest copy until a
+            // thumbnail pipeline lands.
+            // WO-1385: this used to be a tall preview well with a large crest above a
+            // three-line rich-text block; on the 411 px body the third line (Est / Troops /
+            // Power) was truncated clean off and the second ran under the guide band. It is
+            // now TWO single-line rows: crest + "ENEMY BASE" + the stats readout, then the
+            // copy line. Each row is FitSingleLine (shrinks to the floor, then ellipsis --
+            // never a silent cut).
+            // (#29) A dark recessed Well, not a Niche -- with BlinkChrome off the Niche painted
+            // an opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
+            float enemyTop = hasSubHeader ? EnemyBandY1 : 0.845f;
+            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, EnemyBandY0), new Vector2(1.00f, enemyTop));
             preview.GetComponent<Image>().raycastTarget = false;
 
             var crest = ElarionUiKit.AddImage(preview.transform, "PreviewCrest",
-                new Vector2(0.40f, 0.55f), new Vector2(0.60f, 0.92f),
+                new Vector2(0.03f, 0.54f), new Vector2(0.085f, 0.98f),
                 new Color(1f, 1f, 1f, 0.55f));
             var crestImg = crest.GetComponent<Image>();
             var crestSprite = UiStyle.Icon("combat", "crest", "shield", "emblem");
@@ -417,37 +467,45 @@ namespace DeNelle.Village.Hero
             }
             crestImg.raycastTarget = false;
 
-            // One owned information block is more robust than four narrow free-floating bands:
-            // the hierarchy remains intact at every aspect and TMP can fit the stack as a unit.
+            var pvHdr = ElarionUiKit.Label(preview.transform, "ENEMY BASE", 0.50f, 1.00f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.10f, 0.42f, bold: true);
+            ElarionUiKit.FitSingleLine(pvHdr);
+            pvHdr.raycastTarget = false;
+
+            // The WORD carries the meaning (no colour-only rich text any more).
             string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
             int totalTroops = _vm != null ? _vm.DeployableCount : 0;
             int power = _vm != null ? _vm.PowerRating : 0;
-            string previewCopy = "<b><color=#E8BD45>ENEMY BASE</color></b>\n" +
-                "Assault to recon - deploy troops on the field\n" +
-                "<color=#E8BD45>Est. ~" + est + "</color>  |  Troops " + totalTroops + "  |  Power " + power;
-            var pvInfo = ElarionUiKit.Label(preview.transform, previewCopy, 0.02f, 0.54f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
-            pvInfo.richText = true;
-            ElarionUiKit.FitBlock(pvInfo);
-            pvInfo.raycastTarget = false;
+            var pvStats = ElarionUiKit.Label(preview.transform,
+                "Est. ~" + est + " | Troops " + totalTroops + " | Power " + power, 0.50f, 1.00f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.44f, 0.97f);
+            ElarionUiKit.FitSingleLine(pvStats);
+            pvStats.raycastTarget = false;
 
-            // WO-1380: the ECHO GUIDE band, between the preview and the scout report.
+            var pvCopy = ElarionUiKit.Label(preview.transform, "Assault to recon - deploy troops on the field",
+                0.00f, 0.50f, ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.97f);
+            ElarionUiKit.FitSingleLine(pvCopy);
+            pvCopy.raycastTarget = false;
+
+            // WO-1380: the ECHO GUIDE band, between the enemy line and the scout report.
             BuildGuideBand(body);
 
             // WO-839 #3: SCOUT REPORT intel band fills the previously bare lower band.
             // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
             // facts only (walls / gates / garrison / boss; never the cosmetic reward
             // fields the loot math ignores).
-            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.00f), new Vector2(1.00f, 0.44f));
+            // WO-1385: content untouched; the well's top drops 0.44 -> ScoutBandY1 so the
+            // guide block above gets a band the CHANGE button actually fits in.
+            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, ScoutBandY0), new Vector2(1.00f, ScoutBandY1));
             intel.GetComponent<Image>().raycastTarget = false;
-            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.72f, 0.96f,
+            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.75f, 0.99f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             ElarionUiKit.FitSingleLine(intelHdr);
             intelHdr.raycastTarget = false;
             var report = _vm != null ? _vm.ScoutReport : null;
             string intelText = report != null && report.Count > 0
                 ? string.Join("\n", report) : "No scout intel available.";
-            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.06f, 0.70f,
+            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.03f, 0.73f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
             ElarionUiKit.FitBlock(intelLbl);
             intelLbl.raycastTarget = false;
@@ -472,13 +530,24 @@ namespace DeNelle.Village.Hero
         // solely to EchoWorldPresence (WO-1108 Lane B), which escorts the player to the
         // gate and returns ONCE after the battle — and that return is where the Guide
         // actually speaks this line aloud (EchoWorldPresence.SpeakGuideMemory).
-        private const float GuideBandY0 = 0.455f;
-        private const float GuideBandY1 = 0.600f;
+        //
+        // WO-1385 layout (fractions OF THE BAND, band = GuideBandY0..GuideBandY1 of the
+        // body = ~158 px on the phone body): a TEXT COLUMN on the left (x 0.04-0.63) of
+        // three rows -- header 0.76-0.99 (36 px), name 0.51-0.76 (40 px), quote 0.02-0.50
+        // (76 px = two 30 px lines) -- and the CHANGE button on the RIGHT (x 0.66-0.97,
+        // y 0.06-0.94 = 232 x 139 px), beside the name line and clear of every row. The
+        // button is taller than the name line ON PURPOSE: MinTouchPx is 112 and the band
+        // cannot give a single row that height, so the button owns the column's height
+        // instead of ClampMinTouch growing it over the neighbours (the shipped collision).
+        // (GuideBandY0/Y1 live with the other band constants above BuildCenterColumn.)
 
         // Live band labels, so cycling the Guide re-renders two strings instead of
         // rebuilding the screen (a rebuild would drop the player's scroll position).
         private TMPro.TMP_Text _guideNameLabel;
         private TMPro.TMP_Text _guideMemoryLabel;
+
+        private const float GuideTextX0 = 0.04f;
+        private const float GuideTextX1 = 0.63f;
 
         private void BuildGuideBand(Transform body)
         {
@@ -486,8 +555,8 @@ namespace DeNelle.Village.Hero
             var bandImg = band.GetComponent<Image>();
             if (bandImg != null) bandImg.raycastTarget = false;
 
-            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.66f, 0.98f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.55f, bold: true);
+            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.76f, 0.99f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
             ElarionUiKit.FitSingleLine(hdr);
             hdr.raycastTarget = false;
 
@@ -507,16 +576,18 @@ namespace DeNelle.Village.Hero
                 // supplies the height afterwards; this button has no such seat, so it carries
                 // its own band. UiKitMinTouchGuard is a net, not a layout — it does not run in
                 // an edit-mode headless capture (ElarionUiKit.cs:1075-1077).
+                // WO-1385: the band spans y 0.06-0.94 of a ~158 px band = 139 px, above
+                // the 112 px floor by construction, so the clamp never has to grow it.
                 ElarionUiKit.Button(band.transform, "Change", ElarionUiKit.ButtonKind.Quiet,
-                    new Vector2(0.58f, 0.66f), new Vector2(0.96f, 0.98f), OnCycleGuide);
+                    new Vector2(0.66f, 0.06f), new Vector2(0.97f, 0.94f), OnCycleGuide);
             }
 
-            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.42f, 0.66f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
+            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.51f, 0.76f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
             _guideNameLabel.raycastTarget = false;
 
-            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.04f, 0.42f,
-                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.05f, 0.95f);
+            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.02f, 0.50f,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, GuideTextX0, GuideTextX1);
             _guideMemoryLabel.raycastTarget = false;
 
             RefreshGuideBand();
@@ -557,6 +628,11 @@ namespace DeNelle.Village.Hero
                     (raidId ?? "(null)") + ". Narrative only - no stat, no yield, no combat effect.");
             }
             ElarionUiKit.FitBlock(_guideMemoryLabel);
+            // WO-1385 #3: FitBlock's overflow mode is Truncate, which is how the quote shipped
+            // cut mid-word ("...sowed this ground, an") with nothing telling the player the
+            // sentence went on. Wrap stays, auto-size stays (down to the 30 px floor), and a
+            // line that STILL does not fit the two-line rect ends in an ellipsis instead.
+            _guideMemoryLabel.overflowMode = TMPro.TextOverflowModes.Ellipsis;
         }
 
         // Advance to the next OWNED Echo and re-render. The choice is a preference, not a
@@ -628,20 +704,19 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.00f, 0.50f), new Vector2(0.28f, 0.50f), OnAutoRecommend);
             SeatFooterCtaAtCanonicalHeight(readyBtn);
 
-            // DEPLOY — the big glowing primary CTA. WO-839 #5: the old DeployGlow was a
-            // flat gilt RECT deliberately larger than the button on every side
-            // (x0.60-1.00 / y0.00-1.00) — the owner's "gold slivers". Replaced by a thin
-            // ROUNDED halo hugging the button (~1% margin, rounded sprite corners), so a
-            // soft gold rim reads as the ember glow with no hard slab edge.
-            var glow = ElarionUiKit.AddImage(footer, "DeployGlow",
-                new Vector2(0.30f, 0.00f), new Vector2(1.00f, 1.00f),
-                new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.30f));
-            var glowImg = glow.GetComponent<Image>();
-            glowImg.raycastTarget = false;
-            ElarionUiKit.ApplyRounded(glowImg);
-
-            // WO-932: "BEGIN ASSAULT" — distinct from in-raid ground DROP of troops.
-            var deployBtn = ElarionUiKit.Button(footer, "BEGIN ASSAULT", ElarionUiKit.ButtonKind.Confirm,
+            // DEPLOY -- the primary CTA. WO-1385 #4 (owner 2026-09-04, Seeker screenshot:
+            // "yuck"): the WO-839 DeployGlow halo -- a flat gilt image slab behind the
+            // button, x 0.30-1.00 / y 0.00-1.00 of the footer -- is GONE. On the phone the
+            // footer is ~113 px and the seated button 132 px, so the "halo" read as a raw
+            // yellow rectangle sticking out behind a framed button, next to ARMY READY?'s
+            // kit frame: two visual languages on one row. The primary emphasis now comes
+            // from the kit's own primary face -- BuildObsidianButton Yellow -- on the SAME
+            // row geometry as ARMY READY? (y 0.50/0.50 + SeatFooterCtaAtCanonicalHeight).
+            // No second image, no second style. Pinned by RaidDeployUiRegression
+            // [deploy-bar-kit-button].
+            // WO-932: "BEGIN ASSAULT" -- distinct from in-raid ground DROP of troops.
+            var deployBtn = ElarionUiKit.BuildObsidianButton(footer, "BEGIN ASSAULT",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.32f, 0.50f), new Vector2(0.985f, 0.50f), OnDeploy);
             SeatFooterCtaAtCanonicalHeight(deployBtn);
             // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either

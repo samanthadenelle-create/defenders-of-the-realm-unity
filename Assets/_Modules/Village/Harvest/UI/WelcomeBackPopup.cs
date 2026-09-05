@@ -67,6 +67,20 @@ namespace DeNelle.Village.UI
                     "welcome-back: no summary content (haul/mend/jobs/collectors all empty) -- not shown.");
                 return;
             }
+            // NEVER REPLACE A SHOWN REPORT WITH A SMALLER ONE (owner felt-test 2026-09-04 22:29:
+            // "YOUR REALM WORKED FOR 0m" after 12.6h away). The cold-load and resume triggers
+            // raced during boot; the second claim measured ~0s and this rebuild threw the real
+            // 12h report away. OfflineHarvestService now latches the claim itself; this is the
+            // belt to that brace: a later result covering LESS away time than the one on screen
+            // is not news, it is the same window measured again.
+            if (s_active != null && s_active._result != null && result.AwaySeconds < s_active._result.AwaySeconds)
+            {
+                FlowTrace.Warn("Offline",
+                    $"welcome-back: a later result (away {result.AwaySeconds:0}s, haul={result.Total}) would REPLACE the " +
+                    $"open report (away {s_active._result.AwaySeconds:0}s, haul={s_active._result.Total}) with a smaller " +
+                    "window -- kept the first; the later result is a re-measure of the same window.");
+                return;
+            }
             FlowTrace.Step("Offline",
                 $"welcome-back REVEAL: haul={result.Total} mendNews={result.HasMendNews} " +
                 $"jobs={result.CompletedJobCount} collectorsPending={result.PendingCollectorTotal} " +
@@ -336,11 +350,36 @@ namespace DeNelle.Village.UI
             Dismiss();
         }
 
-        private string AwayText()
+        private string AwayText() => AwayTextFor(_result.AwaySeconds, _result.WasCapped);
+
+        /// <summary>The whole summary line, exposed for the away-summary oracle.</summary>
+        public static string AwayTextFor(double awaySeconds, bool wasCapped)
         {
-            double hours = _result.AwaySeconds / 3600.0;
-            string span = hours >= 1.0 ? $"{hours:0.#}h" : $"{Mathf.RoundToInt((float)(_result.AwaySeconds / 60.0))}m";
-            return _result.WasCapped ? $"YOUR REALM WORKED FOR {span} (STORAGE FULL)" : $"YOUR REALM WORKED FOR {span}";
+            string span = FormatAwaySpan(awaySeconds);
+            return wasCapped ? $"YOUR REALM WORKED FOR {span} (STORAGE FULL)" : $"YOUR REALM WORKED FOR {span}";
+        }
+
+        /// <summary>
+        /// Away span as hours AND minutes (owner ruling 2026-09-04 22:29: "minutes and hours if
+        /// applicable should show"). Deterministic, ASCII, floor-based, and it can never print
+        /// "0m": under a minute reads "under 1m".
+        /// <code>
+        ///   45328 s -> "12h 35m"     59 s -> "under 1m"     3600 s -> "1h 0m"
+        ///   90000 s -> "1d 1h"       2100 s -> "35m"
+        /// </code>
+        /// Days carry hours only (a day-scale absence does not need its minutes).
+        /// </summary>
+        public static string FormatAwaySpan(double awaySeconds)
+        {
+            if (double.IsNaN(awaySeconds) || awaySeconds < 0.0) awaySeconds = 0.0;
+            long total = (long)System.Math.Floor(awaySeconds);
+            if (total < 60L) return "under 1m";
+            long days = total / 86400L;
+            long hours = (total % 86400L) / 3600L;
+            long minutes = (total % 3600L) / 60L;
+            if (days >= 1L) return days + "d " + hours + "h";
+            if (hours >= 1L) return hours + "h " + minutes + "m";
+            return minutes + "m";
         }
 
         private void Dismiss()

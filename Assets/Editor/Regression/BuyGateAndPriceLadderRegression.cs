@@ -18,10 +18,20 @@
 //      So this suite does NOT police price at all -- it polices what the shelf
 //      ADVERTISES, which is the thing that can actually lie to a payer.
 //
-//   2. WALLET REQUIRED ABOVE $4.99. A guest's save key is
-//      guest-local-<sha256(deviceId)> -- device-derived, with no proven restore
-//      path after a reinstall or a new phone. At $4.99 a lost entitlement is an
-//      annoyance; at $49.99 it is a chargeback on a LIVE dApp Store listing.
+//   2. WALLET REQUIRED -- PER CHANNEL (re-pinned 2026-09-04, WO-1386). A guest's
+//      save key is guest-local-<sha256(deviceId)> -- device-derived, with no proven
+//      restore path after a reinstall or a new phone.
+//        * PaymentChannel.SolanaDappStore: a wallet is required at EVERY price.
+//          Owner, verbatim (2026-09-04 23:12): "nothing should be guest buyable on
+//          a crypto account otherwise we can never persist change". $1.99 included.
+//        * PaymentChannel.PiBrowser: the same. Owner, same evening, verbatim:
+//          "mark anything for Pi as same logic based on USD".
+//        * PaymentChannel.Unknown: the same, FAIL-CLOSED.
+//        * PaymentChannel.GooglePlay ONLY: the 2026-08-21 threshold holds -- ABOVE
+//          $4.99. Play's account is the durable key, so its guest tier stays:
+//          $1.99 does not need a wallet, $9.99 does.
+//      The threshold constant is kept as history and as the live off-chain rule;
+//      the channel switch lives in ONE predicate, RequiresWallet(usd, channel).
 //
 // WHY THE STRUCTURAL CASES EXIST, AND WHY THEY ARE THE POINT.
 // A value check ("this pack is refused today") is cheap to satisfy and cheap to
@@ -55,11 +65,13 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using DeNelle.Core.Payments;   // WO-1386 - PaymentChannel + PaymentChannelResolver.OverrideForTests
 using DeNelle.Wallet;
 
 namespace DeNelle.Editor.Regression
 {
-    /// <summary>Pins the WO-1121 price-ladder ruling and the wallet-above-$4.99 buy gate.</summary>
+    /// <summary>Pins the WO-1121 price-ladder ruling and the per-channel wallet buy gate
+    /// (WO-1386: every price on Solana, above $4.99 elsewhere).</summary>
     public static class BuyGateAndPriceLadderRegression
     {
         private const string PacksRelPath  = "Data/Canonical/packs.json";
@@ -99,7 +111,7 @@ namespace DeNelle.Editor.Regression
         {
             var failures = new List<string>();
             var log = new StringBuilder();
-            log.AppendLine("=== BuyGateAndPriceLadderRegression [buy-gate] (WO-1121: $49.99 ceiling + wallet above $4.99) ===");
+            log.AppendLine("=== BuyGateAndPriceLadderRegression [buy-gate] (WO-1121: $49.99 ceiling; WO-1386: wallet at EVERY price on Solana, above $4.99 elsewhere) ===");
 
             try
             {
@@ -116,6 +128,7 @@ namespace DeNelle.Editor.Regression
                 }
 
                 CaseThresholdBoundary(failures, log);
+                CaseSolanaGuestRefusedWithConnectSentence(failures, log);
                 CaseRefusalSentencesExist(failures, log);
                 CaseChargePathConsultsTheGate(failures, log);
             }
@@ -132,9 +145,10 @@ namespace DeNelle.Editor.Regression
                          "cosmetic, a convenience kind or a glimmer line this build cannot deliver; the wallet " +
                          "threshold exists exactly once (PurchaseGate.WalletRequiredAboveUsd = $" +
                          PurchaseGate.WalletRequiredAboveUsd.ToString("0.00", CultureInfo.InvariantCulture) +
-                         ") and is never re-authored per pack; every pack above it is refused while this save " +
-                         "has no attested wallet; and the CHARGE PATH itself (PackStore.Purchase) consults the " +
-                         "gate, so the rule is not UI-only.";
+                         ") and is never re-authored per pack; on GooglePlay every pack above it is refused " +
+                         "while this save has no attested wallet, on SolanaDappStore EVERY pack is (WO-1386) " +
+                         "with the connect-a-wallet sentence; and the CHARGE PATH itself (PackStore.Purchase) " +
+                         "consults the gate, so the rule is not UI-only.";
                 Debug.Log("BUY_GATE_OK\n" + log);
                 return true;
             }
@@ -339,10 +353,27 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  [threshold] -- RULING 2's boundary, asserted on the predicate itself.
-        //  $4.99 EXACTLY must stay guest-buyable: the ruling moved the wallet
-        //  requirement ABOVE the old ceiling, so nothing that was already
-        //  guest-buyable may be taken away by a float rounding hair.
+        //  [threshold] -- RULING 2's boundary, asserted on the predicate itself,
+        //  PER CHANNEL (re-pinned 2026-09-04, WO-1386).
+        //
+        //  GooglePlay keeps the 2026-08-21 shape: $4.99 EXACTLY must stay
+        //  guest-buyable (the rule is ABOVE the old ceiling, so nothing that was
+        //  already guest-buyable may be taken away by a float rounding hair), and
+        //  $9.99 / $19.99 / $49.99 need the wallet.
+        //
+        //  SolanaDappStore has NO guest tier at all. Owner, verbatim (2026-09-04):
+        //  "nothing should be guest buyable on a crypto account otherwise we can
+        //  never persist change". So $1.99 -- the cheapest impulse pack on the
+        //  shelf -- requires a wallet, and so does everything above it.
+        //
+        //  PROVEN RED (mutations named, one line each, in PurchaseGate.RequiresWallet
+        //  (double, PaymentChannel)):
+        //    * delete `if (channel == PaymentChannel.SolanaDappStore) return true;`
+        //      -> "[threshold/solana] $1.99 must require a wallet" fails.
+        //    * change that line to `if (channel == PaymentChannel.GooglePlay) return true;`
+        //      -> "[threshold/play] $1.99 must be guest-buyable" fails.
+        //    * change the old-signature delegate to pass PaymentChannel.GooglePlay
+        //      -> "[threshold/delegate] RequiresWallet(double) must follow the RESOLVED channel" fails.
         // =====================================================================
         private static void CaseThresholdBoundary(List<string> failures, StringBuilder log)
         {
@@ -351,14 +382,185 @@ namespace DeNelle.Editor.Regression
                              PurchaseGate.WalletRequiredAboveUsd.ToString("0.0000", CultureInfo.InvariantCulture) +
                              ", the owner ruled $4.99 (2026-08-21).");
 
-            if (PurchaseGate.RequiresWallet(1.99d)) failures.Add("[threshold] $1.99 must be guest-buyable.");
-            if (PurchaseGate.RequiresWallet(4.99d)) failures.Add("[threshold] $4.99 EXACTLY must stay guest-buyable - " +
-                                                                "the rule is ABOVE $4.99, not from $4.99.");
-            if (!PurchaseGate.RequiresWallet(9.99d))  failures.Add("[threshold] $9.99 must require a wallet.");
-            if (!PurchaseGate.RequiresWallet(19.99d)) failures.Add("[threshold] $19.99 must require a wallet.");
-            if (!PurchaseGate.RequiresWallet(49.99d)) failures.Add("[threshold] $49.99 must require a wallet - this is " +
-                                                                  "the chargeback case the ruling exists for.");
-            log.AppendLine("  [threshold] $1.99/$4.99 guest-buyable, $9.99/$19.99/$49.99 wallet-gated");
+            // -- GooglePlay: the threshold, unchanged. Play's account is the durable key.
+            const PaymentChannel play = PaymentChannel.GooglePlay;
+            if (PurchaseGate.RequiresWallet(1.99d, play)) failures.Add("[threshold/play] $1.99 must be guest-buyable on GooglePlay.");
+            if (PurchaseGate.RequiresWallet(4.99d, play)) failures.Add("[threshold/play] $4.99 EXACTLY must stay guest-buyable on GooglePlay - " +
+                                                                      "the rule is ABOVE $4.99, not from $4.99.");
+            if (!PurchaseGate.RequiresWallet(9.99d, play))  failures.Add("[threshold/play] $9.99 must require a wallet on GooglePlay.");
+            if (!PurchaseGate.RequiresWallet(19.99d, play)) failures.Add("[threshold/play] $19.99 must require a wallet on GooglePlay.");
+            if (!PurchaseGate.RequiresWallet(49.99d, play)) failures.Add("[threshold/play] $49.99 must require a wallet on GooglePlay - this is " +
+                                                                        "the chargeback case the 2026-08-21 ruling exists for.");
+
+            // -- SolanaDappStore: EVERY price. "nothing should be guest buyable on a crypto account".
+            const PaymentChannel sol = PaymentChannel.SolanaDappStore;
+            if (!PurchaseGate.RequiresWallet(0.99d, sol))  failures.Add("[threshold/solana] $0.99 must require a wallet on SolanaDappStore - no price is guest-buyable on the crypto rail (owner 2026-09-04).");
+            if (!PurchaseGate.RequiresWallet(1.99d, sol))  failures.Add("[threshold/solana] $1.99 must require a wallet on SolanaDappStore - the cheapest impulse pack is NOT guest-buyable (owner 2026-09-04, WO-1386).");
+            if (!PurchaseGate.RequiresWallet(4.99d, sol))  failures.Add("[threshold/solana] $4.99 must require a wallet on SolanaDappStore - the old ceiling no longer gates the crypto rail.");
+            if (!PurchaseGate.RequiresWallet(9.99d, sol))  failures.Add("[threshold/solana] $9.99 must require a wallet on SolanaDappStore.");
+            if (!PurchaseGate.RequiresWallet(49.99d, sol)) failures.Add("[threshold/solana] $49.99 must require a wallet on SolanaDappStore.");
+
+            // -- PiBrowser: EVERY price. Owner, same evening (2026-09-04), verbatim: "mark anything
+            //    for Pi as same logic based on USD". RED: `channel != GooglePlay` -> `channel == SolanaDappStore`.
+            const PaymentChannel pi = PaymentChannel.PiBrowser;
+            if (!PurchaseGate.RequiresWallet(0.99d, pi))  failures.Add("[threshold/pi] $0.99 must require a wallet on PiBrowser - 'mark anything for Pi as same logic based on USD' (owner 2026-09-04).");
+            if (!PurchaseGate.RequiresWallet(1.99d, pi))  failures.Add("[threshold/pi] $1.99 must require a wallet on PiBrowser (owner 2026-09-04, WO-1386).");
+            if (!PurchaseGate.RequiresWallet(4.99d, pi))  failures.Add("[threshold/pi] $4.99 must require a wallet on PiBrowser - Pi has no guest tier.");
+            if (!PurchaseGate.RequiresWallet(49.99d, pi)) failures.Add("[threshold/pi] $49.99 must require a wallet on PiBrowser.");
+
+            // -- Unknown: EVERY price, FAIL-CLOSED. A channel the artifact cannot name gets the strict
+            //    rule. RED: add `|| channel == PaymentChannel.Unknown` to the GooglePlay branch.
+            const PaymentChannel unk = PaymentChannel.Unknown;
+            if (!PurchaseGate.RequiresWallet(0.99d, unk))  failures.Add("[threshold/unknown] $0.99 must require a wallet on an Unknown channel - fail-closed (WO-1386).");
+            if (!PurchaseGate.RequiresWallet(1.99d, unk))  failures.Add("[threshold/unknown] $1.99 must require a wallet on an Unknown channel - fail-closed (WO-1386).");
+            if (!PurchaseGate.RequiresWallet(4.99d, unk))  failures.Add("[threshold/unknown] $4.99 must require a wallet on an Unknown channel - fail-closed (WO-1386).");
+            if (!PurchaseGate.RequiresWallet(49.99d, unk)) failures.Add("[threshold/unknown] $49.99 must require a wallet on an Unknown channel - fail-closed (WO-1386).");
+
+            // -- The old one-argument signature must follow the RESOLVED channel, not a baked one.
+            //    Both directions, so a delegate hardwired to either channel fails.
+            try
+            {
+                PaymentChannelResolver.OverrideForTests(sol);
+                if (!PurchaseGate.RequiresWallet(1.99d))
+                    failures.Add("[threshold/delegate] RequiresWallet(double) must follow the RESOLVED channel: with " +
+                                 "SolanaDappStore resolved, $1.99 must require a wallet.");
+                PaymentChannelResolver.OverrideForTests(play);
+                if (PurchaseGate.RequiresWallet(1.99d))
+                    failures.Add("[threshold/delegate] RequiresWallet(double) must follow the RESOLVED channel: with " +
+                                 "GooglePlay resolved, $1.99 must stay guest-buyable.");
+            }
+            finally
+            {
+                PaymentChannelResolver.ClearTestOverride();
+            }
+
+            log.AppendLine("  [threshold] GooglePlay: $1.99/$4.99 guest-buyable, $9.99/$19.99/$49.99 wallet-gated; " +
+                           "SolanaDappStore / PiBrowser / Unknown: $0.99..$49.99 ALL wallet-gated; the 1-arg predicate follows the resolved channel");
+        }
+
+        // =====================================================================
+        //  [solana-guest] -- BEHAVIOURAL + COPY (WO-1386, owner 2026-09-04).
+        //  With the channel resolved as SolanaDappStore, the Buy flag forced ON,
+        //  and no attested wallet on this save, the ONE pack that survives every
+        //  earlier gate in CanBuy (the devnet canary `hearth-spark`, $4.99 -- a
+        //  price the OLD rule let a guest buy) must be refused, and refused with
+        //  the connect-a-wallet sentence EXACTLY:
+        //      "Connect a wallet so this purchase is yours on every device."
+        //  Never a bare "wallet required", never the $4.99 threshold sentence,
+        //  because on this rail there is no threshold left to name.
+        //
+        //  PROVEN RED (one line each):
+        //    * StoreStrings.BuyWalletRequiredCryptoSentence reworded ("Wallet required.")
+        //      -> "[solana-guest] the Solana refusal sentence is not the owner's" fails.
+        //    * PurchaseGate.WalletRefusalSentence: drop the channel test so it always
+        //      formats KeyBuyWalletRequired -> "[solana-guest] hearth-spark was refused with
+        //      the THRESHOLD sentence" fails.
+        //    * PurchaseGate.CanBuy: `RequiresWallet(usd, channel)` -> `RequiresWallet(usd,
+        //      PaymentChannel.GooglePlay)` -> "[solana-guest] hearth-spark ($4.99) is
+        //      PURCHASABLE by a guest on SolanaDappStore" fails.
+        // =====================================================================
+        private static void CaseSolanaGuestRefusedWithConnectSentence(List<string> failures, StringBuilder log)
+        {
+            const string owner = "Connect a wallet so this purchase is yours on every device.";
+
+            // The copy, pinned to the owner's sentence and to the one accessor every caller uses.
+            if (!string.Equals(StoreStrings.BuyWalletRequiredCryptoSentence, owner, StringComparison.Ordinal))
+                failures.Add("[solana-guest] the Solana refusal sentence is not the owner's. Expected \"" + owner +
+                             "\" (WO-1386, 2026-09-04), got \"" + StoreStrings.BuyWalletRequiredCryptoSentence + "\".");
+            if (!string.Equals(StoreStrings.CryptoWalletRequired(), StoreStrings.BuyWalletRequiredCryptoSentence, StringComparison.Ordinal))
+                failures.Add("[solana-guest] StoreStrings.CryptoWalletRequired() does not return BuyWalletRequiredCryptoSentence - two homes for one sentence.");
+            foreach (char c in StoreStrings.BuyWalletRequiredCryptoSentence)
+                if (c > 127) { failures.Add("[solana-guest] the Solana refusal sentence is not ASCII - TMP renders it as tofu."); break; }
+            if (StoreStrings.BuyWalletRequiredCryptoSentence.IndexOf("wallet", StringComparison.OrdinalIgnoreCase) < 0)
+                failures.Add("[solana-guest] the Solana refusal never says 'wallet' - the remedy must be NAMED.");
+            if (StoreStrings.BuyWalletRequiredCryptoSentence.IndexOf("{0}", StringComparison.Ordinal) >= 0)
+                failures.Add("[solana-guest] the Solana refusal formats a threshold - there is no guest tier on this rail to name.");
+
+            string thresholdSentence = StoreStrings.Format(StoreStrings.KeyBuyWalletRequired,
+                "$" + PurchaseGate.WalletRequiredAboveUsd.ToString("0.00", CultureInfo.InvariantCulture));
+            if (!string.Equals(PurchaseGate.WalletRefusalSentence(PaymentChannel.SolanaDappStore), owner, StringComparison.Ordinal))
+                failures.Add("[solana-guest] PurchaseGate.WalletRefusalSentence(SolanaDappStore) is not the owner's sentence.");
+            // Owner 2026-09-04: "mark anything for Pi as same logic based on USD" - Pi and an Unknown
+            // channel get the SAME connect sentence from the gate. RED: `channel != GooglePlay` ->
+            // `channel == SolanaDappStore` in WalletRefusalSentence.
+            if (!string.Equals(PurchaseGate.WalletRefusalSentence(PaymentChannel.PiBrowser), owner, StringComparison.Ordinal))
+                failures.Add("[solana-guest] PurchaseGate.WalletRefusalSentence(PiBrowser) is not the owner's connect sentence - Pi is 'same logic based on USD' (2026-09-04).");
+            if (!string.Equals(PurchaseGate.WalletRefusalSentence(PaymentChannel.Unknown), owner, StringComparison.Ordinal))
+                failures.Add("[solana-guest] PurchaseGate.WalletRefusalSentence(Unknown) is not the owner's connect sentence - an unnamed channel is fail-closed.");
+            if (!string.Equals(PurchaseGate.WalletRefusalSentence(PaymentChannel.GooglePlay), thresholdSentence, StringComparison.Ordinal))
+                failures.Add("[solana-guest] PurchaseGate.WalletRefusalSentence(GooglePlay) is not the $4.99 threshold sentence - " +
+                             "Play's guest tier must keep its own words.");
+
+            if (PurchaseGate.HasDurableIdentity)
+            {
+                log.AppendLine("  [solana-guest] " + RegressionOutcome.PartialSkipToken +
+                               " this save has an ATTESTED wallet, so the guest refusal cannot be exercised here. " +
+                               "The predicate and copy pins above still bind.");
+                return;
+            }
+
+            bool hadPref = PlayerPrefs.HasKey(BuyFlagPrefKey);
+            int prevPref = hadPref ? PlayerPrefs.GetInt(BuyFlagPrefKey, -1) : -1;
+
+            // ⚠ THE GATE THAT MASKED THIS ARM (regression pass 7, 2026-09-04 23:26, RED):
+            // PurchaseGate.CanBuy(out reason) asks MaintenanceCatalog.Refuses(Store, ...) FIRST,
+            // and MaintenanceCatalog.For (Assets/_Modules/Core/Ops/MaintenanceCatalog.cs:229-234)
+            // fails CLOSED for the store on a NULL table - the headless resting state, no toggle
+            // fetch ever ran - with UnreadableStoreMessage (:154, "The store is closed because we
+            // cannot reach the server..."). So the case never reached the wallet layer.
+            //
+            // The seam is the one the maintenance suite itself uses (MaintenanceTogglesRegression
+            // Case1b): MarkFeatureAbsent() (:463) swaps in an EMPTY, READABLE table - "the toggle
+            // system is not deployed here", which the owner ruled is NOT an outage - so the store
+            // resolves OPEN with no seal invented. Clear() (:430) puts the null table back in the
+            // finally. Guarded: if a LIVE table is already standing (Loaded == true) we leave it
+            // alone - a real seal then refuses, and the arm reports THAT by name below rather
+            // than clobbering a live catalog to get a green.
+            bool touchedMaintenance = false;
+            try
+            {
+                PlayerPrefs.SetInt(BuyFlagPrefKey, 1);
+                PackCatalog.Reload();
+                PaymentChannelResolver.OverrideForTests(PaymentChannel.SolanaDappStore);
+                if (!DeNelle.Core.Ops.MaintenanceCatalog.Loaded)
+                {
+                    DeNelle.Core.Ops.MaintenanceCatalog.MarkFeatureAbsent();
+                    touchedMaintenance = true;
+                }
+
+                PackDef canary = PackCatalog.Find(PurchaseGate.DevnetCanarySku);
+                if (canary == null)
+                {
+                    failures.Add("[solana-guest] PackCatalog has no '" + PurchaseGate.DevnetCanarySku + "' - the one sku " +
+                                 "that reaches the wallet rule on devnet is gone, so the refusal cannot be exercised.");
+                    return;
+                }
+                double usd = canary.Pricing != null ? canary.Pricing.Usd : 0d;
+                bool allowed = PurchaseGate.CanBuy(canary, out string why);
+                if (allowed)
+                    failures.Add("[solana-guest] " + canary.Sku + " ($" + usd.ToString("0.00", CultureInfo.InvariantCulture) +
+                                 ") is PURCHASABLE by a guest on SolanaDappStore. Owner 2026-09-04: \"nothing should be " +
+                                 "guest buyable on a crypto account otherwise we can never persist change\".");
+                else if (string.Equals(why, thresholdSentence, StringComparison.Ordinal))
+                    failures.Add("[solana-guest] " + canary.Sku + " was refused with the THRESHOLD sentence on SolanaDappStore - " +
+                                 "that names a $4.99 guest tier the crypto rail no longer has.");
+                else if (!string.Equals(why, owner, StringComparison.Ordinal))
+                    failures.Add("[solana-guest] " + canary.Sku + " was refused, but not by the wallet rule with the owner's " +
+                                 "sentence. Reason given: \"" + why + "\". An earlier gate (kill switch / rail) is " +
+                                 "masking the wallet rule, so this case proves nothing about it.");
+                else
+                    log.AppendLine("  [solana-guest] " + canary.Sku + " ($" + usd.ToString("0.00", CultureInfo.InvariantCulture) +
+                                   ") refused for a guest on SolanaDappStore with: \"" + why + "\"");
+            }
+            finally
+            {
+                if (touchedMaintenance) DeNelle.Core.Ops.MaintenanceCatalog.Clear();
+                PaymentChannelResolver.ClearTestOverride();
+                if (hadPref) PlayerPrefs.SetInt(BuyFlagPrefKey, prevPref);
+                else PlayerPrefs.DeleteKey(BuyFlagPrefKey);
+                PlayerPrefs.Save();
+                PackCatalog.Reload();
+            }
         }
 
         // =====================================================================
@@ -370,6 +572,11 @@ namespace DeNelle.Editor.Regression
         //  every pack is refused anyway, and the case would pass for a reason that
         //  has nothing to do with the wallet rule - a green that means nothing.
         //  The prior value is restored in a finally, always.
+        //
+        //  WO-1386 (2026-09-04): this case is the THRESHOLD half, so it runs with
+        //  the channel pinned to GooglePlay - the editor resolves Unknown, which
+        //  happens to share the threshold today, but a pin that leans on "happens
+        //  to" is not a pin. The Solana half is [solana-guest].
         // =====================================================================
         private static void CaseWalletRuleRefusesEveryUpperTier(JArray packs, List<string> failures, StringBuilder log)
         {
@@ -391,6 +598,7 @@ namespace DeNelle.Editor.Regression
             {
                 PlayerPrefs.SetInt(BuyFlagPrefKey, 1);   // force the rail flag ON for this case only
                 PackCatalog.Reload();
+                PaymentChannelResolver.OverrideForTests(PaymentChannel.GooglePlay);   // WO-1386: the threshold half
 
                 foreach (var tok in packs)
                 {
@@ -402,7 +610,7 @@ namespace DeNelle.Editor.Regression
                     double usd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
                     bool allowed = PurchaseGate.CanBuy(pack, out string why);
 
-                    if (PurchaseGate.RequiresWallet(usd))
+                    if (PurchaseGate.RequiresWallet(usd, PaymentChannel.GooglePlay))
                     {
                         checkedUpper++;
                         if (allowed)
@@ -437,14 +645,15 @@ namespace DeNelle.Editor.Regression
                 // Restore EXACTLY what was there, including "no key at all" - leaving a stored 1
                 // behind would silently arm the purchase rail on this machine (CLAUDE.md notes a
                 // stored ff.realmstorepurchase BEATS the compiled default).
+                PaymentChannelResolver.ClearTestOverride();
                 if (hadPref) PlayerPrefs.SetInt(BuyFlagPrefKey, prevPref);
                 else PlayerPrefs.DeleteKey(BuyFlagPrefKey);
                 PlayerPrefs.Save();
                 PackCatalog.Reload();
             }
 
-            log.AppendLine("  [wallet-rule] " + checkedUpper + " above-threshold packs all refused without a wallet; " +
-                           checkedGuest + " guest-tier packs never shown the wallet sentence");
+            log.AppendLine("  [wallet-rule/play] " + checkedUpper + " above-threshold packs all refused without a wallet; " +
+                           checkedGuest + " guest-tier packs never shown the wallet sentence (channel pinned GooglePlay)");
         }
 
         // =====================================================================

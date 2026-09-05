@@ -82,6 +82,15 @@ exist. **Several gears are spinning independently. Connect them.**
 | Gold | 0 | **2,200** |
 | Crystals | 55 | **20–30** |
 
+> ⚠ **SUPERSEDED 2026-09-04 23:16 (WO-1387) — the "1,650 for three starters" cost anchor no longer exists.**
+> Owner, on the Seeker, verbatim: *"we agreed earlier training free"* / *"just time"* / *"and gold is to
+> hire mercenaries if they dont want to wait"*. Training and troop upgrades cost ZERO gold and ZERO
+> resources — only wall-clock time on the Train/Research line. `troops.json costGold` stays authored as
+> the reward-sizing anchor and the hire basis but is never charged. The gold table below is now a
+> faucet whose only sinks are the HIRE REINFORCEMENTS skip, the daily chest and the Cathedral ladder;
+> that is the owner's accepted trade tonight — re-ask before re-sizing the reward. The paragraph below
+> is kept as written (CLAUDE.md s15); read it as the reasoning of the afternoon, not the live rule.
+
 **The reasoning, preserved because it is the spec:** four-hour passive output is ~2,880 wood /
 1,728 iron / 14,400 food, so the raid pays **60–65% of four hours of wood/iron production instantly,
 without making collectors worthless**. And three starter troops cost 1,650 gold, so a 2,200 win is
@@ -327,6 +336,10 @@ is guesswork.
 2. ⚠ **WO-1372 (troops cost TIME, gold buys time) interacts directly.** If troops become time-only,
    the 1,650-gold wall partly dissolves and the gold-sized-to-army-replacement maths in §1 changes its
    meaning. **These two rulings must be reconciled before either ships.**
+   > ✅ **RECONCILED 2026-09-04 23:16 — WO-1387.** Troops ARE time-only (owner: *"just time"*); the
+   > 1,650 wall is gone entirely, not partly. The §1 reward table stands as ruled and is now a faucet
+   > with the skip as its main sink (see the banner in §1). The reversal chain (WO-1372 -> commit
+   > `281902df0` -> WO-1387) is recorded on WO-1387 so no seat re-derives it.
 3. ⚠ **WO-1373's rough-stone / Jeweler chain** is the *other* raid reward axis, still blocked on the
    dungeon-exclusivity question. It is compatible with this programme but must not double-pay.
 4. ⛔ **The Season Pass has NO navigation entry BY RULING, and a regression enforces it** —

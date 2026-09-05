@@ -1342,6 +1342,11 @@ namespace DeNelle.Editor
             // an absent/null field must not replace a populated list, and the only sanctioned public
             // clearer is ResetToNewGame. Before tonight no suite asserted more than ONE record.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "baselayout-roundtrip suite", () => { if (!DeNelle.Editor.Regression.BaseLayoutRoundTripRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[baselayout-roundtrip] " + r); });
+
+            // WO-1387 (owner 2026-09-04: "training free ... just time ... gold is to hire mercenaries if they
+            // dont want to wait"): a Train or troop-Upgrade job enqueues with a ZERO wallet; the ONLY gold
+            // spend on the Train line is the instant-finish skip. Proven RED first (mutations in the suite header).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "training-costs-time-only suite", () => { if (!DeNelle.Editor.TrainingCostsTimeOnlyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[training-costs-time-only] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-budget-vfx-warm suite", () => { if (!DeNelle.Editor.Regression.SpawnBudgetAndVfxWarmRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-budget-vfx-warm] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });
