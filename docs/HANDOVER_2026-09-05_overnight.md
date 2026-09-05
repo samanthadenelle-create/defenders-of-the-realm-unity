@@ -72,6 +72,13 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 06:44 | committed 1395 + 1399 + 1400 by explicit path (22 files) + board | `0f716ffaa`, `89887a3c1` |
 | 06:45 | fourth APK chain started DETACHED on 89887a3c1; WO-1397 lane loaded in `D:\eoa-lane-1397` | `Builds/overnight-apk-status.txt` |
 
+| 06:52 | **APK 2026.09.05.356386 built from 89887a3c1** (detached): `APK_OK` 06:51:50 -> `R2_PARITY_OK objects=271` -> `APK_DONE` 06:52:16; version bump committed `0e942b953`; Firebase upload started (notes `firebase-release-notes-2026-09-05c.txt`) | `Builds/overnight-apk-status.txt` |
+| 06:55 | WO-1397 lane finished (Hero-deck "Wardrobe" card -> PanelId.CosmeticShop; deck grid rows from card count); merged into `D:\eoa`; suite registered by the committer above the fence | `scratchpad/lane-1397.patch` |
+| 06:58-07:01 | `COMPILE_GATE_OK` 06:57; **`REGRESSION_OK 383/383`** 07:01 | `Builds/regression.log` 07:01:00 |
+
+| 07:02 | `UI_CAPTURE_OK` but **`UI_GEOMETRY_FAIL x10`** from WO-1397: the third Hero-deck row resolves cards to 108.7 px (3.3 under MinTouchPx 112) at 2670x1200 and 110.9 at 2340x1080; and the Wardrobe card renders LOCKED in the headless capture (nothing registered the shop there). Sent back to the lane (editing in `D:\eoa`). 1397 is NOT committed yet. | `Builds/ui-capture.log` 07:02; `Builds/ui-capture/HeroWorkspace_2670x1200.png` |
+| 07:05 | **Pushed 356386 to Firebase App Distribution** (`uploaded new release 2026.09.05.356386 ... distributed to testers/groups successfully`; notes `firebase-release-notes-2026-09-05c.txt`). WO-1398/1401/1399/1400/1395 -> FIXED. | firebase CLI output |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
