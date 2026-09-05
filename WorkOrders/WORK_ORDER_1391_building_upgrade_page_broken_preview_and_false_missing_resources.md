@@ -1,6 +1,6 @@
 # WO-1391: the building upgrade page - noise in the 3D preview, "Missing resources" with the resources on the strip, truncated face, off-kit styling
 
-**Status:** IN PROGRESS 2026-09-05 00:29 - landed + gated (COMPILE_GATE_OK, REGISTERED_SECONDARY_CAPTURE_OK 33/33 touch=clean, `Builds/ui-capture/BuildingUpgrade_2670x1200.png`); awaiting the next APK + the Cathedral page on the Seeker. Finding for the owner: "Missing resources" was TRUE - the tier costs 800 gold and the page hid the gold line; and `arcane-tower` tier-1 authors `costCrystal: 1280` while the service charges WOOD by tier number (ruling needed). Was: READY TO IMPLEMENT - found on the headed walk 2026-09-04 23:48 (build 355952); it is the page EVERY Research door and every Buildings-tab Upgrade lands on
+**Status:** IN PROGRESS 2026-09-05 00:29 - landed + gated (COMPILE_GATE_OK, REGISTERED_SECONDARY_CAPTURE_OK 33/33 touch=clean, `Builds/ui-capture/BuildingUpgrade_2670x1200.png`); awaiting the next APK + the Cathedral page on the Seeker. Finding for the owner: "Missing resources" was TRUE - the tier costs 800 gold and the page hid the gold line; and `arcane-tower` tier-1 authors `costCrystal: 1280` while the service charges WOOD by tier number (ruling needed). Found on the headed walk 2026-09-04 23:48 (build 355952); it is the page EVERY Research door and every Buildings-tab Upgrade lands on.
 
 ## Evidence
 `docs/qa/UI_REVIEW_2026-09-05/14-research-door-result.png` - "Cathedral of Magic Enhancements", reached from

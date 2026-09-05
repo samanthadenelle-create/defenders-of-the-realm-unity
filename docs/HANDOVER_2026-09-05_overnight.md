@@ -21,8 +21,11 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 ## Builds installed on the Seeker
 - 2026.09.05.355952 (bedtime baseline, 65d5a7eae) - still the installed build at 00:24 (adb devices: SM02G4061955851, battery 23%).
 
+| 00:29 | 1391 layout fixed (bonus zone budgeted from the post-scale body; pills+tabs moved into the Close band): **`REGISTERED_SECONDARY_CAPTURE_OK 33/33 touch=clean`** | `Builds/ui-capture-secondary.log` 00:29:26; PNG regenerated |
+| 00:31 | committed the gated set by explicit path | `da90ddc0f` |
+
 ## Commits (local only)
-- (none yet - waiting on the 1391 layout fix so the combined tree is green on every marker)
+- `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
 ## What the headless proofs already show (before any device run)
 - WO-1391: preview = catalog icon, never noise (`[Flow:UpgradeUI] preview model NOT resolved for 'arcane-tower@1'` -> `model band built ... as ICON`); the sentence names the shortfall (`Short 1280 Wood, 800 Gold`); kit CLOSE. Open: the card bands overlap (above).
