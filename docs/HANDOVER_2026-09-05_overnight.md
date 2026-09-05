@@ -57,6 +57,11 @@ Every line below names the log/PNG/commit it was read from. Anything without evi
 | 05:55 | **Pushed to Firebase App Distribution** (owner order 05:2x "push to firebase"): `uploaded new release 2026.09.05.356329 (356329) successfully`, release notes added, `distributed to testers/groups successfully`. Console: https://console.firebase.google.com/project/defenders-of-the-realm-echos/appdistribution/app/android:com.denellestudios.echoesofelarion/releases/4vs24o6e7l3k8 . Push notification sent to the owner. Device watcher still polling (no phone). | firebase CLI output; `Builds/firebase-release-notes-2026-09-05.txt` |
 | 05:56 | WO-1391/1392/1393/1388/1389 -> FIXED (on a distributed build). 1398 + 1401 patches applied to main (1398's `PlayerDeckWorkspace` hunk reconciled by hand against 1389's Route signature). Gate next. | this commit |
 
+| 06:07-06:14 | 1398 + 1401 gated: `COMPILE_GATE_OK` 06:12; regression RED once (`NightMarketUiRegression` pins exactly ONE wordmark read in PackStore - the 1398 lane had added a second on the diagnostic Register handle; handle re-pointed to "PackStoreUI") -> **`REGRESSION_OK 379/379`** 06:14 (the new StoreNameSingleSource suite is #379) | `Builds/regression.log` 06:14:40 |
+| 06:15 | `UI_CAPTURE_OK` with **ZERO `[UICap-GEO]` lines** (HeroSkillTree was x9 at 05:13); traces `quick-swap rail built: slots y 0..112, hint y 120..160 (gap 8)` and `store face label='The Night Market' source=canon-strings` | `Builds/ui-capture.log` 06:15:44 |
+| 06:16 | committed 1398 + 1401 by explicit path (18 files); the four lane worktrees + branches removed | `eb118ac14` |
+| 06:17 | third APK chain started DETACHED on eb118ac14 (1398 + 1401 on top of the Firebase build); new lanes 1395 / 1399 / 1400 loaded in fresh worktrees off eb118ac14 | `Builds/overnight-apk-status.txt` |
+
 ## Commits (local only)
 - `da90ddc0f` feat(ui,harvest): WO-1391 upgrade page, WO-1393 close-frame grace + queue drawer, WO-1392 harvest never burns (49 files). Gate evidence: COMPILE_GATE_OK 00:19, REGRESSION_OK 378/378 00:21 (before the 1391 layout fix), COMPILE OK + REGISTERED_SECONDARY_CAPTURE_OK 00:29 (after it). The full regression re-runs at the next combined gate before any APK.
 
