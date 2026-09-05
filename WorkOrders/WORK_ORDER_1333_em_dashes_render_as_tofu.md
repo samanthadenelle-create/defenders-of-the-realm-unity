@@ -1,6 +1,6 @@
 # WORK ORDER 1333 - Em dashes in DISPLAYED titles render as tofu boxes
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
 **Silo / Lane:** Player-facing strings / canon
 **Type:** EXISTING defect (shipped copy)
 **Minted:** 2026-09-02 (CLI) as an adjacent finding from WO-1332's sweep. Predates that ticket.

@@ -180,7 +180,7 @@ namespace DeNelle.Editor
         // ── Hard-locked Bryn line (spec §12 Tier 1 — design §4 Beat 1) ───────
         // VERBATIM from docs/dungeon-3d-healers-cottage-design.md §4 Beat 1.
         private const string BrynTier1Line =
-            "The path opens easy, Keeper. But mind the rocks — they remember you. " +
+            "The path opens easy, Keeper. But mind the rocks - they remember you. " +
             "And don't walk it dark. The cottage keeps her shadows close.";
 
         // ── Running tallies for the summary log ──────────────────────────────
@@ -1028,7 +1028,7 @@ namespace DeNelle.Editor
                     Title = "Alduin's journal - entry 4 (the last one)",
                     Body = new[] {
                         "I am going. The Wound is louder than the Heart now. I have left a thing " +
-                        "in the cellar for whoever is next — a seed. Plant it at the Folk's " +
+                        "in the cellar for whoever is next - a seed. Plant it at the Folk's " +
                         "table, if there is anyone to plant it. It will grow into something old " +
                         "and quiet. The Folk used to say there were trees like it once, before " +
                         "any of us. Maybe one of them will remember the song.",
@@ -1379,7 +1379,7 @@ namespace DeNelle.Editor
             AddSpecChild(bossGo, "HP: 2.5x normal Hollow One (design §4 Beat 6)");
             AddSpecChild(bossGo, "Damage: +50% (design §4 Beat 6)");
             AddSpecChild(bossGo,
-                "Special: Tincture — shrinks the Keeper's lantern reach 50% for 6s");
+                "Special: Tincture - shrinks the Keeper's lantern reach 50% for 6s");
         }
 
         /// <summary>Bakes one HARD-LOCKED spec line into a child GameObject name.</summary>

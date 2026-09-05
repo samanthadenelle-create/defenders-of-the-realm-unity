@@ -25,7 +25,7 @@
 > is a faucet with no sink, and it was the real risk this banner caught.
 
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
 **Silo / Lane:** Economy - troop training + vendor sell path + `Resources.Coins`
 **Type:** NEW FEATURE + BALANCE RESHAPE, owner-ruled
 **Minted:** 2026-09-04 (CLI)

@@ -180,7 +180,14 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-ninth pass): main line next free = **1381**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, sixtieth pass): main line next free = **1383**.
+> *(CLI minted **1381** (the owner's autonomy directive - execute an order to completion, never pause at an
+> approval gate) and **1382** (Manage - Troops screen redesign: the troop detail card floats OVER the roster,
+> two TRAIN buttons for one unit, clipped scroll arrows - device screenshot docs/qa/seeker-manage-troops-2026-09-04.png).
+> ⛔ 1381 was written to disk EARLIER tonight WITHOUT this bump - the exact collision CLAUDE.md s2 names; caught
+> and closed in this SAME edit as the 1382 mint. Bumped 1381 -> 1383.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-ninth pass): main line next free = **1381**.
 > *(CLI minted **WO-1378 / 1379 / 1380** to execute the owner's creative direction of 2026-09-04,
 > recorded as canon in `docs/CREATIVE_CANON_ELARION_2026-09-04.md`. That direction arrived in TWO
 > passes and the author revised her own first pass - **1378** is the fiction/copy/naming lane (target

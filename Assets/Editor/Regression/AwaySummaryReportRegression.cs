@@ -38,6 +38,11 @@
 //      Collect() -- the away claim must not become a second route to the wallet.
 //   7. [rows-are-ascii]  every new player-facing row literal is ASCII.
 //
+// 2026-09-04 22:30 (owner felt-test on build 2026.09.05.355872): three pins added --
+//   5b. [one-button]      the shell's Close face is hidden; COLLECT is the one button.
+//   6b. [never-on-title]  the reveal defers until HubScenes.IsHub and re-checks on sceneLoaded.
+//   7.  the collector literals became per-RESOURCE rows ("<WORD> WAITING" / "ALSO WAITING").
+//
 // Cases 1-3 drive the real DeNelle.Village.OfflineHarvestResult type. Cases 4-7 are source
 // assertions, which is the right instrument for "the wiring is present": the modal cannot be
 // constructed in editmode batchmode (no canvas/PanelSettings), and asserting on a screenshot
@@ -143,8 +148,20 @@ namespace DeNelle.Editor.Regression
                     if (popup.IndexOf("AddCollectorRow", StringComparison.Ordinal) < 0)
                         failures.Add("case5 the pending-collector row is not rendered (AddCollectorRow absent)");
 
+                    // 2026-09-04 22:30 owner felt-test: the shell's own CLOSE face overprinted COLLECT
+                    // ("dont need both"). BuildObsidianModal has no label/hook parameter for its close,
+                    // so the popup hides that face after build and COLLECT (which dismisses) is the one
+                    // button. Pin the hide so a re-seat cannot bring the double face back.
+                    if (popup.IndexOf("chrome.close.gameObject.SetActive(false)", StringComparison.Ordinal) < 0)
+                        failures.Add("case5 [one-button] the modal's shared Close face is not hidden -- COLLECT and " +
+                                     "CLOSE overprint on the bottom band (owner felt-test 2026-09-04)");
+
                     // ── 7. ASCII only in the player-facing row copy ───────────
-                    foreach (var lit in new[] { "COMPLETE", "ALSO FINISHED", "COLLECTOR WAITING", "COLLECTORS WAITING" })
+                    // 2026-09-04 22:30 owner rulings ("the collectors need to be seperated" / "Wood Iron
+                    // Stone different rows"): the collector news is now one plate row PER RESOURCE
+                    // ("WOOD WAITING" / "+1240", built as resourceWord + " WAITING") plus an "ALSO WAITING"
+                    // overflow line. "COLLECTOR(S) WAITING" survives only as the no-lines fallback.
+                    foreach (var lit in new[] { "COMPLETE", "ALSO FINISHED", " WAITING", "ALSO WAITING", "COLLECTOR WAITING", "COLLECTORS WAITING" })
                     {
                         if (popup.IndexOf("\"" + lit, StringComparison.Ordinal) < 0 &&
                             popup.IndexOf(lit + "\"", StringComparison.Ordinal) < 0)
@@ -166,6 +183,12 @@ namespace DeNelle.Editor.Regression
                     if (service.IndexOf("ResourceCollectorRegistry.All", StringComparison.Ordinal) < 0)
                         failures.Add("case6 [service-records-and-never-banks] the pending-collector total is not read from " +
                                      "ResourceCollectorRegistry -- the 'waiting' row cannot be populated");
+                    // 2026-09-04 22:30 owner felt-test: the popup fired OVER the Title screen. The reveal
+                    // must defer until a hub scene is active (HubScenes.IsHub) and re-check on load.
+                    if (service.IndexOf("HubScenes.IsHub", StringComparison.Ordinal) < 0 ||
+                        service.IndexOf("sceneLoaded += OnSceneLoadedForReveal", StringComparison.Ordinal) < 0)
+                        failures.Add("case6 [never-on-title] OfflineHarvestService.TryShowPopup does not defer the reveal " +
+                                     "until a hub scene is active (HubScenes.IsHub + sceneLoaded re-check)");
                     if (service.IndexOf(".Collect()", StringComparison.Ordinal) >= 0)
                         failures.Add("case6 [service-records-and-never-banks] OfflineHarvestService calls Collect() -- the " +
                                      "away claim must REPORT pending, never bank it; banking here is a second route to the " +

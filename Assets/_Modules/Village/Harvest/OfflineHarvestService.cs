@@ -72,6 +72,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Economy;   // WO-857 Phase F — the town bank cap (this path writes the wallet directly)
 using DeNelle.Core.State;
 using DeNelle.Core.World;
+using DeNelle.Village.Buildings.Progression;   // LANE G — the collector registry, read for the away summary's "waiting" row
 using DeNelle.Village.Monetization;   // WO-1119 — HarvestBoostService (Version B rate boost)
 using DeNelle.Village.UI;
 
@@ -125,11 +126,19 @@ namespace DeNelle.Village
             Instance = this;
             OfflineClaimCoordinator.Register(this);
             EnsureSubscribed();                       // WO-1231: the away summary's reveal seam
+            EnsureJobSubscription();                  // LANE G: the away summary's finished-jobs seam
         }
 
         private void OnDestroy()
         {
             OfflineClaimCoordinator.Unregister(this);
+            DisarmSceneHook();                        // the deferred welcome-back reveal (Title-screen guard)
+            if (_subscribedToJobs)
+            {
+                var timers = BuildTimerService.Instance;
+                if (timers != null) timers.JobCompleted -= OnAnyJobCompleted;
+                _subscribedToJobs = false;
+            }
             if (_subscribedToCompletion)
             {
                 OfflineClaimCoordinator.ClaimCompleted -= OnClaimCompleted;
@@ -169,8 +178,17 @@ namespace DeNelle.Village
 
         private System.Collections.IEnumerator ClaimAfterTwoFrames(string reason)
         {
+            // LANE G -- attach the queue listener BEFORE the frames elapse. BuildTimerService's
+            // OWN offline sweep runs on its Start + ONE frame (BuildTimerService.SweepNextFrame),
+            // i.e. strictly inside this two-frame wait, so subscribing here is what puts the
+            // listener in place before the jobs that finished overnight complete. Re-tried on
+            // every frame of the wait because BuildTimerService bootstraps itself
+            // (RuntimeInitializeOnLoadMethod) and may not exist on the first attempt.
+            EnsureJobSubscription();
             yield return null;
+            EnsureJobSubscription();
             yield return null;
+            EnsureJobSubscription();
             // ONE claim for the whole game: the coordinator fans the window out to every
             // consumer and advances the clock once. Our own share lands in
             // ApplyOfflineWindow (which raises Claimed + the welcome-back popup).
@@ -195,6 +213,7 @@ namespace DeNelle.Village
             // Idempotent: editmode/headless AddComponent never runs Awake, so register here too.
             OfflineClaimCoordinator.Register(this);
             EnsureSubscribed();
+            EnsureJobSubscription();
             _lastResult = OfflineHarvestResult.None;
             OfflineClaimCoordinator.Claim("OfflineHarvestService.ClaimAccrual");
             return _lastResult ?? OfflineHarvestResult.None;
@@ -306,14 +325,176 @@ namespace DeNelle.Village
             _subscribedToCompletion = true;
         }
 
+        // =====================================================================
+        //  LANE G -- WHAT THE QUEUE FINISHED WHILE THE PLAYER WAS AWAY
+        // ---------------------------------------------------------------------
+        //  Economy map (docs/PROGRAM_RAID_ECONOMY_2026-09-04.md sec.7) beat 1 is
+        //  "BUILD COMPLETE -> collect". Nothing reported it. Measured at source
+        //  first, so the gap is stated exactly and not overclaimed:
+        //    * an UPGRADE-kind job DOES already apply its level on the offline
+        //      sweep (BuildTimerService.OnJobCompleted -> CompletedUpgradeApplier
+        //      .Apply), and where the structure is spawned the player sees it;
+        //    * a NEW-CONSTRUCTION completion, and an upgrade whose structure has
+        //      not spawned, were reported NOWHERE;
+        //    * and there was no AGGREGATE anywhere -- no screen that said "three
+        //      things finished" on the one screen a returning player reads.
+        //
+        //  THE SEAM IS THE EXISTING EVENT. BuildTimerService.JobCompleted already
+        //  fires for live expiry, ad/instant skip AND the offline-fair sweep (it is
+        //  raised from the ONE completion seam, OnJobCompleted), so this listener
+        //  needs no new completion path and cannot diverge from one. We RECORD only:
+        //  nothing here completes, grants or re-applies a job.
+        // =====================================================================
+
+        /// <summary>Jobs recorded since the last reveal. Static so a service instance
+        /// destroyed by a scene load does not drop the night's completions on the floor;
+        /// bounded so an un-revealed backlog can never grow without limit.</summary>
+        private static readonly List<OfflineHarvestResult.OfflineJobLine> s_completedJobs =
+            new List<OfflineHarvestResult.OfflineJobLine>();
+
+        /// <summary>Hard bound on the recorder. A returning player is shown at most a
+        /// handful of rows anyway; this only stops an un-revealed backlog growing forever.</summary>
+        private const int MaxRecordedJobs = 32;
+
+        /// <summary>Slack on the window-membership test, in ms. The queue completes a job at
+        /// the sweep, which is a couple of frames off the claim's own "now"; without slack a
+        /// job that finished on the boundary would be silently dropped from its own report.</summary>
+        private const double JobWindowSlackMs = 5000.0;
+
+        private bool _subscribedToJobs;
+
+        /// <summary>Idempotently attach to the ONE job-completion seam. Null-safe: with no
+        /// BuildTimerService yet (it self-bootstraps) this is a no-op and is retried.</summary>
+        private void EnsureJobSubscription()
+        {
+            if (_subscribedToJobs) return;
+            var timers = BuildTimerService.Instance;
+            if (timers == null) return;
+            timers.JobCompleted -= OnAnyJobCompleted;   // belt-and-braces: never double-attach
+            timers.JobCompleted += OnAnyJobCompleted;
+            _subscribedToJobs = true;
+            FlowTrace.Step("Offline",
+                "away summary attached to BuildTimerService.JobCompleted -- finished jobs will be " +
+                "reported on the next reveal.");
+        }
+
+        /// <summary>
+        /// Record one finished job for the away summary. Guarded (CLAUDE.md sec.12): a bad
+        /// label lookup logs and is skipped, and can never break the queue's completion cascade
+        /// -- this is a listener on the completion event, so a throw here would propagate.
+        /// </summary>
+        private void OnAnyJobCompleted(BuildJobData job)
+        {
+            Guard.Try("Offline", $"record completed job '{job.StructureId}' for the away summary", () =>
+            {
+                // The SHARED card seam, so the summary says the same words the queue card said.
+                var entry = BuildTimerService.EntryFor(job);
+                s_completedJobs.Add(new OfflineHarvestResult.OfflineJobLine
+                {
+                    Verb = string.IsNullOrEmpty(entry.Verb) ? "COMPLETE" : entry.Verb,
+                    Label = string.IsNullOrEmpty(entry.Label) ? "Job" : entry.Label,
+                    FinishedUnixMs = job.FinishMs,
+                });
+                while (s_completedJobs.Count > MaxRecordedJobs) s_completedJobs.RemoveAt(0);
+                FlowTrace.Step("Offline",
+                    $"away summary recorded a finished job: {entry.Verb} '{entry.Label}' " +
+                    $"(finishMs={job.FinishMs:0}); {s_completedJobs.Count} awaiting a reveal.");
+            });
+        }
+
+        /// <summary>
+        /// Move the recorded jobs that belong to THIS window onto the result, and drop them
+        /// from the recorder so a second reveal can never re-report them.
+        /// <para>MEMBERSHIP IS BY FinishMs, not by arrival order. On a RESUME claim the window
+        /// starts at the pause edge, so a job the player watched finish while the app was in
+        /// the foreground is correctly excluded; on a COLD load the window starts at the
+        /// persisted claim clock, so everything that landed since then is genuinely away
+        /// news.</para>
+        /// </summary>
+        private static void AttachCompletedJobs(OfflineHarvestResult result, OfflineClaimWindow window)
+        {
+            result.CompletedJobs.Clear();
+            if (s_completedJobs.Count == 0) return;
+
+            double from = window.WindowStartUnixMs - JobWindowSlackMs;
+            double to = window.NowUnixMs + JobWindowSlackMs;
+            int skipped = 0;
+            for (int i = s_completedJobs.Count - 1; i >= 0; i--)
+            {
+                var j = s_completedJobs[i];
+                if (j == null) { s_completedJobs.RemoveAt(i); continue; }
+                if (j.FinishedUnixMs < from || j.FinishedUnixMs > to) { skipped++; continue; }
+                result.CompletedJobs.Insert(0, j);        // oldest-first, the order they landed
+                s_completedJobs.RemoveAt(i);
+            }
+
+            FlowTrace.Step("Offline",
+                $"claim #{window.Sequence}: away summary claims {result.CompletedJobCount} finished job(s) " +
+                $"from window {from:0}..{to:0}; {skipped} recorded job(s) fell outside it and were left " +
+                "for a later window.");
+        }
+
+        /// <summary>
+        /// Read what the collectors are STILL HOLDING, for the report's "waiting" row.
+        /// <para>READ-ONLY, and deliberately so: this claim must not bank a collector's pending.
+        /// The collectors run their OWN away catch-up on their own per-collector stamp
+        /// (ResourceCollector.CatchUpAway) and the player banks it with the COLLECT button.
+        /// Banking here would be a second route to the wallet for the same units.</para>
+        /// </summary>
+        private static void AttachPendingCollectors(OfflineHarvestResult result)
+        {
+            int total = 0, count = 0;
+            result.PendingCollectors.Clear();
+            // Owner rulings 2026-09-04 22:30: the collectors are SEPARATED, "Wood Iron Stone
+            // different rows" -- one row per RESOURCE (not per building), in the HUD rail's fixed
+            // order (HudKitController names[] = Wood, Iron, Stone, Crystals; HarvestResource.Food
+            // IS the Stone slot). The resource word is the game's canon LabelFor -- the same word
+            // the rail and the collector's own "+N Wood" gain popup say. Never a second vocabulary.
+            var railOrder = new[] { HarvestResource.Wood, HarvestResource.Iron, HarvestResource.Food, HarvestResource.Crystals };
+            var pendingByResource = new Dictionary<HarvestResource, int>();
+            var collectorsByResource = new Dictionary<HarvestResource, int>();
+            Guard.Try("Offline", "read pending collectors for the away summary", () =>
+            {
+                foreach (var c in ResourceCollectorRegistry.All)
+                {
+                    if (c == null) continue;
+                    int pending = (int)System.Math.Floor(c.PendingAmount);
+                    if (pending <= 0) continue;
+                    total += pending;
+                    count++;
+                    var res = c.Resource;
+                    pendingByResource.TryGetValue(res, out int had);
+                    pendingByResource[res] = had + pending;
+                    collectorsByResource.TryGetValue(res, out int n);
+                    collectorsByResource[res] = n + 1;
+                }
+            });
+            foreach (var res in railOrder)
+            {
+                if (!pendingByResource.TryGetValue(res, out int held) || held <= 0) continue;
+                collectorsByResource.TryGetValue(res, out int n);
+                result.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine
+                {
+                    Resource = ResourceBuildingProgression.LabelFor(res),
+                    Pending = held,
+                    Collectors = n,
+                });
+            }
+            result.PendingCollectorTotal = total;
+            result.PendingCollectorCount = count;
+        }
+
         /// <summary>
         /// Every consumer has applied and the clock has advanced: attach passive mending's
         /// share of the SAME window and reveal the summary.
         /// <para>
-        /// THE GATE IS "haul OR mend", not "haul". A window in which the player gathered
-        /// nothing but mending spent 400 Wood used to show no summary at all -- which is
-        /// the exact case where they most need one, and is what made materials look like
-        /// they were simply vanishing (WO-1231 P1).
+        /// THE GATE IS <see cref="OfflineHarvestResult.HasSummaryContent"/> -- haul OR mend OR
+        /// a finished queue job OR resources waiting in a collector -- and it is read off the
+        /// RESULT, never re-derived here. WO-1231 first widened it from "haul" to "haul OR
+        /// mend" (a window in which the player gathered nothing but mending spent 400 Wood
+        /// used to show no summary at all); LANE G (2026-09-04) moved it onto the result and
+        /// added the other two axes, because this method and WelcomeBackPopup.Show each held
+        /// their own copy of the two-term gate and a collector-only town fell through both.
         /// </para>
         /// </summary>
         private void OnClaimCompleted(OfflineClaimWindow window)
@@ -336,10 +517,21 @@ namespace DeNelle.Village
             var mend = EchoRepairService.LastOfflineMendReport;
             result.Mend = (mend != null && mend.ClaimSequence == window.Sequence) ? mend : EchoMendReport.None;
 
-            bool show = result.Total > 0 || result.HasMendNews;
+            // LANE G -- the other two axes of the returning session (economy map sec.7 beat 1).
+            AttachCompletedJobs(result, window);
+            AttachPendingCollectors(result);
+
+            // THE GATE IS NOW FOUR AXES, and it is read off the RESULT so this method and
+            // WelcomeBackPopup.Show cannot disagree about what counts as news. It used to be
+            // "haul OR mend", which showed NOTHING to a player whose nodes were idle, whose
+            // Echoes were quiet, whose three overnight builds had finished and whose farm was
+            // sitting full -- the exact returning session sec.7 is written around.
+            bool show = result.HasSummaryContent;
             FlowTrace.Step("Offline",
                 $"claim #{window.Sequence}: away summary gate -> haul={result.Total}, " +
-                $"mendNews={result.HasMendNews} => {(show ? "REVEAL" : "no reveal")}.");
+                $"mendNews={result.HasMendNews}, jobs={result.CompletedJobCount}, " +
+                $"collectorsPending={result.PendingCollectorTotal} across {result.PendingCollectorCount} " +
+                $"collector(s) => {(show ? "REVEAL" : "no reveal")}.");
             if (!show) return;
 
             Claimed?.Invoke(result);
@@ -513,6 +705,13 @@ namespace DeNelle.Village
         //  Welcome-back popup (code-built, hosted on a borrowed PanelSettings)
         // =====================================================================
 
+        /// <summary>A reveal that arrived while no hub scene was active (Title, raid, dungeon)
+        /// waits here for the next hub load. Owner felt-test 2026-09-04 22:30: the popup fired
+        /// OVER the Title screen (CONTINUE / START NEW / PLAY INTRO behind it) because the cold-load
+        /// claim runs before any hub scene exists.</summary>
+        private OfflineHarvestResult _deferredReveal;
+        private bool _sceneHookArmed;
+
         private void TryShowPopup(OfflineHarvestResult result)
         {
             // Suppress during an active wave or while the Defend-the-Tower mode is
@@ -523,7 +722,55 @@ namespace DeNelle.Village
                 Debug.Log("[OfflineHarvest] Combat active — welcome-back reveal suppressed (haul already banked).");
                 return;
             }
+
+            // NEVER ON THE TITLE SCREEN (owner felt-test 2026-09-04 22:30). Same deferral shape as
+            // combat, but this one RE-CHECKS: the reveal parks until SceneManager.sceneLoaded hands
+            // us a hub scene (DeNelle.Core.HubScenes.IsHub -- the one canonical hub list).
+            string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (!DeNelle.Core.HubScenes.IsHub(scene))
+            {
+                _deferredReveal = result;
+                if (!_sceneHookArmed)
+                {
+                    UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedForReveal;
+                    _sceneHookArmed = true;
+                }
+                FlowTrace.Step("Offline",
+                    $"welcome-back DEFERRED: active scene '{scene}' is not a hub -- reveal waits for the next hub load. " +
+                    $"AwaySeconds={result.AwaySeconds:0} haul={result.Total} collectorsPending={result.PendingCollectorTotal}.");
+                return;
+            }
+
+            _deferredReveal = null;
+            FlowTrace.Step("Offline",
+                $"welcome-back SHOW: scene='{scene}' is a hub. AwaySeconds={result.AwaySeconds:0} " +
+                $"clock={result.ClockSource} haul={result.Total} collectorsPending={result.PendingCollectorTotal}.");
             WelcomeBackPopup.Show(result);
+        }
+
+        private void OnSceneLoadedForReveal(UnityEngine.SceneManagement.Scene scene,
+            UnityEngine.SceneManagement.LoadSceneMode mode)
+        {
+            var pending = _deferredReveal;
+            if (pending == null) { DisarmSceneHook(); return; }
+            if (!DeNelle.Core.HubScenes.IsHub(scene.name))
+            {
+                FlowTrace.Step("Offline",
+                    $"welcome-back still DEFERRED: loaded scene '{scene.name}' is not a hub (AwaySeconds={pending.AwaySeconds:0}).");
+                return;
+            }
+            _deferredReveal = null;
+            DisarmSceneHook();
+            FlowTrace.Step("Offline",
+                $"welcome-back deferred reveal RELEASED: hub scene '{scene.name}' loaded ({mode}). AwaySeconds={pending.AwaySeconds:0}.");
+            TryShowPopup(pending);   // re-runs the combat check on the hub it just landed in
+        }
+
+        private void DisarmSceneHook()
+        {
+            if (!_sceneHookArmed) return;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedForReveal;
+            _sceneHookArmed = false;
         }
 
         private static bool IsCombatActive()

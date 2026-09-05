@@ -1,6 +1,6 @@
 # WORK ORDER 1378 - The fiction, copy and naming pass
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
 **Silo / Lane:** Copy / canonical JSON strings - data-only, no gameplay logic
 **Type:** COPY + NAMING, owner-ruled creative direction
 **Minted:** 2026-09-04 (CLI)

@@ -1,6 +1,7 @@
 # WORK ORDER 1379 - Heartfire replaces "Raid Orders"
 
 **Status:** READY TO IMPLEMENT
+> 2026-09-04 (board note, not a flip): `[heartfire]` is GREEN on the 2026.09.05.355872 tree, but `RaidSelectionScreen.cs:527` still gates the raid card tap on `RaidCooldownService.IsOnCooldown(id)` - the per-camp wall (fenced item 3 in the earlier WO-1379 gap note) is NOT retired at the door, so this stays READY. (Measured, same read: `scene-configs.json:287` `iron_bastion` carries `raidCooldownSeconds: 43200` with NO `_raidCooldownSecondsSuperseded` note, unlike the other three camps.)
 **Silo / Lane:** Raid pacing / HUD charge display
 **Type:** NEW GATE + naming, owner-ruled creative direction
 **Minted:** 2026-09-04 (CLI)
