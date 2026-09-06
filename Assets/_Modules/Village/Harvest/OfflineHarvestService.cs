@@ -629,65 +629,236 @@ namespace DeNelle.Village
             return rows;
         }
 
+        /// <summary>
+        /// WO-1434 -- what a Dump would route out of the Echo silo per resource. READ ONLY: this
+        /// never dumps (COLLECT carries the tap to CollectorStatusGate.RequestCollectAll, which is
+        /// what calls EchoService.DumpSilos). Guarded, so a missing EchoService reports an empty
+        /// silo rather than blanking the whole away summary.
+        /// </summary>
+        private static void AttachSiloPending(OfflineHarvestResult result)
+        {
+            result.SiloPending.Clear();
+            result.SiloTotal = 0;
+            result.SiloAtCap = false;
+
+            int[] split = null;
+            Guard.Try("Offline", "read the Echo silo split for the away summary",
+                () => split = EchoService.PredictDumpSplit());
+            if (split == null || split.Length < 5) return;
+
+            // Rail order, and ONLY the resources the return screen can speak about. Gold
+            // (EchoService.ShareGold) is coins, which the rail does not carry.
+            AddSiloLine(result, HarvestResource.Wood,     split[EchoService.ShareWood]);
+            AddSiloLine(result, HarvestResource.Iron,     split[EchoService.ShareIron]);
+            AddSiloLine(result, HarvestResource.Food,     split[EchoService.ShareFood]);
+            AddSiloLine(result, HarvestResource.Crystals, split[EchoService.ShareCrystals]);
+
+            var echo = EchoService.Instance;
+            result.SiloAtCap = echo != null && echo.SiloAtCap;
+            FlowTrace.Step("Offline",
+                $"away summary: Echo silo holds {result.SiloTotal} across {result.SiloPending.Count} resource row(s)" +
+                (result.SiloAtCap ? " -- AT CAP, the Echoes have stopped gathering until the player collects." : "."));
+        }
+
+        private static void AddSiloLine(OfflineHarvestResult result, HarvestResource res, int amount)
+        {
+            if (amount <= 0) return;
+            result.SiloPending.Add(new OfflineHarvestResult.OfflineSiloLine
+            {
+                Resource = ResourceBuildingProgression.LabelFor(res),
+                Pending = amount,
+            });
+            result.SiloTotal += amount;
+        }
+
         // =====================================================================
-        //  WO-1392 -- WARN BEFORE COLLECT
+        //  WO-1434 -- ONE ROW PER RESOURCE, AMOUNT AND DESTINY TOGETHER
+        // ---------------------------------------------------------------------
+        //  WHAT THIS REPLACES, and why the replacement is not a rewording.
+        //
+        //  WO-1392 added PredictCollectWaits + CollectWaitLine, which produced a SECOND
+        //  list of lines under the "<RES> WAITING +N" rows: "Storage nearly full - 10609
+        //  wood will wait". On the owner's screen (2026-09-06, build 358161) that read:
+        //      WOOD  WAITING   +10609
+        //      IRON  WAITING    +6365
+        //      STONE WAITING   +25808
+        //      Storage nearly full - 10609 wood will wait
+        //      Storage nearly full - 6365 iron will wait
+        //      Storage nearly full - 25808 stone will wait
+        //  -- six lines for three facts, the same integer printed twice ("way too much
+        //  here"), and every row still carrying a REWARD's "+" while its entire amount was
+        //  going to wait. Neither half was wrong; they were two halves of one row.
+        //
+        //  A ReturnRow is that one row. It carries the amount AND what becomes of it, and
+        //  it knows about BOTH producers -- the collectors and the Echo silo -- because a
+        //  player does not have a collector total and a silo total, she has wood.
+        //
+        //  ⚠ NOTHING HERE IS LOST, AND THE COPY MUST NEVER SAY IT IS. Proven on the
+        //  device, 2026-09-06:
+        //    * collectors: ResourceCollector.Collect banks only what fits and leaves the
+        //      rest pending (WO-1392); the same pendings came back larger on the next tap
+        //      (wood 10656 -> 10776, stone 25870 -> 26026).
+        //    * silo: EchoService.DumpSilos settles against the APPLIED basket
+        //      (`s.SiloResources -= bankedFromSilo`), and the log says so --
+        //      "silo dump: 28800 wood stayed in the silo - Wood storage full". Pool 57600
+        //      was still 57600 across three separate dumps (12:51:25, 12:56:03, 12:56:06).
+        //  The word "LOST" in the [Flow:Bank] BANK FULL warn is the BANK's statement that
+        //  it refused the units; whether they are retained is the CALLER's business, and
+        //  both live callers retain. See HarvestOverflowModal.BuildBody.
         // =====================================================================
 
-        /// <summary>One predicted wait: this many units of this resource will NOT bank on COLLECT
-        /// because the town bank has no room for them (they stay in the collectors).</summary>
-        public struct CollectWait
+        /// <summary>
+        /// One resource on the return screen: everything waiting for it, from every producer,
+        /// and what the bank will do with that on COLLECT.
+        /// </summary>
+        public struct ReturnRow
         {
             public HarvestResource Resource;
-            /// <summary>Lowercase player word ("wood" / "stone").</summary>
+            /// <summary>Canon player word, title case ("Wood" / "Stone").</summary>
             public string Word;
+            /// <summary>Units held in the collectors.</summary>
+            public int FromCollectors;
+            /// <summary>Units the Echo silo would route here on a Dump.</summary>
+            public int FromSilo;
+            /// <summary>Everything waiting for this resource.</summary>
             public int Pending;
+            /// <summary>Town-bank room right now (int.MaxValue when the resource is uncapped).</summary>
             public int Headroom;
-            public int Wait;
+            /// <summary>What COLLECT will actually bank.</summary>
+            public int Banks;
+            /// <summary>What stays where it is — never burned, on either producer.</summary>
+            public int Waits;
+            /// <summary>True when the whole amount waits: the row must NOT read as a gain.</summary>
+            public bool NothingBanks => Banks <= 0 && Pending > 0;
         }
 
         /// <summary>Live overload: headroom from the town bank (ResourceCollectorService.HeadroomFor).</summary>
-        public static List<CollectWait> PredictCollectWaits(OfflineHarvestResult result)
-            => PredictCollectWaits(result, ResourceCollectorService.HeadroomFor);
+        public static List<ReturnRow> BuildReturnRows(OfflineHarvestResult result)
+            => BuildReturnRows(result, ResourceCollectorService.HeadroomFor);
 
         /// <summary>
-        /// WO-1392 - the loss used to be decided AT COLLECT with no warning before the tap. The
-        /// popup already knows the pending per resource (its own rows) and the bank's headroom, so
-        /// it can say "Storage nearly full - 414 wood will wait" BEFORE the button. PURE given a
-        /// headroom reader (pinned by OfflineHarvestRegression [warn-before-collect]). Rows are
+        /// PURE given a headroom reader (pinned by OfflineHarvestRegression
+        /// [one-row-per-resource] / [no-gain-without-headroom] / [every-producer-rendered]).
+        /// Rail order, resources with nothing pending dropped. Lines from both producers are
         /// matched back to their resource through the same LabelFor word they were built from.
         /// </summary>
-        public static List<CollectWait> PredictCollectWaits(OfflineHarvestResult result,
+        public static List<ReturnRow> BuildReturnRows(OfflineHarvestResult result,
             System.Func<HarvestResource, int> headroom)
         {
-            var waits = new List<CollectWait>();
-            if (result == null || result.PendingCollectors == null || headroom == null) return waits;
+            var rows = new List<ReturnRow>();
+            if (result == null || headroom == null) return rows;
             foreach (var res in ResourceCollectorService.RailOrder)
             {
                 string word = ResourceBuildingProgression.LabelFor(res);
-                int pending = 0;
-                foreach (var line in result.PendingCollectors)
-                    if (line != null && string.Equals(line.Resource, word, System.StringComparison.OrdinalIgnoreCase))
-                        pending += line.Pending;
+                int collectors = SumFor(result.PendingCollectors, word);
+                int silo = SumSiloFor(result.SiloPending, word);
+                int pending = collectors + silo;
                 if (pending <= 0) continue;
+
                 int room = headroom(res);
                 if (room < 0) room = 0;
-                if (pending <= room) continue;
-                waits.Add(new CollectWait
+                int banks = room >= pending ? pending : room;
+                rows.Add(new ReturnRow
                 {
                     Resource = res,
-                    Word = word.ToLowerInvariant(),
+                    Word = word,
+                    FromCollectors = collectors,
+                    FromSilo = silo,
                     Pending = pending,
                     Headroom = room,
-                    Wait = pending - room,
+                    Banks = banks,
+                    Waits = pending - banks,
                 });
             }
-            return waits;
+            return rows;
         }
 
-        /// <summary>The one pre-COLLECT sentence. ASCII, words not colour, names the amount and the
-        /// resource: "Storage nearly full - 414 wood will wait".</summary>
-        public static string CollectWaitLine(CollectWait w)
-            => $"Storage nearly full - {w.Wait} {w.Word} will wait";
+        private static int SumFor(List<OfflineHarvestResult.OfflineCollectorLine> lines, string word)
+        {
+            int sum = 0;
+            if (lines == null) return 0;
+            foreach (var line in lines)
+                if (line != null && string.Equals(line.Resource, word, System.StringComparison.OrdinalIgnoreCase))
+                    sum += line.Pending;
+            return sum;
+        }
+
+        private static int SumSiloFor(List<OfflineHarvestResult.OfflineSiloLine> lines, string word)
+        {
+            int sum = 0;
+            if (lines == null) return 0;
+            foreach (var line in lines)
+                if (line != null && string.Equals(line.Resource, word, System.StringComparison.OrdinalIgnoreCase))
+                    sum += line.Pending;
+            return sum;
+        }
+
+        /// <summary>
+        /// The row's LEFT column: the resource and the amount.
+        ///
+        /// <para>⛔ WO-1434 D1 — <b>THE PLUS-NUMBER IS ALWAYS THE COLLECTABLE AMOUNT, NEVER THE
+        /// PENDING ONE.</b> That substitution IS the defect: the screen headlined 42,782 pending,
+        /// the owner read it as a reward, tapped COLLECT and banked zero. The rule holds at every
+        /// scale, not just at zero headroom — a row with room for 258 of 672 says <c>+258</c>,
+        /// because +672 is a promise the tap cannot keep. The whole amount only ever appears
+        /// UNSIGNED, in the WAITING form, where no plus can read it as a gain.</para>
+        ///
+        /// <para>And NO INTEGER APPEARS TWICE ACROSS THE ROW (D2). The label owns what banks; the
+        /// destiny column owns what stays. ASCII only.</para>
+        /// <code>
+        ///   room for all   -> "WOOD +672"
+        ///   partial room   -> "WOOD +258"          (destiny: "414 MORE WAITS")
+        ///   no room at all -> "WOOD 10609 WAITING" (destiny: "STORAGE FULL - STAYS PUT")
+        /// </code>
+        /// </summary>
+        public static string ReturnRowLabel(ReturnRow r)
+            => r.NothingBanks
+                ? $"{r.Word.ToUpperInvariant()} {r.Pending} WAITING"
+                : $"{r.Word.ToUpperInvariant()} +{r.Banks}";
+
+        /// <summary>
+        /// The row's RIGHT column: what becomes of the REST, in WORDS (the owner is red/green
+        /// colourblind — no meaning may ride on hue). ASCII only; the device renders a non-ASCII
+        /// dash or bullet as tofu. It never restates the label's integer — see
+        /// <see cref="ReturnRowLabel"/>.
+        /// <code>
+        ///   room for all      -> "COLLECT NOW"
+        ///   partial room      -> "414 MORE WAITS"
+        ///   no room at all    -> "STORAGE FULL - STAYS PUT"
+        /// </code>
+        /// "WAITS" and "STAYS PUT", never "lost": nothing on either producer burns (see the block
+        /// header above for the captured proof).
+        /// </summary>
+        public static string ReturnRowDestiny(ReturnRow r)
+        {
+            if (r.Waits <= 0) return "COLLECT NOW";
+            if (r.Banks <= 0) return "STORAGE FULL - STAYS PUT";
+            return $"{r.Waits} MORE WAITS";
+        }
+
+        /// <summary>
+        /// The one sentence under the table, when a row could not bank in full. Names the fix and
+        /// says plainly that nothing is going away, because the previous screen's own numbers made
+        /// the player expect a payout that did not arrive.
+        /// </summary>
+        public static string ReturnFooterLine(IReadOnlyList<ReturnRow> rows)
+        {
+            if (rows == null) return null;
+            int waiting = 0;
+            for (int i = 0; i < rows.Count; i++) waiting += rows[i].Waits;
+            if (waiting <= 0) return null;
+            return $"{waiting} stays where it is until there is room - nothing is lost. Spend, or upgrade storage.";
+        }
+
+        /// <summary>
+        /// WO-1434 / `FOUNDATIONAL_RULINGS.md` section 7 — a faucet that stopped must be said in
+        /// words. A FULL silo is a different fact from a waiting row: a half-full silo also waits,
+        /// and it is still gathering. Null when the silo is not at its ceiling.
+        /// </summary>
+        public static string SiloStalledLine(OfflineHarvestResult result)
+            => result != null && result.SiloAtCap && result.SiloTotal > 0
+                ? "Echo silo is full - your Echoes gather nothing more until you collect."
+                : null;
 
         /// <summary>
         /// Every consumer has applied and the clock has advanced: attach passive mending's
@@ -725,6 +896,7 @@ namespace DeNelle.Village
             // LANE G -- the other two axes of the returning session (economy map sec.7 beat 1).
             AttachCompletedJobs(result, window);
             AttachPendingCollectors(result);
+            AttachSiloPending(result);   // WO-1434 -- the fifth axis
 
             // THE GATE IS NOW FOUR AXES, and it is read off the RESULT so this method and
             // WelcomeBackPopup.Show cannot disagree about what counts as news. It used to be
@@ -736,7 +908,8 @@ namespace DeNelle.Village
                 $"claim #{window.Sequence}: away summary gate -> haul={result.Total}, " +
                 $"mendNews={result.HasMendNews}, jobs={result.CompletedJobCount}, " +
                 $"collectorsPending={result.PendingCollectorTotal} across {result.PendingCollectorCount} " +
-                $"collector(s) => {(show ? "REVEAL" : "no reveal")}.");
+                $"collector(s), siloPending={result.SiloTotal} (atCap={result.SiloAtCap}) " +
+                $"=> {(show ? "REVEAL" : "no reveal")}.");
             if (!show) return;
 
             Claimed?.Invoke(result);

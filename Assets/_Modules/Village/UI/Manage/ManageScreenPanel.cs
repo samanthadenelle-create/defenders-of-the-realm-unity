@@ -31,6 +31,7 @@ using System;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Jobs;
+using DeNelle.Core.Manage;   // WO-2001 - ManageTabId / ManageWorkspacePanel / ManageArt.
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
@@ -239,6 +240,12 @@ namespace DeNelle.Village.UI
         private RectTransform _operationalWell;
         private RectTransform _launcherHost;
         private RectTransform _launcherGrid;
+        // WO-2001 - the three-tab workspace. It owns the WHOLE body well (the largest well this
+        // chrome can offer) because the redesign's grid + selection band stack does not fit the
+        // 533/542/612px wells the rail path was authored against; see ManageWorkspacePanel's
+        // header, which hands that arithmetic to THIS work order by name.
+        private RectTransform _workspaceHost;
+        private DeNelle.Core.Manage.ManageWorkspacePanel _workspace;
         private Button _workspaceBack;
         private TextMeshProUGUI _workspaceTitle;
         private readonly TextMeshProUGUI[] _launcherBadges = new TextMeshProUGUI[4];
@@ -286,8 +293,12 @@ namespace DeNelle.Village.UI
         // the queue-row tick writes the drawer's "Building - 2m 10s left (63% done)" grammar and
         // the band's cell is the short form the owner's mockup shows. Same 1 Hz tick, strings only.
         private readonly List<TrainingNowCell> _trainingNowCells = new List<TrainingNowCell>(8);
-        private static readonly Dictionary<string, Sprite> ManageBuildingSpriteCache =
-            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        // WO-2001 - the per-key sprite cache MOVED to DeNelle.Core.Manage.ManageArt.LoadSprite.
+        // There was one loader with two implementations (this file's and ManageArt's, which could
+        // not call this one because it is `internal` to DeNelle.Village); that is duplicated state
+        // of exactly the shape CLAUDE.md 2 / 5 / 16 keeps paying for. ManageArt is now the ONE
+        // loader, the ONE Texture2D fallback and the ONE cache - and it also caches MISSES and
+        // announces them once through FlowTrace, which this copy never did.
         private static readonly HashSet<string> ManageBuildingPortraitGaps =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -361,6 +372,13 @@ namespace DeNelle.Village.UI
 
             _vm = new ManageScreenVM();
             _vm.Changed += Render;
+            // WO-2001 - the HOST's four verbs. The model owns every destination decision (canon 9
+            // forbids the View deciding "which destination a prerequisite CTA should open"); these
+            // are the only things the model cannot do for itself, because they leave its own graph.
+            _vm.OpenQueueRequested = () => { if (!_queueDrawerOpen) ToggleQueueDrawer(); };
+            _vm.OpenHeartRequested = OpenHeartSurface;
+            _vm.CloseRequested = Close;
+            _vm.OpenTownBuilderRequested = OpenTownBuilder;
 
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.QueueChanged += OnQueueChanged;
@@ -373,8 +391,14 @@ namespace DeNelle.Village.UI
             }
 
             _vm.Rebuild();
+            // The approved launcher cards are still BUILT (they remain the source of record for the
+            // 2026-08-31 art + copy) but the host is never shown again - WO-2001 removes the
+            // required chooser. See ShowWorkspace, and the pin list in this WO's hand-back.
             RenderLauncherCards();
-            ShowLauncher();
+            ShowWorkspace();
+            // WO-2001 "Entry": the last-used tab when it is still available, otherwise BUILD. The
+            // decision is the MODEL's - the UI must not decide the default tab.
+            _vm.OpenDefaultScreen();
 
             // WO-465: a panel that never notifies reads as an invisible scrim and PanelRouter
             // reports the open as failed.
@@ -433,6 +457,10 @@ namespace DeNelle.Village.UI
                 // in that order and never ends on a row the player has already passed.
                 if (!string.IsNullOrEmpty(_selectedTroopId))
                 {
+                    // WO-2001: a PRESELECT is a DETAIL screen reached by BROWSING (no jump origin),
+                    // so its BACK returns to the ARMY grid - ruling 28's ordinary case, which must
+                    // not regress just because the door was contextual.
+                    _vm?.OpenDetail(ManageTabId.Army, _selectedTroopId, null, null);
                     string preselected = _selectedTroopId;
                     Guard.Try("Manage", "raise preselect troop-selected signal", () =>
                         DeNelle.Core.Tutorial.TutorialSignals.Raise(
@@ -456,6 +484,8 @@ namespace DeNelle.Village.UI
             _operationalWell = null;
             _launcherHost = null;
             _launcherGrid = null;
+            if (_workspace != null) { _workspace.Clear(); _workspace = null; }
+            _workspaceHost = null;
             _workspaceBack = null;
             _workspaceTitle = null;
             for (int i = 0; i < _launcherBadges.Length; i++) _launcherBadges[i] = null;
@@ -680,12 +710,18 @@ namespace DeNelle.Village.UI
                 ? NoticeSeatBesideClose(chrome.content.transform, noticeX1)
                 : Band(well, "Band_Notice", ref cursor, NoticeBandPx));
 
+            // WO-2001 - the workspace host is created BEFORE the drawer so the drawer is a LATER
+            // sibling and paints over it. QUEUE is an OVERLAY (the owner's flow), and the host is
+            // deactivated outright while it is open, so nothing shows through and nothing under it
+            // stays tappable.
+            BuildWorkspaceHost(well);
+
             BuildQueueDrawer(well);
 
             BuildLauncher(well);
             _workspaceBack = ElarionUiKit.BuildObsidianButton(chrome.content.transform, "BACK",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.035f, 0.835f), new Vector2(0.205f, 0.965f), ShowLauncher);
+                new Vector2(0.035f, 0.835f), new Vector2(0.205f, 0.965f), OnBackPressed);
             if (_workspaceBack != null)
             {
                 _workspaceBack.gameObject.name = "ManageWorkspaceBack";
@@ -693,6 +729,119 @@ namespace DeNelle.Village.UI
                 MedievalUiSkin.ApplyButton(_workspaceBack);
                 _workspaceBack.gameObject.SetActive(false);
             }
+        }
+
+        // =====================================================================
+        //  WO-2001 - THE THREE-TAB WORKSPACE (BUILD / ARMY / RESEARCH)
+        // ---------------------------------------------------------------------
+        //  Manage opens DIRECTLY on the last-used tab (BUILD by default). The
+        //  four-tile launcher is superseded and is never shown; BACK walks the
+        //  model's screen graph and can no longer route through it.
+        //
+        //  ⛔ THE HOST GIVES THE RENDERER THE WHOLE BODY WELL. ManageWorkspacePanel's
+        //  header states the arithmetic and hands the call here: the fixed band stack
+        //  alone (header 120 + tabs 120 + selection floor 256 + gaps) is 532px against
+        //  MEASURED Manage wells of 533 / 542 / 612px, so a grid cannot exist inside
+        //  the old rail path's list band. It therefore takes the well itself, and the
+        //  strip band, the browse list band and the header QUEUE toggle stand down.
+        //
+        //  ⚠ STILL SHORT, AND SAID OUT LOUD RATHER THAN PAPERED OVER. Even the whole
+        //  well is not the ~1454px canon 3's twelve tiles imply. Two things close it
+        //  and BOTH are named in the hand-back: (a) the renderer must skip the
+        //  selection band when Selection.Visible is false and the grid band when the
+        //  tab has no tiles - the shape this composer already emits, screen by screen;
+        //  (b) this modal's own chrome must go full-bleed. Until (a) lands the grid is
+        //  clamped and scrolls, and ManageWorkspacePanel reports the shortfall in px.
+        //  Nothing here silently re-columns or shrinks a text band to fake it.
+        // =====================================================================
+
+        /// <summary>True once the workspace renderer owns the body well.</summary>
+        private bool WorkspaceActive => _workspace != null && _workspaceHost != null;
+
+        private void BuildWorkspaceHost(RectTransform well)
+        {
+            if (well == null) return;
+            var go = new GameObject("ManageWorkspace", typeof(RectTransform));
+            _workspaceHost = (RectTransform)go.transform;
+            _workspaceHost.SetParent(well, false);
+            _workspaceHost.anchorMin = Vector2.zero;
+            _workspaceHost.anchorMax = Vector2.one;
+            _workspaceHost.offsetMin = _workspaceHost.offsetMax = Vector2.zero;
+            _workspace = new DeNelle.Core.Manage.ManageWorkspacePanel(_workspaceHost);
+        }
+
+        /// <summary>
+        /// Show the workspace and stand the retired chrome down. The launcher host is built (its
+        /// cards are still the source-of-record for the 2026-08-31 approved art and copy) but it is
+        /// never made visible again - WO-2001 removes the required chooser, and BACK no longer has
+        /// a launcher to return to.
+        /// </summary>
+        private void ShowWorkspace()
+        {
+            if (_launcherHost != null) _launcherHost.gameObject.SetActive(false);
+            if (_operationalWell != null) _operationalWell.gameObject.SetActive(true);
+            if (_stripHost != null) _stripHost.gameObject.SetActive(false);
+            if (_operationalListBand != null) _operationalListBand.SetActive(false);
+            if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(!_queueDrawerOpen);
+            if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(true);
+            // ONE queue affordance on screen: the workspace header's own door (ruling 17). The
+            // panel-header toggle stood in for it before the workspace existed; two controls for one
+            // verb, in two chrome layers, is the ambiguity the redesign exists to remove. The
+            // drawer's own HIDE closes it, which is why forcing full-body mode below matters.
+            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(false);
+            if (_workspaceTitle != null)
+            {
+                _workspaceTitle.text = "MANAGE";
+                var titleRt = _workspaceTitle.rectTransform;
+                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
+                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
+                titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
+                titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
+                ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
+            }
+        }
+
+        /// <summary>
+        /// BACK. The MODEL owns the graph (owner ruling 28: the stack remembers WHY, not only
+        /// where), so this hands the press over and does nothing else. When the model reports it is
+        /// standing on a root grid it raises CloseRequested, which is wired to <see cref="Close"/>.
+        /// </summary>
+        private void OnBackPressed()
+        {
+            if (_queueDrawerOpen) { ToggleQueueDrawer(); return; }   // the overlay closes first
+            if (_vm == null) { Close(); return; }
+            _vm.Back();
+        }
+
+        /// <summary>
+        /// Paint the workspace. One <c>Bind</c> per model change - never per second: the panel's
+        /// header records the WO-836/864 lesson that a per-tick rebuild is what caused per-frame
+        /// layout churn, and <see cref="DeNelle.Core.Manage.ManageWorkspacePanel.Bind"/> is a full
+        /// Clear + rebuild with no partial-update path.
+        /// </summary>
+        private void RenderWorkspace()
+        {
+            // The legacy row factories own these cells; with no legacy rows on screen they must
+            // still be emptied before the drawer builds its own (the ordering RenderList held).
+            _tickCells.Clear();
+            _progressCells.Clear();
+            _trainingNowCells.Clear();
+
+            if (_operationalListBand != null) _operationalListBand.SetActive(false);
+            if (_stripHost != null) _stripHost.gameObject.SetActive(false);
+            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(false);
+            if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(!_queueDrawerOpen);
+            if (_workspace == null || _vm == null) return;
+            if (_queueDrawerOpen) return;      // the overlay owns the screen; nothing under it paints
+
+            var nav = _vm.Nav;
+            _workspace.Bind(_vm.ComposeWorkspace());
+            FlowTrace.Step("Manage", "workspace screen=" +
+                (nav != null ? nav.Kind + "/" + ManageScreenVM.TabWordOf(nav.Tab) : "<none>") +
+                " item='" + (nav != null ? (nav.ItemId ?? nav.SchoolId ?? "-") : "-") +
+                "' origin=" + (nav != null && nav.Origin != null ? nav.Origin.Kind.ToString() : "browse") +
+                " bands(px): well=" + _workspace.LastWellPx.ToString("0") +
+                " grid=" + _workspace.LastGridPx.ToString("0"));
         }
 
         private void BuildLauncher(RectTransform operationalWell)
@@ -943,48 +1092,31 @@ namespace DeNelle.Village.UI
             }
         }
 
-        private void ShowLauncher()
-        {
-            _categoryNavigationCommitted = false;
-            if (_launcherHost != null) _launcherHost.gameObject.SetActive(true);
-            if (_operationalWell != null) _operationalWell.gameObject.SetActive(false);
-            if (_stripHost != null) _stripHost.gameObject.SetActive(false);
-            if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(false);
-            if (_workspaceTitle != null)
-            {
-                _workspaceTitle.text = "MANAGE";
-                // WO-2003: the launcher used to leave the title on its full-width header anchors,
-                // which now reach back under the HEART face at content x 0.28-0.385. Shrink it to
-                // the SAME 0.22-0.78 local span the operational mode already uses, so the title
-                // sits clear of both header controls in BOTH modes rather than only one.
-                var titleRt = _workspaceTitle.rectTransform;
-                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
-                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
-                titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
-                titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
-                ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
-            }
-            FlowTrace.Step("Navigation", "Manage Back/root -> category cards");
-        }
+        // ⛔ WO-2001 - ShowLauncher IS DELETED. It was the only path that made the four-tile chooser
+        // visible, and BACK was its only caller ("Manage Back/root -> category cards"). The work
+        // order retires the launcher and states that BACK must never route through it; leaving a
+        // private method that can put it back on screen is how it would return. Verified before
+        // deleting: no suite under Assets/Editor names ShowLauncher. The launcher CONSTRUCTION
+        // (BuildLauncher / RenderLauncherCards) stays - it is still the source of record for the
+        // approved 2026-08-31 art and copy, and two source oracles read it - but its host is never
+        // activated. Those two pins are itemised for retirement in this work order's hand-back.
 
+        /// <summary>
+        /// The legacy destination entry point, kept as the ONE name every existing caller and the
+        /// headless capture harness (Assets/Editor/UICaptureLaunch.cs:6877 invokes it by reflection)
+        /// already uses. ⛔ WO-2001 RE-POINTS IT AT THE THREE-TAB WORKSPACE: the four legacy tabs
+        /// collapse onto BUILD / ARMY / RESEARCH (Defense and Buildings merge, ruling 4, because
+        /// they already share one Builder line), and the model decides the rest.
+        /// </summary>
         private void ShowOperational(ManageTab tab)
         {
-            if (_launcherHost != null) _launcherHost.gameObject.SetActive(false);
-            if (_operationalWell != null) _operationalWell.gameObject.SetActive(true);
-            if (_stripHost != null) _stripHost.gameObject.SetActive(true);
-            if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(true);
-            if (_workspaceTitle != null)
-            {
-                _workspaceTitle.text = "MANAGE - " + ManageScreenVM.TabLabels[(int)tab].ToUpperInvariant();
-                var titleRt = _workspaceTitle.rectTransform;
-                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
-                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
-                titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
-                titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
-                ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
-            }
-            _vm?.SelectTab(tab);
-            FlowTrace.Step("Navigation", "Manage category card -> " + tab);
+            ShowWorkspace();
+            ManageTabId target = tab == ManageTab.Troops
+                ? ManageTabId.Army
+                : tab == ManageTab.Research ? ManageTabId.Research : ManageTabId.Build;
+            _vm?.EnterTab(target);
+            FlowTrace.Step("Navigation", "Manage -> " + tab + " (workspace tab " +
+                ManageScreenVM.TabWordOf(target) + ")");
             // WO-1389: the TROOPS workspace is on screen - the post-raid beat's first route hop
             // (spotlight -> the Footman rail row). Raised HERE, after SelectTab has rebuilt and
             // Render has re-registered every "manage.troop_row.<id>" rect, so the hop can resolve
@@ -1220,8 +1352,15 @@ namespace DeNelle.Village.UI
         {
             if (_queueDrawer == null) return;
             var drawer = (RectTransform)_queueDrawer.transform;
-            bool band = _queueDrawerOpen && DrawerInBandMode;
+            // ⛔ WO-2001 - QUEUE IS AN OVERLAY, so the band shape stands down while the workspace
+            // owns the well. The owner's flow puts QUEUE on every screen's header and over the
+            // screen it was opened from; a band seated inside the old browse-list rectangle has
+            // nowhere to sit once that band is gone. DrawerInBandMode itself is UNTOUCHED (its
+            // verbatim text is pinned by ManageBuildingsCardRegression:171) - only this one
+            // condition, which is where the two shapes were always chosen between.
+            bool band = _queueDrawerOpen && DrawerInBandMode && !WorkspaceActive;
             _drawerBandMode = band;
+            if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(WorkspaceActive && !_queueDrawerOpen);
 
             // The TRAINING NOW band (and its extra rows) is the line's MIRROR; the drawer
             // supersedes it while open. Inactive rows drop out of the vertical layout, so the
@@ -1241,7 +1380,9 @@ namespace DeNelle.Village.UI
                 // Full-body mode hides the browse list under the opaque drawer (WO-1368: a browse
                 // list left actionable under a panel carrying paid verbs is a mis-tap surface).
                 // Band mode keeps it, shrunk to the viewport ABOVE the card's CTA line.
-                _operationalListBand.SetActive(!_queueDrawerOpen || band);
+                // WO-2001: the browse list band is retired while the workspace owns the well - an
+                // empty scroll zone left active over the grid is an invisible raycast blocker.
+                _operationalListBand.SetActive(!WorkspaceActive && (!_queueDrawerOpen || band));
                 var listRt = (RectTransform)_operationalListBand.transform;
                 float keep = band ? Mathf.Min(DrawerModeListKeepPx, _listBandPx) : _listBandPx;
                 listRt.sizeDelta = new Vector2(listRt.sizeDelta.x, keep);
@@ -1336,6 +1477,11 @@ namespace DeNelle.Village.UI
             // ApplyDrawerPlacement owns both shapes.
             ApplyDrawerPlacement();
             if (_queueDrawerOpen) RenderQueueDrawer();
+            // WO-2001: closing the overlay hands the screen back to the workspace. Re-binding here
+            // (rather than waiting for the next QueueChanged) is what re-hides the header toggle, so
+            // exactly ONE queue affordance is on screen in each state: the workspace door while
+            // browsing, and this toggle - reading "HIDE QUEUE" - while the overlay is up.
+            else if (WorkspaceActive) RenderWorkspace();
             FlowTrace.Step("Manage", "queue drawer " + (_queueDrawerOpen ? "expanded" : "collapsed") +
                 " (rows " + (_queueDrawerOpen ? (_vm != null ? _vm.QueueRows.Count : 0) : 0) + ")" +
                 (_queueDrawerOpen ? (_drawerBandMode ? " as a band under the Troops workspace" : " full-body") : ""));
@@ -1487,6 +1633,15 @@ namespace DeNelle.Village.UI
             foreach (var button in buttons)
             {
                 if (button == null) continue;
+                // ⛔ WO-2001 - THE WORKSPACE SUBTREE IS EXEMPT, WHOLESALE. ManageWorkspacePanel
+                // authors every face against a MEASURED pixel band and fits it there (its band
+                // table states each height in px, floor 28 for text and 112 for touch). This
+                // copy-keyed bulk pass re-promotes faces by their WORDS and re-fits labels with a
+                // 30px floor - which is precisely the clipping the two WO-1422 polish notes below
+                // record for the Defense and Research rails ("Archer Tower" -> "ARCHER T..."). An
+                // ancestry test rather than a name prefix, because the renderer's object names are
+                // its own business and a prefix list here would be a second copy of them.
+                if (_workspaceHost != null && button.transform.IsChildOf(_workspaceHost)) continue;
                 string objectName = button.gameObject.name ?? string.Empty;
                 if (string.Equals(objectName, "Scrim", StringComparison.Ordinal) ||
                     string.Equals(objectName, "CloseButton", StringComparison.Ordinal) ||
@@ -1772,8 +1927,20 @@ namespace DeNelle.Village.UI
             });
         }
 
+        /// <summary>
+        /// ⛔ WO-2001 - THE BODY IS NOW THE THREE-TAB WORKSPACE. Everything below the delegation is
+        /// the LEGACY rail + selected-card path (WO-1418 / WO-1422). It is retained deliberately and
+        /// NOT deleted here for two stated reasons: (1) eight suites read these method bodies as
+        /// SOURCE TEXT and a silent deletion would take them red inside a lane that cannot run the
+        /// gate, and (2) the per-destination cards are the proven detail surfaces the redesign's
+        /// DETAIL screens are modelled on. ⚠ It is nevertheless DEAD CODE UNDER GREEN PINS - the
+        /// exact shape ManageQueueDrawerRegression:103-113 exists to catch - so its removal, and the
+        /// pin moves that must precede it, are itemised in this work order's hand-back. Do not leave
+        /// it here indefinitely.
+        /// </summary>
         private void RenderList()
         {
+            if (WorkspaceActive) { RenderWorkspace(); return; }
             if (_listContent == null) return;
             for (int i = _listContent.childCount - 1; i >= 0; i--)
             {
@@ -2169,28 +2336,25 @@ namespace DeNelle.Village.UI
             return art ?? LoadManageBuildingSpriteAt(root);
         }
 
-        /// <summary>WO-2017 - INTERNAL, not private: <see cref="HeartPanel"/> loads the Heart's own
-        /// portrait through this exact path so the Heart cannot become the one art route with its
-        /// own loader, its own Texture2D fallback and its own cache-miss behaviour. Same assembly,
-        /// same namespace; nothing outside DeNelle.Village can reach it.</summary>
+        /// <summary>
+        /// WO-2017 - INTERNAL, not private: <see cref="HeartPanel"/> loads the Heart's own portrait
+        /// through this exact path so the Heart cannot become the one art route with its own loader,
+        /// its own Texture2D fallback and its own cache-miss behaviour.
+        ///
+        /// <para>⛔ WO-2001 - THIS IS NOW A ONE-LINE FORWARDER, NOT AN IMPLEMENTATION. The body it
+        /// used to hold was duplicated verbatim in <see cref="DeNelle.Core.Manage.ManageArt.LoadSprite"/>
+        /// (see that file's header: it could not call this one, because `internal` does not cross
+        /// the DeNelle.Core / DeNelle.Village assembly line). Two copies of one behaviour is the
+        /// failure CLAUDE.md 2 / 5 / 16 records three times over, so the Core copy WINS - it is
+        /// reachable from both assemblies, it caches MISSES as well as hits, and it announces a
+        /// miss once per key through FlowTrace instead of silently returning null.</para>
+        ///
+        /// <para>Kept as a method rather than deleted so the Village callers (and
+        /// <see cref="HeartPanel"/>) keep one name for the route; the sprite name suffix
+        /// "_manage_building" moved to ManageArt's "_manage" with it.</para>
+        /// </summary>
         internal static Sprite LoadManageBuildingSpriteAt(string resourceKey)
-        {
-            if (string.IsNullOrEmpty(resourceKey)) return null;
-            if (ManageBuildingSpriteCache.TryGetValue(resourceKey, out Sprite cached)) return cached;
-            Sprite art = Resources.Load<Sprite>(resourceKey);
-            if (art == null)
-            {
-                var texture = Resources.Load<Texture2D>(resourceKey);
-                if (texture != null)
-                {
-                    art = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
-                        new Vector2(0.5f, 0.5f), 100f);
-                    art.name = texture.name + "_manage_building";
-                }
-            }
-            ManageBuildingSpriteCache[resourceKey] = art;
-            return art;
-        }
+            => DeNelle.Core.Manage.ManageArt.LoadSprite(resourceKey);
 
         private void BuildBuildingCard(RectTransform card, BuildingChoiceVM selected)
         {

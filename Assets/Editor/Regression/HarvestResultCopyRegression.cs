@@ -200,9 +200,43 @@ namespace DeNelle.Editor.Regression
                                  "that is the number the popup never showed, and it must be told apart from the collectors'");
                 if (siloBody.IndexOf("Wood storage 4000", StringComparison.Ordinal) < 0)
                     failures.Add("[cap-named] the silo row does not name the cap that bit by its player word ('Wood storage 4000')");
-                if (siloBody.IndexOf("were not added to storage", StringComparison.Ordinal) < 0)
-                    failures.Add("[post-collect-figure] the silo row lost the authoritative 'not added to storage' truth - the " +
-                                 "silo dump still burns its overflow today and must keep saying so");
+                // =============================================================
+                //  WO-1434 -- THE SECOND MOVED PIN. THIS ASSERTION WAS FALSE.
+                // -------------------------------------------------------------
+                //  It used to read:
+                //      if (siloBody.IndexOf("were not added to storage") < 0)
+                //          failures.Add("... the silo dump STILL BURNS its overflow
+                //                        today and must keep saying so");
+                //  That belief was already stale when it was written. WO-1392 changed
+                //  EchoService.DumpSilos to settle against the APPLIED basket
+                //  (`s.SiloResources -= bankedFromSilo`, with an explicit STOP comment
+                //  forbidding the old `-= pool`), so what the cap refuses STAYS IN THE
+                //  SILO. The pin outlived the burn it was protecting and then REQUIRED
+                //  the game to keep telling the player her resources were destroyed.
+                //
+                //  MEASURED, owner's Seeker 2026-09-06 (build 358161), one tap:
+                //      [Flow:Harvest] silo dump: 28800 wood stayed in the silo - Wood storage full
+                //      [Flow:Harvest] silo dump: 28800 iron stayed in the silo - Iron storage full
+                //  and the pool was UNCHANGED at 57600 across three consecutive dumps
+                //  (12:51:25, 12:56:03, 12:56:06). Nothing burned. Meanwhile the modal
+                //  told her those 57,600 units "are lost".
+                //
+                //  The assertion is INVERTED, not deleted: a silo row must now say the
+                //  units are WAITING, and must never say they were lost.
+                // =============================================================
+                if (siloBody.IndexOf("still waiting in your Echo silo", StringComparison.Ordinal) < 0)
+                    failures.Add("[silo-never-burns] a silo-dump row does not say the refused units are STILL WAITING in " +
+                                 "the silo - EchoService.DumpSilos retains them (WO-1392 applied-basket settle; proven on " +
+                                 "the owner's device 2026-09-06, pool 57600 survived three dumps)");
+                // The burn copy is exactly "... were not added to storage - they are lost." (and its
+                // singular "it is lost"). Test for THOSE, not for the bare word: the correct
+                // waiting copy legitimately ends "- nothing was lost."
+                if (siloBody.IndexOf("not added to storage", StringComparison.Ordinal) >= 0 ||
+                    siloBody.IndexOf("they are lost", StringComparison.Ordinal) >= 0 ||
+                    siloBody.IndexOf("it is lost", StringComparison.Ordinal) >= 0)
+                    failures.Add("[silo-never-burns] a silo-dump row still tells the player the units were LOST. They were " +
+                                 "not: they stayed in the silo. The [Flow:Bank] 'LOST N' warn is the BANK saying it REFUSED " +
+                                 "the units - never a statement about what the caller did with them");
                 foreach (var ch in wait + siloBody)
                     if (ch > 126 || (ch < 32 && ch != '\n'))
                     {

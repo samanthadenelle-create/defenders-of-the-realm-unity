@@ -106,6 +106,33 @@ namespace DeNelle.Village
         private float _huntTimer;
         private IDamageable _cachedFoe;
 
+        // ── WO-1438 [Flow:TroopAI] — the deployed warband's target selection was the
+        // ONE invisible actor in a raid. The defenders firehose 13 800 [Flow:EnemyAggro]
+        // lines per raid; the player's own troops emitted nothing about WHAT they chose or
+        // WHY, so "the AI didn't really fight" and "they keep chewing adjoining walls" could
+        // not be told apart from a log. These fields carry the per-troop trace state.
+        // PERMANENT instrumentation (CLAUDE.md §12) — flag it off, never strip it.
+        private string _troopRole = "?";           // melee / ranged / siege / support / tank
+        private string _retargetReason = "spawn";  // why the last scan ran: timer / foe-died / foe-null
+        private int _retargetCount;                // how many times this troop has switched foe
+        private Vector3 _aiLastPos;                // for the measured moved/sec in the heartbeat
+        private float _aiLastPosTime;
+        // Filled by NearestHostile so the retarget line can report the runner-up of the OTHER
+        // kind — the falsifiable field (§1.4b): it embarrasses the selector when a 3 m wall
+        // beats an 11 m live defender.
+        // NOTE these hold REFERENCES, not formatted strings. NearestHostile runs 5x/second per
+        // troop; DescribeTarget interpolates, so formatting here would allocate on every scan
+        // even when nothing is logged (§1.3). The strings are built at EMIT time only.
+        private IDamageable _lastRunnerUp;
+        private float _lastRunnerUpDist = -1f;
+        private int _lastAcceptedUnits, _lastAcceptedStructs, _lastRejected, _lastOverlapCount;
+        // Nearest hostile of ANY kind seen by the last scan, even when it lost — so the
+        // idle/rally line can say "there WAS a foe at 21 m, my radius is 14 m".
+        private IDamageable _lastNearestAny;
+        private float _lastNearestAnyDist = -1f;
+        // Reused by TraceBreachProbe so the once-per-structure-kill path query allocates once.
+        private NavMeshPath _breachPath;
+
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         // WO-853 raised this from 48: the hunt mask now includes the Structure layer, so a
         // sweep inside a raid base returns every wall panel in the 14 m scan radius as well as
@@ -334,6 +361,7 @@ namespace DeNelle.Village
                 _element        = ParseElement(def.Element);
                 // WO-933: role "siege" → structure-prefer hunt (WC Demolisher / CoC wall-breaker).
                 _preferStructures = string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
+                _troopRole = string.IsNullOrEmpty(def.Role) ? "?" : def.Role;
                 _isSupport = string.Equals(def.Role, "support", System.StringComparison.OrdinalIgnoreCase);
                 _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
                 _unitDamageMult = def.UnitDamageMult > 0f ? def.UnitDamageMult : 1f;
@@ -360,6 +388,27 @@ namespace DeNelle.Village
                 _agent.Warp(spawnPos);
             else
                 transform.position = spawnPos;
+
+            _aiLastPos = transform.position;
+            _aiLastPosTime = Time.time;
+
+            // WO-1438: state this troop's SELECTOR CONTRACT once, at spawn. Every later
+            // [Flow:TroopAI] line is read against these numbers — a troop that never fights
+            // is usually a huntRadius that never reaches, and a troop that chews masonry is
+            // usually preferStruct=False, which puts walls in the same nearest-wins bucket as
+            // live defenders. Both are visible here before a single tick runs.
+            //
+            // Steering context for whoever reads the log (kept OUT of the line itself so the
+            // line stays measurement-only): MoveToward drives _agent.Move(displacement) — a
+            // straight-line push. There is no SetDestination and no path query, so nothing here
+            // has a route concept that a breach could change. If that ever gains a path, the
+            // agent= field below is what will show it.
+            FlowTrace.Step("TroopAI",
+                $"id={_troopId} role={_troopRole}: SELECTOR huntRadius={_huntScanRadius:F1}m " +
+                $"attackRange={_attackRange:F1}m moveSpeed={_moveSpeed:F1} preferStruct={_preferStructures} " +
+                $"support={_isSupport} mask={_enemyMask.value} " +
+                $"agent={(_agent != null ? (_agent.isOnNavMesh ? "onNavMesh" : "OFF-NAVMESH") : "none")} " +
+                $"steering=Move(displacement) hasDestination={(_agent != null && _agent.hasPath)}");
         }
 
         private void Awake()
@@ -479,15 +528,75 @@ namespace DeNelle.Village
             bool foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
             if (_huntTimer <= 0f || !foeValid)
             {
+                // WO-1438: name WHY we rescanned before we rescan. "foe-died" is the
+                // load-bearing one — it is the tick right after a wall segment collapses,
+                // and the retarget line that follows says what replaced it.
+                _retargetReason = _cachedFoe == null ? "foe-null"
+                                : !_cachedFoe.IsAlive ? "foe-died"
+                                : "timer";
+                var previousFoe = _cachedFoe;
+
                 _huntTimer = HuntScanInterval;
                 _cachedFoe = NearestHostile();
                 foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
+
+                // Fire ONLY on an actual change of foe — not every 0.2 s scan. This is the
+                // ticket's central line: it records the winner, its kind and distance, and
+                // the best candidate of the OTHER kind that lost. If a raid shows
+                // "won=Wall_Outer_SS_7 (struct) @2.9m | runner-up unit RaidGuard... @11.4m"
+                // repeating along a wall run, the selector is proven to be plain
+                // nearest-wins with no route concept — the WO-1438 hypothesis, evidenced.
+                if (!ReferenceEquals(previousFoe, _cachedFoe))
+                {
+                    _retargetCount++;
+                    bool wonIsStruct = _cachedFoe != null && IsHostileStructure(_cachedFoe);
+                    float wonDist = _cachedFoe != null
+                        ? Vector3.Distance(transform.position, _cachedFoe.WorldPosition) : -1f;
+                    // Strings are built HERE, on the change, not on every 0.2 s scan (§1.3).
+                    FlowTrace.Step("TroopAI",
+                        $"id={_troopId} role={_troopRole} RETARGET#{_retargetCount} reason={_retargetReason} " +
+                        $"dropped='{DescribeTarget(previousFoe)}' -> won='{DescribeTarget(_cachedFoe)}' " +
+                        $"kind={(_cachedFoe == null ? "none" : wonIsStruct ? "struct" : "unit")} " +
+                        $"dist={wonDist:F1}m | runnerUpOtherKind='{DescribeTarget(_lastRunnerUp)}' " +
+                        $"dist={_lastRunnerUpDist:F1}m | sweep colliders={_lastOverlapCount} " +
+                        $"accepted[unit={_lastAcceptedUnits},struct={_lastAcceptedStructs}] rejected={_lastRejected} " +
+                        $"radius={_huntScanRadius:F1}m preferStruct={_preferStructures}");
+
+                    // WO-1438 THE BREACH LINE. When the thing that just died was a STRUCTURE,
+                    // the player expects a hole to have opened and the warband to pour through
+                    // it. This probes whether the kill actually changed the navigable world:
+                    // it asks the NavMesh for a COMPLETE path to the new target and reports the
+                    // status. A "breach opened" that still reports PathPartial/PathInvalid is a
+                    // hole in the geometry that is NOT a hole in the navmesh — and a selector
+                    // that then picks the wall segment next door has not re-evaluated a route,
+                    // because there is no route to re-evaluate.
+                    // NOTE: a collapsed WallSegment keeps its component and its Hostile faction
+                    // (only IsAlive flips), so the dropped foe can still be classified here.
+                    if (_retargetReason == "foe-died" && previousFoe is IDamageableStructure)
+                        TraceBreachProbe(previousFoe, _cachedFoe);
+                }
             }
 
             var foe = foeValid ? _cachedFoe : null;
             if (foe == null)
             {
                 SetInCombat(false);
+                // WO-1438: the "didn't really fight" line. It reports the nearest hostile the
+                // sweep SAW at any distance, so a troop standing idle next to a live defender
+                // 21 m away with a 14 m radius indicts the radius, not the troop.
+                if (FlowTrace.Enabled)
+                {
+                    Vector3? rallyDbg = TroopRally.Point;
+                    // Key is PER TROOP (instance id) — a shared key would let one idle troop
+                    // suppress the other nine and hide a whole idle warband behind one line.
+                    FlowTrace.Throttle("TroopAI", $"troopai-idle-{GetInstanceID()}", 1f,
+                        $"id={_troopId} role={_troopRole} IDLE/RALLY: no acquirable hostile inside " +
+                        $"radius={_huntScanRadius:F1}m (last sweep colliders={_lastOverlapCount}, " +
+                        $"accepted[unit={_lastAcceptedUnits},struct={_lastAcceptedStructs}], rejected={_lastRejected}; " +
+                        $"nearestHostileAnyKind='{DescribeTarget(_lastNearestAny)}' @{_lastNearestAnyDist:F1}m) " +
+                        $"rally={(rallyDbg.HasValue ? rallyDbg.Value.ToString("F1") : "<unset>")} " +
+                        $"action={(rallyDbg.HasValue ? "walk-to-rally" : "stand-still")}");
+                }
                 // No foe — RALLY (WO-453 Step 4): if a global rally point is set and we are
                 // farther than the arrival epsilon, walk toward it; otherwise idle in place.
                 // Foe-in-range always wins (this branch only runs when there's no foe), so
@@ -508,6 +617,29 @@ namespace DeNelle.Village
             SetInCombat(true);
             Vector3 foePos = foe.WorldPosition;
             float dist = Vector3.Distance(transform.position, foePos);
+
+            // WO-1438 STEERING HEARTBEAT — ~1/s per troop (Throttle guards internally).
+            // The measured field is `moved`: actual metres covered per second, taken from the
+            // transform, NOT the speed we asked for. `moved~=0` while `dist > attackRange` is
+            // the signature of a troop pinned against geometry it cannot path around — the
+            // failure that a "commanded speed" field could never report (§1.4b).
+            if (FlowTrace.Enabled)
+            {
+                float span = Time.time - _aiLastPosTime;
+                if (span > 0.75f)
+                {
+                    float moved = (transform.position - _aiLastPos).magnitude / Mathf.Max(span, 0.0001f);
+                    _aiLastPos = transform.position;
+                    _aiLastPosTime = Time.time;
+                    FlowTrace.Throttle("TroopAI", $"troopai-engaged-{GetInstanceID()}", 1f,
+                        $"id={_troopId} role={_troopRole} ENGAGED foe='{DescribeTarget(foe)}' " +
+                        $"kind={(IsHostileStructure(foe) ? "struct" : "unit")} dist={dist:F1}m " +
+                        $"attackRange={_attackRange:F1}m inRange={(dist <= _attackRange)} " +
+                        $"moved={moved:F2}m/s commanded={_moveSpeed:F1} " +
+                        $"agent={(_agent != null && _agent.isOnNavMesh ? "onNavMesh" : "OFF-NAVMESH")} " +
+                        $"retargets={_retargetCount}");
+                }
+            }
 
             if (dist > _attackRange)
             {
@@ -589,13 +721,41 @@ namespace DeNelle.Village
             IDamageable bestStruct = null;
             float bestUnitSqr = float.MaxValue;
             float bestStructSqr = float.MaxValue;
+
+            // WO-1438 trace accounting. NOTE the shape of the loop below, because it is the
+            // whole ticket: when _preferStructures is FALSE (every role except "siege"), a
+            // hostile STRUCTURE falls through to the `else` and competes in the SAME
+            // nearest-wins bucket as a live defender. A wall panel 3 m away therefore beats a
+            // garrison orc 11 m away, and when that panel dies the next-nearest thing is the
+            // panel beside it. These counters make that visible instead of inferable.
+            _lastOverlapCount = count;
+            _lastAcceptedUnits = 0;
+            _lastAcceptedStructs = 0;
+            _lastRejected = 0;
+            // Tracked independently of the winner so the retarget/idle lines can name the best
+            // candidate of the OTHER kind, and the nearest hostile of ANY kind.
+            IDamageable nearestStructAny = null, nearestUnitAny = null;
+            float nearestStructAnySqr = float.MaxValue, nearestUnitAnySqr = float.MaxValue;
+
             for (int i = 0; i < count; i++)
             {
                 var col = _overlap[i];
-                if (col == null) continue;
+                if (col == null) { _lastRejected++; continue; }
                 var dmg = col.GetComponentInParent<IDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) { _lastRejected++; continue; }
                 float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
+
+                if (IsHostileStructure(dmg))
+                {
+                    _lastAcceptedStructs++;
+                    if (sqr < nearestStructAnySqr) { nearestStructAnySqr = sqr; nearestStructAny = dmg; }
+                }
+                else
+                {
+                    _lastAcceptedUnits++;
+                    if (sqr < nearestUnitAnySqr) { nearestUnitAnySqr = sqr; nearestUnitAny = dmg; }
+                }
+
                 if (_preferStructures && IsHostileStructure(dmg))
                 {
                     if (sqr < bestStructSqr)
@@ -609,6 +769,30 @@ namespace DeNelle.Village
                     bestUnitSqr = sqr;
                     bestUnit = dmg;
                 }
+            }
+
+            // Record the runner-up of the OTHER kind from whatever is about to win, plus the
+            // nearest hostile of any kind (for the idle/rally line).
+            bool structWins = _preferStructures && bestStruct != null;
+            IDamageable runnerUp = structWins ? nearestUnitAny : nearestStructAny;
+            float runnerUpSqr = structWins ? nearestUnitAnySqr : nearestStructAnySqr;
+            _lastRunnerUp = runnerUp;
+            _lastRunnerUpDist = runnerUp != null ? Mathf.Sqrt(runnerUpSqr) : -1f;
+
+            if (nearestUnitAnySqr <= nearestStructAnySqr && nearestUnitAny != null)
+            {
+                _lastNearestAny = nearestUnitAny;
+                _lastNearestAnyDist = Mathf.Sqrt(nearestUnitAnySqr);
+            }
+            else if (nearestStructAny != null)
+            {
+                _lastNearestAny = nearestStructAny;
+                _lastNearestAnyDist = Mathf.Sqrt(nearestStructAnySqr);
+            }
+            else
+            {
+                _lastNearestAny = null;
+                _lastNearestAnyDist = -1f;
             }
             if (_preferStructures && bestStruct != null)
             {
@@ -632,10 +816,75 @@ namespace DeNelle.Village
             return dmg is IDamageableStructure;
         }
 
+        /// <summary>
+        /// WO-1438 (§1.4b hollow-field repair): this used to return <c>GetType().Name</c>, so
+        /// every wall panel in a raid printed the identical string "WallSegment". A trace that
+        /// cannot tell <c>Wall_Outer_SS_7</c> from <c>Wall_Outer_SS_8</c> cannot show a squad
+        /// walking sideways along a wall run, which is the exact behaviour this ticket is about.
+        /// It now returns the INSTANCE name plus the type, so adjacent segments are separable.
+        /// </summary>
         private static string DescribeTarget(IDamageable dmg)
         {
-            if (dmg is Component c && c != null) return c.GetType().Name;
-            return dmg != null ? dmg.GetType().Name : "?";
+            if (dmg == null) return "<none>";
+            if (dmg is Component c && c != null) return $"{c.name}({c.GetType().Name})";
+            return dmg.GetType().Name;
+        }
+
+        /// <summary>
+        /// WO-1438: fired once, on the retarget that follows a hostile STRUCTURE dying to this
+        /// troop's hunt. Asks the NavMesh whether the kill actually opened a route to the new
+        /// target and prints the <see cref="NavMeshPathStatus"/>.
+        ///
+        /// This is the line that separates the two competing explanations for "they don't push
+        /// in through the breach":
+        ///   * status=PathComplete  -> a route DOES exist and the selector simply never
+        ///                             preferred it (a target-selection defect).
+        ///   * status=PathPartial / PathInvalid -> the hole in the geometry is not a hole in the
+        ///                             navmesh, so there was never a route to prefer (a bake
+        ///                             defect, and no selector change alone can fix it).
+        /// Read-only: it computes a path, it never steers by it.
+        /// </summary>
+        /// <summary>
+        /// Summed corner-to-corner length of a computed path, or -1 when there is none.
+        /// Paired with the straight-line distance it is the falsifiable pair: a pathLength far
+        /// longer than straightLine means the route detours around the wall ring instead of
+        /// crossing the breach, even when the status reads PathComplete.
+        /// </summary>
+        private static float PathLength(NavMeshPath path)
+        {
+            if (path == null || path.corners == null || path.corners.Length < 2) return -1f;
+            float total = 0f;
+            for (int i = 1; i < path.corners.Length; i++)
+                total += Vector3.Distance(path.corners[i - 1], path.corners[i]);
+            return total;
+        }
+
+        private void TraceBreachProbe(IDamageable destroyed, IDamageable replacement)
+        {
+            if (!FlowTrace.Enabled) return;
+            Guard.Try("TroopAI", $"breach-probe id={_troopId}", () =>
+            {
+                if (_breachPath == null) _breachPath = new NavMeshPath();
+
+                // Probe toward the thing that just became our target. If we have no target at
+                // all, probe straight through the corpse of the wall we just felled — the
+                // point the player expects us to walk through.
+                Vector3 probeTo = replacement != null
+                    ? replacement.WorldPosition
+                    : (destroyed != null ? destroyed.WorldPosition : transform.position);
+
+                bool computed = NavMesh.CalculatePath(transform.position, probeTo, NavMesh.AllAreas, _breachPath);
+                string status = computed ? _breachPath.status.ToString() : "CalculatePath-FAILED";
+                int corners = computed && _breachPath.corners != null ? _breachPath.corners.Length : 0;
+
+                FlowTrace.Step("TroopAI",
+                    $"id={_troopId} role={_troopRole} BREACH: structure '{DescribeTarget(destroyed)}' " +
+                    $"died -> reacquired '{DescribeTarget(replacement)}' " +
+                    $"kind={(replacement == null ? "none" : IsHostileStructure(replacement) ? "struct" : "unit")} " +
+                    $"routeStatus={status} corners={corners} " +
+                    $"straightLine={(replacement != null ? Vector3.Distance(transform.position, probeTo) : -1f):F1}m " +
+                    $"pathLength={PathLength(computed ? _breachPath : null):F1}m");
+            });
         }
 
         /// <summary>Lands one attack on <paramref name="foe"/> and resets the attack cooldown.</summary>

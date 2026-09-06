@@ -269,7 +269,7 @@ namespace DeNelle.Village.UI
                 frameImage.raycastTarget = false;
                 if (frameImage.sprite == null) frameImage.color = new Color(1f, 1f, 1f, 0f);
             }
-            Sprite heartArt = ManageScreenPanel.LoadManageBuildingSpriteAt(HeartArtKey);
+            Sprite heartArt = LoadManageSprite(HeartArtKey);   // WO-2001: the ONE loader (ManageArt)
             if (heartArt == null)
                 FlowTrace.Warn("Heart", "heart art unresolved at Resources/" + HeartArtKey
                     + " - the medallion falls back to the kit placeholder disc.");
@@ -441,9 +441,13 @@ namespace DeNelle.Village.UI
             }
         }
 
-        // The kit's loader with the Texture2D fallback + cache, reused from the Manage card path
+        // The ONE Manage loader (Texture2D fallback + hit/miss cache + a FlowTrace line on a miss),
         // so the Heart's art cannot become the one route that resolves differently.
+        // ⛔ WO-2001: re-pointed straight at DeNelle.Core.Manage.ManageArt.LoadSprite. It used to go
+        // through ManageScreenPanel.LoadManageBuildingSpriteAt, which held a SECOND implementation of
+        // that same behaviour beside ManageArt's; the Village copy is now a forwarder to this method
+        // and the Heart calls the one loader directly.
         private static Sprite LoadManageSprite(string key) =>
-            ManageScreenPanel.LoadManageBuildingSpriteAt(key);
+            DeNelle.Core.Manage.ManageArt.LoadSprite(key);
     }
 }

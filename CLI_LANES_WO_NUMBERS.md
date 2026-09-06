@@ -187,7 +187,64 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, eighty-third pass): main line next free = **1432**.
+> ## RECONCILED 2026-09-06 (CLI, eighty-ninth pass): main line next free = **1440**.
+> *(CLI minted **1439** - the raid GARRISON attacks its OWN spire: **10,687 of the defenders' 13,800
+> `[Flow:EnemyAggro]` lines** are `ProbeForStructure hit 'RaidSpire' -> stopping agent to attack`, plus 37
+> `(contact)` damage hits on it. `IDamageableStructure` carries no faction and `EnemyBrain` applies no
+> faction test, while the ATTACKER side does. Proven from capture by the WO-1438 instrumentation lane.
+> This is the larger half of the owner's "the AI didnt really fight either" - her own warband finished
+> `deployed 10, survivors 10, wounded 0`, so the two armies never met.
+> ⚠ **BANNER-BUMP DISCIPLINE NOTE:** 1439's file was written WITHOUT bumping this banner in the same
+> edit; corrected here in the ninetieth-second sense. That gap is exactly the mechanism behind the five
+> two-seat collisions of 2026-08-02 - a mint on disk that the banner does not know about. Recorded rather
+> than quietly fixed. Bumped 1439 -> 1440 in this edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-eighth pass): main line next free = **1439**.
+> *(CLI minted **1436**, **1437** and **1438** - the owner's first real raid on build 2026.09.06.358161,
+> all three proven from device screencaps plus 52 MB of logcat saved to `logs/debug/`.
+> **1436 (P0)** - the raid never tears down the TOWN HUD: two full interfaces stacked, the raid deploy bar
+> paints OVER the ability row, and `[Flow:Repair] hub repair affordance installed (scene='RaidBase_*')` +
+> the Echo chip gate both explicitly ALLOW town systems into the raid. Posture resolves to Overworld
+> because wave/battleLock/pursuit are all False in a raid scene.
+> **1437 (P0 SOFTLOCK)** - a WON raid never terminates: `SPIRE DOWN` + `Razed 85%`, the clock FROZEN at
+> 1:58 across two captures minutes apart, and `HeroDeath primary fired: action=respawn` puts the player
+> back INTO the raid with kills still scoring. RETREAT is the only exit, so a winner is offered only the
+> losing door.
+> **1438** - raid AI keeps hitting walls after the gate falls and barely fights; there is NO trace for
+> squad target selection in 27 MB of raid log, so instrumentation is the first deliverable.
+> Bumped 1436 -> 1439 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-seventh pass): main line next free = **1436**.
+> *(CLI minted **1435** - the Harvest rail chip is pinned at a FIXED y while the resource panel's height
+> DERIVES from its row count, so opening the resource window covers the STONE row's number - the very
+> number WO-1434 proved is capped at 2000 against ~7050/hr production. Owner felt-test 2026-09-06, proven
+> from an adb screencap. Bumped 1435 -> 1436 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-sixth pass): main line next free = **1435**.
+> *(CLI minted **1434** - the Welcome Back screen advertises 42,782 resources and delivers ZERO, and the
+> modal aggregates FIVE rows while drawing THREE (57,600 hidden). Owner felt-test on build
+> 2026.09.06.358161; proven from an adb screencap plus the logcat window covering her own COLLECT tap.
+> Carries the measured collector-vs-bank capacity inversion (farm collector 30000 vs stone bank 2000).
+> Bumped 1434 -> 1435 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-fifth pass): main line next free = **1434**.
+> *(Spec lane minted **1433** = the CLEAN-ROOM PROD BUILD HUB (owner: "full PROD HUB - wipe every time
+> and pull down then build"). ⚠ COMMISSIONED AS 1432 AND RE-MINTED: 1432 was already on disk
+> (the honest-review grant, below), so first-on-disk-and-referenced-wins applied and the hub took 1433.
+> Bumped 1433 -> 1434 in this SAME edit. SPEC ONLY, four open owner questions - and it carries three
+> measurements that change the premise it was written from: `Assets/Quaternius` DOES NOT EXIST on
+> D:\eoa; the gitignored set under Assets/ is 17.71 GiB / 124,465 files, not two packs, of which
+> `Assets/Blink/Art` alone is 12.8 GiB; and 15.20 GiB of it would route to LFS via the existing
+> .gitattributes, i.e. metered storage re-downloaded on every wiped build.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-fourth pass): main line next free = **1433**.
+> *(CLI minted **1432** - the "enjoying the game? leave an honest review" one-time thank-you grant of
+> 1000 wood/stone/iron. Owner 2026-09-06, clarified twice: NOT contingent on a positive review, IS
+> contingent on an honest one. SPEC with ONE open owner decision - no store on any platform tells the
+> client that a review was left, so the grant must hang on a feedback surface we own (recommended) or
+> on the store flow merely completing. Bumped 1432 -> 1433 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-third pass): main line next free = **1432**.
 > *(CLI minted **1431** - LOW PRIORITY, tracked not queued: the mage grips the staff on its lower half instead of its upper half. Owner: "very low priority... I just wanted it tracked so that when things are slow we have them fix that." Bumped 1431 -> 1432 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, eighty-second pass): main line next free = **1431**.

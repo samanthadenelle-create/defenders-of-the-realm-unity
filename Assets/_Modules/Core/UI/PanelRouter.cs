@@ -163,6 +163,23 @@ namespace DeNelle.Core.UI
         /// building/research CTA, which already read "UPGRADE THE HEART".
         /// Append-only: values are load-bearing.</summary>
         Heart = 26,
+        /// <summary>WO-1432 - the one-time HONEST FEEDBACK thank-you (HonestFeedbackPanel,
+        /// DeNelle.Village.Feedback): a short feedback box that pays 1000 wood / 1000 stone /
+        /// 1000 iron as <c>BankGrantKind.PurchasedOrPromised</c> once, on a response in which
+        /// our OWN backend says it stored the player's words. The store link rides the same
+        /// panel as a second, visually secondary, UNREWARDED button.
+        ///
+        /// ⛔ NOT a menu entry and NOT an action-bar face. The offer decides its own moment
+        /// (HonestFeedbackService.IsEligible: a positive beat landed, session time past the
+        /// JSON-authored threshold, onboarding done, no other modal open) and shows itself
+        /// exactly once per save. Its doors are HonestFeedbackService.TryOpenOffer (D1) and
+        /// HonestFeedbackPanelBootstrap (D2).
+        ///
+        /// ⛔ NOTHING ON THIS ROUTE MAY CLAIM A REVIEW WAS LEFT OR VERIFIED. No app store
+        /// tells a client either fact, on any platform, deliberately - so the grant hangs on
+        /// a feedback surface this project owns, never on a store flow returning.
+        /// Append-only: values are load-bearing.</summary>
+        HonestFeedback = 27,
     }
 
     /// <summary>

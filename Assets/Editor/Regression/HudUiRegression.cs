@@ -245,6 +245,7 @@ namespace DeNelle.Editor
                 CheckSafeAreaCorner(failures, notes);
                 CheckCombatHudComposition(failures, notes);
                 CheckResourceRailRaise(modulesDir, failures, notes);
+                CheckHarvestChipClearsResourcePanel(modulesDir, failures, notes);   // WO-1435
             }
             catch (Exception ex)
             {
@@ -259,7 +260,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths, " +
-                         "safe-area corner, combat-hud composition, resource-rail raise all green" + noteStr;
+                         "safe-area corner, combat-hud composition, resource-rail raise, " +
+                         "harvest-chip clearance all green" + noteStr;
                 Debug.Log(reason);
                 return true;
             }
@@ -1346,14 +1348,81 @@ namespace DeNelle.Editor
                              "resourceChipsCollapsed is unchecked.");
         }
 
+        // =====================================================================
+        //  THE SHARED RIGHT-COLUMN GEOMETRY (WO-1435)
+        // ---------------------------------------------------------------------
+        // ⛔ EVERY NUMBER BELOW IS READ FROM SOURCE, NOT TYPED HERE. That is the whole point.
+        // 7g used to carry its own copies — `actionRailY0 = 0.040f, actionRailY1 = 0.420f` and
+        // `goldAnchorY0 = 0.82f` — and BOTH had gone stale: HudAreasHost.cs authors ActionRail at
+        // 0.770..0.965 and BuildResourceChips seats the gold chip at min.y 0.45. It also used
+        // `Mathf.Lerp` for the CanvasScaler factor, which is wrong: MatchWidthOrHeight lerps in
+        // LOG space (verified at source, Library/PackageCache/com.unity.ugui@a9ea81766fbd/Runtime/
+        // UGUI/UI/Core/Layout/CanvasScaler.cs:328-331), a geometric mean — 1.243 here, not 1.549.
+        // An oracle carrying a stale copy of the geometry it audits is the exact duplicated-state
+        // failure CLAUDE.md documents four times over, and it is worse here than in a doc: this
+        // one reports GREEN while measuring a layout the game does not have.
+        //
+        // RULING (WO-1435, recorded in-file as CLAUDE.md §15 requires): 7g is CORRECTED, not
+        // rewritten — its invariant (the hang-below-gold stack is on-screen with real height) is
+        // unchanged and still passes; only its inputs move from hardcoded copies to source reads.
+        // Corrected, the four-row stack resolves 583..822 ref px from the canvas bottom — inside
+        // the 965 ref px viewport, height 297 device px — so 7g stays GREEN.
+        // =====================================================================
+
+        /// <summary>The canvas-local (== reference px) height at a device resolution, using the
+        /// LOG-weighted MatchWidthOrHeight factor Unity actually applies.</summary>
+        private static float CanvasRefHeight(float screenW, float screenH, float refW, float refH,
+                                             float match)
+        {
+            float logW = Mathf.Log(screenW / refW, 2f);
+            float logH = Mathf.Log(screenH / refH, 2f);
+            float scale = Mathf.Pow(2f, Mathf.Lerp(logW, logH, match));
+            return screenH / scale;
+        }
+
+        /// <summary>Read an area mount's y band straight out of HudAreasHost.cs, e.g.
+        /// <c>Add(HudArea.QueueStatus, new Vector2(0.780f, 0.510f), new Vector2(0.995f, 0.750f));</c>
+        /// Returns false (and NOTES, never a silent default) if the authored form moved.</summary>
+        private static bool ReadAreaBandY(string hostSrc, string area, out float y0, out float y1,
+                                          List<string> notes)
+        {
+            y0 = 0f; y1 = 0f;
+            var m = Regex.Match(hostSrc,
+                @"Add\(\s*HudArea\." + Regex.Escape(area) +
+                @"\s*,\s*new\s+Vector2\(\s*[-0-9.]+f?\s*,\s*([-0-9.]+)f\s*\)\s*,\s*new\s+Vector2\(\s*[-0-9.]+f?\s*,\s*([-0-9.]+)f\s*\)");
+            if (!m.Success)
+            {
+                notes.Add("right-column geometry: HudArea." + area + " is no longer authored as a " +
+                          "literal Vector2 pair in HudAreasHost.cs (it may have moved to a band table) " +
+                          "— the layout half of this check is SKIPPED rather than run on a guess");
+                return false;
+            }
+            return float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out y0)
+                && float.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out y1);
+        }
+
+        /// <summary>Gold chip anchor min.y within the ActionRail mount, read from the
+        /// <c>CurrencyChip(pool, ... CurrencyKind.Gold, new Vector2(x, y), ...)</c> call.</summary>
+        private static float ReadGoldChipMinY(string src, float fallback, List<string> notes)
+        {
+            var m = Regex.Match(src,
+                @"CurrencyChip\(\s*pool\s*,\s*ElarionUiKit\.CurrencyKind\.Gold\s*,\s*new\s+Vector2\(\s*[-0-9.]+f\s*,\s*([-0-9.]+)f\s*\)");
+            float v;
+            if (m.Success &&
+                float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+                return v;
+            notes.Add("right-column geometry: the gold chip's anchor min.y was not parsed — using " +
+                      fallback.ToString("0.##"));
+            return fallback;
+        }
+
         /// <summary>7g — pure canvas math at the captured Seeker resolution. The expanded
-        /// stack hangs below the gold chip (ActionRail y 0.82..1.0). If that hang is zero
-        /// height or fully below y=0, the player sees only gold — the captured defect.</summary>
+        /// stack hangs below the gold chip. If that hang is zero height or fully off the
+        /// viewport, the player sees only gold — the captured defect.</summary>
         private static void CheckResourceRailLayout2670(string src, List<string> failures, List<string> notes)
         {
             float rowH = ReadConstFloat(src, "ResRowHeightPx", 56f, notes);
             float rowGap = ReadConstFloat(src, "ResRowGapPx", 5f, notes);
-            float railGap = ReadConstFloat(src, "RailGapPx", 6f, notes);
             const int rowCount = 4;
             float stackH = rowCount * rowH + (rowCount - 1) * rowGap;
             if (stackH < DeNelle.Core.Diagnostics.UiSurfaceProbe.MinEdgePx)
@@ -1364,27 +1433,13 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // CanvasScaler 1080x1920 match 0.5, screen 2670x1200 — same numbers as
-            // HudAreasHost + the proving capture tmp/resources-expanded-105803.png.
-            const float screenW = 2670f, screenH = 1200f;
-            const float refW = 1080f, refH = 1920f;
-            float scale = Mathf.Lerp(screenW / refW, screenH / refH, 0.5f);
-            float canvasH = screenH / scale;
-            const float actionRailY0 = 0.040f, actionRailY1 = 0.420f;
-            const float goldAnchorY0 = 0.82f;   // CurrencyChip min.y on ActionRail
-            float actionRailH = (actionRailY1 - actionRailY0) * canvasH;
-            float goldH = (1f - goldAnchorY0) * actionRailH;
-            float actionRailTopFromBottom = actionRailY1 * canvasH;
-            float goldBottomFromBottom = actionRailTopFromBottom - goldH;
-            float stackTopFromBottom = goldBottomFromBottom - railGap;
-            float stackBottomFromBottom = stackTopFromBottom - stackH;
+            RightColumn col;
+            if (!ReadRightColumn(src, rowCount, out col, notes)) return;
 
             // Screen-space y from the TOP (capture convention).
-            float stackTopScreen = screenH - (stackTopFromBottom * scale);
-            float stackBottomScreen = screenH - (stackBottomFromBottom * scale);
-            var stack = Rect.MinMaxRect(0f, Mathf.Min(stackTopScreen, stackBottomScreen),
-                                        screenW, Mathf.Max(stackTopScreen, stackBottomScreen));
-            var viewport = new Rect(0f, 0f, screenW, screenH);
+            float scale = 2670f / (col.CanvasW <= 0f ? 1f : col.CanvasW);
+            var stack = Rect.MinMaxRect(0f, col.StackTop * scale, 2670f, col.StackBottom * scale);
+            var viewport = new Rect(0f, 0f, 2670f, 1200f);
             if (stack.height < DeNelle.Core.Diagnostics.UiSurfaceProbe.MinEdgePx)
                 failures.Add("RESOURCE RAIL — hanging-below-gold stack at 2670x1200 resolves to " +
                              stack.height.ToString("0") + " px tall (below MinEdgePx). Zero-size rail: " +
@@ -1394,6 +1449,245 @@ namespace DeNelle.Editor
                              "(rect y " + stack.y.ToString("0") + ".." + (stack.y + stack.height).ToString("0") +
                              " px). Wood/Iron/Stone/Crystals would paint outside the Seeker capture, " +
                              "which is how tmp/resources-expanded-105803.png showed only gold.");
+        }
+
+        /// <summary>Everything the right column resolves to at the owner's 2670x1200, all of it
+        /// derived from source reads. Distances are REFERENCE PX FROM THE CANVAS TOP (the same
+        /// convention HudRailClearance works in, so the two cannot disagree about sign).</summary>
+        private struct RightColumn
+        {
+            public float CanvasW, CanvasH;
+            public float ActionRailTop, QueueTop, QueueBottom;
+            public float GoldTop, GoldBottom;
+            public float StackTop, StackBottom;
+        }
+
+        private static bool ReadRightColumn(string src, int rowCount, out RightColumn c, List<string> notes)
+        {
+            c = default(RightColumn);
+            string hostPath = Path.Combine(Application.dataPath, "_Modules", "HUD", "Kit", "HudAreasHost.cs");
+            string hostSrc;
+            try { hostSrc = File.ReadAllText(hostPath); }
+            catch (Exception ex)
+            {
+                notes.Add("right-column geometry: HudAreasHost.cs unreadable (" + ex.GetType().Name +
+                          ") — layout half skipped");
+                return false;
+            }
+
+            float arY0, arY1, qsY0, qsY1;
+            if (!ReadAreaBandY(hostSrc, "ActionRail", out arY0, out arY1, notes)) return false;
+            if (!ReadAreaBandY(hostSrc, "QueueStatus", out qsY0, out qsY1, notes)) return false;
+
+            // CanvasScaler as authored in HudAreasHost.Build: 1080x1920, MatchWidthOrHeight 0.5.
+            const float screenW = 2670f, screenH = 1200f;
+            c.CanvasH = CanvasRefHeight(screenW, screenH, 1080f, 1920f, 0.5f);
+            c.CanvasW = screenW * (c.CanvasH / screenH);
+
+            float rowH = ReadConstFloat(src, "ResRowHeightPx", 56f, notes);
+            float rowGap = ReadConstFloat(src, "ResRowGapPx", 5f, notes);
+            float railGap = ReadConstFloat(src, "RailGapPx", 6f, notes);
+            float goldMinY = ReadGoldChipMinY(src, 0.45f, notes);
+
+            c.ActionRailTop = (1f - arY1) * c.CanvasH;
+            c.QueueTop = (1f - qsY1) * c.CanvasH;
+            c.QueueBottom = (1f - qsY0) * c.CanvasH;
+            float actionRailH = (arY1 - arY0) * c.CanvasH;
+            // ⚠ THE GOLD CHIP IS CLAMPED, AND MODELLING IT UNCLAMPED IS ~4 REF PX OF LIE.
+            // BuildResourceChips calls ElarionUiKit.ClampMinTouch(tapBtn) on this chip, and the
+            // clamp grows a sub-floor side "symmetrically about the centre" to MinTouchPx
+            // (ElarionUiKit.cs:1044-1060). Its authored height here is (1-0.45) * the ActionRail
+            // band = 103.5 ref px at 2670x1200 — BELOW the 112 floor — so the chip really resolves
+            // 112 tall with its bottom edge ~4.25 px lower than the anchors alone say, and the
+            // whole stack hanging off it moves down with it. Fold the clamp in rather than state
+            // numbers the device does not have.
+            c.GoldTop = c.ActionRailTop;
+            float goldH = (1f - goldMinY) * actionRailH;
+            float clampedH = Mathf.Max(goldH, DeNelle.Core.UI.ElarionUiKit.MinTouchPx);
+            float grow = (clampedH - goldH) * 0.5f;   // symmetric about the centre
+            c.GoldTop -= grow;
+            c.GoldBottom = c.GoldTop + clampedH;
+            c.StackTop = c.GoldBottom + railGap;
+            c.StackBottom = c.StackTop + rowCount * rowH + (rowCount - 1) * rowGap;
+            return true;
+        }
+
+        // =====================================================================
+        // CHECK 8 — THE HARVEST CHIP NEVER SITS ON THE RESOURCE PANEL (WO-1435)
+        // ---------------------------------------------------------------------
+        // WHAT SHIPPED (owner felt-test 2026-09-06, build 2026.09.06.358161, verbatim: *"can we
+        // move harvest down when someone opens the resource window ... so it doesnt overlap"*):
+        // the expanded resource panel's height is `kinds.Length * ResRowHeightPx + ...` — a
+        // FUNCTION of its row count, growing downward out of the ActionRail mount — while the
+        // Harvest/Collectors chip was pinned in the QueueStatus mount directly beneath it at a
+        // CONSTANT `yFromTopPx = 0f`. Two things in one gutter, one variable, nothing reconciling.
+        //
+        // ⛔ RED PROOF — the numbers this check produces against the pre-fix tree, at the owner's
+        // 2670x1200 (canvas 965.4 ref px tall; CanvasScaler log-weighted factor 1.243; the gold
+        // chip's ClampMinTouch growth folded in, see ReadRightColumn):
+        //     four-row panel   147.6 .. 386.6 ref px from the canvas top
+        //     Harvest chip     241.3 .. 353.3        (yFromTop 0f in a band whose top is 241.3)
+        // The chip is ENTIRELY INSIDE the panel — 112 ref px of overlap on a shared right edge and
+        // a shared 220 px width, i.e. total. Row pitch is 61, so the covered band 241.3..353.3
+        // swallows the whole of row 2 (STONE, 269.6..325.6) and clips the edges of Iron and
+        // Crystals — which is exactly what the owner's device shows: coins, wood, iron, a row
+        // whose number is under a button, then crystals. This check FAILS with those numbers on
+        // today's build and passes only once the offset derives.
+        //
+        // ⛔ AND IT CANNOT BE SATISFIED BY A BIGGER LITERAL. It runs the SAME geometry at THREE
+        // row counts (3 / 4 / 6). A hand-picked constant that clears today's four rows fails at
+        // six, which is the point: `kinds.Length` is not fixed, so a second hand-maintained number
+        // is the identical bug one resource later — the duplicated-state failure CLAUDE.md
+        // documents at §2, §5, §7 and §16. Pre-fix it is RED at every one of the three
+        // (overlap 84.2 / 112.0 / 112.0 ref px at 3 / 4 / 6 rows); with the derivation in place
+        // the chip lands at 331.6 / 392.6 / 514.6 and clears the panel by exactly RailGapPx each
+        // time, still inside the 965.4 ref px canvas (bottom 443.6 / 504.6 / 626.6).
+        //
+        // Invariants:
+        //   8a  the Collectors band carries HudRailClearance (the derivation), and the chip's
+        //       literal argument is a resting BASE, not the position.
+        //   8b  the derived chip clears the panel at 3, 4 and 6 rows — zero overlap, each stated
+        //       with its own numbers.
+        //   8c  the chip stays inside the canvas at every one of those row counts (deriving
+        //       downward must not push it off the bottom of the screen).
+        //   8d  the 220x112 box is untouched — width and the MinTouchPx-floor height are canon
+        //       (three rail chips share one right edge; ElarionUiKit.FontFloor is a FLOOR and the
+        //       "Tap to collec" fleet capture proved the fix for a tight label is fewer
+        //       characters, never a smaller box). A "fix" that shrinks the chip fails here.
+        //   8e  fixed pixels only (WO-841): the band must not become a fraction of its parent —
+        //       a sub-MinTouchPx fraction is grown about its centre by ClampMinTouch INTO its
+        //       neighbour, recreating this overlap by a second route.
+        //
+        // ⚠ WHAT THIS IS AND IS NOT: authored-anchor ARITHMETIC (the check-7g precedent), not a
+        // laid-out measurement. DeNelle.EditorRegression.asmdef does not reference DeNelle.HUD,
+        // and batchmode runs no layout pass (recorded at HudKitController.TickResourceExpandVerify:
+        // "UNMEASURABLE => NAMED SKIP, NEVER A PASS"). Every input is READ FROM SOURCE so it cannot
+        // go stale; the live measurement is HudRailClearance's own FlowTrace line plus a headless
+        // capture with the window open.
+        //
+        // THE BUILDERS CHIP IS NOT MODELLED HERE, AND THAT IS THE FINDING, NOT AN OMISSION: it
+        // shares this band at the same `0f`, but its build call is commented out
+        // (`// BuildQueueStatusChip(pool);`) and SessionShapeRegression Case7_OneDoor FAILS if that
+        // byte-exact retirement line ever disappears. A chip that cannot be built cannot collide;
+        // pinning geometry for it would be a hypothetical, not a pin. It is wired to the same
+        // clearance in source so a future un-retirement is safe by construction.
+        // =====================================================================
+        private static void CheckHarvestChipClearsResourcePanel(string modulesDir,
+            List<string> failures, List<string> notes)
+        {
+            string path = Path.Combine(modulesDir, "HUD", "Kit", "HudKitController.cs");
+            string src;
+            try { src = File.ReadAllText(path); }
+            catch (Exception ex)
+            {
+                failures.Add("HARVEST CLEARANCE — HudKitController.cs unreadable (" + ex.GetType().Name +
+                             "). WO-1435's overlap invariant is not checked at all.");
+                return;
+            }
+
+            // ── 8a: the derivation must exist, and be attached to THIS chip's band ──────────
+            bool hasComponent = src.IndexOf("internal sealed class HudRailClearance",
+                                            StringComparison.Ordinal) >= 0;
+            if (!hasComponent)
+                failures.Add("HARVEST CLEARANCE — HudRailClearance is gone. The Harvest chip's y is " +
+                             "back to a constant in a gutter shared with a variable-height panel, which " +
+                             "is the WO-1435 defect: the owner's device buried the STONE row's number " +
+                             "under the button, and stone is the resource WO-1434 proved fills its " +
+                             "2,000 cap in 17 minutes at ~7,050/hour. The one number that would have " +
+                             "shown her the problem is the one the button covered.");
+
+            // The rule itself, so a component that exists but stopped deriving still fails.
+            bool derives = src.IndexOf("Mathf.Max(BaseYFromTopPx, (mountTop - lowest) + GapPx)",
+                                       StringComparison.Ordinal) >= 0;
+            if (hasComponent && !derives)
+                failures.Add("HARVEST CLEARANCE — HudRailClearance no longer computes " +
+                             "max(base, (mountTop - sourceBottom) + gap). A clearance component that " +
+                             "does not derive from the MEASURED source bottom is a constant wearing a " +
+                             "component's name (WO-1435).");
+
+            var call = Regex.Match(src,
+                @"BuildRailChip\(\s*rrt\s*,\s*""CollectorsChip""\s*,\s*""Collectors""\s*,\s*([-0-9.]+)f");
+            if (!call.Success)
+            {
+                failures.Add("HARVEST CLEARANCE — the Collectors chip's BuildRailChip call was not " +
+                             "found in its authored form, so its vertical offset cannot be audited. " +
+                             "WO-1435 is unchecked.");
+                return;
+            }
+            float baseY;
+            if (!float.TryParse(call.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture,
+                                out baseY))
+                baseY = 0f;
+
+            bool attached = Regex.IsMatch(src,
+                @"collectorsBand\.gameObject\.AddComponent<HudRailClearance>\(\)");
+            if (!attached)
+                failures.Add("HARVEST CLEARANCE — the Collectors chip's band no longer receives a " +
+                             "HudRailClearance. Its " + baseY.ToString("0.#") + "f argument is then the " +
+                             "chip's actual position rather than a resting base (WO-1435).");
+
+            // ── 8d/8e: the box and the fixed-pixel law are untouched ────────────────────────
+            if (src.IndexOf("RailChipWidthPx = 220f", StringComparison.Ordinal) < 0)
+                failures.Add("HARVEST CLEARANCE — RailChipWidthPx is no longer 220. Narrowing the chip " +
+                             "is a forbidden route out of this overlap: 220 == " +
+                             "EchoUnlockFeedback.EchoChipWidthPx and three rail chips share one right " +
+                             "edge. The 2026-08-22 fleet captured this chip reading \"Tap to collec\" in " +
+                             "all 8 runs; the fix for a tight label is FEWER CHARACTERS, never a " +
+                             "smaller box (WO-1144).");
+            if (src.IndexOf("RailChipHeightPx = ElarionUiKit.MinTouchPx", StringComparison.Ordinal) < 0)
+                failures.Add("HARVEST CLEARANCE — the rail chip height is no longer authored AT " +
+                             "ElarionUiKit.MinTouchPx. Shortening the chip to dodge the panel drops the " +
+                             "tap target below the touch floor, and ClampMinTouch then grows it back " +
+                             "about its centre INTO its neighbour (WO-841/WO-868).");
+            if (Regex.IsMatch(src, @"rt\.anchorMin\s*=\s*new\s+Vector2\(1f,\s*1f\);") == false)
+                notes.Add("harvest clearance: RailBand's point anchor was not matched verbatim — the " +
+                          "fixed-pixel (never fractional) rail-chrome law is worth re-reading (WO-841)");
+
+            // ── 8b/8c: the geometry, at three row counts ───────────────────────────────────
+            float chipH = DeNelle.Core.UI.ElarionUiKit.MinTouchPx;
+            float railGap = ReadConstFloat(src, "RailGapPx", 6f, notes);
+            int[] rowCounts = { 3, 4, 6 };
+            for (int i = 0; i < rowCounts.Length; i++)
+            {
+                int n = rowCounts[i];
+                RightColumn col;
+                // A parse failure NOTES and stops the layout half (the check-7f/7g convention in
+                // this file) rather than failing — an oracle that cannot read the geometry must
+                // not invent a verdict in either direction. The source lints above still stand.
+                if (!ReadRightColumn(src, n, out col, notes)) return;
+
+                // The rule, mirrored from HudRailClearance.Apply. It is stated once there and once
+                // here on purpose: this half exists to FAIL when the source half is missing, so it
+                // must be able to model both worlds.
+                float chipTop = col.QueueTop + baseY;
+                if (attached)
+                    chipTop = Mathf.Max(chipTop, col.StackBottom + railGap);
+                float chipBottom = chipTop + chipH;
+
+                if (chipTop < col.StackBottom && chipBottom > col.StackTop)
+                {
+                    float overlap = Mathf.Min(chipBottom, col.StackBottom) - Mathf.Max(chipTop, col.StackTop);
+                    failures.Add("HARVEST CLEARANCE — at " + n + " resource rows the Harvest chip (" +
+                                 chipTop.ToString("0.#") + ".." + chipBottom.ToString("0.#") +
+                                 " ref px from the canvas top) sits ON the expanded resource panel (" +
+                                 col.StackTop.ToString("0.#") + ".." + col.StackBottom.ToString("0.#") +
+                                 ") — " + overlap.ToString("0.#") + " ref px of overlap on a shared " +
+                                 "220 px right edge, so the covered row's NUMBER is unreadable. This is " +
+                                 "WO-1435 (owner felt-test 2026-09-06). Derive the chip's offset from " +
+                                 "the panel's laid-out height; a bigger constant is the same bug at a " +
+                                 "different row count.");
+                }
+                if (chipBottom > col.CanvasH)
+                    failures.Add("HARVEST CLEARANCE — at " + n + " resource rows the derived chip bottom " +
+                                 "(" + chipBottom.ToString("0.#") + " ref px) falls off the " +
+                                 col.CanvasH.ToString("0.#") + " ref px canvas at 2670x1200. Deriving " +
+                                 "downward must not push the tap target off-screen; HudRailClearance " +
+                                 "clamps to the canvas and Warns, and the right column needs a rethink " +
+                                 "at this row count.");
+            }
+
+            notes.Add("harvest clearance: derived offset + zero panel overlap at 3/4/6 rows + the " +
+                      "220x112 box and fixed-pixel laws pinned (WO-1435)");
         }
 
         private static float ReadConstFloat(string src, string name, float fallback, List<string> notes)

@@ -194,6 +194,10 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
         private TMP_Text _resHintLabel;   // WO-1221: the collapsed chip's "+N more" hint
+        // WO-1435: the rail chips whose vertical offset is DERIVED from the resource panel's
+        // laid-out height rather than authored. _buildersClearance stays null in shipping builds
+        // (its chip's build call is retired — see BuildQueueStatusChip).
+        private HudRailClearance _collectorsClearance, _buildersClearance;
         private Button _fleeButton, _startWaveButton;
         // ── WO-835 action bar (owner architecture law 2026-08-02): the bottom bar renders
         // ONLY the applicable buttons, packed + centered. Every predicate (Talk in range,
@@ -309,7 +313,20 @@ namespace DeNelle.HUD.Kit
         private int _heartGateSceneHandle = int.MinValue;
         private bool _heartGateIsHub;
         private string _heartGateSceneName = string.Empty;
-        private int _heartGateLogged = -1;   // -1 unknown, 0 hidden, 1 shown
+        // WO-1436 — the HUB-ONLY widget set. Widgets whose MEANING is the town, listed in
+        // hud-areas.json rows that legitimately also fire outside a hub. Each gets the exact
+        // heartStatus treatment: the ROW stays authored (it is not wrong), and a scene test
+        // sits ON TOP of it. One flip-state per widget (this REPLACES the single
+        // _heartGateLogged int, which only ever tracked heartStatus).
+        private static readonly string[] HubOnlyWidgets = { "heartStatus", "waveBlock" };
+        private readonly int[] _hubOnlyLogged = { -1, -1 };
+
+        // Why-it-is-hub-only, printed in the gate's own trace so a capture explains itself.
+        private static readonly string[] HubOnlyWhy =
+        {
+            "the Heart is village-only",
+            "waves attack the TOWN; a raid/dungeon has no wave to count down",
+        };
 
         /// <summary>Build the whole kit under a fresh HudAreasHost.</summary>
         public static HudKitController Create(VillageHudController owner)
@@ -1720,8 +1737,11 @@ namespace DeNelle.HUD.Kit
         private const float RailChipHeightPx = ElarionUiKit.MinTouchPx;   // 112
         /// <summary>Collapsed chip width — == EchoUnlockFeedback.EchoChipWidthPx.</summary>
         private const float RailChipWidthPx = 220f;
-        /// <summary>Gap between a chip and its expanded section.</summary>
-        private const float RailGapPx = 6f;
+        /// <summary>Gap between a chip and its expanded section. WO-1435 made it `internal`
+        /// (was `private`) so <see cref="HudRailClearance"/> holds the SAME gap when it seats a
+        /// chip below a panel — a second "6f" typed into the clearance component would be the
+        /// duplicated state this whole ticket is about.</summary>
+        internal const float RailGapPx = 6f;
         /// <summary>Expanded-section width. Shares the chip's right edge, grows LEFT.</summary>
         private const float RailPanelWidthPx = 420f;
         /// <summary>THE shared rail gutter: distance from the SCREEN's right edge to every
@@ -1755,7 +1775,29 @@ namespace DeNelle.HUD.Kit
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
             // THE shared collapsed chip (identical build to the Resources chip below).
-            var chip = BuildRailChip(rrt, "BuildersChip", "Builders", 0f, OnBuildersChipTapped);
+            // ⭐ WO-1435: this 0f is a RESTING BASE, not a position — same treatment as the
+            // Collectors chip, for the same reason (it shares the QueueStatus band that sits under
+            // the variable-height resource panel). ⚠ THIS CHIP CANNOT COLLIDE TODAY, and the proof
+            // is at source, not an inference: the call site is commented out at
+            // `// BuildQueueStatusChip(pool);` in Build(), so nothing here ever runs, and
+            // SessionShapeRegression Case7_OneDoor FAILS the build if that byte-exact retirement
+            // line disappears. It is wired anyway because the owner ruling that retired it also
+            // said the chip is "two lines from returning" — un-retiring it must not silently
+            // re-ship this defect, nor land it on top of the Collectors chip that took its band.
+            RectTransform buildersBand;
+            var chip = BuildRailChip(rrt, "BuildersChip", "Builders", 0f,
+                                     OnBuildersChipTapped, out buildersBand);
+            if (buildersBand != null)
+            {
+                _buildersClearance = buildersBand.gameObject.AddComponent<HudRailClearance>();
+                _buildersClearance.BaseYFromTopPx = 0f;
+                _buildersClearance.AddSource(_resGoldOnly != null && _resGoldOnly.root != null
+                    ? (RectTransform)_resGoldOnly.root.transform : null);
+                // Build order between the two chips is not fixed, so each registers with whichever
+                // of the pair already exists (see the mirror of this in BuildCollectorsChip).
+                if (_collectorsClearance != null)
+                    _buildersClearance.AddSource((RectTransform)_collectorsClearance.transform);
+            }
             // Wrap + bounded auto-size come from BuildRailChip (see the note there) — the chip
             // reports the SAME string it always did (FormatQueueChip), it just no longer has to
             // ellipsize the Train count off the end of a narrower face.
@@ -1831,7 +1873,42 @@ namespace DeNelle.HUD.Kit
             rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
-            var chip = BuildRailChip(rrt, "CollectorsChip", "Collectors", 0f, OnCollectorsChipTapped);
+            // ⭐ WO-1435 — THIS CHIP'S y IS DERIVED, AND THE 0f IS A RESTING BASE, NOT A POSITION.
+            // The QueueStatus band sits directly under the ActionRail band that hosts the resource
+            // panel, and that panel's height is `kinds.Length * ResRowHeightPx + ...` — a FUNCTION
+            // of its row count, growing downward. Pinned at a constant 0f, this chip landed inside
+            // it: at the owner's 2670x1200 the four-row panel occupies ~143..382 ref px from the
+            // screen top and the chip occupied 241..353, i.e. entirely within it, burying the STONE
+            // row's number (owner felt-test 2026-09-06, build 2026.09.06.358161). ⛔ Do NOT replace
+            // this 0f with a bigger literal that happens to clear four rows — see HudRailClearance
+            // for why a second hand-maintained number is the same bug one resource later.
+            RectTransform collectorsBand;
+            var chip = BuildRailChip(rrt, "CollectorsChip", "Collectors", 0f,
+                                     OnCollectorsChipTapped, out collectorsBand);
+            var clearance = collectorsBand != null
+                ? collectorsBand.gameObject.AddComponent<HudRailClearance>() : null;
+            if (clearance != null)
+            {
+                clearance.BaseYFromTopPx = 0f;
+                if (_resGoldOnly != null && _resGoldOnly.root != null)
+                    clearance.AddSource((RectTransform)_resGoldOnly.root.transform);
+                else
+                    FlowTrace.Warn("HudKit", "collectors chip clearance has NO source - the gold " +
+                                             "resource chip did not build, so the Harvest chip will " +
+                                             "rest at its base offset and cannot know where the " +
+                                             "expanded panel ends (WO-1435).");
+                _collectorsClearance = clearance;
+                // A dormant Builders chip (retired 2026-08-07, call site commented out) would share
+                // this exact band, so if it is ever un-retired it must clear THIS chip too. Wiring
+                // it here rather than at its build site keeps the two build orders independent.
+                if (_buildersClearance != null) _buildersClearance.AddSource((RectTransform)clearance.transform);
+            }
+            else
+            {
+                FlowTrace.Warn("HudKit", "collectors chip built with NO clearance band - its y is " +
+                                         "back to a constant and it can sit on top of the expanded " +
+                                         "resource panel (WO-1435).");
+            }
             _collectorsChipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>(true) : null;
             if (_collectorsChipLabel == null)
                 FlowTrace.Warn("HudKit", "collectors chip built without a label - the ambient collector " +
@@ -1894,7 +1971,18 @@ namespace DeNelle.HUD.Kit
         private Button BuildRailChip(RectTransform parent, string name, string label,
                                      float yFromTopPx, Action onTap)
         {
-            var band = RailBand(parent, name + "Band", yFromTopPx, RailChipHeightPx, RailChipWidthPx);
+            RectTransform ignored;
+            return BuildRailChip(parent, name, label, yFromTopPx, onTap, out ignored);
+        }
+
+        /// <summary>Same chip, handing back the fixed-pixel BAND it was seated in. WO-1435 needs
+        /// the band (not the button) because the band is what carries the rail's y — and reaching
+        /// it by <c>GetChild(0)</c> or by re-deriving the "<c>&lt;name&gt;Band</c>" string at the
+        /// call site would be a second copy of a name this method already owns.</summary>
+        private Button BuildRailChip(RectTransform parent, string name, string label,
+                                     float yFromTopPx, Action onTap, out RectTransform band)
+        {
+            band = RailBand(parent, name + "Band", yFromTopPx, RailChipHeightPx, RailChipWidthPx);
             var btn = ElarionUiKit.BuildObsidianButton(band, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 Vector2.zero, Vector2.one, onTap);
@@ -3326,7 +3414,13 @@ namespace DeNelle.HUD.Kit
             bool betweenWaves = w.Phase == WavePhase.Idle || w.Phase == WavePhase.Countdown ||
                                 w.Phase == WavePhase.Cleared;
             bool activeWave = w.Phase == WavePhase.Active || w.Phase == WavePhase.Breached;
-            bool show = betweenWaves || activeWave;
+            // WO-1436: AND the hub scene gate. This is the SECOND writer of waveBlock's
+            // visibility (ApplyHeartSceneGate is the other), and without this term the two
+            // disagree in a raid: the gate hides the block every frame while a single wave-model
+            // event re-shows it, giving a one-frame flash of a TOWN WAVE TIMER over a raid
+            // battlefield. Waves attack the town; a raid has no wave and never can.
+            RefreshHubGateCache();
+            bool show = (betweenWaves || activeWave) && _heartGateIsHub;
             _waveBlockRoot.SetActive(show);
             if (!show) return;
 
@@ -3699,6 +3793,14 @@ namespace DeNelle.HUD.Kit
                 _resHintLabel.gameObject.SetActive(!open);
 
             if (!stateChanged) return;
+
+            // ⭐ WO-1435 — the panel just changed height, so the chips below it must re-derive.
+            // SetResourcePanelOpen is already the ONE owner of the stack's SetActive, so it is
+            // also the one honest place to ring the clearance: a SetActive on a DESCENDANT raises
+            // no OnRectTransformDimensionsChange on the chip's own band, and leaving that to a
+            // poll is what turns a layout rule back into a race.
+            if (_collectorsClearance != null) _collectorsClearance.MarkDirty();
+            if (_buildersClearance != null) _buildersClearance.MarkDirty();
 
             if (open)
             {
@@ -4262,38 +4364,74 @@ namespace DeNelle.HUD.Kit
         //
         // In the hub every posture that lists heartStatus still shows it: IsHub() is true
         // there, so `want` collapses to pure row membership (today's behaviour, unchanged).
+        //
+        // ── WO-1436 GENERALISATION ───────────────────────────────────────────
+        // The gate above was RIGHT and was scoped to one widget, so the next town-only
+        // widget in a hostile row repeated the defect. `waveBlock` is that widget: it sits
+        // in the hostile(prebattle) AND hostile(activebattle) rows for the same good reason
+        // heartStatus does — a village wave defence is a fight — and the owner's raid
+        // screenshot shows a WAVE TIMER counting down over a raid battlefield, where there
+        // is no wave and never can be. Before WO-1436 that only surfaced during the brief
+        // pursuit windows that flipped the raid hostile; now that a raid declares combat for
+        // its whole duration, an ungated waveBlock would be on screen the ENTIRE raid.
+        //
+        // So the mechanism is reused verbatim, driven by a LIST instead of a name — one gate,
+        // N widgets. Adding a hub-only widget is one string in HubOnlyWidgets + its reason.
+        // As before: the hud-areas.json rows are NOT edited. The rows are not wrong; posture
+        // simply cannot tell a village wave from a raid, and only a SCENE test can.
+        /// <summary>
+        /// Refresh the cached "is the active scene a hub?" answer. Scene.name allocates and this
+        /// is read per frame, so it is cached by scene HANDLE and recomputed only on a change.
+        ///
+        /// <para>Its own method since WO-1436 because there are TWO readers, and that is the
+        /// whole point: <see cref="ApplyHeartSceneGate"/> is not the only writer of
+        /// waveBlock.activeSelf — <see cref="OnWave"/> also sets it from the wave phase. Two
+        /// writers with different opinions is a flicker, so both consult this one answer.</para>
+        /// </summary>
+        private void RefreshHubGateCache()
+        {
+            var scene = SceneManager.GetActiveScene();
+            if (scene.handle == _heartGateSceneHandle) return;
+            _heartGateSceneHandle = scene.handle;
+            _heartGateSceneName = scene.name;
+            _heartGateIsHub = HubScenes.IsHub(_heartGateSceneName);
+            // re-announce every hub-only widget's decision once per scene
+            for (int i = 0; i < _hubOnlyLogged.Length; i++) _hubOnlyLogged[i] = -1;
+        }
+
         private void ApplyHeartSceneGate(HudPosture posture)
         {
-            GameObject heart;
-            if (_config == null || !_widgets.TryGetValue("heartStatus", out heart) || heart == null)
-                return;
+            if (_config == null) return;
 
-            var scene = SceneManager.GetActiveScene();
-            if (scene.handle != _heartGateSceneHandle)
+            RefreshHubGateCache();
+
+            var occupancy = _config.Occupancy(posture);
+
+            for (int i = 0; i < HubOnlyWidgets.Length; i++)
             {
-                _heartGateSceneHandle = scene.handle;
-                _heartGateSceneName = scene.name;
-                _heartGateIsHub = HubScenes.IsHub(_heartGateSceneName);
-                _heartGateLogged = -1;   // re-announce the decision once per scene
+                string id = HubOnlyWidgets[i];
+                GameObject go;
+                if (!_widgets.TryGetValue(id, out go) || go == null) continue;
+
+                bool inRow = occupancy.ContainsKey(id);
+                bool want = inRow && _heartGateIsHub;
+                if (go.activeSelf != want) go.SetActive(want);
+
+                // Project law: a decision leaves a logged line. This runs per occupancy apply
+                // AND per frame, so log ONLY on a flip (and once per scene) — never per frame.
+                int decision = want ? 1 : 0;
+                if (decision == _hubOnlyLogged[i]) continue;
+                _hubOnlyLogged[i] = decision;
+
+                if (inRow && !_heartGateIsHub)
+                    FlowTrace.Warn("HudKit", id + ": posture " + HudPostureKeys.Key(posture) +
+                                   " lists it, but scene '" + _heartGateSceneName +
+                                   "' is not a hub -> scene gate HIDES it (" + HubOnlyWhy[i] + ")");
+                else
+                    FlowTrace.Step("HudKit", id + " scene gate: " + (want ? "show" : "hide") +
+                                   " (scene " + _heartGateSceneName + ", hub " + _heartGateIsHub +
+                                   ", inRow " + inRow + ")");
             }
-
-            bool inRow = _config.Occupancy(posture).ContainsKey("heartStatus");
-            bool want = inRow && _heartGateIsHub;
-            if (heart.activeSelf != want) heart.SetActive(want);
-
-            // Project law: a decision leaves a logged line. This runs per occupancy apply
-            // AND per frame, so log ONLY on a flip (and once per scene) — never per frame.
-            int decision = want ? 1 : 0;
-            if (decision == _heartGateLogged) return;
-            _heartGateLogged = decision;
-            if (inRow && !_heartGateIsHub)
-                FlowTrace.Warn("HudKit", "heartStatus: posture " + HudPostureKeys.Key(posture) +
-                               " lists it, but scene '" + _heartGateSceneName +
-                               "' is not a hub -> scene gate HIDES it (the Heart is village-only)");
-            else
-                FlowTrace.Step("HudKit", "heartStatus scene gate: " + (want ? "show" : "hide") +
-                               " (scene " + _heartGateSceneName + ", hub " + _heartGateIsHub +
-                               ", inRow " + inRow + ")");
         }
 
         // WO-997 §3b: per-frame mana-bar animation. Eases the shown fill toward the model's
@@ -4887,6 +5025,211 @@ namespace DeNelle.HUD.Kit
                 if (Mathf.Abs(_rt.offsetMax.x + inset) < 0.01f) return;
                 _rt.offsetMax = new Vector2(-inset, _rt.offsetMax.y);
             }
+        }
+    }
+
+    /// <summary>
+    /// ⭐ WO-1435 — THE RAIL CHIP'S VERTICAL OFFSET IS DERIVED, NOT AUTHORED.
+    /// ---------------------------------------------------------------------------
+    /// THE DEFECT THIS EXISTS TO END (owner felt-test 2026-09-06, build 2026.09.06.358161:
+    /// *"can we move harvest down when someone opens the resource window ... so it doesnt
+    /// overlap"*): the resource panel's height is a FUNCTION of its row count
+    /// (`BuildResourceChips`: `kinds.Length * ResRowHeightPx + (kinds.Length-1) * ResRowGapPx`)
+    /// and grows DOWNWARD out of the ActionRail mount, while the Harvest/Collectors chip sat at
+    /// a CONSTANT `yFromTopPx = 0f` in the QueueStatus mount directly beneath it. Two things
+    /// sharing one gutter, one of them variable, and nothing reconciling them.
+    ///
+    /// ⛔ THE FIX IS NOT A BIGGER CONSTANT. A hand-picked offset that clears today's FOUR rows
+    /// is the identical bug the day a fifth resource lands — the row count is `kinds.Length`,
+    /// not a literal. A second hand-maintained number tracking a live one is the duplicated-state
+    /// failure CLAUDE.md documents four separate times (§2 the stale WO block, §5 the retired
+    /// dependency table, §7 `MaxVisibleFaces` — stale TWICE — §16 the copy-pasted R2 verify).
+    /// The cure is never a better copy; it is deleting the copy. So this component MEASURES the
+    /// source's laid-out bottom edge every time it can change, and places the chip beneath it.
+    /// Add a fifth resource row and the chip moves with no second edit.
+    ///
+    /// THE RULE, in one line:
+    ///   chipTopFromMountTop = max(authored base, (mountTop - sourceBottom) + RailGapPx)
+    /// measured in CANVAS-LOCAL units — i.e. reference px, the same unit `RailGutterPx` and
+    /// `MinTouchPx` are authored in, reached the same way <see cref="HudRailGutter"/> reaches it
+    /// (world corners -> the ROOT canvas' local space), so it is correct whatever scale the HUD
+    /// host is parented under and at every resolution. The two components are deliberately
+    /// orthogonal: the gutter owns x, this owns y, and neither writes the other's axis — writing
+    /// the whole vector from both would make them fight every LateUpdate.
+    ///
+    /// FIXED PIXELS ONLY (WO-841). Not a fraction of the band: a fraction can resolve under
+    /// `MinTouchPx`, and `ClampMinTouch` then grows the chip about its CENTRE into its
+    /// neighbour — which would recreate this exact overlap by a second route.
+    /// The chip's 220x112 box is untouched (canon: `RailChipWidthPx` == the Echoes chip's width;
+    /// three rail chips share one right edge). Nothing here narrows it, shortens its label or
+    /// lowers its font — `ElarionUiKit.FontFloor` is a FLOOR, and the fleet capture recorded at
+    /// `FormatCollectorChip` proves the fix for a tight label is FEWER CHARACTERS, never a
+    /// smaller box.
+    ///
+    /// Presentation-only. It moves a band; it reads no state, owns no data, decides nothing.
+    /// </summary>
+    internal sealed class HudRailClearance : MonoBehaviour
+    {
+        private static readonly Vector3[] Corners = new Vector3[4];
+        private static readonly List<RectTransform> Buf = new List<RectTransform>(32);
+
+        /// <summary>The authored resting offset, used whenever no source is live.</summary>
+        internal float BaseYFromTopPx;
+        /// <summary>Gap held between the lowest live source edge and this band's top.</summary>
+        internal float GapPx = HudKitController.RailGapPx;
+
+        private readonly List<RectTransform> _sources = new List<RectTransform>(2);
+
+        private RectTransform _rt, _canvasRt;
+        private bool _dirty = true;
+        private int _lastW = -1, _lastH = -1;
+        private bool _lastSourcesLive;
+        private float _appliedY = float.NaN;
+        private bool _clampWarned;
+
+        /// <summary>Add something this band must stay clear of. Order-independent and
+        /// null-safe, so a caller built BEFORE its source can register itself later.</summary>
+        internal void AddSource(RectTransform source)
+        {
+            if (source == null || _sources.Contains(source)) return;
+            _sources.Add(source);
+            _dirty = true;
+        }
+
+        /// <summary>The one owner of the expanded panel (SetResourcePanelOpen) rings this the
+        /// frame it toggles. A SetActive on a DESCENDANT of the source raises no
+        /// OnRectTransformDimensionsChange here, so without an explicit ring the only thing
+        /// left would be polling — and the live-state compare below is the belt to this
+        /// brace, never the primary signal.</summary>
+        internal void MarkDirty() { _dirty = true; }
+
+        private void OnEnable() { _dirty = true; _appliedY = float.NaN; }
+        private void OnRectTransformDimensionsChange() { _dirty = true; }
+
+        private void LateUpdate()
+        {
+            if (Screen.width != _lastW || Screen.height != _lastH)
+            {
+                _lastW = Screen.width; _lastH = Screen.height; _dirty = true;
+            }
+            // Cheap belt: an allocation-free bool over at most two roots. Catches any path that
+            // shows/hides a source without ringing MarkDirty (occupancy re-parenting, a posture
+            // flip, a future second opener) so the chip can never be left parked over a panel.
+            bool live = SourcesLive();
+            if (live != _lastSourcesLive) { _lastSourcesLive = live; _dirty = true; }
+            if (!_dirty) return;
+            Apply();
+        }
+
+        private bool SourcesLive()
+        {
+            for (int i = 0; i < _sources.Count; i++)
+                if (_sources[i] != null && _sources[i].gameObject.activeInHierarchy) return true;
+            return false;
+        }
+
+        private void Apply()
+        {
+            if (_rt == null) _rt = transform as RectTransform;
+            if (_rt == null) { _dirty = false; return; }
+            if (_canvasRt == null)
+            {
+                var c = GetComponentInParent<Canvas>();
+                if (c == null) return;                        // not mounted yet; retry (KEEP dirty)
+                var root = c.rootCanvas != null ? c.rootCanvas : c;
+                _canvasRt = root.transform as RectTransform;
+            }
+            if (_canvasRt == null) return;
+            var parent = _rt.parent as RectTransform;
+            if (parent == null) return;                       // re-parented by occupancy; retry
+            if (parent.rect.height < 1f || _canvasRt.rect.height < 1f) return;   // unresolved; retry
+
+            // ⛔ PRE-SETTLE IS A RETRY, NEVER A VERDICT — and it must NOT clear the dirty flag.
+            // A rect that has been built and activated in the same frame has not been through a
+            // layout pass and reads 0x0 (registry shape H4; the same rule TickResourceExpandVerify
+            // polls for at "MEASURE AFTER LAYOUT SETTLES"). Concluding from that read would park
+            // the chip at its base offset forever, and the live-state compare could not rescue it
+            // because the state never changes again. So: return with _dirty still set.
+            float mountTop = CanvasTopOf(parent);
+            if (float.IsNaN(mountTop)) return;
+
+            float lowest = float.NaN;
+            for (int i = 0; i < _sources.Count; i++)
+            {
+                var s = _sources[i];
+                if (s == null || !s.gameObject.activeInHierarchy) continue;
+                float b = UnionBottom(s);
+                if (float.IsNaN(b)) return;                   // measurable-but-unsettled: retry
+                if (float.IsNaN(lowest) || b < lowest) lowest = b;
+            }
+
+            // No live source => the authored resting offset. "Nothing to clear" is a real,
+            // named state, never a stale hold of the last computed y.
+            float want = BaseYFromTopPx;
+            if (!float.IsNaN(lowest))
+                want = Mathf.Max(BaseYFromTopPx, (mountTop - lowest) + GapPx);
+
+            // The chip may legitimately hang below its own mount (the QueueStatus band is a mount
+            // point, not a clip rect — HudAreasHost builds bare RectTransforms, no Mask), but it
+            // may never leave the screen. If the clamp ever bites, the rail genuinely cannot fit
+            // and that is a FINDING, not something to swallow (CLAUDE.md §12.2 — no silent
+            // failures). Say it once, with the numbers.
+            float maxY = (mountTop - _canvasRt.rect.yMin) - _rt.rect.height;
+            if (maxY > BaseYFromTopPx && want > maxY)
+            {
+                if (!_clampWarned)
+                {
+                    _clampWarned = true;
+                    FlowTrace.Warn("HudKit", "rail clearance: '" + name + "' wants y=" +
+                                   want.ToString("F1") + " ref px to clear the panel above it but the " +
+                                   "canvas bottom caps it at " + maxY.ToString("F1") + " - the right " +
+                                   "column can no longer seat the expanded panel AND this chip. " +
+                                   "The chip will overlap; shorten the panel or move the chip's band.");
+                }
+                want = maxY;
+            }
+
+            _dirty = false;
+            if (!float.IsNaN(_appliedY) && Mathf.Abs(_appliedY - want) < 0.01f) return;
+            _appliedY = want;
+            // x belongs to HudRailGutter. Write ONLY y.
+            _rt.anchoredPosition = new Vector2(_rt.anchoredPosition.x, -want);
+            FlowTrace.Step("HudKit", "rail clearance: '" + name + "' y=" + want.ToString("F1") +
+                           " ref px from mount top (base " + BaseYFromTopPx.ToString("F1") +
+                           ", gap " + GapPx.ToString("F1") + ", mountTop " + mountTop.ToString("F1") +
+                           ", lowest live source edge " +
+                           (float.IsNaN(lowest) ? "none" : lowest.ToString("F1")) +
+                           ") - DERIVED from the laid-out panel, never a literal (WO-1435).");
+        }
+
+        /// <summary>Canvas-local y of a rect's TOP edge, or NaN if it has not laid out yet.</summary>
+        private float CanvasTopOf(RectTransform rt)
+        {
+            if (rt.rect.height < 1f) return float.NaN;
+            rt.GetWorldCorners(Corners);
+            return _canvasRt.InverseTransformPoint(Corners[1]).y;   // [1] = top-left
+        }
+
+        /// <summary>Canvas-local y of the LOWEST edge of <paramref name="root"/> and every ACTIVE
+        /// RectTransform beneath it — which is precisely what makes this derived: the expanded
+        /// resource stack, its rows and the "+N" hint are all descendants of the gold chip, so a
+        /// fifth resource row deepens this union and the chip follows with no second edit.
+        /// NaN means "not laid out yet" (see the pre-settle note in Apply).</summary>
+        private float UnionBottom(RectTransform root)
+        {
+            float lowest = float.NaN;
+            Buf.Clear();
+            root.GetComponentsInChildren(false, Buf);   // false = skip inactive; no allocation
+            for (int i = 0; i < Buf.Count; i++)
+            {
+                var rt = Buf[i];
+                if (rt == null || rt.rect.height < 1f) continue;
+                rt.GetWorldCorners(Corners);
+                float b = _canvasRt.InverseTransformPoint(Corners[0]).y;   // [0] = bottom-left
+                if (float.IsNaN(lowest) || b < lowest) lowest = b;
+            }
+            Buf.Clear();
+            return lowest;
         }
     }
 

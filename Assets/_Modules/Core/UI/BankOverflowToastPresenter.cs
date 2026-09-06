@@ -235,7 +235,25 @@ namespace DeNelle.Core.UI
 
             ToastCount++;
             LastToastMessage = msg;
-            HarvestOverflowModal.Present(order.ConvertAll(r => merged[r]));
+
+            // WO-1434 -- STAMP THE SCOPE ONTO THE ROWS. BankOverflowStatus.Source is the
+            // ClampGrant sourceTag, and every one of these rows came through
+            // EconomyService.GrantSpendable, so it reads "Grant" -- MEASURED on the owner's
+            // Seeker 2026-09-06 12:51:25: "BANK FULL [Grant] Wood: requested 28800 ...". The
+            // scope is the ONLY place that knows these are the Echo silo's rows, which is why
+            // HarvestOverflowModal's `Source.IndexOf("DumpSilos")` branch (added for exactly
+            // this case) had never once fired and the silo rows were shown to the player as
+            // "lost". They are not lost: DumpSilos settles against the APPLIED basket and the
+            // refused units stay in the silo (proven on the same device -- pool 57600 survived
+            // three consecutive dumps). Presentation stays a separate layer: this observer
+            // records WHERE the row came from; the modal decides the words.
+            var stamped = order.ConvertAll(r =>
+            {
+                var s = merged[r];
+                if (!string.IsNullOrEmpty(_scopeSource)) s.Source = _scopeSource;
+                return s;
+            });
+            HarvestOverflowModal.Present(stamped);
             FlowTrace.Step("Bank",
                 $"bank-cap harvest-result modal for [{_scopeSource ?? "?"}] naming {spoken} trimmed resource(s)"
                 + (throttled > 0 ? $" ({throttled} suppressed by cooldown)" : "") + ".");

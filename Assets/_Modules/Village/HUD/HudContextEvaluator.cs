@@ -7,9 +7,34 @@
 // and writes the Core HudContextModel:
 //   • Combat  : a village wave is ACTIVE (WaveManager.Phase), OR a staged / in-place
 //               fight is live (BattleLock.IsInBattle — ATB, Arena, BattleArena,
-//               HeroCombatEngagement). Scene ground alone (raid / enemy-owned) does
-//               NOT flip Battle — the PostureEvaluator opens hostile(prebattle) on
-//               pursuit/target instead (owner 2026-07-05: peaceful default).
+//               HeroCombatEngagement), OR an enemy is pursuing the hero, OR THE SCENE
+//               ITSELF DECLARES COMBAT (HubScenes.SceneDeclaresCombat — WO-1436).
+//
+//               ⚠ THE OLD HEADER SENTENCE HERE WAS *"Scene ground alone (raid /
+//               enemy-owned) does NOT flip Battle"*, AND IT SHIPPED THE WO-1436 P0.
+//               It is REFINED, not deleted, because it is still right about the case
+//               it was written for. The owner's 2026-07-05 "peaceful default" ruling
+//               is about open enemy-owned GROUND — Village2 carries ownership:"Enemy",
+//               and wandering onto hostile ground must stay calm until something
+//               actually threatens the hero. That half stands: enemy-ownership STILL
+//               does not flip Battle, and the PostureEvaluator still opens
+//               hostile(prebattle) on pursuit/target there.
+//
+//               What the sentence got wrong is that it swept a RaidBase_* scene into
+//               the same bucket. A raid is not ground you wander onto: it is reachable
+//               only through BEGIN ASSAULT, with troops committed and a scored 180 s
+//               clock, and [Flow:Raid] RAID START fires ~1 s after the load. Owner
+//               felt-test 2026-09-06 (build 2026.09.06.358161): "in the raid, i had no
+//               way to fight. No combast skills" — the context resolved to Overworld
+//               for the whole assault, the posture to calm(explore), and the action bar
+//               rendered the PEACEFUL dock. Measured off that same capture, the posture
+//               flapped calm(explore) <-> hostile(*) SEVEN times in 49 s, tracking
+//               transient pursuit pulses instead of the committed fight.
+//
+//               The narrow predicate (raids ONLY — not dungeons, not enemy ground)
+//               lives in DeNelle.Core.HubScenes with the rest of the scene-family
+//               naming, so the HUD, the Village and the seam oracle all read ONE
+//               authority instead of three private copies (the WO-411/920 lesson).
 //   • Town    : a non-combat HUB scene with the hero inside the town ring.
 //   • Overworld : non-combat, outside the town ring (the merged overworld) / a non-hub scene.
 //   • Modal   : a registered modal panel is open (PanelManager.AnyOpen) — overlays.
@@ -63,7 +88,13 @@ namespace DeNelle.Village.Hud
         {
             string scene = SceneManager.GetActiveScene().name;
 
-            bool combat = IsWaveActive()
+            // WO-1436: the scene's OWN declaration. Constant for the whole time the player
+            // stands in an assault, which is what stops the posture flapping with pursuit
+            // pulses. Evaluated first so the trace below can name it as its own input.
+            bool sceneCombat = HubScenes.SceneDeclaresCombat(scene);
+
+            bool combat = sceneCombat
+                          || IsWaveActive()
                           || BattleLock.IsInBattle()
                           // owner F8 2026-07-10 "actively chased should be battle HUD": an overworld rep
                           // pursuing/striking the hero flips to Battle too (refines the 2026-07-05 ruling
@@ -81,15 +112,21 @@ namespace DeNelle.Village.Hud
             // Precedence: Modal overlays everything; else BuildMode (an edit session owns
             // the screen and freezes waves — BuildModeController.Enter/FreezeWaves — so it
             // outranks a residual combat signal); else Battle; else Town; else Overworld.
-            HudContext ctx = modal ? HudContext.Modal
-                           : buildMode ? HudContext.BuildMode
-                           : combat ? HudContext.Battle
-                           : inVillage ? HudContext.Town
-                           : HudContext.Overworld;
+            //
+            // WO-1436: the chain itself now lives in DeNelle.Core.HudModel.HudContextResolver
+            // so the seam oracle can assert it WITHOUT loading a scene or reaching into this
+            // internal class. Behaviour is byte-identical — the ternary chain was hoisted, not
+            // rewritten. Do NOT re-inline it here; a second copy is exactly how this rule would
+            // drift away from the thing that tests it.
+            HudContext ctx = HudContextResolver.Resolve(modal, buildMode, combat, inVillage);
 
             // Observability (mirrors BattleHudVisibilityManager.EvaluateMode's input trace).
+            // sceneCombat is printed as its own input: WO-1436's whole diagnosis came from
+            // reading this line and finding EVERY combat input False inside a live raid, so a
+            // new input that did not appear here would be invisible to the next such read.
             FlowTrace.Throttle("HUD", "ctx-eval", 1f,
-                $"context inputs: wave={IsWaveActive()} battleLock={BattleLock.IsInBattle()} " +
+                $"context inputs: sceneCombat={sceneCombat} wave={IsWaveActive()} " +
+                $"battleLock={BattleLock.IsInBattle()} " +
                 $"pursuit={DeNelle.Core.HudModel.PostureSignals.PursuitActive} " +
                 $"inVillage={inVillage} modal={modal} buildMode={buildMode} scene='{scene}' -> {ctx}");
 

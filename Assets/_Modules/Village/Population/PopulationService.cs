@@ -80,6 +80,22 @@ namespace DeNelle.Village.Population
             get { var s = State; return s != null ? Mathf.Clamp(s.PopulationEchoSlots, 1, MaxEchoSlots) : 1; }
         }
 
+        /// <summary>
+        /// The population cap at an arbitrary Village/Stronghold tier — the SAME ladder
+        /// <see cref="PopulationCap"/> reads, exposed so the Heart Level unlock preview can say
+        /// what a level actually grants (WO-2004).
+        /// <para>⚠ READ-ONLY PROJECTION, NOT A SECOND TABLE. <see cref="CapByTier"/> stays the one
+        /// authority and stays private; this method is the only way out of it. HeartProgression
+        /// .UnlocksAt calls it rather than re-listing 5/8/12/16, because a hand-copied unlock table
+        /// is precisely what WO-2004's "no duplicated Heart-level unlock tables" forbids. It is
+        /// also why this is a static reader and not a service instance call — the preview must work
+        /// before PopulationService exists in the scene.</para>
+        /// <para>⛔ Owner rules on the numbers. The ladder is CODE-side today, not authored JSON;
+        /// that is recorded as a gap in the WO-2004 gate audit, not fixed here (moving it would be
+        /// a balance-data change smuggled into a progression change — CLAUDE.md §5's lane rule).</para>
+        /// </summary>
+        public static int CapAtVillageTier(int tier) => CapForTier(tier);
+
         private static int CapForTier(int tier)
         {
             if (tier < 0) tier = 0;

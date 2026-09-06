@@ -24,6 +24,20 @@ namespace DeNelle.Core.UI
         /// </summary>
         public const string CollectorSource = "Collectors";
 
+        /// <summary>
+        /// WO-1434 - the <see cref="BankOverflowStatus.Source"/> of a row produced by the ECHO
+        /// SILO dump. It is the WARN SCOPE tag (BankOverflowToastPresenter stamps it), NOT a
+        /// ClampGrant sourceTag: every silo row reaches the bank through
+        /// EconomyService.GrantSpendable and therefore arrives tagged "Grant", which is why the
+        /// old substring test on "DumpSilos" never matched a single row on the device.
+        /// <para>THESE ROWS DO NOT BURN EITHER. EchoService.DumpSilos settles against the APPLIED
+        /// basket (`s.SiloResources -= bankedFromSilo`), so what the cap refused stays in the silo
+        /// and banks on the next dump. Proven on the owner's Seeker 2026-09-06: "silo dump: 28800
+        /// wood stayed in the silo - Wood storage full", and pool 57600 was unchanged across three
+        /// dumps (12:51:25, 12:56:03, 12:56:06).</para>
+        /// </summary>
+        public const string SiloSource = "EchoService.DumpSilos";
+
         // WO-1392 - ONE screen per tap. CollectAll banks the collectors AND dumps the Echo silo,
         // and each half used to reach Present on its own (the silo through its warn scope), so
         // the second call closed the first. While a batch is open, Present only QUEUES; the
@@ -167,9 +181,10 @@ namespace DeNelle.Core.UI
                 long after = (long)Mathf.Max(0, s.Current) + Mathf.Max(0, s.Granted);
                 string state = s.OverCap ? " (over capacity)" : (after >= s.Max ? " (full)" : "");
                 bool fromCollectors = string.Equals(s.Source, CollectorSource, System.StringComparison.Ordinal);
+                bool fromSilo = !fromCollectors && !string.IsNullOrEmpty(s.Source)
+                                && s.Source.IndexOf("DumpSilos", System.StringComparison.Ordinal) >= 0;
                 string from = fromCollectors ? " from your collectors"
-                    : (!string.IsNullOrEmpty(s.Source) && s.Source.IndexOf("DumpSilos", System.StringComparison.Ordinal) >= 0
-                        ? " from the Echo silo" : "");
+                    : (fromSilo ? " from the Echo silo" : "");
                 var block = new List<string>
                 {
                     $"{name} storage: {after} / {s.Max}{state}",
@@ -189,11 +204,35 @@ namespace DeNelle.Core.UI
                         ? $"{name} storage {s.Max} is exceeded. It banks by itself once you spend below {s.Max} and collect again."
                         : $"{name} storage {s.Max} is full. Spend {unit}, or upgrade a {s.ContainerName}, then collect again.");
                 }
+                else if (fromSilo)
+                {
+                    // WO-1434 - NEVER BURN, SECOND PRODUCER. This branch is new because the
+                    // silo's rows were falling into the "lost" branch below and telling the owner
+                    // that 57,600 units had been destroyed while EchoService.DumpSilos was, in the
+                    // same millisecond, logging that it had kept every one of them. Same shape as
+                    // the collector branch above, different container word.
+                    block.Add(s.Lost == 1
+                        ? $"That 1 {unit} is still waiting in your Echo silo - nothing was lost."
+                        : $"Those {s.Lost} {unit} are still waiting in your Echo silo - nothing was lost.");
+                    block.Add(s.OverCap
+                        ? $"{name} storage {s.Max} is exceeded. It banks by itself once you spend below {s.Max} and collect again."
+                        : $"{name} storage {s.Max} is full. Spend {unit}, or upgrade a {s.ContainerName}, then collect again.");
+                }
                 else
                 {
                     // LINE 3 - the loss, said out loud. Two authored branches rather than one
                     // interpolated verb, so the singular reads "was" and the plural reads "were"
                     // without a template that can only be right for one of them.
+                    //
+                    // ⚠ WO-1434 - THIS BRANCH IS NOW THE EXCEPTION, NOT THE RULE. Both LIVE
+                    // producers (collectors, Echo silo) retain what the cap refused; a row only
+                    // reaches here from a path that genuinely discards - e.g.
+                    // OfflineHarvestService.Grant, whose ClampGrant result is banked and whose
+                    // pre-clamp accrual is dropped on the floor (latent: that path accrued
+                    // total=0 on the owner's device and did not run). Before adding a producer to
+                    // this branch, PROVE it burns; the [Flow:Bank] "LOST N" warn is the BANK
+                    // saying it refused the units, never a statement about what the caller did
+                    // with them.
                     block.Add(s.Lost == 1
                         ? $"That 1 {unit} was not added to storage - it is lost."
                         : $"Those {s.Lost} {unit} were not added to storage - they are lost.");

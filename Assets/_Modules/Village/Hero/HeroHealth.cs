@@ -873,10 +873,59 @@ namespace DeNelle.Village
             // to the home hub (MainCastle_Hall) instead of respawning in place. The
             // hub load resets the hero fresh on the far side. Player-owned scenes
             // keep the normal in-place respawn below.
-            if (DeNelle.Village.SceneOwnership.IsEnemyOwned)
+            // WO-1437 — WHICH SIGNAL ANSWERS "am I in a raid?".
+            //
+            // THE BUG THIS CLOSES, proven by capture, not inferred. This branch used to read
+            // `SceneOwnership.IsEnemyOwned` ALONE. That is a FACTION flag, and the victory path
+            // DELIBERATELY FLIPS IT: RaidClaimService turns the razed camp player-owned at the
+            // win. So the same build, the same scene and the same death produced two outcomes
+            // five minutes apart (device log logs/debug/raid-*-2026-09-06.log):
+            //
+            //   12:59:45  hero death in non-hub scene 'RaidBase_raider_camp_small'
+            //             (enemyOwned=True)  -> EVAC -> "hero death settle: partial loot for
+            //             32% razed."                                          <- ruled behaviour
+            //   13:02:42  "CLAIM - 'raider_camp_small' flipped ENEMY -> PLAYER-owned"
+            //   13:02:47  hero death in non-hub scene 'RaidBase_raider_camp_small'
+            //             (enemyOwned=False) -> fell through to the in-place respawn below
+            //   13:02:49  "HERO MOVED ... by HeroHealth.Respawn reason=in-place respawn at
+            //             spawn anchor"                                        <- THE SOFTLOCK
+            //
+            // The player stood up inside a raid that had already paid out, and kills kept
+            // scoring into it ("KILL MATERIALS SUPPRESSED (raid active)" at 13:02:55, :58 and
+            // 13:03:00) with no exit left but Retreat. Note the respawn came from THIS coroutine
+            // 4s BEFORE the end-state's "action=respawn" at 13:02:53 - the screen was narration;
+            // this branch is the mover.
+            //
+            // RaidScoring.RaidInProgress is the repo's OWN documented "THE ONE 'am I inside a
+            // raid' ANSWER" (WO-1227): the scorer's lifetime, with HubScenes.IsRaid as the
+            // fallback. It does not move when ownership flips, which is exactly the property
+            // this branch needed. Reading it here removes a SECOND answer to one question
+            // rather than adding one - the drift RaidScoring's own docs warn against.
+            //
+            // IsEnemyOwned is KEPT as an OR, not replaced: Village2 and enemy-owned dungeons
+            // are not raids and must keep evacuating exactly as they do today.
+            bool enemyOwnedScene = DeNelle.Village.SceneOwnership.IsEnemyOwned;
+            bool raidInProgress  = DeNelle.Village.RaidScoring.RaidInProgress;
+            var  raidScorer      = DeNelle.Village.RaidScoring.Instance;
+            bool raidSettled     = raidScorer != null && raidScorer.Finalized;
+
+            // A SETTLED raid always goes home (see RaidScoring.RaidDeathEndsRaid): the loot is
+            // paid, the camp is claimed and the clock is stopped, so there is nothing left to
+            // respawn INTO. An UNSETTLED raid follows the owner's ruling constant.
+            bool raidDeathExit = raidInProgress &&
+                                 (raidSettled || DeNelle.Village.RaidScoring.RaidDeathEndsRaid);
+
+            if (enemyOwnedScene || raidDeathExit)
             {
+                // Name the deciding signal: a future divergence between these two must be
+                // readable straight off a capture instead of re-derived from source.
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
-                    "HandleDeath: down-beat elapsed -> EVAC branch (enemy-owned scene, GoCastle).");
+                    "HandleDeath: down-beat elapsed -> EVAC branch (GoCastle). Signal: " +
+                    $"enemyOwned={enemyOwnedScene} raidInProgress={raidInProgress} " +
+                    $"raidSettled={raidSettled} raidDeathEndsRaid={DeNelle.Village.RaidScoring.RaidDeathEndsRaid} " +
+                    $"-> chose={(enemyOwnedScene ? "enemy-owned scene" : raidSettled ? "SETTLED raid (no session to respawn into)" : "live raid + owner ruling")}. " +
+                    "WO-1437: enemyOwned alone used to gate this, and a claimed camp flipped it " +
+                    "false mid-raid, which stranded the player inside a won raid.");
                 Debug.Log("[HeroHealth] Hero down in enemy territory — raid ends, retreating to home hub.");
 
                 // SETTLE THE ARMY (owner ruling 2026-07-30). Hero death is the THIRD raid exit,

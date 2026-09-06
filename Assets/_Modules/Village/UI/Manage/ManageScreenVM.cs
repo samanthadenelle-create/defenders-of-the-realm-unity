@@ -47,6 +47,7 @@ using DeNelle.Core.UI;
 using DeNelle.Wallet;     // WO-1282 - PackCatalog now ships in DeNelle.Commerce but KEEPS this
                           // namespace (PromoCodeService resolves it as a reflection string literal).
 using DeNelle.Commerce;   // WO-1282 - StoreFocusRequest, the rail-neutral store focus latch.
+using DeNelle.Core.Manage;// WO-2001 - the Wave 0/1 Manage state + presentation contract this VM composes.
 using UnityEngine;
 using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
@@ -579,6 +580,8 @@ namespace DeNelle.Village.UI
                 DefenseChoices.Clear();
                 ResearchChoices.Clear();
                 TroopArmySummaryText = null;
+                _inventoryTiles = null;   // WO-2001 - the per-rebuild BUILD inventory cache
+                _inventoryChip = null;
 
                 BuildVisibleTabs();
                 if (VisibleTabs.Count > 0 && !VisibleTabs.Contains(Tab))
@@ -2826,5 +2829,1376 @@ namespace DeNelle.Village.UI
             }
             return sb.ToString();
         }
+
+        // =====================================================================
+        //  WO-2001 - THE MANAGE INFORMATION ARCHITECTURE
+        // ---------------------------------------------------------------------
+        //  Three tabs (BUILD / ARMY / RESEARCH), a SCREEN GRAPH, and a back stack
+        //  that remembers WHY the player is on a screen, not only where.
+        //
+        //  ⛔ THE OWNER'S OWN FLOW MOCKUP IS THE LAYOUT AUTHORITY: the grid and the
+        //  selected-item detail are SEPARATE SCREENS and never share one. That is not
+        //  a taste call, it is arithmetic - stacking a 12-tile grid AND a selection
+        //  card needs ~1454 reference px against the three MEASURED Manage wells of
+        //  533 / 542 / 612px (ManageWorkspacePanel.cs header, WO-2002's hand-back).
+        //  So a GRID screen composes tiles with Selection.Visible=false, and a DETAIL
+        //  screen composes an EMPTY tile list with a visible selection card.
+        //
+        //  ⛔ THE VIEW DECIDES NOTHING HERE. Canon 9 forbids the View computing costs,
+        //  locks, affordability, destinations or queue capacity; this file does all of
+        //  it and hands ManageWorkspacePanel finished records. Every route is bound
+        //  INTO a callback by ManageVmProjection, so the renderer never sees a
+        //  ManageRoute at all.
+        //
+        //  ⛔ NOTHING IS RE-DERIVED. The tiles are composed from the choice VMs this
+        //  class already builds (BuildingChoices / DefenseChoices / TroopChoices /
+        //  ResearchChoices) plus BuildInventoryModel for the authoritative BUILD
+        //  inventory. A second lock/cost/queue derivation is the duplicated state
+        //  CLAUDE.md 2 / 5 / 16 keeps paying for.
+        // =====================================================================
+
+        /// <summary>PlayerPrefs key for the last-used tab (WO-2001 "Entry": open it again).</summary>
+        public const string LastTabPrefKey = "manage.lasttab";
+
+        /// <summary>Host command: open the global QUEUE overlay (ruling 17). Set by the panel.</summary>
+        public Action OpenQueueRequested;
+        /// <summary>Host command: open the Heart progression surface (ruling 10 / route HeartCard).</summary>
+        public Action OpenHeartRequested;
+        /// <summary>Host command: leave Manage entirely (back from a root grid).</summary>
+        public Action CloseRequested;
+        /// <summary>Host command: enter Town build mode (the door for a structure that is not placed yet).</summary>
+        public Action OpenTownBuilderRequested;
+
+        private ManageNavEntry _nav;
+        private string _activeFilter = BuildFilter.All;
+        private readonly List<ManageTabId> _availableTabs = new List<ManageTabId>(3);
+
+        /// <summary>Depth cap on the jump chain. A cycle in the graph would otherwise grow it forever.</summary>
+        private const int MaxOriginDepth = 8;
+
+        /// <summary>The screen the player is on. Never null once <see cref="OpenDefaultScreen"/> has run.</summary>
+        public ManageNavEntry Nav => _nav;
+
+        /// <summary>The BUILD filter chip in force. One of <see cref="BuildFilter.Chips"/>.</summary>
+        public string ActiveFilter => _activeFilter;
+
+        /// <summary>The tabs this build actually offers, model-decided (WO-2001 "available tabs").</summary>
+        public IReadOnlyList<ManageTabId> AvailableTabIds => _availableTabs;
+
+        // ── tab identity crossing ────────────────────────────────────────────
+
+        /// <summary>
+        /// The ONE place the redesign's three tabs cross the four legacy content tabs.
+        /// Ruling 4: Defense and Buildings MERGE into BUILD because they share the Builder
+        /// queue - which is exactly what <see cref="ChannelOf"/> already says, so the merge
+        /// costs the queue model nothing.
+        /// </summary>
+        public static ManageTab LegacyTabOf(ManageTabId id)
+        {
+            switch (id)
+            {
+                case ManageTabId.Army: return ManageTab.Troops;
+                case ManageTabId.Research: return ManageTab.Research;
+                default: return ManageTab.Buildings;   // BUILD == Buildings + Defense, one Builder line
+            }
+        }
+
+        /// <summary>ASCII tab words. Supplied so the View never derives a label from an enum name.</summary>
+        public static string TabWordOf(ManageTabId id)
+        {
+            switch (id)
+            {
+                case ManageTabId.Army: return "ARMY";
+                case ManageTabId.Research: return "RESEARCH";
+                default: return "BUILD";
+            }
+        }
+
+        /// <summary>
+        /// Which of the three tabs this build offers. BUILD is unconditional (the town always has
+        /// structures); ARMY and RESEARCH follow <see cref="VisibleTabs"/>, which is derived from
+        /// live placements (<c>CountPlacedThisTown</c>).
+        ///
+        /// <para>⚠ ARMY is gated rather than shown-and-empty for a MECHANICAL reason, not a design
+        /// one: <see cref="Rebuild"/> snaps <see cref="Tab"/> back to <c>VisibleTabs[0]</c> whenever
+        /// the selected tab is not visible, so an un-gated ARMY tab would silently render BUILD
+        /// content under an ARMY heading. Un-gating it needs that snap-back to move first.</para>
+        /// </summary>
+        private void RefreshAvailableTabs()
+        {
+            _availableTabs.Clear();
+            _availableTabs.Add(ManageTabId.Build);
+            if (VisibleTabs.Contains(ManageTab.Troops) && BarracksUnlock.IsUnlocked)
+                _availableTabs.Add(ManageTabId.Army);
+            if (VisibleTabs.Contains(ManageTab.Research))
+                _availableTabs.Add(ManageTabId.Research);
+        }
+
+        // ── entry ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// WO-2001 "Entry": open the last-used tab when it is still available, otherwise BUILD.
+        /// "Do not persist a stale tab that is no longer available because of feature gating" -
+        /// hence the membership test against <see cref="AvailableTabIds"/>, not a blind read.
+        /// The four-tile launcher is superseded; there is no chooser to land on.
+        /// </summary>
+        public void OpenDefaultScreen()
+        {
+            RefreshAvailableTabs();
+            ManageTabId want = ManageTabId.Build;
+            int stored = PlayerPrefs.GetInt(LastTabPrefKey, (int)ManageTabId.Build);
+            if (stored >= 0 && stored <= (int)ManageTabId.Research)
+            {
+                var candidate = (ManageTabId)stored;
+                if (_availableTabs.Contains(candidate)) want = candidate;
+                else FlowTrace.Step("Manage", "last-used tab " + candidate + " is not available in this " +
+                    "build (gating) - opening BUILD instead rather than persisting a stale tab");
+            }
+            EnterTab(want);
+        }
+
+        /// <summary>Switch tabs. Tabs are siblings: one tap from each other, and the stack resets.</summary>
+        public void EnterTab(ManageTabId id)
+        {
+            RefreshAvailableTabs();
+            if (!_availableTabs.Contains(id))
+            {
+                FlowTrace.Warn("Manage", "tab " + id + " was requested but is not available - staying on " +
+                    (_nav != null ? _nav.Tab.ToString() : "BUILD"));
+                return;
+            }
+            _activeFilter = BuildFilter.All;
+            _nav = new ManageNavEntry { Kind = ManageScreenKind.Grid, Tab = id, Filter = _activeFilter };
+            PlayerPrefs.SetInt(LastTabPrefKey, (int)id);
+            FlowTrace.Step("Navigation", "Manage -> " + TabWordOf(id) + " grid");
+            SelectTabForId(id);
+        }
+
+        /// <summary>
+        /// Point the legacy model at the tab that owns this id's content and rebuild.
+        /// <see cref="SelectTab"/> early-returns when the tab has not changed, so a same-tab
+        /// re-entry still needs an explicit rebuild to raise <see cref="Changed"/> for the View.
+        /// </summary>
+        private void SelectTabForId(ManageTabId id)
+        {
+            ManageTab legacy = LegacyTabOf(id);
+            if (Tab == legacy) Rebuild();
+            else SelectTab(legacy);
+        }
+
+        /// <summary>Change the BUILD filter chip. Membership lives in the data; this only selects.</summary>
+        public void SetFilter(string chip)
+        {
+            if (!BuildFilter.IsChip(chip))
+            {
+                FlowTrace.Warn("Manage", "filter '" + chip + "' is not one of BuildFilter.Chips - ignored");
+                return;
+            }
+            if (string.Equals(_activeFilter, chip, StringComparison.OrdinalIgnoreCase)) return;
+            _activeFilter = chip;
+            if (_nav != null) _nav.Filter = chip;
+            FlowTrace.Step("Manage", "BUILD filter -> " + chip);
+            Changed?.Invoke();
+        }
+
+        // ── the screen graph ─────────────────────────────────────────────────
+
+        private void GoTo(ManageNavEntry entry)
+        {
+            if (entry == null) { CloseRequested?.Invoke(); return; }
+            _nav = entry;
+            if (!string.IsNullOrEmpty(entry.Filter)) _activeFilter = entry.Filter;
+            PlayerPrefs.SetInt(LastTabPrefKey, (int)entry.Tab);
+            SelectTabForId(entry.Tab);
+        }
+
+        /// <summary>
+        /// A snapshot of the current screen, used as a jump's ORIGIN (ruling 28).
+        ///
+        /// <para>⚠ The chain is PRESERVED, not flattened. Ruling 28 asks that a nested jump
+        /// "unwind ONE hop"; keeping each entry's own origin makes every single BACK press
+        /// exactly one hop, all the way down, instead of teleporting the player two branches
+        /// away on the second press. Depth is capped at <see cref="MaxOriginDepth"/> so a cycle
+        /// cannot grow the chain forever.</para>
+        /// </summary>
+        private ManageNavEntry SnapshotForOrigin()
+        {
+            if (_nav == null) return null;
+            var copy = new ManageNavEntry
+            {
+                Kind = _nav.Kind,
+                Tab = _nav.Tab,
+                ItemId = _nav.ItemId,
+                SchoolId = _nav.SchoolId,
+                Filter = _nav.Filter,
+                Origin = _nav.Origin
+            };
+            int depth = 0;
+            for (var walk = copy; walk != null; walk = walk.Origin)
+            {
+                if (++depth < MaxOriginDepth) continue;
+                walk.Origin = null;   // truncate rather than recurse forever
+                break;
+            }
+            return copy;
+        }
+
+        /// <summary>Open one item's DETAIL screen. <paramref name="origin"/> non-null means a JUMP.</summary>
+        public void OpenDetail(ManageTabId tab, string itemId, string schoolId, ManageNavEntry origin)
+        {
+            GoTo(new ManageNavEntry
+            {
+                Kind = ManageScreenKind.Detail,
+                Tab = tab,
+                ItemId = itemId,
+                SchoolId = schoolId,
+                Filter = tab == ManageTabId.Build ? _activeFilter : null,
+                Origin = origin
+            });
+        }
+
+        /// <summary>Open one research school's perk list (canon 5: school first, then its perks).</summary>
+        public void OpenSchool(string buildingId, ManageNavEntry origin)
+        {
+            GoTo(new ManageNavEntry
+            {
+                Kind = ManageScreenKind.ResearchPerks,
+                Tab = ManageTabId.Research,
+                SchoolId = buildingId,
+                Origin = origin
+            });
+        }
+
+        /// <summary>
+        /// BACK, one hop. Owner ruling 28: back from a screen entered BY A JUMP returns to the
+        /// screen that SENT the player there; back from the same screen reached by BROWSING walks
+        /// the tree. That is why <see cref="ManageNavEntry.Origin"/> exists at all - a plain screen
+        /// history returns to the grid, because that is literally where the player came from.
+        ///
+        /// <para>Tree parents: Detail -> its grid (or its school's perk list), ResearchPerks -> the
+        /// RESEARCH school grid, Grid -> out of Manage. Back never routes through the retired
+        /// four-tile launcher, because there is no longer one to route through.</para>
+        /// </summary>
+        public void Back()
+        {
+            if (_nav == null) { CloseRequested?.Invoke(); return; }
+
+            if (_nav.Origin != null)
+            {
+                FlowTrace.Step("Navigation", "Manage BACK -> jump origin (" + _nav.Origin.Kind + " " +
+                    TabWordOf(_nav.Origin.Tab) + " '" + (_nav.Origin.ItemId ?? _nav.Origin.SchoolId ?? "-") +
+                    "') - ruling 28, the back stack remembers WHY");
+                GoTo(_nav.Origin);
+                return;
+            }
+
+            switch (_nav.Kind)
+            {
+                case ManageScreenKind.Detail:
+                    if (_nav.Tab == ManageTabId.Research && !string.IsNullOrEmpty(_nav.SchoolId))
+                        OpenSchool(_nav.SchoolId, null);
+                    else
+                        GoTo(new ManageNavEntry
+                        {
+                            Kind = ManageScreenKind.Grid, Tab = _nav.Tab, Filter = _activeFilter
+                        });
+                    return;
+                case ManageScreenKind.ResearchPerks:
+                    GoTo(new ManageNavEntry { Kind = ManageScreenKind.Grid, Tab = ManageTabId.Research });
+                    return;
+                default:
+                    FlowTrace.Step("Navigation", "Manage BACK from a root grid -> close");
+                    CloseRequested?.Invoke();
+                    return;
+            }
+        }
+
+        /// <summary>
+        /// The composer's route handler (ruling 18: every blocker names a door that opens).
+        /// A screen entered through here carries the screen that SENT the player as its ORIGIN,
+        /// which is what makes the jump a round trip (ruling 28).
+        /// </summary>
+        private void Navigate(ManageRoute route)
+        {
+            var origin = SnapshotForOrigin();
+            switch (route.Kind)
+            {
+                case ManageRouteKind.BuildCard:
+                    _activeFilter = BuildFilter.All;   // the target may not live in the current chip
+                    OpenDetail(ManageTabId.Build, route.TargetId, null, origin);
+                    return;
+                case ManageRouteKind.BuildTab:
+                    GoTo(new ManageNavEntry
+                    {
+                        Kind = ManageScreenKind.Grid, Tab = ManageTabId.Build,
+                        Filter = BuildFilter.All, Origin = origin
+                    });
+                    return;
+                case ManageRouteKind.ArmyTab:
+                    GoTo(new ManageNavEntry
+                    {
+                        Kind = ManageScreenKind.Grid, Tab = ManageTabId.Army, Origin = origin
+                    });
+                    return;
+                case ManageRouteKind.ResearchTab:
+                    if (!string.IsNullOrEmpty(route.TargetId)) OpenSchool(route.TargetId, origin);
+                    else GoTo(new ManageNavEntry
+                    {
+                        Kind = ManageScreenKind.Grid, Tab = ManageTabId.Research, Origin = origin
+                    });
+                    return;
+                case ManageRouteKind.HeartCard:
+                    // The Heart is its own panel, OUTSIDE the Manage screen graph, so there is no
+                    // Manage screen to push. Its own Close returns the player here.
+                    OpenHeartRequested?.Invoke();
+                    return;
+                case ManageRouteKind.Queue:
+                    // The Queue is an OVERLAY over whatever screen the player is on (the owner's
+                    // flow: "reachable from every screen's header"), so it never pushes either.
+                    OpenQueueRequested?.Invoke();
+                    return;
+                default:
+                    FlowTrace.Warn("Manage", "a CTA routed to ManageRouteKind.None - ruling 18 says every " +
+                        "blocker names a destination that opens; nothing happened");
+                    return;
+            }
+        }
+
+        // ── the workspace VM ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// Compose the whole workspace for <see cref="ManageWorkspacePanel"/>. Called by the View
+        /// on every <see cref="Changed"/>; it reads live model state and returns finished records.
+        /// </summary>
+        public ManageWorkspaceVM ComposeWorkspace()
+        {
+            RefreshAvailableTabs();
+
+            // ⛔ COMPOSE NEVER WRITES NAV STATE. This is a PROJECTION - it runs on every Changed,
+            // and a projection that assigns _nav could clobber a legitimate Detail screen the
+            // moment a Render fires between a navigation and its rebuild. EnterTab / OpenDetail /
+            // OpenSchool / Back / GoTo are the ONLY writers. A screen that cannot be painted is
+            // REPORTED and rendered as an explicit empty state, never silently redirected.
+            ManageNavEntry nav = _nav;
+            bool navPaintable = nav != null && _availableTabs.Contains(nav.Tab);
+            if (nav != null && !navPaintable)
+                FlowTrace.Warn("Manage", "the current screen sits on tab " + nav.Tab + ", which this build " +
+                    "no longer offers - the workspace paints an empty state and says so rather than " +
+                    "silently redirecting the player");
+            else if (nav == null)
+                FlowTrace.Warn("Manage", "ComposeWorkspace ran before any screen was entered - painting the " +
+                    "empty state. OpenDefaultScreen is what chooses the opening tab (WO-2001 Entry)");
+
+            var tabs = new List<ManageTabVM>(_availableTabs.Count);
+            int activeIndex = 0;
+            for (int i = 0; i < _availableTabs.Count; i++)
+            {
+                ManageTabId id = _availableTabs[i];
+                bool isActive = navPaintable && id == nav.Tab;
+                if (isActive) activeIndex = i;
+                ManageTabId captured = id;
+                var tab = new ManageTabVM
+                {
+                    Id = id,
+                    Label = TabWordOf(id),
+                    IsActive = isActive,
+                    Activate = () => EnterTab(captured),
+                    GridColumns = id == ManageTabId.Build ? 4 : 3
+                };
+                if (isActive) FillActiveTab(tab, nav);
+                tabs.Add(tab);
+            }
+
+            // The explicit empty state (see the projection note above). The renderer paints
+            // Tabs[ActiveTabIndex] whatever IsActive says, so the seat that WILL be painted is the
+            // one that carries the sentence - a blank screen with no words is the failure this
+            // whole program exists to remove (canon 11 question 6).
+            if (!navPaintable && tabs.Count > 0)
+            {
+                tabs[0].Tiles = Array.Empty<ManageTileVM>();
+                tabs[0].EmptyText = "Pick a tab above to start.";
+                tabs[0].Selection = new ManageSelectionVM
+                {
+                    Visible = false,
+                    EmptyText = "Pick a tab above to start."
+                };
+                tabs[0].Activity = new ManageActivityVM { Visible = false };
+            }
+
+            return new ManageWorkspaceVM
+            {
+                HeaderTitle = HeaderTitle(navPaintable ? nav : null),
+                HeaderSubtitle = HeaderSubtitle(navPaintable ? nav : null),
+                Tabs = tabs,
+                ActiveTabIndex = activeIndex,
+                Queue = ComposeQueueDoor()
+            };
+        }
+
+        private static string HeaderTitle(ManageNavEntry nav)
+        {
+            if (nav == null) return "MANAGE";
+            if (nav.Kind == ManageScreenKind.Detail) return "MANAGE / " + TabWordOf(nav.Tab) + " / DETAIL";
+            if (nav.Kind == ManageScreenKind.ResearchPerks) return "MANAGE / RESEARCH / SCHOOL";
+            return "MANAGE / " + TabWordOf(nav.Tab);
+        }
+
+        private string HeaderSubtitle(ManageNavEntry nav)
+        {
+            if (nav == null) return "";
+            switch (nav.Kind)
+            {
+                case ManageScreenKind.Detail: return "Back returns to where you came from.";
+                case ManageScreenKind.ResearchPerks: return "Pick a perk to see what it does.";
+                default:
+                    if (nav.Tab == ManageTabId.Build) return "Filter: " + _activeFilter;
+                    if (nav.Tab == ManageTabId.Army) return "Every troop, unlocked or not.";
+                    return "Pick a school, then a perk.";
+            }
+        }
+
+        private ManageQueueVM ComposeQueueDoor()
+        {
+            ChannelId channel = ChannelOf(Tab);
+            int depth = 0, cap = 0, busy = 0;
+            for (int i = 0; i < Channels.Count; i++)
+            {
+                if (Channels[i].Channel != channel) continue;
+                depth = Channels[i].Depth;
+                cap = Channels[i].DepthCap;
+                busy = Channels[i].Busy;
+                break;
+            }
+            return new ManageQueueVM
+            {
+                Visible = true,
+                Label = "QUEUE",
+                CountText = busy > 0 ? busy + " RUNNING" : "IDLE",
+                CapacityText = cap > 0 ? depth + " OF " + cap : null,
+                AtCapacity = cap > 0 && depth >= cap,
+                Open = () => OpenQueueRequested?.Invoke()
+            };
+        }
+
+        private ManageActivityVM ComposeActivity()
+        {
+            ChannelId channel = ChannelOf(Tab);
+            int queued = 0;
+            QueueRowVM running = null;
+            for (int i = 0; i < QueueRows.Count; i++)
+            {
+                var r = QueueRows[i];
+                if (r == null || r.IsStackChild) continue;
+                if (r.Queued) { queued += Mathf.Max(1, r.StackCount); continue; }
+                if (running == null) running = r;
+            }
+            if (running == null)
+                return new ManageActivityVM { Visible = false };
+            return new ManageActivityVM
+            {
+                Visible = true,
+                IconKey = null,
+                Title = Ascii(running.Label ?? ""),
+                TimerText = Ascii(running.StateText ?? ""),
+                QueuedCountText = queued > 0 ? queued + " QUEUED" : null,
+                OpenQueue = () => OpenQueueRequested?.Invoke()
+            };
+        }
+
+        /// <summary>
+        /// Fill the ACTIVE tab. Grid screens carry tiles and an invisible selection; detail screens
+        /// carry a visible selection and NO tiles - the owner's flow mockup keeps them apart, and
+        /// the band arithmetic makes that the only shape that fits (see this region's header).
+        /// </summary>
+        private void FillActiveTab(ManageTabVM tab, ManageNavEntry nav)
+        {
+            tab.Activity = ComposeActivity();
+
+            if (nav.Kind == ManageScreenKind.Detail)
+            {
+                tab.Tiles = Array.Empty<ManageTileVM>();
+                tab.EmptyText = null;
+                tab.Selection = ComposeDetail(nav);
+                return;
+            }
+
+            switch (nav.Tab)
+            {
+                case ManageTabId.Army:
+                    tab.Tiles = ComposeArmyTiles();
+                    tab.EmptyText = "No troops are authored for this barracks yet.";
+                    break;
+                case ManageTabId.Research:
+                    if (nav.Kind == ManageScreenKind.ResearchPerks)
+                    {
+                        tab.Tiles = ComposeResearchPerkTiles(nav.SchoolId);
+                        tab.EmptyText = "This school authors no perks yet.";
+                    }
+                    else
+                    {
+                        tab.Tiles = ComposeResearchSchoolTiles();
+                        tab.EmptyText = "Build a research structure to open a school.";
+                    }
+                    break;
+                default:
+                    tab.Filters = ComposeFilters();
+                    tab.Tiles = ComposeBuildTiles();
+                    tab.EmptyText = "Nothing in this filter yet.";
+                    break;
+            }
+
+            tab.Selection = new ManageSelectionVM
+            {
+                Visible = false,
+                EmptyText = "Pick one to see what it does, what it costs and what you can do."
+            };
+        }
+
+        private List<ManageFilterVM> ComposeFilters()
+        {
+            var chips = BuildFilter.Chips;   // the ONE ordering authority - never re-listed here
+            var list = new List<ManageFilterVM>(chips.Length);
+            for (int i = 0; i < chips.Length; i++)
+            {
+                string chip = chips[i];
+                list.Add(new ManageFilterVM
+                {
+                    Id = chip,
+                    Label = chip,
+                    IsActive = string.Equals(chip, _activeFilter, StringComparison.OrdinalIgnoreCase),
+                    Activate = () => SetFilter(chip)
+                });
+            }
+            return list;
+        }
+
+        // ── BUILD ────────────────────────────────────────────────────────────
+
+        private BuildingChoiceVM BuildingChoiceFor(string catalogEntryId, string ladderId)
+        {
+            for (int i = 0; i < BuildingChoices.Count; i++)
+            {
+                var c = BuildingChoices[i];
+                if (c == null) continue;
+                if (!string.IsNullOrEmpty(catalogEntryId) &&
+                    string.Equals(c.CatalogEntryId, catalogEntryId, StringComparison.OrdinalIgnoreCase)) return c;
+                if (!string.IsNullOrEmpty(ladderId) &&
+                    string.Equals(c.Id, ladderId, StringComparison.OrdinalIgnoreCase)) return c;
+            }
+            return null;
+        }
+
+        private DefenseChoiceVM DefenseChoiceFor(string catalogEntryId)
+        {
+            if (string.IsNullOrEmpty(catalogEntryId)) return null;
+            for (int i = 0; i < DefenseChoices.Count; i++)
+            {
+                var c = DefenseChoices[i];
+                if (c == null) continue;
+                if (string.Equals(c.CatalogEntryId, catalogEntryId, StringComparison.OrdinalIgnoreCase)) return c;
+                if (string.Equals(c.Id, catalogEntryId, StringComparison.OrdinalIgnoreCase)) return c;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The BUILD grid. The AUTHORITATIVE inventory comes from
+        /// <see cref="DeNelle.Village.BuildInventoryModel"/> (canon 3: "the model must expose the
+        /// authoritative live list", ruling 20: reconcile before locking any numeric test), and the
+        /// live per-structure state is joined on from the choice VMs this class already builds.
+        /// A row with no matching choice is authored and offered but NOT PLACED - it gets a real
+        /// BUILD door rather than a padlock with nowhere to go (ruling 18).
+        /// </summary>
+        /// <summary>
+        /// The reconciled BUILD inventory for THIS rebuild and THIS chip.
+        /// <see cref="DeNelle.Village.BuildInventoryModel.Rows"/> says in its own header that it is
+        /// "Rebuilt on every call" - it walks the whole catalog and reconciles every entry - and a
+        /// Manage rebuild fires on every BuildTimerService.QueueChanged, so an uncached read would
+        /// reconcile the catalog several times a minute while the screen is open. Cleared by
+        /// <see cref="Rebuild"/>, which is the only thing that can invalidate it: the inputs it reads
+        /// (catalog + unlock flags + collections) cannot change without one.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ THE FILTER RULE IS NOT RE-IMPLEMENTED HERE. The cache holds what
+        /// <see cref="DeNelle.Village.BuildInventoryModel.Tiles"/> returned for the chip in force -
+        /// that method stays the ONE authority on membership and on which rows are live content.
+        /// Re-deriving the membership test beside it, to make the cache chip-independent, would be
+        /// the duplicated state CLAUDE.md 2 / 5 / 16 records three times over.
+        /// </remarks>
+        private List<BuildInventoryRow> _inventoryTiles;
+        private string _inventoryChip;
+
+        private List<BuildInventoryRow> InventoryTiles()
+        {
+            if (_inventoryTiles != null &&
+                string.Equals(_inventoryChip, _activeFilter, StringComparison.OrdinalIgnoreCase))
+                return _inventoryTiles;
+            _inventoryTiles = BuildInventoryModel.Tiles(_activeFilter);
+            _inventoryChip = _activeFilter;
+            return _inventoryTiles;
+        }
+
+        private List<ManageTileVM> ComposeBuildTiles()
+        {
+            var rows = InventoryTiles();
+            var tiles = new List<ManageTileVM>(rows.Count);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var row = rows[i];
+                if (row == null) continue;
+                var item = ComposeBuildItem(row);
+                if (item == null) continue;
+                string id = item.ItemId;
+                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                    () => OpenDetail(ManageTabId.Build, id, null, null)));
+            }
+            return tiles;
+        }
+
+        private ManageItemState ComposeBuildItem(BuildInventoryRow row)
+        {
+            var building = BuildingChoiceFor(row.Id, row.TierLadderId);
+            if (building != null) return ComposeBuildingItem(building, row);
+            var defense = DefenseChoiceFor(row.Id);
+            if (defense != null) return ComposeDefenseItem(defense, row);
+            return ComposeUnplacedItem(row);
+        }
+
+        /// <summary>Authored, offered, not on the map yet. Owned=NotUnlocked with a door that opens.</summary>
+        private ManageItemState ComposeUnplacedItem(BuildInventoryRow row)
+        {
+            var item = new ManageItemState
+            {
+                ItemId = row.Id,
+                DisplayName = Ascii(string.IsNullOrEmpty(row.DisplayName) ? row.Id : row.DisplayName),
+                IconId = row.ArtKey,
+                Ownership = ManageOwnership.NotUnlocked,
+                UpgradeTrack = ManageUpgradeTrack.NotApplicable,
+                Level = 0,
+                MaxLevel = 0,
+                // ⚠ DELIBERATELY *NOT* ManageTileBadge.Locked, and this is an owner question flagged
+                // in the hand-back rather than a silent call. Ruling 15 forbids labelling an OWNED
+                // item locked; this row is not owned, so the letter of it does not apply - but its
+                // reasoning does. ManageArt.StatusFor(Locked) paints a PADLOCK, which says "you
+                // cannot have this", while the truth is "tap BUILD". Idle paints the Available
+                // medallion and the WORD carries the difference, which is the colourblind-safe
+                // channel this project uses everywhere else.
+                Badge = ManageTileBadge.Idle,
+                BadgeText = "NOT BUILT",
+                LockReason = "Not built yet - place one in Town."
+            };
+            item.Add(new ManageAction
+            {
+                Kind = ManageActionKind.Build,
+                Availability = ManageActionAvailability.Available,
+                Cta = "BUILD",
+                CostLine = null,
+                IsPrimary = true,
+                Invoke = () => OpenTownBuilderRequested?.Invoke()
+            });
+            return item;
+        }
+
+        private ManageItemState ComposeBuildingItem(BuildingChoiceVM c, BuildInventoryRow row)
+        {
+            bool atMax = string.Equals(c.StateWord, "Max", StringComparison.OrdinalIgnoreCase)
+                         || (c.MaxLevel > 0 && c.Level >= c.MaxLevel);
+            var item = new ManageItemState
+            {
+                ItemId = c.Id,
+                DisplayName = Ascii(c.Name),
+                IconId = c.IconKey,
+                Ownership = ManageOwnership.Owned,
+                Level = c.Level,
+                MaxLevel = c.MaxLevel,
+                UpgradeTrack = c.MaxLevel > 1
+                    ? (atMax ? ManageUpgradeTrack.Max : ManageUpgradeTrack.Upgradable)
+                    : ManageUpgradeTrack.NotApplicable,
+                NextRungLine = Ascii(c.AfterUpgradeText)
+            };
+            if (item.UpgradeTrack == ManageUpgradeTrack.NotApplicable) item.MaxLevel = 0;
+
+            string costLine = CostFormat.Words(c.UpgradeCostParts);
+            bool running = string.Equals(c.StateWord, "Building", StringComparison.OrdinalIgnoreCase);
+            item.Add(ComposeUpgradeAction(
+                atMax: atMax,
+                running: running,
+                jobChannel: ChannelId.Builder,
+                jobId: c.Id,
+                locked: c.Locked,
+                lockReason: string.IsNullOrEmpty(c.LockReason)
+                    ? "This upgrade needs a higher Heart Level."
+                    : Ascii(c.LockReason),
+                lockCta: string.IsNullOrEmpty(c.LockCtaLabel) ? "VIEW HEART" : Ascii(c.LockCtaLabel),
+                ready: c.UpgradeReady,
+                costLine: costLine,
+                invoke: c.Activate));
+
+            ApplyBuildBadge(item, atMax, running, c.Locked, c.UpgradeReady);
+            return item;
+        }
+
+        private ManageItemState ComposeDefenseItem(DefenseChoiceVM c, BuildInventoryRow row)
+        {
+            bool atMax = string.Equals(c.StateWord, "Max", StringComparison.OrdinalIgnoreCase)
+                         || (c.MaxLevel > 0 && c.Level >= c.MaxLevel);
+            var item = new ManageItemState
+            {
+                ItemId = c.Id,
+                DisplayName = Ascii(c.Name),
+                IconId = c.PortraitKey,
+                Ownership = ManageOwnership.Owned,
+                Level = c.Level,
+                MaxLevel = c.MaxLevel,
+                UpgradeTrack = c.MaxLevel > 1
+                    ? (atMax ? ManageUpgradeTrack.Max : ManageUpgradeTrack.Upgradable)
+                    : ManageUpgradeTrack.NotApplicable,
+                NextRungLine = Ascii(c.AfterUpgradeText)
+            };
+            if (item.UpgradeTrack == ManageUpgradeTrack.NotApplicable) item.MaxLevel = 0;
+
+            bool running = string.Equals(c.StateWord, "Building", StringComparison.OrdinalIgnoreCase);
+            item.Add(ComposeUpgradeAction(
+                atMax: atMax,
+                running: running,
+                jobChannel: ChannelId.Builder,
+                jobId: c.JobKey,
+                locked: false,           // ruling 3.5: a placed defence carries no Heart gate today
+                lockReason: null,
+                lockCta: null,
+                ready: c.UpgradeReady,
+                costLine: CostFormat.Words(c.UpgradeCostParts),
+                invoke: c.Activate));
+
+            ApplyBuildBadge(item, atMax, running, false, c.UpgradeReady);
+            return item;
+        }
+
+        /// <summary>
+        /// ONE upgrade-action composer for both BUILD families. The precedence is deliberate and it
+        /// is the model's call, never the View's: MAX, then RUNNING, then the PREREQUISITE gate,
+        /// then the QUEUE, then affordability.
+        /// </summary>
+        private ManageAction ComposeUpgradeAction(bool atMax, bool running, ChannelId jobChannel,
+            string jobId, bool locked, string lockReason, string lockCta, bool ready,
+            string costLine, Action invoke)
+        {
+            if (atMax)
+                return ManageAction.NotApplicable(ManageActionKind.Upgrade);
+
+            if (running)
+            {
+                LiveJob(jobChannel, jobId, out float progress, out float remaining);
+                return new ManageAction
+                {
+                    Kind = ManageActionKind.Upgrade,
+                    Availability = ManageActionAvailability.InProgress,
+                    Cta = "UPGRADING",
+                    Progress01 = progress,
+                    RemainingSeconds = remaining,
+                    IsPrimary = true
+                };
+            }
+
+            if (locked)
+                return new ManageAction
+                {
+                    Kind = ManageActionKind.Upgrade,
+                    Availability = ManageActionAvailability.PrerequisiteBlocked,
+                    Cta = "UPGRADE",
+                    BlockerReason = lockReason,
+                    Route = ManageRoute.ToHeart(lockCta),
+                    CostLine = costLine,
+                    IsPrimary = true
+                };
+
+            if (LineIsFull(jobChannel))
+                return new ManageAction
+                {
+                    Kind = ManageActionKind.Upgrade,
+                    Availability = ManageActionAvailability.QueueBlocked,
+                    Cta = "UPGRADE",
+                    BlockerReason = "The " + BuildTimerService.ChannelWord(jobChannel) + " line is full.",
+                    Route = ManageRoute.ToQueue(),
+                    CostLine = costLine,
+                    IsPrimary = true
+                };
+
+            if (!ready)
+                return new ManageAction
+                {
+                    Kind = ManageActionKind.Upgrade,
+                    Availability = ManageActionAvailability.Unaffordable,
+                    Cta = "UPGRADE",
+                    BlockerReason = string.IsNullOrEmpty(costLine)
+                        ? "You cannot pay for this upgrade yet."
+                        : "Needs " + costLine + ".",
+                    CostLine = costLine,
+                    IsPrimary = true
+                };
+
+            return new ManageAction
+            {
+                Kind = ManageActionKind.Upgrade,
+                Availability = ManageActionAvailability.Available,
+                Cta = "UPGRADE",
+                CostLine = costLine,
+                IsPrimary = true,
+                Invoke = invoke
+            };
+        }
+
+        /// <summary>
+        /// Canon 8: every tile carries one actionable indicator, chosen by the MODEL.
+        /// ⛔ Ruling 15: an OWNED structure whose next rung is Heart-gated is NEVER badged Locked -
+        /// the item is built and operating; it is the upgrade ACTION that is blocked, and the
+        /// action already carries the sentence and the door.
+        /// </summary>
+        private static void ApplyBuildBadge(ManageItemState item, bool atMax, bool running,
+            bool locked, bool ready)
+        {
+            if (atMax) { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; return; }
+            if (running) { item.Badge = ManageTileBadge.Upgrading; item.BadgeText = "UPGRADING"; return; }
+            if (locked) { item.Badge = ManageTileBadge.Idle; item.BadgeText = "HEART GATED"; return; }
+            if (LineIsFull(ChannelId.Builder))
+            { item.Badge = ManageTileBadge.QueueBlocked; item.BadgeText = "QUEUE FULL"; return; }
+            item.Badge = ready ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.UpgradeUnaffordable;
+            item.BadgeText = ready ? "READY" : "SHORT";
+        }
+
+        // ── ARMY ─────────────────────────────────────────────────────────────
+
+        private List<ManageTileVM> ComposeArmyTiles()
+        {
+            var tiles = new List<ManageTileVM>(TroopChoices.Count);
+            for (int i = 0; i < TroopChoices.Count; i++)
+            {
+                var c = TroopChoices[i];
+                if (c == null) continue;
+                var item = ComposeTroopItem(c);
+                string id = c.Id;
+                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                    () => OpenDetail(ManageTabId.Army, id, null, null)));
+            }
+            return tiles;
+        }
+
+        private ManageItemState ComposeTroopItem(TroopChoiceVM c)
+        {
+            bool atMax = !c.HasNextLevel;
+            var item = new ManageItemState
+            {
+                ItemId = c.Id,
+                DisplayName = Ascii(c.Name),
+                // RpgUiCatalog serves troop art from Resources/RpgUi/troop/<iconId>; the contract
+                // addresses every visual as a RESOURCES KEY, so the folder is named here once.
+                IconId = string.IsNullOrEmpty(c.IconId) ? null : "RpgUi/troop/" + c.IconId,
+                Ownership = c.Unlocked ? ManageOwnership.Owned : ManageOwnership.NotUnlocked,
+                Level = c.Level,
+                MaxLevel = 0,
+                UpgradeTrack = atMax ? ManageUpgradeTrack.Max : ManageUpgradeTrack.Upgradable,
+                NextRungLine = Ascii(c.NextUnlockText)
+            };
+            // MaxLevel is deliberately left at 0: TroopChoiceVM authors no ceiling, and asserting
+            // one here would be a second reading of a ladder this VM does not own (ruling 13's
+            // [track-mismatch] invariant is exactly that trap).
+
+            if (!c.Unlocked)
+            {
+                item.LockReason = string.IsNullOrEmpty(c.Requirement)
+                    ? "Locked until the Barracks reaches Tier " + c.LockTier + "."
+                    : Ascii(c.Requirement);
+                item.Badge = ManageTileBadge.Locked;
+                item.BadgeText = "LOCKED";
+                // Ruling 21: the barracks BUILDING tier gates troop unlocks, so the door is the
+                // barracks BUILD card - a screen that already exists and already works.
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Train,
+                    Availability = ManageActionAvailability.PrerequisiteBlocked,
+                    Cta = "TRAIN",
+                    BlockerReason = item.LockReason,
+                    Route = ManageRoute.ToBuildCard("barracks", "VIEW BARRACKS"),
+                    IsPrimary = true
+                });
+                return item;
+            }
+
+            string troopId = c.Id;
+            bool trainLineFull = LineIsFull(ChannelId.Train);
+            if (c.TrainReady)
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Train,
+                    Availability = ManageActionAvailability.Available,
+                    Cta = "TRAIN",
+                    CostLine = Ascii(c.TrainTimeText),
+                    IsPrimary = true,
+                    Invoke = () => TrainTroop(troopId)
+                });
+            else
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Train,
+                    Availability = trainLineFull
+                        ? ManageActionAvailability.QueueBlocked
+                        : ManageActionAvailability.Unaffordable,
+                    Cta = "TRAIN",
+                    BlockerReason = string.IsNullOrEmpty(c.TrainStateText)
+                        ? "Training cannot start right now."
+                        : Ascii(c.TrainStateText),
+                    Route = trainLineFull ? ManageRoute.ToQueue() : ManageRoute.None,
+                    CostLine = Ascii(c.TrainTimeText),
+                    IsPrimary = true
+                });
+
+            // ⚠ Ruling 13: MAX belongs to the TRACK. A maxed troop is still TRAINABLE, which is why
+            // the Train action above is composed before this and is never suppressed by atMax.
+            if (!atMax)
+            {
+                if (c.UpgradeInProgress)
+                    item.Add(ManageAction.NotApplicable(ManageActionKind.Upgrade));
+                else if (c.UpgradeReady)
+                    item.Add(new ManageAction
+                    {
+                        Kind = ManageActionKind.Upgrade,
+                        Availability = ManageActionAvailability.Available,
+                        Cta = "UPGRADE",
+                        CostLine = Ascii(c.UpgradeCostText),
+                        Invoke = () => UpgradeTroop(troopId)
+                    });
+                else
+                    item.Add(new ManageAction
+                    {
+                        Kind = ManageActionKind.Upgrade,
+                        Availability = ManageActionAvailability.Unaffordable,
+                        Cta = "UPGRADE",
+                        BlockerReason = string.IsNullOrEmpty(c.UpgradeStateText)
+                            ? "This upgrade cannot start right now."
+                            : Ascii(c.UpgradeStateText),
+                        CostLine = Ascii(c.UpgradeCostText)
+                    });
+            }
+
+            if (c.UpgradeInProgress) { item.Badge = ManageTileBadge.Training; item.BadgeText = "UPGRADING"; }
+            else if (trainLineFull) { item.Badge = ManageTileBadge.QueueBlocked; item.BadgeText = "QUEUE FULL"; }
+            else if (c.TrainReady) { item.Badge = ManageTileBadge.Trainable; item.BadgeText = "TRAINABLE"; }
+            else if (atMax) { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; }
+            else { item.Badge = ManageTileBadge.Idle; item.BadgeText = "IDLE"; }
+            return item;
+        }
+
+        // ── RESEARCH ─────────────────────────────────────────────────────────
+
+        /// <summary>Canon 5: schools first. Membership is the model's; the View never infers it from an id.</summary>
+        private List<ManageTileVM> ComposeResearchSchoolTiles()
+        {
+            var seen = new List<string>(8);
+            var tiles = new List<ManageTileVM>(8);
+            for (int i = 0; i < ResearchChoices.Count; i++)
+            {
+                var c = ResearchChoices[i];
+                if (c == null || string.IsNullOrEmpty(c.BuildingId)) continue;
+                if (seen.Contains(c.BuildingId)) continue;
+                seen.Add(c.BuildingId);
+
+                int total = 0, ready = 0, locked = 0;
+                for (int j = 0; j < ResearchChoices.Count; j++)
+                {
+                    var p = ResearchChoices[j];
+                    if (p == null || !string.Equals(p.BuildingId, c.BuildingId, StringComparison.OrdinalIgnoreCase)) continue;
+                    total++;
+                    if (p.Locked) locked++;
+                    else if (p.Ready) ready++;
+                }
+
+                var item = new ManageItemState
+                {
+                    ItemId = c.BuildingId,
+                    DisplayName = Ascii(string.IsNullOrEmpty(c.BuildingName) ? c.BuildingId : c.BuildingName),
+                    IconId = string.IsNullOrEmpty(c.IconName) ? null : "HudIcons/BuildingUpgrades/" + c.IconName,
+                    Ownership = ManageOwnership.Owned,
+                    UpgradeTrack = ManageUpgradeTrack.NotApplicable,
+                    Badge = ready > 0 ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.Idle,
+                    BadgeText = ready > 0 ? ready + " READY" : (locked > 0 ? locked + " LOCKED" : total + " PERKS"),
+                    NextRungLine = total + " perk" + (total == 1 ? "" : "s") + " in this school."
+                };
+                // No action record: a school TILE is pure navigation and its command is the tile's
+                // own Activate below. A ManageAction here would be a button nothing ever paints -
+                // dead code that looks like a shipped feature (ManageQueueDrawerRegression:103-113).
+                string school = c.BuildingId;
+                tiles.Add(ManageVmProjection.ProjectTile(item, false, () => OpenSchool(school, null)));
+            }
+            return tiles;
+        }
+
+        private List<ManageTileVM> ComposeResearchPerkTiles(string schoolId)
+        {
+            var tiles = new List<ManageTileVM>(8);
+            for (int i = 0; i < ResearchChoices.Count; i++)
+            {
+                var c = ResearchChoices[i];
+                if (c == null) continue;
+                if (!string.IsNullOrEmpty(schoolId) &&
+                    !string.Equals(c.BuildingId, schoolId, StringComparison.OrdinalIgnoreCase)) continue;
+                var item = ComposeResearchItem(c);
+                string perk = c.PerkId;
+                string school = c.BuildingId;
+                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                    () => OpenDetail(ManageTabId.Research, perk, school, null)));
+            }
+            return tiles;
+        }
+
+        private ManageItemState ComposeResearchItem(ResearchChoiceVM c)
+        {
+            var item = new ManageItemState
+            {
+                ItemId = c.PerkId,
+                DisplayName = Ascii(c.Name),
+                IconId = string.IsNullOrEmpty(c.IconName) ? null : "HudIcons/BuildingUpgrades/" + c.IconName,
+                Ownership = c.Locked ? ManageOwnership.NotUnlocked : ManageOwnership.Owned,
+                UpgradeTrack = ManageUpgradeTrack.NotApplicable,
+                NextRungLine = Ascii(c.TierText)
+            };
+
+            bool researching = string.Equals(c.StateWord, "Researching", StringComparison.OrdinalIgnoreCase);
+            bool researched = string.Equals(c.StateWord, "Researched", StringComparison.OrdinalIgnoreCase);
+            string costLine = CostFormat.Words(c.CostParts);
+
+            if (c.Locked)
+            {
+                item.LockReason = string.IsNullOrEmpty(c.LockReason)
+                    ? "Locked until its building reaches Tier " + c.UnlockTier + "."
+                    : Ascii(c.LockReason);
+                item.Badge = ManageTileBadge.Locked;
+                item.BadgeText = "LOCKED";
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Research,
+                    Availability = ManageActionAvailability.PrerequisiteBlocked,
+                    Cta = string.IsNullOrEmpty(c.CtaLabel) ? "RESEARCH" : Ascii(c.CtaLabel),
+                    BlockerReason = item.LockReason,
+                    // Ruling 18 - the door is the school's own BUILD card, which exists and opens.
+                    Route = ManageRoute.ToBuildCard(c.BuildingId,
+                        string.IsNullOrEmpty(c.DoorLabel) ? "VIEW BUILDING" : Ascii(c.DoorLabel)),
+                    CostLine = costLine,
+                    IsPrimary = true
+                });
+                return item;
+            }
+
+            if (researched)
+            {
+                item.Badge = ManageTileBadge.Max;
+                item.BadgeText = "RESEARCHED";
+                item.Add(ManageAction.NotApplicable(ManageActionKind.Research));
+                return item;
+            }
+
+            if (researching)
+            {
+                LiveJob(ChannelId.Research, "building-research:" + c.BuildingId + ":" + c.PerkId,
+                    out float progress, out float remaining);
+                item.Badge = ManageTileBadge.Upgrading;
+                item.BadgeText = "RESEARCHING";
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Research,
+                    Availability = ManageActionAvailability.InProgress,
+                    Cta = "RESEARCHING",
+                    Progress01 = progress,
+                    RemainingSeconds = remaining,
+                    IsPrimary = true
+                });
+                return item;
+            }
+
+            bool full = LineIsFull(ChannelId.Research);
+            if (full)
+            {
+                item.Badge = ManageTileBadge.QueueBlocked;
+                item.BadgeText = "QUEUE FULL";
+                item.Add(new ManageAction
+                {
+                    Kind = ManageActionKind.Research,
+                    Availability = ManageActionAvailability.QueueBlocked,
+                    Cta = string.IsNullOrEmpty(c.CtaLabel) ? "RESEARCH" : Ascii(c.CtaLabel),
+                    BlockerReason = "The Research line is full.",
+                    Route = ManageRoute.ToQueue(),
+                    CostLine = costLine,
+                    IsPrimary = true
+                });
+                return item;
+            }
+
+            item.Badge = c.Ready ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.UpgradeUnaffordable;
+            item.BadgeText = c.Ready ? "READY" : "SHORT";
+            var action = c.Ready
+                ? new ManageAction
+                {
+                    Kind = ManageActionKind.Research,
+                    Availability = ManageActionAvailability.Available,
+                    Cta = string.IsNullOrEmpty(c.CtaLabel) ? "RESEARCH" : Ascii(c.CtaLabel),
+                    CostLine = costLine,
+                    IsPrimary = true,
+                    Invoke = c.Activate
+                }
+                : new ManageAction
+                {
+                    Kind = ManageActionKind.Research,
+                    Availability = ManageActionAvailability.Unaffordable,
+                    Cta = string.IsNullOrEmpty(c.CtaLabel) ? "RESEARCH" : Ascii(c.CtaLabel),
+                    BlockerReason = string.IsNullOrEmpty(costLine)
+                        ? "You cannot pay for this perk yet."
+                        : "Needs " + costLine + ".",
+                    CostLine = costLine,
+                    IsPrimary = true
+                };
+            item.Add(action);
+            return item;
+        }
+
+        // ── the DETAIL screen ────────────────────────────────────────────────
+
+        private ManageSelectionVM ComposeDetail(ManageNavEntry nav)
+        {
+            ManageItemState item = null;
+            string description = null;
+            IReadOnlyList<ManageStatVM> stats = Array.Empty<ManageStatVM>();
+            IReadOnlyList<ManageCostVM> costs = Array.Empty<ManageCostVM>();
+
+            switch (nav.Tab)
+            {
+                case ManageTabId.Army:
+                {
+                    var c = TroopChoiceById(nav.ItemId);
+                    if (c != null)
+                    {
+                        item = ComposeTroopItem(c);
+                        description = Ascii(c.Description);
+                        stats = TwoFacts(Ascii(c.TrainFactText), Ascii(c.UpgradeFactText));
+                    }
+                    break;
+                }
+                case ManageTabId.Research:
+                {
+                    var c = ResearchChoiceById(nav.SchoolId, nav.ItemId);
+                    if (c != null)
+                    {
+                        item = ComposeResearchItem(c);
+                        description = Ascii(c.Description);
+                        stats = TwoFacts(Ascii(c.TierText), Ascii(c.TimeText));
+                        costs = CostVms(c.CostParts);
+                    }
+                    break;
+                }
+                default:
+                {
+                    var b = BuildingChoiceFor(nav.ItemId, nav.ItemId);
+                    if (b != null)
+                    {
+                        item = ComposeBuildingItem(b, null);
+                        description = Ascii(b.Description);
+                        stats = TwoFacts(Ascii(b.AfterUpgradeText), Ascii(b.UpgradeTimeText));
+                        costs = CostVms(b.UpgradeCostParts);
+                        break;
+                    }
+                    var d = DefenseChoiceFor(nav.ItemId);
+                    if (d != null)
+                    {
+                        item = ComposeDefenseItem(d, null);
+                        description = Ascii(d.Description);
+                        stats = TwoFacts(Ascii(d.PlacedText), Ascii(d.UpgradeTimeText));
+                        costs = CostVms(d.UpgradeCostParts);
+                        break;
+                    }
+                    var row = InventoryRowById(nav.ItemId);
+                    if (row != null)
+                    {
+                        item = ComposeUnplacedItem(row);
+                        description = Ascii(row.Description);
+                    }
+                    break;
+                }
+            }
+
+            if (item == null)
+            {
+                FlowTrace.Warn("Manage", "detail screen asked for '" + (nav.ItemId ?? "<null>") +
+                    "' on " + TabWordOf(nav.Tab) + " and the model has no such item - the card says so " +
+                    "rather than painting a blank");
+                return new ManageSelectionVM
+                {
+                    Visible = false,
+                    EmptyText = "That item is no longer in this town. Go back and pick another."
+                };
+            }
+
+            return ManageVmProjection.ProjectSelection(item, description, stats, costs, Navigate);
+        }
+
+        private TroopChoiceVM TroopChoiceById(string id)
+        {
+            for (int i = 0; i < TroopChoices.Count; i++)
+                if (TroopChoices[i] != null &&
+                    string.Equals(TroopChoices[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return TroopChoices[i];
+            return null;
+        }
+
+        private ResearchChoiceVM ResearchChoiceById(string buildingId, string perkId)
+        {
+            for (int i = 0; i < ResearchChoices.Count; i++)
+            {
+                var c = ResearchChoices[i];
+                if (c == null) continue;
+                if (!string.Equals(c.PerkId, perkId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.IsNullOrEmpty(buildingId) &&
+                    !string.Equals(c.BuildingId, buildingId, StringComparison.OrdinalIgnoreCase)) continue;
+                return c;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The detail screen's row. Reads the CACHED chip list first (the usual case: the player
+        /// tapped a tile that is on screen), and only falls back to a full reconcile when a jump
+        /// landed on a row outside the current chip. The fallback is the expensive path, so it is
+        /// the one that is conditional.
+        /// </summary>
+        private BuildInventoryRow InventoryRowById(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var cached = InventoryTiles();
+            for (int i = 0; i < cached.Count; i++)
+                if (cached[i] != null && string.Equals(cached[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return cached[i];
+            var rows = BuildInventoryModel.Rows();
+            for (int i = 0; i < rows.Count; i++)
+                if (rows[i] != null && string.Equals(rows[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return rows[i];
+            return null;
+        }
+
+        private static IReadOnlyList<ManageStatVM> TwoFacts(string a, string b)
+        {
+            var list = new List<ManageStatVM>(2);
+            if (!string.IsNullOrWhiteSpace(a)) list.Add(new ManageStatVM { Label = "Next", Value = a });
+            if (!string.IsNullOrWhiteSpace(b)) list.Add(new ManageStatVM { Label = "Time", Value = b });
+            return list;
+        }
+
+        /// <summary>
+        /// Cost rows with a PER-RESOURCE affordability verdict. Canon 9 forbids the View inspecting
+        /// player resources, so the comparison happens here, against the SAME GameState fields
+        /// <see cref="CanAfford"/> reads - never a second ledger.
+        /// </summary>
+        private static IReadOnlyList<ManageCostVM> CostVms(IReadOnlyList<CostPart> parts)
+        {
+            if (parts == null || parts.Count == 0) return Array.Empty<ManageCostVM>();
+            var list = new List<ManageCostVM>(parts.Count);
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var p = parts[i];
+                list.Add(new ManageCostVM
+                {
+                    Label = p.Word,
+                    AmountText = p.AmountText,
+                    IconKey = null,
+                    Affordable = BankOf(p.ConceptId) >= p.Amount
+                });
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// The live bank for one cost concept. Returns <see cref="int.MaxValue"/> for a concept this
+        /// method does not know, so an unknown currency never renders as "you cannot afford it" -
+        /// a false refusal is worse than a missing one, and the trace names it.
+        /// </summary>
+        private static int BankOf(string conceptId)
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null) return 0;
+            switch (conceptId)
+            {
+                case "wood": return state.Wood;
+                case "iron": return state.Iron;
+                case "stone": return state.Resources.Food;   // stone is banked on the Food field
+                case "food": return state.Resources.Food;
+                case "crystal":
+                case "crystals": return state.Resources.Crystals;
+                case "gold": return GoldBalance();
+                default:
+                    FlowTrace.Once("Manage", "bank-concept:" + conceptId,
+                        "cost concept '" + conceptId + "' has no bank reader - its row is reported " +
+                        "AFFORDABLE rather than falsely refused");
+                    return int.MaxValue;
+            }
+        }
+
+        /// <summary>True when the channel's queue has no depth left (ruling 14 - first-class state).</summary>
+        private static bool LineIsFull(ChannelId channel)
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null) return false;
+            // The SERVICE's own verdict (BuildTimerService.IsLineFull, :929) - authored depth plus
+            // the crystal-bought slots. Never a second capacity calculation, and never the View's.
+            return svc.IsLineFull(channel);
+        }
+
+        /// <summary>Live progress + remaining seconds for one job. 0/0 when nothing is running.</summary>
+        private static void LiveJob(ChannelId channel, string jobId, out float progress, out float remaining)
+        {
+            progress = 0f;
+            remaining = 0f;
+            var svc = BuildTimerService.Instance;
+            if (svc == null || string.IsNullOrEmpty(jobId)) return;
+            remaining = Mathf.Max(0f, (float)svc.RemainingSeconds(channel, jobId));
+            progress = Mathf.Clamp01(ProgressOfLive(svc, channel, jobId));
+        }
+    }
+
+    /// <summary>
+    /// WO-2001 - which SCREEN of the Manage graph the player is on. The grid and the detail are
+    /// separate screens and never share one (the owner's flow mockup, and the band arithmetic).
+    /// </summary>
+    public enum ManageScreenKind
+    {
+        /// <summary>The tab's tile grid. RESEARCH's grid is its school list (canon 5).</summary>
+        Grid = 0,
+        /// <summary>One item's detail card.</summary>
+        Detail = 1,
+        /// <summary>One research school's perk grid.</summary>
+        ResearchPerks = 2
+    }
+
+    /// <summary>
+    /// One screen in the Manage graph, plus WHY the player is on it.
+    ///
+    /// <para>⛔ <see cref="Origin"/> is the whole point (owner ruling 28). A plain screen history
+    /// returns the player to the grid, because that is literally where they came from; a
+    /// prerequisite JUMP has to return them to the screen that SENT them - the locked Outrider they
+    /// were shopping for, not the Build grid they passed through. So the stack pushes an ORIGIN,
+    /// not a breadcrumb.</para>
+    ///
+    /// <para>⚠ Ruling 28 asks for the origin to sit on <c>ManageRoute</c>. It cannot: ManageRoute is
+    /// a readonly struct in DeNelle.Core.Manage, which WO-2001 is forbidden to edit. The origin sits
+    /// beside the route here instead - still model-side, still never the View's (canon 9). Recorded
+    /// as a deviation rather than done quietly.</para>
+    /// </summary>
+    public sealed class ManageNavEntry
+    {
+        public ManageScreenKind Kind;
+        public ManageTabId Tab;
+        /// <summary>Detail subject: building id / troop id / perk id.</summary>
+        public string ItemId;
+        /// <summary>Research school (building id) this screen belongs to. Null elsewhere.</summary>
+        public string SchoolId;
+        /// <summary>The BUILD chip in force when this screen was entered.</summary>
+        public string Filter;
+        /// <summary>The screen that SENT the player here, or null when they browsed to it.</summary>
+        public ManageNavEntry Origin;
     }
 }

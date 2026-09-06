@@ -115,7 +115,10 @@ namespace DeNelle.Editor.Regression
         };
 
         /// <summary>
-        /// The two live hits that are NOT WO-1170 offences, each with the reason it is not.
+        /// The live hits that are NOT WO-1170 offences, each with the reason it is not.
+        /// (Was "the two" until WO-1432 added a third of the identical scalar-default shape;
+        /// the count is not asserted anywhere and a number written in prose here would be the
+        /// same duplicated state CLAUDE.md sections 2 and 5 keep paying for.)
         /// ⛔ Adding a row here is a decision, not a formality: it must be a fallback that
         /// carries NO table (WO-1170's harm is a wrong TABLE substituting different game
         /// rules) and that says so out loud when it is taken. Case [allowlist-live] fails if
@@ -134,6 +137,15 @@ namespace DeNelle.Editor.Regression
                     RuntimeRoot + "/Village/World/HarvestTuning.cs",
                     "Fallback() is 'new TuningDoc()' - the same scalar-default shape as AggroTuning, and Load() " +
                     "warns with the yield/cooldown/siteBase numbers before it is taken. No table, nothing to drift."
+                },
+                {
+                    RuntimeRoot + "/Village/Feedback/HonestFeedbackTuning.cs",
+                    "WO-1432. Fallback() is 'new TuningDoc()' - the same scalar-default shape as AggroTuning and " +
+                    "HarvestTuning, and Load() emits FlowTrace.Warn naming the threshold and character minimum " +
+                    "before it is ever taken. There is no per-id row here to drift, and the one number WO-1170's " +
+                    "harm would actually be about - the 1000/1000/1000 grant - is DELIBERATELY not in this JSON " +
+                    "at all (it is a const on HonestFeedbackGrant, so its oracle asserts a literal rather than " +
+                    "reading back the same file the code read). Retire this row if the doc ever grows a table."
                 },
             };
 

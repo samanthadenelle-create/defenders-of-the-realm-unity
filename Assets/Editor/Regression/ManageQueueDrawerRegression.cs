@@ -239,7 +239,16 @@ namespace DeNelle.Editor.Regression
                 if (!place.Contains("child.name.StartsWith(TrainingNowPrefix") || !place.Contains("SetActive(!band)"))
                     failures.Add("[drawer-clear-of-card] the TRAINING NOW band does not collapse while the drawer " +
                                  "is open - the drawer supersedes it and needs its height");
-                if (!place.Contains("_operationalListBand.SetActive(!_queueDrawerOpen || band)"))
+                // RE-POINTED 2026-09-06 (CLI, at the gate) — WO-2001 extended this expression to
+                // `SetActive(!WorkspaceActive && (!_queueDrawerOpen || band))`. The added guard is
+                // CORRECT: the new Manage workspace replaces the legacy list band entirely, so the
+                // band must stand down while the workspace renders. The INVARIANT this case exists
+                // to protect is unchanged and still holds — in band mode with the drawer open the
+                // list band stays up, so the card remains readable (`band` true => the disjunction
+                // is true). The pin now asserts the DISJUNCTION, not the whole line, so a future
+                // legitimate guard does not re-break it while a real inversion still fails.
+                // A pin that requires the old text is a pin that forbids the fix.
+                if (!place.Contains("(!_queueDrawerOpen || band)"))
                     failures.Add("[drawer-clear-of-card] band mode hides the list band - the card is gone instead " +
                                  "of readable (ruling #6)");
             }

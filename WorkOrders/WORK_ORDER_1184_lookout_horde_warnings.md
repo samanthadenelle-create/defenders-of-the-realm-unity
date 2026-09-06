@@ -1,6 +1,47 @@
 # WO-1184 — Earned lookout warnings: phone alerts + a LOOKOUT REPORT HUD surface
 
-**Status:** READY TO IMPLEMENT - owner felt-test 2026-09-03 Needs Work - "right now its a red dot middle of screen, Have UI refine to maybe vibration and pulsing warning". Bounced from Fixed. PRIOR STATUS: FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** BLOCKED ON OWNER CAPTURE - not implementable as written. Re-statused 2026-09-06 (CLI) after a
+read-only RCA lane proved the body describes code that no longer exists. **Do not pick this up without a
+device screenshot and the build id.**
+
+> ### ⚠ STALE BODY - BANNER ADDED 2026-09-06. The two findings below are BOTH ALREADY FIXED.
+> Verified at source this session, not inferred:
+> - *"Finding 1: hosts on `FindAnyObjectByType<UIDocument>()`, may not render on device"* - **false today.**
+>   `Assets/_Modules/Village/Waves/LookoutNoticeChip.cs:100-102` builds a ScreenSpaceOverlay uGUI Canvas;
+>   `:115` uses `ElarionUiKit.ToastCard(...)`. No `UIDocument` anywhere.
+> - *"Finding 2: `BestLookoutLevel()` matches towers by display-name substring"* - **false today.**
+>   `Assets/_Modules/Village/Siege/RoamingHordeNotifications.cs:175-224` keys on `IsLookoutCatalogId(...)`
+>   plus `StructureRole.Lookout`.
+>
+> ### THE BOUNCE DOES NOT DESCRIBE THIS SYSTEM.
+> Owner note: *"right now its a red dot middle of screen"*. The shipped surface is `ToastTone.Info`
+> (parchment/gold, commented in-file as "not Danger, not a red bang"), anchored **top-centre**
+> (`anchorMin/Max (0.5,1)`, `anchoredPosition (0,-96)`), carrying **words**: "Lookout notice" /
+> "Horde approaching -- ". Wrong colour, wrong shape, wrong position, wrong substrate. **A red dot exists
+> somewhere in the game and it is NOT this chip.**
+>
+> ### HOW THE BOUNCE WAS PRODUCED - this is the transferable finding.
+> Commit `695a5c92b` (2026-09-03) shows it arrived in a **bulk board sign-off**: `200 recorded, 198
+> validated, closed 40, bounced 3`. The drop file records only `{"note": "...", "verdict": "Needs Work"}`
+> - **no build id, no screenshot.** The fix had shipped 08-27 (`086ce14fd`), so the row was already **10
+> days old** on her screen. A note typed against an aged row in a bulk pass is not evidence about the
+> current binary. See memory `layout-tickets-need-a-fresh-capture` and `diagnose-the-build-under-test`.
+>
+> ### WHICH BUILD SHE TESTED IS UNPROVEN, AND WAS NOT GUESSED AT.
+> No APK in `Builds/Android/` is dated between the 08-27 fix and the 09-03 bounce. The two apk-chain logs
+> that day are 11:47 and 12:05, **before** the 13:41 fix. A `prod-apk-chain` ran 16:07 but its logs show
+> only the R2 stage. So it cannot be confirmed or ruled out that the fixed code was ever run.
+>
+> ### WHAT UNBLOCKS THIS: an F8 capture of the red dot (screen + build id in one artifact).
+> Also owed, and an owner call not an RCA outcome: a ruling on "vibration and pulsing" as the notice
+> style. ⚠ The owner is red/green colourblind - a pulsing COLOUR cue needs care, and the current chip
+> deliberately carries its meaning in words.
+>
+> **The red dot itself was deliberately NOT identified.** A grep for `Color.red` / `ToastTone.Danger` /
+> ping markers returns a dozen candidates; per CLAUDE.md section 12 that LOCATES and does not CONCLUDE.
+> Naming one would be the inference-fix the gate forbids.
+
+**PRIOR STATUS:** READY TO IMPLEMENT - owner felt-test 2026-09-03 Needs Work - "right now its a red dot middle of screen, Have UI refine to maybe vibration and pulsing warning". Bounced from Fixed. PRIOR: FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Silo:** HUD / notifications.
 **Origin:** owner, ad hoc alongside batch 4 — *"i added that adhoc"*. ⚠ Minted **after** the code
 landed, as a **ticket of record**: work with no work order is how a fix becomes invisible (two

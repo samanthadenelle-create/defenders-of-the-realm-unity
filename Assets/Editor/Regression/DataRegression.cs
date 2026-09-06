@@ -456,6 +456,11 @@ namespace DeNelle.Editor
             if (!ArmyRecoveryRegression.Run(out var troopRecoveryReason)) failures.Add(troopRecoveryReason); else log.AppendLine("[troop-recovery] " + troopRecoveryReason);
             if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);
             if (!HudUiRegression.Run(out var hudUiSmeReason)) failures.Add(hudUiSmeReason); else log.AppendLine("[hud-ui-sme] " + hudUiSmeReason);
+            // --- WO-1436 (owner ruling 2026-09-06): the hero ABILITY ROW owns the thumb band at
+            //     the bottom of the screen; the raid deploy bar stacks ABOVE it. Two surfaces in
+            //     two assemblies that cannot reference each other were authored into the SAME
+            //     band, and the one 26 000 layers above buried the one the player fights with ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-thumb-band suite", () => { if (!DeNelle.Editor.Regression.RaidHudThumbBandRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-thumb-band] " + r); });
             if (!CombatAtbRegression.Run(out var combatAtbReason)) failures.Add(combatAtbReason); else log.AppendLine("[combat-atb] " + combatAtbReason);
             if (!DialogueRegression.Run(out var dialogueReason)) failures.Add(dialogueReason); else log.AppendLine("[dialogue] " + dialogueReason);
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
@@ -493,6 +498,11 @@ namespace DeNelle.Editor
             // (same as RuntimeSpawnVisualRegression below).
             if (!DeNelle.Editor.Regression.UiCaptureFidelityRegression.Run(out var uiCapFidelityReason)) failures.Add(uiCapFidelityReason); else log.AppendLine("[ui-capture-fidelity] " + uiCapFidelityReason);
             if (!HudPostureRegression.Run(out var hudPostureReason)) failures.Add(hudPostureReason); else log.AppendLine("[hud-posture] " + hudPostureReason);
+            // --- WO-1436 P0 — the SCENE/POSTURE SEAM. HudPostureRegression above asks "does
+            // the pursuit pulse arc behave?"; this asks the question none of the 394+ green
+            // suites could: "is the resolved posture RIGHT for the scene the player is standing
+            // in?" A raid scene resolving to a peaceful posture FAILS the build. ---
+            if (!ScenePostureSeamRegression.Run(out var scenePostureReason)) failures.Add(scenePostureReason); else log.AppendLine("[scene-posture-seam] " + scenePostureReason);
             // --- WO-673 strategic placement — the §5 permission gates (flag-off parity,
             // migration round-trip, one-per-id, save v30, repair chain, 45° yaw + claim) ---
             if (!StrategicPlacementRegression.Run(out var stratPlaceReason)) failures.Add(stratPlaceReason); else log.AppendLine("[strategic-placement] " + stratPlaceReason);
@@ -1012,6 +1022,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "aggro-leash suite", () => { if (!DeNelle.Editor.AggroLeashRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[aggro-leash] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-cam-958 suite", () => { if (!DeNelle.Editor.DungeonCameraTightRoomRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-cam-958] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "camera-wall-occlusion suite", () => { if (!DeNelle.Editor.Regression.CameraWallOcclusionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[camera-wall-occlusion] " + r); });
+            // --- WO-2001: the Manage screen graph - a prerequisite JUMP returns to its ORIGIN (ruling 28)
+            // while a plain BROWSE returns to its tree parent, Manage opens ON a tab (the launcher chooser
+            // is retired), and there is exactly ONE Manage art loader. Registered by the COMMITTER, not by
+            // the implementing lane: it correctly declined to edit this committer-fenced file and handed
+            // the line over instead. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-navigation suite", () => { if (!DeNelle.Editor.Regression.ManageNavigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-navigation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-queue-drawer suite", () => { if (!DeNelle.Editor.Regression.ManageQueueDrawerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-queue-drawer] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-approved-launcher suite", () => { if (!DeNelle.Editor.Regression.ManageApprovedLauncherRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-approved-launcher] " + r); });
             // --- WO-1418 Manage - Buildings re-layout: rail + selected card + BUILDING NOW; ten RED-first cases (Codex dev lane) ---
@@ -1031,6 +1047,9 @@ namespace DeNelle.Editor
             // --- SEAM ORACLES (CLI driving plan section 1): every panel has a door; no authored field goes unread ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "panel-door suite", () => { if (!DeNelle.Editor.PanelDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[panel-door] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "authored-field-reader suite", () => { if (!DeNelle.Editor.AuthoredFieldReaderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[authored-field-reader] " + r); });
+            // --- WO-1432: the honest-feedback thank-you DELIVERS 1000/1000/1000 against a near-cap bank (an EarnedIncome control proves the fixture bites), and a second claim is a traced no-op ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "honest-feedback-grant suite", () => { if (!DeNelle.Editor.HonestFeedbackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[honest-feedback-grant] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "honest-feedback-once suite", () => { if (!DeNelle.Editor.HonestFeedbackClaimOnceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[honest-feedback-once] " + r); });
             // --- WO-1429: a refused primary falls through to the FREE melee sweep; the per-class table is gone ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "primary-fallback suite", () => { if (!DeNelle.Editor.Regression.PrimaryFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[primary-fallback] " + r); });
             // --- WO-2002: the common Manage renderer is DUMB - 16 banned shapes, each with a planted-fixture proof ---
@@ -1303,6 +1322,17 @@ namespace DeNelle.Editor
             // BEFORE it builds the HUD (an unguarded presentation throw was the raid's only
             // exitless state), and the four named raid catches must not swallow silently again.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-exit-parity suite", () => { if (!DeNelle.Editor.Regression.RaidExitParityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-exit-parity] " + r); });
+
+            // WO-1437 (P0): the sibling above asks whether each raid exit PAYS correctly. This
+            // one asks the question none of them did - CAN THE PLAYER GET OUT AT ALL. The owner
+            // won a raid on 2026-09-06 and could not leave it: every part worked, and nothing
+            // asserted that the session as a whole terminates. It MEASURES the raid clock across
+            // real Update ticks, pins both hero-death readers onto RaidScoring.RaidInProgress
+            // instead of the faction flag the victory claim flips (the same scene read
+            // enemyOwned=True at 12:59:45 and False at 13:02:47, and only the first settled), and
+            // requires a non-view stranding watchdog so no exit's only owner is an EndState panel
+            // that any other modal can destroy.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-terminal-state suite", () => { if (!DeNelle.Editor.Regression.RaidTerminalStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-terminal-state] " + r); });
 
             // --- COLLECTOR STACK PROPS (2026-08-16): CollectorStackPropCatalog.cs told
             // everyone to "place the asset at Assets/Resources/Collectors/..." and nobody

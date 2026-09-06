@@ -1,0 +1,18 @@
+{
+  "version": 1,
+
+  "offer": {
+    "minSessionSeconds": 300.0,
+    "recheckIntervalSeconds": 4.0
+  },
+
+  "feedback": {
+    "minCharacters": 12,
+    "maxCharacters": 1000
+  },
+
+  "storeLink": {
+    "url": "https://echoes-of-elarion.vercel.app/",
+    "deepLink": ""
+  }
+}

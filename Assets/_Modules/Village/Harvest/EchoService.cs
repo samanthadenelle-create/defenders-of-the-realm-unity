@@ -317,6 +317,114 @@ namespace DeNelle.Village
         //  Dump -- the come-back-claim-reset hook
         // =====================================================================
 
+        // =====================================================================
+        //  WO-1434 -- THE SPLIT IS ONE PRODUCER, READ BY TWO SURFACES.
+        // ---------------------------------------------------------------------
+        //  MEASURED on the owner's Seeker, 2026-09-06 12:51:25 (build 358161):
+        //    [Flow:Echo] DumpSilos split (pool 57600) by harvest weights
+        //                [W 7200/I 7200/F 0/G 0/C 0] -> wood 28800, iron 28800, ...
+        //    [Flow:Bank] BANK FULL [Grant] Wood: requested 28800, banked 0, LOST 28800
+        //    [Flow:Harvest] silo dump: 28800 wood stayed in the silo - Wood storage full
+        //  Those two 28,800 rows are the ones WO-1434 sec.3 recorded as NOT TRACED: they
+        //  are the ECHO SILO, not the offline-harvest grant (that claim accrued
+        //  `worker-owned=0 node(s), total=0` in the same window). The welcome-back screen
+        //  never mentioned the silo at all, because nothing outside DumpSilos could say
+        //  what a dump WOULD route. The apportionment is therefore extracted here as a
+        //  PURE function and the return screen predicts through it -- one producer, so the
+        //  screen's numbers and the tap's numbers cannot drift apart (the WO-1392 lesson,
+        //  applied to the silo the way ResourceCollectorService.PendingByResource applied
+        //  it to the collectors).
+        //  !! Do NOT re-inline the apportionment into DumpSilos. Two copies of a split is
+        //  the duplicated-state defect this whole ticket is made of.
+        // =====================================================================
+
+        /// <summary>Indices into the <see cref="SplitPool"/> / <see cref="PredictDumpSplit"/> array.</summary>
+        public const int ShareWood = 0, ShareIron = 1, ShareFood = 2, ShareGold = 3, ShareCrystals = 4;
+
+        /// <summary>
+        /// The Harvest-lane assignment weights (WO-830), with the defensive classic split applied
+        /// when nothing is assigned. Extracted from <see cref="DumpSilos"/> so the prediction and
+        /// the dump read the SAME weights on the same frame.
+        /// </summary>
+        public static void ReadHarvestWeights(out double wW, out double wI, out double wF,
+                                              out double wG, out double wC)
+        {
+            var weights = EchoBonusCalculator.HarvestTargetWeights();
+            wW = weights.TryGetValue(HarvestTarget.Wood, out var vw) ? vw : 0.0;
+            wI = weights.TryGetValue(HarvestTarget.Iron, out var vi) ? vi : 0.0;
+            wF = weights.TryGetValue(HarvestTarget.Food, out var vf) ? vf : 0.0;
+            wG = weights.TryGetValue(HarvestTarget.Gold, out var vg) ? vg : 0.0;
+            wC = weights.TryGetValue(HarvestTarget.Crystals, out var vc) ? vc : 0.0;
+            if (wW + wI + wF + wG + wC <= 0.0)
+            { wW = 1.0; wI = 1.0; wF = 1.0; wG = 0.0; wC = 0.0; }   // defensive classic split
+        }
+
+        /// <summary>
+        /// PURE largest-remainder apportionment of <paramref name="pool"/> across the five harvest
+        /// targets, in <see cref="ShareWood"/>..<see cref="ShareCrystals"/> order. The integer split
+        /// sums to EXACTLY the pool (no unit created or lost); leftover units go to the largest
+        /// fractional shares, each to a distinct one.
+        /// </summary>
+        public static int[] SplitPool(int pool, double wW, double wI, double wF, double wG, double wC)
+        {
+            const int n = 5;
+            var alloc = new int[n];
+            if (pool <= 0) return alloc;
+
+            double totalW = wW + wI + wF + wG + wC;
+            if (totalW <= 0.0) { wW = 1.0; wI = 1.0; wF = 1.0; wG = 0.0; wC = 0.0; totalW = 3.0; }
+
+            double[] exact =
+            {
+                pool * (wW / totalW), pool * (wI / totalW), pool * (wF / totalW),
+                pool * (wG / totalW), pool * (wC / totalW),
+            };
+            double[] fracs = new double[n];
+            int used = 0;
+            for (int k = 0; k < n; k++)
+            {
+                alloc[k] = (int)Math.Floor(exact[k]);
+                fracs[k] = exact[k] - alloc[k];
+                used += alloc[k];
+            }
+            int remainder = pool - used;   // in {0..n-1}: sum of fractional parts < n
+            for (int r = 0; r < remainder; r++)
+            {
+                int best = -1; double bestFrac = -1.0;
+                for (int k = 0; k < n; k++) { if (fracs[k] > bestFrac) { bestFrac = fracs[k]; best = k; } }
+                if (best < 0) break;
+                alloc[best] += 1;
+                fracs[best] = -1.0;   // consume so each leftover unit lands on a distinct top share
+            }
+            return alloc;
+        }
+
+        /// <summary>
+        /// What a Dump RIGHT NOW would route per resource, without dumping anything. The return
+        /// screen's silo rows read this. All zeros when there is no service, no state or an empty
+        /// silo -- never null.
+        /// </summary>
+        public static int[] PredictDumpSplit()
+        {
+            var gs = GameStateService.Instance;
+            var s = gs != null ? gs.State : null;
+            int pool = s != null ? (int)Math.Floor(s.SiloResources) : 0;
+            if (pool <= 0) return new int[5];
+            ReadHarvestWeights(out double wW, out double wI, out double wF, out double wG, out double wC);
+            return SplitPool(pool, wW, wI, wF, wG, wC);
+        }
+
+        /// <summary>
+        /// True when the silo is full, i.e. the Echoes have STOPPED gathering until the player
+        /// collects. `FOUNDATIONAL_RULINGS.md` section 7 requires a stopped faucet to be said in
+        /// words, so the return screen needs this as its own fact -- it is not implied by a
+        /// waiting row (a partly-full silo also waits, and it is still gathering).
+        /// </summary>
+        public bool SiloAtCap
+        {
+            get { double cap = SiloCapacity; return cap > 0.0 && Silo >= cap - 0.5; }
+        }
+
         /// <summary>
         /// Transfer the pooled silo into the spendable wallet (split across resource
         /// types), reset the silo, advance the clock + Save. Banks through
@@ -347,39 +455,9 @@ namespace DeNelle.Village
             // both only flow when an echo is explicitly assigned there. Uses LARGEST-
             // REMAINDER apportionment so the integer split sums to the EXACT pool (no unit
             // created or lost); leftover units go to the largest fractional shares.
-            var weights = EchoBonusCalculator.HarvestTargetWeights();
-            double wW = weights.TryGetValue(HarvestTarget.Wood, out var vw) ? vw : 0.0;
-            double wI = weights.TryGetValue(HarvestTarget.Iron, out var vi) ? vi : 0.0;
-            double wF = weights.TryGetValue(HarvestTarget.Food, out var vf) ? vf : 0.0;
-            double wG = weights.TryGetValue(HarvestTarget.Gold, out var vg) ? vg : 0.0;
-            double wC = weights.TryGetValue(HarvestTarget.Crystals, out var vc) ? vc : 0.0;
-            double totalW = wW + wI + wF + wG + wC;
-            if (totalW <= 0.0) { wW = 1.0; wI = 1.0; wF = 1.0; wG = 0.0; wC = 0.0; totalW = 3.0; }   // defensive classic split
+            ReadHarvestWeights(out double wW, out double wI, out double wF, out double wG, out double wC);
 
-            const int n = 5;
-            double[] exact =
-            {
-                pool * (wW / totalW), pool * (wI / totalW), pool * (wF / totalW),
-                pool * (wG / totalW), pool * (wC / totalW),
-            };
-            int[] alloc = new int[n];
-            double[] fracs = new double[n];
-            int used = 0;
-            for (int k = 0; k < n; k++)
-            {
-                alloc[k] = (int)Math.Floor(exact[k]);
-                fracs[k] = exact[k] - alloc[k];
-                used += alloc[k];
-            }
-            int remainder = pool - used;   // in {0..n-1}: sum of fractional parts < n
-            for (int r = 0; r < remainder; r++)
-            {
-                int best = -1; double bestFrac = -1.0;
-                for (int k = 0; k < n; k++) { if (fracs[k] > bestFrac) { bestFrac = fracs[k]; best = k; } }
-                if (best < 0) break;
-                alloc[best] += 1;
-                fracs[best] = -1.0;   // consume so each leftover unit lands on a distinct top share
-            }
+            int[] alloc = SplitPool(pool, wW, wI, wF, wG, wC);
             int wood = alloc[0];
             int iron = alloc[1];
             int food = alloc[2];

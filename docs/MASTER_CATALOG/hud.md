@@ -140,6 +140,31 @@ published by BuildTimerService on QueueChanged + a 1 s tick.
   Count-tween only, no flash (law lives in `CurrencyChip.SetAmount`, `:1210`).
   calm(explore) collapsed gold-only chip tap-expands the full row for 6 s
   (`:1101-1115`, `Update :1666-1681`).
+- **Right-column rail chrome — TWO presentation-only components, one axis each**
+  (both `internal sealed class` at the bottom of `HudKitController.cs`, alongside
+  `CombatArcLayout611`). Every rail band is FIXED REFERENCE PIXELS, never a fraction
+  of its parent (WO-841): a fraction can resolve under `MinTouchPx`, and
+  `ClampMinTouch` then grows it about its centre INTO its neighbour.
+  - `HudRailGutter` owns **x**. Measures the gap between its parent's right edge and
+    the ROOT canvas' right edge and writes `anchoredPosition.x`, so every chip's right
+    edge sits `RailGutterPx` (54 ref px) from the SCREEN edge at any resolution — the
+    same inset `EchoUnlockFeedback` authors for the Echoes chip on a different canvas.
+    Three rail chips, one right edge.
+  - `HudRailClearance` owns **y** (WO-1435, 2026-09-06). The expanded resource panel's
+    height is a FUNCTION of its row count (`kinds.Length`) and grows down out of the
+    ActionRail band into the QueueStatus band below; the Harvest/Collectors chip used
+    to sit there at a constant `yFromTopPx = 0f` and buried a resource row's number.
+    The component measures the union bottom of its source's ACTIVE descendants in
+    canvas-local ref px and applies
+    `y = max(authored base, (mountTop - sourceBottom) + RailGapPx)`, so adding a fifth
+    resource moves the chip with no second edit. ⛔ Never replace that base with a
+    bigger literal — a hand-maintained offset tracking a live row count is the
+    duplicated-state defect class (CLAUDE.md §2/§5/§7/§16). Dirtied by
+    `SetResourcePanelOpen` (the panel's one owner) plus a cheap live-state compare;
+    a pre-settle 0x0 read RETRIES without clearing the dirty flag (registry shape H4).
+    Attached to the Collectors band, and to the dormant Builders band so un-retiring
+    that chip cannot re-ship the overlap. Pinned by `HudUiRegression` check 8 at three
+    row counts.
 - **Move cluster** (`:519-531`): CombatHud611 ⇒ virtual D-pad, else the four round
   buttons — both write `HudMoveInput.Set`.
 - **Slide dock** (WO-439, `BuildSlideDock :1484-1523`): left gear tab, FIVE tabs —
@@ -181,7 +206,17 @@ scaffolding host. Geometry (`:95-111`): Vitals 0.01-0.33 x 0.80-0.985; Status
 0.66-0.84; ActionRail 0.78-0.995 x 0.04-0.42; ActionBar 0.28-0.72 x 0.015-0.15;
 MoveCluster 0.01-0.27 x 0.03-0.33; Dock 0-0.23 x 0.33-0.43; HeartStatus 0.01-0.33 x
 0.70-0.792; QueueStatus 0.78-0.995 x 0.53-0.865 (taller since 2026-07-30 for the WC3
-rows); Feedback full-screen, last sibling, never raycast (`:113-115`). NOTE: the
+rows); Feedback full-screen, last sibling, never raycast (`:113-115`).
+
+> ⚠ **STALE 2026-09-06 (WO-1435) — THE y BANDS ABOVE ARE WRONG, READ `HudAreasHost.cs`.**
+> Measured at source this session: **ActionRail is y 0.770-0.965** (not 0.04-0.42) and
+> **QueueStatus is y 0.510-0.750** (not 0.53-0.865); Vitals / Dock / HeartStatus / Minimap
+> left this file entirely for `DeNelle.Core.UI.HudLayoutBands` (WO-1219). Only the y values
+> were re-measured — the x values and the other areas are UNVERIFIED here, so treat the whole
+> line as hearsay until someone re-reads `HudAreasHost.Build`. This is not corrected in place
+> on purpose: a hand-copied geometry table in a catalog is the same duplicated state that put
+> stale bands (`0.040/0.420`, gold `0.82`) inside `HudUiRegression`'s own check 7g, where they
+> reported GREEN while measuring a layout the game does not have. NOTE: the
 class doc says "nine mounts" (`:53`) and the build log line says "9 area mounts"
 (`:117`) — the code adds **11**; comment drift only.
 

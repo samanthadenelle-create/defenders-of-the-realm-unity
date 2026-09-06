@@ -65,6 +65,134 @@ namespace DeNelle.Core
         }
 
         // ─────────────────────────────────────────────────────────────────────
+        //  SCENE KIND + the COMBAT DECLARATION (WO-1436)
+        // -----------------------------------------------------------------------
+        //  THE DEFECT THIS CLOSES (owner felt-test 2026-09-06, build
+        //  2026.09.06.358161: "in the raid, i had no way to fight. No combast
+        //  skills"). Inside RaidBase_raider_camp_small the HUD context resolver
+        //  logged, for the whole raid:
+        //
+        //    [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False
+        //               inVillage=False modal=False scene='RaidBase_raider_camp_small'
+        //               -> Overworld
+        //
+        //  ...so the posture resolved to calm(explore) and the action bar rendered
+        //  the PEACEFUL dock. The bar was not broken; it was asked the wrong
+        //  question. NOTHING told the HUD that standing inside an assault is combat.
+        //  Measured from the same capture, the posture flapped
+        //  calm(explore) <-> hostile(*) SEVEN times across a 49 s raid, tracking
+        //  transient pursuit pulses instead of the fact that the player had pressed
+        //  BEGIN ASSAULT.
+        //
+        //  WHY IsRaid AND NOT IsEnemyOwnedScene. The owner's 2026-07-05 ruling --
+        //  "scene ground alone does NOT flip Battle" -- was written about open
+        //  enemy-owned GROUND, and Village2 carries ownership:"Enemy" in
+        //  scene-configs.json, so keying combat off enemy-ownership would drag the
+        //  whole raid-target village into a permanent battle posture and overturn
+        //  that ruling. A RaidBase_* scene is not ground the player wanders onto: it
+        //  is entered only through BEGIN ASSAULT, with troops committed and a scored
+        //  180 s clock (RaidScoring), and [Flow:Raid] RAID START fires ~1 s after the
+        //  load. That is a DECLARED fight, so it declares combat. The 07-05 ruling is
+        //  refined, not overturned.
+        //
+        //  WHY IT LIVES HERE. Same reason as the rest of this class: "what kind of
+        //  scene is this?" was already answered in drifted partial copies (WO-411,
+        //  WO-920). The combat declaration is one more answer to that same question,
+        //  so it goes next to IsHub/IsOverworld/IsRaid/IsDungeon rather than becoming
+        //  a private test inside the HUD.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>The scene families the HUD posture seam classifies against.
+        /// Exhaustive over the build list -- <c>Unknown</c> is a FAILURE the seam
+        /// oracle reports, never a silent default.</summary>
+        public enum SceneKind
+        {
+            /// <summary>Title / HeroSelect / PetSelect -- front-end, no world HUD.</summary>
+            FrontEnd,
+            /// <summary>A home/hub town scene (<see cref="IsHub"/>).</summary>
+            Hub,
+            /// <summary>An enemy raid base entered through BEGIN ASSAULT (<see cref="IsRaid"/>).</summary>
+            Raid,
+            /// <summary>An open-air enemy outpost — <c>Garrison_*</c>, <c>Outpost1</c>, <c>Outpost2</c>.
+            /// Deliberately NOT <see cref="Raid"/>: see <see cref="IsEnemyOutpost"/>.</summary>
+            EnemyOutpost,
+            /// <summary>A dungeon -- composed <c>dg_*</c>, hand-built <c>Dungeon*</c>, or the outpost.</summary>
+            Dungeon,
+            /// <summary>The staged ATB battle scene.</summary>
+            Battle,
+            /// <summary>Open world / anything else that is a real playable scene.</summary>
+            Overworld,
+            /// <summary>No predicate names this scene. The seam oracle FAILS on this.</summary>
+            Unknown,
+        }
+
+        /// <summary>Front-end / menu scenes: no world, no posture worth asserting.</summary>
+        public static bool IsFrontEnd(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return sceneName == SceneRouter.Title
+                || sceneName.StartsWith("HeroSelect", StringComparison.OrdinalIgnoreCase)
+                || sceneName.StartsWith("PetSelect", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// The OPEN-AIR enemy outposts baked outside the raid pipeline: <c>Garrison_*</c> and
+        /// the two hand-named <c>Outpost1</c>/<c>Outpost2</c> scenes. The same three families
+        /// FeatureFlags and SceneTransitionTrigger already group together.
+        ///
+        /// <para>⚠ THEY ARE NOT <see cref="IsRaid"/>, AND THAT IS A DELIBERATE NON-DECISION.
+        /// WO-1436 was raised on a <c>RaidBase_*</c> scene and proven there; whether a garrison
+        /// or an outpost is ALSO a committed assault that should declare combat is a design
+        /// question the owner has not been asked. They are named here so the scene/posture seam
+        /// oracle can classify the whole build list without a false Unknown — naming a scene is
+        /// not the same as ruling on it. If the owner rules that they are assaults too, the
+        /// change is one line in <see cref="SceneDeclaresCombat"/> and the oracle's expectation
+        /// for this kind.</para>
+        /// </summary>
+        public static bool IsEnemyOutpost(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            return sceneName.StartsWith("Garrison_", StringComparison.OrdinalIgnoreCase)
+                || sceneName.StartsWith("Outpost", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Classify a scene into exactly one <see cref="SceneKind"/>. Order matters and is
+        /// deliberate: the front-end and raid/dungeon tests run BEFORE <see cref="IsHub"/>,
+        /// because IsHub matches by SUBSTRING (see its remarks) and a future
+        /// "Dungeon_Village2_Ruins" must not read as a town.
+        /// </summary>
+        public static SceneKind Classify(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return SceneKind.Unknown;
+            if (IsFrontEnd(sceneName)) return SceneKind.FrontEnd;
+            if (IsRaid(sceneName)) return SceneKind.Raid;
+            // IsDungeon BEFORE IsEnemyOutpost: KayKitChallengeOutpost is a DUNGEON that happens
+            // to end in "Outpost", and only this ordering keeps it one.
+            if (IsDungeon(sceneName)) return SceneKind.Dungeon;
+            if (IsEnemyOutpost(sceneName)) return SceneKind.EnemyOutpost;
+            if (sceneName == SceneRouter.ATBBattle) return SceneKind.Battle;
+            if (IsHub(sceneName)) return SceneKind.Hub;
+            if (IsOverworld(sceneName)) return SceneKind.Overworld;
+            return SceneKind.Unknown;
+        }
+
+        /// <summary>
+        /// TRUE when the SCENE ITSELF declares that the player is in a fight, independently
+        /// of waves, pursuit pulses or a battle lock -- the missing HUD context input behind
+        /// WO-1436. Read by <c>HudContextEvaluator</c> so the posture resolves to a combat
+        /// posture for the WHOLE time the player stands in an assault, and by the scene/posture
+        /// seam oracle so a raid scene resolving peaceful FAILS the build.
+        ///
+        /// <para>TODAY THIS IS EXACTLY <see cref="IsRaid"/>, and that narrowness is the point.
+        /// A dungeon is explored before it is fought, and open enemy ground stays peaceful
+        /// until something threatens the hero (owner 2026-07-05) -- both keep the existing
+        /// pursuit-driven arc. Only the raid is a committed, clocked, scored assault. Widening
+        /// this predicate is an owner ruling, not a refactor.</para>
+        /// </summary>
+        public static bool SceneDeclaresCombat(string sceneName) => IsRaid(sceneName);
+
+        // ─────────────────────────────────────────────────────────────────────
         //  Dungeon scene test (WO-920)
         // -----------------------------------------------------------------------
         //  Added here rather than in a new file for the exact reason this class

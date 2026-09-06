@@ -109,10 +109,33 @@ namespace DeNelle.Village.UI
             // Arena battle: BattleArena's loss flow shows the Defeat end-state itself.
             if (BattleArena.AnyBattleInProgress) return;
 
+            // WO-1437 — the SENTENCE must match the BRANCH HeroHealth.HandleDeath actually
+            // takes, and it did not. EndStateVM.FromHeroDeath's bool is copy-only: true prints
+            // "The raid is lost. You retreat to the castle to fight another day.", false prints
+            // "The dark takes you, but Elarion still needs its defender." Fed IsEnemyOwned
+            // alone, a death AFTER the win claimed the camp (RaidClaimService flips ownership
+            // player-owned) read enemyOwned=False and promised a respawn while the hero was
+            // standing in a raid base — captured verbatim at 13:02:47 in
+            // logs/debug/raid-stuck-2026-09-06.log:
+            //     "hero death in non-hub scene 'RaidBase_raider_camp_small' (enemyOwned=False)"
+            // against the SAME scene reading enemyOwned=True at 12:59:45.
+            //
+            // Read the same two signals HeroHealth reads, in the same order, so the copy and
+            // the routing cannot disagree. This file makes NO routing decision — presentation
+            // stays out of the lifecycle (ARCHITECTURE_PRINCIPLES); it only reports it.
             bool enemyOwned = SceneOwnership.IsEnemyOwned;
+            bool raidInProgress = RaidScoring.RaidInProgress;
+            var raidScorer = RaidScoring.Instance;
+            bool raidSettled = raidScorer != null && raidScorer.Finalized;
+            bool leavingTheRaid = enemyOwned ||
+                                  (raidInProgress && (raidSettled || RaidScoring.RaidDeathEndsRaid));
+
             FlowTrace.Step("EndState",
-                $"hero death in non-hub scene '{scene}' (enemyOwned={enemyOwned}) -> defeat sting.");
-            EndStateView.Show(EndStateVM.FromHeroDeath(enemyOwned));
+                $"hero death in non-hub scene '{scene}' (enemyOwned={enemyOwned} " +
+                $"raidInProgress={raidInProgress} raidSettled={raidSettled} " +
+                $"leavingTheRaid={leavingTheRaid}) -> defeat sting. WO-1437: the copy now tracks " +
+                "HeroHealth's evac branch, not the faction flag the victory claim flips.");
+            EndStateView.Show(EndStateVM.FromHeroDeath(leavingTheRaid));
         }
     }
 }

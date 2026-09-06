@@ -115,20 +115,46 @@ namespace DeNelle.Editor
                 if (state.LastHarvestClaimMs > future)
                     failures.Add($"case3 clock left in the future ({state.LastHarvestClaimMs}) — monotonic guard did not re-stamp to now");
 
-                // --- Case 4 [warn-before-collect] (WO-1392): the popup can warn BEFORE the tap ---
-                // The owner's 2026-09-04 popup promised +672 wood / +403 iron / +874 stone and the
-                // loss was decided at COLLECT with no warning. PredictCollectWaits is the pure
-                // prediction (the popup's own rows x a headroom reader); with wood headroom 258,
-                // iron 5000 and stone 0 it must name 414 wood and 874 stone, in rail order, and
-                // CollectWaitLine must be the exact ASCII sentence the popup seats.
-                // RED before WO-1392: neither method existed and the popup had no such row.
+                // =====================================================================
+                //  Case 4 [one-row-per-resource] (WO-1434) -- THE MOVED PIN. READ THIS.
+                // ---------------------------------------------------------------------
+                //  WHAT THIS CASE USED TO BE, and why moving it was required rather than
+                //  optional. WO-1392 pinned the exact string
+                //      "Storage nearly full - 414 wood will wait"
+                //  and pinned WelcomeBackPopup for `PredictCollectWaits(_result)` +
+                //  `AddCollectWaitRows(body, ref y)`. Those three pins together REQUIRED the
+                //  screen to keep drawing a separate warning line under each waiting row --
+                //  which is precisely the duplication the owner reported on 2026-09-06
+                //  ("this screen too. Way too much here"): six lines for three facts, each
+                //  integer printed twice. A pin that requires the old copy is a pin that
+                //  forbids the fix, so it is MOVED, deliberately, in the same edit as the copy.
+                //
+                //  ⭐ WHAT SURVIVES, because it was the real assertion and it is still true:
+                //  the screen must predict the bank's behaviour BEFORE the tap, from a PURE
+                //  function taking a headroom reader, in rail order, with no false alarm at
+                //  unlimited headroom, in ASCII. Every one of those is re-asserted below
+                //  against OfflineHarvestService.BuildReturnRows.
+                //  ⛔ WHAT DOES NOT SURVIVE: the requirement that the prediction be drawn as
+                //  its OWN line. It is now the right-hand column of the row it describes.
+                //
+                //  RED PROOF (measured, not asserted): against the pre-WO-1434 tree this case
+                //  does not compile -- BuildReturnRows / ReturnRowLabel / ReturnRowDestiny /
+                //  OfflineHarvestResult.SiloPending did not exist. Against the old BEHAVIOUR,
+                //  the sub-case marked [no-gain-without-headroom] is the one that fails on
+                //  today's build: the old popup drew "+" + line.Pending for every row
+                //  unconditionally (WelcomeBackPopup:280, `"+" + line.Pending`), so a row with
+                //  zero headroom rendered "WOOD WAITING +10609" -- a gain sign on an amount
+                //  that banked nothing. The owner tapped COLLECT on 42,782 of those and banked
+                //  0 ([Flow:Eco] Grant +W0 +I0, device 2026-09-06 12:51:25).
+                // =====================================================================
                 var r4 = new OfflineHarvestResult();
                 r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Wood", Pending = 672, Collectors = 1 });
                 r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Iron", Pending = 403, Collectors = 1 });
                 r4.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Stone", Pending = 874, Collectors = 1 });
                 r4.PendingCollectorTotal = 1949;
                 r4.PendingCollectorCount = 3;
-                var waits = OfflineHarvestService.PredictCollectWaits(r4, res =>
+
+                System.Func<DeNelle.Village.Buildings.Progression.HarvestResource, int> headroom4 = res =>
                 {
                     switch (res)
                     {
@@ -137,31 +163,160 @@ namespace DeNelle.Editor
                         case DeNelle.Village.Buildings.Progression.HarvestResource.Food: return 0;
                         default: return int.MaxValue;
                     }
-                });
-                if (waits == null || waits.Count != 2)
-                    failures.Add($"case4 [warn-before-collect] expected 2 predicted waits (wood 414, stone 874), got {(waits == null ? -1 : waits.Count)}");
+                };
+
+                var rows4 = OfflineHarvestService.BuildReturnRows(r4, headroom4);
+                if (rows4 == null || rows4.Count != 3)
+                    failures.Add($"case4 [one-row-per-resource] expected 3 rows (wood/iron/stone), got {(rows4 == null ? -1 : rows4.Count)}");
                 else
                 {
-                    if (waits[0].Word != "wood" || waits[0].Wait != 414 || waits[0].Pending != 672 || waits[0].Headroom != 258)
-                        failures.Add($"case4 [warn-before-collect] first wait = {waits[0].Word}/{waits[0].Wait} (pending {waits[0].Pending}, headroom {waits[0].Headroom}); expected wood/414");
-                    if (waits[1].Word != "stone" || waits[1].Wait != 874)
-                        failures.Add($"case4 [warn-before-collect] second wait = {waits[1].Word}/{waits[1].Wait}; expected stone/874 (Stone is the Food slot, rail order Wood/Iron/Stone)");
-                    string line = OfflineHarvestService.CollectWaitLine(waits[0]);
-                    if (line != "Storage nearly full - 414 wood will wait")
-                        failures.Add($"case4 [warn-before-collect] CollectWaitLine = '{line}', expected 'Storage nearly full - 414 wood will wait'");
-                    foreach (var ch in line) if (ch > 126) { failures.Add("case4 [warn-before-collect] the warning line is not ASCII"); break; }
+                    // Rail order, and the same arithmetic the retired PredictCollectWaits pinned:
+                    // wood 672 against headroom 258 waits 414; stone 874 against 0 waits all 874.
+                    if (rows4[0].Word != "Wood" || rows4[0].Pending != 672 || rows4[0].Banks != 258 || rows4[0].Waits != 414)
+                        failures.Add($"case4 [one-row-per-resource] row 0 = {rows4[0].Word} pending {rows4[0].Pending} " +
+                                     $"banks {rows4[0].Banks} waits {rows4[0].Waits}; expected Wood/672/258/414");
+                    if (rows4[1].Word != "Iron" || rows4[1].Waits != 0 || rows4[1].Banks != 403)
+                        failures.Add($"case4 [one-row-per-resource] row 1 = {rows4[1].Word} banks {rows4[1].Banks} " +
+                                     $"waits {rows4[1].Waits}; expected Iron banking all 403");
+                    if (rows4[2].Word != "Stone" || rows4[2].Banks != 0 || rows4[2].Waits != 874)
+                        failures.Add($"case4 [one-row-per-resource] row 2 = {rows4[2].Word} banks {rows4[2].Banks} " +
+                                     $"waits {rows4[2].Waits}; expected Stone/0/874 (Stone is the Food slot, rail order Wood/Iron/Stone)");
+
+                    // --- [no-gain-without-headroom] -- THE ACCEPTANCE ASSERTION -------
+                    // No row may present an uncollectable amount as a gain. The "+" is the
+                    // gain sign on this screen; a row that banks nothing may not wear one.
+                    if (OfflineHarvestService.ReturnRowLabel(rows4[0]) != "WOOD +258")
+                        failures.Add($"case4 [no-gain-without-headroom] the partial-room row reads " +
+                                     $"'{OfflineHarvestService.ReturnRowLabel(rows4[0])}', expected 'WOOD +258'. THE PLUS-NUMBER " +
+                                     "MUST BE THE COLLECTABLE AMOUNT, NEVER THE PENDING ONE - '+672' is a promise the tap " +
+                                     "cannot keep, and that substitution IS WO-1434 D1 at smaller scale");
+                    if (OfflineHarvestService.ReturnRowDestiny(rows4[0]) != "414 MORE WAITS")
+                        failures.Add($"case4 [one-row-per-resource] the destiny column reads " +
+                                     $"'{OfflineHarvestService.ReturnRowDestiny(rows4[0])}', expected '414 MORE WAITS'");
+
+                    foreach (var r in rows4)
+                    {
+                        string label = OfflineHarvestService.ReturnRowLabel(r);
+                        string destiny = OfflineHarvestService.ReturnRowDestiny(r);
+                        if (r.NothingBanks && label.IndexOf('+') >= 0)
+                            failures.Add($"case4 [no-gain-without-headroom] '{label}' presents {r.Pending} {r.Word} as a GAIN " +
+                                         "while zero of it banks - this is the defect the owner tapped COLLECT on (42,782 promised, 0 delivered)");
+                        if (!r.NothingBanks && r.Banks > 0 && label.IndexOf("+" + r.Banks, System.StringComparison.Ordinal) < 0)
+                            failures.Add($"case4 [no-gain-without-headroom] '{label}' does not headline the COLLECTABLE " +
+                                         $"{r.Banks} {r.Word}");
+                        if (r.Banks > 0 && r.Waits > 0 && label.IndexOf("+" + r.Pending, System.StringComparison.Ordinal) >= 0)
+                            failures.Add($"case4 [no-gain-without-headroom] '{label}' headlines the PENDING {r.Pending} with a " +
+                                         $"gain sign while only {r.Banks} banks - WO-1434 D1 verbatim: 'the headline number is " +
+                                         "the PENDING amount, not the COLLECTABLE amount'");
+                        // D2 - no integer may appear twice across the one row.
+                        if (r.Banks > 0 && r.Waits > 0 &&
+                            destiny.IndexOf(r.Banks.ToString(), System.StringComparison.Ordinal) >= 0)
+                            failures.Add($"case4 [one-row-per-resource] the destiny '{destiny}' restates the label's own " +
+                                         $"integer {r.Banks} - printing one number twice is the owner's 'way too much here'");
+                        // The destiny column must never call a retained amount lost -- both live
+                        // producers keep what the cap refuses (WO-1392 collectors, WO-1434 silo).
+                        if (destiny.IndexOf("lost", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            destiny.IndexOf("gone", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                            failures.Add($"case4 [no-gain-without-headroom] destiny '{destiny}' says the units are lost; " +
+                                         "nothing on either producer burns");
+                        foreach (var ch in label) if (ch > 126) { failures.Add($"case4 row label '{label}' is not ASCII"); break; }
+                        foreach (var ch in destiny) if (ch > 126) { failures.Add($"case4 row destiny '{destiny}' is not ASCII"); break; }
+                    }
+                    string footer4 = OfflineHarvestService.ReturnFooterLine(rows4);
+                    if (string.IsNullOrEmpty(footer4) || footer4.IndexOf("nothing is lost", System.StringComparison.Ordinal) < 0)
+                        failures.Add($"case4 [one-row-per-resource] the footer does not say plainly that nothing is lost: '{footer4}'");
                 }
-                var none = OfflineHarvestService.PredictCollectWaits(r4, res => int.MaxValue);
-                if (none == null || none.Count != 0)
-                    failures.Add("case4 [warn-before-collect] with unlimited headroom a wait was still predicted (false alarm)");
+
+                // No false alarm at unlimited headroom (carried over from the retired case).
+                var open4 = OfflineHarvestService.BuildReturnRows(r4, res => int.MaxValue);
+                if (open4 == null || open4.Count != 3) failures.Add("case4 unlimited headroom dropped rows that still exist");
+                else foreach (var r in open4)
+                    if (r.Waits != 0 || OfflineHarvestService.ReturnRowDestiny(r) != "COLLECT NOW")
+                        failures.Add($"case4 with unlimited headroom {r.Word} still predicts a wait (false alarm): " +
+                                     $"'{OfflineHarvestService.ReturnRowDestiny(r)}'");
+
+                // =====================================================================
+                //  Case 5 [every-producer-rendered] (WO-1434) -- THE ONE THAT WOULD HAVE
+                //  CAUGHT D3. The device's own modal aggregate named FIVE rows while the
+                //  return screen drew THREE, and nothing anywhere compared the two counts.
+                //  The two missing ones were the Echo silo (28,800 wood + 28,800 iron,
+                //  device 2026-09-06 12:51:25) -- WO-1434 sec.3 attributed them to the
+                //  offline-harvest grant, but that claim accrued total=0 and Grant() never
+                //  ran. The rows are EchoService.DumpSilos's.
+                //  RED BY: removing the SiloPending term from BuildReturnRows, or the
+                //  HasSiloNews term from OfflineHarvestResult.HasSummaryContent.
+                // =====================================================================
+                var r5 = new OfflineHarvestResult();
+                r5.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Wood", Pending = 10656, Collectors = 1 });
+                r5.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Iron", Pending = 6393, Collectors = 1 });
+                r5.PendingCollectors.Add(new OfflineHarvestResult.OfflineCollectorLine { Resource = "Stone", Pending = 25870, Collectors = 1 });
+                r5.PendingCollectorTotal = 42919;
+                r5.PendingCollectorCount = 3;
+                r5.SiloPending.Add(new OfflineHarvestResult.OfflineSiloLine { Resource = "Wood", Pending = 28800 });
+                r5.SiloPending.Add(new OfflineHarvestResult.OfflineSiloLine { Resource = "Iron", Pending = 28800 });
+                r5.SiloTotal = 57600;
+                r5.SiloAtCap = true;
+
+                var rows5 = OfflineHarvestService.BuildReturnRows(r5, res => 0);   // every bank full, as she found it
+                int producerResources = 3;   // wood, iron, stone -- the silo adds units, not resources, here
+                if (rows5 == null || rows5.Count != producerResources)
+                    failures.Add($"case5 [every-producer-rendered] {(rows5 == null ? -1 : rows5.Count)} rows for " +
+                                 $"{producerResources} resources with a non-zero pending - a producer is being counted and not drawn");
+                else
+                {
+                    int drawn = 0;
+                    foreach (var r in rows5) drawn += r.Pending;
+                    if (drawn != 42919 + 57600)
+                        failures.Add($"case5 [every-producer-rendered] the rows account for {drawn} units but the " +
+                                     $"producers hold {42919 + 57600} - {42919 + 57600 - drawn} units exist with no row (WO-1430 species)");
+                    if (rows5[0].FromSilo != 28800 || rows5[0].FromCollectors != 10656)
+                        failures.Add($"case5 [every-producer-rendered] the Wood row does not carry BOTH producers " +
+                                     $"(collectors {rows5[0].FromCollectors}, silo {rows5[0].FromSilo})");
+                }
+                if (!r5.HasSiloNews || !r5.HasSummaryContent)
+                    failures.Add("case5 [every-producer-rendered] a full Echo silo does not open the reveal gate - " +
+                                 "a town whose nodes are idle and whose collectors are empty gets no screen at all");
+                var siloOnly = new OfflineHarvestResult();
+                siloOnly.SiloPending.Add(new OfflineHarvestResult.OfflineSiloLine { Resource = "Wood", Pending = 400 });
+                siloOnly.SiloTotal = 400;
+                if (!siloOnly.HasSummaryContent)
+                    failures.Add("case5 [every-producer-rendered] a silo-ONLY window still reports no summary content");
+                string stalled5 = OfflineHarvestService.SiloStalledLine(r5);
+                if (string.IsNullOrEmpty(stalled5))
+                    failures.Add("case5 a silo at cap does not say IN WORDS that the Echoes have stopped gathering " +
+                                 "(`FOUNDATIONAL_RULINGS.md` section 7 - a stopped faucet is told, never signalled by colour)");
+                else foreach (var ch in stalled5) if (ch > 126) { failures.Add("case5 the silo-stalled line is not ASCII"); break; }
+                r5.SiloAtCap = false;
+                if (!string.IsNullOrEmpty(OfflineHarvestService.SiloStalledLine(r5)))
+                    failures.Add("case5 a silo BELOW cap still claims the Echoes have stopped gathering (false alarm)");
+
+                // --- Source pins: the screen must actually seat the one producer ------
+                // Moved with the copy (see case 4's header): the retired pins named
+                // PredictCollectWaits(_result) / AddCollectWaitRows, both of which required the
+                // duplicated second list.
                 string popupPath = System.IO.Path.Combine(Application.dataPath, "_Modules/Village/Harvest/UI/WelcomeBackPopup.cs");
                 string popupSrc = System.IO.File.Exists(popupPath) ? System.IO.File.ReadAllText(popupPath) : null;
                 if (popupSrc == null)
-                    failures.Add("case4 [warn-before-collect] could not read WelcomeBackPopup.cs");
-                else if (popupSrc.IndexOf("PredictCollectWaits(_result)", System.StringComparison.Ordinal) < 0 ||
-                         popupSrc.IndexOf("AddCollectWaitRows(body, ref y)", System.StringComparison.Ordinal) < 0)
-                    failures.Add("case4 [warn-before-collect] WelcomeBackPopup does not seat the predicted waits " +
-                                 "(PredictCollectWaits(_result) / AddCollectWaitRows) - COLLECT is not informed before the tap");
+                    failures.Add("case4 could not read WelcomeBackPopup.cs");
+                else
+                {
+                    if (popupSrc.IndexOf("BuildReturnRows(_result)", System.StringComparison.Ordinal) < 0)
+                        failures.Add("case4 [one-row-per-resource] WelcomeBackPopup does not build its rows from " +
+                                     "OfflineHarvestService.BuildReturnRows - the screen has a second producer again");
+                    if (popupSrc.IndexOf("ReturnRowDestiny(r)", System.StringComparison.Ordinal) < 0)
+                        failures.Add("case4 [one-row-per-resource] the popup seats no destiny column - the amount is " +
+                                     "shown without what becomes of it, which is the defect");
+                    if (popupSrc.IndexOf("AddDestinyFooter(body, ref y", System.StringComparison.Ordinal) < 0)
+                        failures.Add("case5 [every-producer-rendered] the popup seats no table footer - the " +
+                                     "'nothing is lost' sentence and the silo-stalled sentence have no home");
+                    // Quote-prefixed on purpose: the retired sentence is QUOTED in this file's own
+                    // WO-1434 comment block (it is the evidence), and a bare substring test would
+                    // fail on the comment that explains the fix.
+                    if (popupSrc.IndexOf("\"Storage nearly full", System.StringComparison.Ordinal) >= 0)
+                        failures.Add("case4 [one-row-per-resource] the RETIRED per-row warning line " +
+                                     "('Storage nearly full - N <res> will wait') is back - it repeats the row's own " +
+                                     "integer and is what the owner called 'way too much here' (2026-09-06)");
+                }
             }
             catch (System.Exception ex)
             {

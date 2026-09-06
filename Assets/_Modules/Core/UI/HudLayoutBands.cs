@@ -1,6 +1,8 @@
 // =============================================================================
-// HudLayoutBands - THE ONE AUTHORITY for the town HUD's left column and for the
-// single reserved TOAST ZONE (WO-1219, owner-approved design 2026-08-26).
+// HudLayoutBands - THE ONE AUTHORITY for the town HUD's left column, for the
+// single reserved TOAST ZONE (WO-1219, owner-approved design 2026-08-26), and for
+// the RESERVED THUMB BAND that the ability row owns at the bottom of the screen
+// (WO-1436, owner ruling 2026-09-06 - see the section above ToastZone).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Core   Namespace: DeNelle.Core.UI
 //
@@ -181,6 +183,78 @@ namespace DeNelle.Core.UI
                 MinimapMount.yMax - NightMarketCardHeightPx * uy,
                 MinimapMount.xMin + NightMarketCardWidthPx * ux,
                 MinimapMount.yMax);
+        }
+
+        // ── THE RESERVED THUMB BAND (WO-1436, owner ruling 2026-09-06) ──────────
+        //
+        // ⭐ OWNER RULING, VERBATIM IN SUBSTANCE: the ABILITY ROW owns the thumb position at the
+        // bottom of the screen; the raid deploy bar (FOOTMAN / ARCHER / Rally / RETREAT) stacks
+        // ABOVE it. Her reasoning is the frequency argument — casting is CONSTANT, deploying is
+        // OCCASIONAL, so the constant action belongs under the thumb.
+        //
+        // WHY THE NUMBER LIVES IN DeNelle.Core AND NOWHERE ELSE
+        // ----------------------------------------------------
+        // The two surfaces that must not collide are in assemblies that CANNOT see each other:
+        //   * the ability row  — HudAreasHost (DeNelle.HUD), area mount HudArea.ActionBar
+        //   * the raid deploy bar — RaidDeployController (DeNelle.Village)
+        // DeNelle.Village may not reference DeNelle.HUD (CLAUDE.md §5 — the one cross-assembly
+        // invariant that is actually enforced by asmdef; AdminOverlay's reflection exists
+        // precisely because of it). So the raid HUD cannot ASK the kit where the free band starts.
+        // The only lawful shared vocabulary is DeNelle.Core, which both already reference — the
+        // CoreServices pattern, and the pattern this very file already uses for ToastZone.
+        //
+        // ⛔ THE ALTERNATIVE — a Y literal typed into HudAreasHost AND a matching one typed into
+        // RaidDeployController — is DUPLICATED STATE, the single failure mode CLAUDE.md documents
+        // four separate times (§2 the stale WO-number block, §5 the retired dependency table, §8
+        // the restated MaxVisibleFaces, §16 the copy-pasted R2 verify). Every one of those was
+        // correct the day it was written. Do not add a fifth. If the row's height changes, it
+        // changes HERE, once, and the deploy bar follows without anybody remembering to.
+        //
+        // ⚠ THE TWO CANVASES ARE DIFFERENT OBJECTS AND THE FRACTIONS ARE STILL COMPARABLE.
+        // HudAreasHost's canvas is ScreenSpaceOverlay at sortingOrder 4000; the raid deploy HUD is
+        // a separate ScreenSpaceOverlay canvas at 30000. Anchor fractions on a ScreenSpaceOverlay
+        // canvas are fractions OF THE SCREEN regardless of the CanvasScaler each one carries — the
+        // scaler changes the reference-unit size, never where anchorMin 0.16 lands. So band
+        // arithmetic across the two is valid, and sortingOrder becomes irrelevant once the bands
+        // are exclusive. ⛔ Do not "fix" a future overlap by re-ordering the canvases; separate
+        // the bands.
+
+        /// <summary>Bottom edge of the ability/action row (HudArea.ActionBar), as a screen
+        /// fraction. ⛔ THIS AND <see cref="ThumbActionRowMaxY"/> ARE THE ONLY COPY. HudAreasHost
+        /// reads them for its ActionBar mount — it does not author its own.</summary>
+        public const float ThumbActionRowMinY = 0.015f;
+        /// <summary>Top edge of the ability/action row. See <see cref="ThumbActionRowMinY"/>.</summary>
+        public const float ThumbActionRowMaxY = 0.150f;
+
+        /// <summary>Breathing gap between the thumb row and anything stacked on top of it, and
+        /// between an overlay's own stacked parts. One number, so a bar and its status line never
+        /// drift apart.</summary>
+        public const float ThumbBandClearanceGap = 0.010f;
+
+        /// <summary>
+        /// ⭐ THE FLOOR FOR ANY BOTTOM-ANCHORED OVERLAY THAT IS NOT THE ABILITY ROW. A module that
+        /// wants a bottom bar starts HERE and grows upward. Nothing may reach below it.
+        /// </summary>
+        public static float BottomOverlayFloorY
+        {
+            get { return ThumbActionRowMaxY + ThumbBandClearanceGap; }
+        }
+
+        /// <summary>The thumb row's own band at a given x span, for oracle arithmetic. The x edges
+        /// are NOT authored here (they live on HudAreasHost, whose source text is pinned by
+        /// HudDockLayoutRegression) — the caller passes them in.</summary>
+        public static Rect ThumbActionRowBand(float xMin, float xMax)
+        {
+            return Rect.MinMaxRect(xMin, ThumbActionRowMinY, xMax, ThumbActionRowMaxY);
+        }
+
+        /// <summary>A band of <paramref name="height"/> (screen fraction) seated immediately above
+        /// the reserved thumb band, plus <paramref name="stackIndex"/> further bands of the same
+        /// height already stacked there. Pure arithmetic; no scene, no canvas.</summary>
+        public static Rect StackAboveThumbBand(float xMin, float xMax, float height, float offset)
+        {
+            float y0 = BottomOverlayFloorY + offset;
+            return Rect.MinMaxRect(xMin, y0, xMax, y0 + height);
         }
 
         // ── THE ONE RESERVED TOAST ZONE ─────────────────────────────────────────

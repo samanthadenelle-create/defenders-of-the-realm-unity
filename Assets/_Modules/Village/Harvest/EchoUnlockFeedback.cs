@@ -243,7 +243,16 @@ namespace DeNelle.Village
         private void ApplySceneVisibility(string sceneName)
         {
             _sceneAllowsChip = IsGameplayScene(sceneName);
-            FlowTrace.Step("Echo", $"EchoUnlockFeedback scene gate={(_sceneAllowsChip ? "allows" : "blocks")} chip for scene '{sceneName ?? "<null>"}'");
+            // WO-1436: the REASON is printed, not just the verdict. The old line said only
+            // "gate=allows chip for scene 'RaidBase_raider_camp_small'" - true, and useless
+            // for telling a deliberate allow from an unasked question.
+            string why = _sceneAllowsChip
+                ? "gameplay scene, town HUD permitted here"
+                : (DeNelle.Core.HubScenes.SuppressTownHud(sceneName)
+                    ? "enemy-owned ground (HubScenes.SuppressTownHud) - town chrome stands down"
+                    : "menu/front-end scene");
+            FlowTrace.Step("Echo", $"EchoUnlockFeedback scene gate={(_sceneAllowsChip ? "allows" : "blocks")} " +
+                                   $"chip for scene '{sceneName ?? "<null>"}' - {why}");
             ApplyChipVisibility();
         }
 
@@ -285,10 +294,24 @@ namespace DeNelle.Village
         }
 
         /// <summary>FALSE for the menu / non-HUD scenes (Title, HeroSelect, PetSelect,
-        /// ATBBattle), TRUE for everything else. A small deny-list of menu scenes (not an
-        /// allow-list) so new gameplay scenes -- hub/village/raid/dungeon -- default to SHOWING
-        /// the pip. Matches SceneRouter constants: Title="Title", HeroSelect="HeroSelect",
-        /// PetSelect="PetSelect", ATBBattle="ATBBattle".</summary>
+        /// ATBBattle) AND for enemy-owned ground, TRUE for everything else.
+        ///
+        /// <para>WO-1436. The deny-list half is unchanged and still right: a small list of
+        /// MENU scenes (not an allow-list) so a gameplay scene baked tomorrow defaults to
+        /// showing the pip. But "not a menu" was doing double duty as "is a place the town
+        /// HUD belongs", and those are different questions. A raid base is not a menu, so the
+        /// chip said yes:</para>
+        /// <code>[Flow:Echo] EchoUnlockFeedback scene gate=allows chip for scene 'RaidBase_raider_camp_small'</code>
+        /// <para>...and <c>Echoes 4/6</c> rendered over a battlefield during the owner's
+        /// felt-test. Echoes are awakened at the Heart and assigned to harvest lanes; there is
+        /// nothing to act on mid-assault, which is the same argument WO-1010 D18 already used
+        /// to hide this chip for the whole of build mode.</para>
+        ///
+        /// <para>The second half REUSES <see cref="DeNelle.Core.HubScenes.SuppressTownHud"/>
+        /// -- the WO-550 town-HUD chokepoint, already gating ~14 panel bootstraps -- rather
+        /// than adding "RaidBase" to the deny-list. Typing a scene prefix here would be a
+        /// third private copy of scene-family naming, which is the drift HubScenes exists to
+        /// end (WO-411/920), and it would miss Village2 as a raid target.</para></summary>
         private static bool IsGameplayScene(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;
@@ -299,9 +322,8 @@ namespace DeNelle.Village
                 case "PetSelect":
                 case "ATBBattle":
                     return false;
-                default:
-                    return true;
             }
+            return !DeNelle.Core.HubScenes.SuppressTownHud(sceneName);
         }
 
         // -- the unlock moment (event -> portrait dialogue + SFX + pip) ------------

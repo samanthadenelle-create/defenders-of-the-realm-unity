@@ -247,6 +247,153 @@ namespace DeNelle.Village
                 _scoring.OnTimeExpired -= OnRaidTimeExpired;
                 _scoring.OnTimeExpired += OnRaidTimeExpired;
             }
+
+            // WO-1437: arm the terminal-state net in the SAME place, and for the same reason,
+            // the clock subscriber is bound here — before BuildHud, so no exit depends on
+            // presentation succeeding (WO-1110 §1's load-bearing order).
+            //
+            // ⚠ ARMED OUTSIDE THE `_scoring != null` BLOCK, DELIBERATELY. The watchdog's
+            // last-resort arm exists precisely to cover "RaidScoring never installed" — and it
+            // names that case in its own failure text. Arming it inside the null-check would
+            // mean the one scenario it advertises is the one scenario where it never starts,
+            // which is a trace that lies (CLAUDE.md §11B). The coroutine handles a null scorer
+            // on its own: it re-resolves RaidScoring.Instance each tick and falls back to
+            // RaidScoring.DefaultClockSeconds for its backstop deadline.
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", "arm raid stranding watchdog",
+                () => StartCoroutine(StrandingWatchdog()));
+        }
+
+        // =====================================================================
+        //  WO-1437 — THE TERMINAL-STATE NET. Every raid session ends, full stop.
+        // =====================================================================
+        /// <summary>
+        /// Unscaled seconds a SETTLED raid may still be standing in its own scene before
+        /// this controller takes the route home back. Must stay comfortably LONGER than
+        /// <c>RaidVictoryController._autoReturnSeconds</c> (12s) so the normal victory
+        /// auto-dismiss always wins and this never pre-empts a working exit.
+        /// </summary>
+        private const float SettledExitGraceSeconds = 30f;
+
+        /// <summary>
+        /// Extra unscaled seconds past the raid clock before the LAST-RESORT arm fires on a
+        /// raid that never settled at all (a missing OnTimeExpired subscriber plus a failed
+        /// HUD — the raid's one exitless state).
+        /// </summary>
+        private const float UnsettledBackstopGraceSeconds = 45f;
+
+        /// <summary>
+        /// GUARANTEES A RAID SESSION REACHES A TERMINAL STATE. This is the general form the
+        /// WO-1437 acceptance asks for, and the runtime twin of the oracle that pins it.
+        ///
+        /// <para><b>WHY IT HAS TO EXIST, proven by capture.</b> Until now the route home from a
+        /// WON raid was owned solely by the victory <c>EndStateView</c> — both its primary
+        /// action (Return to Castle) and its <c>AutoDismissSeconds</c> softlock guard live on
+        /// that GameObject. Any other modal opening over it destroys BOTH at once. On
+        /// 2026-09-06 that is exactly what happened (logs/debug/raid-stuck-2026-09-06.log):</para>
+        /// <code>
+        /// 13:02:42.214  RETURN - victory screen shown ...; tap or auto-dismiss routes to the castle.
+        /// 13:02:47.276  'Victory!' destroyed WITHOUT firing its primary action - EndStateView.Show
+        ///               - REPLACED by a new end-state 'YOU HAVE FALLEN'. That action is now abandoned.
+        /// 13:02:47.284  'Victory!' destroyed WITHOUT firing its primary action - CloseFromArbiter
+        ///               (another modal opened over this end-state).
+        /// </code>
+        /// <para>Five seconds into a twelve-second guard, the hero died (the raid world keeps
+        /// simulating at <c>timeScale=1.00</c> behind the victory screen — measured, not assumed:
+        /// every <c>[Flow:HeroOwner]</c> line through 13:04 reads <c>timeScale=1.00</c>), the death
+        /// screen replaced the victory screen, and every route home died with it. The player was
+        /// left inside a settled raid with only RETREAT — the losing exit — available after
+        /// WINNING.</para>
+        ///
+        /// <para><b>THE PANEL DYING WITHOUT FIRING IS CORRECT</b> — a displaced end-state must
+        /// never silently trigger a transition. The defect is that RAID OWNERSHIP was delegated
+        /// to a view. This takes that ownership back, exactly as
+        /// <c>BattleArena.StrandingWatchdog</c> already does for arenas (WO-969, whose comment
+        /// records this same failure shape verbatim). Raids never got the same net; now they have
+        /// one, and it covers all four exits — victory, retreat, clock and hero death — from a
+        /// single seam rather than four exit-specific patches.</para>
+        ///
+        /// <para>Safe by construction: <c>ReconcileRaidEnd</c> is latched on <c>_reconciled</c>,
+        /// <c>SettlePartialLoot</c> early-returns on <c>RaidScoring.Finalized</c>, and
+        /// <c>RaidVictoryController.ReturnHome</c> latches on <c>_returning</c>. A normal exit
+        /// therefore makes this a logged no-op, and this firing can never double-pay a raid.</para>
+        ///
+        /// <para>UNSCALED throughout: a hold left at <c>timeScale=0</c> by any other system must
+        /// never become a new way to strand the player — that is the whole point of a net.</para>
+        /// </summary>
+        private IEnumerator StrandingWatchdog()
+        {
+            float settledFor = 0f;
+            float aliveFor = 0f;
+
+            while (true)
+            {
+                yield return null;
+
+                // The scene changed -> the session reached a terminal state by a normal exit.
+                // Nothing to rescue; stand down quietly (this is the overwhelmingly common path).
+                if (!DeNelle.Core.HubScenes.IsRaid(
+                        UnityEngine.SceneManagement.SceneManager.GetActiveScene().name))
+                    yield break;
+
+                float dt = Time.unscaledDeltaTime;
+                aliveFor += dt;
+
+                if (_scoring == null) _scoring = RaidScoring.Instance;
+
+                bool settled = _scoring != null && _scoring.Finalized;
+                if (settled)
+                {
+                    settledFor += dt;
+                    if (settledFor < SettledExitGraceSeconds) continue;
+
+                    // Section 12: never silent. This firing means the route home was eaten.
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                        $"RAID STRANDING WATCHDOG FIRED - the raid SETTLED {settledFor:0}s ago and the " +
+                        "player is STILL standing in the raid scene, so whatever owned the route home " +
+                        "(the victory end-state's primary action and its auto-dismiss, or the death " +
+                        "evac) never ran. Routing home anyway. If you are reading this, find WHAT ate " +
+                        "the exit - look for a nearby \"destroyed WITHOUT firing its primary action\" " +
+                        "warn. The watchdog is a safety net, NOT the fix (WO-1437).");
+                    ForceExitHome("settled-raid stranding watchdog");
+                    yield break;
+                }
+
+                // LAST-RESORT arm: a raid that never settled at all. The clock's OnTimeExpired
+                // subscriber normally ends this at 180s; if it is missing AND the HUD failed to
+                // build, this is the only remaining exit in the game's one exitless state.
+                float clock = _scoring != null ? _scoring.ClockSeconds : RaidScoring.DefaultClockSeconds;
+                if (aliveFor < clock + UnsettledBackstopGraceSeconds) continue;
+
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                    $"RAID STRANDING WATCHDOG FIRED (last-resort arm) - {aliveFor:0}s in a raid scene " +
+                    $"with a {clock:0}s clock that NEVER finalized, so neither the objective, the clock " +
+                    "expiry, Retreat nor hero death ended this session. Routing home anyway. This arm " +
+                    "firing means the OnTimeExpired subscriber is missing or RaidScoring never " +
+                    "installed - fix THAT (WO-1437).");
+                ForceExitHome("unsettled-raid last-resort watchdog");
+                yield break;
+            }
+        }
+
+        /// <summary>
+        /// Settle whatever is still unsettled, then leave. Ordered exactly like
+        /// <see cref="DoRetreat"/> (loot before army reconcile) so the watchdog exit pays what
+        /// every other exit pays; both calls are latched, so a raid already settled by the
+        /// victory path is untouched and this reduces to the route home alone.
+        /// </summary>
+        private void ForceExitHome(string reason)
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", reason + ": settle partial loot",
+                () => SettlePartialLoot(reason));
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", reason + ": reconcile army",
+                () => ReconcileRaidEnd(0));
+
+            // Clear the runtime enemy-owned flag before leaving so the home hub never inherits
+            // a stale read from this raid (mirrors RaidVictoryController.ReturnHome).
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", reason + ": clear scene ownership",
+                () => SceneOwnership.SetEnemyOwned(false));
+            DeNelle.Core.State.GameStateService.Instance?.Save();
+            DeNelle.Core.SceneRouter.GoCastle();
         }
 
         // The raid clock ran out (RaidScoring.OnTimeExpired): call off the assault and
@@ -845,6 +992,60 @@ namespace DeNelle.Village
         //  HUD construction (code-built uGUI, non-modal bottom tray)
         // =====================================================================
 
+        // ── WO-1436: WHERE THE DEPLOY BAR SITS, AND WHY IT IS NOT A LITERAL ──────────
+        //
+        // OWNER RULING 2026-09-06: the ABILITY ROW owns the thumb position at the bottom; this
+        // bar stacks ABOVE it. Casting is constant, deploying is occasional, so the constant
+        // action gets the thumb.
+        //
+        // ⛔ THE DEFECT THIS CLOSES, MEASURED AT SOURCE (WO-1436 §7.3, not inferred):
+        //     kit `actionBar` (holds combatDock)  Y 0.015-0.150  canvas sortingOrder  4 000
+        //     this bar                            Y 0.010-0.160  canvas sortingOrder 30 000
+        // Same band, 26 000 layers above. Once the raid declares combat for its whole duration
+        // the ability faces are up PERMANENTLY - and were permanently buried. The owner's
+        // felt-test screenshot showed CAST / BLOCK / Arcane Bolt / Mend / EMPTY / ITEM rendering
+        // underneath this strip: present, and unreachable, which from the chair is the same thing
+        // as absent.
+        //
+        // ⛔ THE FLOOR IS SHARED DATA, NEVER A NUMBER TYPED HERE. It is
+        // HudLayoutBands.BottomOverlayFloorY (DeNelle.Core.UI). This class is in DeNelle.Village,
+        // which may not reference DeNelle.HUD (CLAUDE.md §5), so it cannot ask the kit for a free
+        // band - and a matching literal on each side is the duplicated-state failure CLAUDE.md
+        // documents four times over. If the ability row's height ever changes, this bar follows
+        // with no edit here. Do NOT re-introduce a bottom-Y literal in BuildHud.
+
+        /// <summary>Bar height as a screen fraction — the authored strip height, unchanged from
+        /// the pre-WO-1436 bar (0.16 - 0.01). Only its SEAT moved.</summary>
+        private const float DeployBarHeight = 0.150f;
+        /// <summary>Status-line height as a screen fraction (was 0.205 - 0.165).</summary>
+        private const float DeployStatusHeight = 0.040f;
+        /// <summary>Left/right edges of both bands (unchanged).</summary>
+        private const float DeployBandMinX = 0.02f, DeployBandMaxX = 0.98f;
+
+        /// <summary>The deploy bar's screen band, seated immediately above the reserved thumb
+        /// band. Exposed so the oracle can assert the exclusion from the AUTHORED anchors on both
+        /// sides rather than from a copied figure.</summary>
+        public static Rect DeployBarBand
+        {
+            get
+            {
+                return HudLayoutBands.StackAboveThumbBand(
+                    DeployBandMinX, DeployBandMaxX, DeployBarHeight, 0f);
+            }
+        }
+
+        /// <summary>The status line's band, stacked on the bar with the SAME shared gap constant
+        /// so the two can never drift apart.</summary>
+        public static Rect DeployStatusBand
+        {
+            get
+            {
+                return HudLayoutBands.StackAboveThumbBand(
+                    DeployBandMinX, DeployBandMaxX, DeployStatusHeight,
+                    DeployBarHeight + HudLayoutBands.ThumbBandClearanceGap);
+            }
+        }
+
         private void BuildHud()
         {
             // WO-1110 acceptance: the ONLY way to prove the exit survives a HUD failure is to
@@ -861,15 +1062,26 @@ namespace DeNelle.Village
             // A plain overlay canvas (NOT a modal scrim — the world stays visible/playable).
             _ui = ElarionUiKit.BuildModalCanvas("RaidDeployHud", 30000);
 
-            // Bottom command bar — a framed dark-glass strip across the bottom.
-            var bar = ElarionUiKit.Panel(_ui.transform, new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.16f), deep: true);
+            // Command bar — a framed dark-glass strip, seated ABOVE the reserved thumb band so
+            // the hero's ability row keeps the thumb position (owner ruling 2026-09-06; see the
+            // DeployBarBand block above). The band comes from DeNelle.Core.UI, not from here.
+            var barBand = DeployBarBand;
+            var bar = ElarionUiKit.Panel(_ui.transform,
+                new Vector2(barBand.xMin, barBand.yMin), new Vector2(barBand.xMax, barBand.yMax),
+                deep: true);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy HUD seated above the reserved thumb band: bar y " +
+                barBand.yMin.ToString("F3") + ".." + barBand.yMax.ToString("F3") +
+                ", floor " + HudLayoutBands.BottomOverlayFloorY.ToString("F3") +
+                " (ability row tops out at " + HudLayoutBands.ThumbActionRowMaxY.ToString("F3") + ").");
 
             // Status line just above the bar.
+            var statusBand = DeployStatusBand;
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             statusGo.transform.SetParent(_ui.transform, false);
             var sr = statusGo.GetComponent<RectTransform>();
-            sr.anchorMin = new Vector2(0.02f, 0.165f);
-            sr.anchorMax = new Vector2(0.98f, 0.205f);
+            sr.anchorMin = new Vector2(statusBand.xMin, statusBand.yMin);
+            sr.anchorMax = new Vector2(statusBand.xMax, statusBand.yMax);
             sr.offsetMin = Vector2.zero; sr.offsetMax = Vector2.zero;
             _status = statusGo.GetComponent<TMPro.TextMeshProUGUI>();
             _status.fontSize = ElarionUi.FontLabel;

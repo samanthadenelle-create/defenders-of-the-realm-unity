@@ -132,7 +132,15 @@ namespace DeNelle.HUD.Kit
             // MoveCluster right edge at 0.270 and the ActionRail left edge at 0.780) so the
             // 7-face applicability MAX (Build/Talk/Bag/Raids/Map/Quests/Upgrade) keeps each
             // face near the previous 6-face touch size at the constant per-button width.
-            Add(HudArea.ActionBar,   new Vector2(ActionBarMinX, 0.015f), new Vector2(ActionBarMaxX, 0.150f));
+            // ⭐ WO-1436 - THE Y EDGES ARE NO LONGER AUTHORED HERE. They are
+            // HudLayoutBands.ThumbActionRowMinY/MaxY (DeNelle.Core.UI), because the raid deploy
+            // bar in DeNelle.Village has to stack ON TOP of this row and DeNelle.Village may not
+            // reference DeNelle.HUD (CLAUDE.md §5). Two literals - one here, one there - is the
+            // duplicated-state failure CLAUDE.md documents four times over; the band is shared
+            // DATA instead. The X edges stay local: nothing outside this assembly needs them, and
+            // HudDockLayoutRegression pins their source text verbatim.
+            Add(HudArea.ActionBar,   new Vector2(ActionBarMinX, HudLayoutBands.ThumbActionRowMinY),
+                                     new Vector2(ActionBarMaxX, HudLayoutBands.ThumbActionRowMaxY));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
             // ⭐ WO-1219 - THE LEFT COLUMN IS NO LONGER AUTHORED HERE.
             // Vitals / HeartStatus / Minimap / Dock are read from DeNelle.Core.UI.HudLayoutBands,

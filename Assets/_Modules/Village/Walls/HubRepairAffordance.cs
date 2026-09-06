@@ -114,7 +114,53 @@ namespace DeNelle.Village
         private static void OnSceneLoaded(Scene s, LoadSceneMode mode)
         {
             s_installedThisScene = false;
+            s_townGateScene = null;          // re-decide the town gate for the new scene
             TrySpawn();
+        }
+
+        // ── WO-1436: the town gate ───────────────────────────────────────────
+        // Cached per active scene so NotifyRepairableAppeared (a per-structure hot path)
+        // costs a reference compare, and so the refusal is announced ONCE per scene rather
+        // than once per structure restored.
+        private static string s_townGateScene;
+        private static bool s_townGateSuppressed;
+
+        /// <summary>
+        /// WO-1436. TRUE when this scene must NOT carry the town repair affordance.
+        ///
+        /// <para>THE DEFECT (owner felt-test 2026-09-06, and she spotted it unprompted —
+        /// she asked why her pets wanted to repair things in a raid). Inside a live raid the
+        /// capture reads:</para>
+        /// <code>[Flow:Repair] hub repair affordance installed (scene='RaidBase_raider_camp_small')</code>
+        /// <para>...and a <c>REPAIR ALL — Wood 263 Iron 133</c> button sat in the middle of a
+        /// battlefield, over the raid's own chrome. This gate was never LEAKED past: it was
+        /// never asked. <see cref="SceneHasRepairables"/> is a structural test — "does this
+        /// scene contain a WallSegment / Gate / Building / Tower?" — and a raid base is FULL
+        /// of them. They are the ENEMY'S. The predicate answered its own question correctly
+        /// and was the wrong question to be the only one asked.</para>
+        ///
+        /// <para>REUSED, NOT INVENTED: <see cref="DeNelle.Core.HubScenes.SuppressTownHud"/> is
+        /// the WO-550 chokepoint written for exactly this — "should TOWN/SOCIAL/ECONOMY HUD be
+        /// suppressed here?" — already gating ~14 panel bootstraps off the same
+        /// scene-configs.json ownership data. The raid scene resolves Enemy-owned in the very
+        /// same capture (<c>[Flow:World] SceneOwnership resolved 'RaidBase_raider_camp_small'
+        /// -> Enemy-owned (IsEnemyOwned=True)</c>), so this is one more caller of a working
+        /// gate, not a new parallel rule.</para>
+        /// </summary>
+        private static bool TownHudSuppressedHere()
+        {
+            string scene = SceneManager.GetActiveScene().name;
+            if (!ReferenceEquals(scene, s_townGateScene) && scene != s_townGateScene)
+            {
+                s_townGateScene = scene;
+                s_townGateSuppressed = DeNelle.Core.HubScenes.SuppressTownHud(scene);
+                if (s_townGateSuppressed)
+                    FlowTrace.Step("Repair",
+                        $"hub repair affordance SUPPRESSED (scene='{scene}') - enemy-owned ground " +
+                        "(HubScenes.SuppressTownHud). The walls and towers standing here are the " +
+                        "ENEMY'S; offering REPAIR ALL over them is town chrome in a raid (WO-1436).");
+            }
+            return s_townGateSuppressed;
         }
 
         /// <summary>
@@ -148,6 +194,12 @@ namespace DeNelle.Village
 
         private static void TrySpawn()
         {
+            // WO-1436: asked BEFORE the structural test, and inside TrySpawn rather than at
+            // the sceneLoaded hook, so BOTH entry paths are covered - the scene-load path and
+            // NotifyRepairableAppeared(), which is the one that actually fired in the raid
+            // (the enemy garrison's walls are restored after the load, exactly like a town's).
+            if (TownHudSuppressedHere()) return;
+
             if (UnityEngine.Object.FindAnyObjectByType<HubRepairAffordance>() != null)
             {
                 s_installedThisScene = true;

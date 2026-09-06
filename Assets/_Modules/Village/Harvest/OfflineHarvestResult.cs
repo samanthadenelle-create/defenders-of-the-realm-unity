@@ -179,6 +179,53 @@ namespace DeNelle.Village
         /// <summary>How many collectors are holding something (the row's singular/plural).</summary>
         public int PendingCollectorCount;
 
+        // =====================================================================
+        //  WO-1434 — THE ECHO SILO, THE FIFTH AXIS THE RETURN SCREEN COULD NOT SAY
+        // ---------------------------------------------------------------------
+        //  MEASURED on the owner's Seeker, 2026-09-06 (build 358161). The 12:50:05
+        //  claim covering 3h40m produced, in this order:
+        //      [Flow:Echo]     claim #1: 'echo-silo' share = 13221s ... -> +52884 to
+        //                      silo -> 57600/57600 (echoes 4).
+        //      [Flow:Offline]  accrued over 13221s: worker-owned=0 node(s), total=0
+        //      [Flow:Offline]  claim #1: away summary gate -> haul=0, mendNews=False,
+        //                      jobs=0, collectorsPending=42782 ... => REVEAL.
+        //  The single largest thing that happened in her absence — 57,600 units into a
+        //  FULL silo — scored on NONE of the four axes, so the screen that exists to
+        //  report the away window never mentioned it. WO-1434 sec.3 recorded those rows
+        //  as coming from the offline-harvest grant; they do not. `Total` was 0 and
+        //  `Grant()` never ran. The producer is EchoService.DumpSilos.
+        //
+        //  These are REPORT fields on the same terms as the collector fields above: the
+        //  service READS EchoService.PredictDumpSplit (it never dumps — the COLLECT
+        //  button carries the tap to the existing CollectorStatusGate.RequestCollectAll,
+        //  which is what calls DumpSilos).
+        // =====================================================================
+
+        /// <summary>One resource's share of what a Dump would route out of the Echo silo.</summary>
+        public sealed class OfflineSiloLine
+        {
+            /// <summary>The game's canon resource word ("Wood" / "Iron" / "Stone" / "Crystals").</summary>
+            public string Resource;
+            /// <summary>Whole units the silo would route to this resource — reported, not banked.</summary>
+            public int Pending;
+        }
+
+        /// <summary>Per-resource silo shares in rail order, filled by
+        /// OfflineHarvestService.AttachSiloPending. Never null.</summary>
+        public readonly List<OfflineSiloLine> SiloPending = new List<OfflineSiloLine>();
+
+        /// <summary>Units the Echo silo is holding across every resource — reported, not banked.</summary>
+        public int SiloTotal;
+
+        /// <summary>
+        /// True when the silo has hit its ceiling and the Echoes have STOPPED gathering.
+        /// `FOUNDATIONAL_RULINGS.md` section 7: a faucet that stopped must be said in words.
+        /// </summary>
+        public bool SiloAtCap;
+
+        /// <summary>True when the Echo silo is holding something the player could collect.</summary>
+        public bool HasSiloNews => SiloTotal > 0;
+
         /// <summary>True when at least one queue job finished inside this window.</summary>
         public bool HasJobNews => CompletedJobs.Count > 0;
 
@@ -187,10 +234,15 @@ namespace DeNelle.Village
 
         /// <summary>
         /// THE ONE REVEAL GATE — haul OR mend OR a finished job OR resources waiting in a
-        /// collector. Both OfflineHarvestService.OnClaimCompleted and WelcomeBackPopup.Show
-        /// read this and nothing else.
+        /// collector OR resources waiting in the Echo silo. Both
+        /// OfflineHarvestService.OnClaimCompleted and WelcomeBackPopup.Show read this and
+        /// nothing else.
+        /// <para>WO-1434 added the silo term. Without it a town whose nodes are idle and whose
+        /// collectors are empty but whose silo is FULL gets no screen at all — the same
+        /// fall-through LANE G fixed for the collector-only town, one axis over.</para>
         /// </summary>
-        public bool HasSummaryContent => Total > 0 || HasMendNews || HasJobNews || HasCollectorNews;
+        public bool HasSummaryContent =>
+            Total > 0 || HasMendNews || HasJobNews || HasCollectorNews || HasSiloNews;
 
         /// <summary>A zero haul — nothing accrued, no popup.</summary>
         public static OfflineHarvestResult None => new OfflineHarvestResult();

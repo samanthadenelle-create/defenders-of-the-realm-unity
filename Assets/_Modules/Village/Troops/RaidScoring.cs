@@ -76,6 +76,39 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-1437 — THE ONE ANSWER TO "does hero death end a raid?". Read by
+        /// <see cref="HeroHealth"/> (which branch the death coroutine takes) and by
+        /// <c>HeroDeathEndState</c> (which sentence the fallen screen prints), so the
+        /// behaviour and the copy can never disagree.
+        ///
+        /// <para><b>OWNER DECISION, PENDING (WO-1437 sec.4.3).</b> Whether "Rise again" may
+        /// legally stand the hero back up INSIDE a live raid is a design ruling, not an
+        /// engineering one. This constant is that ruling, and flipping it is the whole
+        /// change — nothing else in either file branches on the question.</para>
+        ///
+        /// <list type="bullet">
+        /// <item><c>true</c> (current): hero death is the raid's THIRD EXIT. It settles
+        /// partial loot, reconciles the army and routes home — identical to Retreat.</item>
+        /// <item><c>false</c>: hero death respawns in place and the raid continues; the
+        /// player leaves by objective, clock or Retreat only.</item>
+        /// </list>
+        ///
+        /// <para>RECOMMENDED <c>true</c>, and set that way, because it is not a new opinion —
+        /// it is the ruling ALREADY recorded in code. <c>HeroHealth.HandleDeath</c> carries the
+        /// owner ruling of 2026-07-30 verbatim ("Hero death is the THIRD raid exit... All three
+        /// exits are honest now") and WO-1110 sec.3 made death pay exactly what retreat pays.
+        /// The 12:59:47 capture is that ruling working; the 13:02:53 capture is it being
+        /// bypassed. Flipping this to false would retire a shipped ruling, so it needs the
+        /// owner's word — which is precisely why it is one line and not a refactor.</para>
+        ///
+        /// <para>⚠ A SETTLED raid ignores this constant and ALWAYS routes home: once
+        /// <see cref="Finalized"/> has latched, the loot is paid, the camp is claimed and the
+        /// clock has stopped, so there is no session left to respawn into. That is the
+        /// softlock this WO exists to close and it is not a matter of taste.</para>
+        /// </summary>
+        public const bool RaidDeathEndsRaid = true;
+
+        /// <summary>
         /// The LIVE raid clock default (seconds). Selection/deploy UI must display this
         /// (or the authored config time only when it matches) — never a longer "target"
         /// that scoring does not use (honesty pass 2026-08-09).

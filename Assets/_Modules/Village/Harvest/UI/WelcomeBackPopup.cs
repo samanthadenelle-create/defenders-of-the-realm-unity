@@ -129,6 +129,12 @@ namespace DeNelle.Village.UI
             ElarionUiKit.FitSingleLine(summary);
 
             float y = 0.82f;
+            // WO-1434 -- the BANKED haul first (what already landed in the wallet during the
+            // claim), then the one waiting-table. These are different facts and they are never
+            // the same units: Grant() has already applied the haul, while the table below is
+            // what COLLECT would move. On the owner's 2026-09-06 capture the haul was 0 on
+            // every axis ("accrued over 13221s: worker-owned=0 node(s), total=0"), which is why
+            // no haul row drew -- correctly.
             AddResourceRow(body, ref y, _result.AetherCrystals, "AETHER CRYSTALS");
             AddResourceRow(body, ref y, _result.Food, "STONE");
             AddResourceRow(body, ref y, _result.Iron, "IRON");
@@ -139,8 +145,22 @@ namespace DeNelle.Village.UI
 
             if (_result.WasCapped)
             {
+                // WO-1434 - THE SUBJECT OF THIS SENTENCE WAS WRONG. `WasCapped` is
+                // `window.ExceedsCap(OfflineCapHours)` (OfflineHarvestService:385) -- the AWAY
+                // WINDOW hit its 10h ceiling. It says nothing about storage, and the old line
+                // ("Storage filled while you were away. Check in sooner to keep every reward.")
+                // named storage AND implied a reward had been taken away. Neither is true: the
+                // window cap means later hours never accrued, and nothing that DID accrue is
+                // ever discarded (see the proof block on OfflineHarvestService.BuildReturnRows).
+                // !! The header suffix "(STORAGE FULL)" in AwayTextFor carries the SAME wrong
+                // subject and is pinned by AwaySummaryReportRegression case8 (line 243), so it
+                // is left alone here rather than half-moved -- it needs its own pin move.
                 var capped = ElarionUiKit.Label(body,
-                    "Storage filled while you were away. Check in sooner to keep every reward.",
+                    // No number here ON PURPOSE: the ceiling is OfflineHarvestService
+                    // .OfflineCapHours, and a copy of it in this string is duplicated state that
+                    // goes stale the day the storage ladder raises the window (offline-storage
+                    // .json authors 10h/12h/16h/24h/36h per tier). Name the rule, not the value.
+                    "Your realm gathers for a limited stretch while you are away. Nothing gathered is lost.",
                     Mathf.Max(0.03f, y - 0.12f), y, ElarionUi.Gold,
                     ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
                 ElarionUiKit.FitBlock(capped, 26f, ElarionUi.FontMicro);
@@ -245,24 +265,44 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void AddCollectorRow(Transform body, ref float y)
         {
-            if (_result == null || !_result.HasCollectorNews) return;
-            if (!HasRoom(y))
-            {
-                FlowTrace.Warn("Offline",
-                    $"welcome-back: {_result.PendingCollectorTotal} waiting in collectors had no room " +
-                    "left in the report body -- not lost, only unlisted (COLLECT still banks it).");
-                return;
-            }
+            if (_result == null) return;
+            if (!_result.HasCollectorNews && !_result.HasSiloNews) return;
 
-            // OWNER RULINGS 2026-09-04 22:30 ("the collectors need to be seperated" / "Wood Iron
-            // Stone different rows"): one plate row PER RESOURCE in the HUD rail's order, the
-            // resource word left ("WOOD WAITING") and the summed pending right ("+1240"), on the
-            // SAME AddPlateRow geometry as the haul rows above so the report reads as one table.
+            // =================================================================
+            //  WO-1434 -- ONE ROW PER RESOURCE, AMOUNT AND DESTINY TOGETHER.
+            // -----------------------------------------------------------------
+            //  WHAT THIS METHOD USED TO DRAW, from the owner's device 2026-09-06
+            //  (build 358161, screencap 12:50:59):
+            //      WOOD  WAITING   +10609        <- this loop
+            //      IRON  WAITING    +6365
+            //      STONE WAITING   +25808
+            //      Storage nearly full - 10609 wood will wait     <- AddCollectWaitRows
+            //      Storage nearly full - 6365 iron will wait
+            //      Storage nearly full - 25808 stone will wait
+            //  Six lines for three facts, each integer printed twice, and every row
+            //  wearing a reward's "+" while its ENTIRE amount was going to wait. She
+            //  tapped COLLECT and banked ZERO ("[Flow:Eco] Grant +W0 +I0").
+            //
+            //  AND IT WAS DRAWING THREE OF FIVE. The Echo silo -- 57,600 units, at cap,
+            //  the largest single thing that happened while she was away -- had no row
+            //  here and no term in the reveal gate. It reached the player only AFTER the
+            //  tap, in the harvest-result modal, described as "lost".
+            //
+            //  The table below is the fix: OfflineHarvestService.BuildReturnRows merges
+            //  BOTH producers per resource and pairs each amount with what becomes of it,
+            //  so there is one row per resource and no line repeats another's number.
+            //  Nothing here is lost -- see the proof block on BuildReturnRows.
+            // =================================================================
+            List<OfflineHarvestService.ReturnRow> rows = null;
+            Guard.Try("Offline", "build the welcome-back resource table",
+                () => rows = OfflineHarvestService.BuildReturnRows(_result));
+
             // The old single "3 COLLECTORS WAITING +16716" line survives ONLY as the fallback for
-            // a result that carries totals but no per-resource lines (older producers / the oracle).
-            var lines = _result.PendingCollectors;
-            if (lines == null || lines.Count == 0)
+            // a result that carries totals but no per-resource lines (older producers / an oracle
+            // fixture that fills PendingCollectorTotal and nothing else).
+            if (rows == null || rows.Count == 0)
             {
+                if (!_result.HasCollectorNews || !HasRoom(y)) return;
                 string left = _result.PendingCollectorCount == 1
                     ? "COLLECTOR WAITING"
                     : _result.PendingCollectorCount + " COLLECTORS WAITING";
@@ -271,78 +311,99 @@ namespace DeNelle.Village.UI
             }
 
             int rendered = 0, next = 0;
-            while (next < lines.Count && rendered < MaxCollectorRows && HasRoom(y))
+            while (next < rows.Count && rendered < MaxCollectorRows && HasRoom(y))
             {
-                var line = lines[next];
+                var r = rows[next];
                 next++;
-                if (line == null || line.Pending <= 0) continue;
-                string word = string.IsNullOrEmpty(line.Resource) ? "RESOURCE" : line.Resource.ToUpperInvariant();
-                AddPlateRow(body, ref y, word + " WAITING", "+" + line.Pending, ElarionUi.Gold);
+                string label = OfflineHarvestService.ReturnRowLabel(r);
+                string destiny = OfflineHarvestService.ReturnRowDestiny(r);
+                FlowTrace.Step("Offline",
+                    $"welcome-back row: {r.Word} pending={r.Pending} (collectors {r.FromCollectors} + silo {r.FromSilo}) " +
+                    $"headroom={r.Headroom} banks={r.Banks} stays={r.Waits} -> '{label}' | '{destiny}'.");
+                // The value column is WIDE here because it carries a sentence, not a number.
+                AddPlateRow(body, ref y, label, destiny, ElarionUi.Gold, valueSplit: 0.46f);
                 rendered++;
             }
 
             // Whatever the row budget (or the body) could not seat collapses into one line.
             int remaining = 0, remainingUnits = 0;
-            for (int i = next; i < lines.Count; i++)
-            {
-                if (lines[i] == null || lines[i].Pending <= 0) continue;
-                remaining++;
-                remainingUnits += lines[i].Pending;
-            }
+            for (int i = next; i < rows.Count; i++) { remaining++; remainingUnits += rows[i].Pending; }
             if (remaining > 0)
             {
-                if (HasRoom(y)) AddPlateRow(body, ref y, "ALSO WAITING", "+" + remainingUnits + " MORE", ElarionUi.Gold);
+                if (HasRoom(y)) AddPlateRow(body, ref y, "ALSO WAITING", remainingUnits + " MORE", ElarionUi.Gold);
                 else
                     FlowTrace.Warn("Offline",
                         $"welcome-back: {remaining} more resource row(s) ({remainingUnits} units) had no room left " +
-                        "in the report body -- not lost, only unlisted (COLLECT still banks it).");
+                        "in the report body -- they stay where they are, only the row is unlisted.");
             }
-            AddCollectWaitRows(body, ref y);
+
+            AddDestinyFooter(body, ref y, rows);
         }
 
         /// <summary>
-        /// WO-1392 - WARN BEFORE COLLECT. One line per resource whose pending exceeds the town
-        /// bank's headroom right now: "Storage nearly full - 414 wood will wait". Words, not
-        /// colour, ASCII. The prediction is OfflineHarvestService.PredictCollectWaits (pure,
-        /// pinned); this method only seats it. Those units are not lost on the tap any more
-        /// (ResourceCollector.Collect leaves them pending) - the line is so COLLECT is informed.
+        /// WO-1434 - the two sentences that belong to the TABLE rather than to any one row.
+        /// <para>(1) What happens to everything that will not fit, said plainly and without the
+        /// word "lost" - because nothing is lost, on either producer (proof block on
+        /// OfflineHarvestService.BuildReturnRows).</para>
+        /// <para>(2) `FOUNDATIONAL_RULINGS.md` section 7: a player earning nothing into a
+        /// resource must be TOLD, in words. A silo at its ceiling means the Echoes have stopped
+        /// gathering entirely, which no row can say - a half-full silo also has a waiting row and
+        /// is still filling.</para>
+        /// Words and layout, never hue: the owner is red/green colourblind.
         /// </summary>
-        private void AddCollectWaitRows(Transform body, ref float y)
+        private void AddDestinyFooter(Transform body, ref float y,
+                                      IReadOnlyList<OfflineHarvestService.ReturnRow> rows)
         {
-            List<OfflineHarvestService.CollectWait> waits = null;
-            Guard.Try("Offline", "predict collect waits for the welcome-back warning",
-                () => waits = OfflineHarvestService.PredictCollectWaits(_result));
-            if (waits == null || waits.Count == 0) return;
-            foreach (var w in waits)
+            string stalled = OfflineHarvestService.SiloStalledLine(_result);
+            if (!string.IsNullOrEmpty(stalled))
             {
-                string line = OfflineHarvestService.CollectWaitLine(w);
-                FlowTrace.Step("Offline",
-                    $"welcome-back warn-before-collect: {w.Word} pending={w.Pending} headroom={w.Headroom} -> '{line}'.");
-                if (!HasRoom(y))
-                {
-                    FlowTrace.Warn("Offline",
-                        $"welcome-back: the warning '{line}' had no room left in the report body -- the units " +
-                        "still stay in the collectors on COLLECT (never burned), only the warning is unlisted.");
-                    return;
-                }
-                AddMendLine(body, ref y, line, ElarionUi.Gold);
+                if (HasRoom(y)) AddMendLine(body, ref y, stalled, ElarionUi.Gold);
+                else FlowTrace.Warn("Offline",
+                    "welcome-back: the Echo-silo-full line had no room left in the report body -- the silo is " +
+                    "still full and still gathering nothing; only the sentence is unlisted.");
             }
+
+            string footer = OfflineHarvestService.ReturnFooterLine(rows);
+            if (string.IsNullOrEmpty(footer)) return;
+            if (!HasRoom(y))
+            {
+                FlowTrace.Warn("Offline",
+                    $"welcome-back: the footer '{footer}' had no room left in the report body -- the units still " +
+                    "stay where they are on COLLECT (never burned), only the sentence is unlisted.");
+                return;
+            }
+            AddMendLine(body, ref y, footer, ElarionUi.Gold);
         }
 
         /// <summary>The shared two-column plate row: label left, value right. Extracted so a
-        /// job row and a collector row cannot drift from a haul row.</summary>
-        private static void AddPlateRow(Transform body, ref float y, string left, string right, Color rightColor)
+        /// job row and a collector row cannot drift from a haul row.
+        /// <para>WO-1434 - <paramref name="valueSplit"/> is where the value column starts (0..1
+        /// across the plate). The default 0.70 suits a NUMBER; a WO-1434 destiny row's value is a
+        /// short sentence ("258 FITS, 10351 STAYS") and needs the wider 0.46, or FitSingleLine
+        /// shrinks it to unreadable on a phone. Layout carries meaning here, so the split is a
+        /// parameter rather than a second row builder that could drift.</para></summary>
+        private static void AddPlateRow(Transform body, ref float y, string left, string right, Color rightColor,
+                                        float valueSplit = 0.70f)
         {
             if (string.IsNullOrEmpty(left)) return;
             var plate = ElarionUiKit.AddImage(body, "Row_" + left,
                 new Vector2(0.08f, y - RowH), new Vector2(0.92f, y),
                 new Color(0.05f, 0.045f, 0.04f, 0.96f), rounded: false);
+            float split = Mathf.Clamp(valueSplit, 0.30f, 0.90f);
+            // The label column ends AT the split for the default (0.70), byte-identical to the
+            // pre-WO-1434 geometry the job/haul rows were tuned against; only a WIDE value column
+            // takes the 0.02 gutter, where the two texts would otherwise touch.
+            float labelEnd = split >= 0.60f ? split : split - 0.02f;
             var name = ElarionUiKit.Label(plate.transform, left, 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Left,
-                0.05f, 0.70f, bold: false);
+                0.05f, labelEnd, bold: false);
+            // A number gets the display face; a sentence gets the body face, or FitSingleLine
+            // shrinks it past legibility on a phone. Keyed off the split so a caller cannot pick
+            // a wide column and a display font together by accident.
+            int valueFont = split < 0.60f ? ElarionUi.FontMicro : ElarionUi.FontLabel;
             var value = ElarionUiKit.Label(plate.transform, right ?? string.Empty, 0f, 1f,
-                rightColor, ElarionUi.FontLabel, TextAlignmentOptions.Right,
-                0.70f, 0.95f, bold: true);
+                rightColor, valueFont, TextAlignmentOptions.Right,
+                split, 0.95f, bold: true);
             ElarionUiKit.FitSingleLine(name); ElarionUiKit.FitSingleLine(value);
             y -= RowH + RowGap;
         }
@@ -357,14 +418,20 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void CollectAndDismiss()
         {
-            if (_result != null && _result.HasCollectorNews)
+            // WO-1434 - THE SILO IS A REASON TO COLLECT TOO. This gate read HasCollectorNews
+            // alone, so a town whose collectors were empty but whose Echo silo was FULL got a
+            // COLLECT button that only dismissed -- and ResourceCollectorService.CollectAll is
+            // the very call that dumps the silo (it wraps `echo.DumpSilos()`). Same verb, same
+            // one command; only the gate was too narrow.
+            if (_result != null && (_result.HasCollectorNews || _result.HasSiloNews))
             {
                 if (CollectorStatusGate.HasSubscriber)
                 {
                     FlowTrace.Step("Offline",
                         "welcome-back COLLECT -> CollectorStatusGate.RequestCollectAll (" +
                         _result.PendingCollectorTotal + " waiting across " +
-                        _result.PendingCollectorCount + " collector(s)).");
+                        _result.PendingCollectorCount + " collector(s), plus " +
+                        _result.SiloTotal + " in the Echo silo).");
                     Guard.Try("Offline", "welcome-back collect-all",
                         () => CollectorStatusGate.RequestCollectAll());
                 }
