@@ -1,6 +1,6 @@
 # WO-1421: the Journey deck drops DUNGEONS, REALM MAP and SEASON - two cards, not five
 
-**Status:** FIXED 2026-09-06 - landed in `9ad5c7e3c`; COMPILE_GATE_OK (c17) + REGRESSION_OK 393/393 (r17) + MANAGE_OPERATIONAL_CAPTURE_OK 12/12 (capman6); both Journey oracles proven RED then GREEN (rRED3); RESULT file has the deviations. Device build in flight; owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's ruling, dispatched to an Opus lane the same night)*
+**Status:** FIXED 2026-09-06 - ON THE SEEKER in build 2026.09.06.357599 (chain 02:59-03:04: APK_OK 463MB, R2_PARITY_OK objects=271; installed 03:06, versionName read off dumpsys; Firebase App Distribution notified) - landed in `9ad5c7e3c`; COMPILE_GATE_OK (c17) + REGRESSION_OK 393/393 (r17) + MANAGE_OPERATIONAL_CAPTURE_OK 12/12 (capman6); both Journey oracles proven RED then GREEN (rRED3); RESULT file has the deviations. Device build in flight; owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's ruling, dispatched to an Opus lane the same night)*
 **Silo:** HUD / PlayerDeckWorkspace (DeNelle.HUD) - one code file + one suite re-point
 **Owner ruling (2026-09-06, verbatim):** *"Under journey, please remove dungeons season in realm map as they should
 not be displayed there right now we don't have anything for seasons at all dungeons are very vague and ambiguous and
