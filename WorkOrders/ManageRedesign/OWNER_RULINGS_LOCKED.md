@@ -42,3 +42,37 @@ goes further by replacing the rail model rather than enriching the card.
 43 rail rows across four areas, about two visible at a time; Buildings 6 + Defense 11 = 17, which is the number
 the canon cites; the scroll auditor reporting `geometry=5 touch=5` on deliberately scrolled frames, which WO-2016
 is right to call a fix rather than a waiver.
+
+
+## Rulings added after delivery (CLI seat, 2026-09-06)
+
+**21. THE TWO BARRACKS LEVELS ARE MERGED. The barracks BUILDING TIER gates troop unlocks.**
+
+Owner ruling 2026-09-06, in answer to "there are two barracks levels, which way do you want to resolve it":
+**"Merge them - the building tier gates troops."**
+
+*Measured before the ruling, at source:*
+- `GameState.BarracksLevel` (`GameState.cs:506`, save key `barracksLevel`, `SaveSchema.cs:613`) is a SEPARATE field
+  from `GameState.BuildingTiers["barracks"]`, the ladder the player upgrades in Manage.
+- It is raised in exactly one place: `BarracksProgression.ApplyBarracksUpgrade` (`:226-234`), the completion effect of
+  a `BarracksUpgrade` job. That job is composed only by `BarracksPanelVM`, reachable only from
+  `BarracksPanel.ShowBarracksUI` - which has **ZERO CALLERS**, proven four ways including a script-GUID search.
+- Consequence: the field sits at its founding value of 1 forever (`GameStateService.cs:1235`), and **7 of the 9 troop
+  types are unreachable by any player action** - Spearman, Field Cleric, Shieldguard, Outrider, Siege Catapult,
+  Battlemage, Echo Legionnaire - along with 5 barracks-level rungs and 42 troop-level rungs.
+- Upgrading the barracks BUILDING does nothing for the army, which is precisely the trap: two numbers spelled the same
+  way on different scales, and the one the player can touch is not the one that matters. **Identical in shape to the
+  village-tier defect fixed the same day (WO-1423).**
+
+*What this ruling requires, and it lands on WO-2008 / WO-2009 / WO-2011:*
+1. Troop unlock reads the barracks **building tier**. `BarracksService.IsTroopUnlocked` and
+   `BarracksProgression.IsTroopUnlocked(troopId, level)` take their level from `ModifierService.TierOf("barracks")`.
+2. `GameState.BarracksLevel` is retired as a GATE. Read-migrate it on load so existing saves do not regress - never
+   delete a live save key without a migration (CLAUDE.md section 8).
+3. `BarracksPanel` / `BarracksPanelVM` / `ShowBarracksUI` and the `BarracksUpgrade` job kind are then dead weight.
+   Decide deliberately: delete them, or keep the panel as the troop DETAIL surface WO-2009 needs. **Do not leave an
+   unreachable panel in the tree** - that is what caused this.
+4. WO-2008's locked-tile CTA routes to the barracks BUILDING card in BUILD, which already exists and already works.
+   No new screen, and ruling 18 (direct prerequisite navigation) is satisfied with a door that genuinely opens.
+5. An oracle must fail the build if any troop's unlock level exceeds the barracks ladder's max tier - the same shape as
+   `ProgressionReachabilityRegression`, which now guards the village-tier axis.
