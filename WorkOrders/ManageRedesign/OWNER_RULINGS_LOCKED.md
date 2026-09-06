@@ -103,3 +103,36 @@ tier INDEX rather than the authored key, EVERY tier-2 row in the game is charged
 says, and `EconomySinkCapRegression` mis-attributes those costs when it scans. Reconciling that is WO-2005's job
 (BUILD inventory reconciliation) - it must read the CHARGED lane, not the authored one, or every cost it reports is
 wrong for tier 2 and above.
+
+**23. ONE OF EACH STORAGE TYPE. Capacity grows by LEVEL, never by COUNT.**
+
+Owner ruling 2026-09-06, verbatim: **"also cap only one of each storage type, the idea is they should level them"** /
+**"if we decide one day we need more space we add another level easy."**
+
+`lumberyard` (wood), `foundry` (iron) and `silo` (stone) become **singleton**: one placed instance each, and the player
+raises capacity by upgrading it.
+
+*Why this needs a ruling at all:* measured 2026-09-06, **none of the three container rows carries a singleton flag
+today**, while `healing_caravan` does. So a player can place a SECOND lumberyard and gain another full container's
+worth of wood ceiling. `TownBankCapacity.BuildSlots` sums capacity over every built container of that resource, so the
+cap is currently a function of level AND count. That path is undiscoverable, unbalanced, and it makes the level ladder
+pointless - why pay 14,400 wood for L5 to L6 when a second building is cheaper?
+
+**The principle, stated so it survives:** capacity has ONE axis of growth. Raising the ceiling later is then a data
+edit - add a rung, or raise a multiplier in `storage-caps.json` - not a change to how many buildings a town holds and
+where they fit. Two axes would also mean the "which container do I need" copy from WO-1425 could no longer name a
+single answer.
+
+*Implementation notes, for whoever picks this up:*
+1. Data-only: set the singleton flag on the three container rows in `structures-catalog.json`. ⚠ Canonical JSON is
+   edited in BYTE mode with the LF count proven, and there are TWO copies (`Assets/Resources/Data/Canonical/` and
+   `Assets/StreamingAssets/Data/Canonical/`) which must stay identical - a parity oracle reads both.
+2. **Existing saves may already hold two.** Do not silently delete one. Decide and record: leave over-cap towns alone
+   (grandfathered), or surface it. Never destroy a placed structure the player paid for.
+3. ⚠ **Singleton has a known sharp edge, and it bit the caravan the same day:** `StructureSingleton.HasPlacedInstance`
+   returns true **from the persisted BaseLayout record alone**, before it looks at live bodies. So a singleton whose
+   death does not clean up its record can never be rebuilt. Containers are ordinary `Building`s and route through
+   `Destructible.NotifyBroken` correctly, so they are safe - but any future singleton must be checked against that,
+   and an oracle asserting "every singleton's death path routes through Destructible" would close the class.
+4. `EconomySinkCapRegression`'s ceiling arithmetic assumes ONE container per resource. That assumption becomes true
+   with this ruling instead of merely convenient - say so in the suite so nobody "generalises" it back.
