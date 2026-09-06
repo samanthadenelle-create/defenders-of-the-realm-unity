@@ -180,6 +180,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
+> ## MANAGE-REDESIGN SERIES (2000-block): **WO-2001 through WO-2017 are TAKEN**; next free = **WO-2018**.
+> *(A THIRD, DISJOINT NAMESPACE, declared 2026-09-06, exactly like the PROD series. The owner delivered a
+> 17-part Manage redesign program authored outside this repo; it arrived pre-numbered in a 2000-block, so the
+> block is DECLARED here rather than renumbered - renumbering a delivered set is how cross-references rot.
+> Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
+> the main line.)*
+>
 > ## RECONCILED 2026-09-06 (CLI, eightieth pass): main line next free = **1429**.
 > *(CLI minted **1428** - the Manage card grows to the owner's mockup: large building art, a before/after STATS table, a REQUIREMENTS checklist that ticks each resource against the player's balance, and a NEXT LEVEL art preview. Her mockup pasted 2026-09-06; it ABSORBS WO-1427 because the requirements block answers "why can't I?" visually. Bumped 1428 -> 1429 in this SAME edit.)*
 >

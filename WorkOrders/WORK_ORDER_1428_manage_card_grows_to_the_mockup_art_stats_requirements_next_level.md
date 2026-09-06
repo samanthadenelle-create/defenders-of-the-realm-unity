@@ -1,6 +1,6 @@
 # WO-1428: the Manage card grows to the owner's mockup - large art, a before/after STATS table, a REQUIREMENTS checklist, and a NEXT LEVEL preview
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's own mockup, pasted in-session
+**Status:** SUPERSEDED 2026-09-06 by the MANAGE REDESIGN program (`WorkOrders/ManageRedesign/`, WO-2001..2017). That program subsumes the richer Manage card and goes further: it replaces the rail interaction model rather than enriching what sits inside it. The rulings in this file that the program did NOT restate are still worth reading - in particular the blocker PRECEDENCE (hard gate, then capacity, then affordability) and the one-producer rule. *(was: READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's own mockup, pasted in-session)*
 **Silo:** HUD / Manage (Village assembly, code-built uGUI) + one Core producer
 **Owner ruling (2026-09-06):** she pasted a Manage - Buildings mockup and asked *"wasnt this the idea we were going for?"*
 The answer is **yes, and what shipped in WO-1422 is a thinner version of it.** This WO closes the gap.

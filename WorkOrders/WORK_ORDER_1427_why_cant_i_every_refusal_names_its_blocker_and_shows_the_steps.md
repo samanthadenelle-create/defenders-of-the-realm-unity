@@ -1,6 +1,6 @@
 # WO-1427: "Why can't I?" - every refused build or upgrade names its blocker in player words and offers the STEPS that clear it
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's playtest of build 2026.09.06.357599
+**Status:** SUPERSEDED 2026-09-06 by the MANAGE REDESIGN program (`WorkOrders/ManageRedesign/`, WO-2001..2017). That program subsumes the requirements/steps feature and goes further: it replaces the rail interaction model rather than enriching what sits inside it. The rulings in this file that the program did NOT restate are still worth reading - in particular the blocker PRECEDENCE (hard gate, then capacity, then affordability) and the one-producer rule. *(was: READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's playtest of build 2026.09.06.357599)*
 **Silo:** Core (a new gating producer) + the three refusal surfaces. Presentation stays a separate layer.
 **Owner rulings (2026-09-06, verbatim):**
 - *"i want an audit of all items buildable upgradable. I want the user to be able to see the steps need to get there. So if upgrade village to lvl 1 is prerequsite, click here to see stpes needed"*
