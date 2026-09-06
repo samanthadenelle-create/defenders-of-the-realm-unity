@@ -960,9 +960,14 @@ namespace DeNelle.Village.UI
             var rootGroup = chrome.root.GetComponent<CanvasGroup>();
             if (rootGroup == null) rootGroup = chrome.root.AddComponent<CanvasGroup>();
             rootGroup.alpha = 0f;
-            StartCoroutine(RevealRoutine(rootGroup, (RectTransform)chrome.root.transform, 0f, 0.25f, 0.94f));
+            StartCoroutine(RevealRoutine(rootGroup, (RectTransform)chrome.root.transform, 0f, RootRevealSec, 0.94f));
             foreach (var r in _reveals)
-                StartCoroutine(RevealRoutine(r.Group, r.Rect, r.Delay, 0.20f, r.FromScale));
+                StartCoroutine(RevealRoutine(r.Group, r.Rect, r.Delay, BodyRevealSec, r.FromScale));
+            // ⭐ THE REVEAL-COMPLETION PROBE (owner eyewitness 2026-09-06: "it is an empty box
+            // was sad"). See VerifyRevealCompleted — this is INSTRUMENTATION, not a fix: the
+            // reveal path reads correct at source, so the next capture has to NAME the dead step
+            // instead of another seat theorising about it (§12).
+            StartCoroutine(VerifyRevealCompleted(rootGroup));
 
 #if UNITY_EDITOR
             // Synchronous edit-mode captures cannot advance the reveal coroutines. Measure and
@@ -1046,6 +1051,22 @@ namespace DeNelle.Village.UI
         /// asking this method what the stacked budget costs, so it cannot be asked back.</para></summary>
         private static float RequiredBodyPxAt(EndStateVM vm, float canvasH, int cols, bool strip)
         {
+            return RequiredBodyPxAtRows(vm, canvasH, cols, strip,
+                                        SpoilRowsShown(vm, canvasH, cols, strip));
+        }
+
+        /// <summary>The same budget at an EXPLICIT SHOWN-ROW count — the recursion-free form the
+        /// THIRD lever (<see cref="SpoilRowsShown"/>) asks its "what would this cost at N rows?"
+        /// question through, and the form the two ESCALATION levers above must use.
+        ///
+        /// <para>⛔ <see cref="SpoilColumns"/> and <see cref="NarrativeStripAt"/> MUST call THIS
+        /// with <c>shown = vm.Spoils.Count</c>, never the four-arg form. The lever ORDER is
+        /// columns -> strip -> row trim, cheapest-and-lossless first: the trim is the only lever
+        /// that removes content, so it may only ever see what the free levers could not save. If
+        /// the escalation loops asked the trimmed budget they would observe "it fits" and never
+        /// escalate, and the panel would silently drop rows it had the width to show.</para></summary>
+        private static float RequiredBodyPxAtRows(EndStateVM vm, float canvasH, int cols, bool strip, int shown)
+        {
             float px = 0f; int n = 0;
             if (strip)
             {
@@ -1063,7 +1084,7 @@ namespace DeNelle.Village.UI
                 if (vm.Stars >= 0) { px += StarsPx; n++; }
                 if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
             }
-            int spoilBands = SpoilBandCountAt(vm, cols);
+            int spoilBands = SpoilBandCountAt(vm, cols, shown);
             // The SEPARATOR band (owner F8 2026-09-02: the subtitle sat straight on the row
             // grid). Budgeted as a real band so the solve and BuildBody count the SAME thing —
             // an unbudgeted spacer is the desync class this file keeps re-learning.
@@ -1145,7 +1166,9 @@ namespace DeNelle.Village.UI
             // their floor. This is what keeps portrait single-file.
             if (SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm)) < parts * MinStripCellPx) return false;
             // ESCALATION ONLY: ask the STACKED budget, so a panel that fits keeps its layout.
-            return RequiredBodyPxAt(vm, canvasH, cols, false) > MaxBodyWellPx(canvasH);
+            // UNTRIMMED (shown = every row): the strip lever is lossless and therefore moves
+            // BEFORE the row trim. See the ordering note on RequiredBodyPxAtRows.
+            return RequiredBodyPxAtRows(vm, canvasH, cols, false, vm.Spoils.Count) > MaxBodyWellPx(canvasH);
         }
 
         // -- WO-952 REOPEN: THE BODY WELL THE CLAMP ACTUALLY ALLOWS -----------------------
@@ -1194,6 +1217,15 @@ namespace DeNelle.Village.UI
             public int Columns;
             /// <summary>Spoils bands at that column count.</summary>
             public int SpoilBands;
+            /// <summary>Spoils rows the VM ASKED for (<c>vm.Spoils.Count</c>).</summary>
+            public int RowsRequested;
+            /// <summary>Spoils rows the third lever (<see cref="SpoilRowsShown"/>) actually seats.
+            /// Below <see cref="RowsRequested"/> means the tail was trimmed and a shortfall band
+            /// states the difference — never a silent drop.</summary>
+            public int RowsShown;
+            /// <summary>Rows the trim dropped. 0 on every panel that fits, which is nearly all
+            /// of them — this is the ESCALATION lever's counter, not a routine one.</summary>
+            public int RowsDropped;
             /// <summary>True while the panel is pinned at <see cref="MaxPanelHalf"/> - the state in
             /// which the well can no longer grow to meet the need.</summary>
             public bool PinnedAtClamp;
@@ -1223,9 +1255,15 @@ namespace DeNelle.Village.UI
             var r = new FitResult();
             if (vm == null || canvasH < 100f) return r;
             r.Columns    = SpoilColumns(vm, canvasH);
-            r.SpoilBands = SpoilBandCountAt(vm, r.Columns);
             r.NarrativeStripMerged = NarrativeStripAt(vm, canvasH, r.Columns);
-            r.NeedPx     = RequiredBodyPxAt(vm, canvasH, r.Columns, r.NarrativeStripMerged);
+            // The THIRD lever, asked in the SAME order the live screen resolves it (columns ->
+            // strip -> row trim), so the oracle sees the shipped row count and not an untrimmed
+            // one. RowsShown/RowsDropped are what let a suite pin "rewards survived the trim".
+            r.RowsRequested = vm.Spoils.Count;
+            r.RowsShown     = SpoilRowsShown(vm, canvasH, r.Columns, r.NarrativeStripMerged);
+            r.RowsDropped   = Mathf.Max(0, r.RowsRequested - r.RowsShown);
+            r.SpoilBands = SpoilBandCountAt(vm, r.Columns, r.RowsShown);
+            r.NeedPx     = RequiredBodyPxAtRows(vm, canvasH, r.Columns, r.NarrativeStripMerged, r.RowsShown);
 
             float half = PanelHalfHeight(vm, canvasH);
             r.PanelPx   = 2f * half * canvasH;
@@ -1322,16 +1360,18 @@ namespace DeNelle.Village.UI
             // first, so the Seeker's gear-drop victory keeps the 3-column layout WO-952 gave it
             // rather than silently swapping to a strip. Only where width caps the columns does
             // the strip lever get its turn (NarrativeStripAt).
-            while (cols < widthCap && RequiredBodyPxAt(vm, canvasH, cols, false) > wellCap)
+            // UNTRIMMED (shown = every row): the column lever is lossless and moves FIRST, so it
+            // must never see the row trim's saving. See the note on RequiredBodyPxAtRows.
+            while (cols < widthCap && RequiredBodyPxAtRows(vm, canvasH, cols, false, vm.Spoils.Count) > wellCap)
                 cols++;
 
             if (cols > 2)
                 FlowTrace.Step("EndState",
                     $"spoils grid REFLOWED to {cols} columns: {vm.Spoils.Count} rows needed " +
-                    $"{RequiredBodyPxAt(vm, canvasH, 2, false):0}px at 2 columns against a " +
+                    $"{RequiredBodyPxAtRows(vm, canvasH, 2, false, vm.Spoils.Count):0}px at 2 columns against a " +
                     $"{wellCap:0}px well ceiling (the panel is clamped at {MaxPanelHalf:0.##} of " +
                     $"half-screen), and reflow to {cols} brings it to " +
-                    $"{RequiredBodyPxAt(vm, canvasH, cols, false):0}px. Reflowing is the fix; compressing " +
+                    $"{RequiredBodyPxAtRows(vm, canvasH, cols, false, vm.Spoils.Count):0}px. Reflowing is the fix; compressing " +
                     "every band below its own content size is the defect (WO-952).");
 
             return cols;
@@ -1355,18 +1395,19 @@ namespace DeNelle.Village.UI
         /// ellipsised, so it read as a BROKEN resource row rather than a different one.
         /// <see cref="SpoilRowVM.Wide"/> is the row saying so: a wide row always takes a band to
         /// itself, at the full body width, and therefore reads as its own grammar.</summary>
-        private static List<(int first, int count)> SpoilBandPlan(EndStateVM vm, int cols)
+        private static List<(int first, int count)> SpoilBandPlan(EndStateVM vm, int cols, int shown)
         {
             var plan = new List<(int, int)>();
             if (vm == null || vm.Spoils.Count == 0) return plan;
             if (cols < 1) cols = 1;
+            int limit = Mathf.Clamp(shown, 0, vm.Spoils.Count);
             int i = 0;
-            while (i < vm.Spoils.Count)
+            while (i < limit)
             {
                 var row = vm.Spoils[i];
                 if (cols == 1 || (row != null && row.Wide)) { plan.Add((i, 1)); i++; continue; }
                 int n = 1;
-                while (n < cols && i + n < vm.Spoils.Count)
+                while (n < cols && i + n < limit)
                 {
                     var next = vm.Spoils[i + n];
                     if (next != null && next.Wide) break;   // a wide row never shares a band
@@ -1375,21 +1416,106 @@ namespace DeNelle.Village.UI
                 plan.Add((i, n));
                 i += n;
             }
+            // ── THE SHORTFALL BAND (WO-952 REOPEN #3) ────────────────────────────────────
+            // TRUNCATION IS STATED, NEVER SILENT — the same law the VM already keeps for the
+            // compact banner ("Showing N of M damaged structures", EndStateVM.FromWaveClear).
+            // A dropped damage row reads as "that building is fine", which is a WORSE defect
+            // than the one the trim is fixing. The band is emitted HERE, inside the one plan
+            // both the solve and BuildBody count, so its pixels are BUDGETED rather than
+            // discovered after layout — an uncounted band is the desync class this file is a
+            // monument to. SummaryBandFirst is the sentinel: no real row index is negative.
+            if (limit < vm.Spoils.Count) plan.Add((SummaryBandFirst, 0));
             return plan;
+        }
+
+        /// <summary>Sentinel <c>first</c> for the shortfall band emitted by
+        /// <see cref="SpoilBandPlan"/> when the row trim dropped rows. Negative because no real
+        /// spoils index ever is, so a band cannot be mistaken for a row.</summary>
+        private const int SummaryBandFirst = -1;
+
+        /// <summary>⛔ THE FLOOR ON THE ROW TRIM. Trimming to nothing would leave the player a
+        /// headline and an empty ledger — the trim exists to keep rows LEGIBLE, never to remove
+        /// the reason the panel opened. One row plus the shortfall band is the least this screen
+        /// may ever show.</summary>
+        private const int MinSpoilRowsShown = 1;
+
+        /// <summary>
+        /// ⭐ THE THIRD REFLOW LEVER (WO-952 REOPEN #3, owner F8 2026-09-06, build
+        /// 2026.09.06.357599, SM02G4061955851): HOW MANY spoils rows this screen may show before
+        /// the bands would have to compress below their own content size.
+        ///
+        /// <para>WHY A THIRD LEVER WAS NEEDED — the two we had are STRUCTURALLY INERT on the
+        /// surface that failed. The captured line was <c>need=668px well=540px scale=0.808</c>
+        /// from a WAVE-CLEAR DAMAGE REPORT, and for that VM:</para>
+        /// <list type="bullet">
+        /// <item>the COLUMN lever cannot help: every damage row is <see cref="SpoilRowVM.Wide"/>
+        /// (EndStateVM.FromWaveClear sets it, because a damage line is a sentence plus a cost, not
+        /// a resource row), and <see cref="SpoilBandPlan"/> gives a wide row a band to itself at
+        /// ANY column count. Eight damage rows are eight bands at 1, 2 or 3 columns.</item>
+        /// <item>the STRIP lever cannot help: FromWaveClear leaves <c>Stars</c> and
+        /// <c>TimeSeconds</c> at their -1 defaults, so the narrative is the emblem alone and
+        /// <see cref="NarrativeStripPx"/> == <see cref="EmblemPx"/> — merging one element into a
+        /// strip of one saves exactly 0 px.</item>
+        /// </list>
+        /// <para>So both escalations ran and changed nothing, the panel pinned at
+        /// <see cref="MaxPanelHalf"/>, and BuildBody did the only thing left to it. The row count
+        /// is the ONLY axis left, and it is the axis that was never capped: EndStateVM's
+        /// <c>damageBudget</c> is <c>vm.Compact ? CompactMaxSpoilRows - rewardRows :
+        /// damageAvailable</c> — the FULL modal had NO ceiling at all and rendered up to
+        /// WaveDamageReport's eight entries.</para>
+        ///
+        /// <para>THE ARITHMETIC, reconstructed from the captured number and the constants at
+        /// source: emblem 64 + subtitle 60x1 + lead gap 16 + 64R + 18(R+2) = 116 + 60L + 82R.
+        /// At L=1 that is 668 px exactly at R=6 — the captured need, to the pixel. The well is
+        /// 540, so R must fall to 3 once the shortfall band's own line is paid for
+        /// (116 + 120 + 82x4 = 504 <= 540, scale 1.000).</para>
+        ///
+        /// <para>⛔ ESCALATION ONLY, exactly like the two levers above. The search starts at the
+        /// FULL row count and only steps down while the budget genuinely overruns the well the
+        /// clamp allows, so every panel that fits today keeps the layout it shipped with and this
+        /// method returns <c>vm.Spoils.Count</c> unchanged.</para>
+        /// </summary>
+        private static int SpoilRowsShown(EndStateVM vm, float canvasH, int cols, bool strip)
+        {
+            if (vm == null || vm.Spoils.Count == 0) return 0;
+            // ⛔ COMPACT BANNERS NEVER ENTER, exactly like the two levers above (SpoilColumns
+            // returns 1 on vm.Compact; the strip note says "the compact wave-clear banner never
+            // enters here at all"). Two reasons, and the second is a correctness bug, not tidiness:
+            //   1. a compact banner ALREADY has its budget, applied model-side where it belongs
+            //      (EndStateVM.CompactMaxSpoilRows), and it STATES its own shortfall in the
+            //      subtitle ("Showing N of M damaged structures").
+            //   2. MaxBodyWellPx is the FULL MODAL's ceiling. The compact well is a different,
+            //      SMALLER number (_compactBodyFrac x its own grown panel), so this cap would be
+            //      the wrong yardstick for it — and a compact banner that trimmed here would print
+            //      BOTH shortfall statements at once, its subtitle's and the band's, disagreeing
+            //      about the same count. One screen, one truth.
+            if (vm.Compact) return vm.Spoils.Count;
+            int shown = vm.Spoils.Count;
+            float wellCap = MaxBodyWellPx(canvasH);
+            if (wellCap <= 1f) return shown;
+            // Step DOWN one row at a time. RequiredBodyPxAtRows re-asks SpoilBandPlan each pass,
+            // so the shortfall band's own cost is inside the number being tested — the trim can
+            // never "save" pixels it then spends on saying that it trimmed.
+            while (shown > MinSpoilRowsShown &&
+                   RequiredBodyPxAtRows(vm, canvasH, cols, strip, shown) > wellCap)
+                shown--;
+            return shown;
         }
 
         /// <summary>How many BANDS the spoils occupy — the number the panel solve must budget.</summary>
         private static int SpoilBandCount(EndStateVM vm, float canvasH)
         {
-            return SpoilBandCountAt(vm, SpoilColumns(vm, canvasH));
+            int cols = SpoilColumns(vm, canvasH);
+            return SpoilBandCountAt(vm, cols,
+                SpoilRowsShown(vm, canvasH, cols, NarrativeStripAt(vm, canvasH, cols)));
         }
 
         /// <summary>Band count at an EXPLICIT column count - the recursion-free form the WO-952
         /// column solver asks its "what would this cost at N columns?" question through.</summary>
-        private static int SpoilBandCountAt(EndStateVM vm, int cols)
+        private static int SpoilBandCountAt(EndStateVM vm, int cols, int shown)
         {
             if (vm == null || vm.Spoils.Count == 0) return 0;
-            return SpoilBandPlan(vm, cols).Count;
+            return SpoilBandPlan(vm, cols, shown).Count;
         }
 
         /// <summary>Stack the VM's content top-down inside the body zone. F8-35: bands are
@@ -1663,13 +1789,33 @@ namespace DeNelle.Village.UI
             // SpoilBandCount is the same function RequiredBodyPx budgeted with, so the panel
             // solve and the layout can never disagree about how many bands there are.
             float spoilBodyPx = SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm));
-            var spoilPlan = SpoilBandPlan(vm, spoilCols);
+            // THE THIRD LEVER, resolved through the SAME shared solver the panel solve used
+            // (RequiredBodyPxAt -> SpoilRowsShown). BuildBody never trims on its own: a layout
+            // that decided its own row count would be the exact solve/layout desync the two
+            // levers above are commented against.
+            int shownRows = SpoilRowsShown(vm, _canvasH, spoilCols, strip);
+            int droppedRows = Mathf.Max(0, vm.Spoils.Count - shownRows);
+            _shortfallRows = droppedRows;
+            var spoilPlan = SpoilBandPlan(vm, spoilCols, shownRows);
+            if (droppedRows > 0)
+                // WARN, not Step: the F8 break-log captures Warn/Fail and DROPS Step (surveyed on
+                // the device log for this capture — 263 [Flow:MagentaGuard] warns present, zero
+                // EndState steps). An outcome nobody can read on the next capture is not evidence.
+                FlowTrace.Warn("EndState",
+                    $"spoils rows TRIMMED to fit: requested={vm.Spoils.Count} shown={shownRows} " +
+                    $"dropped={droppedRows} (+1 shortfall band stating the difference) at " +
+                    $"{spoilCols} column(s), strip={strip} - need " +
+                    $"{RequiredBodyPxAtRows(vm, _canvasH, spoilCols, strip, vm.Spoils.Count):0}px " +
+                    $"untrimmed vs a {MaxBodyWellPx(_canvasH):0}px well ceiling, trimmed to " +
+                    $"{RequiredBodyPxAtRows(vm, _canvasH, spoilCols, strip, shownRows):0}px. " +
+                    "Dropping the tail LEGIBLY beats compressing every band below its own " +
+                    "content size (WO-952); the count is stated on screen, never silent.");
             // ONE font size for EVERY wide row on this screen, solved before any of them is built
             // (owner F8 2026-09-02 defect #4: "DESTROYED, looted ..." rendered at the 30px autosize
             // floor while "damaged" rendered at the full 50, so two rows of the SAME KIND were 40%
             // apart). Fitting each row in isolation is what made them disagree; solving the whole
             // set once is what makes them agree.
-            _wideRowFontPx = SolveWideRowFontPx(vm, spoilBodyPx);
+            _wideRowFontPx = SolveWideRowFontPx(vm, spoilBodyPx, shownRows);
             // The separator band — same test, same order as RequiredBodyPx's (`spoilBands > 0
             // && n > 0`), so the two agree band-for-band. Empty builder: it exists to hold space.
             if (spoilPlan.Count > 0 && bands.Count > 0)
@@ -1713,7 +1859,12 @@ namespace DeNelle.Village.UI
             if (scale < CompressFailBelow)
                 FlowTrace.Fail("EndState",
                     $"body rows COMPRESSED to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} " +
-                    "- the panel hit its screen-height clamp; every band is now below its own content size");
+                    "- every band is now below its own content size. Since WO-952 REOPEN #3 this " +
+                    "line should be UNREACHABLE on a full modal: the row trim (SpoilRowsShown) caps " +
+                    "the need at MaxBodyWellPx before the panel is ever solved. If it fires, the " +
+                    "trim's cap and Bind's SOLVED well have diverged - check that BodyFracOfPanel " +
+                    "still equals BodyTopY - CtaBandY0 - CtaGapY, which is what makes the two " +
+                    "derivations the same number. Do NOT answer it by raising MaxPanelHalf.");
             else if (scale < 1f)
                 FlowTrace.Step("EndState",
                     $"body solved to an EXACT fit: need={totalPx:0.#}px well={wellH:0.#}px scale={scale:0.#####} " +
@@ -1751,6 +1902,30 @@ namespace DeNelle.Village.UI
                                     int cols, float bodyWidthPx)
         {
             if (vm == null || cols < 1) return;
+
+            // ── THE SHORTFALL BAND (WO-952 REOPEN #3) ────────────────────────────────────
+            // SpoilBandPlan emits ONE band at SummaryBandFirst when the row trim dropped rows.
+            // It is the reason the trim is allowed to exist at all: the player is TOLD the
+            // ledger is partial, so a hidden damage row can never read as "that building is
+            // fine". Plain hyphens and no glyphs beyond Latin — the build font has a tofu
+            // precedent (see BuildStarRow), same rule the damage-row copy follows.
+            if (first == SummaryBandFirst)
+            {
+                int more = Mathf.Max(0, _shortfallRows);
+                if (more <= 0) return;
+                var note = ElarionUiKit.Label(host,
+                    // Copy mirrors the VM's own compact-banner shortfall line ("Showing N of M
+                    // damaged structures") rather than inventing a second voice for the same
+                    // fact. Owner's call on the exact wording - it is player-facing.
+                    "Showing " + (vm.Spoils.Count - more) + " of " + vm.Spoils.Count + " results",
+                    0f, 1f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                    TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
+                ElarionUiKit.FitSingleLine(note);   // §1.14 — never spills its own band
+                note.raycastTarget = false;
+                Track(note.gameObject, 0.25f + more * 0.02f, 1f);
+                return;
+            }
+
             int remaining = vm.Spoils.Count - first;
             if (first < 0 || remaining <= 0) return;
             int inBand = Mathf.Clamp(count, 1, Mathf.Min(cols, remaining));
@@ -1816,6 +1991,11 @@ namespace DeNelle.Village.UI
         /// renders at, in reference px. Solved once in <see cref="BuildBody"/> across ALL of them
         /// so two rows of the same kind can never resolve to different sizes; 0 until solved.</summary>
         private float _wideRowFontPx;
+
+        /// <summary>How many spoils rows the third lever dropped on THIS screen — the number the
+        /// shortfall band prints. 0 whenever nothing was trimmed (nearly always). Set in
+        /// <see cref="BuildBody"/> before the bands are built.</summary>
+        private int _shortfallRows;
 
         /// <summary>
         /// THE ONE icon resolution for a spoils row. Called by BOTH the wide-row column solve and
@@ -1883,13 +2063,19 @@ namespace DeNelle.Village.UI
         /// <summary>The shared wide-row font size (reference px): the largest size at which EVERY
         /// wide row's two columns still seat their measured words, floored at the kit's own
         /// legibility floor. Returns FontBody when the screen carries no wide row.</summary>
-        private static float SolveWideRowFontPx(EndStateVM vm, float bodyWidthPx)
+        private static float SolveWideRowFontPx(EndStateVM vm, float bodyWidthPx, int shown)
         {
             if (vm == null) return ElarionUi.FontBody;
             float scale = 1f;
             bool any = false;
-            foreach (var row in vm.Spoils)
+            // WO-952 REOPEN #3: solve over the rows this screen SHOWS, not every row the VM
+            // carries. A trimmed-away row is not on screen, and letting its (often longest)
+            // sentence set the shared size would shrink the rows the player CAN see to fit one
+            // he cannot — the row-shape inconsistency this solver exists to prevent, inverted.
+            int limit = Mathf.Clamp(shown, 0, vm.Spoils.Count);
+            for (int i = 0; i < limit; i++)
             {
+                var row = vm.Spoils[i];
                 if (row == null || !row.Wide) continue;
                 any = true;
                 // A wide row always takes a band ALONE at the full body width (SpoilBandPlan), so
@@ -2563,6 +2749,98 @@ namespace DeNelle.Village.UI
                 Delay = delay,
                 FromScale = fromScale,
             });
+        }
+
+        /// <summary>The whole panel's fade-in duration, seconds of UNSCALED time.</summary>
+        private const float RootRevealSec = 0.25f;
+        /// <summary>One tracked body element's fade-in duration, seconds of UNSCALED time.</summary>
+        private const float BodyRevealSec = 0.20f;
+        /// <summary>Grace added to the last element's (delay + duration) before the probe judges.
+        /// Generous on purpose: the probe must never cry wolf on a slow first frame — a FALSE
+        /// alarm here would burn exactly the trust §12 instrumentation exists to build.</summary>
+        private const float RevealVerifyGraceSec = 1.0f;
+        /// <summary>Alpha at or above which an element counts as VISIBLE to the player.</summary>
+        private const float RevealVisibleAlpha = 0.95f;
+
+        /// <summary>
+        /// ⭐ DID THE PANEL ACTUALLY BECOME VISIBLE? (owner eyewitness, build 2026.09.06.357599:
+        /// the WAVE 7 CLEARED panel showed a title over an EMPTY interior for its whole 5-8s life.)
+        ///
+        /// <para>⛔ WHY THIS PROBE EXISTS RATHER THAN A FIX. The reveal path READS CORRECT at
+        /// source and every candidate was ruled out by reading, not by measuring: nothing calls
+        /// StopAllCoroutines / StopCoroutine in this file; the host GameObject is never deactivated
+        /// (the only SetActive(false) is the chrome Close chip at Show); every body builder does
+        /// call <see cref="Track"/>; and the root group IS revealed on this entry point. The
+        /// coroutines run on UNSCALED time, so <c>HoldWorld</c>'s timeScale 0 cannot stall them.
+        /// So the code says it should work and the owner says it did not, and under §12 that means
+        /// the honest next move is to CAPTURE the dead step, not to guess at it a fourth time.</para>
+        ///
+        /// <para>⛔ AND NO EXISTING GATE COULD EVER HAVE SEEN THIS. Both capture paths FORCE the
+        /// alphas to 1 before they photograph anything — this file's own edit-mode branch in Bind,
+        /// and UICaptureLaunch (`group.alpha = 1f`, UICaptureLaunch.cs:1416 / :3062, whose comment
+        /// at :5161 says outright that "every CanvasGroup is still parked at its start-of-tween
+        /// alpha 0"). A reveal that never completes is therefore INVISIBLE to the whole
+        /// screenshot suite and visible only to the player. That is why this probe runs at
+        /// RUNTIME, in the build, and reports through the F8 channel.</para>
+        ///
+        /// <para>It reports through <see cref="FlowTrace.Fail"/>, which the F8 break-log captures
+        /// (Warn/Fail are recorded; Step is NOT — surveyed on the device log for this defect), so
+        /// the next wave clear on her device either proves the reveal healthy or names exactly how
+        /// many elements were still transparent and which one to look at.</para>
+        /// </summary>
+        private System.Collections.IEnumerator VerifyRevealCompleted(CanvasGroup rootGroup)
+        {
+            float longest = 0f;
+            foreach (var r in _reveals)
+                if (r.Delay > longest) longest = r.Delay;
+            float deadline = longest + BodyRevealSec + RevealVerifyGraceSec;
+
+            float t = 0f;
+            while (t < deadline)
+            {
+                t += Time.unscaledDeltaTime;
+                yield return null;   // unscaled + frame-driven: survives HoldWorld's timeScale 0
+            }
+
+            // The panel may legitimately have been dismissed or replaced by now — that is not a
+            // defect, and a destroyed group must never be reported as a transparent one.
+            if (this == null || rootGroup == null) yield break;
+
+            int tracked = 0, invisible = 0, destroyed = 0;
+            string firstOffender = null;
+            foreach (var r in _reveals)
+            {
+                tracked++;
+                if (r.Group == null) { destroyed++; continue; }
+                if (r.Group.alpha < RevealVisibleAlpha)
+                {
+                    invisible++;
+                    if (firstOffender == null)
+                        firstOffender = r.Group.name + " (alpha " + r.Group.alpha.ToString("0.###") +
+                                        ", delay " + r.Delay.ToString("0.##") + "s)";
+                }
+            }
+
+            bool rootDark = rootGroup.alpha < RevealVisibleAlpha;
+            // The player-facing verdict: a body with nothing visible in it IS the empty box.
+            bool bodyDark = tracked > 0 && invisible >= tracked - destroyed && invisible > 0;
+
+            if (rootDark || bodyDark)
+                FlowTrace.Fail("EndState",
+                    $"REVEAL DID NOT COMPLETE - this is the EMPTY BOX the owner saw. " +
+                    $"root alpha={rootGroup.alpha:0.###} (needs >= {RevealVisibleAlpha:0.##}), " +
+                    $"tracked={tracked} stillTransparent={invisible} destroyed={destroyed} " +
+                    $"after {deadline:0.##}s of UNSCALED time (longest reveal delay {longest:0.##}s " +
+                    $"+ {BodyRevealSec:0.##}s fade + {RevealVerifyGraceSec:0.##}s grace). " +
+                    $"First still-transparent element: {firstOffender ?? "(none - the ROOT group is the dark one)"}. " +
+                    "The elements were BUILT (this probe walked them), so this is NOT a layout or " +
+                    "a text-fit fault - it is the fade never finishing. Look at RevealRoutine and " +
+                    "at anything that could stop this object's coroutines mid-tween.");
+            else
+                FlowTrace.Step("EndState",
+                    $"reveal completed: root alpha={rootGroup.alpha:0.###}, {tracked} tracked " +
+                    $"element(s) all at/above {RevealVisibleAlpha:0.##} ({destroyed} already torn down) " +
+                    $"after {deadline:0.##}s unscaled.");
         }
 
         /// <summary>Ease-out cubic fade+scale on UNSCALED time (plays through slow-mo /

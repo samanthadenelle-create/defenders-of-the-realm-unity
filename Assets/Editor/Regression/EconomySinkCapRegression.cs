@@ -60,6 +60,22 @@
 //   3 [troops-ungated]  troop TRAINING stays affordable at ZERO storage. Training is
 //                the recurring loop; gating the recurring loop behind a storage
 //                upgrade would stall the whole game, not pace it.
+//   4 [cap-copy-reachable]  (WO-1425) the affordability REFUSAL PATH consults
+//                TownBankCapacity at all, and the helper behind it produces a sentence
+//                naming the container level -- and stays SILENT for a cost that fits and
+//                for the uncapped currencies.
+//   5 [cap-copy-ladder]  (WO-1425) the container level the player is TOLD matches the
+//                level this gate derives, for every authored cost above the base store.
+//
+// ⚠ WHAT CASES 1-3 DO NOT PROVE, and why 4-5 exist. On 2026-09-06 the owner reported
+// "some items you cannot upgrade cause you can not get enough resources to use because
+// of ceilings" against a build on which THIS ORACLE PASSED. It was not wrong: every cost
+// is completable with a maxed container. It was measuring the wrong thing. The failure
+// was DISCOVERABILITY -- 'tower_ground_archer' L2->L3 costs 3150 wood, a level-1
+// lumberyard tops the bank out at 3000, and the refusal said only "Not enough Wood
+// (3150)" while the bar sat full at 3000/3000. Proving a cost is payable EVENTUALLY,
+// while never proving the player can be TOLD what to do, is how a silent wall ships
+// behind a green gate. Cases 4-5 pin the telling.
 //
 // THE GATE IS THE MODEL'S ONLY MEMORY. The 2026-08-21 sink pass chose its
 // multipliers by computing required container levels; those levels are re-derived
@@ -96,11 +112,37 @@ namespace DeNelle.Editor.Regression
 
         private static readonly string[] CappedResources = { "wood", "iron", "food" };
 
+        /// <summary>WO-1425 -- one authored cost that exceeds the container-less base store, i.e. one
+        /// the player must own storage to pay. These are the costs whose refusal MUST say so.</summary>
+        private readonly struct OverBaseCost
+        {
+            public readonly string Where;
+            public readonly string Resource;
+            public readonly int Amount;
+            public OverBaseCost(string where, string resource, int amount)
+            { Where = where; Resource = resource; Amount = amount; }
+        }
+
+        private static readonly List<OverBaseCost> _overBase = new List<OverBaseCost>();
+
         private const string StructuresPath   = "Data/Canonical/structures-catalog.json";
         private const string TroopsPath       = "Data/Canonical/troops.json";
         private const string BarracksPath     = "Data/Canonical/barracks.json";
         private const string BuildingTiersPath= "Data/Canonical/building-tiers.json";
         private const string GearLevelsPath   = "Data/Canonical/gear-levels.json";
+        // WO-1425 -- both author capped-resource costs and were OUTSIDE the scan, so the
+        // [ceiling] guarantee simply did not cover them. Verified at source 2026-09-06: each
+        // recipe row carries a flat `cost` object keyed { wood, food, iron, crystals }.
+        private const string GearRecipesPath    = "Data/Canonical/gear-recipes.json";
+        private const string JewelerRecipesPath = "Data/Canonical/jeweler-recipes.json";
+
+        /// <summary>Every canonical file this oracle scans -- the count in the pass reason is DERIVED
+        /// from this array, never restated (a hand-maintained "5 catalog(s)" is duplicated state).</summary>
+        private static readonly string[] ScannedPaths =
+        {
+            StructuresPath, TroopsPath, BarracksPath, BuildingTiersPath, GearLevelsPath,
+            GearRecipesPath, JewelerRecipesPath,
+        };
 
         /// <summary>Max bankable for a capped resource with ONE container at <paramref name="level"/> (0 = none).</summary>
         private static int MaxBankable(int level)
@@ -114,10 +156,16 @@ namespace DeNelle.Editor.Regression
         private static int AbsoluteMax => MaxBankable(RepoProps.MaxStructureLevel);
 
         /// <summary>Lowest container level whose cap holds <paramref name="amount"/> within the safety margin; -1 = never.</summary>
-        private static int RequiredLevel(int amount)
+        private static int RequiredLevel(int amount) => RequiredLevelAt(amount, SafetyFraction);
+
+        /// <summary>Lowest container level whose cap holds <paramref name="amount"/> at an EXPLICIT
+        /// margin; -1 = never. WO-1425 needs margin 1.0 to compare against the player-facing helper,
+        /// which has no safety fraction (the sentence must name the level that ACTUALLY holds the
+        /// cost, not the level that holds it comfortably).</summary>
+        private static int RequiredLevelAt(int amount, float fraction)
         {
             for (int l = 0; l <= RepoProps.MaxStructureLevel; l++)
-                if (amount <= SafetyFraction * MaxBankable(l)) return l;
+                if (amount <= fraction * MaxBankable(l)) return l;
             return -1;
         }
 
@@ -133,6 +181,7 @@ namespace DeNelle.Editor.Regression
             var failures = new List<string>();
             var log = new StringBuilder();
             int scanned = 0;
+            _overBase.Clear();   // WO-1425 -- the table is per-run, never cumulative across domain reloads
             log.AppendLine("=== EconomySinkCapRegression [sink-cap] (no authored cost exceeds max bankable) ===");
             log.AppendLine("  ceiling = base " + BaseCap + " + one container at L" + RepoProps.MaxStructureLevel +
                            " = " + AbsoluteMax + "; safety margin " + (SafetyFraction * 100f) + "%");
@@ -143,6 +192,8 @@ namespace DeNelle.Editor.Regression
                 CaseCeiling(failures, log, ref scanned);
                 CaseStorageLadderSelfAffordable(failures, log);
                 CaseTroopsUngated(failures, log);
+                CaseCapCopyReachable(failures, log);     // WO-1425
+                CaseCapCopyLadder(failures, log);        // WO-1425 -- must run AFTER CaseCeiling (fills _overBase)
             }
             catch (Exception ex)
             {
@@ -151,10 +202,14 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count == 0)
             {
-                reason = "SINK CAP OK - " + scanned + " authored cost value(s) across 5 catalog(s) all fit the " +
-                         "max bankable amount for their resource (ceiling " + AbsoluteMax + " at container L" +
-                         RepoProps.MaxStructureLevel + "); the 3 storage ladders are self-affordable at every " +
-                         "step; troop training stays affordable at ZERO storage.";
+                reason = "SINK CAP OK - " + scanned + " authored cost value(s) across " + ScannedPaths.Length +
+                         " catalog(s) all fit the max bankable amount for their resource (ceiling " + AbsoluteMax +
+                         " at container L" + RepoProps.MaxStructureLevel + "); the 3 storage ladders are " +
+                         "self-affordable at every step; troop training stays affordable at ZERO storage; " +
+                         _overBase.Count + " cost(s) exceed the container-less base store (table above), " +
+                         "the refusal path is WIRED to TownBankCapacity [cap-copy-reachable] and the " +
+                         "container level it would name matches this gate's ladder for every one of them " +
+                         "[cap-copy-ladder] (WO-1425).";
                 Debug.Log("SINK_CAP_OK\n" + log);
                 return true;
             }
@@ -203,6 +258,13 @@ namespace DeNelle.Editor.Regression
         {
             if (amount <= 0) return;
             scanned++;
+
+            // WO-1425 -- every cost that a player CANNOT HOLD without a storage container is
+            // recorded here, so SINK_CAP_OK prints the required-container-level table on every
+            // build and the [cap-copy-ladder] case can re-derive it through the player-facing
+            // helper. Recording is not judging: [ceiling] below is still the only pass/fail.
+            if (amount > BaseCap) _overBase.Add(new OverBaseCost(where, resource, amount));
+
             if (amount > AbsoluteMax)
             {
                 failures.Add("[ceiling] " + where + " costs " + amount + " " + resource + " but the MAXIMUM " +
@@ -282,7 +344,204 @@ namespace DeNelle.Editor.Regression
                     CheckArray("gear-levels band '" + rarity + "'", "iron", bd["costIron"] as JArray, failures, ref scanned);
                 }
 
+            // --- WO-1425: gear-recipes.json + jeweler-recipes.json: recipes[].cost { wood, iron, food, ... }
+            //     Both were outside the scan entirely, so their capped-resource costs carried NO
+            //     ceiling guarantee at all. Shape verified at source 2026-09-06 -- a flat `cost`
+            //     object per recipe row, exactly like barracks levels. crystals is UNCAPPED and
+            //     deliberately not checked.
+            foreach (string recipePath in new[] { GearRecipesPath, JewelerRecipesPath })
+            {
+                var doc = Load(recipePath, failures, log);
+                if (!(doc?["recipes"] is JArray recipes)) continue;
+                foreach (var rec in recipes)
+                {
+                    string rid = (string)rec["id"] ?? "?";
+                    foreach (string r in CappedResources)
+                        Check(recipePath + " recipe '" + rid + "'", r, IntAt(rec["cost"], r), failures, ref scanned);
+                }
+            }
+
             log.AppendLine("  [ceiling] " + scanned + " authored cost value(s) scanned against " + AbsoluteMax);
+        }
+
+        // =====================================================================
+        //  CASE 4 [cap-copy-reachable] -- WO-1425. THE REFUSAL PATH MUST CONSULT
+        //  TownBankCapacity AT ALL.
+        // ---------------------------------------------------------------------
+        //  WHY THIS CASE EXISTS, stated plainly: this oracle PASSED on the build the
+        //  owner played (2026.09.06.357599) and reported the experience as acceptable.
+        //  It was right about the arithmetic -- no cost is uncompletable -- and blind to
+        //  the thing that actually broke: 'tower_ground_archer' L2->L3 costs 3150 wood,
+        //  a save with a level-1 lumberyard tops out at 3000, and the ONLY thing the
+        //  player was told was "Not enough Wood (3150)" while their bar sat full. Proving
+        //  "completable eventually" and never "the player can be told what to do" is how
+        //  a silent wall ships with a green gate.
+        //
+        //  Case 4a is a SOURCE SCAN. That is deliberately crude and deliberately narrow:
+        //  it asserts the ONE structural link -- that BuildModeController's shortfall copy
+        //  names TownBankCapacity -- because the absence of that link is the entire defect
+        //  and a link is the one thing a source scan can prove without a scene, a save or
+        //  an EconomyService. Case 4b then proves the helper behind it actually SPEAKS.
+        //
+        //  REVERT RECIPE for 4a (prove it RED): in BuildModeController.ShortfallMessage
+        //  (:3296 as written) REPLACE the line `string capBlock = CapBlockMessage(cost);` with
+        //  `string capBlock = "";`. (Deleting it outright leaves `capBlock` undeclared on
+        //  the next line -- that is a COMPILE ERROR, not a red gate.)
+        //  REVERT RECIPE for 4b: make TownBankCapacity.TryDescribeStorageBlock return
+        //  false on its first line. (Do NOT gut only DescribeStorageBlock's
+        //  reachable-level branch: with an unloaded CatalogRegistry the message comes from
+        //  the no-container branch instead, which still satisfies the assertion, so that
+        //  edit can leave the case GREEN.)
+        // =====================================================================
+        private static void CaseCapCopyReachable(List<string> failures, StringBuilder log)
+        {
+            // --- 4a: the link exists in the refusal path -------------------------------
+            // Application.dataPath, not a repo-relative literal: the batch CWD is not guaranteed and
+            // the repo ROOT is machine-dependent (C:\eoa on one seat, D:\eoa on another) -- a
+            // hardcoded root is exactly how a doc-followed path lands somewhere that does not exist.
+            string controllerPath = System.IO.Path.Combine(Application.dataPath,
+                "_Modules/Village/BuildMode/BuildModeController.cs");
+            string src = null;
+            try { src = System.IO.File.ReadAllText(controllerPath); }
+            catch (Exception ex)
+            {
+                failures.Add("[cap-copy-reachable] could not read " + controllerPath + " (" + ex.GetType().Name +
+                             "): the one structural link between a refusal and the storage cap cannot be " +
+                             "verified, and an unverifiable link is a FAILURE, not a pass.");
+            }
+
+            if (src != null)
+            {
+                bool hasHelper = src.Contains("public static string CapBlockMessage(");
+                bool wired     = src.Contains("string capBlock = CapBlockMessage(cost);");
+                bool readsCap  = src.Contains("TownBankCapacity.TryDescribeStorageBlock(");
+
+                if (!hasHelper || !wired || !readsCap)
+                    failures.Add("[cap-copy-reachable] BuildModeController's affordability refusal does NOT " +
+                                 "consult TownBankCapacity (helper=" + hasHelper + ", wired=" + wired +
+                                 ", readsCap=" + readsCap + "). A cost the bank can NEVER HOLD then reads " +
+                                 "exactly like a cost the player has not saved up for yet -- the owner's " +
+                                 "2026-09-06 report, and the defect this oracle certified as acceptable " +
+                                 "because it only ever judged arithmetic. The refusal must name the " +
+                                 "container, the level and the capacity that unblocks the cost.");
+                else
+                    log.AppendLine("  [cap-copy-reachable] BuildModeController.ShortfallMessage consults " +
+                                   "TownBankCapacity via CapBlockMessage - the link is present");
+            }
+
+            // --- 4b: the helper actually produces the sentence --------------------------
+            // Driven at the CONTAINER-LESS state (no GameStateService in an editor batch, so
+            // MaxOf resolves to baseCap): 3150 wood -- the exact cost from the owner's report.
+            const int archerL3Wood = 3150;
+            string msg = DeNelle.Core.Economy.TownBankCapacity.StorageBlockMessage(
+                DeNelle.Core.Economy.BankResource.Wood, archerL3Wood);
+
+            if (string.IsNullOrEmpty(msg))
+            {
+                failures.Add("[cap-copy-reachable] TownBankCapacity.StorageBlockMessage(Wood, " + archerL3Wood +
+                             ") returned NOTHING against a bank ceiling of " +
+                             DeNelle.Core.Economy.TownBankCapacity.MaxOf(DeNelle.Core.Economy.BankResource.Wood) +
+                             ". The player-facing sentence for a cap block does not exist, so the refusal " +
+                             "falls back to the generic shortfall line and the wall stays invisible.");
+            }
+            else if (msg.IndexOf("storage", StringComparison.OrdinalIgnoreCase) < 0 &&
+                     msg.IndexOf("level", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                failures.Add("[cap-copy-reachable] the cap-block sentence names neither a storage level nor " +
+                             "storage at all: \"" + msg + "\". The copy must state the WAY OUT, not just " +
+                             "that something is wrong.");
+            }
+            else
+            {
+                log.AppendLine("  [cap-copy-reachable] cap-block copy at zero storage: \"" + msg + "\"");
+            }
+
+            // A cost that FITS must stay silent, or every ordinary shortfall grows a false wall.
+            string quiet = DeNelle.Core.Economy.TownBankCapacity.StorageBlockMessage(
+                DeNelle.Core.Economy.BankResource.Wood, 100);
+            if (!string.IsNullOrEmpty(quiet))
+                failures.Add("[cap-copy-reachable] a 100-wood cost produced a cap-block sentence (\"" + quiet +
+                             "\"). The cap story must appear ONLY when the bank genuinely cannot hold the " +
+                             "cost - otherwise it becomes noise on every ordinary shortfall and stops being read.");
+
+            // Crystals are UNCAPPED by design -- a cap sentence for them would be a fabricated wall.
+            string crystal = DeNelle.Core.Economy.TownBankCapacity.StorageBlockMessage(
+                DeNelle.Core.Economy.BankResource.Crystals, 999999);
+            if (!string.IsNullOrEmpty(crystal))
+                failures.Add("[cap-copy-reachable] a CRYSTAL cost produced a cap sentence (\"" + crystal +
+                             "\"). Crystals and coins are UNCAPPED by design (owner ruling 2026-08-04, " +
+                             "TownBankCapacity.UncappableResources) - telling the player to build storage " +
+                             "for them invents a wall that does not exist.");
+        }
+
+        // =====================================================================
+        //  CASE 5 [cap-copy-ladder] -- WO-1425. WHAT THE PLAYER IS TOLD MUST AGREE
+        //  WITH WHAT THIS GATE PROVED.
+        // ---------------------------------------------------------------------
+        //  The sentence names a container LEVEL. This case re-derives that level for
+        //  EVERY authored cost above the container-less base store, through the
+        //  player-facing helper, and requires it to match this oracle's own ladder at
+        //  margin 1.0. Two ladders that disagree is the duplicated-state failure this
+        //  repo pays for over and over -- here it would mean the game tells the player
+        //  to reach a level that does not hold the cost.
+        //
+        //  It also uses RequiredLevel(), which was defined and NEVER CALLED: the gate
+        //  computed the levels the 2026-08-21 sink pass reasoned about and then threw
+        //  them away, which is why nothing noticed the levels were never surfaced.
+        //
+        //  REVERT RECIPE (prove it RED): change LevelMultipliers in this file to
+        //  { 1f, 2f, 3f, 8f, 16f, 32f } -- the L3 rung drops from 6000 to 5000, so
+        //  'tower_siege_tower' L2->L3 (5600 wood, MEASURED) resolves to L3 through the
+        //  player-facing helper and L4 through this oracle, and the case fails.
+        //  (Do NOT tamper with the L6 rung: no authored cost currently lands above the
+        //  L5 rung of 18000, so a top-rung edit changes nothing and leaves this GREEN.)
+        // =====================================================================
+        private static void CaseCapCopyLadder(List<string> failures, StringBuilder log)
+        {
+            // The two ladders must start from the SAME base, or every comparison below is
+            // measuring the wrong thing. Named explicitly so a divergence says WHICH side moved.
+            int coreBaseWood = DeNelle.Core.Economy.TownBankCapacity.BaseCapOf(DeNelle.Core.Economy.BankResource.Wood);
+            if (coreBaseWood != BaseCap)
+            {
+                failures.Add("[cap-copy-ladder] TownBankCapacity.BaseCapOf(Wood) = " + coreBaseWood +
+                             " but this oracle's BaseCap constant is " + BaseCap + ". Either storage-caps.json " +
+                             "moved (update the constant AND the header ladder above) or the file failed to " +
+                             "load in this batch (BaseCapOf floors at AbsoluteMinBaseCap " +
+                             DeNelle.Core.Economy.TownBankCapacity.AbsoluteMinBaseCap + "). Until they agree, " +
+                             "the level the player is told and the level this gate proved are not comparable.");
+                return;
+            }
+
+            int mismatches = 0;
+            var table = new StringBuilder();
+            table.AppendLine("  [cap-copy-ladder] REQUIRED CONTAINER LEVEL per authored cost above the " +
+                             "container-less base store of " + BaseCap + ":");
+
+            foreach (var c in _overBase)
+            {
+                if (!DeNelle.Core.Economy.TownBankCapacity.TryParseResource(c.Resource, out var br)) continue;
+
+                int coreLevel = DeNelle.Core.Economy.TownBankCapacity.RequiredContainerLevel(
+                    br, c.Amount, ContainerUnit, RepoProps.MaxStructureLevel, out int coreCap);
+                int oracleLevel = RequiredLevelAt(c.Amount, 1f);
+
+                table.AppendLine("    " + c.Amount.ToString().PadLeft(6) + " " + c.Resource.PadRight(5) +
+                                 " -> container L" + coreLevel + " (bank holds " + coreCap + ")   " + c.Where);
+
+                if (coreLevel != oracleLevel)
+                {
+                    mismatches++;
+                    failures.Add("[cap-copy-ladder] " + c.Where + " costs " + c.Amount + " " + c.Resource +
+                                 ": the PLAYER-FACING helper says container level " + coreLevel +
+                                 " but this gate's ladder says " + oracleLevel + ". The sentence the player " +
+                                 "reads would send them to a level that does not hold the cost. One ladder, " +
+                                 "one answer - TownBankCapacity owns it; this oracle only cross-checks it.");
+                }
+            }
+
+            table.AppendLine("  [cap-copy-ladder] " + _overBase.Count + " over-base cost(s), " +
+                             mismatches + " ladder mismatch(es)");
+            log.Append(table);
         }
 
         private static void CheckArray(string where, string resource, JArray arr,

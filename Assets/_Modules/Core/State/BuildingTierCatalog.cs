@@ -178,6 +178,32 @@ namespace DeNelle.Core.State
             return int.MaxValue;
         }
 
+        /// <summary>
+        /// WO-1423 — the VILLAGE-tier gate for a perk: the <see cref="BuildingTierDef.RequiresVillageTier"/>
+        /// authored on the perk's OWN tier row.
+        /// <para>⛔ This is NOT <see cref="PerkUnlockTier"/>. That returns the BUILDING tier number, and
+        /// comparing it to the village tier was the 2026-09-06 progression dead end: every ladder's tier-1
+        /// row authors <c>requiresVillageTier: 0</c> while its perks demanded village tier 1, and
+        /// <c>lumber-ancient-sawmill</c> (lumbermill tier 4) demanded village tier 4 against
+        /// <c>VillageTierService.MaxTier == 3</c> — unreachable by any player action, forever.
+        /// Two scales spelled the same way. <c>ProgressionReachabilityRegression</c> now fails the build if
+        /// either scale drifts back.</para>
+        /// Returns <see cref="int.MaxValue"/> when the perk is unknown, so an unresolved id fails CLOSED.
+        /// </summary>
+        public static int PerkRequiredVillageTier(string buildingId, string perkId)
+        {
+            if (string.IsNullOrEmpty(perkId)) return int.MaxValue;
+            var b = Find(buildingId);
+            if (b == null || b.Tiers == null) return int.MaxValue;
+            foreach (var t in b.Tiers)
+            {
+                if (t == null || t.Perks == null) continue;
+                foreach (var p in t.Perks)
+                    if (p != null && p.Id == perkId) return t.RequiresVillageTier;
+            }
+            return int.MaxValue;
+        }
+
         public static void Reload() { _data = null; EnsureLoaded(); }
 
         private static void EnsureLoaded()

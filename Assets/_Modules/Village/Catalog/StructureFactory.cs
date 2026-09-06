@@ -1237,9 +1237,19 @@ namespace DeNelle.Village
                 {
                     var f = root.AddComponent<HealingFountain>();
                     f.Configure(entry);
-                    // WO-991: caravan is a mobile glass support unit that slow-follows the hero.
-                    // Kill switch ff.caravanmobile (default ON): OFF flattens the caravan back to
-                    // the static HealingFountain-only behaviour without a rebuild.
+                    // WO-991: the caravan is a glass support unit. WO-1424 SPLIT its movement by
+                    // context (owner ruling 2026-09-06: "it slow follows as a combat attack item
+                    // as defensive item it stationary") — the component now slow-follows only in
+                    // an enemy-owned scene and stands still in the player's town. The component is
+                    // attached the same way in both cases; it latches the mode itself in Awake.
+                    //
+                    // ⛔ ff.caravanmobile IS NOT A "MAKE IT STATIC" SWITCH — DO NOT REACH FOR IT.
+                    // This component is the SOLE attach site for CaravanHealField (the 7m heal
+                    // aura + the Safe Zone range ring), CaravanStatusChip and the FloatingHealthBar
+                    // glass HP. Turning the flag OFF amputates all of those, not just the follow —
+                    // which is exactly what the Warn below is admitting. The flag stays a genuine
+                    // kill switch for the WHOLE WO-991 shell; the stationary/defensive behaviour is
+                    // reached through the split inside the component, never through this flag.
                     if (entry != null && entry.id == "healing_caravan")
                     {
                         if (DeNelle.Core.FeatureFlags.HealingCaravanMobile)

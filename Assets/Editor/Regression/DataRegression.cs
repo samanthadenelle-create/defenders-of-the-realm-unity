@@ -1019,6 +1019,8 @@ namespace DeNelle.Editor
             // --- WO-1422 Manage - Defense and Research take the WO-1418 Buildings shape; the paged list is retired ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-defense-card suite", () => { if (!DeNelle.Editor.ManageDefenseCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-defense-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-research-card suite", () => { if (!DeNelle.Editor.ManageResearchCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-research-card] " + r); });
+            // --- WO-1423 progression reachability: no authored gate may demand a village tier above VillageTierService.MaxTier ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "progression-reachability suite", () => { if (!DeNelle.Editor.ProgressionReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[progression-reachability] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
             // --- WO-1404 Journey deck subtitles carry state (Quests / Raids), one pure Core VM, change-only publisher (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-subtitle suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckSubtitleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-subtitle] " + r); });

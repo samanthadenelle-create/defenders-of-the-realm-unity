@@ -43,6 +43,30 @@
 // reveal. That needs eyes: `UICaptureLaunch.CaptureEndStateWaveClear` +
 // `UI_ENDSTATE_FIT_OK`, and the EndState case at the device's real 2670x1200 that
 // WO-952 also asked for. This suite closes the half that a gate can hold.
+//
+// ⛔ AND GEOMETRY CANNOT CATCH ALPHA — READ THIS BEFORE TRUSTING A GREEN RUN.
+// On 2026-09-06 the owner watched a WAVE 7 CLEARED panel show its title over an
+// EMPTY interior for the panel's whole 5-8 second life ("it is an empty box was
+// sad"). EVERY case in this suite would have passed that panel: the rows were
+// BUILT, the bands SOLVED, the scale was fine. They were simply never made
+// visible — EndStateView.Track parks every body element at CanvasGroup.alpha 0
+// (EndStateView.cs:2558) and a reveal coroutine is the only thing that raises it.
+//
+// ⛔ THE SCREENSHOT GATES ARE BLIND TO IT TOO, which is why only her eyes caught
+// it. BOTH capture paths FORCE the alphas to 1 before photographing anything:
+//   • EndStateView.Bind's own `if (!Application.isPlaying)` branch, and
+//   • UICaptureLaunch `group.alpha = 1f` (UICaptureLaunch.cs:1416, :3062) — whose
+//     comment at :5161 states plainly that "every CanvasGroup is still parked at
+//     its start-of-tween alpha 0".
+// So a reveal that never completes is invisible to the ENTIRE editor gate stack.
+//
+// The pin for that defect is therefore NOT here and CANNOT be: an EditMode suite
+// has no player loop, so it cannot advance a coroutine that measures
+// Time.unscaledDeltaTime. It is EndStateView.VerifyRevealCompleted — a RUNTIME
+// probe that waits out the last reveal and FlowTrace.Fails with the final root
+// alpha and a count of still-transparent elements, on the F8 channel. A PlayMode
+// test would be the only way to gate it in CI. ⚠ DO NOT read a green run of this
+// suite as "the end-state renders".
 // =============================================================================
 using System;
 using System.Collections.Generic;
@@ -75,6 +99,7 @@ namespace DeNelle.Editor.Regression
                 TheCapturedArenaVictoryFits(failures, log);
                 TheSpoilsLadderNeverCompresses(failures, log);
                 TheGuardsThatMakeTheAboveMeanSomething(failures, log);
+                TheWaveClearDamageReportFits(failures, log);
             }
             catch (Exception ex)
             {
@@ -231,6 +256,164 @@ namespace DeNelle.Editor.Regression
                                    "not height-driven");
             }
             finally { ElarionUiKit.ClearSurfaceOverride(); }
+        }
+
+        // ---------------------------------------------------------------------
+        //  CASE 4 — ⭐ THE WAVE-CLEAR DAMAGE REPORT (WO-952 REOPEN #3).
+        //  F8 build 2026.09.06.357599, SM02G4061955851, 2026-09-06T09:12:29Z:
+        //    [Flow:EndState] body rows COMPRESSED to fit: need=668px well=540px
+        //      scale=0.808
+        //    (EndStateView.BuildBody <- Bind <- Show <- WaveClearRoutine)
+        //
+        //  ⛔ WHY CASES 1-3 WERE ALL GREEN WHILE THE OWNER'S DEVICE FAILED, which
+        //  is the real lesson here: EVERY case above uses ArenaVictoryFixture, and
+        //  that fixture sets Stars=3 / TimeSeconds=41 and builds ZERO
+        //  SpoilRowVM.Wide rows. Those two facts are exactly what make the two
+        //  existing reflow levers WORK for it — and exactly what a wave-clear
+        //  damage report does not have. This suite's own banner even records
+        //  "the WAVE-CLEAR path is clean (340 = 340, scale 1)": true, and true
+        //  only because the wave-clear VM it measured carried no damage report.
+        //  The defect class was never "arena with a gear drop"; it was "content
+        //  the levers cannot reflow", and the ladder swept the wrong axis.
+        //
+        //  On the shape below BOTH existing levers are STRUCTURALLY INERT:
+        //    • columns — every damage row is Wide, and SpoilBandPlan gives a wide
+        //      row a band to itself at 1, 2 OR 3 columns. Escalating changes
+        //      nothing at all.
+        //    • strip   — FromWaveClear leaves Stars/TimeSeconds at -1, so
+        //      NarrativeStripPx == EmblemPx and merging one element saves 0px.
+        //  Hence the third lever (EndStateView.SpoilRowsShown) and this case.
+        //
+        //  ⭐ HOW TO SEE IT RED (the WO-1138 rule): raise MinSpoilRowsShown in
+        //  EndStateView to 8 — that disables the trim for this shape and restores
+        //  the pre-fix engine — and WaveClearDamageFixture(2, 5) fails with
+        //  need=668px well=540px scale=0.808, the captured numbers to the pixel.
+        //
+        //  ⚠ (2, 5) IS SEVEN ROWS AND SIX BANDS, and the distinction is the whole
+        //  reason the 668 is reproducible: the 2 reward rows are NARROW and PAIR
+        //  into one band at 2 columns, while each of the 5 damage rows is Wide and
+        //  takes a band alone. The budget counts BANDS, never rows:
+        //    64 emblem + 60 subtitle + 16 lead gap + 6x64 rows + 8x18 gaps = 668.
+        //  (2, 4) is 5 bands = 586px and does NOT reproduce the capture.
+        // ---------------------------------------------------------------------
+        private static void TheWaveClearDamageReportFits(List<string> failures, StringBuilder log)
+        {
+            foreach (var s in Surfaces)
+            {
+                ElarionUiKit.SetSurfaceOverride(s.w, s.h);
+                try
+                {
+                    float canvasH = 965.4f * (Mathf.Min(s.w, s.h) / 1200f);
+                    if (s.h > s.w) canvasH = 1920f;
+
+                    // WaveDamageReport.MaxRows is 8, and the FULL modal had no ceiling at all
+                    // (EndStateVM.FromWaveClear: damageBudget = vm.Compact ? ... : damageAvailable),
+                    // so sweep the whole range the model can actually hand over.
+                    for (int dmg = 1; dmg <= 8; dmg++)
+                    {
+                        var vm = WaveClearDamageFixture(rewardRows: 2, damageRows: dmg);
+                        var fit = EndStateView.ProbeFit(vm, canvasH);
+
+                        // (a) THE INVARIANT: no band may resolve below its own content size.
+                        if (fit.Scale < EndStateView.CompressFailBelowFrac)
+                            failures.Add($"[wave-damage/{s.name}] ⛔ WO-952 REOPEN #3 IS BACK: a " +
+                                         $"wave clear with {dmg} damage row(s) compresses to " +
+                                         $"scale={fit.Scale:0.###} (need={fit.NeedPx:0}px " +
+                                         $"well={fit.WellPx:0}px, panel frac {fit.PanelFrac:0.###}, " +
+                                         $"{fit.Columns} column(s), {fit.SpoilBands} band(s), " +
+                                         $"rows {fit.RowsShown}/{fit.RowsRequested}). The column and " +
+                                         "strip levers CANNOT help this shape (wide rows / no " +
+                                         "stars+time) - the row trim is the only lever, so this " +
+                                         "means the trim stopped trimming. Do NOT answer it by " +
+                                         "raising MaxPanelHalf or by letting the bands shrink.");
+
+                        // (b) THE BODY IS NEVER EMPTY. The trim exists to keep rows legible, never
+                        //     to remove the reason the panel opened.
+                        if (fit.RowsShown < 1 || fit.SpoilBands < 1)
+                            failures.Add($"[wave-damage/{s.name}] {dmg} damage row(s) trimmed the body " +
+                                         $"to {fit.RowsShown} row(s) / {fit.SpoilBands} band(s). A " +
+                                         "wave-clear panel that shows a headline over an EMPTY ledger " +
+                                         "is the defect, not the fix - MinSpoilRowsShown is the floor.");
+
+                        // (c) REWARDS SURVIVE THE TRIM. The trim takes from the TAIL, and
+                        //     FromWaveClear appends rewards FIRST and damage LAST, so a trim that
+                        //     ever reaches the reward block has trimmed in the wrong direction.
+                        if (fit.RowsShown < 2)
+                            failures.Add($"[wave-damage/{s.name}] the trim cut into the REWARD rows " +
+                                         $"({fit.RowsShown} of {fit.RowsRequested} shown, 2 of them " +
+                                         "rewards). Rewards are the earn beat the banner exists for; " +
+                                         "the damage tail is what may be dropped.");
+
+                        // (d) A DROP IS NEVER SILENT: the shortfall band is budgeted as a real band,
+                        //     so a trimmed panel always carries one MORE band than it has rows.
+                        if (fit.RowsDropped > 0 && fit.SpoilBands <= fit.RowsShown - 1)
+                            failures.Add($"[wave-damage/{s.name}] {fit.RowsDropped} row(s) were dropped " +
+                                         $"but the plan holds only {fit.SpoilBands} band(s) for " +
+                                         $"{fit.RowsShown} shown row(s) - the shortfall band is missing, " +
+                                         "so the player is not told the ledger is partial. A hidden " +
+                                         "damage row reads as 'that building is fine'.");
+                    }
+
+                    // ⭐ THE CAPTURED SHAPE, and the band arithmetic behind the 668 spelled out so
+                    // nobody has to re-derive it: 2 REWARD rows are NARROW, so at 2 columns they
+                    // PAIR INTO ONE band; the 5 damage rows are Wide and take one each. That is
+                    // 6 SPOILS BANDS from 7 rows — and it is BANDS the budget counts:
+                    //   emblem 64 + subtitle 60x1 + lead gap 16 + 6x64 rows + 8x18 gaps = 668 px,
+                    // against the 540 px well the clamp allows. (2,4) would be 5 bands = 586 px
+                    // and would NOT reproduce the capture — the row count is not the band count.
+                    var captured = EndStateView.ProbeFit(WaveClearDamageFixture(2, 5), canvasH);
+                    log.AppendLine($"  [wave-damage/{s.name}] the captured shape (7 rows -> 6 bands): " +
+                                   $"need={captured.NeedPx:0}px well={captured.WellPx:0}px " +
+                                   $"scale={captured.Scale:0.###}, rows " +
+                                   $"{captured.RowsShown}/{captured.RowsRequested} " +
+                                   $"(dropped {captured.RowsDropped}), {captured.SpoilBands} band(s)");
+                }
+                finally { ElarionUiKit.ClearSurfaceOverride(); }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        //  THE WAVE-CLEAR FIXTURE — the shape behind the 2026-09-06 capture.
+        //  Mirrors EndStateVM.FromWaveClear: emblem, ONE-line subtitle, NO stars,
+        //  NO time, resource reward rows first (narrow), damage rows last (Wide).
+        //  Hand-built for the same reason ArenaVictoryFixture is: the real factory
+        //  resolves icons through RpgUiCatalog and calls WaveDamageReport.Collect,
+        //  neither of which is answerable in a headless editor run.
+        // ---------------------------------------------------------------------
+        private static EndStateVM WaveClearDamageFixture(int rewardRows, int damageRows)
+        {
+            var vm = new EndStateVM
+            {
+                Kind = EndStateKind.WaveResults,
+                Title = "Wave 7 Cleared",
+                // The exact one-line string FromWaveClear sets once damage exists.
+                Subtitle = "The realm holds - but it took damage.",
+                Emblem = OnePixelSprite(),
+                PrimaryLabel = "Prepare for Wave 8",
+                PrimaryRoute = "prepare-next-wave",
+                Compact = false,
+                HoldWorld = true,
+                // ⚠ LOAD-BEARING OMISSION: Stars and TimeSeconds stay at their -1 defaults,
+                // exactly as FromWaveClear leaves them. Setting them here would hand the strip
+                // lever something to merge and the case would stop reproducing the capture.
+            };
+            var rewards = new (string label, string amount)[]
+            {
+                ("Wood", "+180"), ("Iron", "+64"), ("Crystals", "+12"),
+            };
+            for (int i = 0; i < Mathf.Clamp(rewardRows, 0, rewards.Length); i++)
+                vm.Spoils.Add(new SpoilRowVM { Label = rewards[i].label, Amount = rewards[i].amount });
+
+            // Damage rows: a SENTENCE plus a materials cost, and Wide - the grammar
+            // FromWaveClear gives them, and the reason the column lever cannot pair them.
+            for (int i = 0; i < damageRows; i++)
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    Label  = "Archer Tower " + (i + 1) + " - damaged " + (20 + i * 7) + "%",
+                    Amount = "Repair 40 wood, 12 iron",
+                    Wide   = true,
+                });
+            return vm;
         }
 
         // ---------------------------------------------------------------------

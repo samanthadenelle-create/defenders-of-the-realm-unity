@@ -98,6 +98,66 @@ namespace DeNelle.Village
         }
         private string _footprintLabel;
         private bool _footprintComputed;
+
+        /// <summary>
+        /// WO-1425 — the cap-block note for <see cref="EffectiveCost"/>: "" unless some component of
+        /// this cost is MORE THAN THE TOWN BANK CAN HOLD, in which case it names the container, the
+        /// level and the capacity that unblocks it. The pill renders this UNDER the price so an
+        /// unaffordable card explains WHICH kind of unaffordable it is.
+        ///
+        /// <para>An affordable card never has one (a cost you can pay is by definition one the bank
+        /// held), so this is checked only when <see cref="Affordable"/> is false — the palette does
+        /// not pay a capacity walk per card for the common case.</para>
+        ///
+        /// <para>LAZY for the same reason <see cref="FootprintLabel"/> is: the capacity read walks
+        /// GameState.BaseLayout, and the palette builds many cards per open. Wrapped in Guard so a
+        /// null-service or catalog-less context can never blank a card (§12 — never a silent catch:
+        /// Guard logs through FlowTrace.Fail).</para>
+        ///
+        /// <para>NOTE on this VM's stated purity: the ctor takes an injected IEconomy so it is
+        /// unit-testable without a scene. This property reaches TownBankCapacity (static, and
+        /// GameState-reading) instead, which is a deliberate, documented exception — with no
+        /// GameStateService it resolves to the base cap and cannot throw. It is NOT injected because
+        /// the whole point of WO-1425 is that capacity has exactly ONE reader.</para>
+        /// </summary>
+        public string CapBlockNote
+        {
+            get
+            {
+                if (!_capNoteComputed)
+                {
+                    _capNote = !Affordable
+                        ? Guard.Try("Build", "StructureCardVM cap-block note",
+                            () => BuildModeController.CapBlockMessage(EffectiveCost) ?? "", "")
+                        : "";
+                    _capNoteComputed = true;
+                }
+                return _capNote;
+            }
+        }
+        private string _capNote;
+        private bool _capNoteComputed;
+
+        /// <summary>WO-1425 — the same note for <see cref="NextTierCost"/>, so the info panel's
+        /// upgrade preview cannot advertise a tier whose price the bank can never hold without
+        /// saying so. "" when there is no next tier or the cost fits.</summary>
+        public string NextTierCapBlockNote
+        {
+            get
+            {
+                if (!_nextCapNoteComputed)
+                {
+                    _nextCapNote = HasNextTier
+                        ? Guard.Try("Build", "StructureCardVM next-tier cap-block note",
+                            () => BuildModeController.CapBlockMessage(NextTierCost) ?? "", "")
+                        : "";
+                    _nextCapNoteComputed = true;
+                }
+                return _nextCapNote;
+            }
+        }
+        private string _nextCapNote;
+        private bool _nextCapNoteComputed;
         /// <summary>Current-tier stat rows (DPS / Range / Fire Rate — or a single "Type" row).</summary>
         public IReadOnlyList<StatRow> CurrentStats => _currentStats;
         private readonly List<StatRow> _currentStats = new List<StatRow>();

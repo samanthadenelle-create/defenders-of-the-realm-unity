@@ -483,6 +483,227 @@ namespace DeNelle.Core.Economy
         }
 
         // =====================================================================
+        //  WO-1425 -- THE HONEST REFUSAL. "You cannot hold enough" is a DIFFERENT
+        //  situation from "you have not saved up yet", and until now the game said
+        //  the same sentence for both.
+        // ---------------------------------------------------------------------
+        //  THE DEFECT (owner playtest, build 2026.09.06.357599): "some items you
+        //  cannot upgrade cause you can not get enough resources to use because of
+        //  ceilings". MEASURED at source this session: structures-catalog
+        //  'tower_ground_archer' upgradeCost[1] (L2->L3) authors 3150 wood, while a
+        //  save with a level-1 lumberyard has MaxOf(Wood) = baseCap 2000 + container
+        //  1000 = 3000. The bar sits FULL at 3000/3000 and the refusal reads
+        //  "Not enough Wood (3150)" -- indistinguishable from a permanent wall.
+        //
+        //  There is NO arithmetic dead-end: EconomySinkCapRegression [ceiling]
+        //  proves every authored cost fits the L6 ceiling of 34000. The defect is
+        //  DISCOVERABILITY -- nothing in the game names the container, the level, or
+        //  the capacity that unblocks the cost. This is a PRESENTATION seam: it
+        //  reads the ladder and returns words. It changes no cost, no cap, no
+        //  multiplier, and it never touches a wallet.
+        //
+        //  WHY IT LIVES HERE and not in the build UI: this file already owns the
+        //  ladder (BaseCapOf + CapacityAtLevel + StorageCapsCatalog.LevelMultiplier)
+        //  and the [one-reader] guard exists precisely so capacity math is never
+        //  re-derived in a second place. A copy of the ladder in BuildModeController
+        //  is the duplicated-state failure this repo keeps paying for.
+        // =====================================================================
+
+        /// <summary>
+        /// A cost that the town bank CANNOT CURRENTLY HOLD, and the way out. Produced by
+        /// <see cref="TryDescribeStorageBlock"/>; rendered by <see cref="StorageBlockMessage"/>.
+        /// Pure data -- reading it mutates nothing and reads no wallet.
+        /// </summary>
+        public struct StorageBlock
+        {
+            /// <summary>True only when the resource is capped AND <see cref="Amount"/> strictly
+            /// exceeds <see cref="CurrentMax"/>. False for Crystals/Coins, unconditionally.</summary>
+            public bool Blocked;
+            public BankResource Resource;
+            /// <summary>Player-facing resource word ("Wood"; "Stone" for BankResource.Food).</summary>
+            public string ResourceName;
+            /// <summary>The cost that does not fit.</summary>
+            public int Amount;
+            /// <summary>MaxOf(Resource) as it stands right now -- what the bank tops out at today.</summary>
+            public int CurrentMax;
+            /// <summary>Lowest ONE-container level whose total bank cap holds <see cref="Amount"/>,
+            /// or -1 when no level on the ladder does (a genuine dead end -- say so, never invent
+            /// a level). 0 would mean "the base store already holds it", which cannot co-occur
+            /// with Blocked.</summary>
+            public int RequiredContainerLevel;
+            /// <summary>Total bank capacity at <see cref="RequiredContainerLevel"/> (baseCap +
+            /// that container's capacity). 0 when the level is -1.</summary>
+            public int CapacityAtRequiredLevel;
+            /// <summary>Total bank capacity with one container at the top of its ladder.</summary>
+            public int LadderCeiling;
+            /// <summary>Player-facing container name ("Lumberyard"), or null when the catalog is
+            /// not loaded and the row cannot be resolved -- the copy degrades honestly.</summary>
+            public string ContainerName;
+        }
+
+        /// <summary>
+        /// PURE ladder math -- no catalog read, no game state, no allocation. The lowest ONE-container
+        /// level (0 = none needed) whose TOTAL bank cap holds <paramref name="amount"/>, and that
+        /// capacity. Returns -1 / 0 when no level on the ladder reaches it.
+        ///
+        /// <para>"ONE container" is the same conservative bound EconomySinkCapRegression uses: nothing
+        /// stops a player placing a second lumberyard, so the true bank is unbounded -- but telling the
+        /// player "build a second one" is an undiscoverable workaround, which is the very failure this
+        /// helper exists to end. Naming the LEVEL of the container they already have is actionable.</para>
+        ///
+        /// <para>Driven directly by EconomySinkCapRegression [cap-copy-ladder] with explicit unit /
+        /// maxLevel arguments, so the sentence the player reads and the number the gate proved come
+        /// from ONE loop over ONE multiplier ladder.</para>
+        /// </summary>
+        public static int RequiredContainerLevel(BankResource r, int amount, int containerUnit,
+                                                 int maxContainerLevel, out int capacityAtLevel)
+        {
+            capacityAtLevel = 0;
+            if (!IsCapped(r)) return 0;                       // Law 1 -- never a cap story for crystals/coins
+            int baseCap = BaseCapOf(r);
+            if (amount <= baseCap) { capacityAtLevel = baseCap; return 0; }
+            if (containerUnit <= 0) return -1;
+
+            int top = Mathf.Clamp(maxContainerLevel, 1, RepoProps.MaxStructureLevel);
+            for (int level = 1; level <= top; level++)
+            {
+                int cap = baseCap + CapacityAtLevel(containerUnit, level);
+                if (cap >= amount) { capacityAtLevel = cap; return level; }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Resolve the storage container row that backs a resource, FROM THE CATALOG (the same walk
+        /// <see cref="ContainerNameFor"/> does) -- display name, authored storageCapacity, and the
+        /// row's own maxLevel bounded by <see cref="RepoProps.MaxStructureLevel"/>.
+        /// <para>False when the catalog is not loaded or authors no container for the resource. That
+        /// is a real condition (an editor batch with an unpopulated CatalogRegistry), so it is TRACED
+        /// and the caller degrades to a message with no container name -- never a guessed one.</para>
+        /// </summary>
+        public static bool TryGetContainerRow(BankResource r, out string displayName,
+                                              out int storageCapacity, out int maxLevel)
+        {
+            displayName = null;
+            storageCapacity = 0;
+            maxLevel = 0;
+            if (!IsCapped(r)) return false;
+
+            var entries = CatalogRegistry.All();
+            if (entries == null || entries.Count == 0)
+            {
+                FlowTrace.Throttle("Bank", "container-row-nocatalog-" + WordOf(r), 60f,
+                    $"TryGetContainerRow({WordOf(r)}): CatalogRegistry is empty -- the cap-block copy " +
+                    "will name no container. NOT a guess: a wrong building name is worse than none.");
+                return false;
+            }
+
+            string want = WordOf(r);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var e = entries[i];
+                var repo = e != null ? e.repo : null;
+                if (repo == null || !repo.IsStorageContainer) continue;
+                if (!string.Equals(repo.storageResource, want, StringComparison.OrdinalIgnoreCase)) continue;
+                if (repo.storageCapacity <= 0) continue;
+
+                displayName = !string.IsNullOrEmpty(e.displayName) ? e.displayName : e.id;
+                storageCapacity = repo.storageCapacity;
+                maxLevel = Mathf.Clamp(repo.maxLevel, 1, RepoProps.MaxStructureLevel);
+                return true;
+            }
+
+            FlowTrace.Throttle("Bank", "container-row-missing-" + WordOf(r), 60f,
+                $"TryGetContainerRow({WordOf(r)}): no catalog row authors IsStorageContainer for this " +
+                "resource, so no container level can be named.");
+            return false;
+        }
+
+        /// <summary>
+        /// THE SEAM every affordability refusal must consult. True when <paramref name="amount"/> of
+        /// <paramref name="r"/> is MORE THAN THE BANK CAN CURRENTLY HOLD -- i.e. saving up can never
+        /// close the gap, only more storage can. False for an ordinary shortfall (the player just has
+        /// not banked it yet) and false, always, for Crystals/Coins.
+        ///
+        /// <para>PURE: reads caps and the catalog, writes nothing.</para>
+        /// </summary>
+        public static bool TryDescribeStorageBlock(BankResource r, int amount, out StorageBlock block)
+        {
+            block = default;
+            block.Resource = r;
+            block.ResourceName = DisplayName(r);
+            block.Amount = amount;
+            block.RequiredContainerLevel = -1;
+
+            if (amount <= 0) return false;
+            if (!IsCapped(r)) return false;                  // Law 1
+
+            int max = MaxOf(r);
+            block.CurrentMax = max;
+            if (amount <= max) return false;                 // an ordinary shortfall -- keep the ordinary words
+
+            block.Blocked = true;
+
+            if (TryGetContainerRow(r, out string name, out int unit, out int rowMaxLevel))
+            {
+                block.ContainerName = name;
+                block.RequiredContainerLevel =
+                    RequiredContainerLevel(r, amount, unit, rowMaxLevel, out int capAtLevel);
+                block.CapacityAtRequiredLevel = capAtLevel;
+                block.LadderCeiling = BaseCapOf(r) + CapacityAtLevel(unit, rowMaxLevel);
+            }
+
+            FlowTrace.Throttle("Bank", "cap-block-" + WordOf(r), 15f,
+                $"CAP BLOCK {block.ResourceName}: a cost of {amount} exceeds the bank ceiling of {max}. " +
+                $"Way out = {(block.ContainerName ?? "a storage building")} at level " +
+                $"{block.RequiredContainerLevel} (holds {block.CapacityAtRequiredLevel}). " +
+                "This is a DISCOVERABILITY fix (WO-1425), not a balance change.");
+            return true;
+        }
+
+        /// <summary>
+        /// The player-facing sentence for a cap block, or "" when the cost is not cap-blocked (the
+        /// caller keeps its ordinary shortfall copy). ASCII only; the WORDS carry the state, never a
+        /// colour (the owner is red/green colourblind).
+        /// <para>Three shapes, because three different things are true and one sentence cannot say
+        /// all of them honestly:</para>
+        /// <list type="bullet">
+        /// <item>a level on the ladder holds it -> name the container, the level and the capacity;</item>
+        /// <item>NO level holds it -> say so plainly; that is a real dead end and inventing a level
+        /// would send the player up a ladder that does not reach;</item>
+        /// <item>the container row is unresolvable -> state the ceiling and the cost without naming a
+        /// building. A missing name is honest; a wrong one is not.</item>
+        /// </list>
+        /// </summary>
+        public static string StorageBlockMessage(BankResource r, int amount)
+        {
+            if (!TryDescribeStorageBlock(r, amount, out var b)) return "";
+            return DescribeStorageBlock(b);
+        }
+
+        /// <summary>Render an already-resolved <see cref="StorageBlock"/>. Pure, allocation-light, and
+        /// separately testable from the resolution above.</summary>
+        public static string DescribeStorageBlock(StorageBlock b)
+        {
+            if (!b.Blocked) return "";
+            string res = b.ResourceName ?? "Resource";
+            string tops = $"Your {res} storage tops out at {N(b.CurrentMax)}.";
+
+            if (string.IsNullOrEmpty(b.ContainerName))
+                return $"{tops} This costs {N(b.Amount)} - upgrade your storage to hold more.";
+
+            if (b.RequiredContainerLevel <= 0)
+                return $"{tops} This costs {N(b.Amount)}, more than any {b.ContainerName} level holds " +
+                       $"(the ladder tops out at {N(b.LadderCeiling)}).";
+
+            return $"Needs a {b.ContainerName} at level {b.RequiredContainerLevel} " +
+                   $"(holds {N(b.CapacityAtRequiredLevel)}). {tops}";
+        }
+
+        /// <summary>Thousands-separated, culture-invariant ("10,000"). ASCII.</summary>
+        private static string N(int v) => v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+        // =====================================================================
         //  The clamp (Law 3 + the load-bearing warn)
         // =====================================================================
 

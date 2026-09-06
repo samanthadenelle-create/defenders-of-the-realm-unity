@@ -87,6 +87,80 @@ namespace DeNelle.Editor
             if (!src.Contains("IDamageableStructure"))
                 failures.Add("caravan must be damageable (IDamageableStructure)");
 
+            // ── WO-1424 — THE DEATH PATH MUST ROUTE THROUGH Destructible ────────────────────
+            // The three checks above pin the caravan as KILLABLE (48 glass HP x1.75 damage) and
+            // nothing asserted that killing it cleaned up after itself. It did not: Die() called a
+            // raw Destroy(gameObject, 0.4f) and NOTHING else, bypassing Destructible.NotifyBroken
+            // — the one owner of structure death (Destructible.cs:150-193) that frees the grid
+            // cell, Forgets the loader entry, DROPS THE PERSISTED BaseLayout RECORD, burns the
+            // free-build and notifies the singleton bootstrap. The observed consequences: the F8
+            // census line "REPLAYABLE record(s) have NO live body = [healing_caravan@(18,18)]", a
+            // grid cell Occupied for the rest of the session, a free resurrection on reload
+            // against the WO-753 ruling, and — because healing_caravan is singleton:true and
+            // StructureSingleton.HasPlacedInstance answers from the RECORD ALONE — a build card
+            // stuck on "Built" with the heal field gone and no way to get it back.
+            // The caravan was the ONLY structure-death bypass in Assets/_Modules/Village; towers,
+            // buildings and walls already route correctly (Building.cs:230, DefenseTower.cs:356).
+            //
+            // ⛔ EVERY PIN BELOW MATCHES THE STATEMENT FORM, INCLUDING ITS TRAILING PUNCTUATION —
+            // NEVER THE BARE TOKEN. This file greps the WHOLE source with Contains, and
+            // HealingCaravanMobility.cs now carries long comments that name "NotifyBroken",
+            // "SceneOwnership.IsEnemyOwned" and "FollowsHero" in prose. A bare-token pin would be
+            // satisfied by those comments and stay GREEN through a full revert of the code — which
+            // is exactly the failure this suite already recorded once for the mark ("the old
+            // source-grep passed while the mark was dead code", see GateMark below). If you add a
+            // pin here, pin a line of code, then re-read the file's comments to confirm the string
+            // appears nowhere else.
+            //
+            // ⚠ REVERT RECIPE (prove these two RED in ~10 seconds): in
+            //   Assets/_Modules/Village/Buildings/HealingCaravanMobility.cs, inside Die(), replace
+            //   `destructible.NotifyBroken("HealingCaravan hp0");` with `Destroy(gameObject, 0.4f);`
+            //   and delete the `Destructible.Ensure(gameObject);` statement from Awake(). Both
+            //   failures below must fire. Restore both statements to go green.
+            if (!src.Contains("Destructible.Ensure(gameObject);"))
+                failures.Add("caravan does not call Destructible.Ensure(gameObject) — its death would bypass " +
+                             "the one-owner structure-death path and strand its BaseLayout record (WO-1424)");
+            if (!src.Contains("NotifyBroken(\"HealingCaravan hp0\")"))
+                failures.Add("caravan Die() does not call Destructible.NotifyBroken(\"HealingCaravan hp0\") — a " +
+                             "killed caravan leaves its persisted record, keeps its grid cell Occupied, resurrects " +
+                             "free on reload and locks the singleton build card on 'Built' (WO-1424)");
+
+            // ── WO-1424 — THE OFFENSIVE / DEFENSIVE SPLIT ──────────────────────────────────
+            // Owner ruling 2026-09-06, verbatim: "it slow follows as a combat attack item as
+            // defensive item it stationary". The WO-991 follow is KEPT for the offensive case and
+            // gated on SceneOwnership.IsEnemyOwned — this repo's one town-vs-enemy-scene signal.
+            // STATIONARY IS THE FAIL-SAFE DEFAULT (an unresolved scene reads Player-owned).
+            //
+            // ⚠ REVERT RECIPE: delete the `_followsHero = SceneOwnership.IsEnemyOwned;` STATEMENT
+            //   from HealingCaravanMobility.Awake() — the first failure fires (the header comment
+            //   still names the type, which is why the pin includes the assignment). Delete the
+            //   `public bool FollowsHero` declaration — the second fires, and BaseLayoutLoader stops
+            //   compiling, which is the point: the carve decision must never drift away from the
+            //   latched mode. Restore both to go green.
+            if (!src.Contains("_followsHero = SceneOwnership.IsEnemyOwned;"))
+                failures.Add("caravan no longer latches its follow mode from SceneOwnership.IsEnemyOwned — the " +
+                             "defensive town caravan must be STATIONARY where the player placed it (WO-1424)");
+            if (!src.Contains("public bool FollowsHero"))
+                failures.Add("caravan no longer exposes public bool FollowsHero — BaseLayoutLoader keys the " +
+                             "NavMesh carve on it, and a stationary caravan that does not carve wedges pets/NPCs " +
+                             "on its collider forever (WO-1424)");
+
+            string loader = "Assets/_Modules/Village/BuildMode/BaseLayoutLoader.cs";
+            if (File.Exists(loader))
+            {
+                string l = File.ReadAllText(loader);
+                // The carve test must be "will it MOVE?", not "does the component EXIST?" — the
+                // component is now present on the stationary caravan too, so a presence test would
+                // skip the carve on exactly the structure that needs it.
+                if (!l.Contains("caravan.FollowsHero"))
+                    failures.Add("BaseLayoutLoader keys the NavMesh carve on HealingCaravanMobility PRESENCE " +
+                                 "rather than caravan.FollowsHero — the stationary caravan would not carve (WO-1424)");
+            }
+            else
+            {
+                failures.Add("BaseLayoutLoader.cs missing — cannot verify the caravan NavMesh carve split (WO-1424)");
+            }
+
             string factory = "Assets/_Modules/Village/Catalog/StructureFactory.cs";
             string f = File.ReadAllText(factory);
             if (!f.Contains("healing_caravan") || !f.Contains("HealingCaravanMobility"))

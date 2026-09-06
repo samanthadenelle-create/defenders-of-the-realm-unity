@@ -2143,30 +2143,74 @@ namespace DeNelle.Village.UI
 
             if (string.Equals(selected.StateWord, "Max", StringComparison.Ordinal)) return;
 
-            ElarionUiKit.CostRow(card, selected.UpgradeCostParts, new Vector2(0.02f, 0.54f),
-                new Vector2(0.72f, 0.695f), ElarionUi.Parchment, prefix: "Upgrade:",
+            // WO-1423 - a LOCKED card lifts its cost/fact row to 0.565-0.70 (35.1px at
+            // TroopWorkspacePx = 260) to free 0.45-0.56 (28.6px) for the lock SENTENCE, which is the
+            // exact band arithmetic BuildResearchCard already proved on device. Both clear the ~24px
+            // floor below which TMP culls a whole line.
+            float factY0 = selected.Locked ? 0.565f : 0.54f;
+            float factY1 = selected.Locked ? 0.70f : 0.695f;
+            ElarionUiKit.CostRow(card, selected.UpgradeCostParts, new Vector2(0.02f, factY0),
+                new Vector2(0.72f, factY1), ElarionUi.Parchment, prefix: "Upgrade:",
                 fontPx: (int)ElarionUi.FontMicro);
             string readiness = selected.UpgradeReady ? "Ready" : "Short";
             string factText = string.IsNullOrEmpty(selected.UpgradeTimeText)
                 ? readiness : selected.UpgradeTimeText + " . " + readiness;
-            var fact = ElarionUiKit.Label(card, factText, 0.54f, 0.695f, ElarionUi.Parchment,
+            var fact = ElarionUiKit.Label(card, factText, factY0, factY1, ElarionUi.Parchment,
                 (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.73f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(fact, 20f, 28f);
 
-            var benefit = ElarionUiKit.Label(card,
-                string.IsNullOrEmpty(selected.AfterUpgradeText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.AfterUpgradeText),
-                0.445f, 0.535f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
-                TextAlignmentOptions.Left, 0.02f, 0.98f);
-            ElarionUiKit.FitSingleLine(benefit, ElarionUiKit.FontHardFloor, 26f);
+            // The "After upgrade" band (0.445-0.535) is the band the lock sentence takes over, so a
+            // locked card paints one or the other, never both stacked on the same pixels.
+            if (!selected.Locked)
+            {
+                var benefit = ElarionUiKit.Label(card,
+                    string.IsNullOrEmpty(selected.AfterUpgradeText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.AfterUpgradeText),
+                    0.445f, 0.535f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                    TextAlignmentOptions.Left, 0.02f, 0.98f);
+                ElarionUiKit.FitSingleLine(benefit, ElarionUiKit.FontHardFloor, 26f);
+            }
 
             // Locked and in-progress choices still explain what the next tier costs and buys.
             // Only their CTA face changes; Max is the sole state without a next-tier fact row.
             if (selected.Locked)
             {
-                string unlockFace = selected.RequiresVillageTier > 0
-                    ? "UNLOCKS AT VILLAGE LEVEL " + selected.RequiresVillageTier
-                    : "LOCKED";
-                BuildDisabledBuildingFace(card, "BuildingCta_Locked", unlockFace);
+                // ⛔ WO-1423 - THE DEAD END THE OWNER HIT ("some items are locked till village level 1,
+                // which there is no way to trigger"). This branch used to paint the DISABLED-face
+                // helper (the same one the "Building" state still uses below) wearing
+                // "UNLOCKS AT VILLAGE LEVEL"+n, and RETURN before the door below was ever built - so
+                // the ONE card that names the gate was the ONE card with no route to the control that
+                // opens it. (The helper's NAME is deliberately not written in this branch: the
+                // WO-1423 oracle fails the branch if that call ever comes back.) A named lock with
+                // no door is worse than no lock at all: it teaches the player the game is stuck.
+                //
+                // Same treatment the locked RESEARCH card got (BuildResearchCard, this file): the
+                // requirement is a BODY TEXT LINE - prose belongs in the body, a sentence never fits a
+                // button face - and the card carries exactly ONE FULL-WIDTH LIVE door into
+                // ViewDetails -> OpenUpgradePanel, whose action band renders "Raise Village Tier N" in
+                // the VillageGated state (BuildingUpgradePanelMvvm.cs:1322-1338). The door is full
+                // width REGARDLESS of DoorLabel: a ladder that authors no perks (the Farm) can still
+                // be village-gated, and this door is the GATE door, not the PERKS door.
+                var lockLine = ElarionUiKit.Label(card,
+                    ManageScreenVM.Ascii(string.IsNullOrEmpty(selected.LockReason) ? "Locked." : selected.LockReason),
+                    0.45f, 0.56f, ElarionUi.Parchment, (int)ElarionUi.FontMicro,
+                    TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
+                if (lockLine != null)
+                {
+                    lockLine.gameObject.name = "BuildingLockReason";
+                    ElarionUiKit.FitSingleLine(lockLine, ElarionUiKit.FontHardFloor, 28f);
+                }
+                var lockedDoor = ElarionUiKit.BuildObsidianButton(card,
+                    ManageScreenVM.Ascii(string.IsNullOrEmpty(selected.LockCtaLabel) ? "OPEN" : selected.LockCtaLabel),
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.02f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                    () => Guard.Try("Manage", "open building village gate", () => selected.ViewDetails?.Invoke()));
+                if (lockedDoor != null)
+                {
+                    lockedDoor.gameObject.name = "BuildingCta_Locked";
+                    lockedDoor.interactable = selected.ViewDetails != null;
+                    MedievalUiSkin.ApplyButton(lockedDoor, false);
+                }
+                ElarionUiKit.ClampMinTouch(lockedDoor);
                 return;
             }
             if (string.Equals(selected.StateWord, "Building", StringComparison.Ordinal))

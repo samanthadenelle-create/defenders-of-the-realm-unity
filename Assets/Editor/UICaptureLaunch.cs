@@ -7296,6 +7296,583 @@ namespace DeNelle.Editor
             if (instanceField != null) instanceField.SetValue(null, prior);
         }
 
+        // =====================================================================
+        //  MANAGE FLOW MAP (2026-09-06) -- a DOCUMENTATION capture, not a fit gate.
+        //
+        //  THE PROBLEM IT EXISTS FOR, in the owner's words: "the disconnect is the
+        //  massive amount of data in manage". Every existing Manage capture shoots the
+        //  rail at its resting scroll position, which shows ~2 rows of a list that may
+        //  be 17 long, so the VOLUME of the screen is invisible in the evidence. This
+        //  entry point documents the whole flow INCLUDING what sits below the fold, at
+        //  ONE landscape size (2670x1200, the Seeker's real surface) because it is
+        //  documenting CONTENT, not proving geometry at three ratios.
+        //
+        //  ⛔ IT DOES NOT TOUCH RunManageOperationalCaptureHeadless. That entry point's
+        //  frame count is pinned at 12 by its own marker and by suites; this is an
+        //  ADDITIVE second door with its own marker and its own fixture.
+        //
+        //  TWO ARTEFACTS, and the TEXT one is worth as much as the pixels:
+        //    Builds/ui-capture/ManageFlow_<Tab>_<state>_2670x1200.png
+        //    MANAGE_FLOW_INVENTORY <Tab>: rail rows=<n> (vm=.. rendered=..) visible=<f>
+        //        viewport=<px> content=<px> pitch=<px> queueRows(line=<Channel>)=<n>
+        //  "visible" is the number the owner is actually asking about: how much of the
+        //  rail a player sees before scrolling.
+        // =====================================================================
+
+        /// <summary>ONE landscape target. This is a documentation capture; three ratios would
+        /// triple the frames without adding a fact about how much content the screen holds.</summary>
+        private static readonly CaptureTarget[] ManageFlowMapTargets =
+        {
+            new CaptureTarget(2670, 1200),   // THE SEEKER'S REAL SURFACE
+        };
+
+        /// <summary>Which frame of the Manage flow a single capture body is shooting.</summary>
+        private enum ManageFlowFrame { Hub, RailTop, RailBottom, QueueDrawer, LockedCard, MaxCard }
+
+        // Hand-off from the capture body to the settled-layout probe. Set before
+        // RenderCanvasToPng, cleared in the body's finally -- never read anywhere else.
+        private static ScrollRect _flowRailScroll;
+        private static bool _flowRailToBottom;
+        private static bool _flowMeasureRail;
+        private static string _flowMeasureTab;
+        private static int _flowVmRailRows;
+        private static int _flowVmQueueRows;
+        private static string _flowQueueChannel;
+        private static readonly List<string> _flowInventory = new List<string>();
+        private static readonly List<string> _flowStateNotes = new List<string>();
+
+        /// <summary>
+        /// Documents the ENTIRE Manage flow: the hub, and for each of the four destinations the
+        /// rail at the top, the rail SCROLLED TO THE BOTTOM (so the full list length is visible),
+        /// the queue drawer, and the two card states a player cannot act on (blocked/locked and
+        /// max/researched). 21 frames, plus a per-tab TEXT INVENTORY of how many rows each rail
+        /// holds versus how many fit on screen.
+        /// </summary>
+        public static void RunManageFlowMapCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+            _flowInventory.Clear();
+            _flowStateNotes.Clear();
+
+            const int Expected = 21;   // 1 hub + 4 tabs x (railtop, railbottom, queue, locked, max)
+            int count = 0;
+
+            count += CaptureManageFlowFrame(ManageTab.Defense, ManageFlowFrame.Hub);
+
+            var tabs = new[] { ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research };
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.RailTop);
+                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.RailBottom);
+                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.QueueDrawer);
+                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.LockedCard);
+                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.MaxCard);
+            }
+
+            // The inventory prints BEFORE the marker so it survives a FAIL: the row counts are the
+            // answer to the owner's question even on a run where a frame did not render.
+            for (int i = 0; i < _flowStateNotes.Count; i++) Debug.Log("MANAGE_FLOW_STATE " + _flowStateNotes[i]);
+            for (int i = 0; i < _flowInventory.Count; i++) Debug.Log(_flowInventory[i]);
+
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == Expected && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; hub + 4 destinations x " +
+                          "(rail top, rail bottom, queue, locked, max); inventory lines=" + _flowInventory.Count);
+            else
+                Debug.LogError("MANAGE_FLOW_MAP_FAIL frames=" + count + "/" + Expected + " fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count +
+                    " inventory=" + _flowInventory.Count);
+        }
+
+        /// <summary>
+        /// Runs on the SETTLED, camera-space layout inside RenderCanvasToPng -- the only point in
+        /// the run where a rect read is in kit reference px (see that method's own comment), so it
+        /// is both where the scroll must be applied and where the rail can honestly be measured.
+        ///
+        /// ⚠ THE SCROLL MUST HAPPEN HERE, NOT IN THE CAPTURE BODY. RenderCanvasToPng does two full
+        /// ForceRebuildLayoutImmediate passes over the canvas root before this probe; a scroll set
+        /// before those passes is set against a content height that has not settled yet.
+        ///
+        /// The seam reused is the panel's own rail alignment: StopMovement() followed by an
+        /// explicit verticalNormalizedPosition, ManageScreenPanel.cs:1985-1989 (the pixel-exact
+        /// alignment inside AddBuildingWorkspaceRow). 1f = top, 0f = bottom.
+        /// </summary>
+        private static void ManageFlowRailProbe(GameObject canvasGo, string label, int w, int h)
+        {
+            var scroll = _flowRailScroll;
+            if (scroll == null || scroll.content == null)
+            {
+                if (_flowMeasureRail)
+                {
+                    // NO SILENT FAILURE (§12): a missing rail is a finding, not an empty line.
+                    Debug.LogWarning("[UICap-HL] MANAGE_FLOW_MAP " + label + ": no rail ScrollRect resolved -- " +
+                                     "the inventory line for " + (_flowMeasureTab ?? "<null>") + " cannot be measured.");
+                    _flowMeasureRail = false;
+                }
+                return;
+            }
+
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+            scroll.StopMovement();
+            scroll.verticalNormalizedPosition = _flowRailToBottom ? 0f : 1f;
+            Canvas.ForceUpdateCanvases();
+
+            if (!_flowMeasureRail) return;
+            _flowMeasureRail = false;
+
+            // Count the RENDERED rows the way the panel names them: "<Prefix>ChoiceRow_<id>"
+            // (ManageScreenPanel.cs:2002 / 2465 / 2931 / 3244), never the tail spacer the rail
+            // appends for its own alignment range (":1976" and its three siblings).
+            int rendered = 0;
+            float firstRowPx = 0f;
+            for (int i = 0; i < scroll.content.childCount; i++)
+            {
+                var child = scroll.content.GetChild(i) as RectTransform;
+                if (child == null || !child.gameObject.activeSelf) continue;
+                if (child.name.IndexOf("TailSpacer", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (child.name.IndexOf("ChoiceRow_", StringComparison.Ordinal) < 0) continue;
+                rendered++;
+                if (firstRowPx <= 0f) firstRowPx = child.rect.height;
+            }
+
+            var vlg = scroll.content.GetComponent<VerticalLayoutGroup>();
+            float spacing = vlg != null ? vlg.spacing : 0f;
+            float pitch = firstRowPx > 0f ? firstRowPx + spacing : 0f;
+            float viewportPx = scroll.viewport != null ? scroll.viewport.rect.height : 0f;
+            float contentPx = scroll.content.rect.height;
+            float visible = pitch > 0.01f ? viewportPx / pitch : 0f;
+
+            _flowInventory.Add("MANAGE_FLOW_INVENTORY " + (_flowMeasureTab ?? "<null>") +
+                ": rail rows=" + _flowVmRailRows +
+                " (vm=" + _flowVmRailRows + " rendered=" + rendered + ")" +
+                " visible=" + visible.ToString("0.0") +
+                " viewport=" + viewportPx.ToString("0") + "px" +
+                " content=" + contentPx.ToString("0") + "px" +
+                " pitch=" + pitch.ToString("0") + "px" +
+                " queueRows(line=" + (_flowQueueChannel ?? "?") + ")=" + _flowVmQueueRows +
+                (rendered != _flowVmRailRows ? "  ** VM/RENDERED MISMATCH **" : ""));
+        }
+
+        /// <summary>
+        /// The RICH fixture. Deliberately the opposite of a minimal one: long rails are the whole
+        /// point of this capture. Every id below is read from the canonical data, not invented --
+        /// structures-catalog.json (tower_ground_archer:15 maxLevel 3:31, tower_ballista:88 max 3,
+        /// tower_siege_tower:160 max 3, tower_catapult:226 max 3, tower_arcane_spire:1004 max 3,
+        /// wall_wood:288 max 2, wall_stone:342 max 1, gate_stone:386, mine_crystal:428 max 3,
+        /// healing_caravan:488 max 3, lumberyard:1289 max 6, foundry:1368 max 6, silo:1447 max 6,
+        /// barracks:1242, forge:804, lumbermill:762, armorer:853, arcane-tower:951, market:671,
+        /// mill:718, workshop:625, jeweler:903) and building-tiers.json (the five ladders that
+        /// author perks: arcane-tower 4, armorer 3, barracks 3, forge 3, lumbermill 4 = 17 perks;
+        /// 'farm' authors none). Returns a THROWAWAY GameState the caller destroys.
+        /// </summary>
+        private static GameState BuildManageFlowFixture()
+        {
+            var fixture = ScriptableObject.CreateInstance<GameState>();
+            fixture.Onboarded = true;
+            fixture.BarracksLevel = 3;      // troops at unlockBarracksTier 1-3 unlocked, 4-6 locked
+            fixture.VillageTier = 4;
+
+            // ⚠ THE ARCHER AT (3,7) IS LOAD-BEARING. SeedManageCaptureQueue enqueues
+            // PlacedUpgradeKey.Compose("tower_ground_archer", 3, 7) on the Builder line; move that
+            // placement and the running job names a tower that is not there, and the Defence
+            // "Building" state word (this capture's Defence 'locked' frame) becomes unreachable.
+            fixture.BaseLayout = new List<PlacedStructureData>
+            {
+                // --- defensive types: one rail row per TYPE (ruling 3.1), many types ---
+                new PlacedStructureData("tower_ground_archer", 3, 7, 0, 1),   // the queued upgrade
+                new PlacedStructureData("tower_ground_archer", 5, 9, 0, 2),   // second instance, higher level
+                new PlacedStructureData("tower_ballista", 7, 9, 0, 1),
+                new PlacedStructureData("tower_ballista", 7, 11, 0, 2),
+                new PlacedStructureData("tower_siege_tower", 9, 11, 0, 1),
+                new PlacedStructureData("tower_catapult", 9, 9, 0, 3),        // AT its ceiling -> "Max"
+                new PlacedStructureData("tower_arcane_spire", 11, 11, 0, 2),
+                new PlacedStructureData("wall_wood", 13, 9, 0, 1),
+                new PlacedStructureData("wall_wood", 14, 9, 0, 1),
+                new PlacedStructureData("wall_wood", 15, 9, 0, 1),            // "3 placed . lowest L1"
+                new PlacedStructureData("wall_stone", 17, 9, 0, 1),           // maxLevel 1 -> "Max"
+                new PlacedStructureData("gate_stone", 19, 9, 0, 1),
+                new PlacedStructureData("mine_crystal", 21, 9, 0, 2),
+                new PlacedStructureData("healing_caravan", 23, 9, 0, 1),
+                new PlacedStructureData("lumberyard", 11, 9, 0, 3),           // six-rung container, mid-climb
+                new PlacedStructureData("foundry", 25, 9, 0, 2),
+                new PlacedStructureData("silo", 27, 9, 0, 1),
+
+                // --- ladder buildings: every ladder that authors perks, so RESEARCH is long ---
+                new PlacedStructureData("barracks", 2, 2, 0, 4),
+                new PlacedStructureData("arcane-tower", 6, 3, 0, 4),
+                new PlacedStructureData("forge", 8, 3, 0, 4),
+                new PlacedStructureData("lumbermill", 10, 3, 0, 4),
+                new PlacedStructureData("armorer", 12, 3, 0, 4),
+
+                // --- extra town structures: they lengthen the Buildings rail when they carry an
+                //     authored ladder, and BuildBuildingChoices simply skips them when they do not
+                //     (IsUpgradable, ManageScreenVM.cs:1181). Harmless either way.
+                new PlacedStructureData("market", 14, 3, 0, 4),
+                new PlacedStructureData("mill", 16, 3, 0, 4),
+                new PlacedStructureData("workshop", 18, 3, 0, 4),
+                new PlacedStructureData("jeweler", 20, 3, 0, 4),
+                new PlacedStructureData("collector_farm", 22, 3, 0, 4),
+            };
+
+            fixture.Wood = 100000;
+            fixture.Iron = 100000;
+            var balances = fixture.Resources;
+            balances.Food = 100000;
+            balances.Crystals = 100000;
+            balances.Coins = 100000;
+            fixture.Resources = balances;
+            fixture.ObsidianQueue = ObsidianQueueState.Empty();
+
+            fixture.BuildingTiers["barracks"] = 3;
+            fixture.BuildingTiers["arcane-tower"] = 3;
+            fixture.BuildingTiers["forge"] = BuildingTierCatalog.MaxTier("forge");   // -> "Max"
+            fixture.BuildingTiers["lumbermill"] = 1;                                 // -> locked perks
+            fixture.BuildingTiers["armorer"] = 2;
+
+            // Research "Researched" cards. Key shape is BuildingPerkService.Key's
+            // "<buildingId>:<perkId>" (BuildingPerkService.cs:68) -- the same shape
+            // _selectedResearchKey takes. All three perk ids are authored in building-tiers.json.
+            fixture.OwnedBuildingPerks = new List<string>
+            {
+                "forge:forge-efficient-smelting",
+                "arcane-tower:arcane-basics",
+                "barracks:barracks-swift-recruitment",
+            };
+
+            // Troops "Max" card. NOT a magic 99: TroopLevelOf returns the stored value UNCLAMPED
+            // (BarracksProgression.cs:60-66), so a sentinel would paint "Level 99" on the card.
+            // MaxTroopLevel reads troop-upgrades.json through the lazily-loaded
+            // TroopUpgradeCatalog (TroopStatResolver.cs:176-187, CanonicalJson) -- which DOES
+            // resolve in edit mode, unlike the RuntimeInitializeOnLoad CatalogRegistry.
+            if (fixture.TroopLevels != null)
+                fixture.TroopLevels["troop-footman"] = BarracksProgression.MaxTroopLevel("troop-footman");
+            else
+                Debug.LogWarning("[UICap-HL] MANAGE_FLOW_MAP: GameState.TroopLevels is null -- the Troops " +
+                                 "'max' frame has no maxed troop to select.");
+
+            return fixture;
+        }
+
+        /// <summary>
+        /// Two extra jobs per line on top of <see cref="SeedManageCaptureQueue"/>'s three, so every
+        /// channel sits at the AUTHORED DEPTH CAP of 5 (BuildTimerConfig.queueDepthPerLine,
+        /// CLAUDE.md §8) and the queue drawer documents a full line rather than a sample.
+        /// Enqueue returns null on refusal (BuildTimerService.cs:841-843) -- never ignored here.
+        /// </summary>
+        private static void SeedManageFlowExtraQueue(BuildTimerService queue)
+        {
+            if (queue == null) throw new ArgumentNullException(nameof(queue));
+
+            EnqueueFlowJob(queue, JobKind.Upgrade, ChannelId.Builder, "armorer:12:3", 900d, 3);
+            EnqueueFlowJob(queue, JobKind.Repair, ChannelId.Builder, "wall_wood:13:9", 240d, 0);
+
+            EnqueueFlowJob(queue, JobKind.TrainTroop, ChannelId.Train, "train:spearman:capture-d", 300d, 0);
+            EnqueueFlowJob(queue, JobKind.TrainTroop, ChannelId.Train, "train:archer:capture-e", 360d, 0);
+
+            EnqueueFlowJob(queue, JobKind.TroopUpgrade, ChannelId.Research, "troop-upgrade:troop-archer", 660d, 2);
+            EnqueueFlowJob(queue, JobKind.LearnMagic, ChannelId.Research, "magic:chain-lightning", 600d, 0);
+        }
+
+        private static void EnqueueFlowJob(BuildTimerService queue, JobKind kind, ChannelId channel,
+                                           string targetId, double seconds, int tier)
+        {
+            var job = queue.Enqueue(kind, channel, targetId, seconds, tier);
+            if (job == null)
+                Debug.LogWarning("[UICap-HL] MANAGE_FLOW_MAP: queue refused '" + targetId + "' on " + channel +
+                                 " (already in flight, or the line is at its depth cap) -- the drawer will " +
+                                 "document one row fewer on that line.");
+        }
+
+        /// <summary>
+        /// Pick the choice this frame must select. Resolved from the LIVE VM rather than a
+        /// hardcoded id, so the frame documents whatever state the fixture actually produced.
+        /// Returns false when the tab has no choice in that state -- the caller then LOGS it and
+        /// the frame fails, because a silently-substituted card is a frame whose filename lies.
+        /// </summary>
+        private static bool TryPickManageFlowChoice(ManageScreenVM vm, ManageTab tab, bool wantBlocked,
+                                                    out string selection, out string note)
+        {
+            selection = null;
+            note = null;
+            if (vm == null) return false;
+
+            switch (tab)
+            {
+                case ManageTab.Defense:
+                    // ⚠ DefenseChoiceVM HAS NO Locked FIELD. Its StateWord is documented as
+                    // "Building" | "Max" | "Upgradable" (ManageScreenVM.cs:353) -- there is no
+                    // village-tier lock on a placed defensive type. The blocked state a Defence
+                    // row CAN reach is "Building", supplied by the running archer job.
+                    for (int i = 0; i < vm.DefenseChoices.Count; i++)
+                    {
+                        var c = vm.DefenseChoices[i];
+                        if (c == null) continue;
+                        bool hit = string.Equals(c.StateWord, wantBlocked ? "Building" : "Max", StringComparison.Ordinal);
+                        if (!hit) continue;
+                        selection = c.Id;
+                        note = "Defense/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id + " state=" + c.StateWord;
+                        return true;
+                    }
+                    return false;
+
+                case ManageTab.Buildings:
+                    for (int i = 0; i < vm.BuildingChoices.Count; i++)
+                    {
+                        var c = vm.BuildingChoices[i];
+                        if (c == null) continue;
+                        bool hit = wantBlocked ? c.Locked
+                                               : string.Equals(c.StateWord, "Max", StringComparison.Ordinal);
+                        if (!hit) continue;
+                        selection = c.Id;
+                        note = "Buildings/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id +
+                               " state=" + (c.StateWord ?? "<null>");
+                        return true;
+                    }
+                    return false;
+
+                case ManageTab.Troops:
+                    for (int i = 0; i < vm.TroopChoices.Count; i++)
+                    {
+                        var c = vm.TroopChoices[i];
+                        if (c == null) continue;
+                        bool hit = wantBlocked ? !c.Unlocked : (c.Unlocked && !c.HasNextLevel);
+                        if (!hit) continue;
+                        selection = c.Id;
+                        note = "Troops/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id +
+                               " unlocked=" + c.Unlocked + " hasNext=" + c.HasNextLevel;
+                        return true;
+                    }
+                    return false;
+
+                case ManageTab.Research:
+                    for (int i = 0; i < vm.ResearchChoices.Count; i++)
+                    {
+                        var c = vm.ResearchChoices[i];
+                        if (c == null) continue;
+                        bool hit = wantBlocked ? c.Locked
+                                               : string.Equals(c.StateWord, "Researched", StringComparison.Ordinal);
+                        if (!hit) continue;
+                        // The selection key shape is ResearchKeyOf's, "<buildingId>:<perkId>"
+                        // (ManageScreenPanel.cs:1912) -- composed identically here.
+                        selection = (c.BuildingId ?? "") + ":" + (c.PerkId ?? "");
+                        note = "Research/" + (wantBlocked ? "locked" : "max") + " -> " + selection +
+                               " state=" + (c.StateWord ?? "<null>");
+                        return true;
+                    }
+                    return false;
+            }
+            return false;
+        }
+
+        /// <summary>The panel's private selection field for each destination.</summary>
+        private static string ManageFlowSelectionField(ManageTab tab)
+        {
+            switch (tab)
+            {
+                case ManageTab.Defense: return "_selectedDefenseId";
+                case ManageTab.Buildings: return "_selectedBuildingId";
+                case ManageTab.Troops: return "_selectedTroopId";
+                case ManageTab.Research: return "_selectedResearchKey";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The rail zone's authored name per destination. ⚠ THREE OF THE FOUR ARE SINGULAR while
+        /// the tab is plural: "BuildingSelectorRail" (ManageScreenPanel.cs:1952),
+        /// "TroopSelectorRail" (:2413), "DefenseSelectorRail" (:2884), "ResearchSelectorRail"
+        /// (:3195). Getting this wrong resolves no ScrollRect and the rail is never scrolled.
+        /// </summary>
+        private static string ManageFlowRailZoneName(ManageTab tab)
+        {
+            switch (tab)
+            {
+                case ManageTab.Defense: return "DefenseSelectorRail";
+                case ManageTab.Buildings: return "BuildingSelectorRail";
+                case ManageTab.Troops: return "TroopSelectorRail";
+                case ManageTab.Research: return "ResearchSelectorRail";
+            }
+            return null;
+        }
+
+        /// <summary>The production line each destination rides (CLAUDE.md §8 / ManageTab's own doc).</summary>
+        private static string ManageFlowChannelName(ManageTab tab)
+        {
+            switch (tab)
+            {
+                case ManageTab.Defense: return "Builder";
+                case ManageTab.Buildings: return "Builder";
+                case ManageTab.Troops: return "Train";
+                case ManageTab.Research: return "Research";
+            }
+            return "?";
+        }
+
+        /// <summary>Find the rail's ScrollRect by its authored zone name, inactive included (the
+        /// queue drawer deactivates the browse band on three of the four tabs).</summary>
+        private static ScrollRect FindManageFlowRail(GameObject canvasGo, ManageTab tab)
+        {
+            string zoneName = ManageFlowRailZoneName(tab);
+            if (canvasGo == null || string.IsNullOrEmpty(zoneName)) return null;
+            var rects = canvasGo.GetComponentsInChildren<RectTransform>(true);
+            for (int i = 0; i < rects.Length; i++)
+            {
+                if (rects[i] == null || !string.Equals(rects[i].name, zoneName, StringComparison.Ordinal)) continue;
+                return rects[i].GetComponentInChildren<ScrollRect>(true);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// One frame of the flow map. Same shape and the same full restore as every sibling
+        /// capture: a throwaway GameState + BuildTimerService are installed, the real panel is
+        /// built, one png is written, and EVERY mutation is undone in the finally -- including the
+        /// shared BuildingTierDef gate and the catalog registry, which are process-wide statics
+        /// that would otherwise poison every later capture in the same run.
+        /// </summary>
+        private static int CaptureManageFlowFrame(ManageTab tab, ManageFlowFrame frame)
+        {
+            string state = frame == ManageFlowFrame.Hub ? "hub" :
+                           frame == ManageFlowFrame.RailTop ? "railtop" :
+                           frame == ManageFlowFrame.RailBottom ? "railbottom" :
+                           frame == ManageFlowFrame.QueueDrawer ? "queue" :
+                           frame == ManageFlowFrame.LockedCard ? "locked" : "max";
+            string shotName = frame == ManageFlowFrame.Hub ? "ManageFlow_Hub" : "ManageFlow_" + tab + "_" + state;
+
+            return ForEachTarget(shotName, ManageFlowMapTargets, target =>
+            {
+                GameStateService prior = GameStateService.Instance;
+                BuildTimerService priorQueue = BuildTimerService.Instance;
+                GameObject stateHost = null, queueHost = null, panelHost = null, canvas = null;
+                GameState fixture = null;
+                BuildingTierDef gatedTier = null;
+                int priorGate = 0;
+                bool hydratedCatalog = false;
+                try
+                {
+                    PanelManager.CloseAll();
+
+                    // ⛔ WITHOUT THIS EVERY BaseLayout ROW RESOLVES NULL AND EVERY RAIL COMES BACK
+                    // EMPTY. CatalogBootstrap registers structures from a
+                    // [RuntimeInitializeOnLoadMethod] (CatalogBootstrap.cs:96) which never runs in
+                    // an -executeMethod capture, so CatalogRegistry.Get(placed.itemId) answers null
+                    // and BuildDefenseBrowse bails before the ceiling test. Idempotent; cleared
+                    // below ONLY when this frame is the one that filled an empty registry.
+                    hydratedCatalog = DeNelle.Core.Catalog.CatalogRegistry.Count == 0;
+                    HydrateCatalogForCapture();
+
+                    fixture = BuildManageFlowFixture();
+
+                    // Capture-only presentation fixture: production canon tops out at Village Tier
+                    // 3 requirements, so temporarily raise one REAL next-tier gate to give the
+                    // Buildings tab a genuinely Locked card. Restored in the finally.
+                    gatedTier = BuildingTierCatalog.TierOf("lumbermill", 2);
+                    if (gatedTier == null)
+                        throw new InvalidOperationException("Manage flow map requires lumbermill tier 2");
+                    priorGate = gatedTier.RequiresVillageTier;
+                    gatedTier.RequiresVillageTier = 5;
+
+                    stateHost = new GameObject("~UICapManageFlowState");
+                    if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
+                        throw new InvalidOperationException("GameStateService capture seam is unavailable");
+
+                    queueHost = new GameObject("~UICapManageFlowQueue");
+                    var queueService = queueHost.AddComponent<BuildTimerService>();
+                    if (!InstallCaptureQueue(queueService))
+                        throw new InvalidOperationException("BuildTimerService capture seam is unavailable");
+                    SeedManageCaptureQueue(queueService);
+                    SeedManageFlowExtraQueue(queueService);
+
+                    panelHost = new GameObject("~UICap" + shotName);
+                    var panel = panelHost.AddComponent<ManageScreenPanel>();
+                    InvokePrivate(panel, "Awake");
+                    panel.Open();   // the HUB: "Choose a path" launcher cards
+
+                    if (frame != ManageFlowFrame.Hub)
+                    {
+                        InvokePrivate(panel, "ShowOperational", tab);
+
+                        if (frame == ManageFlowFrame.LockedCard || frame == ManageFlowFrame.MaxCard)
+                        {
+                            var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
+                            bool wantBlocked = frame == ManageFlowFrame.LockedCard;
+                            if (!TryPickManageFlowChoice(vm, tab, wantBlocked, out string selection, out string note))
+                                throw new InvalidOperationException(
+                                    "no " + state + " choice on the " + tab + " tab -- the fixture did not " +
+                                    "produce that card state, so this frame cannot be shot honestly");
+                            _flowStateNotes.Add(note);
+                            SetPrivateField(panel, ManageFlowSelectionField(tab), selection);
+                            // Render() rebuilds the rail AND re-runs its own alignment seam, so it
+                            // must happen BEFORE any scroll of ours (which lives in the probe).
+                            InvokePrivate(panel, "Render");
+                        }
+
+                        if (frame == ManageFlowFrame.QueueDrawer)
+                            InvokePrivate(panel, "ToggleQueueDrawer");
+                    }
+
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
+                    if (canvas == null) return 0;
+
+                    // Hand the probe its work. The queue-drawer frame deliberately gets NO rail:
+                    // ApplyDrawerPlacement hides the browse band on three of the four tabs, so
+                    // scrolling a hidden rail would prove nothing.
+                    _flowRailScroll = frame == ManageFlowFrame.Hub || frame == ManageFlowFrame.QueueDrawer
+                        ? null
+                        : FindManageFlowRail(canvas, tab);
+                    _flowRailToBottom = frame == ManageFlowFrame.RailBottom;
+
+                    // Measure ONCE per tab, on the unscrolled rail-top frame.
+                    if (frame == ManageFlowFrame.RailTop)
+                    {
+                        var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
+                        _flowMeasureRail = true;
+                        _flowMeasureTab = ManageScreenVM.TabLabels[(int)tab];
+                        _flowQueueChannel = ManageFlowChannelName(tab);
+                        _flowVmQueueRows = vm != null ? vm.QueueRows.Count : 0;
+                        _flowVmRailRows = vm == null ? 0 :
+                            tab == ManageTab.Defense ? vm.DefenseChoices.Count :
+                            tab == ManageTab.Buildings ? vm.BuildingChoices.Count :
+                            tab == ManageTab.Troops ? vm.TroopChoices.Count : vm.ResearchChoices.Count;
+                    }
+
+                    _settledProbe = ManageFlowRailProbe;
+                    return RenderCanvasToPng(canvas, OutDir + shotName + "_" + target.Tag + ".png",
+                                             target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] " + shotName + " capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    _settledProbe = null;
+                    _flowRailScroll = null;
+                    _flowRailToBottom = false;
+                    _flowMeasureRail = false;
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                    RestoreCaptureQueue(priorQueue);
+                    if (queueHost != null) UnityEngine.Object.DestroyImmediate(queueHost);
+                    RestoreCaptureState(prior);
+                    if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                    if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                    if (gatedTier != null) gatedTier.RequiresVillageTier = priorGate;
+                    if (hydratedCatalog) DeNelle.Core.Catalog.CatalogRegistry.Clear();
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
         private static void InstallCaptureVillageInventory(VillageInventory inventory)
         {
             var field = typeof(VillageInventory).GetField("<Instance>k__BackingField",

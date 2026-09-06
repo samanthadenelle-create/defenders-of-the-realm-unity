@@ -190,10 +190,58 @@ namespace DeNelle.Editor
                 !buildingNow.Contains("BuildingSprite(FindBuildingChoice(first.BuildingId))"))
                 failures.Add("[building-now-stays-in-band] queue rows escape the band, lack +N more, or use troop art");
 
-            // RED: paint selected.LockText on the disabled CTA again.
-            if (card == null || !card.Contains("UNLOCKS AT VILLAGE LEVEL ") ||
-                !card.Contains("selected.RequiresVillageTier"))
-                failures.Add("[locked-cta-names-village-level] locked CTA does not name its village-tier gate");
+            // ⭐ RE-POINTED 2026-09-06 (WO-1423). THIS CASE USED TO PIN THE DEAD END.
+            // It read:
+            //     if (card == null || !card.Contains("UNLOCKS AT VILLAGE LEVEL ") ||
+            //         !card.Contains("selected.RequiresVillageTier"))
+            //         failures.Add("[locked-cta-names-village-level] locked CTA does not name its
+            //                       village-tier gate");
+            // i.e. it FAILED unless the locked card painted its requirement on a DISABLED FACE - the
+            // very shape the owner reported as a progression dead end ("some items are locked till
+            // village level 1, which there is no way to trigger"). The card that named the gate was
+            // the only card with no route to the control that opens it, and this suite was holding
+            // that shape in place. A suite that proves a lock is NAMED but never that it is
+            // ESCAPABLE is the exact hole that let this ship.
+            //
+            // THE RULING (WO-1423): a locked card must do BOTH - name the gate in words AND offer a
+            // live door to the control that opens it. The gate sentence is BODY TEXT (a sentence
+            // never fits a button face - the WO-1422 3.7 lesson) and the door is ONE full-width live
+            // button into ViewDetails -> OpenUpgradePanel, whose action band carries the
+            // VillageGated "Raise Village Tier N" control. Same shape as the locked RESEARCH card.
+            //
+            // Scoped to the Locked BRANCH, not the whole method: the card also reads selected.Locked
+            // up top for the portrait dim + lock badge, and a whole-body Contains could be satisfied
+            // by those.
+            // REVERT RECIPE (RED): put `BuildDisabledBuildingFace(card, "BuildingCta_Locked",
+            // "UNLOCKS AT VILLAGE LEVEL" + selected.RequiresVillageTier); return;` back as the whole
+            // Locked branch -> the door/prose halves all fire.
+            string lockedBranch = card == null ? null
+                : Body(card, "// Locked and in-progress choices", "if (string.Equals(selected.StateWord, \"Building\"");
+            if (lockedBranch == null)
+                failures.Add("[locked-card-names-the-gate-and-opens-it] the Locked branch of BuildBuildingCard was " +
+                             "not found, so the dead-end pin could not be scoped. FAIL, not a skip");
+            else
+            {
+                if (!lockedBranch.Contains("selected.LockReason") || !lockedBranch.Contains("BuildingLockReason"))
+                    failures.Add("[locked-card-names-the-gate-and-opens-it] the locked building card does not paint " +
+                                 "the VM's LockReason as a named body line, so the player is never told WHICH gate " +
+                                 "holds the upgrade");
+                if (!lockedBranch.Contains("selected.ViewDetails") ||
+                    !lockedBranch.Contains("new Vector2(0.98f, TroopCtaY1)"))
+                    failures.Add("[locked-card-names-the-gate-and-opens-it] the locked building card has no ONE " +
+                                 "full-width LIVE door into ViewDetails -> OpenUpgradePanel. A named lock with no " +
+                                 "route to the control that opens it is the WO-1423 progression dead end");
+                if (lockedBranch.Contains("BuildDisabledBuildingFace"))
+                    failures.Add("[locked-card-names-the-gate-and-opens-it] the locked building card is back on a " +
+                                 "DISABLED face. The gate sentence belongs in body text and the CTA line belongs to " +
+                                 "a live door (WO-1423); a dead face as the only affordance is the defect itself");
+            }
+            // The VM, not the View, must author both strings (the Research precedent).
+            // REVERT RECIPE (RED): delete the LockReason/LockCtaLabel assignments in BuildBuildingChoices.
+            string vmSource = ReadSource("Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs", failures);
+            if (vmSource != null && (!vmSource.Contains("LockReason = isLocked") || !vmSource.Contains("LockCtaLabel = isLocked")))
+                failures.Add("[locked-card-names-the-gate-and-opens-it] BuildBuildingChoices does not author the " +
+                             "locked card's sentence and door word in the VM, so the View is inventing copy");
 
             // RED: remove the tail spacer and restore count-normalized scrolling.
             string workspace = Body(panel, "private void AddBuildingWorkspaceRow(", "private void BuildBuildingRailRow(");

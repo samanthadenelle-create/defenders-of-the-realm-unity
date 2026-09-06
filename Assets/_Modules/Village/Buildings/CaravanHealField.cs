@@ -3,10 +3,19 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// OWNER RULING (2026-08-15): the caravan is a mobile glass support unit. The
-// heal field is its payoff — "win a hard wave by parking it behind a wall and
-// fighting in its radius" — with REDUCED strength while rolling (follow mode
-// stays useful without becoming a mobile fortress).
+// OWNER RULING (2026-08-15): the caravan is a glass support unit. The heal field
+// is its payoff — "win a hard wave by parking it behind a wall and fighting in
+// its radius" — with REDUCED strength while rolling (follow mode stays useful
+// without becoming a mobile fortress).
+//
+// WO-1424 (owner ruling 2026-09-06, "it slow follows as a combat attack item as
+// defensive item it stationary") gives that reduction its full meaning. The
+// caravan now follows ONLY in an enemy-owned scene and is stationary in the
+// player's town, so MovingHealMultiplier is no longer a quirk of whether the
+// crawler happens to be catching up — it is the deliberate TRADE between the two
+// modes: the offensive escort buys mobility at HALF the heal rate, while the
+// defensive town caravan gives up mobility and heals at FULL rate for it. The
+// value itself is unchanged and is the owner's to re-tune, not ours.
 //
 // OWNER VFX PICK (2026-08-16, VERBATIM TAG): the aura-range ring is
 //   "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 8 Safe zone Loop.prefab"
@@ -64,7 +73,10 @@ namespace DeNelle.Village
         private const float HealPerTick = 6f;
 
         /// <summary>TUNABLE: field-strength multiplier while the caravan is rolling
-        /// (owner default "Yes, reduced — e.g. 50% while rolling").</summary>
+        /// (owner default "Yes, reduced — e.g. 50% while rolling"). WO-1424: this is now the
+        /// offensive/defensive TRADE, not an incidental penalty — a DEFENSIVE town caravan never
+        /// rolls, so it always heals at full rate; only the OFFENSIVE escort pays this. Balance
+        /// value deliberately UNCHANGED by WO-1424 — re-tuning it is the owner's call.</summary>
         private const float MovingHealMultiplier = 0.5f;
 
         /// <summary>TUNABLE: uniform scale applied to the mirrored ring prefab per metre of

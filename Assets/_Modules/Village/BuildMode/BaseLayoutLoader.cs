@@ -327,17 +327,31 @@ namespace DeNelle.Village
             Vector2Int blockerFootprint = grid.FootprintCells(claimXz);
             Vector2Int footprint = grid.FootprintCells(claimXz, yawDeg);
 
-            // MOBILE structures (WO-991 healing caravan) must NOT carve the navmesh: the
-            // carving NavMeshObstacle on the same root as the caravan's NavMeshAgent carved
-            // the mesh out from under its own agent — isOnNavMesh false forever, follow dead
-            // on arrival (2026-08-15 review finding #1). They KEEP the box collider (tap-select
-            // + contact damage collider-of-record) and the visual-collider strip; only the
-            // static carve is skipped, and it travels with none.
-            bool mobile = go.GetComponent<HealingCaravanMobility>() != null;
+            // A structure that WILL MOVE must NOT carve the navmesh: the carving NavMeshObstacle on
+            // the same root as the caravan's NavMeshAgent carved the mesh out from under its own
+            // agent — isOnNavMesh false forever, follow dead on arrival (2026-08-15 review finding
+            // #1). It KEEPS the box collider (tap-select + contact-damage collider-of-record) and
+            // the visual-collider strip; only the static carve is skipped.
+            //
+            // ⛔ WO-1424 — THE TEST IS "WILL IT MOVE?", NOT "DOES THE COMPONENT EXIST?". The
+            // caravan's follow is now split by context (owner ruling 2026-09-06: "it slow follows
+            // as a combat attack item as defensive item it stationary"), so HealingCaravanMobility
+            // is present on BOTH the offensive escort AND the stationary town structure. Keying the
+            // carve on mere presence would leave the DEFENSIVE caravan a 3x4x3 non-trigger collider
+            // with no carving obstacle — the documented shape that wedges pets and NPCs forever
+            // (PetHeroLeash.cs:556) — i.e. it would have swapped the hero-pin for a pet-pin.
+            // FollowsHero is LATCHED in the component's Awake (which has already run: AddComponent
+            // in StructureFactory.Create runs Awake synchronously, before Create returns), so this
+            // read and the agent/obstacle decisions inside the component can never disagree.
+            var caravan = go.GetComponent<HealingCaravanMobility>();
+            bool mobile = caravan != null && caravan.FollowsHero;
             AddFootprintBlocker(go, blockerFootprint, grid.cellSize, carveNavMesh: !mobile);
             if (mobile)
                 FlowTrace.Step("BaseLayout",
-                    $"'{go.name}' is MOBILE (HealingCaravanMobility) — NavMesh carve skipped so the agent keeps its mesh.");
+                    $"'{go.name}' is MOBILE (HealingCaravanMobility, OFFENSIVE follow mode) — NavMesh carve skipped so the agent keeps its mesh.");
+            else if (caravan != null)
+                FlowTrace.Step("BaseLayout",
+                    $"'{go.name}' is a STATIONARY (DEFENSIVE) healing caravan — NavMesh carve APPLIED so pets/NPCs path around it instead of wedging on its collider.");
 
             // "towers shoot through walls" fix (owner 2026-07): a build-mode WALL or GATE must sit on
             // the "Structure" physics layer so the towers' line-of-sight linecast (masked to

@@ -84,10 +84,16 @@ namespace DeNelle.Village.Buildings.Progression
     /// </summary>
     public sealed class BuildingUpgradeVM : IPanelViewModel, IDisposable
     {
-        /// <summary>Tile id for the synthetic "Unlock Village Tier" affordance (the Heart-of-Elarion
-        /// tech-gate). Injected at the TOP of every city/resource building's grid so the player has
-        /// ONE place to raise the global Village/Stronghold Tier that unlocks the WO-432 tier-2+
-        /// enhancements + research perks. Tapping it routes to VillageTierService.TryUpgrade().</summary>
+        /// <summary>Row id for the synthetic "Unlock Village Tier" affordance (the Heart-of-Elarion
+        /// tech-gate). <see cref="Select"/> on this id raises the global Village/Stronghold Tier that
+        /// unlocks the WO-432 tier-2+ enhancements + research perks.
+        /// <para>⚠ CORRECTED WO-1423: this said the row is "Injected at the TOP of every city/resource
+        /// building's grid" so the player has "ONE place" to tap it. IT IS NOT DRAWN AS A TILE. Both of
+        /// the View's render paths take <c>perk:</c> ids only (BuildingUpgradePanelMvvm.cs:817 and
+        /// :1781), so <see cref="PrependVillageTierRow"/>'s row never reaches the screen. The LIVE
+        /// control is the action band's VillageGated state (BuildingUpgradePanelMvvm.cs:1322-1338),
+        /// which calls <c>Select(VillageTierRowId)</c> — and Select never consults <see cref="Perks"/>,
+        /// so it works whether or not the row exists.</para></summary>
         public const string VillageTierRowId = "villagetier";
 
         /// <summary>Icon role key on each tier tile (the View maps it to art; no game state).</summary>
@@ -398,7 +404,40 @@ namespace DeNelle.Village.Buildings.Progression
 
         /// <summary>WO-1391 — the live shortfall sentence for the next upgrade ("" when affordable).
         /// The View puts THIS on the face - never a bare "Missing resources".</summary>
-        public string NextShortfallSentence => ShortfallSentence(_nextCostLines);
+        public string NextShortfallSentence
+        {
+            get
+            {
+                // WO-1425 - a CEILING is not a shortfall. "Short 150 Wood" against a bank sitting
+                // full at 3,000/3,000 reads exactly like a wall, and the owner hit precisely that:
+                // "i couldnt tell Oh im missing gold, ohhh i need a foundry, whatever" (2026-09-06).
+                // MEASURED: structures-catalog 'tower_ground_archer' upgradeCost[1] = 3150 wood
+                // against MaxOf(Wood) = 3000 at lumberyard L1.
+                // Checked HERE and NOT in ShortfallSentence(lines): that overload is pure and is
+                // pinned by [shortfall-named] with fixture lines, so a capacity read there would
+                // break it.
+                string cap = CapBlockFrom(_nextCostLines);
+                if (!string.IsNullOrEmpty(cap)) return cap;
+                return ShortfallSentence(_nextCostLines);
+            }
+        }
+
+        /// <summary>WO-1425 - the cap-block sentence for whichever cost line the town bank cannot
+        /// hold, or "" when every line fits. "Magic" and "Gold" simply do not parse to a capped
+        /// BankResource and are skipped; Crystals/Coins are uncapped by design and TownBankCapacity
+        /// returns "" for them regardless.</summary>
+        private static string CapBlockFrom(IReadOnlyList<UpgradeCostLine> lines)
+        {
+            if (lines == null) return "";
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (!DeNelle.Core.Economy.TownBankCapacity.TryParseResource(lines[i].Label, out var r))
+                    continue;
+                string msg = DeNelle.Core.Economy.TownBankCapacity.StorageBlockMessage(r, lines[i].Amount);
+                if (!string.IsNullOrEmpty(msg)) return Ascii(msg);
+            }
+            return "";
+        }
 
         /// <summary>
         /// WO-1391 — the ONE action-state resolver, pure so a fixture can drive it. Same order the
@@ -1077,19 +1116,33 @@ namespace DeNelle.Village.Buildings.Progression
             // would be a dead affordance).
             if (_isPlaced) return;
 
-            // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST tile of every
-            // building's grid (the enhancement panel is the surface the player already opens with F
-            // at any upgrade building, so this needs zero new UI). This is the SOLE caller of
-            // VillageTierService.TryUpgrade — without it GameState.VillageTier is stuck at 0 and
-            // every RequiresVillageTier > 0 tier / research perk is permanently locked.
+            // WO-481 — emit the synthetic Village-Tier ROW (cost/effect/gate data, not a drawn tile).
+            // ⚠ CORRECTED WO-1423: this comment claimed the row is "the FIRST tile of every building's
+            // grid" and "the SOLE caller of VillageTierService.TryUpgrade". Both were false and both
+            // were load-bearing: the row is filtered out of every render path, and the tap that raises
+            // the tier comes from the action band, not from a tile. What the row IS still for is named
+            // on PrependVillageTierRow itself.
             PrependVillageTierRow();
         }
 
         /// <summary>
-        /// Inserts the synthetic "Unlock Village Tier" tile at the top of <see cref="Perks"/>.
-        /// Cost source = VillageTierService.NextCost() (Crystals, the premium progression currency;
-        /// felt-tunable in VillageTierService). The View renders it like any tile; tapping it
-        /// routes to <see cref="Select"/> which calls VillageTierService.TryUpgrade().
+        /// Emits the synthetic "Unlock Village Tier" row at the top of <see cref="Perks"/> and its
+        /// cost/effect/gate entries. Cost source = VillageTierService.NextCost() (Crystals, the premium
+        /// progression currency; felt-tunable in VillageTierService).
+        /// <para>⛔ THIS ROW IS NEVER DRAWN AS A TILE, and the old doc line ("The View renders it like
+        /// any tile") was the lie WO-1423 caught. Both render paths take <c>perk:</c> ids only
+        /// (BuildingUpgradePanelMvvm.cs:817 <c>HasSkills</c>, :1781 <c>RebuildSkills</c>), and this row's
+        /// id is <c>villagetier</c>.</para>
+        /// <para>It is KEPT, not deleted, because two live readers walk <see cref="Perks"/> WITHOUT the
+        /// <c>perk:</c> filter: <c>DeriveSpendableCurrencies</c> (BuildingUpgradePanelMvvm.cs:758-770)
+        /// scans each row's cost STRING for currency words, and this row's "N Crystals" is what puts
+        /// the Crystal chip on the panel's currency strip — correct, since the village tier is bought
+        /// with Crystals from this very panel; and the repaint hash (:544) folds every row in. Deleting
+        /// the row would silently drop that chip.</para>
+        /// <para>The LIVE control is the action band's VillageGated state
+        /// (BuildingUpgradePanelMvvm.cs:1322-1338) -&gt; <see cref="Select"/>(<see cref="VillageTierRowId"/>)
+        /// -&gt; VillageTierService.TryUpgrade. <see cref="Select"/> does not consult <see cref="Perks"/>,
+        /// so the control does not depend on this row existing.</para>
         /// </summary>
         private void PrependVillageTierRow()
         {
@@ -1115,7 +1168,9 @@ namespace DeNelle.Village.Buildings.Progression
             _effectById[VillageTierRowId] = "Opens tier-" + (cur + 1) + " enhancements everywhere";
             _gateById[VillageTierRowId] = affordable ? "" : GateCost;
 
-            // locked=false so the control is always tappable (Select reports affordability honestly).
+            // locked=false is INERT here - the row is never drawn, so nothing reads this flag to
+            // decide tappability (corrected WO-1423; it used to say "so the control is always
+            // tappable"). The action band owns the tap, and Select reports affordability honestly.
             _perks.Insert(0, new ItemVM(VillageTierRowId, name, IconRoleTier, VillageTierRowId, 0, "",
                                         affordable, rarity: null, equipped: false, locked: false));
         }

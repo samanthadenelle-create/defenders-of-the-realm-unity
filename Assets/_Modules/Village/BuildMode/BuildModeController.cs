@@ -3280,6 +3280,22 @@ namespace DeNelle.Village
         /// </summary>
         public static string ShortfallMessage(DeNelle.Core.Catalog.ResourceCost cost)
         {
+            // ── WO-1425 PASS 1 — is this a CEILING, not a shortfall? ─────────────────
+            // "Not enough Wood (3150)" against a bank sitting FULL at 3000/3000 is
+            // indistinguishable from a permanent wall, and nothing else in the game says
+            // otherwise. MEASURED this session: structures-catalog 'tower_ground_archer'
+            // upgradeCost[1] authors 3150 wood; MaxOf(Wood) with a level-1 lumberyard is
+            // 2000 + 1000 = 3000. Saving up can NEVER close that gap -- only storage can,
+            // so the sentence must name the container and the level. This is the ONLY
+            // link between a refusal and TownBankCapacity, and its absence is the bug.
+            // Runs BEFORE the ledger read because the ceiling is true with or without
+            // EconomyService, and it is checked across ALL capped resources rather than
+            // stopping at the first short one: tower_ballista L2->L3 costs 2100 wood
+            // (fits at lumberyard L1) AND 3500 iron (needs foundry L2), so naming only
+            // the first short pool would leave the permanent iron wall invisible.
+            string capBlock = CapBlockMessage(cost);
+            if (!string.IsNullOrEmpty(capBlock)) return capBlock;
+
             var econ = EconomyService.Instance;
             if (econ != null)
             {
@@ -3293,6 +3309,64 @@ namespace DeNelle.Village
                 return $"Not enough Crystals ({cost.crystals})";
             }
             return "Not enough resources";
+        }
+
+        /// <summary>
+        /// WO-1425 — the cap-block sentence for a cost, or "" when nothing in it exceeds what the
+        /// town bank can hold. PUBLIC so a card / pill can show the SAME words the refusal will,
+        /// instead of growing a second copy of the story.
+        ///
+        /// <para>Crystals and Coins are UNCAPPED by design (TownBankCapacity.UncappableResources,
+        /// owner ruling 2026-08-04) and are deliberately absent — a cap sentence for crystals would
+        /// be a fabricated wall.</para>
+        ///
+        /// <para>All three capped pools are examined and the DEEPEST blocker leads (highest required
+        /// container level; an unreachable one first), because that is the gate the player actually
+        /// has to clear. Any other blocked pool is named in a trailing clause so clearing the first
+        /// one does not simply reveal the next invisible wall.</para>
+        ///
+        /// <para>PURE presentation: it reads caps and returns words. No cost, cap, multiplier or
+        /// wallet is touched (architecture law — presentation never touches the objects).</para>
+        /// </summary>
+        public static string CapBlockMessage(DeNelle.Core.Catalog.ResourceCost cost)
+        {
+            var blocks = new List<DeNelle.Core.Economy.TownBankCapacity.StorageBlock>(3);
+            TryAddCapBlock(DeNelle.Core.Economy.BankResource.Wood, cost.wood, blocks);
+            TryAddCapBlock(DeNelle.Core.Economy.BankResource.Iron, cost.iron, blocks);
+            TryAddCapBlock(DeNelle.Core.Economy.BankResource.Food, cost.food, blocks);   // displayed "Stone"
+            if (blocks.Count == 0) return "";
+
+            int worst = 0;
+            for (int i = 1; i < blocks.Count; i++)
+            {
+                if (RankOf(blocks[i]) > RankOf(blocks[worst])) worst = i;
+            }
+
+            string msg = DeNelle.Core.Economy.TownBankCapacity.DescribeStorageBlock(blocks[worst]);
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                if (i == worst) continue;
+                // Same thousands-separated, culture-invariant shape the lead sentence uses --
+                // "3,000" then "3500" in one message reads as two different systems talking.
+                msg += " Also over your " + blocks[i].ResourceName + " ceiling of "
+                     + blocks[i].CurrentMax.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+                     + ": needs "
+                     + blocks[i].Amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            }
+            return msg;
+        }
+
+        /// <summary>Depth of a cap block: an UNREACHABLE ladder outranks every reachable level, then
+        /// the higher required level, then the larger amount. Deterministic — never list order.</summary>
+        private static long RankOf(DeNelle.Core.Economy.TownBankCapacity.StorageBlock b)
+            => (b.RequiredContainerLevel < 0 ? 1000L : b.RequiredContainerLevel) * 1000000L + b.Amount;
+
+        private static void TryAddCapBlock(DeNelle.Core.Economy.BankResource r, int amount,
+                                           List<DeNelle.Core.Economy.TownBankCapacity.StorageBlock> into)
+        {
+            if (amount <= 0) return;
+            if (DeNelle.Core.Economy.TownBankCapacity.TryDescribeStorageBlock(r, amount, out var b))
+                into.Add(b);
         }
 
         /// <summary>

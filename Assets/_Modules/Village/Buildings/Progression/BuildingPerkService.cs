@@ -157,9 +157,17 @@ namespace DeNelle.Village.Buildings.Progression
 
         /// <summary>
         /// Whether this perk can be STARTED right now. Gates: it exists, isn't owned, isn't already
-        /// being researched, the building has reached the perk's unlock tier, AND the Village/
-        /// Stronghold Tier meets that tier (the WC3 "Lvl N needs Tier N" rule).
+        /// being researched, the building has reached the perk's unlock BUILDING tier, AND the Village/
+        /// Stronghold Tier meets the VILLAGE tier that perk's own tier row authors.
         /// <paramref name="reason"/> returns a player-facing ASCII lock line for the View.
+        /// <para>⚠ WO-1423 — TWO SCALES, TWO ACCESSORS. This doc used to say the Village Tier had to
+        /// "meet that tier", and the code did exactly that: it compared the BUILDING tier number to
+        /// <c>VillageTierService.Current</c>. Every ladder's tier-1 row authors
+        /// <c>requiresVillageTier: 0</c>, so on a fresh save the first perk of every ladder was locked
+        /// behind a village gate nobody authored — the owner's "locked till village level 1, which
+        /// there is no way to trigger". The village half now reads
+        /// <c>BuildingTierCatalog.PerkRequiredVillageTier</c>, the same authored field the tier UPGRADE
+        /// gate uses.</para>
         /// <para>
         /// Deliberately does NOT gate on affordability — that stayed the caller's own check
         /// (BuildingUpgradeVM tints the tile from <c>_economy.Coins</c>; the Manage screen states the
@@ -180,7 +188,11 @@ namespace DeNelle.Village.Buildings.Progression
 
             int unlock = BuildingTierCatalog.PerkUnlockTier(buildingId, perkId);
             if (ModifierService.TierOf(buildingId) < unlock) { reason = "Upgrade the building to Tier " + unlock + " first."; return false; }
-            if (VillageTierService.Current < unlock) { reason = "Locked - needs Village Tier " + unlock + "."; return false; }
+            // WO-1423 — the VILLAGE gate is the perk's own tier row's requiresVillageTier, NEVER the
+            // building tier number. The sentence shape is unchanged (a suite asserts LockReason equals
+            // this string verbatim); only the number is now on the right scale.
+            int villageGate = BuildingTierCatalog.PerkRequiredVillageTier(buildingId, perkId);
+            if (VillageTierService.Current < villageGate) { reason = "Locked - needs Village Tier " + villageGate + "."; return false; }
             return true;
         }
 

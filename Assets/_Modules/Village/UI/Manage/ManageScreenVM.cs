@@ -301,6 +301,14 @@ namespace DeNelle.Village.UI
         public string LockText;
         /// <summary>The authored Village level gate for the next tier; 0 when no gate applies.</summary>
         public int RequiresVillageTier;
+        /// <summary>WO-1423 - the one SENTENCE a locked card paints as BODY TEXT, never on a button
+        /// face (a sentence never fits a face - the WO-1422 3.7 lesson the Research card already
+        /// learned). "" when not locked. The View pins this, not a face string.</summary>
+        public string LockReason;
+        /// <summary>WO-1423 - the SHORT face worn by the locked card's ONE full-width live door.
+        /// "UPGRADE THE HEART", the same word the locked RESEARCH card uses for the same gate, so the
+        /// two cards read alike. "" when not locked. The door itself is <see cref="ViewDetails"/>.</summary>
+        public string LockCtaLabel;
         public string StateWord;
         public string Description;
         public IReadOnlyList<CostPart> UpgradeCostParts;
@@ -1212,6 +1220,18 @@ namespace DeNelle.Village.UI
                     Locked = isLocked,
                     LockText = isLocked ? "Level " + level + " . T" + next.RequiresVillageTier : "",
                     RequiresVillageTier = isLocked ? next.RequiresVillageTier : 0,
+                    // WO-1423 - the sentence and the door WORD are authored here, in the VM, exactly
+                    // as the Research card does it. The card's only gate is the VILLAGE tier (isLocked
+                    // IS next.RequiresVillageTier > villageTier), so the sentence can name it outright
+                    // and say WHERE it is raised - the Heart of Elarion, whose control is the upgrade
+                    // page's VillageGated action band.
+                    // Kept SHORT on purpose: it lands in a 28.6px band, and the Research card's own
+                    // device note warns that TMP culls a short band it cannot fit. 45 chars, close to
+                    // the 37 that were MEASURED to render there.
+                    LockReason = isLocked
+                        ? "Needs Village Tier " + next.RequiresVillageTier + " - raise it at the Heart."
+                        : "",
+                    LockCtaLabel = isLocked ? "UPGRADE THE HEART" : "",
                     StateWord = stateWord,
                     Description = Ascii(description),
                     UpgradeCostParts = isMax ? Array.Empty<CostPart>() : BuildingUpgradeCostParts(next),
@@ -1567,12 +1587,20 @@ namespace DeNelle.Village.UI
                             {
                                 // THE DOOR, not a dead button. Both gates open the SAME page through
                                 // the one existing start path: the building's upgrade page, whose
-                                // FIRST tile is the Heart-of-Elarion "Unlock Village Tier" control
-                                // (there is no separate Heart panel). The face names WHICH
-                                // prerequisite the player is going to.
+                                // action band renders "Raise Village Tier N" in the VillageGated
+                                // state (BuildingUpgradePanelMvvm.cs:1322-1338 -> Select(
+                                // BuildingUpgradeVM.VillageTierRowId) -> VillageTierService.TryUpgrade).
+                                // ⚠ CORRECTED WO-1423: this said the page's "FIRST tile" was that
+                                // control. It is not - PrependVillageTierRow's tile is filtered out of
+                                // BOTH render paths (they take `perk:` ids only), so no such tile is
+                                // ever drawn. The action band is the control. There is no separate
+                                // Heart panel. The face names WHICH prerequisite the player is going to.
                                 bool buildingLocked = ModifierService.TierOf(bId) < unlock;
+                                // WO-1423 — the village gate is the perk's OWN row's requiresVillageTier
+                                // (village scale), never `unlock` (building scale).
                                 bool villageLocked = !buildingLocked &&
-                                    Buildings.Progression.VillageTierService.Current < unlock;
+                                    Buildings.Progression.VillageTierService.Current <
+                                        BuildingTierCatalog.PerkRequiredVillageTier(bId, pId);
                                 cta = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
                                 activate = () =>
                                 {
@@ -2154,17 +2182,24 @@ namespace DeNelle.Village.UI
                             // so it stays skipped, as does anything unexpected.
                             int unlock = BuildingTierCatalog.PerkUnlockTier(bId, pId);
                             bool buildingLocked = ModifierService.TierOf(bId) < unlock;
+                            // WO-1423 — village gate on the VILLAGE scale (the perk's own tier row's
+                            // requiresVillageTier), never the building tier number `unlock`.
                             bool villageLocked = !buildingLocked &&
-                                                 Buildings.Progression.VillageTierService.Current < unlock;
+                                                 Buildings.Progression.VillageTierService.Current <
+                                                     BuildingTierCatalog.PerkRequiredVillageTier(bId, pId);
                             if (!buildingLocked && !villageLocked) continue;
 
                             // THE DOOR, not a dead button. Both gates open the SAME page through the
                             // one existing start path (PanelId.BuildingUpgrade + the ladder id, the
                             // id BuildModeController hands it too): the building's upgrade page,
-                            // whose FIRST tile is the Heart-of-Elarion "Unlock Village Tier" control
-                            // (BuildingUpgradeVM.PrependVillageTierRow, WO-481) - there is no
-                            // separate Heart panel. The face names which prerequisite the player is
-                            // going to. This screen still charges NOTHING: the page does.
+                            // whose ACTION BAND renders "Raise Village Tier N" in the VillageGated
+                            // state (BuildingUpgradePanelMvvm.cs:1322-1338) and routes to
+                            // VillageTierService.TryUpgrade - there is no separate Heart panel.
+                            // ⚠ CORRECTED WO-1423: this comment said the page's "FIRST tile" was that
+                            // control (BuildingUpgradeVM.PrependVillageTierRow, WO-481). That tile is
+                            // never drawn - both render paths filter on `perk:` ids - so the band, not
+                            // a tile, is the live control. The face names which prerequisite the
+                            // player is going to. This screen still charges NOTHING: the page does.
                             string upperName = buildingName.ToUpperInvariant();
                             string face = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
                             string gate = Ascii(string.IsNullOrEmpty(reason) ? "Locked." : reason);
