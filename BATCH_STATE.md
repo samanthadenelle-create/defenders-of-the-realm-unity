@@ -826,6 +826,20 @@ Settings slider kept; DailyChest CTA hide with the reward path untouched; all AS
   1413 part 2 AFTER the 8.10 polish (the polish is what gates tonight's device build).
 - Current HEAD for any new worktree: `458baf57f`.
 
+### 8.12 LANDED 23:5x - polish + 1413 part 2 dispositions
+- **s8.10 polish -> `73a31b67a`.** 5/6 PASS on lead review; item 5 accepted with a correction: the hand-back said the
+  tier sheets are square - on disk EVERY `Portraits/` file is 784x1168 (the "square" ones are square only by their
+  import profile). The removed `Portraits/<slug>-<level>` route is accepted because those sheets belong to Defense
+  ladders that never appear on the Buildings tab; the `[building-art-palette-first]` pin gets reworded when the route
+  returns. Nits (not rework): "+N more" counts stack children; the unresolved-art path uses `Warn` (~8 per rebuild) -
+  make it `Once` next time you are in the file.
+- **1413 part 2:** gated green after ONE lead correction - `CopyHygieneRegression` `[retired-pet]` was a
+  case-insensitive "& PET" search that matched ordinary C# (`&& pet.Id`) in three files outside the lane: a hollow trap
+  that went RED on code, not copy. Now a case-sensitive phrase match ignoring `&&`. Rule for the lane: a copy scan
+  matches COPY (case-sensitive phrase, word boundary), never a substring that C# syntax can produce. Commit hash
+  posted: **1413 part 2 -> `9ec35ed52`**.
+- Next base for any new worktree: `9ec35ed52`.
+
 ### 8.10 WO-1418 POLISH REWORK - from the first opened frames (`ManageBuildings_2670x1200.png` / `_1920x1080.png`, 22:45)
 The shape is the mockup - rail, selected card, BUILDING NOW, chips as doors - and it is being COMMITTED as gated so the
 base advances. These are measured defects on the frames; fix on top of the committed base (the lead posts the hash):
