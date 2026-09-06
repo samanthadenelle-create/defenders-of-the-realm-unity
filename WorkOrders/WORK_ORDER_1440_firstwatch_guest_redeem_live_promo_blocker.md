@@ -3,8 +3,10 @@
 **Status:** DONE - shipped to production 2026-09-06 (`dpl_27KRA2P93P76Nx9fcmsbWChT2W5z`,
 commit `08ae66de0`). A guest redeem of FIRSTWATCH was captured succeeding against the real
 prod endpoint. See `WORK_ORDER_1440_firstwatch_guest_redeem_live_promo_blocker.RESULT.md`.
-⛔ **ONE OWNER ACTION REMAINS** - `max_redemptions` on FIRSTWATCH is NULL, so its "500" is a
-tier boundary and the tail is unbounded; RESULT §6 has the one-line fix.
+A cap gap was found and reported mid-ticket (`max_redemptions` was NULL, so the "500" was a
+tier boundary, not a cap) and was **closed by someone during the session** - the live row now
+reads `max_redemptions = 500`, and this change is what makes that value hold atomically.
+RESULT section 6 keeps the record.
 **Silo:** `api/promo/redeem.js` + `api/_lib/wallet-auth.js`. **SERVER-SIDE ONLY** - see section 2, this is
 the whole constraint.
 **Source:** owner, 2026-09-06. The campaign is already posted from `@EchoesOfElarion`.

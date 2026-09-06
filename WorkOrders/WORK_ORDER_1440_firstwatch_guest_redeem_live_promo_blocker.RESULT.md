@@ -51,9 +51,17 @@ on the canon docs plus commit dates bracketing the build. It would be closed by
 | `api/schema.sql`, `api/DB_SETUP.md` | Canon corrected in the same change (CLAUDE.md §15). DB_SETUP §7 item 3's "wallet rail only" sentence is quoted and superseded, not erased. `SCHEMA_PARITY_OK 45 table(s)`. |
 | `test/db-promo-packs.test.js` | Column-list pins updated to the new shape; the property guarded (snapshot + ordinal claim in ONE statement) is unchanged and now covers all three insert paths. |
 
-⛔ **No other endpoint's identity requirements changed.** `authenticateGranting` still has
-exactly the same two-entry allowlist; `/api/referral/claim`, purchases, entitlements,
-save and load are untouched. `grep -c authenticatePromoRedeem api/**` → one caller.
+⛔ **No other endpoint's identity requirements changed — grepped, not assumed.**
+`authenticatePromoRedeem` has exactly ONE call site: `api/promo/redeem.js:316`.
+`authenticateGranting` still guards `api/referral/claim.js:143`, `api/purchases/quote.js:202`,
+`api/purchases/verify.js:251`, `api/purchases/fulfill.js:44`, `api/purchases/reconcile.js:35`
+and the entitlement read predicate, with its allowlist unchanged at two entries.
+
+**Provenance of the deployed bundle, stated honestly:** the deploy uploaded the working
+tree, so the bundle is *inferred* to equal commit `08ae66de0`'s `api/` content — from
+`git status` taken immediately before the commit plus file mtimes showing the other lane's
+edits landed at 19:12 UTC, after the 19:08 upload. It is not proven byte-identical to HEAD.
+Committed locally on `feat/synty-art-retheme`; **not pushed**.
 
 ## 3. PROOF — a guest redeems FIRSTWATCH on production
 
@@ -90,6 +98,11 @@ DELETE FROM promo_redemptions
    AND player_id='guest-local-9f4c1d77b3ae0521cc86f0a4d29e7b13548ac6f9e0d2b871a35c4e69f7021d8b';
 UPDATE promo_codes SET redemption_count = redemption_count - 1 WHERE code='FIRSTWATCH';
 ```
+
+⚠ **Run both together and run them NOW, or leave the row alone.** `redemption_ordinal` has
+no UNIQUE constraint, so once a real player has taken ordinal 3 the decrement makes the next
+player reuse an ordinal. Leaving the row costs 1 of 500 and nothing else — that is the safe
+default.
 
 ## 4. PROOF — the cap holds under concurrency, BY MEASUREMENT
 
@@ -154,7 +167,17 @@ WO1440_IP_BUDGET_LIVE_OK
 
 ## 6. ⛔ THE RESIDUAL RISK THE RULING DID NOT ACCOUNT FOR — owner action
 
-Read off the live row 2026-09-06:
+> ## ✅ CLOSED WHILE THIS TICKET WAS BEING WRITTEN — but read the finding anyway.
+> Re-read at 19:30 UTC, `promo_codes.max_redemptions` for FIRSTWATCH is **500**. It was
+> **NULL** when measured at 19:10 UTC (the reading below, and the reading the WO's own
+> ruling was made on). Someone set it in that window; this seat did not, and does not
+> claim to know who. **The tail is therefore bounded now** — and it is bounded *atomically*
+> only because of §4: before today, `max_redemptions` was enforced by a count that was
+> measured to let 50 through a cap of 20. Setting that value on the old code would have
+> looked like a fix and leaked anyway. The finding below stands as the record of why the
+> value needed setting; it is left intact rather than rewritten.
+
+Read off the live row at 19:10 UTC 2026-09-06:
 
 ```
 FIRSTWATCH  reward 500/500   max_redemptions NULL   per_player_limit 1
@@ -192,8 +215,30 @@ minted and already being fixed in the Unity tree by another lane; **WO-1420** is
 *different* bug in the same subsystem (Connect()'s catch cannot tell a 30 s deadline from
 the provider's own instant refusal). **Do not open a third ticket.**
 
-**b) NEW, and it is server-side — the per-request-signature wallet rail on this endpoint
-is DEAD on production.** Captured today against the live deployment:
+**b) NEW, server-side, and BIGGER THAN IT FIRST LOOKED — wallet players on the PUBLISHED
+build still cannot redeem.** The wallet rail has two sub-rails. Both were tested against
+production end-to-end with a throwaway ed25519 keypair (a wallet is only a public key to
+this endpoint — nothing needs a funded one), `tools/wo1440-wallet-rail-prod-proof.mjs`:
+
+```
+GET /api/auth/nonce   -> 200 {"ok":true,"nonce":"sU715edWe56l…","ttlSeconds":300}
+RAIL 1 (signature)    -> HTTP 500 {"ok":false,"code":"SERVER_ERROR","ref":"f36c61ea"}
+RAIL 2 (session)      -> HTTP 200 {"success":true,"reward":{"crystals":7,"coins":0},…}
+ledger: ordinal 1, ip_hash 991a75916a12
+promo_ip_budget rows: 0   <-- a proven wallet is never charged the guest IP budget
+WO1440_WALLET_RAIL_OK
+```
+
+Rail 1 failed **with a cryptographically valid signature over the exact bytes**, which is
+what makes this a server defect and not a client one. And the sub-rail that works is the
+one the store build does not have: **the session rail landed in `e526e013f` on 2026-08-23,
+six days AFTER the published build 2026.08.17.328845 was cut** — so a wallet-connected
+player on the store build has exactly one auth path and it is the dead one. **Guests are
+unblocked by this ticket; wallet players on the published build are not.** Given WO §2's
+own finding that the campaign's arrivals are overwhelmingly guests, that does not hold the
+campaign, but it must not be reported as "wallets merely degraded".
+
+The cause, captured:
 
 ```
 [auth_reject] code=SERVER_ERROR ref=249acca1 mode=wallet method=POST
@@ -205,10 +250,18 @@ Vercel's Node 24 runtime parses `req.body` regardless of `config.api.bodyParser 
 (the stack shows `IncomingMessage.get [as body]` inside `_lib/http.js:172`), so
 `readBodyExact` reports `exact:false` and the guard refuses **before** a signature can be
 checked. A wallet holder with a valid signature but no live session gets a 500. It **fails
-closed** — it over-refuses, never over-grants, so it does not block this ticket — but
-combined with (a) it is the second half of why the owner's wallet could not redeem. The
-session path is unaffected (a forged session correctly reached `AUTH_SESSION_UNKNOWN`,
-HTTP 401). Almost certainly affects `api/game/save.js` identically. **Its own WO.**
+closed** — it over-refuses, never over-grants — and almost certainly affects
+`api/game/save.js` identically.
+
+**The fix is small and is NOT applied here, deliberately.** The guard exists only so a
+parser problem does not masquerade as `AUTH_BAD_SIGNATURE`; it is a diagnostics choice, not
+a security one. Letting the wallet path *attempt* verification against the reconstructed
+bytes cannot create a false accept — a signature either verifies against those bytes or it
+does not — so the correct change is "proceed, and tag the failure detail" rather than
+"refuse with 500". It is not done in this ticket for one concrete reason: shipping it needs
+a `vercel --prod`, and a deploy right now would sweep another lane's uncommitted WO-1441
+server work into production (see the landmine note below). **Its own WO, and it should be
+quick.**
 
 **c) ⛔ AND THE ONE THAT WAS ACTUALLY KILLING HER CLOUD SAVES — a migration that was
 never applied.** `_lib/wallet-auth.issueSession` has INSERTed `auth_sessions.identity_kind`
@@ -259,10 +312,15 @@ just did.** Apply the ALTER before that deploy, and re-run the sweep.
       request and response captured, ledger row verified.
 - [x] **The cap holds under concurrent load, proven by MEASUREMENT** — §4, with the
       before/after numbers and the pre-existing race named rather than glossed.
-- [x] **A wallet holder still redeems via the wallet rail, unchanged** — the allowlist and
-      `verifyWallet` are byte-unchanged; forged signature / forged session / no headers all
-      refuse and never grant. ⚠ Qualified by §7(b): the *signature* sub-path 500s on this
-      runtime, which pre-dates this change and fails closed.
+- [x] **A wallet holder still redeems via the wallet rail, unchanged** — MEASURED, not
+      inferred: a real ed25519 wallet redeemed on production via the session sub-rail
+      (`{"success":true,…}`), with no `promo_ip_budget` row, proving wallets are not
+      IP-counted. The non-comment diff of `wallet-auth.js` adds only the new function, the
+      env switch and an export — `verifyWallet`, `verifySession`, `authenticate`,
+      `authenticateGranting` and `GRANTING_MODES` have **no changed code lines**. Forged
+      signature / forged session / no headers all refuse and never grant.
+      ⚠ Qualified by §7(b): the *signature* sub-rail 500s on this runtime — pre-existing,
+      fails closed, and it is the only sub-rail the published build has.
 - [x] **The reversal, its reasoning and the residual risk recorded in the file header** —
       original paragraph kept verbatim, reversal beneath it, three residual risks named.
 - [x] **§5 reported with evidence and handed back** — §7.
