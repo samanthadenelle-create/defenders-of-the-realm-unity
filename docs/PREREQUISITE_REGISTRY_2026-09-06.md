@@ -64,10 +64,7 @@ doc, a comment's summary, or a prior session's memory.** Where a fact could not 
 | Bank ceiling | 2000 | 3000 | 4000 | 6000 | 10000 | 18000 | 34000 |
 
 Containers are `lumberyard` (wood), `foundry` (iron), `silo` (display name **"Stoneyard"**, stone).
-**Crystals and Coins are UNCAPPED** - `TownBankCapacity.UncappableResources` `:265`, `IsCapped` `:317-321`.
-`MaxOf` sums **every built container** of that resource (`TownBankCapacity.cs:435-442`, slot walk `:972-1005`), so a
-second container also raises the ceiling. That is real but **undiscoverable**, and this registry uses the
-one-container bound throughout, exactly as `EconomySinkCapRegression` does.
+**All three are SINGLETON** — `repo.singleton: true` in `structures-catalog.json` (Owner Ruling 23, 2026-09-06, OWNER_RULINGS_LOCKED.md §23). Capacity grows by LEVEL only; a second container cannot be built. Existing saves holding multiple containers are grandfathered (StructureSingleton.EnforceInternal `:279-325` acts only on baked twins; these rows author `bakedTwins: null`). **Crystals and Coins are UNCAPPED** - `TownBankCapacity.UncappableResources` `:265`, `IsCapped` `:317-321`. This registry uses the one-container L6 bound throughout.
 
 ---
 
@@ -75,21 +72,9 @@ one-container bound throughout, exactly as `EconomySinkCapRegression` does.
 
 ### 2.0 SEVEN OF THE NINE TROOPS CAN NEVER BE TRAINED - the biggest finding in this audit
 
-**`GameState.BarracksLevel` is pinned at 1 for the life of every save, because the only UI that raises it has no
-entry point.** Verified end to end this session:
+⚠ **SUPERSEDED 2026-09-06:** Owner Ruling 21 (2026-09-06) changed how troop unlocks are gated. The barracks gate now reads `BarracksProgression.EffectiveBarracksLevelOf(state)` which returns `MAX(stored GameState.BarracksLevel, BuildingTiers["barracks"])` floored to 1 (`BarracksProgression.cs:124-130`). The barracks BUILDING tier (reached via Manage > Buildings) now gates troop unlocks directly. This document describes the pre-ruling state. All cost tables, storage requirements and the container ladder in section 6.1 remain accurate. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21` for the full ruling.
 
-1. `GameState.cs:506` - `public int BarracksLevel = 1;`. New game sets 1 (`GameStateService.cs:1235`).
-2. The training gate is `BarracksService.EnqueueTraining` `:310-313`:
-   `if (!IsTroopUnlocked(troopId)) { stopReason = "Locked - unlocks at Barracks Level N."; return 0; }`
-3. `BarracksService.IsTroopUnlocked` `:63-64` -> `BarracksProgression.IsTroopUnlocked(troopId, BarracksLevel)`
-   `:100-116`. **It reads `BarracksLevel` only** - the `building-tiers.json` barracks ladder is not consulted.
-4. `BarracksLevel` is raised only by `BarracksProgression.ApplyBarracksUpgrade`, reached only from the
-   `BarracksUpgrade` job enqueued only by `BarracksService.UpgradeBarracks` `:162-194`, whose only caller is
-   `BarracksPanelVM.UpgradeBarracks` `:238-247`, whose only caller is `BarracksPanel.cs:389`, inside a panel whose
-   only entry point is `BarracksPanel.ShowBarracksUI()` (`BarracksPanel.cs:74`).
-5. **`ShowBarracksUI` has ZERO callers.** A ripgrep for the symbol across all of `Assets/` - every `.cs`, `.unity`,
-   `.prefab`, `.yarn` - returns three hits, all inside `BarracksPanel.cs` itself (`:21` its own header comment,
-   `:74` the definition, `:78` a trace string). No dev tool writes `BarracksLevel` either.
+**PRE-RULING STATEMENT (superseded):** `GameState.BarracksLevel` was pinned at 1 for the life of every save, because the only UI that raised it had no entry point. The training gate was `BarracksService.EnqueueTraining` `:310-313`, which read stored `BarracksLevel` only — the `building-tiers.json` barracks ladder was not consulted. `BarracksLevel` was raised only by `BarracksProgression.ApplyBarracksUpgrade`, reached only from the `BarracksUpgrade` job enqueued only by `BarracksService.UpgradeBarracks`, whose only caller was `BarracksPanelVM.UpgradeBarracks`, whose only caller was `BarracksPanel.cs:389`, inside a panel whose only entry point was `BarracksPanel.ShowBarracksUI()` (`BarracksPanel.cs:74`), which had ZERO callers.
 
 **Therefore UNREACHABLE:** Spearman, Field Cleric, Shieldguard, Outrider, Siege Catapult, Battlemage,
 Echo Legionnaire (7 troops), all **5** `barracks.json` level rungs, the **42** troop-level rungs on those seven,
@@ -216,27 +201,14 @@ and `costFood` is a key **no tier row authors**. Worth a follow-up ticket; not a
 
 ## 3. THE TWO STRUCTURAL DEFECTS BEHIND MOST OF THE CONFUSION
 
-### 3.1 The Village Tier is never shown, and its control only appears once you are already blocked
+### 3.1 Heart Level (formerly "Village Tier") surface and the upgrade flow
 
-- `VillageTierService.TryUpgrade` has **exactly one production caller**: `BuildingUpgradeVM.cs:1045`, inside
-  `Select(tierId)` guarded by `tierId == VillageTierRowId` (`"villagetier"`).
-- The only widget that reaches it is the upgrade panel's action band in its `VillageGated` state -
-  `BuildingUpgradePanelMvvm.cs:1323-1338`, tap at `:1332`, label `"Raise Village Tier"`
-  (`BuildingUpgradePanelMvvm.cs:425`) rendered with `current + 1` appended at `:1327`.
-- `ResolveActionState` returns `VillageGated` **only when `requiresVillageTier > villageTierNow`**
-  (`BuildingUpgradeVM.cs:415-426`). Every ladder's tier-1 row authors `requiresVillageTier: 0`, so **on a fresh
-  save the button does not exist anywhere in the game.** It appears only after the player has bought some
-  building's tier 1 and its tier 2 turns gated.
-- **Nothing displays the player's current Village Tier.** Every authored string names a *required* tier. There is
-  no Heart-of-Elarion panel: `BuildingInteractable.cs` has zero `Heart` hits, and `ManageScreenVM.cs:2197` says so
-  in-code. `[TREE]` the new copy `"Needs Village Tier N - raise it at the Heart."` (`ManageScreenVM.cs:1232`)
-  points the player at a world object with no interaction.
-- `[HEAD]` The one card that names the gate has **no door**: `ManageScreenPanel.cs:2166-2168` paints a disabled
-  face `"UNLOCKS AT VILLAGE LEVEL " + n` and then `return`s before any button is built. `[TREE]` adds a live
-  `"UPGRADE THE HEART"` door (`ManageScreenVM.cs:1234`, rendered `ManageScreenPanel.cs:2196-2214`).
-- **The Quarry is the worst case even in the tree.** The `farm` ladder authors **zero perks**, so its `DoorLabel`
-  is null and the second door is hidden by design (`ManageScreenVM.cs:1250`, WO-1422 ruling 3.5). A player whose
-  only tier-bearing building is a Quarry sees a gated card and, at HEAD, no route from it at all.
+⚠ **SUPERSEDED 2026-09-06:** The player-visible string for Village Tier is now "Heart Level" throughout the UI. The barracks BUILDING tier gate (Fact 2) now applies alongside the Heart Level gate, so the two authorities are unified for display. The entry point is now the Heart surface reachable directly from Manage's header. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §6` (Heart Level as player-facing name) and WO-1423 (Heart surface + unified gate).
+
+**PRE-RULING STATEMENT (superseded):**
+- `VillageTierService.TryUpgrade` had exactly one production caller and only appeared in the upgrade panel's `VillageGated` state on an already-gated building.
+- Nothing displayed the player's current Village Tier. Every authored string named a *required* tier. There was no Heart-of-Elarion panel.
+- The `farm` ladder authored zero perks, hiding the second door, so a player with only a Quarry saw no route to upgrading the tier.
 
 ### 3.2 A building tier's cost is charged in a resource the JSON never names
 
@@ -630,15 +602,11 @@ Surface: **Manage > Troops** (`ManageScreenVM.BuildTroopsBrowse` `:1840`; train 
 at `:2545`; muster -> `OpenMuster` `:2095`). The tab is visible only once a placed id contains "barracks"
 (`ManageScreenVM.cs:615-616`).
 
-**TWO LADDERS SHARE THE WORD "BARRACKS", ONLY ONE UNLOCKS TROOPS, AND THAT ONE HAS NO DOOR - see 2.0.**
-- **`GameState.BarracksLevel`** (default 1, `GameStateService.cs:1235`) driven by `barracks.json` is the **real**
-  troop gate: `BarracksProgression.IsTroopUnlocked` `:100-116` checks `TroopDef.UnlockBarracksTier <= barracksLevel`
-  OR membership of a reached level's `unlocksTroopIds`. Raised by `BarracksService.UpgradeBarracks` `:162`, gated
-  by `CanUpgradeBarracks` `:143-155` (**no village-tier gate, no requirement that a Barracks building be placed**)
-  - and **unreachable**, because `BarracksPanel.ShowBarracksUI` has no callers.
-- **`building-tiers.json` `barracks` tiers 1-6** grant troop damage/health multipliers, structure HP and the one
-  `armyCapBonus` perk. Their `effect` strings advertise troop unlocks they do not grant. **No code reads
-  `effect`.** Decorative duplicated state that restates `barracks.json` and has already drifted from it.
+⚠ **SUPERSEDED 2026-09-06:** Owner Ruling 21 changed the troop unlock gate. Previously two ladders shared "barracks" and only one (`GameState.BarracksLevel`) was consulted; it had no entry point. Now the gate is `BarracksProgression.EffectiveBarracksLevelOf(state)` which is `MAX(stored BarracksLevel, BuildingTiers["barracks"])` floored to 1 (`BarracksProgression.cs:124-130`). The **barracks BUILDING tier** (upgraded via Manage > Buildings > Barracks) now gates troop unlocks directly. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21` for the full ruling. The cost tables below remain accurate.
+
+**PRE-RULING STATEMENT (superseded):**
+- **`GameState.BarracksLevel`** (default 1, `GameStateService.cs:1235`) was the troop gate. `BarracksProgression.IsTroopUnlocked` `:100-116` checked `TroopDef.UnlockBarracksTier <= barracksLevel` OR membership of a reached level's `unlocksTroopIds`. It was raised only by the unreachable `BarracksPanel.ShowBarracksUI`.
+- **`building-tiers.json` `barracks` tiers 1-6** granted troop damage/health multipliers, structure HP and the one `armyCapBonus` perk. Their `effect` strings advertised troop unlocks they did not grant.
 
 **Barracks LEVEL ladder** (`barracks.json`) - the one that matters, and the one with no door.
 Costs go through `ResourceLedger.TrySpend` (`BarracksService.cs:179`); a `coins` term would be warned and dropped
@@ -698,18 +666,18 @@ Footman rungs: 180 / 270 / 360 / 450 / 540 / 630 s. Archer rungs: 240 / 360 / 48
 **slots**, not units (`ArmyReadiness.cs:132` -> `TroopDef.Slots`) - a Siege Catapult would eat 4 of 10, if it could
 be trained.
 
-### 6.5 Village Tier
+### 6.5 Heart Level (formerly "Village Tier")
+
+⚠ **SUPERSEDED 2026-09-06:** Owner Ruling 21 unified the barracks BUILDING tier with the Village Tier for unlock gates (see 6.4). The player-visible name is now "Heart Level" per Ruling 6. The control is now reachable directly from Manage's header via the Heart surface (WO-1423). See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md` for details. The cost table below and the `MaxTier = 3` ceiling remain accurate.
 
 | Rung | Cost | Gate | Where bought | Verdict |
 |---|---|---|---|---|
-| 0 -> 1 | 250 Crystals | none | the `VillageGated` action band of any gated building's upgrade panel (`BuildingUpgradePanelMvvm.cs:1332`) | REACHABLE - a fresh save holds exactly 250 |
+| 0 -> 1 | 250 Crystals | none | the Heart surface or the `VillageGated` action band of any gated building's upgrade panel | REACHABLE - a fresh save holds exactly 250 |
 | 1 -> 2 | 500 Crystals | none | same | REACHABLE |
 | 2 -> 3 | 750 Crystals | none | same | REACHABLE |
 
 `NextCost = 250 * next` (`VillageTierService.cs:46`); `MaxTier = 3` (`:27`); `TryUpgrade` `:54-73` refuses at max
 and spends atomically through `EconomyService`. **Crystals are uncapped**, so no storage gate applies.
-**The tier is never displayed and the control is conditional - see 3.1.** This is the single highest-value target
-for WO-1427.
 
 ### 6.6 Gear upgrade ladder - `gear-levels.json`
 
@@ -781,12 +749,12 @@ Ordered by how much player confusion each one causes.
 
 | # | Gate | Enforced at | Where the explanation must be added |
 |---|---|---|---|
-| 0 | **The barracks LEVEL ladder has no entry point, so 7 of 9 troops are unreachable** | `BarracksService.cs:310-313` refuses; `BarracksPanel.ShowBarracksUI` `:74` has no callers | Not an explanation problem - **wire an entry point**. The natural home is the Manage > Troops tab, which already owns the surface and already ANDs both authorities (`ManageScreenVM.cs:1866-1867`). Also worth a suite: `DataRegression.cs:3011-3012` asserts unlock at the troop's own tier, which is true by construction and can never catch this. |
+| 0 | ⚠ **SUPERSEDED 2026-09-06:** The barracks BUILDING tier now gates troop unlocks (Owner Ruling 21, `BarracksProgression.EffectiveBarracksLevelOf` `:124-130`). The gate is now reachable via Manage > Buildings > Barracks. The old stored `GameState.BarracksLevel` field persists as a floor but no longer has a UI writer. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21`. | Previously at `BarracksPanel.ShowBarracksUI` (no callers); now at `BarracksService.EnqueueTraining` via `BarracksProgression.IsTroopUnlocked` `:100-116` | Fixed in the working tree. The gate now reflects the barracks BUILDING tier as intended. |
 | 1 | **Storage ceiling on a building-tier upgrade, and on a gear improve** | `BuildingUpgradeService.cs:160-166` (bare `false`); `GearProgression.CanImprove:367` (`MissingOf(cost)`) | `ManageScreenVM.cs:2495` (replace the generic refusal), `BuildingUpgradeVM.NextShortfallSentence` `:407`, and `GearProgression.MissingOf` - all three must call `TownBankCapacity.TryDescribeStorageBlock` `[TREE] :633` instead of subtracting balances. |
-| 1b | **Manage > Troops paints 7 dead cards naming an impossible requirement** | `ManageScreenVM.cs:1881-1891` (`Requirement = "Requires Barracks Tier N"`, `StateWord = "Locked"`, `DoorLabel` null) | Fixed by item 0. Until then it is the most visible instance of the owner's complaint - a named gate with no door, seven times over. |
+| 1b | ⚠ **SUPERSEDED 2026-09-06:** Manage > Troops now correctly gates on the barracks BUILDING tier (Ruling 21). Troops at the current tier display as unlocked; those above display with the correct gate and door to the Heart (or Barracks upgrade panel). | `ManageScreenVM.cs:1881-1891` (now reflects the effective gate via `TroopUnlock.EffectiveBarracksTier`) | Fixed in the working tree. See row 0 and `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21`. |
 | 2 | **Storage ceiling on a placed-structure upgrade** | `PlacedStructureUpgradeService.cs:194` | The Manage > Defense CTA path, `ManageScreenVM.cs:1445` / `:2173`. |
-| 3 | **The player's current Village Tier is invisible** | n/a - nothing renders it | A persistent readout. The Manage screen header (`ManageScreenPanel`) is the natural home; the HUD resource strip is the alternative. |
-| 4 | **The "Raise Village Tier" control only exists on an already-gated building** | `BuildingUpgradeVM.cs:415-426` (`VillageGated` only when `requiresVillageTier > now`) | A tier control that does not depend on a gated building being selected. Until then, every gated card needs its own door - `[TREE]` `ManageScreenPanel.cs:2196-2214` adds one, **except on the Quarry**, whose door is hidden because its ladder authors no perks (`ManageScreenVM.cs:1250`). |
+| 3 | ⚠ **SUPERSEDED 2026-09-06:** The player's current Heart Level (formerly Village Tier) is now visible via the Heart surface in Manage's header (WO-1423). | Previously n/a - nothing rendered it; now `ManageScreenPanel` and Heart surface both display it | Fixed in the working tree. Heart Level shows on the Heart surface and related panels. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §6`. |
+| 4 | ⚠ **SUPERSEDED 2026-09-06:** The "Raise Heart Level" control is now accessible directly from the Heart surface in Manage's header (WO-1423), independent of any gated building. | Previously at `BuildingUpgradeVM.cs:415-426` (conditional on already-gated building); now at the Heart surface independent of selection | Fixed in the working tree. Heart Level upgrades are now discoverable. See `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §6`. |
 | 5 | **Tier 2 costs STONE; tiers 3+ cost IRON, regardless of the authored key** | `BuildingUpgradeService.cs:195-197` | Not a UI bug - the screens already show the charged lane. It needs a **catalog ruling** (already flagged as WO-1391 at `BuildingUpgradeVM.cs:1512-1519`) so the JSON stops saying "crystal" for an iron cost. Until then, every doc reading `building-tiers.json` will be wrong. |
 | 6 | **Four buildable-looking ids can never be built** | `BuildCollectionBrowser.cs:31,:357,:365-367` | Not an explanation problem - either write the unlock (a wave / quest / plans drop, as `tower_arcane_spire` has) or remove the rows from `card-collections.json` and `lockedIds`. |
 | 7 | **Wall levels 2-3 are authored and unreachable** | `WallTierData.cs:155` | Either ship WO-904's raid-steal path or mark the tiers as content-not-yet-reachable so no balance pass counts them. |

@@ -103,6 +103,7 @@ separately in `../PROJECT_INDEX.md`.
 
 ## Process / QA / audits (mostly dated — newest wins)
 
+- **Manage redesign (WO-1418+) flow & prerequisites:** `manage-flow-map/MAP.md` — the redesign's dataflow lanes and mock-up mapping; `PREREQUISITE_REGISTRY_2026-09-06.md` — the audit of every gate and cost in the system, with the container singletons ruling (Ruling 23) and barracks/Heart Level unification (Ruling 21) reflected; `ART_DELIVERY_2026-09-06_manage_assets.md` — Synty building portraits checklist; `ART_REQUEST_2026-09-06_manage_tab_portraits.md` — owner art request for the redesigned tabs
 - `BACKLOG_TRIAGE_2026-06-04.md`, `ARCHIVED_ISSUES_2026_06_04.md`, `WO_ROI_TRIAGE.md`,
   `ROI_PLAN_2026-06-03.md`, `REUSABILITY_AUDIT_2026-06-03.md`
 - `QA_player_sanity_pass_2026-05-30.md`, `acceptance_verification_2026-05-30.md`,

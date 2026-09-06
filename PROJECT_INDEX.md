@@ -98,6 +98,12 @@ The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutt
 (504 spec + result files). The numbering authority `CLI_LANES_WO_NUMBERS.md` +
 `WO_AUDIT_*.md` stay at root.
 
+**Manage redesign program (WO-1418+, 2026-09-06):** `WorkOrders/ManageRedesign/` folder
+holds the coordinated WO set, owner rulings (Rulings 21/23 on barracks/containers; Ruling 6 on Heart Level naming),
+and the redesigned flow mapping (`docs/manage-flow-map/MAP.md`). Prerequisite audit
+(`docs/PREREQUISITE_REGISTRY_2026-09-06.md`) verifies all gates and costs are covered by containers and the unified
+gate.
+
 - `WORK_ORDER_NNN_name.md` — the spec. Status line inside says if READY TO IMPLEMENT
 - `WORK_ORDER_NNN_name.RESULT.md` — CLI's completion report. **If a .RESULT.md
   exists, the WO is done** — don't re-implement
