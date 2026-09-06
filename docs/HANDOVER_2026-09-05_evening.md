@@ -116,3 +116,13 @@ Commit charge at 23:2x: **105.2 / 115.8 GB** - the leak that OOM-kills player bu
 - Installed via `install-apk-to-seeker.ps1 -Build:$false -Install:$true`: dumpsys versionCode=357453 versionName=2026.09.06.357453. Firebase App Distribution release 0kka4h6t9u400, testers notified.
 - Board: the 11 Status lines stamped with the build + BOARD.html regenerated, commit `b22cb98cd` (with the ProjectSettings stamp 357453).
 - OPEN: section 3 step 4 screencaps NOT taken - the Seeker sat on its keyguard (`mDreamingLockscreen=true` after a wake + swipe); needs the owner's unlock. The four `proof/` deletions in the working tree were there before this session and are untouched.
+
+### 7b. 00:53-00:57 - the five screencaps (owner unlocked the phone; adb taps drove the UI)
+Saved under `logs/device/screens/seeker-357453-*.png` (untracked, sent to the owner in-session). Seen on 357453:
+- Heart plate: `Heartfire 3/3 (raids)` with three ember-medallion flame icons (WO-1419 live). Wave 5 timer + Start Now; 'Prepare the realm' line (WO-1407).
+- Manage hub -> Buildings: Forge row with its BUILDING portrait (WO-1418 art drop live); Forge reads `LEVEL 0 / Upgradable / 57s . Short`, upgrade 1060 wood + 680 iron. The ladder list box shows ~2.3 rows before scrolling.
+- Manage -> Troops: Footman L2, `Train one: 45s . Ready`, TRAIN 1 FOOTMAN primary; the upgrade subtitle truncates: `4m 30s . Ready . L3 unlocks Sweepi...`.
+- Journey: deck subtitles with state (WO-1404 live): `Quests 0 active . 0 ready to claim`, `Raids Army 8 / 10 . train to open a camp`.
+- Raids: spoils line per row (WO-1402 live). The Forsaken Camp row reads `LOCKED - needs Army 9`, yet tapping it OPENS Deploy with BEGIN ASSAULT live - logcat `[Flow:Raid] deploy readiness snapshot: deployableSlots=8 queued=0 required=3 cap=10 ready=True firstRaidSoftGate=True` while the list VM logged `army=unknown`. The list lock and the deploy gate disagree - a ticket to mint after the owner's felt-test (which one is the ruling?).
+- Raid Deploy: Grom / Sylas hero medallions are BLANK (no portrait); the Echo quote truncates at `where i...` (WO-1403 two-line authoring in EchoGuideService).
+- F8 seq 4683 on this boot: the wallet's silent reauthorize was REFUSED by com.solanamobile.wallet in 0.1s and WalletService reported a 30s TIMEOUT -> WO-1420 (`defe8a569`), READY. Ask the owner to tap Connect Wallet once on this build (section 4 of the WO).
