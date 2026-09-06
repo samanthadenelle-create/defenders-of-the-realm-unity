@@ -121,17 +121,7 @@ namespace DeNelle.Village
             int count = OwnedCount();
             if (count <= 0) return 1f;   // no service -> neutral
 
-            float specSum = 0f;
-            for (int i = 0; i < count; i++)
-            {
-                if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Harvest) continue;
-                specSum += LaneContribution(i, LaneType.Harvest);
-            }
-
-            specSum += PairBonusSum(count);
-
-            if (AllOwned(count))
-                specSum += EchoBalanceCatalog.SixSetBonusGlobalHarvest;
+            float specSum = DisclosedHarvestBonusFraction(count);
 
             // WO-830 Sec.3d: the UNDISCLOSED tri-synergy -- applied, never displayed.
             bool triActive = HiddenTriSynergyActive(count);
@@ -146,6 +136,32 @@ namespace DeNelle.Village
             }
 
             return count * (1f + specSum);
+        }
+
+        /// <summary>The additive harvest bonus safe to show to players, as a percent.
+        /// Includes specialization, running pairs, and the six-Echo set; deliberately
+        /// excludes the hidden tri-synergy that exists only in the applied aggregate.</summary>
+        public static float DisclosedHarvestBonusPercent()
+        {
+            int count = OwnedCount();
+            float percent = count > 0 ? DisclosedHarvestBonusFraction(count) * 100f : 0f;
+            FlowTrace.Once("Echo", "disclosed-harvest-bonus-readout",
+                "EchoBonusCalculator supplied the additive player readout; hidden tri-synergy excluded.");
+            return Mathf.Max(0f, percent);
+        }
+
+        private static float DisclosedHarvestBonusFraction(int count)
+        {
+            float sum = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Harvest) continue;
+                sum += LaneContribution(i, LaneType.Harvest);
+            }
+
+            sum += PairBonusSum(count);
+            if (AllOwned(count)) sum += EchoBalanceCatalog.SixSetBonusGlobalHarvest;
+            return sum;
         }
 
         /// <summary>

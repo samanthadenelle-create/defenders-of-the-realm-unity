@@ -193,9 +193,8 @@ namespace DeNelle.Village.Monetization
                     color = ElarionUiKit.ObsidianButtonColor.Gray;
                     break;
                 default:
-                    label = VillageStrings.Canon(KeyAdNotReady);
-                    color = ElarionUiKit.ObsidianButtonColor.Gray;
-                    break;
+                    FlowTrace.Step("DailyChest", "ad CTA hidden until rewarded placement is ready");
+                    return;
             }
 
             _doubleButton = ElarionUiKit.BuildObsidianButton(_well, label,

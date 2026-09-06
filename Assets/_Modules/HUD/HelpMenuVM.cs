@@ -210,7 +210,7 @@ namespace DeNelle.HUD
             var candidates = new List<Candidate>(6);
             candidates.Add(new Candidate("report_bug", "Report a Bug", false, false, true, HostReportBug));
             candidates.Add(new Candidate("controls", "Controls", false, false, true, HostShowControls));
-            candidates.Add(new Candidate("reset_progress", "Reset Hero & Pet", true, false, true, HostResetProgress));
+            candidates.Add(new Candidate("reset_progress", "Reset Hero & Echoes", true, false, true, HostResetProgress));
             candidates.Add(new Candidate("credits", "Credits", false, false, true, HostShowCredits));
 #if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
             // SECURITY (LB-11 / store-hardening S1): both rows are compile-STRIPPED from

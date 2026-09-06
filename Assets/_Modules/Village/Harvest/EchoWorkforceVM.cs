@@ -52,6 +52,12 @@ namespace DeNelle.Village
         event Action<int> EchoUnlocked;
     }
 
+    /// <summary>Optional additive harvest readout supplied by the live bonus calculator.</summary>
+    public interface IEchoHarvestBonusReadout
+    {
+        double HarvestTogetherBonusPct { get; }
+    }
+
     /// <summary>
     /// Pure snapshot ViewModel of the Echo workforce. Subscribes to the model's Changed /
     /// EchoUnlocked and re-snapshots, raising <see cref="Changed"/>. All framing math lives here.
@@ -140,7 +146,7 @@ namespace DeNelle.Village
         public string HudSiloLine { get; private set; }
         /// <summary>The roster header ETA line ("Echoes N/M   -   ...").</summary>
         public string RosterEtaText { get; private set; }
-        /// <summary>The honest shared-perk line ("Each Echo speeds ALL harvest -- now xN ..."); null when owned == 0.</summary>
+        /// <summary>The additive shared-perk line ("Echoes N/M - harvest +P% together"); null when owned == 0.</summary>
         public string HarvestPerkLine { get; private set; }
 
         protected virtual void Recompute()
@@ -184,9 +190,23 @@ namespace DeNelle.Village
                 RosterEtaText = "Echoes " + owned + "/" + max + "   -   Next Echo in " + nextWaves
                               + " wave" + (nextWaves == 1 ? "" : "s");
 
+            double harvestTogetherPct;
+            if (Model is IEchoHarvestBonusReadout bonusReadout)
+            {
+                harvestTogetherPct = Math.Max(0d, bonusReadout.HarvestTogetherBonusPct);
+                FlowTrace.Once("Echo", "workforce-bonus-calculator",
+                    "Echo workforce subtitle uses EchoBonusCalculator's disclosed additive readout.");
+            }
+            else
+            {
+                // Test/legacy adapters may not expose the specialization calculator yet. Keep
+                // their projection additive and deterministic rather than reviving multiplier copy.
+                harvestTogetherPct = Math.Max(0d, (GlobalHarvestMultiplier - 1d) * 100d);
+                FlowTrace.Once("Echo", "workforce-bonus-fallback",
+                    "Echo workforce adapter has no additive bonus readout; deriving display percent from its aggregate value.");
+            }
             HarvestPerkLine = owned > 0
-                ? "Each Echo speeds ALL harvest -- now x" + GlobalHarvestMultiplier.ToString("0.#")
-                  + " to every node's yield."
+                ? "Echoes " + owned + "/" + max + " - harvest +" + harvestTogetherPct.ToString("0.#") + "% together"
                 : null;
         }
 
@@ -212,7 +232,7 @@ namespace DeNelle.Village
     /// The live adapter: <see cref="IEchoWorkforce"/> over EchoService + ResourceCollectorService.
     /// Null-safe (no service -> neutral defaults). Re-raises EchoService's own events.
     /// </summary>
-    public sealed class EchoServiceWorkforce : IEchoWorkforce, IDisposable
+    public sealed class EchoServiceWorkforce : IEchoWorkforce, IEchoHarvestBonusReadout, IDisposable
     {
         private readonly EchoService _svc;
 
@@ -247,6 +267,8 @@ namespace DeNelle.Village
         public int WavesUntilNextEcho => EchoService.Instance != null ? EchoService.Instance.WavesUntilNextEcho : 0;
         public float NextEchoProgress => EchoService.Instance != null ? EchoService.Instance.NextEchoProgress : 0f;
         public double GlobalHarvestMultiplier => EchoService.Instance != null ? EchoService.Instance.GlobalHarvestMultiplier : 1.0;
+        public double HarvestTogetherBonusPct
+            => EchoBonusCalculator.DisclosedHarvestBonusPercent();
         public float FillFraction => EchoService.Instance != null ? EchoService.Instance.FillFraction : 0f;
         public int PendingCollect => ResourceCollectorService.TotalPending();
         public float CollectorMaxFill => ResourceCollectorService.MaxFillFraction();

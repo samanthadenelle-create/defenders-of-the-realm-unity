@@ -12,7 +12,7 @@ using DeNelle.Village;
 namespace DeNelle.Tests.EditMode
 {
     /// <summary>Fake workforce model with settable snapshot values + manual event raises.</summary>
-    internal sealed class FakeEchoWorkforce : IEchoWorkforce
+    internal sealed class FakeEchoWorkforce : IEchoWorkforce, IEchoHarvestBonusReadout
     {
         public bool Available { get; set; } = true;
         public int EchoCount { get; set; } = 1;
@@ -21,6 +21,7 @@ namespace DeNelle.Tests.EditMode
         public int WavesUntilNextEcho { get; set; } = 3;
         public float NextEchoProgress { get; set; } = 0.4f;
         public double GlobalHarvestMultiplier { get; set; } = 1.0;
+        public double HarvestTogetherBonusPct { get; set; }
         public float FillFraction { get; set; } = 0.5f;
         public int PendingCollect { get; set; } = 0;
         public float CollectorMaxFill { get; set; } = 0f;
@@ -94,8 +95,14 @@ namespace DeNelle.Tests.EditMode
             var empty = new FakeEchoWorkforce { EchoCount = 0 };
             Assert.That(Vm(empty).HarvestPerkLine, Is.Null);
 
-            var owned = new FakeEchoWorkforce { EchoCount = 2, GlobalHarvestMultiplier = 2.0 };
-            Assert.That(Vm(owned).HarvestPerkLine, Does.Contain("x2"));
+            var owned = new FakeEchoWorkforce
+            {
+                EchoCount = 2,
+                MaxEchoes = 6,
+                HarvestTogetherBonusPct = 17
+            };
+            Assert.That(Vm(owned).HarvestPerkLine,
+                Is.EqualTo("Echoes 2/6 - harvest +17% together"));
         }
 
         [Test]

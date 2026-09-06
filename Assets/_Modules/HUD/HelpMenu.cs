@@ -5,7 +5,7 @@
 // SettingsController via Core SettingsGate, and this menu registers PanelId.Help so
 // Settings can route to it exactly as it routes to Game Guide / Defence Reports.
 // Surfaces whatever HelpMenuVM offers: Report Bug (WO-596 BugReportView),
-// Controls, Reset Hero & Pet, Credits — plus Dev Tools + the gated dev grant in
+// Controls, Reset Hero & Echoes, Credits — plus Dev Tools + the gated dev grant in
 // dev builds only. The list itself is VM state; see WO-882 below.
 // -----------------------------------------------------------------------------
 // WO-F conversion (2026-07-03, coverage matrix row #44): UIDocument/UITK panel
@@ -80,6 +80,7 @@ namespace DeNelle.HUD
         public static HelpMenu Instance { get; private set; }
 
         private ElarionUiKit.ObsidianModal _modal;
+        private ElarionUiKit.ConfirmModal _resetConfirm;
         private ElarionUiKit.ToastParts _toast;
         private float _toastUntil;
 
@@ -136,6 +137,7 @@ namespace DeNelle.HUD
 
         private void OnDestroy()
         {
+            CloseResetConfirm();
             if (Instance == this) Instance = null;
             PanelRouter.Unregister(PanelId.Help, Open);
             if (_vm != null)
@@ -635,9 +637,33 @@ namespace DeNelle.HUD
         }
 #endif // DEVELOPMENT_BUILD || UNITY_EDITOR — 5-tap dev resource grant (store-hardening S1)
 
-        /// <summary>Resets save state via reflection so the player can redo hero + pet
-        /// selection, then routes back to HeroSelect.</summary>
+        /// <summary>Raises the shared confirmation sheet before destructive progress reset.</summary>
         private void OnResetProgress()
+        {
+            if (_resetConfirm != null && _resetConfirm.canvas != null) return;
+            FlowTrace.Step("UI", "HelpMenu: reset Hero & Echoes requested - showing confirmation");
+            _resetConfirm = ElarionUiKit.BuildConfirmModal(
+                "ResetProgressConfirm",
+                "Reset Hero & Echoes",
+                "Reset your hero and Echoes and begin again? This cannot be undone.",
+                "Reset",
+                "Keep Progress",
+                onConfirm: () =>
+                {
+                    FlowTrace.Step("UI", "HelpMenu: reset Hero & Echoes confirmed");
+                    CloseResetConfirm();
+                    ResetProgressConfirmed();
+                },
+                onCancel: () =>
+                {
+                    FlowTrace.Step("UI", "HelpMenu: reset Hero & Echoes cancelled");
+                    CloseResetConfirm();
+                },
+                confirmKind: ElarionUiKit.ButtonKind.Danger);
+        }
+
+        /// <summary>Resets save state after confirmation, then routes back to HeroSelect.</summary>
+        private void ResetProgressConfirmed()
         {
             try
             {
@@ -668,6 +694,16 @@ namespace DeNelle.HUD
                 Debug.LogWarning("[HelpMenu] Reset failed: " + ex.Message);
                 ShowToast("Reset failed - see log.");
             }
+        }
+
+        private void CloseResetConfirm()
+        {
+            if (_resetConfirm != null && _resetConfirm.canvas != null)
+            {
+                if (Application.isPlaying) Destroy(_resetConfirm.canvas);
+                else DestroyImmediate(_resetConfirm.canvas);
+            }
+            _resetConfirm = null;
         }
 
         /// <summary>Opens the AdminOverlay (owner tools). SECURITY (LB-11):
