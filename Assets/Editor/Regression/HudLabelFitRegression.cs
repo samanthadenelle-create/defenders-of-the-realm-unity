@@ -1391,8 +1391,8 @@ namespace DeNelle.Editor.Regression
         //        floor >= the objective line's ceiling - it cannot be the plate's smallest text;
         //   10c  at both aspects every row's band seats its floor line (floor x 1.2), so the
         //        post-layout guard has no reason to relax a font below its floor;
-        //   10d  the widest marks row ("[*] [*] [*]" + gap + "Heartfire 0/3 (raids)", plus the
-        //        authored letter-spacing) measures inside the row at the floor.
+        //   10d  three fixed-size flame Images fit left of the unchanged PlateLabel, and the
+        //        PlateLabel measures inside its own right-hand band at the floor.
         //        (!) WO-1415 WIDENED THAT ROW. The owner ruled the plate must name what a
         //        charge buys - HeartfireCharges.PlateLabel, "Heartfire 3/3 (raids)" - so the
         //        measured string is now the PlateLabel form, 12 characters longer than the
@@ -1422,19 +1422,24 @@ namespace DeNelle.Editor.Regression
                 parsed &= TryFloatConst(src, rows[i] + "BandY0", out y0[i]);
                 parsed &= TryFloatConst(src, rows[i] + "BandY1", out y1[i]);
             }
-            float fireMin, fireMax, objMin, objMax, nameMin, spacing;
+            float fireMin, fireMax, objMin, objMax, nameMin;
+            float iconPx, iconGapPx, flameX1, labelX0;
             parsed &= TryFloatConst(src, "HeartfireFontMin", out fireMin);
             parsed &= TryFloatConst(src, "HeartfireFontMax", out fireMax);
             parsed &= TryFloatConst(src, "HeartObjectiveFontMin", out objMin);
             parsed &= TryFloatConst(src, "HeartObjectiveFontMax", out objMax);
             parsed &= TryFloatConst(src, "HeartNameFontMin", out nameMin);
-            parsed &= TryFloatConst(src, "HeartfireMarkSpacing", out spacing);
+            parsed &= TryFloatConst(src, "HeartfireFlameIconPx", out iconPx);
+            parsed &= TryFloatConst(src, "HeartfireFlameGapPx", out iconGapPx);
+            parsed &= TryFloatConst(src, "HeartfireFlameX1", out flameX1);
+            parsed &= TryFloatConst(src, "HeartfireLabelX0", out labelX0);
             if (!parsed)
             {
                 failures.Add("[heartfire-inside-plate] " + HudSrc + " no longer declares the Heart plate row " +
                              "constants (Heart{Name,Objective}BandY0/Y1, Heartfire{,Rekindle}BandY0/Y1, " +
                              "HeartfireFontMin/Max, HeartObjectiveFontMin/Max, HeartNameFontMin, " +
-                             "HeartfireMarkSpacing) as float literals - this pin reads the layout off them");
+                             "HeartfireFlameIconPx/GapPx/X1 and HeartfireLabelX0) as float literals - this pin reads " +
+                             "the icon/label composition off them");
                 return;
             }
 
@@ -1501,13 +1506,8 @@ namespace DeNelle.Editor.Regression
                 notes.Add("Heart plate " + plateH.ToString("0") + " ref px at " + a.Name);
             }
 
-            // 10d - the widest marks row measures inside the row at the floor.
-            // WO-1415: the row is now marks + PlateLabel ("Heartfire 0/3 (raids)"), not marks +
-            // Name. The SPENT pool is the widest case (0/3 and 3/3 are the same length, but the
-            // spent form is what a new player stares at), and it is composed here from the same
-            // Core methods HudKitController paints with.
-            string marks = DeNelle.Core.State.HeartfireCharges.FlameRow(0, 3) + "   " +
-                           DeNelle.Core.State.HeartfireCharges.PlateLabel(0, 3);
+            // 10d - WO-1419 splits the row into three flame Images plus unchanged PlateLabel.
+            string marks = DeNelle.Core.State.HeartfireCharges.PlateLabel(0, 3);
             float rowX0, rowX1;
             if (!TryFloatConst(src, "HeartRowX0", out rowX0)) rowX0 = 0.05f;
             if (!TryFloatConst(src, "HeartRowX1", out rowX1)) rowX1 = 0.95f;
@@ -1516,21 +1516,26 @@ namespace DeNelle.Editor.Regression
             if (w < 0f) notes.Add("marks row not measurable headlessly: " + detail);
             else
             {
-                // MeasureLineWidthPx ignores characterSpacing (0 on kit labels); the marks row
-                // authors some, and TMP applies it as spacing/100 em per glyph.
-                w += marks.Length * spacing * 0.01f * fireMin;
                 foreach (var a in Aspects)
                 {
                     var refSize = HudLayoutBands.CanvasReferenceSize(a.W, a.H);
                     float plateW = HudLayoutBands.HeartMount.width * refSize.x * 0.97f;
-                    float rowW = (rowX1 - rowX0) * plateW;
-                    if (w > rowW)
-                        failures.Add("[heartfire-inside-plate] at " + a.Name + " the marks row '" + marks +
+                    float labelW = (rowX1 - labelX0) * plateW;
+                    int slots = DeNelle.Core.State.HeartfireCharges.FlameStates(0, 3).Length;
+                    float flamesW = slots * iconPx + Math.Max(0, slots - 1) * iconGapPx;
+                    float flameBandW = (flameX1 - rowX0) * plateW;
+                    if (flamesW > flameBandW)
+                        failures.Add("[heartfire-inside-plate] at " + a.Name + " the " + slots + " flame Images need " +
+                                     flamesW.ToString("0.0") + " ref px but their band is " +
+                                     flameBandW.ToString("0.0") + " px wide");
+                    if (w > labelW)
+                        failures.Add("[heartfire-inside-plate] at " + a.Name + " the PlateLabel '" + marks +
                                      "' MEASURES " + w.ToString("0.0") + " ref px at its " + fireMin + "px floor " +
-                                     "(spacing " + spacing + ") but the row is " + rowW.ToString("0.0") +
+                                     "but its label band is " + labelW.ToString("0.0") +
                                      " px wide (" + detail + ") - it would ellipsise");
                 }
-                notes.Add("marks row '" + marks + "' " + w.ToString("0.0") + " px at " + fireMin + "px");
+                notes.Add("Heartfire PlateLabel '" + marks + "' " + w.ToString("0.0") +
+                          " px beside " + DeNelle.Core.State.HeartfireCharges.FlameStates(0, 3).Length + " icons");
             }
         }
 

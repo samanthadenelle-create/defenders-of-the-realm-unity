@@ -1320,6 +1320,8 @@ namespace DeNelle.Editor
             // between scene-configs.json and the code fallback table.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-cooldown suite", () => { if (!DeNelle.Editor.Regression.RaidCooldownRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-cooldown] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "heartfire suite", () => { if (!DeNelle.Editor.Regression.HeartfireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heartfire] " + r); });
+            // --- WO-1419 the Heart plate paints flame ICONS (ember medallion), not [*] [ ] ASCII pips ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "heartfire-pips suite", () => { if (!DeNelle.Editor.Regression.HeartfirePipsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heartfire-pips] " + r); });
 
             // 2026-09-04 (coverage audit before the production regression): commit 1ef5f6ad4 added
             // fourteen suites and registered FOUR. The ten below existed on disk, compiled (or did

@@ -278,19 +278,20 @@ namespace DeNelle.Editor.Regression
                 f.Add("the refusal '" + blocked + "' does not name the wait");
             AssertAscii(f, "refusal", blocked);
 
-            // The lit/spent row must be TEXT-ENCODED. The owner is red/green colourblind, so
-            // a lit charge can never be "the orange one" (memory owner-colorblind-delegate-
-            // visual-creative). Two different states, two different strings.
+            // FlameRow remains the trace form; the player-facing plate binds these same states
+            // to greyscale-distinct Images (WO-1419).
             string two = HeartfireCharges.FlameRow(2, 3);
             string three = HeartfireCharges.FlameRow(3, 3);
             string zero = HeartfireCharges.FlameRow(0, 3);
             if (two == three || two == zero)
                 f.Add("FlameRow renders different charge counts identically ('" + two + "') -- the state " +
                       "would only be readable by colour, which says nothing to a colourblind player");
-            if (two.IndexOf("[ ]", StringComparison.Ordinal) < 0)
-                f.Add("FlameRow(2,3) '" + two + "' shows no SPENT slot -- a player cannot see what they lost");
-            if (three.IndexOf("[ ]", StringComparison.Ordinal) >= 0)
-                f.Add("FlameRow(3,3) '" + three + "' shows a spent slot on a FULL pool");
+            bool[] twoStates = HeartfireCharges.FlameStates(2, 3);
+            bool[] threeStates = HeartfireCharges.FlameStates(3, 3);
+            if (twoStates.Length != 3 || !twoStates[0] || !twoStates[1] || twoStates[2])
+                f.Add("FlameStates(2,3) does not expose two lit slots followed by one spent slot");
+            if (threeStates.Length != 3 || !threeStates[0] || !threeStates[1] || !threeStates[2])
+                f.Add("FlameStates(3,3) does not expose a fully lit pool");
             AssertAscii(f, "flame row", two);
 
             // Out-of-range inputs must clamp, never throw and never render a ragged row.

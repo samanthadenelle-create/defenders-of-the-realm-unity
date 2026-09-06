@@ -146,6 +146,14 @@ namespace DeNelle.HUD.Kit
         // WO-1379 HEARTFIRE - the flame row + rekindle line under the Heart of Elarion
         // plate. Repainted from the Core posture rail (PostureSignals.SetHeartfire), the
         // same cheap poll as the collectors chip; the View derives NOTHING.
+        private RectTransform _heartfireFlameHost;
+        private readonly List<Image> _heartfireFlameSlots = new List<Image>(3);
+        // The flame sprite is resolved from Resources ONCE (see ResolveHeartfireFlameSprite):
+        // the repaint runs on every count change and must never touch Resources.
+        // _heartfireFlameSpriteMissing latches the MISS, so a missing key costs one lookup and
+        // one trace line for the whole session, not one per repaint.
+        private static Sprite _heartfireFlameSprite;
+        private static bool _heartfireFlameSpriteMissing;
         private TMP_Text _heartfireLabel;
         /// <summary>WO-1384: the rekindle line ("Heartfire is full" / "Heartfire rekindles in
         /// m:ss") on its OWN row under the marks row. It used to be the second line of
@@ -2013,11 +2021,16 @@ namespace DeNelle.HUD.Kit
         /// to a fixed 18 - stated here as authored, the kit owns the clamp.)</summary>
         private const float HeartObjectiveFontMin = 16f;
         private const float HeartObjectiveFontMax = 18f;
-        /// <summary>TMP characterSpacing on the marks row: MedievalUiSkin titles use 3, the kit's
-        /// stamp labels 4..6. 5 opens "[*] [*] [ ]" into three separate brackets at 20..26 px.</summary>
-        private const float HeartfireMarkSpacing = 5f;
-        /// <summary>The gap between the marks and the word "Heartfire" on the same row.</summary>
-        private const string HeartfireMarksGap = "   ";
+        /// <summary>WO-1419 owner-selected runtime sprite and greyscale-safe slot treatment.</summary>
+        private const string HeartfireFlameSpritePath = "ItemIcons/cons_emberfire_bomb";
+        private const float HeartfireFlameLitAlpha = 1.0f;
+        private const float HeartfireFlameSpentAlpha = 0.25f;
+        private const float HeartfireFlameSpentGray = 0.55f;
+        /// <summary>One flame matches the marks row's 26px line height; slots keep a fixed gutter.</summary>
+        private const float HeartfireFlameIconPx = 26f;
+        private const float HeartfireFlameGapPx = 4f;
+        private const float HeartfireFlameX1 = 0.32f;
+        private const float HeartfireLabelX0 = 0.34f;
 
         // WO-432: Heart of Elarion status cluster — a tree-of-life glyph + "Elarion" caption
         // sitting ABOVE its own gold Heart bar, so the whole widget reads as the world-tree /
@@ -2099,23 +2112,23 @@ namespace DeNelle.HUD.Kit
             // which is the acceptance criterion.
             //
             // ⛔ COLOUR AND ICON TREATMENT ARE THE OWNER'S CALL, NOT THE IMPLEMENTER'S
-            // (WO-1379 section 4). What is built here is the STATE MODEL and the words:
-            // "[*] [*] [ ]" for lit/spent and the rekindle line under it. That reads
-            // correctly in pure greyscale and with no art at all, which is the standard
-            // the owner's colourblindness sets (memory owner-colorblind-delegate-visual-
-            // creative) - a flame sprite and a dark/lit tint drop straight onto it later
-            // without changing a single predicate.
-            //
-            // WO-1384 MARKS: the kit has no flame glyph (concept-icons.json's real icons are
-            // combat/sword/shield/heart/inventory/quest/compass/talk/tree/settings), so the
-            // "[*] [ ]" words stay the marks and are made to READ: the row is a SINGLE line
-            // (FitSingleLine at the plate's name size, 20..26, never FitBlock), bold, with
-            // HeartfireMarkSpacing of letter-spacing so three brackets are three distinct marks
-            // in greyscale. The rekindle line is its own label on the row beneath.
+            // WO-1419 records that owner call: ItemIcons/cons_emberfire_bomb is the mark.
+            // Lit/spent differ by opacity and neutral-grey fill, not hue; FlameRow survives only
+            // in the trace path. The rekindle line remains on its own row beneath the icons/count.
+            // WO-1419: real flame Images replace the player-facing ASCII brackets. The slot
+            // treatment differs in opacity and fill luminance, so it survives greyscale.
+            _heartfireFlameSlots.Clear();
+            var flameHostGo = new GameObject("HeartfireFlameSlots", typeof(RectTransform));
+            _heartfireFlameHost = (RectTransform)flameHostGo.transform;
+            _heartfireFlameHost.SetParent(_heartPlate.Root.transform, false);
+            _heartfireFlameHost.anchorMin = new Vector2(HeartRowX0, HeartfireBandY0);
+            _heartfireFlameHost.anchorMax = new Vector2(HeartfireFlameX1, HeartfireBandY1);
+            _heartfireFlameHost.offsetMin = Vector2.zero;
+            _heartfireFlameHost.offsetMax = Vector2.zero;
             _heartfireLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
-                string.Empty, HeartfireBandY0, HeartfireBandY1,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
-                HeartRowX0, HeartRowX1, spacing: HeartfireMarkSpacing, bold: true);
+                 string.Empty, HeartfireBandY0, HeartfireBandY1,
+                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
+                 HeartfireLabelX0, HeartRowX1, bold: true);
             _heartfireLabel.enableAutoSizing = true;
             ElarionUiKit.FitSingleLine(_heartfireLabel, HeartfireFontMin, HeartfireFontMax);
             _heartfireRekindleLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
@@ -4541,7 +4554,6 @@ namespace DeNelle.HUD.Kit
             _heartfireMaxPainted = max;
             _heartfireSecondsPainted = secs;
 
-            string flames = DeNelle.Core.State.HeartfireCharges.FlameRow(lit, max);
             // WO-1415 (owner ruling 2026-09-05): the plate says what a charge BUYS, not only
             // that it is full - "Heartfire 3/3 (raids)" / "Heartfire 0/3 (raids) - next in
             // 3h 12m". The PARENTHETICAL form and not the sentence, because this row is one
@@ -4551,6 +4563,8 @@ namespace DeNelle.HUD.Kit
             // cannot drift from what the plate says.
             string label = DeNelle.Core.State.HeartfireCharges.PlateLabel(lit, max);
             string line = DeNelle.Core.State.HeartfireCharges.PlateRekindle(lit, max, secs);
+            if (force || countMoved)
+                RepaintHeartfireFlameSlots(DeNelle.Core.State.HeartfireCharges.FlameStates(lit, max));
             // WO-1384: two rows, two labels. The marks row keeps the words; the rekindle line
             // has its own band so neither is shrunk to seat the other. If the second label is
             // absent (it is built in the same method, so only a factory failure) the combined
@@ -4558,21 +4572,94 @@ namespace DeNelle.HUD.Kit
             // owner's ruled spent string exactly, "<label> - <line>".
             if (_heartfireRekindleLabel != null)
             {
-                _heartfireLabel.text = flames + HeartfireMarksGap + label;
+                _heartfireLabel.text = label;
                 _heartfireRekindleLabel.text = line;
             }
             else
             {
-                _heartfireLabel.text = flames + HeartfireMarksGap + label +
-                                       (string.IsNullOrEmpty(line) ? string.Empty : " - " + line);
+                _heartfireLabel.text = label +
+                                        (string.IsNullOrEmpty(line) ? string.Empty : " - " + line);
             }
 
             // Only the COUNT is worth a line; the countdown moves every second and would
             // otherwise be a per-second firehose in every capture (the lesson of the
             // [Flow:Offset] ring-buffer eviction, memory logcat-ring-buffer-destroys-evidence).
             if (force || countMoved)
+            {
+                string flames = DeNelle.Core.State.HeartfireCharges.FlameRow(lit, max);
                 FlowTrace.Step("HudKit", "heartfire painted -> " + flames + " '" + label +
-                               "' (" + lit + "/" + max + "), rekindle row '" + line + "'");
+                                "' (" + lit + "/" + max + "), rekindle row '" + line + "'");
+            }
+        }
+
+        /// <summary>Build/update flame Images only when the charge count or ceiling moves.</summary>
+        private void RepaintHeartfireFlameSlots(bool[] states)
+        {
+            if (_heartfireFlameHost == null || states == null) return;
+            while (_heartfireFlameSlots.Count > states.Length)
+            {
+                int last = _heartfireFlameSlots.Count - 1;
+                var stale = _heartfireFlameSlots[last];
+                _heartfireFlameSlots.RemoveAt(last);
+                if (stale != null) Destroy(stale.gameObject);
+            }
+
+            Sprite flame = ResolveHeartfireFlameSprite();
+            while (_heartfireFlameSlots.Count < states.Length)
+            {
+                int index = _heartfireFlameSlots.Count;
+                var slot = ElarionUiKit.AddImage(_heartfireFlameHost, "HeartfireFlameSlot_" + index,
+                    new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Color.white, rounded: false);
+                var image = slot.GetComponent<Image>();
+                image.preserveAspect = true;
+                image.raycastTarget = false;
+                _heartfireFlameSlots.Add(image);
+            }
+
+            for (int i = 0; i < _heartfireFlameSlots.Count; i++)
+            {
+                var image = _heartfireFlameSlots[i];
+                if (image == null) continue;
+                var rt = image.rectTransform;
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+                rt.pivot = new Vector2(0f, 0.5f);
+                rt.sizeDelta = new Vector2(HeartfireFlameIconPx, HeartfireFlameIconPx);
+                rt.anchoredPosition = new Vector2(i * (HeartfireFlameIconPx + HeartfireFlameGapPx), 0f);
+                image.sprite = flame;
+                image.enabled = flame != null;
+                image.color = states[i]
+                    ? new Color(1f, 1f, 1f, HeartfireFlameLitAlpha)
+                    : new Color(HeartfireFlameSpentGray, HeartfireFlameSpentGray,
+                        HeartfireFlameSpentGray, HeartfireFlameSpentAlpha);
+            }
+        }
+
+        /// <summary>
+        /// Resolve the Heartfire flame sprite ONCE per domain. The repaint above runs on every
+        /// charge-count change, so a Resources.Load in that path would be a per-change disk/lookup
+        /// hit for a sprite that never changes.
+        /// A MISS is latched too, and it is TRACED once: without the line, a runtime miss reads as
+        /// the CLAUDE.md s16 pattern - the plate paints, the word paints, the slots are simply
+        /// invisible and nothing anywhere says why (the same silent shape as an unpushed bundle).
+        /// The count word keeps painting either way; only the icons drop.
+        /// </summary>
+        private static Sprite ResolveHeartfireFlameSprite()
+        {
+            if (_heartfireFlameSprite != null) return _heartfireFlameSprite;
+            if (_heartfireFlameSpriteMissing) return null;
+
+            var loaded = Resources.Load<Sprite>(HeartfireFlameSpritePath);
+            if (loaded == null)
+            {
+                _heartfireFlameSpriteMissing = true;
+                FlowTrace.Once("HudKit", "heartfire-flame-sprite-missing",
+                    "heartfire flame sprite MISSING at Resources '" +
+                    HeartfireFlameSpritePath + "' - slots hidden, the count word still paints");
+                return null;
+            }
+
+            _heartfireFlameSprite = loaded;
+            return loaded;
         }
 
         /// <summary>

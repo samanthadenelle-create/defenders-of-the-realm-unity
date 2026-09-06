@@ -1,6 +1,6 @@
 # WO-1419: the Heartfire plate paints flame ICONS, not `[*] [ ]` ASCII pips
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 (CLI) from the owner's ruling; dispatched to the Codex dev lane (BATCH_STATE PART 8 item 6, AFTER the WO-1407 commit because `HudKitController.cs` is locked until then)
+**Status:** FIXED 2026-09-05 22:27 - Codex lane landed ember-medallion slots (candidate A, lead greyscale pick), oracles moved with the ruling, HeartfirePipsRegression green, COMPILE_GATE_OK + REGRESSION_OK 386/386, AdaptiveHudPeaceful frame opened (RESULT file); device build after the owner's reboot; felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 (CLI) from the owner's ruling; dispatched to the Codex dev lane, PART 8 item 6)*
 **Silo:** HUD - Heart plate (DeNelle.HUD + DeNelle.Core.State)
 **Owner ruling (2026-09-05, verbatim):** "yeah i hate those [*] items when we should use some icon, we have over 4000"
 

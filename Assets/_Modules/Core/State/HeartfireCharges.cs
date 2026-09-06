@@ -322,28 +322,35 @@ namespace DeNelle.Core.State
         public const string Name = "Heartfire";
 
         /// <summary>
-        /// The lit/spent row, TEXT-ENCODED so it survives greyscale. The owner is
-        /// red/green colourblind (memory owner-colorblind-delegate-visual-creative), so a
-        /// lit charge can never be "the orange one" - it is a filled bracket beside an
-        /// empty one. ASCII only.
-        /// <para>(!) The canonical mock draws three flames around the Heart symbol and
-        /// darkens a spent one. COLOUR AND ICON TREATMENT ARE THE OWNER'S CALL, NOT THE
-        /// IMPLEMENTER'S (WO-1379 section 4); this is the state model those visuals bind
-        /// to, and it reads correctly with no art at all.</para>
+        /// The legacy ASCII rendering retained for logs and traces. Player-facing surfaces bind
+        /// <see cref="FlameStates"/> to the owner-selected flame sprite instead of painting these
+        /// brackets. ASCII remains useful in evidence where image state cannot be serialized.
         /// </summary>
         public static string FlameRow(int charges, int maxCharges)
+        {
+            bool[] states = FlameStates(charges, maxCharges);
+            var sb = new System.Text.StringBuilder(states.Length * 4);
+            for (int i = 0; i < states.Length; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(states[i] ? "[*]" : "[ ]");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// One state per charge slot: true is lit, false is spent. Inputs clamp to a non-empty
+        /// pool and to its ceiling so presentation code cannot build a ragged or surplus row.
+        /// </summary>
+        public static bool[] FlameStates(int charges, int maxCharges)
         {
             if (maxCharges < 1) maxCharges = 1;
             if (charges < 0) charges = 0;
             if (charges > maxCharges) charges = maxCharges;
 
-            var sb = new System.Text.StringBuilder(maxCharges * 4);
-            for (int i = 0; i < maxCharges; i++)
-            {
-                if (i > 0) sb.Append(' ');
-                sb.Append(i < charges ? "[*]" : "[ ]");
-            }
-            return sb.ToString();
+            var states = new bool[maxCharges];
+            for (int i = 0; i < states.Length; i++) states[i] = i < charges;
+            return states;
         }
 
         /// <summary>"Heartfire 2/3" - the count in words, for a badge that must fit.</summary>
