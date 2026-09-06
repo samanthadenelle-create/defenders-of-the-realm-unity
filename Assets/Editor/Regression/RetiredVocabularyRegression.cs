@@ -49,7 +49,9 @@ namespace DeNelle.Editor.Regression
         // same four the 2026-08-25 first run left as owner-owed prose.
         private static readonly Dictionary<string, int> KnownCopyDebt2026_08_25 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            { "Assets/Resources/Data/Canonical/guide-content.json:tips[]", 2 },
+            // 2026-09-05 WO-1416: the building_farm tip was rewritten to Stone, so the debt shrank
+            // 2 -> 1 (the remaining hit is the quests tip's "Crystals, Wood, Iron, Food" list).
+            { "Assets/Resources/Data/Canonical/guide-content.json:tips[]", 1 },
             { "Assets/Resources/Data/Canonical/quests.json:objectiveText", 1 },
             { "Assets/Resources/Data/Canonical/structures-catalog.json:description", 1 },
         };

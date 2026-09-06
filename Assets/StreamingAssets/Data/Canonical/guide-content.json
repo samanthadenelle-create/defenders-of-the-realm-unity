@@ -385,17 +385,17 @@
     },
     {
       "id": "building_farm",
-      "tab": "Farm",
-      "title": "Farm",
+      "tab": "Quarry",
+      "title": "Quarry",
       "status": "live",
       "body": [
-        "The Farm grows the wheat and apples the Heart wills into being, producing Food for the realm. Food is one of the core resources you spend on gear and upkeep.",
-        "Like the other resource buildings, the Farm upgrades along a yield path: each level produces more Food over time. It keeps your hero fed and your crafting and shops supplied.",
-        "A steady Farm means you are never stalled on Food when you want to craft or buy."
+        "The Quarry cuts the bedrock the Heart wills up beneath your town, producing Stone for the realm. Stone is one of the core resources your Barracks spends to grow your army.",
+        "Like the other resource buildings, the Quarry upgrades along a yield path: each level produces more Stone over time. It keeps your Barracks climbing and your army growing.",
+        "A steady Quarry means you are never stalled on Stone when you want to train or upgrade."
       ],
       "tips": [
-        "Food feeds crafting and many gear purchases; do not let it run dry.",
-        "Upgrade the Farm to keep pace with your spending.",
+        "Stone pays for Barracks upgrades and the troops they unlock; do not let it run dry.",
+        "Upgrade the Quarry to keep pace with your spending.",
         "Resource buildings work best upgraded together."
       ]
     },

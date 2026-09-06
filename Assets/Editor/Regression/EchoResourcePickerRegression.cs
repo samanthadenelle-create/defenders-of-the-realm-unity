@@ -440,9 +440,21 @@ namespace DeNelle.Editor
                 Fail($"iron's needed building resolved to '{ironName}', which names the WEAPONS shop " +
                      $"'{weaponShopName}' (role '{DeNelle.Core.Catalog.StructureRole.Weaponsmith}') — the " +
                      "name inversion is back: the player would be sent to build a weapons roof to mine iron.");
+            // WO-1416 (owner 2026-09-05: "quarry pays stone"): the stored slot is still the
+            // persisted HarvestResource.Food / collectorBuildingId "farm", but the player's word is
+            // the STONE-PRODUCER role row's displayName ("Quarry") - read off the role table like
+            // the armorer check above, never a literal, so the next rename carries this oracle too.
+            string stoneShopName = DeNelle.Core.Catalog.StructureRoles
+                .By[DeNelle.Core.Catalog.StructureRole.StoneProducer].DisplayName;
             string foodName = EchoCardVM.NeededBuildingDisplayName("farm");
-            if (foodName != "Farm")
-                Fail($"food's needed building resolved to '{foodName}' (expected canon 'Farm')");
+            if (string.IsNullOrEmpty(stoneShopName))
+                Fail($"NO catalog row claims role '{DeNelle.Core.Catalog.StructureRole.StoneProducer}' - the " +
+                     "stone faucet's NEEDS cue has no building to name.");
+            else if (!string.Equals(foodName, stoneShopName, StringComparison.OrdinalIgnoreCase))
+                Fail($"stone's needed building resolved to '{foodName}', expected the STONE-PRODUCER row " +
+                     $"'{stoneShopName}' (owner 2026-09-05: the Quarry pays Stone; 'Farm' is retired copy).");
+            else if (string.Equals(foodName, "Farm", StringComparison.OrdinalIgnoreCase))
+                Fail("stone's needed building still reads 'Farm' - retired word (WO-1416).");
             string woodName = EchoCardVM.NeededBuildingDisplayName("lumbermill");
             if (string.IsNullOrEmpty(woodName) || !woodName.StartsWith("Lumber", StringComparison.Ordinal))
                 Fail($"wood's needed building resolved to '{woodName}' (expected the canon 'Lumber Mill' family)");

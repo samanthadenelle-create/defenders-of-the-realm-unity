@@ -76,9 +76,26 @@ namespace DeNelle.Core.Catalog
         /// <summary>Crafting station — NOT a vendor (holds no vendors.json row).</summary>
         public const string CraftingStation = "crafting_station";
 
-        // ── The resource faucets. Code branches on these (the Echo harvest gate) ──
-        /// <summary>The FOOD faucet.</summary>
-        public const string FoodProducer = "food_producer";
+        // -- The resource faucets. Code branches on these (the Echo harvest gate) --
+        /// <summary>
+        /// The STONE faucet - the row id <c>collector_farm</c>, displayName "Quarry".
+        /// <para>WO-1416, owner ruling 2026-09-05, verbatim: "quarry pays stone" and
+        /// "the farm was retired nothiong uses food, was replaced by stone which actually
+        /// has uses". The catalog row already authored <c>"role": "stone_producer"</c>
+        /// (structures-catalog.json:1087) while the ONLY constant here still said
+        /// <c>food_producer</c> - a role NO row claims - so every call site resolved to
+        /// null and fell back to a literal: BuildingInteractable printed the generic
+        /// "Building" and CastleVendorNpcInjector printed the retired proper noun "Farm".
+        /// That is why one building answered to three different words.</para>
+        /// <para>STOP - THE CATALOG ID DOES NOT MOVE. <c>collector_farm</c> is a LIVE SAVE KEY
+        /// (everBuiltStructureIds / BaseLayout / baked twins); only the ROLE and the
+        /// RESOURCE changed. Likewise <c>HarvestResource.Food</c> stays as the frozen
+        /// persisted Stone wallet slot - see ResourceBuildingProgression.LabelFor.</para>
+        /// <para>The retired <c>FoodProducer = "food_producer"</c> constant is DELETED
+        /// rather than kept: a named role that no row claims is a trap that resolves to
+        /// null in silence, which is the exact defect WO-1416 fixed.</para>
+        /// </summary>
+        public const string StoneProducer = "stone_producer";
         /// <summary>The WOOD faucet.</summary>
         public const string WoodProducer = "wood_producer";
         /// <summary>The IRON faucet.</summary>

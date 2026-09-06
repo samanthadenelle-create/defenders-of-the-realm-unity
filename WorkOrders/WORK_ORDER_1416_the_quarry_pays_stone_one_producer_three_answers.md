@@ -1,6 +1,6 @@
 # WO-1416: the Quarry pays Stone - one building currently gives three different answers
 
-**Status:** READY TO IMPLEMENT - OWNER RULED 2026-09-05: "quarry pays stone"
+**Status:** FIXED 2026-09-05 21:45 - code + guide + canon-strings landed, oracles moved with the ruling, COMPILE_GATE_OK + REGRESSION_OK 385/385; art question open (RESULT file); device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - OWNER RULED 2026-09-05: "quarry pays stone")*
 
 ## Owner, verbatim (2026-09-05 10:1x-10:2x)
 > "we need to put a stone collector instead" ... "can you look in the assets and see if we have

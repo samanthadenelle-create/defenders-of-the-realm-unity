@@ -177,7 +177,8 @@ namespace DeNelle.Village.Buildings.Progression
                 // A never-built id accrues NOTHING - not even elapsed time, so a town
                 // founded an hour into the session cannot bank a phantom backlog.
                 var collector = ResourceCollectorRegistry.Get(id);
-                bool gateOpen = MayHarvest(CatalogIdsForBuilding(id), EverBuiltIds(), collector != null);
+                var catalogIds = CatalogIdsForBuilding(id);
+                bool gateOpen = MayHarvest(catalogIds, EverBuiltIds(), collector != null);
                 if (_lastGate[i] != (gateOpen ? 1 : 0))
                 {
                     _lastGate[i] = gateOpen ? 1 : 0;
@@ -185,6 +186,7 @@ namespace DeNelle.Village.Buildings.Progression
                         $"existence gate {(gateOpen ? "OPEN" : "CLOSED")} for '{id}' " +
                         $"(liveCollector={(collector != null ? "yes" : "no")}, everBuilt=[{EverBuiltJoined()}]) - " +
                         (gateOpen ? "this id may tick" : "NEVER BUILT, so it earns nothing (phantom-income gate)"));
+                    TraceYieldMap(id, def, catalogIds);
                 }
                 if (!gateOpen)
                 {
@@ -253,7 +255,12 @@ namespace DeNelle.Village.Buildings.Progression
 
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("Harvest", "no-live-collector-" + id, 10f,
                     $"'{id}' is in the ever-built ledger but NO ResourceCollector is registered - " +
-                    $"{amount} {def.Yields} HELD (not lost) this tick; the interval is preserved and " +
+                    // WO-1416: the WORD, never the raw enum. `def.Yields` ToString()s the frozen
+                    // persisted slot name ("Food") while every other surface - the welcome-back
+                    // popup, the collect result, the upgrade panel - reads the SAME value through
+                    // ResourceBuildingProgression.LabelFor and says "Stone". That skipped label
+                    // step is the whole reason one building answered in two words.
+                    $"{amount} {ResourceBuildingProgression.LabelFor(def.Yields)} HELD (not lost) this tick; the interval is preserved and " +
                     "pays when a collector registers. A standing building with no collector component " +
                     "is still a wiring bug; income is never granted straight to the wallet.");
             }
@@ -421,6 +428,38 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var s = DeNelle.Core.State.GameStateService.Instance?.State;
             return s?.EverBuiltStructureIds ?? (IReadOnlyList<string>)System.Array.Empty<string>();
+        }
+
+        /// <summary>
+        /// WO-1416 - ONE line that reads all three of this building's answers from their
+        /// real sources at once, so a capture can never again show three different words
+        /// for one building without saying so:
+        /// <code>[Flow:Harvest] yield map: collector_farm -> Stone (role=Quarry)</code>
+        /// <list type="bullet">
+        /// <item>the catalog id - <see cref="CatalogIdsForBuilding"/>, i.e. the row whose
+        /// <c>repo.collectorBuildingId</c> claims this progression id;</item>
+        /// <item>the RESOURCE WORD - <c>ResourceBuildingProgression.Find(id).Yields</c> put
+        /// through <c>LabelFor</c>. That pair is the SINGLE producer: the tick above, the
+        /// collector (<c>ResourceCollector.ResolveResource</c>) and the offline/welcome-back
+        /// summary (<c>ResourceCollectorService.PendingByResource</c>) all read it and
+        /// nothing else re-derives it;</item>
+        /// <item>the ROLE WORD - the catalog row's own <c>role</c> resolved through
+        /// <c>StructureRoles</c>, which is what the building's tile and its NPC print.</item>
+        /// </list>
+        /// <c>&lt;unresolved&gt;</c> for the role is a REAL finding, not noise: it means no row
+        /// claims that role (exactly what "food_producer" had become before this WO), and the
+        /// player-facing word has silently fallen back to a literal.
+        /// Edge-triggered via the gate trace and <c>FlowTrace.Once</c>, so it costs
+        /// one line per id per session, never a per-frame wall.
+        /// </summary>
+        private static void TraceYieldMap(string buildingId, ResourceBuildingDef def, IReadOnlyList<string> catalogIds)
+        {
+            if (def == null) return;
+            string catalogId = (catalogIds != null && catalogIds.Count > 0) ? catalogIds[0] : "<none>";
+            string role = DeNelle.Core.Catalog.StructureRoles.RoleOf(catalogId);
+            string roleWord = DeNelle.Core.Catalog.StructureRoles.By[role].DisplayName ?? "<unresolved>";
+            DeNelle.Core.Diagnostics.FlowTrace.Once("Harvest", "yield-map-" + buildingId,
+                $"yield map: {catalogId} -> {ResourceBuildingProgression.LabelFor(def.Yields)} (role={roleWord})");
         }
 
         /// <summary>Ledger contents for the edge-triggered gate trace (never per-frame).</summary>

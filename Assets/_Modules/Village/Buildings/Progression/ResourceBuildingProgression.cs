@@ -240,11 +240,17 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var dict = new Dictionary<string, ResourceBuildingDef>();
 
-            // Farm — produces Food. Upgraded with Wood + Crystals (you spend the
-            // other harvestables to grow your food output). 5 levels.
+            // QUARRY - produces STONE. Upgraded with Wood + Crystals (you spend the
+            // other harvestables to grow its output). 5 levels.
+            // STOP - WO-1416, owner ruling 2026-09-05: "quarry pays stone" / "the farm was
+            // retired nothiong uses food, was replaced by stone which actually has uses".
+            // The building id stays "farm" and the enum member stays HarvestResource.Food
+            // because BOTH are live persisted keys (PlayerPrefs level keys, the catalog's
+            // repo.collectorBuildingId, GameState.Resources.Food). Food IS the Stone wallet
+            // slot - LabelFor is the one place that turns it into the player's word.
             // WO-855 Phase 5: yield 20/+12 -> 13/+4 and baseCost 85 -> 130. See the
             // HarvestIntervalByLevel note: the faucet, not the sinks, was the runaway.
-            // Per-hour at x1 echo / no perks: L1 936, L3 2,160, L5 5,220 food.
+            // Per-hour at x1 echo / no perks: L1 936, L3 2,160, L5 5,220 stone.
             dict[FarmId] = MakeBuilding(
                 FarmId, "Quarry", HarvestResource.Food,
                 baseYield: 13, yieldStep: 4,

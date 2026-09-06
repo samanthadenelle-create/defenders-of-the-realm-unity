@@ -134,10 +134,12 @@ namespace DeNelle.Village
                     // player reads is the catalog's ("Lumber Mill", off collector_lumbermill).
                     return new Vendor { BodyRes = BodyPeasantB, StructureId = "lumbermill",   Label = RoleWord(StructureRole.WoodProducer, "Lumber Mill"), Arch = TownsfolkDialogue.Archetype.Villager };
                 case "windmill":
-                    // StructureId "farm" is the DIALOGUE key and stays. The label used to read
-                    // "Windmill" while the tile it anchors to (collector_farm) says "Farm" —
-                    // the catalog settles it.
-                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "farm",         Label = RoleWord(StructureRole.FoodProducer, "Farm"),   Arch = TownsfolkDialogue.Archetype.Villager };
+                    // StructureId "farm" is the DIALOGUE key and stays - a live key, not a word.
+                    // The catalog settles the word, and as of WO-1416 (owner 2026-09-05 "quarry
+                    // pays stone" / "the farm was retired nothiong uses food") that word is
+                    // "Quarry". This named StructureRole.FoodProducer, a role NO row claims, so
+                    // the null fallback printed the retired proper noun "Farm" on the NPC label.
+                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "farm",         Label = RoleWord(StructureRole.StoneProducer, "Quarry"), Arch = TownsfolkDialogue.Archetype.Villager };
                 case "echohollow":
                     // No catalog row claims a role for the Echo Hollow yet — word stays local.
                     return new Vendor { BodyRes = BodyPeasantA, StructureId = "pet-house",    Label = "Echo Hollow", Arch = TownsfolkDialogue.Archetype.Villager };

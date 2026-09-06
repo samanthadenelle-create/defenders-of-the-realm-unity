@@ -114,6 +114,10 @@ namespace DeNelle.Editor.Regression
         private const string StructuresRes = "Assets/Resources/Data/Canonical/structures-catalog.json";
         private const string StructuresSA = "Assets/StreamingAssets/Data/Canonical/structures-catalog.json";
         private const string StepsRes = "Assets/Resources/Data/Canonical/tutorial/tutorial-steps.json";
+        // WO-1416 [quarry-pays-stone] targets - the three surfaces that must agree.
+        private const string RoleSrc = "Assets/_Modules/Core/Catalog/StructureRole.cs";
+        private const string InteractableSrc = "Assets/_Modules/Village/Buildings/BuildingInteractable.cs";
+        private const string VendorNpcSrc = "Assets/_Modules/Village/NPCs/CastleVendorNpcInjector.cs";
 
         // =====================================================================
 
@@ -144,6 +148,7 @@ namespace DeNelle.Editor.Regression
             Case(failures, "configure-rekeys", () => Case13_ConfigureRekeys(failures, notes));
             Case(failures, "popup-and-result-agree", () => Case14_PopupAndResultAgree(failures, notes));
             Case(failures, "overflow-stays-pending", () => Case15_OverflowStaysPending(failures, notes));
+            Case(failures, "quarry-pays-stone", () => Case16_QuarryPaysStone(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count > 0)
@@ -163,7 +168,9 @@ namespace DeNelle.Editor.Regression
                      "and is bounded by capacity, the last-accrual stamp advances even AT CAP (no frozen " +
                      "backlog), capacity is expressed in HOURS so fill time is level- and echo-invariant at " +
                      "~8h, no collector opens a crystal faucet, Configure re-keys the registry, and the " +
-                     "collector FULL tell is wired with a coalesced toast" + noteStr;
+                     "collector FULL tell is wired with a coalesced toast. AND (WO-1416): the Quarry " +
+                     "pays STONE in all three of its answers - the role word, the harvest tick and the " +
+                     "offline/welcome-back summary - off ONE producer" + noteStr;
             return true;
         }
 
@@ -1067,6 +1074,175 @@ namespace DeNelle.Editor.Regression
             return l1.YieldPerTick * Math.Max(0f, l1.YieldSizeMultiplier) * (3600.0 / l1.HarvestInterval);
         }
 
+        // =====================================================================
+        //  CASE 16 - WO-1416: the QUARRY pays STONE, and all three answers come
+        //  from the SAME producer.
+        // ---------------------------------------------------------------------
+        //  MEASURED DEFECT (owner device 2026-09-05, WO-1416): one building, three
+        //  words. The catalog row `collector_farm` already read displayName "Quarry",
+        //  description "Extracts Stone", role "stone_producer" - but
+        //    * the only C# role constant said StructureRole.FoodProducer =
+        //      "food_producer", a role NO row claims, so StructureRoles resolved NULL
+        //      and each caller fell back to a literal: BuildingInteractable printed the
+        //      generic "Building" and CastleVendorNpcInjector printed the RETIRED proper
+        //      noun "Farm"; and
+        //    * the harvest tick printed the RAW ENUM (`{def.Yields}` -> "Food") while the
+        //      welcome-back popup put the SAME value through
+        //      ResourceBuildingProgression.LabelFor and printed "Stone".
+        //  Owner rulings this pins: "quarry pays stone" and "the farm was retired
+        //  nothiong uses food, was replaced by stone which actually has uses".
+        //
+        //  STOP - THE RESOURCE ALWAYS HAD EXACTLY ONE PRODUCER and still does:
+        //  ResourceBuildingProgression.Find(id).Yields. The tick, ResourceCollector
+        //  .ResolveResource and ResourceCollectorService.PendingByResource all read it;
+        //  nothing re-derives it. What diverged was the LABEL STEP and the ROLE NAME, so
+        //  this case pins the three READ SITES, not a new map.
+        //
+        //  STOP - AND IT PINS WHAT MUST NOT MOVE: the id `collector_farm` and the enum member
+        //  HarvestResource.Food are LIVE PERSISTED KEYS. Food IS the Stone wallet slot
+        //  (LabelFor). A HarvestResource.Food site in C# is a STONE site - never "fix" it.
+        //
+        //  NAMED MUTATION (the one-line proof this case discriminates): in
+        //  ResourceBuildingHarvester.cs revert the HELD trace to `{def.Yields}` - check
+        //  [tick-word] fails. Equally: put StructureRole.FoodProducer back at
+        //  BuildingInteractable's BuildingType.Farm arm - check [role-word] fails.
+        // =====================================================================
+
+        private static void Case16_QuarryPaysStone(List<string> failures, List<string> notes)
+        {
+            const string Tag = "[quarry-pays-stone] ";
+
+            // -- 1. the role constant names the role the CATALOG actually authors -------
+            string roleRaw = ReadText(RoleSrc, failures);
+            if (roleRaw != null)
+            {
+                string role = StripComments(roleRaw);
+                if (!role.Contains("StoneProducer = \"stone_producer\""))
+                    failures.Add(Tag + "StructureRole has no StoneProducer = \"stone_producer\" constant - " +
+                                 "the collector_farm row authors role 'stone_producer', so without this constant " +
+                                 "every caller names a role no row claims and silently resolves to null");
+                if (Regex.IsMatch(role, @"FoodProducer\s*="))
+                    failures.Add(Tag + "StructureRole still declares FoodProducer - no catalog row claims " +
+                                 "'food_producer' (the Quarry authors 'stone_producer'), and a named role nothing " +
+                                 "claims is the exact trap WO-1416 removed: it resolves to null in silence and the " +
+                                 "player-facing word falls back to a literal");
+            }
+
+            // -- 2. the ROLE WORD: the building's own tile ------------------------------
+            string interRaw = ReadText(InteractableSrc, failures);
+            if (interRaw != null)
+            {
+                string inter = StripComments(interRaw);
+                // Anchor on the WORD switch (LabelFor). The file carries three other
+                // BuildingType.Farm arms (structure id, panel, progression id) and none of them
+                // names a role - matching the wrong one would make this check vacuous.
+                int labelSwitch = inter.IndexOf("LabelFor(BuildingType t)", StringComparison.Ordinal);
+                if (labelSwitch < 0)
+                {
+                    failures.Add(Tag + "BuildingInteractable has no LabelFor(BuildingType t) - the tile's " +
+                                 "word switch moved; re-point this oracle");
+                    labelSwitch = 0;
+                }
+                var m = Regex.Match(inter.Substring(labelSwitch), @"BuildingType\.Farm\s*=>[^,\r\n]*");
+                if (!m.Success)
+                    failures.Add(Tag + "BuildingInteractable has no BuildingType.Farm arm in LabelFor - " +
+                                 "the tile's word moved; re-point this oracle");
+                else
+                {
+                    if (m.Value.Contains("FoodProducer"))
+                        failures.Add(Tag + "BuildingInteractable's BuildingType.Farm arm still asks for " +
+                                     "StructureRole.FoodProducer - that role is unclaimed, so the Quarry tile reads " +
+                                     "the generic \"Building\" fallback (owner ruling: quarry pays stone)");
+                    if (!m.Value.Contains("StoneProducer"))
+                        failures.Add(Tag + "BuildingInteractable's BuildingType.Farm arm does not read " +
+                                     "StructureRole.StoneProducer - the word must come from the row that claims the " +
+                                     "role ('Quarry'), never from a literal typed into that file");
+                }
+            }
+
+            // -- 3. the NPC label: no surface may still say "Farm" ---------------------
+            string vendorRaw = ReadText(VendorNpcSrc, failures);
+            if (vendorRaw != null)
+            {
+                string vendor = StripComments(vendorRaw);
+                if (vendor.Contains("\"Farm\""))
+                    failures.Add(Tag + "CastleVendorNpcInjector still carries the player-facing literal \"Farm\" - " +
+                                 "the farm is RETIRED (owner 2026-09-05); the Quarry's NPC label falls back to that " +
+                                 "word whenever the catalog has not loaded");
+                if (!vendor.Contains("StructureRole.StoneProducer"))
+                    failures.Add(Tag + "CastleVendorNpcInjector's windmill/farm vendor does not read " +
+                                 "StructureRole.StoneProducer - its label resolves to null and prints its literal");
+            }
+
+            // -- 4. the HARVEST TICK: the WORD, not the raw enum -----------------------
+            string harvRaw = ReadText(HarvesterSrc, failures);
+            if (harvRaw != null)
+            {
+                string harv = StripComments(harvRaw);
+                if (Regex.IsMatch(harv, @"\{\s*def\.Yields\s*\}"))
+                    failures.Add(Tag + "the harvest tick still interpolates the RAW enum {def.Yields} - it " +
+                                 "ToString()s the frozen persisted slot name (\"Food\") while every other surface " +
+                                 "puts the SAME value through ResourceBuildingProgression.LabelFor and says " +
+                                 "\"Stone\". That skipped label step is the divergence WO-1416 closed");
+                if (!harv.Contains("LabelFor(def.Yields)"))
+                    failures.Add(Tag + "the harvest tick does not word its payout through " +
+                                 "ResourceBuildingProgression.LabelFor(def.Yields) - the tick and the welcome-back " +
+                                 "popup must read the one producer through the one label");
+                if (!harv.Contains("yield map:"))
+                    failures.Add(Tag + "the harvester emits no '[Flow:Harvest] yield map: <catalogId> -> <word> " +
+                                 "(role=<word>)' line - a capture cannot prove the three answers agree " +
+                                 "(CLAUDE.md sec.12: instrument, do not guess)");
+            }
+
+            // -- 5. DATA SANITY (green today; keeps the pin honest if the row moves) ----
+            var farmDef = ResourceBuildingProgression.Find(ResourceBuildingProgression.FarmId);
+            if (farmDef == null)
+                failures.Add(Tag + "ResourceBuildingProgression has no '" + ResourceBuildingProgression.FarmId +
+                             "' building - the one resource producer lost the Quarry's row");
+            else
+            {
+                string word = ResourceBuildingProgression.LabelFor(farmDef.Yields);
+                if (!string.Equals(word, "Stone", StringComparison.Ordinal))
+                    failures.Add(Tag + "the ONE producer words '" + ResourceBuildingProgression.FarmId +
+                                 "' as '" + word + "', not 'Stone' - owner ruling 2026-09-05 'quarry pays stone'. " +
+                                 "(HarvestResource.Food is the FROZEN persisted Stone slot; fix LabelFor or the " +
+                                 "row's Yields, never the enum member - it is a live save key)");
+            }
+
+            foreach (string path in new[] { StructuresRes, StructuresSA })
+            {
+                string raw = ReadText(path, failures);
+                if (raw == null) continue;
+                var entries = JObject.Parse(raw)["entries"] as JArray;
+                if (entries == null)
+                {
+                    failures.Add(Tag + path + " has no 'entries' array");
+                    continue;
+                }
+                JToken row = null;
+                foreach (var e in entries)
+                    if (string.Equals((string)e["id"], "collector_farm", StringComparison.Ordinal)) { row = e; break; }
+                if (row == null)
+                {
+                    failures.Add(Tag + path + " has no 'collector_farm' row - that id is a LIVE SAVE KEY " +
+                                 "(everBuiltStructureIds / BaseLayout / bakedTwins) and must never be renamed");
+                    continue;
+                }
+                if (!string.Equals((string)row["role"], "stone_producer", StringComparison.OrdinalIgnoreCase))
+                    failures.Add(Tag + path + ": collector_farm authors role '" + ((string)row["role"] ?? "<none>") +
+                                 "', not 'stone_producer' - the role word, the tile and the NPC all resolve through it");
+                if (!string.Equals((string)row["displayName"], "Quarry", StringComparison.Ordinal))
+                    failures.Add(Tag + path + ": collector_farm displayName is '" +
+                                 ((string)row["displayName"] ?? "<none>") + "', not 'Quarry'");
+                string desc = (string)row["description"] ?? "";
+                if (desc.IndexOf("Stone", StringComparison.OrdinalIgnoreCase) < 0)
+                    failures.Add(Tag + path + ": collector_farm description does not name Stone ('" + desc + "')");
+                if (row["_quarryNote"] == null)
+                    notes.Add("collector_farm carries no _quarryNote in " + path +
+                              " - the 2026-09-05 ruling is not recorded where the next seat reads it");
+            }
+        }
+
         private static string ReadText(string path, List<string> failures)
         {
             if (!File.Exists(path))
@@ -1083,11 +1259,55 @@ namespace DeNelle.Editor.Regression
         }
 
         /// <summary>Strips // and block comments so a lint can never be satisfied by prose.</summary>
+        /// <summary>
+        /// Strips comments, keeping string literals (the "Farm" check below needs them).
+        ///
+        /// ⛔ SINGLE PASS, IN LEXICAL ORDER - and that is the whole point of this rewrite
+        /// (2026-09-05, WO-1416). The regex pair this replaced ran the BLOCK pattern FIRST:
+        ///     Regex.Replace(src, @"/\*.*?\*\/", " ", Singleline)   // then //...
+        /// so a `//` LINE comment containing the two characters `/` `*` opened a block that ran
+        /// to the next `*` `/` anywhere in the file and DELETED everything between them.
+        /// `CastleVendorNpcInjector.cs:92` is exactly that - a line comment ending
+        /// `Resources/Portraits/*):` - and the next `*/` is `/*wander*/` at :1080, so ~988 lines
+        /// vanished, including the very `StructureRole.StoneProducer` this suite then reported as
+        /// missing. The code was right and the oracle was wrong: a FALSE RED, which is as
+        /// expensive as a false green because it sends the next seat to fix working code.
+        /// The same shape red the WallAdjacency wiring suite earlier the same day
+        /// (a comment carrying `logs/device/*.log`).
+        ///
+        /// A char-by-char walk cannot have that bug: whichever of `//` or `/*` is reached first
+        /// consumes its own comment and nothing else. `SourceLint.StripCommentsAndLiterals` is
+        /// the same shape and would be the shared home for this, but it also empties literals,
+        /// which this suite's "Farm" assertion depends on.
+        /// </summary>
         private static string StripComments(string src)
         {
             if (string.IsNullOrEmpty(src)) return string.Empty;
-            string noBlock = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);
-            return Regex.Replace(noBlock, @"//[^\r\n]*", " ");
+            var sb = new System.Text.StringBuilder(src.Length);
+            for (int i = 0; i < src.Length; i++)
+            {
+                char c = src[i];
+                char n = i + 1 < src.Length ? src[i + 1] : '\0';
+                if (c == '/' && n == '/')
+                {
+                    while (i < src.Length && src[i] != '\n') i++;
+                    if (i < src.Length) sb.Append('\n');
+                    continue;
+                }
+                if (c == '/' && n == '*')
+                {
+                    i += 2;
+                    while (i < src.Length && !(src[i] == '*' && i + 1 < src.Length && src[i + 1] == '/'))
+                    {
+                        if (src[i] == '\n') sb.Append('\n');
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
     }
 }

@@ -716,7 +716,11 @@ namespace DeNelle.Village
         {
             // ── Roles the catalog authors: the word comes from the row, never from here ──
             BuildingType.Workshop    => RoleWord(StructureRole.CraftingStation), // id "workshop"   -> "Crafting Station"
-            BuildingType.Farm        => RoleWord(StructureRole.FoodProducer),      // id "collector_farm"
+            // WO-1416 (owner 2026-09-05 "quarry pays stone"): the row id is still the live
+            // save key "collector_farm", but its authored role is stone_producer and its
+            // displayName is "Quarry". This used to name StructureRole.FoodProducer - a role
+            // NO catalog row claims - so RoleWord resolved null and this tile read "Building".
+            BuildingType.Farm        => RoleWord(StructureRole.StoneProducer),    // id "collector_farm" -> "Quarry"
             BuildingType.Lumbermill  => RoleWord(StructureRole.WoodProducer),      // id "collector_lumbermill" -> "Lumber Mill"
             BuildingType.Forge       => RoleWord(StructureRole.Weaponsmith),     // id "forge" (SELLS WEAPONS)
             BuildingType.Armorer     => RoleWord(StructureRole.Armorer),         // id "armorer" (SELLS ARMOUR)
