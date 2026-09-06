@@ -30,6 +30,16 @@ Frozen point-in-time ledger. Written 23:2x before the owner's reboot, so the res
 | `5661d71e4` | WO-1404 Journey deck subtitles carry state (Codex; Core VM, change-only publisher) |
 | `458baf57f` | WO-1413 part 1 copy hygiene (Codex; Pause reverted per ruling) |
 | `f4c6e27dc` | board + courier files (s8.10 polish rework, s8.11 new base) |
+| `295c12bba` | this handover (first cut) |
+| `97918f627` | `CLI_SESSION_PLAYBOOK.md` - the executed per-session script with a receipt per step (owner directive) |
+| `73a31b67a` | WO-1418 POLISH - the six defects from the first frames (Codex s8.10; tier-sheet route deviation accepted) |
+| `9ec35ed52` | WO-1413 part 2 - fixture verbs, live combat skill faces, CopyHygieneRegression (lead corrected its retired-pet scan) |
+| `b9a9e3166` | board + courier files (s8.12) - **HEAD at the reboot call** |
+
+Final gate on that HEAD: `COMPILE_GATE_OK` (`Builds/c13` 23:51), `REGRESSION_OK 390/390` (`Builds/r14` 23:54),
+`MANAGE_OPERATIONAL_CAPTURE_OK 12/12` (`capman2` 23:49), `UI_CAPTURE_OK 91` (`cap7` 23:56),
+`ADAPTIVE_HUD_CAPTURE_OK 9/9` (`caphud2` 23:57). Commit charge at the call: 106.2 / 115.8 GB. Codex's s8.10 and
+1413 part 2 are LANDED - the dev lane has nothing in flight; its next items are in PART 8 s8.12 / section 4 below.
 
 Every commit was gated on a fresh log before it landed: the last full run is `COMPILE_GATE_OK` (`Builds/c11` 23:13),
 `REGRESSION_OK 389/389` (`Builds/r12` 23:15), `UI_CAPTURE_OK 91` (`Builds/cap6` 23:16),
