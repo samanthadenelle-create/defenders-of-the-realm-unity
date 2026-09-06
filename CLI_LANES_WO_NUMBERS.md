@@ -180,7 +180,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI, seventy-third pass): main line next free = **1418**.
+> ## RECONCILED 2026-09-05 (CLI, seventy-fifth pass): main line next free = **1420**.
+> *(CLI minted **1419** - the Heartfire plate paints flame ICONS, not `[*] [ ]` ASCII pips (owner: "i hate those [*] items when we should use some icon, we have over 4000"); Codex tail, after the 1407 commit. Bumped 1419 -> 1420 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI, seventy-fourth pass): main line next free = **1419**.
+> *(CLI minted **1418** - Manage - Buildings re-layout to the owner's mockup (portrait list + selected card + BUILDING NOW; absorbs 1405's benefit line, 1406, 1412); dispatched to Codex via BATCH_STATE PART 8. Bumped 1418 -> 1419 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI, seventy-third pass): main line next free = **1418**.
 > *(CLI minted **1417** - the build palette item cards are flat navy boxes inside the medieval frame, with `COST: NO COST` and `[READY] AVAILABLE`; owner live screen 10:34. Bumped 1417 -> 1418 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-05 (CLI, seventy-second pass): main line next free = **1417**.

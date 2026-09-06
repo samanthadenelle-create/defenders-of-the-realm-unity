@@ -627,3 +627,116 @@ run the relevant offline/content regression plus compile gate, then rebuild the 
   unchanged` and `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
 - Firebase App Distribution succeeded to `testers`: release `2026.09.01.351290`, ID
   `46rbucqgcr04g`.
+
+---
+
+## PART 8 - THE MANAGE RE-LAYOUT BATCH + the file-disjoint READY tail (2026-09-05 evening, CLI lead)
+
+### 8.1 What this batch is
+Owner, 2026-09-05 evening, verbatim: *"i want tonight to be a focus on the UI layout that we have. I dont love it. Think
+of Clash of clans and warcraft, this is too much text on screen whereas they are simple and intuitive"* - *"manage is the
+big offender"* - *"we can reuse the building cards from build"* - *"feel free to hand as much to Codex as you want"*.
+Her two mockups (Manage - Buildings, Manage - Troops) are the approved target; the Troops tab already has that shape
+in the tree (WO-1382, `65d5a7eae`). PART 1-6 and 7.2-7.3 of this file still bind. Every file:line cited in the work
+orders was read at `44d46128d`; **re-read at your base commit before you rely on a number** (CLAUDE.md s11B).
+
+**BASE COMMIT: `44d46128d` (GO - lead ruling 2026-09-05 evening).** The tree-closing commits that land tonight
+(WO-1416 / 1417 / 1402 / 1403 / 1407) touch NONE of the 1418 lane files, so the dev lane starts now from this HEAD and
+the lead reconciles its hand-back three-way onto the newer HEAD by explicit path. The ONE exception is **WO-1404**,
+which shares `Assets/_Modules/Village/Buildings/BuildTimerService.cs` with the in-house 1407 lane: start it LAST, or
+after the lead posts the post-commit hash here.
+**LOCKED FILES (main-tree `git status --short -- Assets/` at go - every one is in flight, do not edit any of them):**
+```
+Assets/Editor/Regression/BuildCollectionPlayerRegression.cs   Assets/Editor/Regression/CollectorIncomeRegression.cs
+Assets/Editor/Regression/DataRegression.cs                    Assets/Editor/Regression/EchoResourcePickerRegression.cs
+Assets/Editor/Regression/HudLabelFitRegression.cs             Assets/Editor/Regression/RetiredVocabularyRegression.cs
+Assets/Editor/Regression/RaidSelectionSpoilsRegression.cs (new)
+Assets/Resources/Data/Canonical/{canon-strings,guide-content,structures-catalog}.json  + StreamingAssets twins
+Assets/_Modules/Core/Catalog/StructureRole.cs                 Assets/_Modules/Core/UI/ElarionUi.cs
+Assets/_Modules/Core/UI/QueueRailView.cs                      Assets/_Modules/Core/UI/RaidEntryGate.cs
+Assets/_Modules/Core/HudModel/HudStateCopy.cs (new)           Assets/_Modules/HUD/Kit/HudKitController.cs
+Assets/_Modules/Village/BuildMode/BuildCollectionBrowser.cs   Assets/_Modules/Village/Buildings/BuildTimerService.cs
+Assets/_Modules/Village/Buildings/BuildingInteractable.cs     Assets/_Modules/Village/Buildings/Progression/ResourceBuildingHarvester.cs
+Assets/_Modules/Village/Buildings/Progression/ResourceBuildingProgression.cs
+Assets/_Modules/Village/Catalog/Generated/CatalogFallbackData.g.cs
+Assets/_Modules/Village/Hero/RaidSelectionScreen.cs           Assets/_Modules/Village/Hero/RaidSelectionVM.cs
+Assets/_Modules/Village/Hero/RaidDeployScreen.cs              Assets/_Modules/Village/Hero/RaidDeployVM.cs
+Assets/_Modules/Village/NPCs/CastleVendorNpcInjector.cs       Assets/_Modules/Village/Troops/RaidScoring.cs
+Assets/_Modules/Village/Waves/WaveCountdownUI.cs
+```
+`BuildCollectionBrowser.cs` is on that list on purpose: lane A READS it to copy `AddGoldPerimeter`; it does not edit it.
+
+**UPDATE 22:05 - three lanes COMMITTED: `4ed44db76` (WO-1416), `15ca64163` (WO-1417), `04dec910a` (WO-1407).** The
+following files are therefore UNLOCKED and at their final shape for tonight - re-read them at `04dec910a` or later:
+`HudKitController.cs`, `BuildTimerService.cs`, `HudActionBarModel.cs`, `HudStateCopy.cs`, `ElarionUi.cs`,
+`QueueRailView.cs`, `RaidEntryGate.cs`, `WaveCountdownUI.cs`, `BuildCollectionBrowser.cs`, `StructureRole.cs`, the
+three canonical JSON pairs, and the 1416/1417 suites. **WO-1404 and WO-1419 may start now** (base `04dec910a`).
+Still LOCKED (in flight, a lane is fixing two capture findings): `RaidDeployScreen.cs`, `RaidDeployVM.cs`,
+`RaidSelectionScreen.cs`, `RaidSelectionVM.cs`, `RaidScoring.cs`, `DataRegression.cs`, the two raid suites.
+
+### 8.2 Assignments, in priority order
+Worktree per lane: `git -C D:\eoa worktree add D:\eoa-codex-1418-<lane> <BASE>` on branch `codex/wo-1418-<lane>`.
+No commit, no push, no Unity, no `DataRegression.cs` edits (hand registration lines back as text).
+
+1. **WO-1418 Manage - Buildings re-layout** - `WorkOrders/WORK_ORDER_1418_manage_buildings_relayout.md`, read it in
+   full; it carries the architecture ruling, the pin list, the `BuildingChoiceVM` field list and the ten RED-first
+   cases. Four lanes, file-disjoint:
+   - **Lane A** (Core kit): `Assets/_Modules/Core/UI/CostFormat.cs` + new `ElarionUiKitGoldPerimeter.cs` (+ .meta).
+   - **Lane B** (VM): `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs` only.
+   - **Lane C** (View + capture + suite): `Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs`,
+     `Assets/Editor/UICaptureLaunch.cs`, new `Assets/Editor/Regression/ManageBuildingsCardRegression.cs`.
+     Authors in parallel against the VM field list; compiles after B.
+   - **Lane D** (store return, WO-1412 store half + **WO-1409** in the same lane because both live in
+     `Assets/_Modules/Wallet/PackStore.cs`): store CLOSE returns to the sending Manage tab; the wallet-less Night Market
+     says WHY each shelf is unavailable and its right rail stops overlapping (`WorkOrders/WORK_ORDER_1409_*.md`).
+   The WO absorbs WO-1405's benefit line, WO-1406 and WO-1412; do not take those three separately.
+2. **WO-1404** Journey deck subtitles truncate and carry no state - `Assets/_Modules/Core/HudModel/PostureSignals.cs`,
+   `Assets/_Modules/Village/Buildings/BuildTimerService.cs` (+ whatever the WO names). Disjoint from lane A-D.
+3. **WO-1410** Hero screens carry four names for two screens; WISDOM unexplained; Loadout empty state is a sentence not
+   a door - `Assets/_Modules/Village/Talents/HeroSkillTreePanelMvvm.cs` (+ the WO's list).
+4. **WO-1413** copy hygiene across several screens - `Assets/Resources/Data/Canonical/dialogue/dialogues.json` (+ its
+   StreamingAssets twin, byte-identical, binary-safe edits - PART 7.3 trap), `Assets/_Modules/Village/Harvest/EchoWorkforceVM.cs`
+   and the WO's list. **Before touching any file, check it is not in another lane above or in the LOCKED list; if it
+   is, hand that item back as "blocked by lane X" instead of editing.**
+5. **WO-1348** VFX picks tunable from the Command Center - the hold is released (1343/1344 CLOSED, 1345-1347 FIXED;
+   its Status text is stale). `Assets/_Modules/Core/Addressables/VfxAssetLoader.cs` (runtime override seam), `api/admin/*`
+   picker, `api/_lib/tunable-manifest.js`. The tunables RAIL files (`Core/Ops/RemoteTunables.cs`, `RemoteTunablesService.cs`,
+   `api/_lib/tunables.js`, `RemoteTunablesDefaultsRegression.cs`) are lead-owned merge files: hand back the key +
+   default as text. `api/` has node tests - run them and paste the output.
+
+6. **WO-1419** the Heartfire plate paints flame ICONS, not `[*] [ ]` ASCII pips - owner ruling 2026-09-05 evening,
+   `WorkOrders/WORK_ORDER_1419_heartfire_pips_are_icons_not_ascii.md`. Files: `Assets/_Modules/Core/State/HeartfireCharges.cs`,
+   `Assets/_Modules/HUD/Kit/HudKitController.cs` (LOCKED until the 1407 commit - the lead posts the post-commit hash
+   here; start this one after WO-1404, same rule), a new regression, and a three-candidate icon survey handed back
+   (the lead picks against the greyscale gate; do not ask the owner for a hue).
+
+**HELD - do not take:** WO-1408 and WO-1411 (both add a door INTO Manage; they wait until 1418 lands), WO-1402 /
+WO-1403 / WO-1407 (in-house lanes tonight), WO-1416 / WO-1417 (done, committing), WO-1382 (landed; the template),
+every PARK-list ticket (1373 / 1377 / 1292 / 1314 / 1327 / 1215 / 1184 / 1244).
+
+### 8.3 Rules that bite on THIS batch
+- Owner is red/green colourblind: state is a WORD, never hue alone. ASCII-only TMP strings.
+- Touch targets >= `ElarionUiKit.MinTouchPx` (112 ref px; `ElarionUiKit.cs:347`).
+- Presentation never touches game objects: the VM feeds the View; the View owns no state but selection.
+- You cannot run EditMode suites. Author each regression case with its one-line REVERT recipe in a comment; the lead
+  proves RED then GREEN at gate. A case that cannot fail is a P1 defect (PART 3.6).
+- Instrument, do not strip: every new decision point carries a `FlowTrace.Step/Warn` line; never delete an existing one.
+- Canonical JSON: Resources + StreamingAssets twins byte-identical; edit bytes, never text-mode rewrites; prove LF counts.
+- Line numbers in the WOs are from `44d46128d`; the Part-B commits will shift some. Re-read at the base commit.
+
+### 8.4 Hand back (PART 5 format, `batch_results_state.md`, one section per lane)
+files changed with line numbers; brace + NUL counts per `.cs`; the `DataRegression.cs` registration line(s) as text;
+the RED recipe per case; node test output for anything under `api/`; what was NOT done and why; any file you needed
+but found locked or in another lane. Everything is a claim until the lead proves it against the tree.
+
+### 8.5 Prep findings from the dev lane (relayed by the owner) - lead rulings, all three ACCEPTED
+1. **WO-1406 chips:** yes - all three channel chips activate their tab (Builders -> Buildings, Training -> Troops,
+   Research -> Research). Only the separate QUEUE control (`ManageQueueDrawerToggle`) opens the drawer; chip 1's old
+   transparent drawer button is retired in lane C. Keep the `[queue-toggle-closes]` pin green
+   (`ManageQueueDrawerRegression.cs:168-188`).
+2. **Army / camp summary data:** yes - project it through `ManageScreenVM` in lane B (a small `ArmySummary` or fields on
+   the existing header VM), never read from the View. The View paints words the VM hands it.
+3. **Store CLOSE return:** yes - the originating tab cannot be recovered from the current calls. Lane B/C provides the
+   caller-side handoff (the drawer's store door passes `(PanelId.Manage, "<tab>")` when it opens the store) through the
+   EXISTING return-door arbiter that WO-1400 shipped for the deck return; lane D consumes it on CLOSE. No second
+   return mechanism. Lane C hands the exact door line to lane D as text if the files are split across people.
