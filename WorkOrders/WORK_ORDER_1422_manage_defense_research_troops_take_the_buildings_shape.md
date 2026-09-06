@@ -180,10 +180,17 @@ Today an OWNED perk emits no row (`VM:1546`) and an IN-PROGRESS perk emits no ro
 ### 3.9 The Research NOW band has no art id, and that is acceptable.
 `QueueRowVM.BuildingId` is populated **only** when `channel == ChannelId.Builder` (`VM:614`), so a Research job carries
 no id. `BuildTroopTrainingNowJob` falls back to `null` art.
-- **Ruling: parse the perk from the job id and resolve its icon.** Research job ids are
+- **Ruling: parse the perk from the job id and resolve its icon THROUGH THE CATALOG.** Research job ids are
   `"building-research:<building>:<perk>"` (`SeedManageCaptureQueue`, `UICaptureLaunch.cs:7159-7175`). Split on `':'`,
   take index 2, resolve `HudIcons/BuildingUpgrades/<IconName>` through the catalog. If the split does not yield a known
   perk, pass `null` and let the existing fallback run - **never** throw, and log a `FlowTrace.Warn` naming the id.
+  ⚠ **CORRECTED 2026-09-06: this WO originally quoted the job id `building-research:arcane-tower:warding`, and that id
+  is INVALID.** `warding` is not a perk; the authored id is **`arcane-warding-runes`** (`building-tiers.json`,
+  arcane-tower tier 3). `BuildingPerkService.IsResearching` compares the WHOLE job id
+  (`BuildingPerkService.cs:128-131`), so **the `Researching` state has been unreachable in every capture ever taken** -
+  a real defect found by the fixture lane, now corrected there. **Never hardcode a perk literal**, and never trust the
+  third segment without a catalog lookup. Also: `CatalogRegistry` is NOT populated under `-executeMethod` (see the
+  correction in section 4 Lane D), so guard every `CatalogRegistry.Get` in a sprite path against null.
 - Defense band: `NormalizeBuildingJobId` (`VM:1104-1116`) produces e.g. `tower-ground-archer`, which is not a
   `BuildingChoiceVM.Id`, so `FindBuildingChoice` returns null and the band falls back. **Accept the fallback tonight**
   and record it as a known gap in the RESULT; do not widen `NormalizeBuildingJobId`, it is shared with Buildings.
@@ -322,8 +329,15 @@ public readonly List<ResearchChoiceVM> ResearchChoices = new();
 - Hand back the `DataRegression.cs` registration lines **as text**; that file is a CLI-owned merge point.
 
 ### Lane D - `Assets/Editor/UICaptureLaunch.cs` ONLY
-The Defense frame is currently **empty** because the fixture places one archer tower at level 1 and
-`BuildDefenseBrowse` skips it - proof that the fixture cannot exercise the new card.
+The Defense frame is currently **empty** - proof that the fixture cannot exercise the new card.
+⚠ **CORRECTED 2026-09-06 by the lane that owns this file: the CLI's stated cause here was WRONG.** This WO originally
+said `BuildDefenseBrowse` skipped the tower for being at its ceiling. It is not: the tower is L1 of 3, so it would have
+emitted a row. The real bail is one line earlier, `ManageScreenVM.cs:821` (`entry == null -> continue`) - under
+`-executeMethod`, `CatalogBootstrap`'s `[RuntimeInitializeOnLoadMethod]` (`Village/Catalog/CatalogBootstrap.cs:96`)
+**never fires**, so `CatalogRegistry.Get` returns null for every `BaseLayout` row. Seeding alone would have changed
+nothing; the fixture must hydrate the catalog first (`HydrateCatalogForCapture`, which exists because the palette
+capture hit the identical hole). Recorded per CLAUDE.md section 11B: an inference stated as a cause, corrected by a
+measurement.
 - Seed the `CaptureManageOperational` fixture (`:7071-7099`) so Defense shows a populated rail: at least three
   upgradable types at different levels (e.g. `tower_ground_archer` x2 at L1 and L2, `tower_ballista` L1,
   `lumberyard` L3) and one at max so a `Max` card paints.
