@@ -136,3 +136,89 @@ single answer.
    and an oracle asserting "every singleton's death path routes through Destructible" would close the class.
 4. `EconomySinkCapRegression`'s ceiling arithmetic assumes ONE container per resource. That assumption becomes true
    with this ruling instead of merely convenient - say so in the suite so nobody "generalises" it back.
+
+**24. THE CATHEDRAL IS PRICED IN A SMALL MULTI-RESOURCE BASKET, NOT CRYSTALS. This SUPERSEDES ruling 22 and the
+2026-08-14 cost-basket pin, for the Cathedral.**
+
+Owner ruling 2026-09-06, verbatim: *"regarding the cathedral I just feel that it's too difficult to attain a large
+number of crystals so switching to needing a smaller amount of multiple resources that are easily obtained. Might be
+the way to go being that we can't get people to play the game so instead of making it challenging, let's try and
+simplify it a little bit so maybe they're more engaged."*
+
+**The reasoning is a product ruling, and it outranks the mechanics:** engagement first, challenge second. Record it as
+the lens, not just the number - the same lens should be applied whenever a cost is defended on difficulty grounds.
+
+*What this resolves.* Ruling 22 said the Cathedral's authoring should be corrected to STONE to match what
+`BuildingUpgradeService.TierCost` already charges. Lane B then found that correcting it was **blocked** by an earlier
+owner pin: `CostBasketSeparationRegression.cs:140-149` lists `arcane-tower` in `MagicalIds` on **owner pin 5,
+2026-08-14** (*"cathedral of magic is where all magic upgrades are"*), and case `[tiers-basket]` FAILS any
+`costWood > 0` on a magical id. Two owner rulings collided and the lane correctly stopped and touched nothing.
+
+**Ruling 24 breaks the tie by changing the design rather than picking a side:** the Cathedral's ladder is no longer a
+single-resource crystal basket at all. It becomes a SMALL basket of several EASILY OBTAINED resources.
+
+*Consequences, all of which must move together in ONE commit (CLAUDE.md section 15):*
+1. `building-tiers.json` (BOTH canonical copies, byte-mode, LF count proven) - the four `arcane-tower` rows are
+   re-authored. **The owner sets the numbers; do not invent them.** Ask for the four baskets.
+2. ⛔ **`CostBasketSeparationRegression`'s `MagicalIds` pin RE-POINTS WITH THIS RULING.** `arcane-tower` leaves the
+   crystal-only set. Do NOT delete the suite - the wood+iron / crystal separation still holds for everything else
+   (WO-947). Update its header to record that the Cathedral was carved out on 2026-09-06 and why, so the next seat does
+   not "restore" it.
+3. ⚠ `BuildingUpgradeService.TierCost` picks ONE lane by tier index (T1 Wood, T2 Stone, T3+ Iron) from
+   `Max(CostWood, CostCrystal)`. **A multi-resource basket cannot be expressed through it.** Either the charge path
+   learns to spend a real basket, or the ruling cannot be implemented as stated. This is the load-bearing engineering
+   consequence and it must be settled before the data is touched - see WO-2005/WO-2007.
+4. The stone-ceiling problem ruling 22 flagged (2,560 stone against a 2,000 base bank) disappears if the basket is
+   small and spread. Re-check it after the numbers land rather than assuming.
+
+*Open for the owner:* the four baskets themselves. Suggested shape to react to, NOT a decision: T1 wood+stone, T2
+wood+stone+iron, T3 stone+iron, T4 all three plus a token crystal cost so the Cathedral keeps a magical flavour.
+
+**25. BUILD GETS A "MANAGE PLACED" DOOR - move / upgrade / sell a structure already on the map.**
+
+Owner ruling 2026-09-06, from a friend's playtest: *"he accidentally put a palisade down and he didn't mean to and now
+he has no way to move the Palisade... we might need to add one more card, which is just move or manage so that they can
+go to the map, select the piece, either move, upgrade or sell. I think right now we lost that option when we simplified
+the UI."*
+
+*Verified at source before recording, and it is the same disease as every other defect in this program:*
+**the capability EXISTS and is fully wired; only the DOOR is missing.**
+- `BuildModeController.BeginMoveSelected` (`:2775`), `CommitMove` (`:2815`), `SellSelected` (`:2431`) are all live.
+- `BuildSelectionUI` (`BuildSelectionUI.cs:35`) raises `OnMoveRequested` (`:38`) and `OnSellRequested` (`:41`) from
+  real buttons (`:173`), and `BuildModeController` subscribes to both (`:4086-4087`).
+- So nothing needs building. The player simply cannot FIND it: the only route is enter build mode, then tap the exact
+  placed structure. A player who mis-taps a palisade during placement has no reason to think "re-enter build mode and
+  tap it" is the fix.
+
+**Ruling: BUILD gains a MANAGE PLACED entry** that takes the player to the map in a select-a-placed-structure mode,
+and the selected piece offers **MOVE / UPGRADE / SELL**. Whether it is a sixth filter chip, a card, or a persistent
+affordance on the BUILD tab is a UI call for WO-2006; the requirement is that it is reachable WITHOUT already knowing
+about build mode.
+
+*Open questions, to answer before implementing - do not assume:*
+1. **Is a placed WALL even selectable today?** The friend's case is a palisade specifically. `AutoPilotDriver.cs:2912`
+   already carries a failure string *"tap on structure never showed BuildSelectionUI"*, so this seam has a known way to
+   fail. Prove it with a wall before designing around it.
+2. **Does SELL refund?** `Destructible.cs:174` says the destroy path *"mirrors the sell path minus the refund"*, so a
+   sell refund exists. Confirm the amount and whether it differs from the WO-911 cancel-refund rule (100% of what was
+   paid, flat).
+3. Does MOVE cost anything, and is a moved structure's upgrade progress preserved? `CommitMove` writes the validated
+   snap cell (`UpdateLayoutEntry`), so the record follows - but confirm the level does too.
+
+⚠ **The through-line, stated because it keeps recurring:** this is the fifth capability found on 2026-09-06 that is
+built, correct, and unreachable - alongside the barracks panel, the village-tier control, the Talent tree panel and the
+kill-drop materials the player is granted but never shown. **`PanelDoorRegression` (shipped this wave) catches the
+panel-shaped instances of this.** A capability that lives behind a MODE rather than a panel is invisible to it. Worth a
+sibling oracle: every player-facing verb the code implements has at least one reachable affordance.
+
+*Clarification, same session:* **"we used to have that method, but the problem is now when you go to build it gives you
+a series of options... now we have no way to get directly to the raw screen where you can manage them."**
+
+So this is a RESTORED FRONT DOOR, not a new feature. BUILD used to put the player on the MAP; it now puts them in front
+of a CATALOGUE (the collection cards), and the map became a place you can only reach if you already know it exists.
+The card goes **straight to the town in select-a-placed-structure mode**, with no catalogue in between.
+
+⚠ **The owner's own mockup already contained this.** The Manage-Buildings mockup she pasted earlier the same day has an
+**Edit** affordance pinned at the FOOT OF THE RAIL. It was logged at the time as an open question (*"the Edit
+affordance at the rail's foot - what does it open? Reorder the list, or enter build mode?"*, WO-1428 section 7 item 1).
+This ruling is the answer: **Edit opens the raw map in manage-placed mode.** Build to the mockup's placement.
