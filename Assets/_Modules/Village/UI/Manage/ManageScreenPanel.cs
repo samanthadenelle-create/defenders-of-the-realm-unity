@@ -3230,9 +3230,16 @@ namespace DeNelle.Village.UI
                 choice.Locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.30f, 0.84f, bold: true);
             ElarionUiKit.FitSingleLine(name, 26f, 38f);
-            string railSub = ManageScreenVM.Ascii(choice.BuildingName ?? "");
-            if (!string.IsNullOrEmpty(choice.StateWord))
-                railSub = string.IsNullOrEmpty(railSub) ? choice.StateWord : railSub + " . " + choice.StateWord;
+            // ⚠ ORDER IS LOAD-BEARING (measured 2026-09-06, seeker-357569-research.png): with the
+            // building name leading, EVERY row of a building read "Cathedral of Magic ...." and the
+            // ellipsis ate the only term that differs between rows. The STATE leads now, so the
+            // discriminator always survives and the ellipsis eats the shared half - the same rule
+            // the description band below already documents. The rail zone is 0..0.26 by design and
+            // is NOT widened. Both terms are kept; only their order changed.
+            string railBuilding = ManageScreenVM.Ascii(choice.BuildingName ?? "");
+            string railSub = choice.StateWord ?? "";
+            if (!string.IsNullOrEmpty(railBuilding))
+                railSub = string.IsNullOrEmpty(railSub) ? railBuilding : railSub + " . " + railBuilding;
             var sub = ElarionUiKit.Label(faceGo.transform, railSub,
                 0.06f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
                 TextAlignmentOptions.Left, 0.30f, 0.84f);
@@ -3304,8 +3311,9 @@ namespace DeNelle.Village.UI
         /// The SELECTED PERK card (ruling 3.7). The WHOLE tree is shown, including the two states
         /// the retired list HID: an owned perk (Researched) and an in-flight one (Researching).
         /// Researched -> no CTA. Researching -> one non-interactable RESEARCHING face. Locked -> the
-        /// CanResearch reason VERBATIM on a dead face beside the live door to its prerequisite.
-        /// Available -> RESEARCH. The parameter is named `choice` because
+        /// CanResearch reason VERBATIM as a BODY TEXT LINE, above ONE full-width live door to the
+        /// prerequisite (the two-half-faces shape is retired - see the block comment on the locked
+        /// branch). Available -> RESEARCH. The parameter is named `choice` because
         /// ManageProgressiveDisclosureRegression's migrated [research-locked-visible] case reads
         /// this body for `choice.Locked` and `BuildLockBadge(`.
         /// </summary>
@@ -3362,12 +3370,25 @@ namespace DeNelle.Village.UI
             if (string.Equals(choice.StateWord, "Researched", StringComparison.Ordinal))
                 return;
 
-            ElarionUiKit.CostRow(card, choice.CostParts, new Vector2(0.02f, 0.54f),
-                new Vector2(0.72f, 0.695f), ElarionUi.Parchment, prefix: "Research:",
+            // A LOCKED card needs one extra body line for the lock sentence, and the only slack on
+            // this card is between the CTA band top (TroopCtaY1 = 0.445) and the cost row. The fact
+            // row lifts by 0.025 ONLY when locked, which frees 0.45-0.56 below it. Arithmetic at
+            // TroopWorkspacePx = 260: locked cost band 0.565-0.70 = 35.1px, which is 0.9px UNDER
+            // AddCostText's preferredHeight of FontMicro+4 = 36 (CostFormat.cs:145). Safe: the
+            // HorizontalLayoutGroup (childControlHeight true, childForceExpandHeight false) clamps
+            // the child to 35.1, and CostText never sets overflowMode, so TMP's default Overflow
+            // RENDERS it - a different path from the Ellipsis cull that blanks a short band.
+            // Locked reason band 0.45-0.56 = 28.6px.
+            // Available / Researching cards keep the 0.54-0.695 that was MEASURED to render.
+            // ⛔ Never re-author a text band on this card below ~24px - TMP culls the whole line.
+            float factY0 = choice.Locked ? 0.565f : 0.54f;
+            float factY1 = choice.Locked ? 0.70f : 0.695f;
+            ElarionUiKit.CostRow(card, choice.CostParts, new Vector2(0.02f, factY0),
+                new Vector2(0.72f, factY1), ElarionUi.Parchment, prefix: "Research:",
                 fontPx: (int)ElarionUi.FontMicro);
             string readiness = choice.Ready ? "Ready" : "Short";
             string factText = string.IsNullOrEmpty(choice.TimeText) ? readiness : choice.TimeText + " . " + readiness;
-            var fact = ElarionUiKit.Label(card, factText, 0.54f, 0.695f, ElarionUi.Parchment,
+            var fact = ElarionUiKit.Label(card, factText, factY0, factY1, ElarionUi.Parchment,
                 (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.73f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(fact, 20f, 28f);
 
@@ -3380,15 +3401,33 @@ namespace DeNelle.Village.UI
 
             if (choice.Locked)
             {
-                // TWO faces, and only the DOOR is live: the reason must be readable at full length
-                // (it is CanResearch's own sentence) and the prerequisite must stay one tap away -
-                // that door is what [research-locked-visible] protects. Never a dead button alone.
-                BuildCardFace(card, "ResearchCta_Locked",
-                    string.IsNullOrEmpty(choice.LockReason) ? "LOCKED" : choice.LockReason, 0.02f, 0.48f);
+                // ⚠ DEVICE FIX (measured 2026-09-06, owner's Seeker build 2026.09.06.357569,
+                // seeker-357569-research.png). This branch used to paint TWO HALF-WIDTH faces and
+                // BOTH ellipsized: "UPGRADE THE BUILDING T..." beside "UPGRADE CATHEDRAL OF M...".
+                // The player could read neither WHY the perk was locked nor where the door went, and
+                // the dead face was indistinguishable from the live one. Root cause is the CONTAINER,
+                // not the width: CanResearch's reason is an authored SENTENCE ("Upgrade the building
+                // to Tier 3 first."), and a sentence never fits a button face.
+                // The reason is now a BODY TEXT LINE - prose in the body, where the description band
+                // right above it already proved text renders - and the card carries exactly ONE
+                // FULL-WIDTH live door wearing the SHORT CtaLabel, which is the single-CTA shape
+                // BuildDefenseCard and BuildBuildingCard already use. Both halves of ruling 3.7 are
+                // intact and more legible: the reason is verbatim and complete, the prerequisite is
+                // still one tap away. [research-locked-visible] is satisfied by the LockReason paint
+                // plus the door - it pins the reason reaching the screen, never a dead button.
+                var lockLine = ElarionUiKit.Label(card,
+                    ManageScreenVM.Ascii(string.IsNullOrEmpty(choice.LockReason) ? "Locked." : choice.LockReason),
+                    0.45f, 0.56f, ElarionUi.Parchment, (int)ElarionUi.FontMicro,
+                    TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
+                if (lockLine != null)
+                {
+                    lockLine.gameObject.name = "ResearchLockReason";
+                    ElarionUiKit.FitSingleLine(lockLine, ElarionUiKit.FontHardFloor, 28f);
+                }
                 var door = ElarionUiKit.BuildObsidianButton(card,
                     ManageScreenVM.Ascii(string.IsNullOrEmpty(choice.CtaLabel) ? "OPEN" : choice.CtaLabel),
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                    new Vector2(0.02f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
                     () => Guard.Try("Manage", "open research prerequisite", () => choice.Activate?.Invoke()));
                 if (door != null)
                 {
@@ -3419,9 +3458,12 @@ namespace DeNelle.Village.UI
         /// A non-interactable CTA face at an ARBITRARY x-span. ⚠ Deliberately NOT a change to
         /// BuildDisabledBuildingFace, which is hardcoded full-width AND is a Body() boundary marker
         /// for ManageBuildingsCardRegression's card window - widening its signature would move that
-        /// boundary. Locked Research needs a HALF-width dead face beside a live door, so it gets
-        /// its own builder. The y-span is always the shared CTA band, so the touch floor is the
-        /// same 113.1px every other face on these cards clears.
+        /// boundary. The y-span is always the shared CTA band, so the touch floor is the same
+        /// 113.1px every other face on these cards clears.
+        /// ⚠ The x-span is arbitrary but the ONLY live caller is the Researching state, at FULL
+        /// width. The locked-Research caller that needed a HALF-width dead face is RETIRED
+        /// (2026-09-06): its sentence ellipsized on a half face, so it became a body text line.
+        /// Do not reintroduce a half-width face to hold a sentence.
         /// </summary>
         private static void BuildCardFace(RectTransform card, string objectName, string text, float x0, float x1)
         {
