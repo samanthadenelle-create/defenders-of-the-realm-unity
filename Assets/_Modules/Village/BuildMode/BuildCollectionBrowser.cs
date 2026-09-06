@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using Cysharp.Threading.Tasks;
 
@@ -270,21 +271,46 @@ namespace DeNelle.Village
             var slotRt = slot.GetComponent<RectTransform>();
             slotRt.anchorMin = Vector2.zero; slotRt.anchorMax = Vector2.one;
             slotRt.offsetMin = slotRt.offsetMax = Vector2.zero;
-            var card = Box("BuildCard_" + itemId, slot.transform, new Color(.09f, .11f, .16f, 1f));
+            // WO-1417: the item card is a KIT SURFACE, not a bespoke navy quad. Same obsidian
+            // face (ElarionUiKit.ObsidianFill) + antique-gold perimeter the sibling CATEGORY
+            // card one page back already uses, so the row reads as the frame's own material.
+            // The old flat #171C29 fill plus an Outline whose colour was the ONLY locked/unlocked
+            // cue is gone: hue never carries state here (the owner is red/green colourblind) --
+            // the state WORD below is the single carrier.
+            var card = Box("BuildCard_" + itemId, slot.transform, ElarionUiKit.ObsidianFill);
             card.anchorMin = new Vector2(0f, .18f);
             card.anchorMax = Vector2.one;
             card.offsetMin = card.offsetMax = Vector2.zero;
-            var outline = card.gameObject.AddComponent<Outline>(); outline.effectColor = locked ? new Color(.5f,.5f,.55f,1) : new Color(.5f,.4f,.2f,1);
+            AddGoldPerimeter(card.transform);
             Label(card, vm?.DisplayName ?? Humanize(itemId), 32, TextAlignmentOptions.Center, new Vector2(.05f,.86f), new Vector2(.95f,.98f));
             var artGo = ElarionUiKit.AddImage(card, "Artwork", new Vector2(.12f,.54f), new Vector2(.88f,.84f), Color.white, false);
             var image = artGo.GetComponent<Image>(); image.preserveAspect = true; image.raycastTarget = false;
             SetArtworkOrFallback(artGo.transform, image, BuildPaletteUI.ResolveEntryArtPublic(entry));
             Label(card, vm?.Description ?? "Catalog definition unavailable.", 25, TextAlignmentOptions.TopLeft, new Vector2(.07f,.30f), new Vector2(.93f,.53f));
-            string cost = vm == null ? "Cost unavailable" : CostWords(vm.EffectiveCost, vm.Freebie);
-            Label(card, "COST: " + cost, 25, TextAlignmentOptions.Center, new Vector2(.06f,.13f), new Vector2(.94f,.23f));
-            string state = locked ? "LOCKED — unavailable" : built ? "BUILT — one allowed" : !vm.Affordable ? "NEED MORE RESOURCES" : "AVAILABLE";
-            if (progressionLocked) state = "Locked - " + lockReason;
-            Label(card, (locked ? "[LOCKED] " : "[READY] ") + state, 25, TextAlignmentOptions.Center, new Vector2(.06f,.02f), new Vector2(.94f,.12f));
+            // WO-1417 cost line. `COST: NO COST` was a label contradicting its own key, and the
+            // underlying zero was TRUE, not a defect: lumberyard/silo/foundry are NON-TOWER rows,
+            // so BuildModeController.FreeBuildAvailable lane 3 makes the FIRST placement of each
+            // distinct id free (BuildModeController.cs:3078-3080), while the catalog prices the
+            // paid one at wood+iron (structures-catalog lumberyard repo.cost 800 wood / 320 iron).
+            // While the freebie is live the price slot shows NOTHING -- owner ruling WO-1010 D20,
+            // recorded verbatim at BuildPaletteUI.cs:1418-1424 ("dont show anything on first build
+            // just nothing" / "they dont need to know first is free"), which retired the "FREE"
+            // label on the carousel card. This surface now obeys the same ruling instead of
+            // inventing a second freebie wording. The paid basket is spelled through the ONE
+            // shared formatter (CostFormat.Words) every other cost surface uses.
+            string cost = vm == null ? "Cost unavailable"
+                        : vm.Freebie ? string.Empty
+                        : CostFormat.Words(CostParts(vm.EffectiveCost));
+            if (!string.IsNullOrEmpty(cost))
+                Label(card, "COST: " + cost, 25, TextAlignmentOptions.Center, new Vector2(.06f,.13f), new Vector2(.94f,.23f));
+            // ONE state word. The old string was a bracket glyph plus a synonym pair
+            // ("[READY] AVAILABLE"); brackets are console furniture, and two words for one state
+            // read as two facts. Every value below is a distinct word, so the state survives
+            // greyscale with no hue at all.
+            string state = locked ? "Locked" : built ? "Built" : !vm.Affordable ? "Unaffordable" : "Ready";
+            Label(card, state, 25, TextAlignmentOptions.Center, new Vector2(.06f,.02f), new Vector2(.94f,.12f));
+            FlowTrace.Step("Build", "collection-card id=" + itemId + " plate=ElarionUiKit.ObsidianFill+GoldPerimeter"
+                + " cost='" + cost + "' state='" + state + "'");
             // The complete state already lives in the wrapping status band above. Button faces
             // carry only a short action/state word so the kit never ellipsizes required copy.
             string buttonFace = available ? "PLACE" : built ? "BUILT" : !locked ? "NEED RESOURCES" : "UNAVAILABLE";
@@ -437,16 +463,7 @@ namespace DeNelle.Village
             // component: one continuous obsidian face plus an explicit antique-gold perimeter.
             face.sprite = null;
             face.color = new Color(.025f, .024f, .023f, .985f);
-            void Edge(string name, Vector2 min, Vector2 max)
-            {
-                var edge = ElarionUiKit.AddImage(go.transform, name, min, max,
-                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, .95f), false);
-                edge.GetComponent<Image>().raycastTarget = false;
-            }
-            Edge("GoldTop",    new Vector2(.018f, .982f), new Vector2(.982f, .992f));
-            Edge("GoldBottom", new Vector2(.018f, .008f), new Vector2(.982f, .018f));
-            Edge("GoldLeft",   new Vector2(.008f, .018f), new Vector2(.018f, .982f));
-            Edge("GoldRight",  new Vector2(.982f, .018f), new Vector2(.992f, .982f));
+            AddGoldPerimeter(go.transform);
             var button = go.GetComponent<Button>();
             button.targetGraphic = face;
             button.transition = Selectable.Transition.ColorTint;
@@ -463,6 +480,25 @@ namespace DeNelle.Village
             if (click != null) button.onClick.AddListener(() => click());
             return go;
         }
+        /// <summary>The kit BEZEL: an explicit antique-gold perimeter over an obsidian face, in
+        /// native scalable geometry (the horizontal frame bitmap does not survive a portrait
+        /// stretch -- see BuildCategoryCard's own note). WO-1417 lifted these four edges out of
+        /// BuildCategoryCard verbatim so the CATEGORY card and the ITEM card are one material
+        /// written once; no new primitive was authored.</summary>
+        private static void AddGoldPerimeter(Transform host)
+        {
+            void Edge(string name, Vector2 min, Vector2 max)
+            {
+                var edge = ElarionUiKit.AddImage(host, name, min, max,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, .95f), false);
+                edge.GetComponent<Image>().raycastTarget = false;
+            }
+            Edge("GoldTop",    new Vector2(.018f, .982f), new Vector2(.982f, .992f));
+            Edge("GoldBottom", new Vector2(.018f, .008f), new Vector2(.982f, .018f));
+            Edge("GoldLeft",   new Vector2(.008f, .018f), new Vector2(.018f, .982f));
+            Edge("GoldRight",  new Vector2(.982f, .018f), new Vector2(.992f, .982f));
+        }
+
         private static RectTransform Box(string name, Transform parent, Color color)
         { return ElarionUiKit.AddImage(parent,name,Vector2.zero,Vector2.one,color,true).GetComponent<RectTransform>(); }
         private static TextMeshProUGUI Label(Transform parent,string text,float size,TextAlignmentOptions align,Vector2 min,Vector2 max)
@@ -476,8 +512,18 @@ namespace DeNelle.Village
             return t;
         }
         private static string Humanize(string id) => string.IsNullOrEmpty(id) ? "Unknown" : id.Replace('_',' ').Replace('-',' ');
-        private static string CostWords(DeNelle.Core.Catalog.ResourceCost c,bool free)
-        { if(free)return "NO COST";var p=new List<string>();if(c.wood>0)p.Add(c.wood+" Wood");if(c.food>0)p.Add(c.food+" Stone");if(c.iron>0)p.Add(c.iron+" Iron");if(c.crystals>0)p.Add(c.crystals+" Crystals");return p.Count==0?"No resources":string.Join(" | ",p); }
+        /// <summary>WO-1417: the collection card's basket now runs through the ONE shared cost
+        /// formatter (CostFormat.Parts/Words) instead of a private second formatter that owned its
+        /// own separator and its own "NO COST" wording. Same concept ids + words BuildPaletteUI
+        /// authors, so the two build surfaces can never disagree about a price.</summary>
+        private static IReadOnlyList<CostPart> CostParts(DeNelle.Core.Catalog.ResourceCost c)
+        {
+            return CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", c.wood), ("stone", "Stone", c.food),
+                ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals)
+            });
+        }
         protected override void OnDisable()
         {
             ProgressionUnlocks.Changed -= OnProgressionUnlockChanged;

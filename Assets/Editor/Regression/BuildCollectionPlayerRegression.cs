@@ -1,7 +1,9 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 using UnityEditor;
 using DeNelle.Core;
@@ -47,8 +49,35 @@ namespace DeNelle.Editor.Regression
                 !browser.Contains("base.Close();") ||
                 !browser.Contains("Done(BuildFirstUseGuide.ItemSelected") || !browser.Contains("callback?.Invoke(entry)"))
                 return Fail("shared workspace/Place release contract missing", out reason);
-            if (!browser.Contains("LOCKED") || !browser.Contains("[LOCKED]") || !browser.Contains("COST: ") || !browser.Contains("vm?.Description"))
+            if (!browser.Contains("\"Locked\"") || !browser.Contains("COST: ") || !browser.Contains("vm?.Description"))
                 return Fail("readable card/state contract missing", out reason);
+            // -- WO-1417 [kit-card] ----------------------------------------------
+            // The palette item card is a KIT SURFACE, and its two copy lines are
+            // player English. Three pins, each RED against the pre-WO-1417 file:
+            //  (a) the card face is the kit's obsidian plate, not a bespoke literal
+            //      colour, and it carries the same gold perimeter the sibling
+            //      category card uses. The Outline that carried locked-vs-unlocked
+            //      by HUE ALONE must stay gone (the owner is red/green colourblind).
+            //  (b) the basket runs through the ONE shared cost formatter, so this
+            //      surface cannot re-grow a private second wording for a price.
+            //  (c) NO STRING LITERAL in the browser contains a '[' bracket glyph or
+            //      the retired "NO COST". Scanned over QUOTED LITERALS ONLY -- the
+            //      source is full of attribute/indexer brackets, so a whole-file
+            //      Contains("[") would pin nothing and fail always.
+            if (!browser.Contains("Box(\"BuildCard_\" + itemId, slot.transform, ElarionUiKit.ObsidianFill)") ||
+                !browser.Contains("AddGoldPerimeter(card.transform)") ||
+                browser.Contains("AddComponent<Outline>(); outline.effectColor = locked"))
+                return Fail("palette item card is not the kit obsidian plate + gold bezel, or state is carried by an outline hue", out reason);
+            if (!browser.Contains("CostFormat.Words(CostParts(vm.EffectiveCost))") ||
+                !browser.Contains("CostFormat.Parts(new[]"))
+                return Fail("palette card cost line no longer runs through the one shared cost formatter", out reason);
+            foreach (string literal in StringLiterals(browser))
+            {
+                if (literal.Contains("["))
+                    return Fail("palette string carries a bracket glyph: " + literal, out reason);
+                if (literal.Contains("NO COST"))
+                    return Fail("palette string carries the retired literal NO COST: " + literal, out reason);
+            }
             if (!browser.Contains("BuildCardSlot_") ||
                 !browser.Contains("Box(\"BuildCard_\" + itemId, slot.transform") ||
                 !browser.Contains("ButtonBox(slot.transform, buttonFace") ||
@@ -94,11 +123,70 @@ namespace DeNelle.Editor.Regression
                 !manageVm.Contains("UpgradeCostFor(entry, level)") ||
                 !manageVm.Contains("grid \" + placed.cellX"))
                 return Fail("Defense upgrade screen lost identity/location, authority cost, empty state, or secondary build route", out reason);
-            reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus separate Upgrade Defenses card, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam";
+            reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus separate Upgrade Defenses card, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam; WO-1417 kit-card: item card is the kit obsidian plate + gold bezel, cost through the one shared formatter, no bracket glyph and no NO COST in any palette string literal";
             return true;
         }
 
         private static bool Fail(string value, out string reason) { reason = "BUILD_COLLECTION_PLAYER_FAIL: " + value; return false; }
+
+        /// <summary>WO-1417: every double-quoted string literal in a C# source, with comments,
+        /// char literals and escapes excluded. A single-state character walk rather than a regex,
+        /// because the cheap regex both mis-reads an escaped quote and cannot tell a '[' in an
+        /// attribute or an indexer from a '[' the player will read on a card.</summary>
+        private static List<string> StringLiterals(string source)
+        {
+            var found = new List<string>();
+            var buffer = new StringBuilder();
+            int i = 0, n = source == null ? 0 : source.Length;
+            while (i < n)
+            {
+                char c = source[i];
+                if (c == '/' && i + 1 < n && source[i + 1] == '/')
+                {
+                    while (i < n && source[i] != '\n') i++;
+                    continue;
+                }
+                if (c == '/' && i + 1 < n && source[i + 1] == '*')
+                {
+                    i += 2;
+                    while (i + 1 < n && !(source[i] == '*' && source[i + 1] == '/')) i++;
+                    i += 2;
+                    continue;
+                }
+                if (c == '\'')
+                {
+                    i++;
+                    while (i < n && source[i] != '\'') i += source[i] == '\\' ? 2 : 1;
+                    i++;
+                    continue;
+                }
+                if (c == '@' && i + 1 < n && source[i + 1] == '"')
+                {
+                    i += 2; buffer.Length = 0;
+                    while (i < n)
+                    {
+                        if (source[i] == '"' && i + 1 < n && source[i + 1] == '"') { buffer.Append('"'); i += 2; continue; }
+                        if (source[i] == '"') break;
+                        buffer.Append(source[i]); i++;
+                    }
+                    i++; found.Add(buffer.ToString());
+                    continue;
+                }
+                if (c == '"')
+                {
+                    i++; buffer.Length = 0;
+                    while (i < n && source[i] != '"')
+                    {
+                        if (source[i] == '\\' && i + 1 < n) { buffer.Append(source[i + 1]); i += 2; continue; }
+                        buffer.Append(source[i]); i++;
+                    }
+                    i++; found.Add(buffer.ToString());
+                    continue;
+                }
+                i++;
+            }
+            return found;
+        }
     }
 }
 #endif

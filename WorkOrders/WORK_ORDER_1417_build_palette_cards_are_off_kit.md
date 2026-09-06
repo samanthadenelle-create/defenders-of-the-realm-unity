@@ -1,6 +1,6 @@
 # WO-1417: the build palette's item cards are off-kit - flat navy boxes inside a medieval frame
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the owner's live screen on build 2026.09.05.356468
+**Status:** FIXED 2026-09-05 21:45 - kit cards landed + pinned, COMPILE_GATE_OK + REGRESSION_OK 385/385, headless capture opened (RESULT file); device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the owner's live screen on build 2026.09.05.356468)*
 
 ## Owner, verbatim (2026-09-05 10:3x)
 > "also the X below seems unpolished coma=pared to rest of UI"
