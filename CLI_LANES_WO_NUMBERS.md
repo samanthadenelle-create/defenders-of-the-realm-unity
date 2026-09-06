@@ -180,7 +180,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-06 (CLI, seventy-sixth pass): main line next free = **1421**.
+> ## RECONCILED 2026-09-06 (CLI, seventy-seventh pass): main line next free = **1423**.
+> *(CLI minted **1421** - the Journey deck drops DUNGEONS / REALM MAP / SEASON (owner ruling 2026-09-06) - and **1422** - Manage Defense, Research and Troops all take the WO-1418 Buildings workspace shape. Bumped 1421 -> 1423 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, seventy-sixth pass): main line next free = **1421**.
 > *(CLI minted **1420** - the wallet's silent reauthorize was REFUSED in 0.1s and WalletService reported a 30s TIMEOUT (F8 device capture seq 4683 on build 2026.09.06.357453). Bumped 1420 -> 1421 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-05 (CLI, seventy-fifth pass): main line next free = **1420**.
