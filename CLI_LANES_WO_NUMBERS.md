@@ -180,7 +180,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-06 (CLI, seventy-seventh pass): main line next free = **1423**.
+> ## RECONCILED 2026-09-06 (CLI, seventy-ninth pass): main line next free = **1428**.
+> *(CLI minted **1427** - "why can't I?" - every refused build/upgrade names its blocker in player words and offers a door to the ORDERED STEPS that clear it. Owner 2026-09-06, verbatim: "the idea came while testing, i had no way to figure out why i couldnt upgrade". Bumped 1427 -> 1428 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, seventy-eighth pass): main line next free = **1427**.
+> *(CLI minted **1423** (village tier gate that may never open), **1424** (healing caravan follows the hero and pins him), **1425** (upgrade costs above the achievable storage ceiling) and **1426** (wave-cleared panel renders an EMPTY body) - all four from the owner's 2026-09-06 playtest on build 357599; 1426 also carries F8 device capture seq 4684. Bumped 1423 -> 1427 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, seventy-seventh pass): main line next free = **1423**.
 > *(CLI minted **1421** - the Journey deck drops DUNGEONS / REALM MAP / SEASON (owner ruling 2026-09-06) - and **1422** - Manage Defense, Research and Troops all take the WO-1418 Buildings workspace shape. Bumped 1421 -> 1423 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, seventy-sixth pass): main line next free = **1421**.
