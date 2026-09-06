@@ -272,6 +272,13 @@ namespace DeNelle.Village.UI
         // the queue-row tick writes the drawer's "Building - 2m 10s left (63% done)" grammar and
         // the band's cell is the short form the owner's mockup shows. Same 1 Hz tick, strings only.
         private readonly List<TrainingNowCell> _trainingNowCells = new List<TrainingNowCell>(8);
+        private static readonly Dictionary<string, Sprite> ManageBuildingSpriteCache =
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> ManageBuildingPortraitGaps =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "arcane-tower", "armorer", "barracks", "forge", "lumbermill", "farm",
+            };
 
         private struct TrainingNowCell
         {
@@ -1892,7 +1899,27 @@ namespace DeNelle.Village.UI
 
         private static Sprite BuildingSprite(BuildingChoiceVM choice)
         {
-            return BuildingSprite(choice != null ? choice.CatalogEntryId : null);
+            if (choice == null) return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+
+            // Dedicated namespace: unlike legacy Portraits/<id>, every file here is guaranteed
+            // to depict the STRUCTURE. Creative can drop a base sheet or optional tier sheet
+            // without replacing an NPC portrait or requiring another code edit.
+            Sprite art = LoadManageBuildingSprite(choice.Id, choice.Level);
+            var entry = string.IsNullOrEmpty(choice.CatalogEntryId)
+                ? null
+                : DeNelle.Core.Catalog.CatalogRegistry.Get(choice.CatalogEntryId);
+
+            // Keep the shared Build palette as the normal fallback, except for the six measured
+            // ids whose current palette route resolves a person rather than a building.
+            if (art == null && entry != null && !ManageBuildingPortraitGaps.Contains(choice.Id))
+                art = DeNelle.Village.BuildPaletteUI.ResolveEntryArtPublic(entry);
+            if (art == null && entry != null)
+                art = DeNelle.Core.UI.ConceptIconResolver.ResolveAny(entry.id, entry.type.ToString());
+            if (art == null)
+                FlowTrace.Warn("Manage", "building art unresolved id=" + (choice.Id ?? "<null>") +
+                    " catalogEntryId=" + (choice.CatalogEntryId ?? "<null>") +
+                    " - add Portraits/Buildings/<id>; neutral hammer used");
+            return art ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
         }
 
         private BuildingChoiceVM FindBuildingChoice(string buildingId)
@@ -1907,43 +1934,32 @@ namespace DeNelle.Village.UI
             return null;
         }
 
-        /// <summary>
-        /// Resolve building art through the Build palette's structure-card resolver. The VM's
-        /// IconKey remains deterministic data, but it may name an old Portraits sheet containing
-        /// an NPC face, so Manage deliberately does not load that path. An unresolved catalog id
-        /// gets the neutral hammer rather than presenting a person as a building.
-        /// </summary>
-        private static Sprite BuildingSprite(string catalogEntryId)
+        private static Sprite LoadManageBuildingSprite(string buildingId, int level)
         {
-            var entry = string.IsNullOrEmpty(catalogEntryId)
-                ? null
-                : DeNelle.Core.Catalog.CatalogRegistry.Get(catalogEntryId);
-            Sprite art = entry != null ? DeNelle.Village.BuildPaletteUI.ResolveEntryArtPublic(entry) : null;
-            if (art != null && !LooksLikeStructureArt(art))
-            {
-                var rect = art.rect;
-                FlowTrace.Once("Manage", "building-art-reject-" + (catalogEntryId ?? "null"),
-                    "building art rejected staff portrait id=" + (catalogEntryId ?? "<null>") +
-                    " sprite=" + art.name + " px=" + rect.width.ToString("0") + "x" + rect.height.ToString("0"));
-                art = entry != null
-                    ? DeNelle.Core.UI.ConceptIconResolver.ResolveAny(entry.id, entry.type.ToString())
-                    : null;
-            }
-            if (art == null)
-                FlowTrace.Warn("Manage", "building art unresolved catalogEntryId=" + (catalogEntryId ?? "<null>") +
-                    " - neutral hammer used; Portraits paths are not structure art");
-            return art ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+            if (string.IsNullOrEmpty(buildingId)) return null;
+            string root = "Portraits/Buildings/" + buildingId;
+            string tierKey = level > 1 ? root + "-" + level : null;
+            Sprite art = LoadManageBuildingSpriteAt(tierKey);
+            return art ?? LoadManageBuildingSpriteAt(root);
         }
 
-        /// <summary>
-        /// Current authored structure sheets use a square canvas. The legacy vendor/NPC portraits
-        /// sharing building ids are tall 2:3 cards; rejecting that measured shape prevents a
-        /// person from standing in for a building while keeping palette art as the first choice.
-        /// </summary>
-        private static bool LooksLikeStructureArt(Sprite art)
+        private static Sprite LoadManageBuildingSpriteAt(string resourceKey)
         {
-            if (art == null || art.rect.height <= 0f) return false;
-            return art.rect.width / art.rect.height >= 0.80f;
+            if (string.IsNullOrEmpty(resourceKey)) return null;
+            if (ManageBuildingSpriteCache.TryGetValue(resourceKey, out Sprite cached)) return cached;
+            Sprite art = Resources.Load<Sprite>(resourceKey);
+            if (art == null)
+            {
+                var texture = Resources.Load<Texture2D>(resourceKey);
+                if (texture != null)
+                {
+                    art = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f);
+                    art.name = texture.name + "_manage_building";
+                }
+            }
+            ManageBuildingSpriteCache[resourceKey] = art;
+            return art;
         }
 
         private void BuildBuildingCard(RectTransform card, BuildingChoiceVM selected)

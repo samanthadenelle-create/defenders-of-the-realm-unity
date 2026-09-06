@@ -50,6 +50,15 @@ Gates: `COMPILE_GATE_OK` (`Builds/c13` 23:51), `REGRESSION_OK 390/390` (`Builds/
 `_1920x1080.png` opened. Minor, not blocking: the "+N more" count includes stack children (may overcount); the
 Open-build footer row is clipped by CLOSE at 1920 inside its scroll zone.
 
+## Art drop (owner archive, 2026-09-06 00:2x)
+26 building portraits (1024x1024, transparent, Sprite metas, Android 512 compressed) under
+`Assets/Resources/Portraits/Buildings/` for all six ladders; the resolver takes `Portraits/Buildings/<id>-<level>`
+(root sheet for L1), cached once per key; rail, card and BUILDING NOW share it. Gates: `COMPILE_GATE_OK` (`c14`
+00:19), `REGRESSION_OK 390/390` (`r15` 00:21), `MANAGE_OPERATIONAL_CAPTURE_OK 12/12` (`capman3` 00:22);
+`ManageBuildings_2670x1200.png` opened - Cathedral and Forge medallions paint their sheets. Review nits (PART 8
+s8.13, next Codex pass): the tall-sheet NPC guard was replaced by a hand-copied id list; the coverage oracle hardcodes
+ids and max levels instead of reading `BuildingTierCatalog`. Owner note: L1 sheets fill more canvas than later tiers.
+
 ## Owed / open
 - `StoreReturnToManageRegression` + `NightMarketNoWalletRegression` (RED-first) - in-house follow-up.
 - The footer hint text ("Recommended next upgrades" in the mockup) ships as the moved "Need another town structure?"

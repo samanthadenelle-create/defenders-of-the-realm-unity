@@ -16,6 +16,7 @@ namespace DeNelle.Editor
     public static class ManageBuildingsCardRegression
     {
         private const string PanelPath = "Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs";
+        private const string BuildingPortraitRoot = "Assets/Resources/Portraits/Buildings";
 
         public static bool Run(out string reason)
         {
@@ -25,6 +26,7 @@ namespace DeNelle.Editor
             {
                 CheckLiveModel(failures, log);
                 CheckPanelSource(failures, log);
+                CheckBuildingPortraitCoverage(failures, log);
             }
             catch (Exception ex)
             {
@@ -184,15 +186,41 @@ namespace DeNelle.Editor
 
             // RED: load the VM's Portraits IconKey before asking the palette resolver.
             string art = Body(panel, "private static Sprite BuildingSprite(BuildingChoiceVM", "private void BuildBuildingCard(");
-            if (art == null || !art.Contains("ResolveEntryArtPublic") || art.Contains("Resources.Load") ||
-                !art.Contains("choice.CatalogEntryId") || !art.Contains("CatalogRegistry.Get(catalogEntryId)") ||
-                !art.Contains("LooksLikeStructureArt(art)") || !art.Contains("ConceptIconResolver.ResolveAny"))
+            if (art == null || !art.Contains("ResolveEntryArtPublic") || art.Contains("choice.IconKey") ||
+                !art.Contains("CatalogRegistry.Get(choice.CatalogEntryId)") ||
+                !art.Contains("LoadManageBuildingSprite(choice.Id, choice.Level)") ||
+                !art.Contains("ManageBuildingPortraitGaps.Contains(choice.Id)") ||
+                !art.Contains("ConceptIconResolver.ResolveAny"))
                 failures.Add("[building-art-palette-first] Manage can paint NPC Portraits art or ignores the typed catalog id");
 
             if (strip == null || !strip.Contains("FitSingleLine(cell, ElarionUiKit.FontHardFloor"))
                 failures.Add("[chip-fit-floor] operational chips are not fitted after their live text is assigned");
 
             log.AppendLine("source card/destination/touch/drawer/footer/idle-paint/polish checks complete");
+        }
+
+        private static void CheckBuildingPortraitCoverage(List<string> failures, StringBuilder log)
+        {
+            // RED: delete any required tier portrait or its .meta file.
+            string[] ids = { "arcane-tower", "armorer", "barracks", "farm", "forge", "lumbermill" };
+            int[] maxLevels = { 4, 4, 6, 4, 4, 4 };
+            int checkedCount = 0;
+
+            for (int i = 0; i < ids.Length; i++)
+            {
+                for (int level = 1; level <= maxLevels[i]; level++)
+                {
+                    string suffix = level == 1 ? "" : "-" + level;
+                    string relative = BuildingPortraitRoot + "/" + ids[i] + suffix + ".png";
+                    string full = Path.Combine(Directory.GetCurrentDirectory(),
+                        relative.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(full)) failures.Add("[building-portrait-coverage] missing " + relative);
+                    if (!File.Exists(full + ".meta")) failures.Add("[building-portrait-coverage] missing " + relative + ".meta");
+                    checkedCount++;
+                }
+            }
+
+            log.AppendLine("building portrait coverage=" + checkedCount + "/26 tiers");
         }
 
         private static bool InstallState(GameStateService service, GameState state)
