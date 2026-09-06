@@ -1,6 +1,6 @@
 # WO-1402: Raid Selection rows say how hard a camp is and never what a raid PAYS
 
-**Status:** FIXED 2026-09-05 21:45 - spoils line landed (RaidScoring.EstimateSpoils, ONE producer shared with WO-1403), RaidSelectionSpoilsRegression green, COMPILE_GATE_OK + REGRESSION_OK 385/385; device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
+**Status:** FIXED - ON THE SEEKER in build 2026.09.06.357453 (chain 00:31-00:38: APK_OK 463MB, R2_PARITY_OK objects=271; installed 00:41, versionCode 357453 read off dumpsys; Firebase App Distribution release 0kka4h6t9u400); owner felt-test closes 2026-09-05 21:45 - spoils line landed (RaidScoring.EstimateSpoils, ONE producer shared with WO-1403), RaidSelectionSpoilsRegression green, COMPILE_GATE_OK + REGRESSION_OK 385/385; device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 Sprint framing, one line: the owner said "creating reason to raid is big" - this screen is where that reason must first appear.
 
