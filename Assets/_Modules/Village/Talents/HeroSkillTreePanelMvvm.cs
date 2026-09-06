@@ -159,6 +159,51 @@ namespace DeNelle.Village.Talents
 
         /// <summary>Right column: the WISDOM currency chip band.</summary>
         public const float WisdomBandPx = 52f;
+
+        // ---------------------------------------------------------------------
+        // WO-1410 THE WISDOM CHIP WAS TOO NARROW FOR ITS OWN PINNED SENTENCE.
+        // Headless frame Builds/ui-capture/HeroSkillTree_2670x1200.png (22:54)
+        // read "WISDOM 0 - next point ..." -- ELLIPSIZED, not culled.
+        //
+        // WHY, measured (no guess):
+        //  - FitSingleLine(_wisdomLabel, 15f, 20f) does NOT render at 15. The kit
+        //    CLAMPS minSize UP to ElarionUiKit.FontHardFloor = 20
+        //    (ElarionUiKitObsidian.cs:3062-3064), so min == max == 20 and the label
+        //    has NO shrink left: too little width means ellipsis, full stop.
+        //  - Canvas units (BuildModalCanvas: 1080x1920, match 0.5):
+        //      2670x1200 -> scale sqrt((2670/1080)*(1200/1920)) = 1.243 -> 2148 units wide
+        //      1920x1080 -> scale 1.0                                  -> 1920 units wide
+        //    So 1080p is the NARROW case and sizing must be proven there.
+        //  - Width chain: chrome.root = 0.86 of canvas; chrome.content = 0..1 of it;
+        //    TalentWorkspace = 0.93 of content. 1080p panel = 0.86*0.93*1920 = 1535.6 u.
+        //  - The retired plate was 0.80..0.98 (0.18) with the label at 0.10..0.90:
+        //    plate 276.4 u, label 221.1 u at 1080p. The capture's own run calibrates
+        //    the bold face at ~0.54 em/char at 20 px (22 chars + ellipsis in the
+        //    Seeker label's 247.4 u), so the widest LIVE sample from Render() --
+        //    "WISDOM 999 - next point at Level 100", 36 chars -- needs ~396 u.
+        //    221 u could not hold even the 3-word prefix. That is the whole defect.
+        //
+        // THE FIX IS WIDTH, NOT COPY: "next point at Level" is pinned by
+        // SkillsPanelLayoutRegression (source law, ~:603) and WisdomBandPx by its
+        // LineFloor case (~:258) -- neither moves. The plate grows LEFTWARDS (the
+        // column's free side) and the label reclaims the plate's own side inset.
+        // ---------------------------------------------------------------------
+
+        /// <summary>WISDOM chip: LEFT anchor, fraction of the talent workspace. Grown from 0.80.
+        /// 0.35 of the panel = 537.5 u at 1080p / 601.3 u at 2670x1200 -- against the ~396 u the
+        /// widest live sentence needs at 20 px, that is ~22% headroom on the NARROW aspect.
+        /// Widening leftwards is free: the graph well is already shortened across the FULL panel
+        /// width by (WisdomBandPx + BandGapPx), so no node plate can be covered.</summary>
+        public const float WisdomPlateAnchorX0 = 0.63f;
+        /// <summary>WISDOM chip: RIGHT anchor. UNCHANGED -- the chip stays pinned to the column's
+        /// right edge, inside the frame, and vertically disjoint from the EQUIPMENT button (that
+        /// button lives on chrome.root at y 0.84..0.98; the workspace TOPS OUT at 0.84).</summary>
+        public const float WisdomPlateAnchorX1 = 0.98f;
+        /// <summary>Side inset of the chip's label inside its plate. 0.05 (was 0.10) returns 10%
+        /// of the plate to the sentence. Safe: the plate art is content-panel drawn
+        /// Image.Type.Simple, whose side margin measures ~1.2% of its 1672 px width
+        /// (cf. PopupContentSideInsetPx = 20), so 5% still clears the painted pilaster.</summary>
+        public const float WisdomLabelInsetX = 0.05f;
         /// <summary>Right column: the "SELECTED TALENT" caption band (FontMicro 32 -> line ~40).</summary>
         public const float DetailHeadPx = 40f;
         /// <summary>Right column: the talent NAME band (FontTitle, fitted; line box floor 40).</summary>
@@ -555,7 +600,8 @@ namespace DeNelle.Village.Talents
             if (_vm == null) return;
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
             if (_wisdomLabel != null)
-                _wisdomLabel.text = "WISDOM  " + _vm.RemainingWisdom;
+                _wisdomLabel.text = "WISDOM " + _vm.RemainingWisdom +
+                                    " - next point at Level " + _vm.NextWisdomLevel;
 
             RebuildTracks();
             RenderQuickSwapBar();
@@ -583,38 +629,99 @@ namespace DeNelle.Village.Talents
             if (_popupPrompt != null) _popupPrompt.text = _vm.SelectedSpendPrompt;
 
             bool canSpend = _vm.CanSpendSelected;
-            bool canEquip = _vm.SelectedIsAssignable && !_vm.SelectedAlreadyOnBar;
             if (_popupConfirmBtn != null)
             {
                 // Keep the button present so layout stays stable; dim when unaffordable.
                 _popupConfirmBtn.gameObject.SetActive(true);
-                _popupConfirmBtn.interactable = canSpend || canEquip;
-                SetButtonAlpha(_popupConfirmBtn, canSpend || canEquip ? 1f : 0.35f);
+                _popupConfirmBtn.interactable = canSpend;
+                SetButtonAlpha(_popupConfirmBtn, canSpend ? 1f : 0.35f);
             }
             if (_popupConfirmRing != null)
-                _popupConfirmRing.SetActive(canSpend || canEquip);
+                _popupConfirmRing.SetActive(canSpend);
+            // COLOURBLIND LAW: the WORD carries the state. This used to be
+            // `canSpend ? "LEARN" : "OWNED"`, and CanSpendSelected is false for OWNED *and*
+            // prereq-LOCKED *and* UNAFFORDABLE alike - so a locked or unaffordable talent
+            // painted the word OWNED, a flat lie on the one cue the owner can read. One word
+            // per real state, derived from the node's own SkillNodeState.
             if (_popupConfirmLabel != null)
-            {
-                if (canEquip)
-                {
-                    int slot = _vm.SelectedSuggestedSlot;
-                    bool replacing = slot > 0 && slot <= _vm.QuickSlots.Count
-                                     && !_vm.QuickSlots[slot - 1].IsEmpty;
-                    _popupConfirmLabel.text = replacing
-                        ? "REPLACE SLOT " + slot
-                        : "ASSIGN SLOT " + slot;
-                }
-                else if (_vm.SelectedAlreadyOnBar)
-                    _popupConfirmLabel.text = "IN SLOT " + _vm.SelectedAssignedSlot;
-                else
-                    _popupConfirmLabel.text = "LEARN";
-            }
+                _popupConfirmLabel.text = ConfirmWordFor(canSpend);
             // Cancel is always the dismiss path (owned / locked / buyable).
             if (_popupCancelBtn != null)
             {
                 _popupCancelBtn.interactable = true;
                 SetButtonAlpha(_popupCancelBtn, 1f);
             }
+        }
+
+        /// <summary>
+        /// The one word on the confirm button, derived from the SELECTED node's real state -
+        /// never from CanSpendSelected alone (that predicate is false for owned, prereq-locked
+        /// and unaffordable nodes alike, so a single ternary can only ever tell the truth about
+        /// one of the three). Owned -> OWNED; prerequisite not yet taken -> LOCKED; reachable but
+        /// unaffordable -> LEARN, dimmed and non-interactable, with the state line carrying
+        /// "Needs N Wisdom (have M)"; buyable -> LEARN.
+        ///
+        /// A node whose seat cannot be resolved falls back to LEARN, NEVER to OWNED: claiming
+        /// ownership the player does not have is the failure this method exists to end.
+        /// </summary>
+        private string ConfirmWordFor(bool canSpend)
+        {
+            if (canSpend) return "LEARN";
+            if (_vm == null) return "LEARN";
+
+            var tracks = _vm.Tracks;
+            string selectedId = _vm.SelectedNodeId;
+            if (tracks == null || string.IsNullOrEmpty(selectedId)) return "LEARN";
+
+            // One pass: the selected seat plus a state index for its prerequisites (same seat
+            // walk RebuildTracks/FilterCalmFrontier use - SkillNodeState is the VM's own verdict).
+            var stateById = new Dictionary<string, SkillNodeState>(64, StringComparer.Ordinal);
+            SkillTrackNodeVM selected = default;
+            bool found = false;
+            bool anyCapstoneOwned = false;
+            for (int t = 0; t < tracks.Count; t++)
+            {
+                var track = tracks[t];
+                if (track == null || track.Nodes == null) continue;
+                for (int i = 0; i < track.Nodes.Count; i++)
+                {
+                    var seat = track.Nodes[i];
+                    if (string.IsNullOrEmpty(seat.Node.Id)) continue;
+                    stateById[seat.Node.Id] = seat.State;
+                    if (seat.Node.IsCapstone && seat.State == SkillNodeState.Owned)
+                        anyCapstoneOwned = true;
+                    if (!found && string.Equals(seat.Node.Id, selectedId, StringComparison.Ordinal))
+                    {
+                        selected = seat;
+                        found = true;
+                    }
+                }
+            }
+            if (!found) return "LEARN";
+            if (selected.State == SkillNodeState.Owned) return "OWNED";
+
+            // Same precedence the VM's LockReasonFor uses: the one-capstone-per-hero rule is the
+            // dominant blocker, so a second capstone reads LOCKED even when it is also unaffordable.
+            if (selected.Node.IsCapstone && anyCapstoneOwned) return "LOCKED";
+
+            var prereqs = selected.Node.Prereqs;
+            if (prereqs != null)
+            {
+                for (int p = 0; p < prereqs.Count; p++)
+                {
+                    string pr = prereqs[p];
+                    if (string.IsNullOrEmpty(pr)) continue;
+                    if (!stateById.TryGetValue(pr, out var prState)) return "LOCKED";
+                    if (prState != SkillNodeState.Owned && prState != SkillNodeState.Planned)
+                        return "LOCKED";
+                }
+            }
+
+            // Prerequisites are met and the capstone rule is clear, so the remaining gate is
+            // affordability: Wisdom short = the action is still LEARN (dimmed), with the state
+            // line carrying "Needs N Wisdom (have M)". Anything else structural reads LOCKED.
+            if (selected.Node.WisdomCost > _vm.RemainingWisdom) return "LEARN";
+            return "LOCKED";
         }
 
                 // ── WO-896: SPARSE TALENT GRAPH (Obsidian demo) ───────────────────────────
@@ -1967,7 +2074,8 @@ namespace DeNelle.Village.Talents
             // owner retired 2026-08-15 — "I don't see the value in ... the close").
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "TALENT TREE",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "chrome"),
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
                 headerX0: 0.18f, headerX1: 0.78f, frameName: RpgUiCatalog.FrameTalent,
                 medallionIcon: "talent");
@@ -2027,8 +2135,8 @@ namespace DeNelle.Village.Talents
             var pointsPlate = new GameObject("WisdomPlate", typeof(Image));
             pointsPlate.transform.SetParent(panel, false);
             var pointsRt = (RectTransform)pointsPlate.transform;
-            pointsRt.anchorMin = new Vector2(0.80f, 1f);
-            pointsRt.anchorMax = new Vector2(0.98f, 1f);
+            pointsRt.anchorMin = new Vector2(WisdomPlateAnchorX0, 1f);
+            pointsRt.anchorMax = new Vector2(WisdomPlateAnchorX1, 1f);
             pointsRt.offsetMin = Vector2.zero; pointsRt.offsetMax = Vector2.zero;
             PinBandFromTop(pointsRt, BodyPadPx, WisdomBandPx);
             var pointsImage = pointsPlate.GetComponent<Image>();
@@ -2044,10 +2152,19 @@ namespace DeNelle.Village.Talents
                 pointsImage.color = new Color(0.035f, 0.03f, 0.035f, 0.98f);
             }
             pointsImage.raycastTarget = false;
-            _wisdomLabel = ElarionUiKit.Label(pointsPlate.transform, "WISDOM  0",
-                0.10f, 0.90f, ElarionUi.Gold, 20,
+            _wisdomLabel = ElarionUiKit.Label(pointsPlate.transform,
+                "WISDOM 0 - next point at Level 2",
+                WisdomLabelInsetX, 1f - WisdomLabelInsetX, ElarionUi.Gold, 20,
                 TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            // The 15f floor is INERT (the kit clamps it up to FontHardFloor 20) -- kept because
+            // the suite pins the call token; the real fit is the plate width computed above.
             ElarionUiKit.FitSingleLine(_wisdomLabel, 15f, 20f);
+            FlowTrace.Step("SkillTree", "wisdom chip: plate x " +
+                WisdomPlateAnchorX0.ToString("F2") + ".." + WisdomPlateAnchorX1.ToString("F2") +
+                " of workspace (" + ((WisdomPlateAnchorX1 - WisdomPlateAnchorX0) * 1535.6f).ToString("F0") +
+                " u at 1080p / " + ((WisdomPlateAnchorX1 - WisdomPlateAnchorX0) * 1718.0f).ToString("F0") +
+                " u at 2670x1200), label inset " + WisdomLabelInsetX.ToString("F2") +
+                ", band " + WisdomBandPx.ToString("F0") + " px, fixed 20 px single line.");
 
             BuildSpendPopup(panel);
         }
@@ -2193,7 +2310,9 @@ namespace DeNelle.Village.Talents
             // COLOURBLIND LAW: the emphasis is a BORDER plus the near-white brightness step
             // below - shape and luminance, never hue. Greyscale the capture and LEARN still
             // reads as the framed, brighter action next to CANCEL's plain parchment plate.
-            // The affirmative word ("LEARN" / "ASSIGN SLOT n") stays the primary cue.
+            // The confirm word (LEARN / OWNED / LOCKED - ConfirmWordFor) stays the primary cue.
+            // WO-1410 moved slot assignment to Loadout, so "ASSIGN SLOT n" is no longer a word
+            // this button can show; the old comment naming it was stale.
             //
             // The GameObject keeps the name "ConfirmRing" - WO-1340's FTUE highlights
             // resolve targets BY NAME and RenderSpendPopup toggles it by reference.
@@ -2224,7 +2343,6 @@ namespace DeNelle.Village.Talents
         {
             if (_vm == null) return;
             if (_vm.CanSpendSelected) _vm.SpendSelected();
-            else if (_vm.SelectedIsAssignable) _vm.ConfirmOrAssign();
         }
 
         /// <summary>Persistent three-slot hot-swap rail. It sits beside the discovery surface so
@@ -2268,7 +2386,7 @@ namespace DeNelle.Village.Talents
             // The default sentence is the VM's (HeroSkillTreeVM.QuickSwapStatus); RenderQuickSwapBar
             // overwrites it on the first paint. ASCII only.
             hint = ElarionUiKit.Label(rail.transform,
-                "Select an owned skill, then tap a slot (1-3).", 1f, 1f,
+                "Assigned skills - change them in " + HudStrings.Get(HudStrings.KeyHeroLoadout) + ".", 1f, 1f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
             hint.gameObject.name = "QuickSwapHint";
@@ -2321,14 +2439,14 @@ namespace DeNelle.Village.Talents
             for (int i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
-                int captured = slot.SlotIndex;
                 string label = slot.IsEmpty ? slot.SlotKey + "\nEMPTY" : string.Empty;
                 var btn = ElarionUiKit.BuildObsidianButton(_quickSwapHost, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     slot.IsEmpty ? ElarionUiKit.ObsidianButtonColor.Gray
                                  : ElarionUiKit.ObsidianButtonColor.Yellow,
                     Vector2.zero, Vector2.one,
-                    () => _vm?.AssignSelectedToSlot(captured));
+                    null);
+                if (btn != null) btn.interactable = false;
                 MedievalUiSkin.ApplyButton(btn, primary: !slot.IsEmpty);
                 if (btn != null && btn.targetGraphic is Image slotImage)
                 {

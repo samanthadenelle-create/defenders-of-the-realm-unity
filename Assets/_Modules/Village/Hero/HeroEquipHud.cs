@@ -253,7 +253,9 @@ namespace DeNelle.Village
                                    0f, 1f, bold: true);
             }
 
-            ElarionUiKit.Label(btn.transform, "BAG", 0.02f, 0.26f, ElarionUi.Ink,
+            ElarionUiKit.Label(btn.transform,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroBag, "button"),
+                0.02f, 0.26f, ElarionUi.Ink,
                                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
                                0.02f, 0.98f, spacing: 2f);
         }

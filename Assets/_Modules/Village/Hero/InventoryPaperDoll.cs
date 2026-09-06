@@ -124,7 +124,7 @@ namespace DeNelle.Village
             // WO-1254: Skills and Map are wayfinding chips in the header, never
             // inventory categories. Both are words, so dormancy survives greyscale.
             var talents = ElarionUiKit.ButtonPack(_headerRoot.transform,
-                InventoryStrings.Get(InventoryStrings.KeyHeaderTalents),
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "button"),
                 ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.755f, 0f), new Vector2(0.87f, 1f), OpenSkillTree);
             if (talents != null) ElarionUiKit.ClampMinTouch(talents);

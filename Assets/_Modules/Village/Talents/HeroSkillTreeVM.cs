@@ -41,6 +41,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Core.Diagnostics;
 
@@ -458,7 +459,7 @@ namespace DeNelle.Village.Talents
 
         public event Action Changed;
 
-        public string Title { get; private set; } = "TALENT TREE";
+        public string Title { get; private set; } = HudStrings.Get(HudStrings.KeyHeroSkills);
 
         public void Close() => _onClose?.Invoke();
 
@@ -492,6 +493,16 @@ namespace DeNelle.Village.Talents
         public int RemainingWisdom
         {
             get { var svc = WisdomCurrencyService.Instance; return svc != null ? svc.Wisdom : 0; }
+        }
+
+        /// <summary>The next guaranteed Wisdom grant. HeroProgression grants Wisdom at every level.</summary>
+        public int NextWisdomLevel
+        {
+            get
+            {
+                var progression = HeroProgression.Instance;
+                return Math.Max(2, (progression != null ? progression.Level : 1) + 1);
+            }
         }
 
         /// <summary>Unspent hero skill points (display companion to Wisdom).</summary>
@@ -549,48 +560,8 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        /// <summary>True when the selected owned active skill is ALREADY sitting in a quick-swap slot.</summary>
+        /// <summary>Read-only: true when the selected owned active skill is already in a Loadout slot.</summary>
         public bool SelectedAlreadyOnBar => AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId) >= 0;
-
-        /// <summary>True when CONFIRM has a REAL action to perform: either a committable learn-plan
-        /// (unowned, affordable nodes staged) OR an owned, assignable ACTIVE skill that is not yet
-        /// on the quick-swap bar (CONFIRM then drops it into the first open slot). A passive talent
-        /// or an already-equipped skill leaves CONFIRM disabled — we never light a CONFIRM that does
-        /// nothing (owner 2026-06-28: don't fake a confirm; selecting a node still EXPLAINS itself
-        /// via the detail strip). Honours the intent "selecting a skill lets you confirm/learn".</summary>
-        public bool CanConfirm => CanCommit || (SelectedIsAssignable && !SelectedAlreadyOnBar);
-
-        /// <summary>The CONFIRM action: commit the staged learn-plan when there is one; otherwise, if an
-        /// owned assignable skill is selected, assign it into the first open quick-swap slot. When that
-        /// skill is already on the bar, report WHERE instead of silently dead-ending (the old bug —
-        /// FirstAssignSlot picked a different empty slot and the bar rejected the duplicate). The
-        /// instant slot-tap path is unchanged; this just makes CONFIRM work + speak.</summary>
-        public void ConfirmOrAssign()
-        {
-            if (CanCommit) { Commit(); return; }
-            if (!SelectedIsAssignable) return;
-            int existing = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
-            if (existing >= 0)
-            {
-                QuickSwapStatus = SelectedNodeName + " is already in quick-swap " + (existing + 1) + " - tap a slot to move it.";
-                Raise();
-                return;
-            }
-            AssignSelectedToSlot(FirstAssignSlot());
-        }
-
-        // First empty quick-swap slot for a CONFIRM-assign; falls back to slot 0 when full.
-        private int FirstAssignSlot()
-        {
-            var bar = AssignableSkillBarAccess.Current;
-            for (int i = 0; i < AssignableSkillBar.SlotCount; i++)
-            {
-                string id = bar != null ? bar.AbilityIdForSlot(i) : null;
-                if (string.IsNullOrEmpty(id)) return i;
-            }
-            return 0;
-        }
-
         /// <summary>Stage a node into the plan if reachable + affordable within the remaining budget
         /// (treats already-staged nodes as tentatively owned so a chain can be planned in one pass).</summary>
         public void Stage(string nodeId)
@@ -750,7 +721,7 @@ namespace DeNelle.Village.Talents
             var tree = HeroTalentCatalog.GetTree(_heroSlug);
             // WO-896 F8 overcrowding: the Obsidian demo chrome is "TALENT TREE", not a
             // packed "Grom (Knight) Skills" header. Hero name stays on the detail strip.
-            Title = "TALENT TREE";
+            Title = HudStrings.Get(HudStrings.KeyHeroSkills);
 
             var svc = WisdomCurrencyService.Instance;
             int wisdom = svc != null ? svc.Wisdom : 0;
@@ -1245,10 +1216,7 @@ namespace DeNelle.Village.Talents
             string id = _selectedId;
             FlowTrace.Step("SkillTree", "popup spend '" + id + "' cost=" + SelectedWisdomCost);
             Unlock(id);
-            var learned = HeroTalentCatalog.FindNode(id);
-            bool active = learned != null && !string.IsNullOrEmpty(AbilityIdOf(learned));
-            if (!active) _selectedId = "";
-            else QuickSwapStatus = SelectedNodeName + " learned - assign it to a numbered quick-swap slot.";
+            _selectedId = "";
             Raise();
         }
 
@@ -1326,10 +1294,6 @@ namespace DeNelle.Village.Talents
         /// <summary>True when the selected node is an owned skill that can be assigned to the quick-swap bar.</summary>
         public bool SelectedIsAssignable => !string.IsNullOrEmpty(SelectedAssignAbilityId);
 
-        /// <summary>One-based destination used by the popup assignment action. An empty slot is
-        /// preferred; when all three are occupied, slot 1 is named explicitly as the replacement.</summary>
-        public int SelectedSuggestedSlot => SelectedIsAssignable ? FirstAssignSlot() + 1 : 0;
-
         /// <summary>One-based current slot for the selected active, or 0 when not assigned.</summary>
         public int SelectedAssignedSlot => SelectedIsAssignable
             ? AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId) + 1 : 0;
@@ -1357,34 +1321,9 @@ namespace DeNelle.Village.Talents
         /// <summary>The player's quick-swap slots 1..3 (mirror of AssignableSkillBar). Never null.</summary>
         public IReadOnlyList<LoadoutSlotVM> QuickSlots => _quickSlots;
 
-        /// <summary>Last quick-swap action / hint line.</summary>
-        public string QuickSwapStatus { get; private set; } = "Select an owned skill, then tap a slot (1-3).";
-
-        /// <summary>Assign the SELECTED owned skill into quick-swap <paramref name="slotIndex"/>; with no
-        /// assignable selection, tapping a filled slot clears it. Battle-locked + persisted via the bar.</summary>
-        public void AssignSelectedToSlot(int slotIndex)
-        {
-            string id = SelectedAssignAbilityId;
-            if (string.IsNullOrEmpty(id))
-            {
-                if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
-                bool cleared = AssignableSkillBarAccess.Clear(slotIndex);
-                QuickSwapStatus = cleared ? "Slot " + (slotIndex + 1) + " cleared."
-                                          : "Select an owned skill, then tap a slot (1-3).";
-                FlowTrace.Step("SkillTree", "quickswap clear slot " + slotIndex + " => " + cleared);
-                Rebuild(); Raise();
-                return;
-            }
-            if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
-            // Assign now MOVES a skill already on the bar (WO-574), so a false result here means
-            // it's already sitting in exactly this slot — report that rather than a stale "already
-            // on the bar" dead-end.
-            bool ok = AssignableSkillBarAccess.Assign(slotIndex, id);
-            QuickSwapStatus = ok ? SelectedNodeName + " -> quick-swap " + (slotIndex + 1) + "."
-                                 : SelectedNodeName + " is already in quick-swap " + (slotIndex + 1) + ".";
-            FlowTrace.Step("SkillTree", "quickswap assign " + id + " -> slot " + slotIndex + " => " + ok);
-            Rebuild(); Raise();
-        }
+        /// <summary>Read-only quick-swap hint naming Loadout as the one assignment owner.</summary>
+        public string QuickSwapStatus => "Assigned skills - change them in " +
+                                         HudStrings.Get(HudStrings.KeyHeroLoadout) + ".";
 
         private void BuildQuickSlots()
         {

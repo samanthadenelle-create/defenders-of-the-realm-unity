@@ -796,7 +796,8 @@ namespace DeNelle.Village.Hero
         private void RenderApprovedInventory()
         {
             if (_approvedInventoryHost == null || _vm == null) return;
-            ApprovedHeading(_approvedInventoryHost, "INVENTORY");
+            ApprovedHeading(_approvedInventoryHost,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroBag, "chrome"));
             var selected = _vm.SelectedItem;
             int count = Mathf.Min(5, _vm.CompatibleItems.Count);
             if (count == 0)
@@ -959,7 +960,8 @@ namespace DeNelle.Village.Hero
             var backLabel = back != null ? back.GetComponentInChildren<TMPro.TMP_Text>() : null;
             if (backLabel != null) ElarionUiKit.FitSingleLine(backLabel, 18f, 26f);
 
-            var talents = ElarionUiKit.ButtonPack(chrome.root.transform, "TALENTS",
+            var talents = ElarionUiKit.ButtonPack(chrome.root.transform,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "button"),
                 ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.82f, 0.885f), new Vector2(0.975f, 0.975f),
                 OpenTalentsFromEquipment, RpgUiCatalog.ButtonFrame);

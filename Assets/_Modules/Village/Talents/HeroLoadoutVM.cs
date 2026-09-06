@@ -23,6 +23,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Talents
@@ -97,7 +98,7 @@ namespace DeNelle.Village.Talents
 
         public event Action Changed;
 
-        public string Title => "Hot-Swap Skills";
+        public string Title => HudStrings.Get(HudStrings.KeyHeroLoadout);
 
         public void Close() => _onClose?.Invoke();
 

@@ -595,12 +595,28 @@ namespace DeNelle.Editor.Regression
             }
 
             int routes = 0;
-            foreach (string raw in hero.Split('\n'))
+            // WO-1410 (2026-09-05): the Bag / Skills / Loadout titles now come from the ONE canon source
+            // (HudStrings.HeroFaceLabel(HudStrings.KeyHero*, "deck")) and each Route( call wraps onto a
+            // second line. The literal budget is unchanged - "deck" + purpose + concept = three - but the
+            // count must be taken over the WHOLE call, not one physical line, or a wrapped call reads as
+            // one literal. Accumulate from "Route(" until its parentheses balance.
+            string[] heroLines = hero.Split('\n');
+            for (int li = 0; li < heroLines.Length; li++)
             {
-                string line = raw.Trim();
+                string line = heroLines[li].Trim();
                 if (line.StartsWith("//", StringComparison.Ordinal)) continue;
                 if (line.IndexOf("Route(", StringComparison.Ordinal) < 0) continue;
                 routes++;
+                int depth = 0;
+                var call = new System.Text.StringBuilder(line);
+                for (int i = 0; i < line.Length; i++) { if (line[i] == '(') depth++; else if (line[i] == ')') depth--; }
+                while (depth > 0 && li + 1 < heroLines.Length)
+                {
+                    string next = heroLines[++li].Trim();
+                    call.Append(' ').Append(next);
+                    for (int i = 0; i < next.Length; i++) { if (next[i] == '(') depth++; else if (next[i] == ')') depth--; }
+                }
+                line = call.ToString();
                 // Route(title, purpose, concept, panelId[, artKey]) - three quoted literals is a
                 // text-free card whose ONLY label producer is the live TMP text. A fourth is an
                 // art key, i.e. a second producer painted into the same plate.

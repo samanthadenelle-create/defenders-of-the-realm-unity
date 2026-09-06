@@ -31,6 +31,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;   // FlowTrace (WO-844: instrument the Use command)
+using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Village.Crafting;   // VillageInventory (resolved in CreateDefault, the sole site)
 
@@ -196,7 +197,7 @@ namespace DeNelle.Village.Hero
 
         public event Action Changed;
 
-        public string Title => "Inventory";
+        public string Title => HudStrings.Get(HudStrings.KeyHeroBag);
 
         public void Close() => _onClose?.Invoke();
 

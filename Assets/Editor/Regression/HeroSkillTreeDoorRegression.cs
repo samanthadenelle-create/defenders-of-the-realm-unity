@@ -106,12 +106,12 @@ namespace DeNelle.Editor
         {
             string rebuild = MethodBody(header, "private void RebuildHeader(");
             if (rebuild == null ||
-                rebuild.IndexOf("KeyHeaderTalents", StringComparison.Ordinal) < 0 ||
+                rebuild.IndexOf("KeyHeroSkills", StringComparison.Ordinal) < 0 ||
                 rebuild.IndexOf("OpenSkillTree", StringComparison.Ordinal) < 0)
-                failures.Add("[case 1] the active Bag header does not draw the canonical Talents chip " +
+                failures.Add("[case 1] the active Bag header does not draw the canonical Skills chip " +
                              "wired to OpenSkillTree; the hero talent tree is unreachable.");
             else
-                log.AppendLine("  case 1 OK - canonical Talents header chip -> OpenSkillTree");
+                log.AppendLine("  case 1 OK - canonical Skills header chip -> OpenSkillTree");
 
             string open = MethodBody(builder, "private void OpenSkillTree(");
             if (open == null || open.IndexOf("PanelId.HeroSkillTree", StringComparison.Ordinal) < 0)

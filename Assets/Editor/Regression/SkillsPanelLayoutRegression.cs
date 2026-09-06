@@ -594,14 +594,14 @@ namespace DeNelle.Editor.Regression
             Law(failures, code, "BuildNodeTypeBadge",
                 "skill nodes no longer state ACTIVE/PASSIVE/SLOT N in words, so hot-swappability " +
                 "and the assigned quick-swap position cannot be read without opening every node");
-            Law(failures, code, "SelectedSuggestedSlot",
-                "the learn-to-assign flow no longer names its destination/replacement slot");
+            Law(failures, code, "btn.interactable = false",
+                "the Skills quick-swap rail is no longer read-only; Loadout must be the one assignment owner");
             Law(failures, code, "UI/ElarionMedieval/frames/circular-bezel-four-point",
                 "skill nodes no longer use the canonical black-iron/four-point-gold medallion");
             Law(failures, code, "fillGo.AddComponent<Mask>()",
                 "skill artwork is no longer clipped into the circular medallion well");
-            Law(failures, code, "_wisdomLabel.text = \"WISDOM  \" + _vm.RemainingWisdom",
-                "the top-right talent balance no longer names and reads the Wisdom currency it spends");
+            Law(failures, code, "next point at Level",
+                "the top-right Wisdom balance no longer explains when the next point arrives");
             Law(failures, code, "UI/ElarionMedieval/frames/circular-bezel-four-point",
                 "the three bottom quick-swap slots no longer use the shared circular medallion");
             Law(failures, code, "ConceptIconResolver.Resolve(slot.AbilityId)",
@@ -618,13 +618,14 @@ namespace DeNelle.Editor.Regression
                 string vmCode = StripComments(vmSrc);
                 Law(failures, vmCode, "EquippedSlot",
                     "the VM no longer exposes the numbered quick-swap seat for an assigned active");
-                Law(failures, vmCode, "SelectedSuggestedSlot",
-                    "the VM no longer exposes the explicit assign/replace destination");
-                if (!Regex.IsMatch(vmCode,
-                        "bool\\s+active\\s*=.*AbilityIdOf\\s*\\(\\s*learned\\s*\\).*if\\s*\\(\\s*!active\\s*\\)\\s*_selectedId\\s*=\\s*\"\"",
+                Law(failures, vmCode, "KeyHeroLoadout",
+                    "the read-only rail no longer points to the canon-named Loadout assignment owner");
+                if (vmCode.IndexOf("AssignableSkillBarAccess.Assign(", StringComparison.Ordinal) >= 0 ||
+                    vmCode.IndexOf("AssignableSkillBarAccess.Clear(", StringComparison.Ordinal) >= 0)
+                    failures.Add("[source-flow] Skills mutates a quick-swap socket again; only Loadout may assign or clear");
+                if (!Regex.IsMatch(vmCode, "SpendSelected\\s*\\([^)]*\\).*?_selectedId\\s*=\\s*\"\"",
                         RegexOptions.Singleline))
-                    failures.Add("[source-flow] SpendSelected no longer preserves selection for a newly learned " +
-                                 "active - the player must find and tap the node again before assigning it");
+                    failures.Add("[source-flow] SpendSelected no longer dismisses after learning; Skills is growing a second assignment step");
             }
 
             // The content rect must be TOP-LEFT pivoted. Centre-pivoting a content rect wider

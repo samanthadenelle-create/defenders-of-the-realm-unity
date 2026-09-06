@@ -247,11 +247,31 @@ namespace DeNelle.Village.Talents
 
             if (n <= 0)
             {
+                // Sentence sits in the TOP band of the grid so the fixed-pixel CTA band
+                // below can never reach it (worst-case clearance 33.3 ref px at
+                // 2670x1200; 36.6 at 2340x1080; 61.8 at 1920x1080).
                 var empty = ElarionUiKit.Label(_gridRoot.transform,
-                    "No unlocked skills yet. Unlock SKILL nodes in the tree.",
-                    0.42f, 0.58f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                    "No skills unlocked yet.",
+                    0.72f, 0.95f, ElarionUi.Parchment, ElarionUi.FontLabel,
                     TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                 empty.raycastTarget = false;
+
+                var openSkills = ElarionUiKit.BuildObsidianButton(_gridRoot.transform,
+                    "OPEN " + HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "button"),
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(0.30f, 0.22f), new Vector2(0.70f, 0.48f),
+                    OpenSkillsFromLoadout);
+                // AUTHOR THE BAND AT THE FLOOR (WO-1410 geometry): the 0.22-0.48 anchor
+                // fractions of this grid resolve to 66.9-77.2 ref px across the three
+                // landscape aspects - UNDER ElarionUiKit.MinTouchPx(112) - so
+                // ClampMinTouch grew the band symmetrically at runtime and spilled it
+                // into both neighbours. Re-seat as a FIXED-PIXEL band (the sanctioned
+                // SeatSharedCloseInside shape): bottom-pinned CtaBottomGapPx above the
+                // grid floor, CanonCtaHeight tall, so the resolved height no longer
+                // depends on the aspect. ClampMinTouch stays armed and is now a no-op.
+                SeatFixedCtaBand(openSkills, 0.30f, 0.70f);
+                ElarionUiKit.ClampMinTouch(openSkills);
                 return;
             }
 
@@ -279,6 +299,31 @@ namespace DeNelle.Village.Talents
                     TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
                 more.raycastTarget = false;
             }
+        }
+
+        /// <summary>Gap in reference px between the grid's floor and the CTA band's bottom edge.</summary>
+        private const float CtaBottomGapPx = 20f;
+
+        /// <summary>
+        /// Seat a just-built kit button as a FIXED-PIXEL bottom-pinned band inside
+        /// <c>_gridRoot</c>: width stays fraction-of-grid (x0..x1), height is stamped at
+        /// <see cref="ElarionUiKit.CanonCtaHeight"/> so it is aspect-independent and can never
+        /// resolve under <see cref="ElarionUiKit.MinTouchPx"/>. Position/size only - no restyle,
+        /// no re-wire. Walks up to the rect that BuildObsidianButton actually anchored (the
+        /// prefab path can return a nested Button), so the stamp lands on the anchored root.
+        /// </summary>
+        private void SeatFixedCtaBand(Button button, float x0, float x1)
+        {
+            if (button == null || _gridRoot == null) return;
+            Transform t = button.transform;
+            while (t != null && t.parent != _gridRoot.transform) t = t.parent;
+            var rt = (t != null ? t : button.transform) as RectTransform;
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(x0, 0f);
+            rt.anchorMax = new Vector2(x1, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);         // seat by the BOTTOM edge, grow up
+            rt.anchoredPosition = new Vector2(0f, CtaBottomGapPx);
+            rt.sizeDelta = new Vector2(0f, ElarionUiKit.CanonCtaHeight);
         }
 
         private void DressChoice(ElarionUiKit.RaritySlotHandle h, SkillChoiceVM choice)
@@ -322,7 +367,8 @@ namespace DeNelle.Village.Talents
             // INHERIT the common Obsidian kit (owner: one common frame + one common close): the Talent
             // master-frame + its measured drop-zones + the ONE shared kit Close (built by
             // BuildObsidianPanel). No bespoke chrome/frame/close of our own.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Hot-Swap Skills",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroLoadout, "chrome"),
                 new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f),
                 () => { if (_vm != null) _vm.Close(); },
                 frameName: RpgUiCatalog.FrameTalent, medallionIcon: "talent");
@@ -365,6 +411,16 @@ namespace DeNelle.Village.Talents
 
             // NO per-panel Close/Done button — the shared kit Close (built by
             // BuildObsidianPanel above) is the ONE close game-wide (owner: one common close).
+        }
+
+        private void OpenSkillsFromLoadout()
+        {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
+                "Loadout empty-state door -> " + HudStrings.Get(HudStrings.KeyHeroSkills));
+            if (_vm != null) _vm.Close();
+            if (!PanelRouter.Open(PanelId.HeroSkillTree))
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                    "LOADOUT empty-state OPEN SKILLS door could not open HeroSkillTree.");
         }
 
         // ── Teardown ──────────────────────────────────────────────────────────────

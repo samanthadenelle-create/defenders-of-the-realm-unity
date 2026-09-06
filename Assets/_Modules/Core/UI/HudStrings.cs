@@ -100,6 +100,13 @@ namespace DeNelle.Core.UI
         /// A face that opens the store says exactly what the store's own title says.</summary>
         public const string KeyStoreWordmark = "storeWordmark";
 
+        // -- The Hero deck and its three destination screens (WO-1410) --
+        // Each face and chrome title resolves the same row. Typed synonyms such as
+        // Inventory, Talents and Hot-Swap Skills are deliberately not fallbacks.
+        public const string KeyHeroBag = "heroBag";
+        public const string KeyHeroSkills = "heroSkills";
+        public const string KeyHeroLoadout = "heroLoadout";
+
         // -- The Journey deck's three new cards (WO-1376 / WO-1394 / WO-1396, 2026-09-05) --
         // The purpose lines are the WO-1378 canon record (creative canon section 8.4: five
         // FANTASIES, not five mechanics). Quests and Raids keep their live subtitles; these three
@@ -124,6 +131,7 @@ namespace DeNelle.Core.UI
             KeyCollectorsNearlyLine, KeyCollectorsWaitingLine,
             KeyManageIdleAll, KeyManageIdleSome,
             KeyStoreWordmark,
+            KeyHeroBag, KeyHeroSkills, KeyHeroLoadout,
             KeyJourneyDungeons, KeyJourneyRealmMap, KeyJourneySeason,
             KeyDungeonSealedHeadline,
         };
@@ -146,6 +154,15 @@ namespace DeNelle.Core.UI
                 return label;
             }
             FlowTrace.Step("Store", "store face label='" + label + "' source=canon-strings site=" + site);
+            return label;
+        }
+
+        /// <summary>Canon-backed Hero destination name, with a trace at each visible face.</summary>
+        public static string HeroFaceLabel(string key, string site)
+        {
+            string label = Get(key);
+            FlowTrace.Step("Hero", "face label='" + label +
+                                   "' source=canon-strings site=" + (site ?? "unknown"));
             return label;
         }
 

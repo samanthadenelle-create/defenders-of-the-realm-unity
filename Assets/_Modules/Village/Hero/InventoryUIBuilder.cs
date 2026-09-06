@@ -120,7 +120,8 @@ namespace DeNelle.Village
             // owner F8 x3) that ~19 panels share, and re-seating it for one screen is a kit change,
             // not a Bag change. The layout instead RESPECTS the band: BodyY0/PurseY0 sit above it
             // and the rail clears it horizontally.
-            var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "INVENTORY",
+            var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform,
+                HudStrings.HeroFaceLabel(HudStrings.KeyHeroBag, "chrome"),
                 new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                 Close, headerX0: 0.05f, headerX1: 0.80f,
                 frameName: RpgUiCatalog.FrameInventory);
@@ -476,7 +477,10 @@ namespace DeNelle.Village
             // trips the TextFitGuard, owner F8 2026-07-10). The label is then RE-ANCHORED to the
             // entry's upper band so the count has its own row underneath, the same technique
             // BuildTabRow uses when it seats an icon beside a tab's label.
-            var btn = ElarionUiKit.ButtonPack(content, InventoryStrings.Get(labelKey),
+            string face = labelKey == InventoryStrings.KeyRailSkills
+                ? HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "button")
+                : InventoryStrings.Get(labelKey);
+            var btn = ElarionUiKit.ButtonPack(content, face,
                 ElarionUiKit.ButtonKind.Quiet,
                 Vector2.zero, Vector2.one, () => SelectRail(railIndex));
             if (btn == null) return;

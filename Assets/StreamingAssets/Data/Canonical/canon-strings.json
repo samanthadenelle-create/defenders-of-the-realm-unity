@@ -103,6 +103,11 @@
   "theKeeperKeyword": "the Keeper",
   "keeper": "Keeper",
 
+  "_heroScreenNamesNote": "WO-1410. One noun per Hero destination: the deck face, chrome title, cross-button and sentence all resolve these rows through HudStrings. ASCII only.",
+  "heroBag": "BAG",
+  "heroSkills": "SKILLS",
+  "heroLoadout": "LOADOUT",
+
   "crystalMines": "The Crystal Mines",
   "crystalMine": "Crystal Mine",
   "petHouse": "Echo Hollow",

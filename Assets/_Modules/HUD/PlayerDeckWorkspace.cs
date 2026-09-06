@@ -660,10 +660,13 @@ namespace DeNelle.HUD
                     // the panel stays. CosmeticShopReachabilityRegression pins the route.
                     return new List<Card>
                     {
-                        Route("Bag", "Every item you carry", "inventory", PanelId.Inventory),
+                        Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroBag, "deck"),
+                            "Every item you carry", "inventory", PanelId.Inventory),
                         Route("Equipment", "Gear worn by your hero", "armor", PanelId.EquipmentPanel),
-                        Route("Skills", "Learn and improve talents", "skill", PanelId.HeroSkillTree),
-                        Route("Loadout", "Abilities equipped for battle", "magic", PanelId.HeroLoadout),
+                        Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "deck"),
+                            "Learn and improve skills", "skill", PanelId.HeroSkillTree),
+                        Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroLoadout, "deck"),
+                            "Abilities equipped for battle", "magic", PanelId.HeroLoadout),
                         Route("Wardrobe", "Looks for your hero, Echo, and town", "wardrobe", PanelId.CosmeticShop)
                     };
                 case PlayerDeckKind.Journey:
