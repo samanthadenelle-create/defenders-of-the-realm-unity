@@ -1218,18 +1218,25 @@ namespace DeNelle.Village.UI
                     MaxLevel = maxLevel,
                     IconKey = ResolveBuildingPortraitKey(entry, id, level),
                     Locked = isLocked,
-                    LockText = isLocked ? "Level " + level + " . T" + next.RequiresVillageTier : "",
+                    // WO-2003: the rail sub-line said "Level 1 . T2", where "T" was the fourth way
+                    // the same gate was spelled on screen. It now names the gate the player can
+                    // actually go and raise. Kept terse - this is a 22-30px rail line.
+                    LockText = isLocked ? "Level " + level + " . Heart " + next.RequiresVillageTier : "",
                     RequiresVillageTier = isLocked ? next.RequiresVillageTier : 0,
                     // WO-1423 - the sentence and the door WORD are authored here, in the VM, exactly
-                    // as the Research card does it. The card's only gate is the VILLAGE tier (isLocked
-                    // IS next.RequiresVillageTier > villageTier), so the sentence can name it outright
-                    // and say WHERE it is raised - the Heart of Elarion, whose control is the upgrade
-                    // page's VillageGated action band.
+                    // as the Research card does it. The card's only gate is the HEART (isLocked IS
+                    // next.RequiresVillageTier > villageTier), so the sentence can name it outright
+                    // and say WHERE it is raised.
+                    // ⚠ CORRECTED WO-2003 (2026-09-06): this said the place it is raised is "the
+                    // upgrade page's VillageGated action band". That WAS true and was the whole
+                    // problem - the door named the Heart and opened a different building's screen.
+                    // ViewDetails below now opens PanelId.Heart for a locked card. The action band
+                    // still exists and still works; it is no longer the ONLY control.
                     // Kept SHORT on purpose: it lands in a 28.6px band, and the Research card's own
                     // device note warns that TMP culls a short band it cannot fit. 45 chars, close to
                     // the 37 that were MEASURED to render there.
                     LockReason = isLocked
-                        ? "Needs Village Tier " + next.RequiresVillageTier + " - raise it at the Heart."
+                        ? "Needs Heart Level " + next.RequiresVillageTier + " - raise it at the Heart."
                         : "",
                     LockCtaLabel = isLocked ? "UPGRADE THE HEART" : "",
                     StateWord = stateWord,
@@ -1240,7 +1247,15 @@ namespace DeNelle.Village.UI
                     AfterUpgradeText = isMax ? "" : Ascii(FirstClause(next.Effect)),
                     NextTier = nextTier,
                     Activate = isMax ? null : (Action)(() => UpgradeBuilding(rowId, targetTier)),
-                    ViewDetails = () => OpenUpgradePanel(rowId),
+                    // WO-2003: the ONE door, re-pointed by STATE, not by adding a second control.
+                    // A locked card's only gate IS the Heart (isLocked is literally
+                    // next.RequiresVillageTier > villageTier, above), its sentence says so and its
+                    // door word is "UPGRADE THE HEART" - so the door now opens the HEART SURFACE
+                    // instead of the building's own upgrade page, where the player then had to find
+                    // the VillageGated action band. An unlocked card's PERKS door is unchanged.
+                    ViewDetails = isLocked
+                        ? (Action)(() => OpenHeartPanel(rowId))
+                        : (Action)(() => OpenUpgradePanel(rowId)),
                     // WO-1422 ruling 3.5 - the owner's "keep one door, but name what's behind it".
                     // The door survives (it is still ViewDetails -> OpenUpgradePanel); only the WORD
                     // changes, and it is HIDDEN when the ladder authors no perks. Measured against
@@ -1593,8 +1608,13 @@ namespace DeNelle.Village.UI
                                 // ⚠ CORRECTED WO-1423: this said the page's "FIRST tile" was that
                                 // control. It is not - PrependVillageTierRow's tile is filtered out of
                                 // BOTH render paths (they take `perk:` ids only), so no such tile is
-                                // ever drawn. The action band is the control. There is no separate
-                                // Heart panel. The face names WHICH prerequisite the player is going to.
+                                // ever drawn. The action band is that page's control.
+                                // ⚠ CORRECTED AGAIN, WO-2003 (2026-09-06): this block used to end
+                                // "There is NO separate Heart panel." THERE IS ONE NOW - HeartPanel on
+                                // PanelId.Heart - and a VILLAGE-gated row opens it, because a door must
+                                // open the thing its own face names. A BUILDING-gated row still opens
+                                // the building's upgrade page, which is where a building tier is raised.
+                                // The face names WHICH prerequisite the player is going to.
                                 bool buildingLocked = ModifierService.TierOf(bId) < unlock;
                                 // WO-1423 — the village gate is the perk's OWN row's requiresVillageTier
                                 // (village scale), never `unlock` (building scale).
@@ -1602,12 +1622,27 @@ namespace DeNelle.Village.UI
                                     Buildings.Progression.VillageTierService.Current <
                                         BuildingTierCatalog.PerkRequiredVillageTier(bId, pId);
                                 cta = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
-                                activate = () =>
-                                {
-                                    FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
-                                        "' (tier " + unlock + ") -> BuildingUpgrade page '" + bId + "'");
-                                    OpenUpgradePanel(bId);
-                                };
+                                // WO-2003 - THE DOOR NOW OPENS THE THING THE FACE NAMES. Both arms
+                                // are still ONE door built from the same state; only the village arm
+                                // moved. It used to send the player to the BUILDING's upgrade page and
+                                // rely on them finding the VillageGated action band there, which is
+                                // how "UPGRADE THE HEART" led to a screen with no Heart on it.
+                                // ⚠ The building arm is untouched and still calls OpenUpgradePanel(bId):
+                                // a BUILDING-tier gate is genuinely raised on that page.
+                                string subject = bId + ":" + pId;
+                                activate = villageLocked
+                                    ? (Action)(() =>
+                                    {
+                                        FlowTrace.Step("Manage", "research locked door '" + subject +
+                                            "' (tier " + unlock + ") -> HEART surface (village gate)");
+                                        OpenHeartPanel(subject);
+                                    })
+                                    : (Action)(() =>
+                                    {
+                                        FlowTrace.Step("Manage", "research locked door '" + subject +
+                                            "' (tier " + unlock + ") -> BuildingUpgrade page '" + bId + "'");
+                                        OpenUpgradePanel(bId);
+                                    });
                             }
                             // "Researched" keeps cta == null and activate == null: there is nothing
                             // left to do to it, so the card shows no CTA at all.
@@ -2189,17 +2224,20 @@ namespace DeNelle.Village.UI
                                                      BuildingTierCatalog.PerkRequiredVillageTier(bId, pId);
                             if (!buildingLocked && !villageLocked) continue;
 
-                            // THE DOOR, not a dead button. Both gates open the SAME page through the
-                            // one existing start path (PanelId.BuildingUpgrade + the ladder id, the
-                            // id BuildModeController hands it too): the building's upgrade page,
-                            // whose ACTION BAND renders "Raise Village Tier N" in the VillageGated
-                            // state (BuildingUpgradePanelMvvm.cs:1322-1338) and routes to
-                            // VillageTierService.TryUpgrade - there is no separate Heart panel.
+                            // THE DOOR, not a dead button - and since WO-2003 each gate opens the
+                            // thing its own face names. A BUILDING-tier gate opens the building's
+                            // upgrade page (PanelId.BuildingUpgrade + the ladder id, the id
+                            // BuildModeController hands it too), which is where a building tier is
+                            // raised. A HEART gate opens the HEART SURFACE (PanelId.Heart).
                             // ⚠ CORRECTED WO-1423: this comment said the page's "FIRST tile" was that
                             // control (BuildingUpgradeVM.PrependVillageTierRow, WO-481). That tile is
-                            // never drawn - both render paths filter on `perk:` ids - so the band, not
-                            // a tile, is the live control. The face names which prerequisite the
-                            // player is going to. This screen still charges NOTHING: the page does.
+                            // never drawn - both render paths filter on `perk:` ids - so the page's
+                            // ACTION BAND, not a tile, is its live control.
+                            // ⚠ CORRECTED AGAIN, WO-2003 (2026-09-06): it then said "there is no
+                            // separate Heart panel". THERE IS ONE NOW (HeartPanel / PanelId.Heart), and
+                            // the village arm below opens it - a face reading "UPGRADE THE HEART" that
+                            // opened another building's screen is the defect the owner reported.
+                            // This screen still charges NOTHING: the destination does.
                             string upperName = buildingName.ToUpperInvariant();
                             string face = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
                             string gate = Ascii(string.IsNullOrEmpty(reason) ? "Locked." : reason);
@@ -2216,13 +2254,19 @@ namespace DeNelle.Village.UI
                                 // nearest prerequisite (Tier 2 before Tier 3) lists first.
                                 CostWeight = unlock,
                                 ActionText = face,
-                                Activate = () =>
-                                {
-                                    FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
-                                        "' (" + (villageLocked ? "village" : "building") + " tier " + unlock +
-                                        ") -> BuildingUpgrade page '" + bId + "'");
-                                    OpenUpgradePanel(bId);
-                                },
+                                Activate = villageLocked
+                                    ? (Action)(() =>
+                                    {
+                                        FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
+                                            "' (heart gate, tier " + unlock + ") -> HEART surface");
+                                        OpenHeartPanel(bId + ":" + pId);
+                                    })
+                                    : (Action)(() =>
+                                    {
+                                        FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
+                                            "' (building tier " + unlock + ") -> BuildingUpgrade page '" + bId + "'");
+                                        OpenUpgradePanel(bId);
+                                    }),
                             });
                             continue;
                         }
@@ -2462,6 +2506,21 @@ namespace DeNelle.Village.UI
         {
             if (!PanelRouter.Open(PanelId.BuildingUpgrade, id))
                 FlowTrace.Warn("Manage", $"BuildingUpgrade opener not registered — cannot drill into '{id}'.");
+        }
+
+        /// <summary>
+        /// WO-2003 / WO-2017 — the door behind every "UPGRADE THE HEART" face.
+        /// <para>Before today that face opened the BUILDING's upgrade page and relied on the player
+        /// finding the VillageGated action band on it. That band is real and still works, but it is
+        /// a control inside another building's screen — which is why the owner reported the gate as
+        /// having "no way to trigger". The face now opens the thing it names. The subject id rides
+        /// along so a capture says WHICH gated row sent the player.</para>
+        /// </summary>
+        private static void OpenHeartPanel(string subject)
+        {
+            if (!PanelRouter.Open(PanelId.Heart, subject))
+                FlowTrace.Fail("Manage", $"Heart opener not registered — the 'UPGRADE THE HEART' door for " +
+                    $"'{subject}' opened NOTHING. HeartPanelBootstrap did not run.");
         }
 
         private void UpgradePlaced(string jobKey)

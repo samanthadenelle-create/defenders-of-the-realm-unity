@@ -149,6 +149,20 @@ namespace DeNelle.Core.UI
         /// used to open THIS screen instead of Settings, and Help was reachable nowhere else.
         /// Append-only: values are load-bearing.</summary>
         Help = 25,
+        /// <summary>WO-2003 / WO-2017 - the HEART OF ELARION surface (HeartPanel, DeNelle.Village):
+        /// the realm-progression spine, where the player reads their HEART LEVEL, sees what the
+        /// next level opens (derived from building-tiers.json, never typed) and raises it.
+        ///
+        /// ⛔ THE DEFECT THIS ID EXISTS FOR (owner 2026-09-06: "wire the heart"): the sole writer of
+        /// the gate is VillageTierService.TryUpgrade, whose ONLY caller was
+        /// BuildingUpgradeVM.Select(VillageTierRowId) - reachable ONLY from the VillageGated action
+        /// band in BuildingUpgradePanelMvvm.cs:1322-1338, i.e. ONLY while the player happened to be
+        /// looking at a building whose next tier was gated. The control that gates nearly all
+        /// content had NO DIRECT ROUTE. Registered scene-independently by HeartPanel (spawned by
+        /// HeartPanelBootstrap); its doors are the Manage header HEART face and every village-gated
+        /// building/research CTA, which already read "UPGRADE THE HEART".
+        /// Append-only: values are load-bearing.</summary>
+        Heart = 26,
     }
 
     /// <summary>

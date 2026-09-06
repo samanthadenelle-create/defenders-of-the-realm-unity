@@ -1232,7 +1232,12 @@ namespace DeNelle.Core.State
             s.LastHarvestClaimMs = 0;   // New Game → reseed the accrual clock on next load (no haul).
             s.BuildJobs = new List<BuildJobData>();   // WO-172 — clear in-flight construction timers.
             s.ObsidianQueue = ObsidianQueueState.Empty();   // WO-773 — New Game: an empty three-channel work queue (no jobs on Builder/Train/Research).
-            s.BarracksLevel = 1;                             // WO-771.9 — New Game: day-one barracks (unlocks Footman + Archer).
+            // WO-771.9 — New Game: the legacy stored barracks level. RETIRED AS A GATE by owner
+            // ruling 21 (2026-09-06): troop unlocks read the barracks BUILDING TIER via
+            // BarracksProgression.EffectiveBarracksLevelOf = MAX(this, BuildingTiers["barracks"]).
+            // Seeded to 1 so the day-one Footman + Archer are trainable before any barracks tier is
+            // written; kept (not deleted) because it is a live save key (CLAUDE.md §8).
+            s.BarracksLevel = 1;
             s.TroopLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-771.9 — New Game: every troop at baseline (level 1).
             s.GearLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-808 — New Game: all gear at authored baseline (level 1).
             s.AdSkipsUsedToday = 0;

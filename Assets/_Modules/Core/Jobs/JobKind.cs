@@ -49,7 +49,18 @@ namespace DeNelle.Core.Jobs
         TowerUpgrade = 7,
         /// <summary>Upgrade a wall (Builder channel).</summary>
         WallUpgrade = 8,
-        /// <summary>Upgrade the Barracks BUILDING to the next level — unlocks new troops (Builder channel, WO-771.9).</summary>
+        /// <summary>
+        /// Raise the LEGACY stored barracks level (Builder channel, WO-771.9).
+        ///
+        /// <para>⚠ DEAD JOB KIND — nothing in the game composes one (verified 2026-09-06). Its only
+        /// composer is BarracksPanelVM, reachable only from BarracksPanel.ShowBarracksUI, which has
+        /// ZERO CALLERS (source grep + a script-GUID search of every .unity/.prefab/.asset). Owner
+        /// ruling 21 (2026-09-06) merged the two barracks levels: troop unlocks now read the barracks
+        /// BUILDING tier, which the ordinary JobKind.Upgrade path raises. NOT deleted here — the enum
+        /// value is persisted in save data (BuildJobData.Kind), so removing or renumbering it would
+        /// break any save that still holds one; and WO-2009 may reuse BarracksPanel as the troop
+        /// DETAIL surface. Do not renumber. See BarracksProgression.ApplyBarracksUpgrade.</para>
+        /// </summary>
         BarracksUpgrade = 9,
         /// <summary>Upgrade a single TROOP's progression track — reach/strength/ability (Research channel, WO-771.9).</summary>
         TroopUpgrade = 10,

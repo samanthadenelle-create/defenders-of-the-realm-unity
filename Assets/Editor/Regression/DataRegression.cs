@@ -1021,6 +1021,16 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-research-card suite", () => { if (!DeNelle.Editor.ManageResearchCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-research-card] " + r); });
             // --- WO-1423 progression reachability: no authored gate may demand a village tier above VillageTierService.MaxTier ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "progression-reachability suite", () => { if (!DeNelle.Editor.ProgressionReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[progression-reachability] " + r); });
+            // --- WO-2003 / WO-2017 Heart surface: the spine has a direct route and ONE player-facing name ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "heart-surface suite", () => { if (!DeNelle.Editor.Regression.HeartSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heart-surface] " + r); });
+            // --- WO-2011 + ruling 21: the barracks BUILDING tier is the troop gate, and every troop is reachable ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-reachability suite", () => { if (!DeNelle.Editor.TroopReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[troop-reachability] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-state-model suite", () => { if (!DeNelle.Editor.ManageStateModelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-state-model] " + r); });
+            // --- WO-2005 BUILD inventory + filters (ALL/ECONOMY/DEFENSE/CRAFT/STORAGE/CIVIC), storage singleton, art-key mapping ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-inventory-filters suite", () => { if (!DeNelle.Editor.Regression.BuildInventoryFilterRegression.Run(out var r)) failures.Add(r); else log.AppendLine(r); });
+            // --- SEAM ORACLES (CLI driving plan section 1): every panel has a door; no authored field goes unread ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "panel-door suite", () => { if (!DeNelle.Editor.PanelDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[panel-door] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "authored-field-reader suite", () => { if (!DeNelle.Editor.AuthoredFieldReaderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[authored-field-reader] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
             // --- WO-1404 Journey deck subtitles carry state (Quests / Raids), one pure Core VM, change-only publisher (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-subtitle suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckSubtitleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-subtitle] " + r); });

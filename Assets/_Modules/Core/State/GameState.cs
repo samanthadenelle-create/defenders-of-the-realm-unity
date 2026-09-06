@@ -496,9 +496,23 @@ namespace DeNelle.Core.State
 
         // ── WO-771.9 — Barracks & troop upgrade progression (additive, NO schema bump) ──
         /// <summary>
-        /// WO-771.9 — the player's current BARRACKS LEVEL (drives which troops are unlocked
-        /// for training/deploy — barracks.json unlocksTroopIds up to this level). Day-one = 1.
-        /// Raised when a <see cref="DeNelle.Core.Jobs.JobKind.BarracksUpgrade"/> job completes on
+        /// WO-771.9 — the LEGACY stored barracks level.
+        ///
+        /// <para>⛔ RETIRED AS A GATE (owner ruling 21, 2026-09-06: <i>"Merge them - the building tier
+        /// gates troops."</i>). Troop unlocks now read the barracks BUILDING TIER,
+        /// <c>BuildingTiers["barracks"]</c>, through
+        /// <c>BarracksProgression.EffectiveBarracksLevelOf</c> = MAX(this field, that tier) floored
+        /// to 1. This field is <b>READ-MIGRATED, never deleted and never written back</b> — a live
+        /// save key is never dropped without a migration (CLAUDE.md §8), and MAX-on-read means an
+        /// existing save can only move up. The doc here used to say this field "drives which troops
+        /// are unlocked", and it did — which is exactly the defect: its only writer was the
+        /// completion effect of a BarracksUpgrade job composed only by BarracksPanelVM, reachable
+        /// only from BarracksPanel.ShowBarracksUI, which has ZERO CALLERS. So it sat at 1 forever
+        /// and seven of the nine troops were unreachable while the player upgraded a barracks
+        /// BUILDING that did nothing for the army.</para>
+        ///
+        /// Day-one = 1. Raised (on the now-dead path only) when a
+        /// <see cref="DeNelle.Core.Jobs.JobKind.BarracksUpgrade"/> job completes on
         /// the Builder channel (BarracksService / BarracksProgression). ADDITIVE default-on-read:
         /// nullable on the wire (SaveSchema.barracksLevel), absent → this initializer (1), so no
         /// schema bump — rides the committed v35. Append-only field at the END.

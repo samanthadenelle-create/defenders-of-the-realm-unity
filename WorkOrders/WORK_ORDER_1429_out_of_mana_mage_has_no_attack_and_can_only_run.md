@@ -82,7 +82,21 @@ Each case with a one-line REVERT RECIPE; the CLI proves RED then GREEN.
       trace showing the primary at 0 mana.
 - [ ] Owner felt-test: play the Mage, empty the bar, and confirm you can still fight and that the swap is visible.
 
-## 7. Open for the owner
+## 7. RULED: the staff swing is FREE
+
+**Owner ruling 2026-09-06, verbatim: *"No swing Staff should have no cost only casting magic should."***
+
+The fallback costs **nothing**. Only casting magic spends mana.
+
+**This is what makes section 3's guarantee actually hold, and it is not merely a balance preference.** A fallback with
+a cost - stamina, a cooldown, anything - can itself become unavailable, and the hero is back in the dead state this WO
+exists to remove. **Free is the only cost that guarantees "the hero always has a verb" is true at every instant.**
+Encode it that way: the sweep must not consult any resource pool.
+
+Add to section 5 as case 7:
+`[fallback-is-free]` the melee-sweep path spends no resource - no mana, no stamina, no charge - at any mana value.
+RED: give the sweep any cost and case 1 `[no-verbless-hero]` fails with it, which is the point.
+
+## 8. Still open for the owner
 1. Staff damage - a fraction of the spell, a flat floor, or scaled off the hero's level?
-2. Does the staff swing cost anything (stamina, nothing)?
-3. Should the same fallback apply to any OTHER class whose basic has a cost, or is the Mage the only one today?
+2. Should the same fallback apply to any OTHER class whose basic has a cost, or is the Mage the only one today?

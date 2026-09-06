@@ -144,7 +144,33 @@ namespace DeNelle.Editor.Regression
             GearRecipesPath, JewelerRecipesPath,
         };
 
-        /// <summary>Max bankable for a capped resource with ONE container at <paramref name="level"/> (0 = none).</summary>
+        /// <summary>
+        /// Max bankable for a capped resource with ONE container at <paramref name="level"/> (0 = none).
+        ///
+        /// ⛔ "ONE container" IS NOW A RULE, NOT A CONVENIENCE. Do not "generalise" this back to a
+        /// sum over N containers. OWNER RULING 23 (2026-09-06, WO-2005), verbatim: *"also cap only
+        /// one of each storage type, the idea is they should level them"* / *"if we decide one day
+        /// we need more space we add another level easy."* `lumberyard`, `foundry` and `silo` carry
+        /// <c>repo.singleton = true</c> in structures-catalog.json as of that ruling, so at most one
+        /// of each can be placed and this arithmetic is exact rather than merely a lower bound.
+        ///
+        /// Before the ruling <c>TownBankCapacity.MaxOf</c> (:435-442) summed capacity over EVERY
+        /// built container of a resource, so a second Lumberyard bought another full container's
+        /// worth of wood ceiling for less than the L5-to-L6 rung cost - an undiscoverable second
+        /// axis that made the level ladder pointless. Capacity now has ONE axis of growth: LEVEL.
+        /// Raising the ceiling later is a DATA edit (a rung, or storage-caps.json's
+        /// levelCapacityMultipliers), never a second building.
+        ///
+        /// ⚠ MaxOf's SUM is deliberately unchanged: existing saves that already hold two containers
+        /// are GRANDFATHERED and keep their summed ceiling. Nothing is destroyed and no capacity is
+        /// clamped - a clamp would delete resources the player paid for. The singleton flag only
+        /// refuses the NEXT placement, and that is PROVEN, not assumed: every branch of
+        /// <c>StructureSingleton.EnforceInternal</c> (:279-325) acts solely on <c>repo.bakedTwins</c>
+        /// (<c>StandDownBakedTwins</c> :401-410 early-returns when a row authors none), and these
+        /// three rows author none - so the hub-load sweep cannot touch a placed body or a BaseLayout
+        /// record. So this arithmetic is the ceiling for every NEW town and a LOWER BOUND for a
+        /// grandfathered one, which is the safe direction for a cap oracle.
+        /// </summary>
         private static int MaxBankable(int level)
         {
             if (level <= 0) return BaseCap;

@@ -177,9 +177,16 @@ namespace DeNelle.Editor
                 fails.Add($"{label}: id \"arcane-tower\" not found — the identifier must remain unchanged");
                 return;
             }
-            // Grab the displayName that immediately follows the arcane-tower id.
+            // Grab the displayName belonging to the arcane-tower row.
+            // ⚠ WO-2005 (2026-09-06): this used to require displayName to be the VERY NEXT key after
+            // id (`"id"\s*:\s*"arcane-tower"\s*,\s*"displayName"`). That asserted FIELD ORDER, which is
+            // not an invariant of anything — it broke the moment the Manage-redesign lane inserted
+            // `manageFilters` and `manageArtKey` between them, on a change that could not possibly
+            // affect what this suite is about. The intent was always "the arcane-tower row displays
+            // Cathedral of Magic". It now allows intervening keys but stays inside the SAME row by
+            // refusing to cross a `"id":` boundary, so it cannot drift onto a neighbour's displayName.
             var m = Regex.Match(txt,
-                @"""id""\s*:\s*""arcane-tower""\s*,\s*""displayName""\s*:\s*""([^""]+)""",
+                @"""id""\s*:\s*""arcane-tower""\s*,(?:(?!""id""\s*:).)*?""displayName""\s*:\s*""([^""]+)""",
                 RegexOptions.Singleline);
             if (!m.Success)
                 fails.Add($"{label}: could not read the displayName following id \"arcane-tower\"");

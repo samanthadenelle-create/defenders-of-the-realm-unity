@@ -26,24 +26,24 @@ namespace DeNelle.Village
     public static class TroopUnlock
     {
         /// <summary>
-        /// The player's effective Barracks tier for unlock math: the persisted tier
-        /// (<see cref="ModifierService.TierOf"/>) floored to 1. A barracks that exists
-        /// but was never written a tier (TierOf → 0) still counts as tier 1, so the
+        /// The player's effective Barracks tier for unlock math. Delegates to the ONE authority,
+        /// <see cref="BarracksService.BarracksLevel"/> = <c>BarracksProgression.EffectiveBarracksLevelOf</c>
+        /// = MAX(the legacy stored GameState.BarracksLevel, BuildingTiers["barracks"]) floored to 1.
+        /// A barracks that exists but was never written a tier still counts as tier 1, so the
         /// day-one troops train the moment the Barracks is usable.
         /// </summary>
-        public static int EffectiveBarracksTier()
-        {
-            // WO-771.9 RECONCILE: the WO-771.9 BarracksService.BarracksLevel is now the primary
-            // unlock authority (barracks.json unlocksTroopIds). Take the MAX of it and the legacy
-            // building-tier (ModifierService.TierOf("barracks")) so BOTH ladders grant unlocks and
-            // no pre-771.9 save regresses. Floored to 1 (a usable Barracks always trains day-one
-            // troops). BarracksLevel defaults to 1 with no live state, so EditMode/VM tests are
-            // unchanged (day-one Footman+Archer unlocked, higher tiers locked).
-            int barracksLevel = BarracksService.BarracksLevel;
-            int legacyTier = ModifierService.TierOf("barracks");
-            int effective = barracksLevel > legacyTier ? barracksLevel : legacyTier;
-            return effective < 1 ? 1 : effective;
-        }
+        public static int EffectiveBarracksTier() => BarracksService.BarracksLevel;
+        // ⛔ OWNER RULING 21 (2026-09-06) — ONE AUTHORITY, AND THIS IS NOT IT ANY MORE.
+        // This method used to compute MAX(BarracksService.BarracksLevel, ModifierService.TierOf
+        // ("barracks")) ITSELF while BarracksService.IsTroopUnlocked compared against the stored
+        // GameState.BarracksLevel alone. That was a SPLIT-BRAIN gate: the Manage ARMY tab requires
+        // BOTH to agree (ManageScreenVM.cs:1892-1893, `unlocked && trainable`), so the stricter,
+        // permanently-1 half won and seven of nine troops were unreachable by any player action.
+        // The MAX now lives in exactly one place - BarracksProgression.EffectiveBarracksLevelOf,
+        // which BarracksService.BarracksLevel returns - so the two readings CANNOT diverge again.
+        // Behaviour here is identical to the old body (same MAX, same floor of 1); what changed is
+        // that it is no longer a second copy of the rule. A hand-maintained second reading of the
+        // same number is duplicated state and it fails exactly the way CLAUDE.md §2/§5/§16 describe.
 
         /// <summary>
         /// True when <paramref name="def"/> may be trained at the current Barracks tier

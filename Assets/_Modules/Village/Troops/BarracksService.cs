@@ -4,10 +4,20 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// The player-facing API the BarracksPanel + deploy/training gates call. Reads the
-// live GameState (BarracksLevel / TroopLevels — additive fields, no schema bump) +
-// EconomyService (afford/spend) and ENQUEUES timed jobs on the common Obsidian
-// queue (BuildTimerService), NEVER a private timer:
+// The player-facing API the deploy/training gates call. Reads the live GameState
+// (BuildingTiers["barracks"] / TroopLevels) + EconomyService (afford/spend) and
+// ENQUEUES timed jobs on the common Obsidian queue (BuildTimerService), NEVER a
+// private timer:
+//
+// ⛔ OWNER RULING 21 (2026-09-06) — THE TROOP GATE READS THE BARRACKS BUILDING TIER.
+// BarracksLevel below is now BarracksProgression.EffectiveBarracksLevelOf, i.e.
+// MAX(the legacy stored GameState.BarracksLevel, BuildingTiers["barracks"]) floored to 1.
+// Before the merge this facade compared troops against the stored field ALONE while
+// TroopUnlock.IsTrainable already took the MAX — a SPLIT-BRAIN gate. The Manage ARMY tab
+// requires BOTH (ManageScreenVM.cs:1892-1893, `unlocked && trainable`), so the stricter,
+// permanently-1 half dominated and seven of nine troops were unreachable. One authority now.
+// The BarracksPanel this file's header used to name has ZERO CALLERS and is marked dead;
+// so is the BarracksUpgrade job path below (see BarracksProgression.ApplyBarracksUpgrade).
 //   • Barracks upgrade  -> JobKind.BarracksUpgrade on the BUILDER channel.
 //   • Troop track upgrade -> JobKind.TroopUpgrade   on the RESEARCH channel.
 //   • Troop training      -> JobKind.TrainTroop     on the TRAIN channel.
@@ -53,8 +63,20 @@ namespace DeNelle.Village
         private static GameState State =>
             GameStateService.Instance != null ? GameStateService.Instance.State : null;
 
-        /// <summary>The player's current barracks level (1 with no live state).</summary>
-        public static int BarracksLevel => BarracksProgression.BarracksLevelOf(State);
+        /// <summary>
+        /// The player's current barracks level for UNLOCK MATH - the barracks BUILDING TIER,
+        /// floored by the legacy stored field and by 1 (owner ruling 21, 2026-09-06:
+        /// <i>"Merge them - the building tier gates troops."</i>).
+        ///
+        /// <para>This one line is the merge. It used to read
+        /// <c>BarracksProgression.BarracksLevelOf(State)</c> - the stored <c>GameState.BarracksLevel</c>
+        /// alone - which no reachable code path could raise, so <see cref="IsTroopUnlocked"/> and both
+        /// train gates below (the unlock refusals in <c>CanUpgradeTroop</c> and
+        /// <c>EnqueueTraining</c>) said no to seven of the nine troops forever. Now it reads
+        /// <see cref="BarracksProgression.EffectiveBarracksLevelOf"/>; the stored key is
+        /// read-migrated, never deleted (CLAUDE.md §8) - the migration rule is documented there.</para>
+        /// </summary>
+        public static int BarracksLevel => BarracksProgression.EffectiveBarracksLevelOf(State);
 
         /// <summary>A troop's current upgrade level (1 = baseline; 1 with no live state).</summary>
         public static int TroopLevel(string troopId) => BarracksProgression.TroopLevelOf(State, troopId);
@@ -463,7 +485,11 @@ namespace DeNelle.Village
         private static void PersistAndNotify()
         {
             GameStateService.Instance?.Save();
-            ModifierService.Recompute();   // barracks unlock refresh (perk/tier listeners)
+            // Ruling 21: OnModifiersChanged now bridges ModifierService.Changed -> Changed. Suppress
+            // it across our own Recompute so this path fires Changed exactly ONCE, not twice.
+            _suppressModifierBridge = true;
+            try { ModifierService.Recompute(); }   // barracks unlock refresh (perk/tier listeners)
+            finally { _suppressModifierBridge = false; }
             Changed?.Invoke();
         }
 
@@ -526,6 +552,25 @@ namespace DeNelle.Village
             return parts.Length >= 2 ? parts[1] : jobId;
         }
 
+        // ── Ruling 21 seam: a BARRACKS BUILDING upgrade now changes the troop roster ──
+        // Before the merge, only this service's own jobs could change the unlock level, so
+        // BarracksService.Changed was a complete signal. Now the level moves when a barracks
+        // BUILDING tier lands (CompletedUpgradeApplier -> ModifierService.Recompute), and the two
+        // surfaces that listen for a roster change subscribe to THIS event only
+        // (ArmyMusterPanel.cs:364, BarracksPanelVM.cs:166). Without this bridge a freshly unlocked
+        // troop would appear on the next panel OPEN rather than live - a silent staleness, which is
+        // the class of failure CLAUDE.md §12 forbids. Re-raise, guarded against the re-entrant
+        // double-fire from our own PersistAndNotify (which calls Recompute and then Changed).
+        private static bool _suppressModifierBridge;
+
+        private static void OnModifiersChanged()
+        {
+            if (_suppressModifierBridge) return;   // our own PersistAndNotify raises Changed itself
+            _suppressModifierBridge = true;
+            try { Changed?.Invoke(); }
+            finally { _suppressModifierBridge = false; }
+        }
+
         // Register the three completion effects once at startup (idempotent; re-registered on domain reload).
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RegisterEffects()
@@ -533,7 +578,14 @@ namespace DeNelle.Village
             JobEffectRegistry.Register(new BarracksUpgradeEffect());
             JobEffectRegistry.Register(new TroopUpgradeEffect());
             JobEffectRegistry.Register(new TrainTroopEffect());
-            FlowTrace.Step("Barracks", "WO-771.9 job effects registered (BarracksUpgrade/TroopUpgrade/TrainTroop).");
+
+            // Idempotent: unsubscribe first so a domain reload cannot stack handlers.
+            ModifierService.Changed -= OnModifiersChanged;
+            ModifierService.Changed += OnModifiersChanged;
+
+            FlowTrace.Step("Barracks", "WO-771.9 job effects registered (BarracksUpgrade/TroopUpgrade/TrainTroop); " +
+                                       "ruling 21 - subscribed to ModifierService.Changed so a barracks BUILDING tier " +
+                                       "refreshes the troop roster live.");
         }
     }
 }

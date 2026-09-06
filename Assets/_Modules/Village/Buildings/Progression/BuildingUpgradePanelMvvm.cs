@@ -422,7 +422,10 @@ namespace DeNelle.Village.Buildings.Progression
                     return string.IsNullOrEmpty(shortfall) ? "Missing resources" : shortfall;
                 case UpgradeActionState.Queued:           return "Queued - waiting for a builder";
                 case UpgradeActionState.InProgress:       return "In progress - " + FormatMinutesSeconds(seconds);
-                case UpgradeActionState.VillageGated:     return "Raise Village Tier";
+                // WO-2003 / canon §6 - ONE player-facing name for this gate: HEART LEVEL. The band
+                // appends the target number (BuildingUpgradePanelMvvm.cs:1327 renders
+                // label + " " + (VillageTierNow + 1)), so the face reads "RAISE HEART LEVEL TO 2".
+                case UpgradeActionState.VillageGated:     return "Raise Heart Level to";
                 case UpgradeActionState.Maxed:            return "Fully enhanced";
                 case UpgradeActionState.QueueFull:
                     return queueLimit > 0

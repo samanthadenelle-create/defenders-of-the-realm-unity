@@ -862,7 +862,7 @@ namespace DeNelle.Village.Buildings.Progression
                         + " gated=" + (nextDef.RequiresVillageTier > villageTier));
                     if (nextDef.RequiresVillageTier > villageTier)
                     {
-                        Status = "Requires Village Tier " + nextDef.RequiresVillageTier
+                        Status = "Requires Heart Level " + nextDef.RequiresVillageTier
                                  + " (you have " + villageTier + ").";
                         Raise();
                         return;
@@ -1028,7 +1028,7 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 if (VillageTierService.IsMax)
                 {
-                    Status = "Village Tier is already at its highest level.";
+                    Status = "The Heart is already at its highest level.";
                     Raise();
                     return;
                 }
@@ -1037,7 +1037,7 @@ namespace DeNelle.Village.Buildings.Progression
                 if (crystals < cost)
                 {
                     Status = "Need " + DeNelle.Core.UI.ElarionUi.CompactNumber(cost)
-                           + " Crystals to raise the Village Tier (you have "
+                           + " Crystals to raise the Heart (you have "
                            + DeNelle.Core.UI.ElarionUi.CompactNumber(crystals) + ").";   // WO-697
                     Raise();
                     return;
@@ -1047,11 +1047,11 @@ namespace DeNelle.Village.Buildings.Progression
                     int n = VillageTierService.Current;
                     FlowTrace.Step("Upgrade", _buildingId + " unlocked villagetier-" + n
                         + " (unlocks tier-" + n + "+ enhancements).");
-                    Status = "Village Tier raised to " + n + " — higher enhancements unlocked.";
+                    Status = "Heart Level raised to " + n + " — higher enhancements unlocked.";
                 }
                 else
                 {
-                    Status = "Couldn't raise the Village Tier right now.";
+                    Status = "Couldn't raise the Heart right now.";
                 }
                 Rebuild();
                 Raise();
@@ -1162,7 +1162,7 @@ namespace DeNelle.Village.Buildings.Progression
             int crystals = _economy?.Crystals ?? 0;
             bool affordable = crystals >= cost;
 
-            string name = "Unlock Village Tier " + (cur + 1);
+            string name = "Raise Heart Level to " + (cur + 1);
             _costById[VillageTierRowId] = DeNelle.Core.UI.ElarionUi.CompactNumber(cost) + " Crystals";   // WO-697
             _costPartsById[VillageTierRowId] = DeNelle.Core.UI.CostFormat.Parts(new[] { ("crystal", "Crystals", cost) });
             _effectById[VillageTierRowId] = "Opens tier-" + (cur + 1) + " enhancements everywhere";
@@ -1214,7 +1214,7 @@ namespace DeNelle.Village.Buildings.Progression
                     string costStr = CostString(cost);
 
                     string lockReason = null;
-                    if (gated) lockReason = "Requires Village Tier " + t.RequiresVillageTier;
+                    if (gated) lockReason = "Requires Heart Level " + t.RequiresVillageTier;
                     // WO-680 gate copy names the ACTION: point at the PREVIOUS tier tile by its
                     // display name ("Unlock 'Ignite the Forge' to open Tier 2") so the thing to
                     // tap is unambiguous — composed from catalog data, never hardcoded.
@@ -1500,9 +1500,16 @@ namespace DeNelle.Village.Buildings.Progression
             // The primary-material LANE is chosen by tier NUMBER because that is what the spend
             // does (BuildingUpgradeService.TierCost :195-197 / TryUpgrade :133-135): T1 Wood,
             // T2 Stone(Food), T3+ Iron. The page shows what will be CHARGED.
-            if (nextDef.Tier == 1) AddCostLine(HarvestResource.Wood, nextDef.PrimaryMaterialCost);
-            else if (nextDef.Tier == 2) AddCostLine(HarvestResource.Food, nextDef.PrimaryMaterialCost);
-            else AddCostLine(HarvestResource.Iron, nextDef.PrimaryMaterialCost);
+            // WO-2005 — the branch itself moved to BuildingTierChargeLane, the ONE authority the
+            // spend also reads. Output is identical for every authored tier (1..6); this file no
+            // longer holds a copy that could drift from the charge it is describing.
+            // ⚠ ONE case differs and it is unreachable: the old `else` also swallowed a Tier-0 def
+            // and printed IRON for it, while BuildingTierChargeLane clamps tier<=1 to WOOD. No
+            // ladder authors a tier 0 (building-tiers.json tiers run 1..6, read at source
+            // 2026-09-06) and the SPEND clamped the other way anyway (TierCost's else-chain paid
+            // NOTHING for a Tier-0 def), so the old line could only ever have printed a cost in a
+            // lane the service would not charge. Named rather than preserved.
+            AddCostLine(BuildingTierChargeLane.For(nextDef), nextDef.PrimaryMaterialCost);
 
             // WO-1391 (2026-09-05) — the AUTHORED lane vs the CHARGED lane. 'arcane-tower' T1 authors
             // costCrystal 1280 / costWood 0, and PrimaryMaterialCost = Max(CostWood, CostCrystal)

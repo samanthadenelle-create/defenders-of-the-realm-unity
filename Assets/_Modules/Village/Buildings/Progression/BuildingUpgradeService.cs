@@ -130,9 +130,15 @@ namespace DeNelle.Village.Buildings.Progression
                     if (timerSvc != null &&
                         timerSvc.StartUpgrade(id, targetTier,
                             BuildTimerService.ToJobCost(new DeNelle.Village.ResourceCost(
-                                wood: def.Tier == 1 ? def.PrimaryMaterialCost : 0,
-                                food: def.Tier == 2 ? def.PrimaryMaterialCost : 0,
-                                iron: def.Tier >= 3 ? def.PrimaryMaterialCost : 0,
+                                // WO-2005: the lane comes from BuildingTierChargeLane, the ONE
+                                // authority (was a copy of the same three-branch rule as TierCost
+                                // below). Identical output for every tier; the basket a cancel
+                                // refunds is byte-for-byte what it was.
+                                // `def.Tier >= 1 ? ... : none` preserves the old else-chain exactly
+                                // for a Tier-0 def (which matched no branch and paid nothing).
+                                wood: def.Tier >= 1 && BuildingTierChargeLane.For(def) == HarvestResource.Wood ? def.PrimaryMaterialCost : 0,
+                                food: def.Tier >= 1 && BuildingTierChargeLane.For(def) == HarvestResource.Food ? def.PrimaryMaterialCost : 0,
+                                iron: def.Tier >= 1 && BuildingTierChargeLane.For(def) == HarvestResource.Iron ? def.PrimaryMaterialCost : 0,
                                 coins: gold))) != null)
                     {
                         // F8 (owner 2026-07-17 "an upgrade timer that doesn't tell"): show the
@@ -192,9 +198,12 @@ namespace DeNelle.Village.Buildings.Progression
             var list = new System.Collections.Generic.List<ResourceCost>(3);
             if (def == null) return list;
             int primary = def.PrimaryMaterialCost;
-            if (def.Tier == 1 && primary > 0) list.Add(new ResourceCost(HarvestResource.Wood, primary));
-            else if (def.Tier == 2 && primary > 0) list.Add(new ResourceCost(HarvestResource.Food, primary));
-            else if (def.Tier >= 3 && primary > 0) list.Add(new ResourceCost(HarvestResource.Iron, primary));
+            // WO-2005 — the tier-index -> resource rule now lives in exactly one place
+            // (BuildingTierChargeLane). Behaviour is unchanged: T1 Wood, T2 Food (= the Stone
+            // wallet slot), T3+ Iron, and a zero primary still emits no line. The `Tier >= 1`
+            // term preserves the old else-chain EXACTLY: a def with Tier 0 (unauthored) matched
+            // none of the three branches and emitted no cost line, and it still emits none.
+            if (primary > 0 && def.Tier >= 1) list.Add(new ResourceCost(BuildingTierChargeLane.For(def), primary));
             return list;
         }
 

@@ -4,6 +4,7 @@
  "_wo1082PaletteTailNote": "WO-1082 SECTION 4a (OWNER RULING 2026-08-26; 4b REJECTED): the barracks row moved ABOVE lumberyard so the three storage containers (lumberyard, foundry, silo) are the LAST Resource rows in entries[]. Nothing else moved - no id, no cost, no buildCost, no upgradeCost, no displayOrder, no lock state. 4b (moving the three collector_* rows to the end) was REJECTED because it requires deleting collector_lumbermill's displayOrder 10, which reverses the shipped WO-963 tutorial ruling that BuildCarouselTutorialOrderRegression case 2 protects. ARRAY POSITION IS ONLY HALF THE LEVER: BuildPaletteVM.AggregateOfType concatenates the verb's catalogTypes TYPE-MAJOR, so every Collector row trails every Resource row regardless of this file. The matching half is the Town row catalogTypes order in build-categories.json (see _wo1082TownTypeOrderNote there). Neither edit alone puts the containers last.",
  "_containerScaleNote2026_08_26": "WO-1224 Slice A: lumberyard, foundry and silo share the wide GenericContainer art, which the owner measured on device as reading about twice town scale. All three author heightMul 0.5 as one family. Lowering the uniform fit shrinks both height and footprint and is save-overlap-safe; device felt-test owns the final visual dial. Slice B placeholder-art replacement remains blocked and is not part of this version.",
  "_rolePassNote2026_08_24": "WO-1167 grouped the Town palette by authored roles. mine_crystal is unlocked and its crystal_producer role belongs in the Producers group (WO-1081); mill and lumbermill remain locked legacy rows with unique roles. Role grouping remains data-authored, never a code map (WO-1161).",
+ "_manageFilterNote2026_09_06": "WO-2005: manageFilters is the DATA authority for the Manage > BUILD filter chips (ALL / ECONOMY / DEFENSE / CRAFT / STORAGE / CIVIC). The UI must never infer a category from an id prefix, a class name, an asset name or a source tab (Manage redesign canon section 3). Legal tokens are pinned by DeNelle.Core.Catalog.BuildFilter; every row the build browser OFFERS must carry at least one. manageArtKey is the Sheet A tile name for this row (docs/ART_DELIVERY_2026-09-06_manage_assets.md appendix) - the art-name-to-catalog-id join lives HERE, in data, never in a resolver that parses names. Rows that are not player content (deco_torch, repair_default) carry neither.",
  "_sinkPassNote": "v24 = ECONOMY SINK PASS 2026-08-21 (OWNER RULING): a committed daily player should need 8-12 WEEKS to exhaust current content, a casual ~6 months; it was ONE EVENING. THE LEVER IS THE SINKS, NOT THE FAUCET -- harvest stays exactly 5 per 5 seconds (EchoBonusCalculator CommonResourcePerHour 3600) because \" 5 wood every 5 seconds\" is legible and a player can feel it; nudging it to 3.7/tick buys nothing and costs comprehension. Scaling factors: build x4, upgrade->L2 x10, upgrade->L3 x14. The THREE STORAGE ROWS (lumberyard/foundry/silo) use their own DECREASING ladder (x16/x16/x10/x8/x6.5/x6) because a uniform multiplier on a ladder that already doubles per step walks the cost off the end of the cap ladder it is gated behind -- foundry and silo wood steps were then lowered again by hand to 2000/2700/4000/6800/12000 because they are paid in WOOD, capped by the LUMBERYARD, and must fit the MATCHED container level. HARD CONSTRAINT, pinned by DeNelle.Editor.Regression.EconomySinkCapRegression [sink-cap]: NO COST MAY EXCEED THE MAX BANKABLE AMOUNT OF THAT RESOURCE (base 2000 + one container at level 1..6 = 3k/4k/6k/10k/18k/34k). A 3000-wood cost under a 2000 cap is UNCOMPLETABLE and nothing in the game explains why. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources) -- that is why the crystal-priced magical ladders run to five figures. Cost baskets are UNCHANGED in shape: scaling never moves a resource across the WO-947 regular/magical line. NOTE the knock-on: BuildTimerConfig.TierForCost derives build TIME from the authored basket, so this pass also lifts the time ladder -- which is the intended coupling (see that file: \"the whole ladder re-tunes itself for free when the JSON cost pass lands\").",
  "_firstStepRule": "v38 = WO-1217 SLICE A  -  THE FIRST UPGRADE STEP IS A RULE, NOT A HAND-AUTHORED ROW. OWNER RULING 2026-08-26, verbatim: \"would take hours just to level anything in the start\". ⭐ THE RULE: repo.upgradeCost[0] (the L1->L2 rung) == round(repo.cost[r] * 1.5) FOR EVERY RESOURCE r, on every entry that authors an upgradeCost array. It was a flat x3 of the build cost on all four towers (Archer Tower L2 = 1080 wood / 480 iron, which at WO-1216's ~37 wood per wave is ~29 waves for ONE rung) and x7.5 on mine_crystal. Archer L2 is now 540 / 240  -  the owner's own number. ⛔ ONLY THE FIRST RUNG IS FLATTENED: upgradeCost[1..] (L3 and beyond, including the six-level storage ladders) keep their ECONOMY SINK PASS values VERBATIM, so the ladder still climbs steeply and a maxed structure stays a real commitment  -  only the first rung stops being a wall. ⛔ APPLIED BY FORMULA ACROSS ALL 10 ROWS THAT AUTHOR AN ARRAY, IN ONE PASS  -  never row by row. A hand-edited cost table is the exact drift shape WO-1137 was written about (a mirror covering 3 of 28 rows that drifted four times). If you re-tune this, re-tune the MULTIPLIER and re-derive, do not edit a row. ⚠ THE 11th maxLevel>1 ROW AUTHORS NO ARRAY: 'healing_caravan' (maxLevel 3, no upgradeCost) falls back to BuildModeController.UpgradeCostFor's scaler  -  build cost x the level being LEFT, i.e. 1.0x for L1->L2  -  which is already BELOW this 1.5x ceiling, so it is deliberately left unauthored rather than given a table it does not need. A regression pinning this rule must therefore assert equality (first step == round(cost * 1.5)) over rows that HAVE an array and 'no worse than 1.5x' in general; a flat equality check over every maxLevel>1 row FAILS a row that is already cheaper than the rule. ⚠ KNOCK-ON, FLAGGED NOT HIDDEN: BuildTimerConfig.TierForCost derives build/upgrade TIME from the authored basket, so lowering these baskets also SHORTENS the first-rung timer  -  the same intended coupling the sink pass relied on, running the other way. And CostBasketSeparationRegression's frozen AppliedRows totals move for 'tower_siege_tower' (step 1: 3240 -> 1620), 'tower_ballista' (step 1: 1920 -> 960) and 'tower_arcane_spire' (see its _wo1217CrystalGateNote); that dictionary must be re-baselined with these numbers or the [applied] case goes RED.",
  "_costBasketRule": "WO-947  -  OWNER ECONOMY RULING 2026-08-10, BINDING, and the four classification pins ANSWERED by the owner 2026-08-14: cost baskets separate by the structure's NATURE. REGULAR structures cost wood + iron (± food where already used) and NEVER crystals. MAGICAL / ETHEREAL structures are CRYSTALS + IRON (owner 2026-08-14 pin 1 verbatim: \"Crystals and Iron\")  -  never wood. INVARIANT: no row's build cost or upgrade step ever contains wood AND iron AND crystals together. Enforced headlessly by DeNelle.Editor.Regression.CostBasketSeparationRegression [cost-basket]  -  any NEW row that violates the invariant FAILS the gate. FULLY APPLIED as of v18: v17 converted 'tower_siege_tower'; v18 converts the five rows that were waiting on the pins  -  MAGICAL (crystals + iron, wood folded 1:1 into CRYSTALS so basket totals are unchanged): 'tower_arcane_spire', 'healing_caravan' (pin 2 verbatim: \"yes AoE healing\"  -  healing IS magical); REGULAR (crystals folded 1:1 into IRON, totals unchanged): 'jeweler' (pin 3 verbatim: \"Crafting (can enbue preciouus sstones future release)\"  -  crafting, therefore regular today; a FUTURE release may let it imbue precious stones, which would be a RE-classification then, not now) and 'tower_wall_wizard' (pin 4 verbatim: \"thats a baliista mechanical\"  -  the DATA reading wins over the id; displayName 'Ballista', element None, projectileStyle 'bolt' per the owner rename ruling 2026-07-08). The regression's pending-pin exemption list is now EMPTY. (v18 populated MagicalIds; v19 added 'arcane-tower'; v20 removed the retired Healer Tower row -- see the retirement note at the end.) THE LAST PIN IS SPENT (OWNER 2026-08-14, verbatim: \"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells\"): 'arcane-tower' ('Cathedral of Magic') is MAGICAL. v19 converts it  -  wood:60 folded 1:1 into CRYSTALS, so the basket is crystals:60 + iron:60 and the total (120) is unchanged, the same discipline used for the three v18 magical rows. This OVERRIDES the earlier agent reading that called it REGULAR by the jeweler analogy (\"a shop that DEALS IN magic is still a shop\"), which cited behaviorId 'GameplayBuilding' and the row's _heightNote (\"despite the id this is not a tower  -  it is the town's one civic landmark\"). THE OWNER'S DISTINCTION, recorded so nobody re-litigates it: the jeweler SELLS things that happen to be precious; the Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK  -  it is the ENGINE of magical progression, not a vendor that deals in it. 'behaviorId: GameplayBuilding' describes its BEHAVIOUR (it is not a firing tower), NOT its cost class. The surface evidence genuinely points both ways, so the ruling is the tiebreak  -  do not re-classify it off the id, the behaviorId or the _heightNote. WO-947 IS NOW FULLY APPLIED: every classification question is closed, the regression's pending-pin exemption list is EMPTY and stays empty. v20 RETIRES the never-buildable Healer Tower row entirely (WO-990, OWNER RULING 2026-08-14, verbatim: \"i do not know what the town healer is\" -> \"retire\"). She did not recognise it because it appeared in NO build category in build-categories.json, so no player could ever build it and it had no early-economy consequence; the WO-947 pin-2 conversion had been applied to a dead row. Its BEHAVIOUR is deliberately KEPT (StructureFactory case \"HealerTower\") as the WO-891 support-FIELD pattern reference; 'healing_caravan' is the row's design successor and inherits the concept. Do not resurrect the row. MagicalIds therefore holds THREE ids at v20: 'tower_arcane_spire', 'healing_caravan', 'arcane-tower'.",
@@ -13,6 +14,8 @@
  "entries": [
   {
    "id": "tower_ground_archer",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-archer-tower",
    "displayName": "Archer Tower",
    "_heightNote": "THE CADENCE ANCHOR - DO NOT CHANGE heightMul HERE without a new owner ruling. 1.2 is owner-ruled (commit 0ac59581) and MEASURED: 4.8 m tall, 2.778 m across = 49.9 percent of a House_Medieval_Medium's 5.562 m fitted diameter, a 1x1 claim at the 3 m cell. Every other tower is pinned to this number, and the whole family in the top-level _heightCadence is expressed against it.",
    "type": "Tower",
@@ -86,6 +89,8 @@
   },
   {
    "id": "tower_ballista",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-ballista",
    "displayName": "Ballista",
    "type": "Tower",
    "kind": "Cell",
@@ -158,6 +163,8 @@
   },
   {
    "id": "tower_siege_tower",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-sky-ballista",
    "displayName": "Sky Ballista (Anti-Air)",
    "_heightNote": "SIEGE-ENGINE group, 0.75 (3.0 m), kept in the 2026-08-05 cadence pass. This one is also the only mustSitOn WallWalk row: it sits ON TOP of a wall, so holding it under the house line is what keeps the stacked wall-plus-engine silhouette from out-topping the 4.8 m towers.",
    "description": "Wall-mounted spear thrower - fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
@@ -224,6 +231,8 @@
   },
   {
    "id": "tower_catapult",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-catapult",
    "displayName": "Catapult",
    "_heightNote": "SIEGE-ENGINE group, 0.75 (3.0 m), kept in the 2026-08-05 cadence pass. A catapult is a machine, not architecture, so it sits deliberately UNDER the 4 m house line and reads as equipment. 0.75 to 1.25 is the full spread of the family and stays inside the ruling's 'relatively the same size'.",
    "type": "Tower",
@@ -286,6 +295,8 @@
   },
   {
    "id": "wall_wood",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-wooden-palisade",
    "displayName": "Wooden Palisade",
    "_heightNote": "2026-08-05 cadence pass: DELIBERATELY LEFT on the 1.0 base (4.0 m) even though a palisade reading at house height is the obvious next thing to lower. heightMul is a UNIFORM scale, so dropping it narrows the wall by the same factor - and every wall in an already-saved town sits on the cell pitch of its OLD claim, so a narrower segment does not re-pitch its neighbours, it opens pathable GAPS in existing runs and shrinks the NavMeshObstacle with it. That is a save-compat break, not a visual tweak. Lowering walls needs a measured StructureHeightAudit run (to state the before/after cell claim) plus a save-migration decision first. See the top-level _heightCadence.",
    "_wo948Note": "WO-948 (owner ruling 2026-08-10): walls BUILD at L1 (wood) ONLY -- higher tiers exist only by UPGRADING the placed wall, CoC model. maxLevel capped 3->2: the ONE reachable rung is wood->stone (upgradeCost[0] is its price); the old second rung's cost row was REMOVED rather than left dormant -- steel/spiked are WO-904's behind raid-steal and must not be pre-built. upgradeVisualPath[0] swaps a L2 wall to the stone model (walls.json meshStraight paths are kaykit SOURCE paths, not runtime-loadable; the catalog row is the runtime mesh authority). wallTierBase omitted = 0 (wood is the walls.json base rung).",
@@ -340,6 +351,8 @@
   },
   {
    "id": "wall_stone",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-stone-wall",
    "displayName": "Stone Wall",
    "_heightNote": "2026-08-05 cadence pass: LEFT on the 1.0 base for the same save-compat reason as wall_wood - see that row's _heightNote and the top-level _heightCadence.",
    "_wo948Note": "WO-948 (owner ruling 2026-08-10): PALETTE-LOCKED (build-categories.json Walls lockedIds) -- walls build at L1 wood only; stone is reached by upgrading a placed wood wall. This ROW SURVIVES so existing saves replay/sell placed stone walls (BaseLayoutLoader resolves via CatalogRegistry, which never consults the palette). maxLevel 3->1: a legacy placed stone wall already sits AT the stone rung; deeper rungs (steel/spiked) are WO-904's behind raid-steal, so its upgradeCost table was removed. wallTierBase 1 = its walls.json ladder level (Stone) -- the WallDefense heart-mitigation derive reads it.",
@@ -384,6 +397,8 @@
   },
   {
    "id": "gate_stone",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-stone-gate",
    "displayName": "Stone Gate",
    "_heightNote": "2026-08-05 cadence pass: LEFT on the 1.0 base. A gate must stay flush with the wall run it interrupts, so it moves ONLY when wall_wood/wall_stone move - and those are blocked on a save-migration decision (see wall_wood's _heightNote).",
    "type": "Gate",
@@ -426,6 +441,8 @@
   },
   {
    "id": "mine_crystal",
+   "manageFilters": ["ECONOMY"],
+   "manageArtKey": "building-crystal-mine",
    "displayName": "Crystal Mine",
    "description": "Yields Crystals each time a wave is cleared.",
    "role": "crystal_producer",
@@ -486,6 +503,8 @@
   },
   {
    "id": "healing_caravan",
+   "manageFilters": ["CIVIC"],
+   "manageArtKey": "building-healing-caravan",
    "displayName": "Healing Caravan",
    "type": "Support",
    "kind": "Cell",
@@ -576,6 +595,8 @@
   },
   {
    "id": "pet-house",
+   "manageFilters": ["CIVIC"],
+   "manageArtKey": "building-echo-hollow",
    "displayName": "Echo Hollow",
    "description": "Home and wardrobe for your Echoes.",
    "role": "echo_home",
@@ -623,6 +644,8 @@
   },
   {
    "id": "workshop",
+   "manageFilters": ["CRAFT"],
+   "manageArtKey": "building-crafting-station",
    "displayName": "Crafting Station",
    "description": "Craft gear and potions here.",
    "_artNote2026_08_17": "THE CRAFTING STATION, and the home of the owner's LAST purchased model. Two things converged here. (1) COLLISION: this row and 'forge' both pointed at Structures/Forge the moment forge was repointed to the WeaponSmith model, so two different buildings would have worn one body. (2) IDENTITY: this row is displayed 'Weaponsmith' but it is NOT a vendor - vendors.json holds exactly four (market, forge=weapon, armorer=armor, jeweler) and this is not one of them. It is a type=Resource crafting building wearing a shop's name, which is why the whole forge/armorer/workshop cluster reads as interchangeable. Repointed to Structures/ShopAndCrafting per the owner's brief for that model - 'the crafting and store misc' + 'Can we have the crafting station also sell the potions so we dont need a store that only sells potions?' - which retires the potions-only storefront by merging it here. ⛔ 'market' was deliberately NOT given this model: market IS a vendor (consumable+material) and is Coppin's marketplace, the one that carried the hidden third Realm Store option. THE displayName IS STILL 'Weaponsmith' AND IS STILL WRONG - it needs an owner ruling, not a silent rename, exactly like forge='Armorer' and armorer='Blacksmith'. Three crossed display names in one cluster is a data defect with one cause, and it should be fixed in one ruling rather than three guesses.",
@@ -669,6 +692,8 @@
   },
   {
    "id": "market",
+   "manageFilters": ["CIVIC"],
+   "manageArtKey": "building-store",
    "displayName": "Store",
    "description": "Sells consumables and materials.",
    "role": "marketplace",
@@ -716,6 +741,7 @@
   },
   {
    "id": "mill",
+   "manageFilters": ["ECONOMY"],
    "displayName": "Mill",
    "description": "Grinds grain into Food.",
    "role": "gristmill",
@@ -760,6 +786,7 @@
   },
   {
    "id": "lumbermill",
+   "manageFilters": ["ECONOMY"],
    "displayName": "Lumber Mill",
    "description": "Processes timber into Wood.",
    "role": "sawmill",
@@ -802,6 +829,8 @@
   },
   {
    "id": "forge",
+   "manageFilters": ["CRAFT"],
+   "manageArtKey": "building-weaponsmith",
    "displayName": "Weaponsmith",
    "description": "Sells weapons.",
    "role": "weaponsmith",
@@ -851,6 +880,8 @@
   },
   {
    "id": "armorer",
+   "manageFilters": ["CRAFT"],
+   "manageArtKey": "building-armorer",
    "displayName": "Armorer",
    "description": "Sells armour, and opens the Iron harvest.",
    "role": "armorer",
@@ -901,6 +932,8 @@
   },
   {
    "id": "jeweler",
+   "manageFilters": ["CRAFT"],
+   "manageArtKey": "building-jeweler",
    "displayName": "Jeweler",
    "description": "Crafts jewelry.",
    "role": "jeweler",
@@ -949,6 +982,8 @@
   },
   {
    "id": "arcane-tower",
+   "manageFilters": ["CIVIC"],
+   "manageArtKey": "building-cathedral",
    "displayName": "Cathedral of Magic",
    "description": "Spells and magic research.",
    "_nameConfusionNote": "⚠ THIS ID IS NOT A TOWER. id 'arcane-tower' displays 'Cathedral of Magic' and is THRAIN'S LEVELING BUILDING (behaviorId GameplayBuilding, singleton, spells + magic research). The DEFENSIVE wizard tower is a different row: 'tower_arcane_spire', displayed 'Arcane Spire', behaviorId ArcaneTower. So the id that says tower is not one, and the one that BEHAVES as ArcaneTower is named Spire - which is why the owner asked about 'arcane tower' costs on 2026-08-24 and meant the Spire. ⛔ IDS ARE FROZEN SAVE KEYS and cannot be renamed; only the words can move. building-tiers.json carries the same warning - it is repeated HERE because this is the file people read first.",
@@ -1002,6 +1037,8 @@
   },
   {
    "id": "tower_arcane_spire",
+   "manageFilters": ["DEFENSE"],
+   "manageArtKey": "building-arcane-spire",
    "displayName": "Arcane Spire",
    "_upgradeCurveNote": "⚠ SUPERSEDED IN PART 2026-08-26 (WO-1217 Slice C  -  see _wo1217CrystalGateNote): the build/L2 crystal numbers below (200 / 400) are RETIRED  -  build and L2 cost NO crystals at all. Only the L3 800 still stands, and the iron figures below (160 / 480 / 1400) are also superseded by 360 / 540 / 1400. Kept for the reasoning, not for the numbers. ⛔ CRYSTAL CURVE RE-RULED 2026-08-24 by the owner: 200 / 400 / 800 (build / L2 / L3), replacing 200 / 1500 / 4370. Her reasoning, verbatim: \"to get 5 of those towers would take a year\". The old curve was 7.5x then 22x the entry price, so a single maxed Spire cost 6,070 crystals and five cost 30,350 - against a resource that until the same day had NO town producer at all. The new curve is a clean doubling: one maxed Spire is 1,400 and five are 7,000. ⚠ IRON IS DELIBERATELY UNCHANGED (160 / 480 / 1400) because the owner ruled the CRYSTAL numbers only. That leaves iron the larger constraint at L3, which is arguably correct - crystals gate ENTRY, iron gates SCALE, and iron has a producer - but it is a consequence of this edit rather than a decision, and is flagged for the owner rather than silently rebalanced.",
    "_wo1217CrystalGateNote": "⛔ CRYSTALS GATE TIER 3 ONLY  -  OWNER RULING 2026-08-26 (WO-1217 Slice C, verbatim: \"i think only tier 3 should cost crystals on the arcane tower\"). Build and L2 are now CRYSTAL-FREE; L3 keeps its 800 crystals untouched. The build basket's 200 crystals were folded 1:1 INTO IRON (160 -> 360), so the build basket TOTAL is UNCHANGED at 360  -  the same discipline the WO-947 v18/v19 conversions used. L2 then follows the v38 first-step rule (_firstStepRule): 540 iron = 1.5x the new 360 build cost, replacing 480 iron + 400 crystals. ⭐ WHY THIS IS NOT TASTE: PROD-015 is still OPEN  -  there is no crystal faucet in town  -  so that L2 Upgrade button could not be satisfied by PLAYING at all, at any grind rate. The owner hit exactly that on device (Seeker build 2026.08.26.341419). Gating crystals to the top tier makes the Spire playable today and turns crystals into the final-tier ask, which is what PROD-015 is about. ⚠ THIS PARTIALLY RE-OPENS WO-947 AND THE OWNER MUST BE TOLD, NOT AN IMPLEMENTER: CostBasketSeparationRegression [applied] asserts every MAGICAL basket carries NON-ZERO crystals and freezes this row's totals at 360/880/2200. The build total still reads 360, but build and L2 now carry ZERO crystals and L2 totals 540, so that suite goes RED until its AppliedRows entry is amended with these numbers AND its magical-basket rule is relaxed from 'every basket is crystal-based' to 'crystal-based AT ITS TOP TIER'. Recorded here so the precedence is explicit: the 2026-08-26 ruling post-dates the 2026-08-14 pin-1 pairing and wins on the lower two tiers; the PAIRING itself (crystals + iron, never wood) is untouched  -  no wood entered this row. ⚠ 'arcane-tower' ('Cathedral of Magic', flat 240 iron / 240 crystals, no maxLevel) is DELIBERATELY UNTOUCHED: it has no tier ladder at all, so \"only tier 3\" cannot apply to it. Whether its flat crystal cost should also move is an OPEN OWNER QUESTION (WO-1217 Slice C name-ambiguity block). Do not change it on inference.",
@@ -1082,6 +1119,8 @@
   },
   {
    "id": "collector_farm",
+   "manageFilters": ["ECONOMY"],
+   "manageArtKey": "building-quarry",
    "displayName": "Quarry",
    "description": "Extracts Stone for your town over time.",
    "role": "stone_producer",
@@ -1136,6 +1175,8 @@
   },
   {
    "id": "collector_lumbermill",
+   "manageFilters": ["ECONOMY"],
+   "manageArtKey": "building-lumber-mill",
    "displayName": "Lumber Mill",
    "description": "Harvests Wood for your town over time.",
    "role": "wood_producer",
@@ -1191,6 +1232,8 @@
   },
   {
    "id": "collector_forge",
+   "manageFilters": ["ECONOMY"],
+   "manageArtKey": "building-iron-mine",
    "displayName": "Iron Mine",
    "description": "Harvests Iron for your town over time.",
    "role": "iron_producer",
@@ -1240,6 +1283,8 @@
   },
   {
    "id": "barracks",
+   "manageFilters": ["CIVIC"],
+   "manageArtKey": "building-barracks",
    "displayName": "Barracks",
    "description": "Trains and houses your troops.",
    "role": "barracks",
@@ -1287,6 +1332,8 @@
   },
   {
    "id": "lumberyard",
+   "manageFilters": ["STORAGE"],
+   "manageArtKey": "building-lumberyard",
    "displayName": "Lumberyard",
    "description": "Raises how much Wood your town can hold.",
    "role": "wood_store",
@@ -1299,6 +1346,8 @@
     "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "wood",
+    "singleton": true,
+    "_singletonNote": "WO-2005 / OWNER RULING 23 (2026-09-06), verbatim: \"also cap only one of each storage type, the idea is they should level them\" / \"if we decide one day we need more space we add another level easy.\" Capacity has ONE axis of growth: LEVEL. Before this flag TownBankCapacity.MaxOf summed storageCapacity over EVERY built container of the resource (TownBankCapacity.cs:435-442), so a second Lumberyard bought another full container's worth of wood ceiling and was CHEAPER than the L5->L6 rung (14400 wood vs 800 wood + 320 iron) - which made the ladder pointless and the WO-1425 \"which container do I need\" copy unanswerable. Raising the ceiling later is a DATA edit (add a rung, or raise levelCapacityMultipliers in storage-caps.json), never a second building. MIGRATION: GRANDFATHERED - an existing save holding two containers keeps both and keeps their summed ceiling; nothing is destroyed and no capacity is clamped (a clamp would delete resources the player paid for). StructureSingleton only refuses the NEXT placement. SWEEP VERIFIED NON-DESTRUCTIVE: StructureSingleton.EnforceInternal (:279-325) has three branches and EVERY one acts only on repo.bakedTwins - StandDownBakedTwins (:401-410) early-returns 'nothing to hide' when a row authors none, and ResurfaceBakedTwins walks the same empty list. These three rows author bakedTwins null, so the hub-load sweep never touches a placed body, a PlacedStructure or a BaseLayout record: an over-cap town is left exactly as it is. DEATH PATH VERIFIED: these rows are behaviorId GameplayBuilding -> Building.cs:230 Destructible.NotifyBroken -> RemovePersistedLayoutRecord + StructureSingletonBootstrap.NotifyRemovedDeferred (Destructible.cs:150-195), so the BaseLayout record StructureSingleton.HasPlacedInstance reads first (StructureSingleton.cs:543-549) is dropped on death and the container can always be rebuilt - the healing_caravan sharp edge does NOT apply here.",
     "buildCost": 1280,
     "cost": {
      "wood": 800,
@@ -1366,6 +1415,8 @@
   },
   {
    "id": "foundry",
+   "manageFilters": ["STORAGE"],
+   "manageArtKey": "building-foundry",
    "displayName": "Foundry",
    "description": "Raises how much Iron your town can hold.",
    "role": "iron_store",
@@ -1378,6 +1429,8 @@
     "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "iron",
+    "singleton": true,
+    "_singletonNote": "WO-2005 / OWNER RULING 23 (2026-09-06), verbatim: \"also cap only one of each storage type, the idea is they should level them\" / \"if we decide one day we need more space we add another level easy.\" Capacity has ONE axis of growth: LEVEL. Before this flag TownBankCapacity.MaxOf summed storageCapacity over EVERY built container of the resource (TownBankCapacity.cs:435-442), so a second Lumberyard bought another full container's worth of wood ceiling and was CHEAPER than the L5->L6 rung (14400 wood vs 800 wood + 320 iron) - which made the ladder pointless and the WO-1425 \"which container do I need\" copy unanswerable. Raising the ceiling later is a DATA edit (add a rung, or raise levelCapacityMultipliers in storage-caps.json), never a second building. MIGRATION: GRANDFATHERED - an existing save holding two containers keeps both and keeps their summed ceiling; nothing is destroyed and no capacity is clamped (a clamp would delete resources the player paid for). StructureSingleton only refuses the NEXT placement. SWEEP VERIFIED NON-DESTRUCTIVE: StructureSingleton.EnforceInternal (:279-325) has three branches and EVERY one acts only on repo.bakedTwins - StandDownBakedTwins (:401-410) early-returns 'nothing to hide' when a row authors none, and ResurfaceBakedTwins walks the same empty list. These three rows author bakedTwins null, so the hub-load sweep never touches a placed body, a PlacedStructure or a BaseLayout record: an over-cap town is left exactly as it is. DEATH PATH VERIFIED: these rows are behaviorId GameplayBuilding -> Building.cs:230 Destructible.NotifyBroken -> RemovePersistedLayoutRecord + StructureSingletonBootstrap.NotifyRemovedDeferred (Destructible.cs:150-195), so the BaseLayout record StructureSingleton.HasPlacedInstance reads first (StructureSingleton.cs:543-549) is dropped on death and the container can always be rebuilt - the healing_caravan sharp edge does NOT apply here.",
     "buildCost": 1600,
     "cost": {
      "wood": 960,
@@ -1445,6 +1498,8 @@
   },
   {
    "id": "silo",
+   "manageFilters": ["STORAGE"],
+   "manageArtKey": "building-stoneyard",
    "displayName": "Stoneyard",
    "description": "Raises how much Stone your town can hold.",
    "role": "stone_store",
@@ -1457,6 +1512,8 @@
     "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "stone",
+    "singleton": true,
+    "_singletonNote": "WO-2005 / OWNER RULING 23 (2026-09-06), verbatim: \"also cap only one of each storage type, the idea is they should level them\" / \"if we decide one day we need more space we add another level easy.\" Capacity has ONE axis of growth: LEVEL. Before this flag TownBankCapacity.MaxOf summed storageCapacity over EVERY built container of the resource (TownBankCapacity.cs:435-442), so a second Lumberyard bought another full container's worth of wood ceiling and was CHEAPER than the L5->L6 rung (14400 wood vs 800 wood + 320 iron) - which made the ladder pointless and the WO-1425 \"which container do I need\" copy unanswerable. Raising the ceiling later is a DATA edit (add a rung, or raise levelCapacityMultipliers in storage-caps.json), never a second building. MIGRATION: GRANDFATHERED - an existing save holding two containers keeps both and keeps their summed ceiling; nothing is destroyed and no capacity is clamped (a clamp would delete resources the player paid for). StructureSingleton only refuses the NEXT placement. SWEEP VERIFIED NON-DESTRUCTIVE: StructureSingleton.EnforceInternal (:279-325) has three branches and EVERY one acts only on repo.bakedTwins - StandDownBakedTwins (:401-410) early-returns 'nothing to hide' when a row authors none, and ResurfaceBakedTwins walks the same empty list. These three rows author bakedTwins null, so the hub-load sweep never touches a placed body, a PlacedStructure or a BaseLayout record: an over-cap town is left exactly as it is. DEATH PATH VERIFIED: these rows are behaviorId GameplayBuilding -> Building.cs:230 Destructible.NotifyBroken -> RemovePersistedLayoutRecord + StructureSingletonBootstrap.NotifyRemovedDeferred (Destructible.cs:150-195), so the BaseLayout record StructureSingleton.HasPlacedInstance reads first (StructureSingleton.cs:543-549) is dropped on death and the container can always be rebuilt - the healing_caravan sharp edge does NOT apply here.",
     "buildCost": 1280,
     "cost": {
      "wood": 960,

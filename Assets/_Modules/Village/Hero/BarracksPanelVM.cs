@@ -1,4 +1,12 @@
 // =============================================================================
+// ⛔ UNREACHABLE — this VM's only View (BarracksPanel) has ZERO CALLERS.
+// Owner ruling 21, 2026-09-06 (WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21).
+// It is the ONLY composer of a JobKind.BarracksUpgrade job, and that job was the only
+// writer of the legacy GameState.BarracksLevel — which is why seven of nine troops were
+// unreachable. Troop unlocks now read the barracks BUILDING tier. See BarracksPanel.cs's
+// header for the proof. DELIBERATELY NOT DELETED in WO-2011: WO-2009 may reuse this as
+// the troop DETAIL surface, and CostFormatSourceRegression.cs:35 pins CostStr() here.
+// -----------------------------------------------------------------------------
 // BarracksPanelVM — the WO-771.9 Barracks & troop-UPGRADE panel's ViewModel (strict
 // MVVM; extracted from BarracksPanel so the View reads NO game state).
 // -----------------------------------------------------------------------------

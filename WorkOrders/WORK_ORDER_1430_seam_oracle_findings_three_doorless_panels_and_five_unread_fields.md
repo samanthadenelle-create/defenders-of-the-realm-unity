@@ -1,0 +1,80 @@
+# WO-1430: the seam oracles' first eight findings - three panels no player can open, five authored fields no code reads
+
+**Status:** READY TO IMPLEMENT - minted 2026-09-06 (CLI). Each finding is EXEMPTED in its oracle with a dated pointer
+to this file, so the gate is green and the oracles stay sharp for anything NEW. **Nothing here is hidden; it is parked.**
+**Silo:** mixed - HUD panels, and five separate catalogs
+**Source:** `PanelDoorRegression` and `AuthoredFieldReaderRegression`, both shipped 2026-09-06 in Wave 0 of the Manage
+redesign, both RED on arrival by design. Full evidence in `Builds/r23`.
+
+---
+
+## 1. Why this ticket exists
+
+394 suites were green while 7 of 9 troops were unreachable. Every oracle asked *"does this system do its job?"*; none
+asked *"can a player get here?"*. These two oracles ask the second question, and the first time they ran they found
+eight things. **That is the oracles working, not failing.**
+
+⚠ **None of these was introduced by Wave 0.** They are pre-existing and were invisible until something looked.
+
+## 2. FINDING GROUP A - three panels no player can open
+
+`PanelDoorRegression` proves a door three ways: a production `.cs` outside the panel's own View/VM loop names it, a
+`[RuntimeInitializeOnLoadMethod]` bootstrap installs it, or a scene/prefab serialises its **script GUID**. (GUID, not
+class name - Unity serialises components by guid, and a name grep proves nothing. An earlier investigation made exactly
+that mistake and had to retract it.)
+
+| Panel | Verdict | Evidence |
+|---|---|---|
+| **BarracksPanel** | no door at all | guid `b245a5682900ee14cbff23be363845d3` appears in no scene or prefab; only its own VM names it. **This is the defect that stranded 7 of 9 troops** - see OWNER_RULINGS_LOCKED §21. |
+| **ShopPanel** | harness-only | guid `f4540a733986bf0478c8ec76a15fa527`; constructed ONLY by `AutoPilotDriver.cs` and `UICaptureLaunch.cs`. **A harness that AddComponents every panel so it can be photographed is not a door.** |
+| **TalentTreePanel** | no door at all | guid `2490ba9b7d648424dafd1c61ba916a57`. Superseded by `HeroSkillTreePanelMvvm`; `DialogueCommandSink.cs:104-106` re-pointed `OpenTalents` to `PanelId.HeroSkillTree` and REMOVED the legacy route. **Its own header still carries an INTEGRATOR NOTE saying to wire the button.** That was never done. |
+
+**Decisions owed (owner or CLI, per panel - do not delete on a whim):**
+1. **BarracksPanel** - ruling 21 made it obsolete as a level control. **WO-2009 may want it as the troop DETAIL
+   surface.** Reuse it or delete it; do not leave it doorless.
+2. **ShopPanel** - `FeatureFlags.cs:152-156` claims the legacy screen opens when `ff.partyshop` is OFF. **That is not
+   true of the code** (`DialogueCommandSink.cs:88-93` routes unconditionally to `PanelId.PartyShop`). Either restore
+   the flag branch or retire the panel and fix the stale canon (CLAUDE.md section 15).
+3. **TalentTreePanel** - the clearest delete. Also UI-Toolkit, which CLAUDE.md section 8 records as not working in builds.
+
+## 3. FINDING GROUP B - five authored fields no production code reads
+
+`AuthoredFieldReaderRegression` measured **463** authored `[JsonProperty]` string fields; **58** have no production
+reader (12.5%), and these **5** make a MECHANICAL claim - a promise about behaviour that nothing implements. Editor and
+test readers deliberately do not count: a suite proving a string is well-formed proves nothing about the game honouring it.
+
+| Field | Where | The broken promise |
+|---|---|---|
+| `unlockMethod` | `Cosmetics/CosmeticCatalog.cs` | **All 37 cosmetics author `"achievement"`.** Nothing gates a cosmetic on an achievement and nothing routes the other kind to a purchase. |
+| `levelCurve` | `Village/Harvest/EchoBalanceCatalog.cs` | authors `"linear"`; `EchoBonusCalculator` never asks. Authoring `"exponential"` tomorrow would change nothing. |
+| `requiresHero` | `Core/Quests/DailyQuests.cs` | **A half-built gate** - its sibling `requiresFeature` IS read and IS authored (`"raids"` x2). This one has no reader anywhere. |
+| `visibilityRule` | `Core/Data/CardCollectionCatalog.cs` | a show/hide rule the client cannot apply. |
+| `expiry_behavior` | `Core/Data/CardCollectionCatalog.cs` | authored `"fallback"`; every expiry behaves identically regardless. |
+
+**The `unlockMethod` one is the most player-visible:** every cosmetic in the game says it is earned by achievement, and
+no achievement grants any of them.
+
+**Decision owed per field:** implement the reader, or retire the field and the copy that implies it. **Do not simply
+delete the field to silence the oracle** - that discards the design intent someone authored. Retiring one is a
+deliberate act that should be recorded.
+
+## 4. How each is parked, and what happens next
+- Group A: named in `PanelDoorRegression`'s `Allowlist`, each entry dated and pointing here, stating what retires it.
+- Group B: named in `AuthoredFieldReaderRegression`'s exemption set, same discipline.
+- **Both oracles still FAIL on anything NEW.** A fourth doorless panel or a sixth unread mechanical field fails the
+  build immediately. The exemptions are a ratchet, not an amnesty.
+- Every entry names the condition that removes it, so the list cannot quietly become permanent.
+
+## 5. Acceptance
+- [ ] Each of the 8 is resolved - implemented, wired, or deliberately retired with the canon corrected in the same change.
+- [ ] Its exemption entry is DELETED as part of that change. An exemption outliving its finding is the rot this ticket
+      exists to prevent.
+- [ ] `REGRESSION_OK n/n` with both oracles green and no exemptions remaining.
+
+## 6. The finding beneath the findings
+Five capabilities were found on 2026-09-06 that are built, correct, and unreachable: the barracks panel, the
+village-tier control, the talent tree panel, move/sell on a placed structure, and the wood/iron/stone granted on every
+kill and never shown. **`PanelDoorRegression` catches only the panel-shaped ones.** A capability behind a MODE (move/sell)
+or with no surface at all (the kill drops) is invisible to it.
+**Proposed sibling oracle, not yet written: every player-facing verb the code implements has at least one reachable
+affordance.** That is the general form, and it is the one that would have caught all five.

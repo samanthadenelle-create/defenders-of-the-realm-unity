@@ -192,7 +192,11 @@ namespace DeNelle.Village.Buildings.Progression
             // building tier number. The sentence shape is unchanged (a suite asserts LockReason equals
             // this string verbatim); only the number is now on the right scale.
             int villageGate = BuildingTierCatalog.PerkRequiredVillageTier(buildingId, perkId);
-            if (VillageTierService.Current < villageGate) { reason = "Locked - needs Village Tier " + villageGate + "."; return false; }
+            // WO-2003 / canon §6 - PLAYER-FACING NAME IS "HEART LEVEL". The stored field is still
+            // GameState.VillageTier and the service is still VillageTierService (save keys and type
+            // names are contracts, display words are not); "Village Tier" was one of THREE spellings
+            // the player met for the same gate, which is part of why it read as unfindable.
+            if (VillageTierService.Current < villageGate) { reason = "Locked - needs Heart Level " + villageGate + "."; return false; }
             return true;
         }
 

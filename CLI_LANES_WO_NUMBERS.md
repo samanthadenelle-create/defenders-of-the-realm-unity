@@ -187,7 +187,10 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, eighty-first pass): main line next free = **1430**.
+> ## RECONCILED 2026-09-06 (CLI, eighty-second pass): main line next free = **1431**.
+> *(CLI minted **1430** - the eight findings the two SEAM ORACLES surfaced on the day they shipped: three panels no player can open, and five authored data fields no code reads. Bumped 1430 -> 1431 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-first pass): main line next free = **1430**.
 > *(CLI minted **1429** - an out-of-mana Mage has NO attack at all and can only run; the primary falls back to the staff melee and returns to magic at 50% mana. Owner playtest 2026-09-06. Bumped 1429 -> 1430 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, eightieth pass): main line next free = **1429**.

@@ -1,4 +1,24 @@
 // =============================================================================
+// ⛔⛔ UNREACHABLE. THIS PANEL HAS NO DOOR. ⛔⛔  (owner ruling 21, 2026-09-06 —
+// WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md §21)
+//
+// ShowBarracksUI() below is this panel's ONLY entry point and it has ZERO CALLERS.
+// Verified 2026-09-06 two ways: a source grep across every .cs under Assets/, and a
+// script-GUID search for b245a5682900ee14cbff23be363845d3 across every .unity, .prefab
+// and .asset in the tree — no hits. No menu, no scene object, no prefab opens it.
+//
+// THAT IS THE DEFECT, NOT A CURIOSITY. This panel was the sole composer of a
+// JobKind.BarracksUpgrade job, whose completion effect was the sole writer of
+// GameState.BarracksLevel, which was the sole troop-unlock gate. With no door, the field
+// sat at 1 forever and SEVEN OF THE NINE TROOPS were unreachable by any player action.
+// Ruling 21 moved the gate to the barracks BUILDING TIER, which the player really can
+// raise. A panel in the tree with no caller is a dead system that silently owns live
+// rules — CLI_DRIVING_PLAN.md §1 seam oracle (3) exists to make this class fail a build.
+//
+// ⚠ DELIBERATELY NOT DELETED IN THIS LANE (WO-2011). WO-2009 may want this panel as the
+// troop DETAIL surface; the CLI seat sequences delete-vs-keep. Until then: DO NOT wire a
+// caller to it and DO NOT re-point the troop gate back at it.
+// -----------------------------------------------------------------------------
 // BarracksPanel — the WO-771.9 Barracks & troop UPGRADE UI (code-built uGUI).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero

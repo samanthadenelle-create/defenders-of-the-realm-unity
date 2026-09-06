@@ -65,6 +65,45 @@ namespace DeNelle.Core.Catalog
         public string      role;
 
         /// <summary>
+        /// WO-2005 — the Manage &gt; BUILD filter chips this row belongs to. **DATA IS THE
+        /// AUTHORITY** (Manage redesign canon §3 / owner ruling 5): the UI may NOT infer a
+        /// category from an id prefix, a class name, an asset name or the tab a row used to
+        /// live on.
+        ///
+        /// <para>⛔ THIS IS NOT <see cref="role"/>, AND IT MUST NEVER BE FOLDED INTO IT. A role
+        /// identifies exactly ONE row — <c>StructureRoles.Index</c> emits a
+        /// <c>FlowTrace.Fail</c> collision the moment two rows claim the same one — so a role
+        /// can never be a category. A filter is many-to-many by construction, which is why it
+        /// is a separate array.</para>
+        ///
+        /// <para>Legal tokens are named (and validated) by <see cref="BuildFilter"/>;
+        /// comparison is ordinal case-insensitive. ALL is NOT authored here — it is the
+        /// unfiltered list, and authoring it would be duplicated state.</para>
+        ///
+        /// <para>Null/empty = the row is not Manage content at all (today: <c>deco_torch</c>,
+        /// <c>repair_default</c>). Every row the build browser OFFERS must carry at least one
+        /// token; <c>BuildInventoryFilterRegression</c> fails the build otherwise.</para>
+        /// </summary>
+        public string[]    manageFilters;
+
+        /// <summary>
+        /// WO-2005 — the art-sheet tile name for this row (e.g. <c>building-sky-ballista</c> for
+        /// id <c>tower_siege_tower</c>), from the Sheet A delivery
+        /// (<c>docs/ART_DELIVERY_2026-09-06_manage_assets.md</c> appendix).
+        ///
+        /// <para>⛔ THE ART NAME AND THE CATALOG ID ARE DIFFERENT LANGUAGES ON PURPOSE, and the
+        /// join lives HERE, in data. <c>building-sky-ballista</c> is <c>tower_siege_tower</c>;
+        /// <c>building-wooden-palisade</c> is <c>wall_wood</c>. A resolver that parsed names
+        /// would have to encode both of those as special cases and would break on the next
+        /// re-skin — the id is a live save key and can never move to match the art.</para>
+        ///
+        /// <para>Null = no tile is drawn for this row on any delivered sheet (today:
+        /// <c>mill</c>, <c>deco_torch</c>, <c>repair_default</c>). Not an error — a missing tile
+        /// is a presentation fallback, never a gate.</para>
+        /// </summary>
+        public string      manageArtKey;
+
+        /// <summary>
         /// PRESENTATION ONLY (WO-963) — the build palette carousel's authored display order.
         /// LOWER SORTS FIRST; 0 (the default, i.e. the JSON key absent) means UNAUTHORED and
         /// sorts AFTER every authored row, keeping its current relative position — the sort is

@@ -28,7 +28,13 @@ namespace DeNelle.Village
         public const int CardsPerPage = CardCollectionPaging.MaxVisibleCards;
         // The catalog/progression row remains live for saves and unlock bookkeeping, but its
         // unfinished card art must not be advertised as a player-ready build choice.
-        private const string HiddenUntilFinishedArtId = "gate_stone";
+        // WO-2005 widened this to internal so BuildInventoryModel can tell a row that is
+        // WAITING ON A FLAG apart from one hidden by a code constant that runs BEFORE any flag
+        // is read (:357). The distinction matters: gate_stone's unlock genuinely flips
+        // (RewardedProgression.TryUnlockStoneGate, on wall_wood reaching L2) and genuinely does
+        // nothing, so it is dead in a way no data edit can revive. Copying the literal into the
+        // model would have made two places own one fact.
+        internal const string HiddenUntilFinishedArtId = "gate_stone";
         private const string MissingImageCopy = "Image coming soon";
         private readonly List<GameObject> _pageObjects = new List<GameObject>();
         private RectTransform _panel;
@@ -355,7 +361,15 @@ namespace DeNelle.Village
             return result;
         }
 
-        private static bool IsCollectionItemVisible(string itemId)
+        /// <summary>
+        /// The ONE offer authority: is this catalog id actually shown to the player as a build
+        /// choice right now? Widened from private to internal by WO-2005 so
+        /// <see cref="BuildInventoryModel"/> can ASK it instead of re-deriving the same four
+        /// checks — a second copy of this predicate is how a card ends up listed in Manage and
+        /// absent from the browser (or the reverse), with no screen saying which is right.
+        /// Still assembly-internal: no View outside DeNelle.Village may call it.
+        /// </summary>
+        internal static bool IsCollectionItemVisible(string itemId)
         {
             if (string.IsNullOrEmpty(itemId)) return false;
             if (string.Equals(itemId, HiddenUntilFinishedArtId, StringComparison.OrdinalIgnoreCase)) return false;

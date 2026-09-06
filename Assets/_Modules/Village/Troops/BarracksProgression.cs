@@ -17,6 +17,15 @@
 // The two agree by construction (barracks level N unlocks the troop whose
 // UnlockBarracksTier == N); the union is defensive against a one-sided authoring gap.
 //
+// ⛔ OWNER RULING 21 (2026-09-06) — WHERE `L` COMES FROM CHANGED, AND THAT IS THE WHOLE FIX.
+// `L` is now EffectiveBarracksLevelOf(state) = MAX(the legacy stored GameState.BarracksLevel,
+// GameState.BuildingTiers["barracks"]), floored to 1 — i.e. THE BARRACKS BUILDING TIER GATES
+// TROOP UNLOCKS. Before the merge `L` was the stored field alone, which no reachable code path
+// could ever raise, so seven of the nine troops were locked forever while the player upgraded a
+// barracks BUILDING that did nothing for the army. Two numbers spelled the same way on different
+// scales — identical in shape to the village-tier defect fixed the same day (WO-1423).
+// The stored key is read-migrated, never deleted (CLAUDE.md §8); see EffectiveBarracksLevelOf.
+//
 // TROOP UPGRADE COST/TIME: troop-upgrades.json carries stat CURVES + abilities only,
 // NOT per-level cost/time. The troop-upgrade TIME is DERIVED from the troop's base
 // BuildSeconds scaled by the target level (placeholder curve; WO-771.14 owns balance).
@@ -49,12 +58,83 @@ namespace DeNelle.Village
 
         // ── GameState reads (default-on-read; null-safe) ──────────────────────
 
-        /// <summary>The barracks level held on <paramref name="state"/>, floored to 1 (1 with no state).</summary>
+        /// <summary>
+        /// The RAW stored <c>GameState.BarracksLevel</c>, floored to 1 (1 with no state).
+        ///
+        /// <para>⛔ OWNER RULING 21 (2026-09-06, OWNER_RULINGS_LOCKED.md §21): <b>this is NOT the
+        /// troop-unlock gate any more.</b> It is a FLOOR that feeds
+        /// <see cref="EffectiveBarracksLevelOf"/>, and nothing else may compare a troop against it.
+        /// The stored field had exactly one writer - <see cref="ApplyBarracksUpgrade"/>, the
+        /// completion effect of a BarracksUpgrade job composed only by BarracksPanelVM, reachable
+        /// only from BarracksPanel.ShowBarracksUI, which has ZERO CALLERS (verified 2026-09-06 by
+        /// source grep AND a script-GUID search of every .unity/.prefab/.asset: no hits for
+        /// b245a5682900ee14cbff23be363845d3). So it sat at its founding value of 1 forever
+        /// (GameStateService.cs:1235) and seven of the nine troops were unreachable by any player
+        /// action. Ask <see cref="EffectiveBarracksLevelOf"/> instead.</para>
+        /// </summary>
         public static int BarracksLevelOf(GameState state)
         {
             if (state == null) return DefaultBarracksLevel;
             return state.BarracksLevel < DefaultBarracksLevel ? DefaultBarracksLevel : state.BarracksLevel;
         }
+
+        /// <summary>
+        /// The BARRACKS BUILDING TIER held on <paramref name="state"/> - the ladder the player
+        /// actually upgrades in Manage (<c>GameState.BuildingTiers["barracks"]</c>). 0 when the
+        /// barracks is unbuilt or was never written a tier.
+        ///
+        /// <para>Read from the PASSED state rather than through
+        /// <c>ModifierService.TierOf("barracks")</c> so this class stays pure and headlessly
+        /// testable (its whole contract is "mutates only the GameState it is handed"). The two are
+        /// the same number: <c>ModifierService.TierOf</c> (ModifierService.cs:42-48) reads exactly
+        /// this dictionary off <c>GameStateService.Instance.State</c>, and the dev override affects
+        /// <c>ModifierService.Active</c>, not <c>TierOf</c>.</para>
+        /// </summary>
+        public static int BarracksBuildingTierOf(GameState state)
+        {
+            if (state == null || state.BuildingTiers == null) return 0;
+            return state.BuildingTiers.TryGetValue(BarracksBuildingId, out int tier) ? tier : 0;
+        }
+
+        /// <summary>The building id of the barracks ladder in building-tiers.json.</summary>
+        public const string BarracksBuildingId = "barracks";
+
+        /// <summary>
+        /// ⭐ THE ONE TROOP-UNLOCK LEVEL (owner ruling 21, 2026-09-06: <i>"Merge them - the building
+        /// tier gates troops."</i>). The barracks BUILDING TIER, floored by the legacy stored
+        /// <see cref="BarracksLevelOf"/> value and by 1.
+        ///
+        /// <para><b>THE MIGRATION RULE, stated so it survives:</b> the legacy save key
+        /// <c>barracksLevel</c> is <b>READ-MIGRATED, NEVER DELETED AND NEVER WRITTEN BACK</b>. We take
+        /// <c>MAX(stored, buildingTier)</c>, so <b>a player who somehow holds a stored level keeps
+        /// it</b> even if the building tier is lower. Chosen because:
+        /// <list type="number">
+        /// <item>it cannot regress ANY existing save - the only direction the number can move is up,
+        /// which is the whole reason CLAUDE.md §8 forbids dropping a live key without a migration;</item>
+        /// <item>no reachable writer ever raised the field, so on real saves the stored value is 1 and
+        /// the MAX is a no-op - the merge is behaviour-neutral for every player who has ever played;</item>
+        /// <item>the fixtures that DO set it to 3 (UICaptureLaunch.cs:6998/7085/7479 and three
+        /// regression suites) keep working unchanged;</item>
+        /// <item>writing the merged value back would be a silent save mutation on load, which is a
+        /// far worse failure mode than carrying a dead-but-harmless key.</item>
+        /// </list>
+        /// The floor of 1 is unchanged behaviour: a usable Barracks always trains the day-one
+        /// Footman + Archer even when its tier was never written.</para>
+        /// </summary>
+        public static int EffectiveBarracksLevelOf(GameState state)
+        {
+            int stored = BarracksLevelOf(state);          // already floored to 1
+            int tier = BarracksBuildingTierOf(state);
+            int effective = tier > stored ? tier : stored;
+            return effective < DefaultBarracksLevel ? DefaultBarracksLevel : effective;
+        }
+
+        /// <summary>
+        /// The top authored tier of the barracks BUILDING ladder (building-tiers.json), which after
+        /// ruling 21 is the ceiling every troop unlock must sit at or below. 0 when the catalog
+        /// failed to load. Pinned by TroopReachabilityRegression.
+        /// </summary>
+        public static int MaxBarracksBuildingTier => BuildingTierCatalog.MaxTier(BarracksBuildingId);
 
         /// <summary>A troop's upgrade level on <paramref name="state"/>, floored to 1 (baseline when absent).</summary>
         public static int TroopLevelOf(GameState state, string troopId)
@@ -219,8 +299,17 @@ namespace DeNelle.Village
         // ── Mutators (mutate ONLY the passed GameState — the IJobEffect completion seams) ──
 
         /// <summary>
-        /// Raise the barracks level on <paramref name="state"/> by one (clamped to the authored
-        /// max). The completion effect of a BarracksUpgrade job. Returns the new level (0 no state).
+        /// Raise the LEGACY stored barracks level on <paramref name="state"/> by one (clamped to the
+        /// authored max). The completion effect of a BarracksUpgrade job.
+        ///
+        /// <para>⚠ DEAD PATH, DELIBERATELY LEFT IN PLACE (owner ruling 21, 2026-09-06). The only
+        /// composer of a <c>JobKind.BarracksUpgrade</c> job is BarracksPanelVM, reachable only from
+        /// BarracksPanel.ShowBarracksUI, which has ZERO CALLERS - so nothing in the game calls this.
+        /// It is NOT deleted in this lane because WO-2009 may reuse BarracksPanel as the troop DETAIL
+        /// surface; the CLI seat sequences that decision. It deliberately still increments the RAW
+        /// stored value (<see cref="BarracksLevelOf"/>), NOT the merged one: incrementing the merge
+        /// would let this path grant unlocks ABOVE the barracks the player actually built, which is
+        /// the very split ruling 21 closes.</para>
         /// </summary>
         public static int ApplyBarracksUpgrade(GameState state)
         {

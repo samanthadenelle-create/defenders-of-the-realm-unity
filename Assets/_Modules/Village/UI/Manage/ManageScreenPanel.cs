@@ -83,6 +83,12 @@ namespace DeNelle.Village.UI
         private const float NoticeCloseBandPx = 96f;// beside-the-Close seat (two lines of FontLabel)
         private const float BandGapPx = 12f;        // guaranteed gutter — no two bands ever touch
         private const float MinListPx = 240f;       // band 4 floor: one 132px row under its 64px header
+        // WO-2003 - the panel TITLE's anchors INSIDE the frame's header zone, shared by the launcher
+        // and operational modes so the title clears BOTH header controls in BOTH states. FrameCore's
+        // header zone is content x 0.24-0.88 (ElarionUiKit.cs:442), so local 0.30-0.78 resolves to
+        // content 0.432-0.739: clear of the HEART face (ends 0.395) and of QUEUE (starts 0.795).
+        private const float TitleLocalX0 = 0.30f, TitleLocalX1 = 0.78f;
+
         private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
         private const float CloseGapY = 0.020f;     // body floor clears the Close box by this much
         private const float RowCtrlY0 = 0.06f;      // 0.88 * RowHeightPx = 116px >= MinTouchPx (112),
@@ -944,7 +950,20 @@ namespace DeNelle.Village.UI
             if (_operationalWell != null) _operationalWell.gameObject.SetActive(false);
             if (_stripHost != null) _stripHost.gameObject.SetActive(false);
             if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(false);
-            if (_workspaceTitle != null) _workspaceTitle.text = "MANAGE";
+            if (_workspaceTitle != null)
+            {
+                _workspaceTitle.text = "MANAGE";
+                // WO-2003: the launcher used to leave the title on its full-width header anchors,
+                // which now reach back under the HEART face at content x 0.28-0.385. Shrink it to
+                // the SAME 0.22-0.78 local span the operational mode already uses, so the title
+                // sits clear of both header controls in BOTH modes rather than only one.
+                var titleRt = _workspaceTitle.rectTransform;
+                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
+                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
+                titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
+                titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
+                ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
+            }
             FlowTrace.Step("Navigation", "Manage Back/root -> category cards");
         }
 
@@ -958,8 +977,8 @@ namespace DeNelle.Village.UI
             {
                 _workspaceTitle.text = "MANAGE - " + ManageScreenVM.TabLabels[(int)tab].ToUpperInvariant();
                 var titleRt = _workspaceTitle.rectTransform;
-                titleRt.anchorMin = new Vector2(0.22f, titleRt.anchorMin.y);
-                titleRt.anchorMax = new Vector2(0.78f, titleRt.anchorMax.y);
+                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
+                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
                 titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
                 titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
                 ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
@@ -1352,10 +1371,32 @@ namespace DeNelle.Village.UI
                 if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
             }
 
+            // ⭐ WO-2003 / WO-2017 - THE DIRECT ROUTE TO THE HEART, and it is built FIRST, before
+            // the "nothing unlocked yet" early return below, precisely so it exists in EVERY state
+            // of this screen. Owner 2026-09-06: "wire the heart" - she could not find how to raise
+            // her realm tier, and MEASURED at source that day the ONLY control was the VillageGated
+            // action band in BuildingUpgradePanelMvvm.cs:1322-1338, painted ONLY while she happened
+            // to be looking at a building whose next tier was gated. A gate that gates nearly all
+            // content had no door of its own. This face is that door.
+            //
+            // SEAT: x 0.225-0.395 of the header-actions row. BACK owns 0.035-0.205 and QUEUE owns
+            // 0.795-0.965. MEASURED, not assumed: FrameCore's header zone is content x 0.24-0.88
+            // (ElarionUiKit.cs:442, `z.header = new Vector4(0.24f, 0.900f, 0.88f, 0.972f)`), and the
+            // title is anchored to its LOCAL 0.30-0.78 inside that zone in BOTH launcher and
+            // operational modes = content x 0.432-0.739. So the title starts 0.037 clear of this
+            // face's right edge. ⚠ At the title's previous local 0.22 it resolved to content 0.381
+            // and would have overlapped this face by 0.004 - the frame's header does NOT start at
+            // 0.28; that is a DIFFERENT frame's zone (line 469, FrameOptions).
+            // The medallion socket ends at content x 0.220 (`z.medallion` :439), which this face
+            // clears; BACK at 0.035-0.205 already sits over that socket and always has.
+            // HEIGHT: the row is 0.835-0.965 of the panel (0.13 x ~972px = ~126px), clear of
+            // MinTouchPx(112) without ClampMinTouch having to rescue it.
+            BuildHeartFace();
+
             if (_vm == null || _vm.VisibleTabs.Count == 0)
             {
                 ElarionUiKit.Label(_tabsHost, "Place a structure to unlock Manage categories", 0f, 1f,
-                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0f, 1f);
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.40f, 1f);
                 return;
             }
             _queueDrawerToggle = ElarionUiKit.BuildObsidianButton(_tabsHost, "QUEUE",
@@ -1368,6 +1409,42 @@ namespace DeNelle.Village.UI
                 SyncQueueToggleFace();
                 ElarionUiKit.ClampMinTouch(_queueDrawerToggle);
             }
+        }
+
+        /// <summary>
+        /// The HEART face - the one always-present door onto <see cref="PanelId.Heart"/>.
+        /// <para>The face carries the LIVE level ("HEART L1"), so the player can read their realm
+        /// progression without opening anything, and the word matches the CTA on every gated card
+        /// ("UPGRADE THE HEART"). ⚠ The level number is read from the model, never cached here -
+        /// duplicated state is what produced the stale-copy family this program exists to kill.</para>
+        /// </summary>
+        private void BuildHeartFace()
+        {
+            if (_tabsHost == null) return;
+            var heart = ElarionUiKit.BuildObsidianButton(_tabsHost,
+                "HEART L" + DeNelle.Village.Buildings.Progression.HeartProgression.Level,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.225f, 0f), new Vector2(0.395f, 1f), OpenHeartSurface);
+            if (heart == null)
+            {
+                FlowTrace.Fail("Manage", "the HEART face failed to build - the direct route to " +
+                    "PanelId.Heart is missing from this screen.");
+                return;
+            }
+            heart.gameObject.name = "ManageHeartFace";
+            MedievalUiSkin.ApplyButton(heart, true);
+            ElarionUiKit.ClampMinTouch(heart);
+        }
+
+        /// <summary>Open the Heart surface. Closes Manage first (PanelManager holds one exclusive
+        /// panel), and says so out loud if the route is dead rather than doing nothing.</summary>
+        private void OpenHeartSurface()
+        {
+            Close();
+            if (!PanelRouter.Open(PanelId.Heart))
+                FlowTrace.Fail("Manage", "PanelRouter.Open(PanelId.Heart) returned FALSE - the Heart " +
+                    "panel is not registered (HeartPanelBootstrap did not run) or it failed to become " +
+                    "visible. The player just tapped a door that opened nothing.");
         }
 
         // =====================================================================
@@ -2092,7 +2169,11 @@ namespace DeNelle.Village.UI
             return art ?? LoadManageBuildingSpriteAt(root);
         }
 
-        private static Sprite LoadManageBuildingSpriteAt(string resourceKey)
+        /// <summary>WO-2017 - INTERNAL, not private: <see cref="HeartPanel"/> loads the Heart's own
+        /// portrait through this exact path so the Heart cannot become the one art route with its
+        /// own loader, its own Texture2D fallback and its own cache-miss behaviour. Same assembly,
+        /// same namespace; nothing outside DeNelle.Village can reach it.</summary>
+        internal static Sprite LoadManageBuildingSpriteAt(string resourceKey)
         {
             if (string.IsNullOrEmpty(resourceKey)) return null;
             if (ManageBuildingSpriteCache.TryGetValue(resourceKey, out Sprite cached)) return cached;
@@ -2185,11 +2266,19 @@ namespace DeNelle.Village.UI
                 //
                 // Same treatment the locked RESEARCH card got (BuildResearchCard, this file): the
                 // requirement is a BODY TEXT LINE - prose belongs in the body, a sentence never fits a
-                // button face - and the card carries exactly ONE FULL-WIDTH LIVE door into
-                // ViewDetails -> OpenUpgradePanel, whose action band renders "Raise Village Tier N" in
-                // the VillageGated state (BuildingUpgradePanelMvvm.cs:1322-1338). The door is full
-                // width REGARDLESS of DoorLabel: a ladder that authors no perks (the Farm) can still
-                // be village-gated, and this door is the GATE door, not the PERKS door.
+                // button face - and the card carries exactly ONE FULL-WIDTH LIVE door via
+                // selected.ViewDetails. The door is full width REGARDLESS of DoorLabel: a ladder that
+                // authors no perks (the Farm) can still be Heart-gated, and this door is the GATE
+                // door, not the PERKS door.
+                //
+                // ⚠ CORRECTED WO-2003 (2026-09-06): this said the door led to "OpenUpgradePanel, whose
+                // action band renders 'Raise Village Tier N'". Both halves have moved. ViewDetails is
+                // authored BY STATE in ManageScreenVM.BuildBuildingChoices - a LOCKED card's
+                // ViewDetails now opens PanelId.Heart (the Heart surface itself), an unlocked card's
+                // still opens the building's upgrade page - and that band's face is now
+                // "Raise Heart Level to N" (BuildingUpgradePanelMvvm.cs:425). The View is unchanged
+                // and still just invokes selected.ViewDetails; only the destination the VM authors
+                // moved, which is the point of the dumb-UI rule.
                 var lockLine = ElarionUiKit.Label(card,
                     ManageScreenVM.Ascii(string.IsNullOrEmpty(selected.LockReason) ? "Locked." : selected.LockReason),
                     0.45f, 0.56f, ElarionUi.Parchment, (int)ElarionUi.FontMicro,
