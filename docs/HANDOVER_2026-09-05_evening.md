@@ -159,3 +159,23 @@ Saved under `logs/device/screens/seeker-357453-*.png` (untracked, sent to the ow
 4. The longest Research names still ellipsize at the 26px floor; Buildings shares this.
 
 **Her Defense tab on the real save shows LUMBERYARD and FOUNDRY, not towers** - which is exactly open question 1 in the WO (storage containers carry an upgrade ladder, so they qualify). She rules on membership; nothing was changed.
+
+### 8c. 03:04-03:10 - FINAL BUILD OF THE NIGHT: `2026.09.06.357599`
+On the Seeker (installed 03:06, versionName off dumpsys) and on Firebase App Distribution. Chain 02:59-03:04:
+APK_OK 463MB, R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271, APK_DONE. Version stamp committed in `6b253d8f7`.
+
+**Commit chain for the night:** `55aafc385` (WOs) -> `41976a7ce` (art request) -> `4c027d605` (plan) -> `9ad5c7e3c` (five lanes) -> `230dd6b9a` (board+RESULTs) -> `5920ea35c` (fixture grammar) -> `ad4cab77d` (handover) -> `6d0861e41` (locked card) -> `0035107ae` (RESULT update) -> `6b253d8f7` (board+stamp). **Nothing pushed** - the production push is hers.
+
+**Final gates, fresh logs:** COMPILE_GATE_OK (c20 02:56), REGRESSION_OK **393/393 -- 393 green, 0 red, 0 skipped** (r19 02:58), MANAGE_OPERATIONAL_CAPTURE_OK 12/12 touch=clean (capman8 02:56).
+
+**Device-verified on 357599** (`logs/device/screens/seeker-357599-research.png`): the locked Research card reads `Upgrade the building to Tier 1 first.` as a full sentence with ONE full-width door `UPGRADE CATHEDRAL OF MAGIC` - neither truncates. Rail sub-lines read `Locked . Cathedral ...`, discriminator first.
+
+**Owner queue for the morning (nothing is blocked on me):**
+1. Felt-test WO-1421 + WO-1422 and close them.
+2. `docs/ART_REQUEST_2026-09-06_manage_tab_portraits.md` -> Codex. 62 files, 12 of them re-cuts. Decide section 0 first: ONE portrait folder and ONE naming convention, or keep two.
+3. **Membership:** her live Defense tab shows LUMBERYARD and FOUNDRY, not towers, because storage containers carry an upgrade ladder. Move them to Buildings, or leave them?
+4. The Research rail is 17 flat rows - group by building later?
+5. Copy nit spotted on the device: a Tier-1 perk says `Upgrade the building to Tier 1 first.` That sentence is authored in `BuildingPerkService.CanResearch`; it reads oddly when the requirement equals the tier shown. Not a layout bug.
+6. Still open from before tonight: the 12-item rulings queue in section 5, and the SAVE DATA LOSS item that has no ticket.
+
+**Known and NOT hidden:** the BUILDINGS tab's own queue band resolves `<none>` when its first Builder job is a placed structure (the new trace says so out loud); the longest Research names still ellipsize at the 26px floor, which Buildings shares.
