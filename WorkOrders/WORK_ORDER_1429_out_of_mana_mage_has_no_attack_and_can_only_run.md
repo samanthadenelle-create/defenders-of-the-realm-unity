@@ -1,6 +1,6 @@
 # WO-1429: an out-of-mana Mage has NO attack at all and can only run
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's playtest
+**Status:** RE-CUT 2026-09-06 - the original spec was WRONG in three ways and a lane correctly REFUSED to implement it. See section 0. READY TO IMPLEMENT as re-cut. *(was: READY TO IMPLEMENT - minted 2026-09-06 (CLI) from the owner's playtest)*
 **Silo:** Hero combat (DeNelle.Village.Hero) - the primary-attack resolution seam
 **Owner ruling (2026-09-06, verbatim):** *"if you play as the mage once you expel all of your MP you have no ability to
 attack in anyway all you can do is run until you regain your mana. I think when mana is gone, it should automatically
@@ -100,3 +100,73 @@ RED: give the sweep any cost and case 1 `[no-verbless-hero]` fails with it, whic
 ## 8. Still open for the owner
 1. Staff damage - a fraction of the spell, a flat floor, or scaled off the hero's level?
 2. Should the same fallback apply to any OTHER class whose basic has a cost, or is the Mage the only one today?
+
+
+---
+
+# 0. ⛔ RE-CUT 2026-09-06 - READ THIS BEFORE ANY SECTION BELOW
+
+A lane was dispatched to implement sections 1-7 and **stopped without writing code**, because CLAUDE.md section 12
+required it to prove the cause first and the proof refuted the spec. **Sections 1-7 below are superseded by this
+section wherever they disagree.** They are kept, unrewritten, because the reasoning that produced them is instructive.
+
+## 0.1 THE PROOF - captured, not inferred
+`logs/device/freeze-20260904-095249.log:544639` and `:466356`, a real Seeker session. Three consecutive lines, one tap:
+```
+[Flow:HudKit] command 'attack' fired
+[Flow:HeroMana] cast REFUSED slot=Q 'Fireball': cd=0.47s Mana 21.08/24.00 cost=3.00 (authored 3).
+[Flow:HudKit] primary command -> class Q for mage gated
+```
+**Nothing follows.** No swing, no melee trace, no fallback. The tap produced no verb.
+
+## 0.2 THREE THINGS THE ORIGINAL SPEC GOT WRONG
+
+**1. IT IS NOT ABOUT MANA. Both captured refusals are COOLDOWN refusals at near-full mana** - `cd=0.47s`,
+`Mana 21.08/24.00`. `HeroAbilities.TryCast:813` refuses on `cd > 0 || _mana < cost` and both exit the SAME
+`return false`. **So the dead button is not a rare out-of-mana state - it fires in every cooldown gap, several times a
+minute, all game.** That is far worse than reported and it is what the owner is actually feeling.
+
+**2. THE NAMED SEAM IS NOT IN THE INPUT PATH.** Section 2 blames `HeroAbilities.TryGetRangedPrimary`. Refuted at source:
+`PlayerAttackController.Update:328` goes straight to `StartAttack()` with no ranged branch, and that file's
+`WO-1105 REVISION` block (`:440-465`) records that the ranged-primary input path was DELETED by owner ruling.
+**The real gate is `Assets/_Modules/Village/HUD/HudKitCommandBridge.cs:67-73`** - a hardcoded per-class table that
+catches `"mage"` or `"ranger"` by name, calls `TryCast(Q)`, and `return`s **before ever reaching the melee swing**.
+⚠ Section 3.3 forbids ADDING a per-class branch. **One already exists, and it IS the defect.** The fix DELETES it.
+
+**3. THE HYSTERESIS WAS DESIGNED AGAINST A WRONG MODEL AND MUST NOT SHIP AS SPECIFIED.** If the fallback fires on
+cooldown refusals while using the mana thresholds of section 3.1, a **0.47 s cooldown gap would lock the hero to the
+staff until mana climbed back to 50%** - strictly worse than today. The owner's intent (never be weaponless) is right;
+the mechanism was built on the assumption that 0 mana was the trigger.
+
+## 0.3 TWO MORE FINDINGS
+- **The RANGER is in the same branch, and it contradicts written canon.** CLAUDE.md section 7 states *"the phone's one
+  attack button never spends an arrow."* `HudKitCommandBridge.cs:67-68` spends one. Same defect, second class - **in
+  scope for this WO.**
+- **MOBILE ONLY.** `PlayerAttackController.Update:317-330` melees unconditionally for every class on
+  keyboard/mouse/gamepad. Only the HUD button is gated - which is why the owner sees it on the Seeker and a desktop
+  session never would.
+
+## 0.4 THE RE-CUT FIX - simpler than the original
+**You pressed attack, so you attack.** A refused primary - for ANY reason, cooldown or cost - falls through to the free
+melee sweep. No thresholds, no mana check, no hysteresis, and **the per-class table is deleted rather than extended**.
+The sweep already consults no resource pool (`PlayerAttackController:700`), so the owner's ruling 7 (the swing is FREE)
+is satisfied by construction.
+
+⚠ **CLI RECOMMENDATION, OWNER MAY REVERSE:** this replaces the owner's authored hysteresis with something simpler. It
+serves her stated intent - never be left without an attack - and it fixes the cooldown case, which is the one she is
+actually hitting. If she wants the staff to *persist* for a while rather than filling only the gap, the hysteresis
+returns as a separate, later refinement on top of a working fallback.
+
+## 0.5 REVISED ORACLE
+Section 5's cases 3, 4 and 7 assume thresholds that no longer exist. Keep case 1 `[no-verbless-hero]` - **for every
+class, at every mana value AND during cooldown, the resolved primary is non-null** - plus:
+- `[no-per-class-table]` `HudKitCommandBridge` contains no class-name comparison in the primary path. RED: restore it.
+- `[ranger-spends-no-arrow]` pins CLAUDE.md section 7's canon, which is currently violated.
+- `[fallback-is-free]` unchanged from section 7.
+- `[cooldown-gap-still-swings]` a refusal with `cd > 0` and full mana still yields a swing. **This is the case that
+  would have caught the real defect**, and no existing suite asks it.
+
+## 0.6 NOT VERIFIED
+**0 mana specifically has no capture.** No in-tree log holds a mana-starved refusal - only the two cooldown ones. That
+`_mana < cost` reaches the identical dead end is a SOURCE READ (`HeroAbilities.cs:813`, both conditions exit one
+`return false`) chained onto a captured cooldown refusal. Say it that way; do not claim a capture that does not exist.

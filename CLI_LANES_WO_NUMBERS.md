@@ -187,7 +187,10 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, eighty-second pass): main line next free = **1431**.
+> ## RECONCILED 2026-09-06 (CLI, eighty-third pass): main line next free = **1432**.
+> *(CLI minted **1431** - LOW PRIORITY, tracked not queued: the mage grips the staff on its lower half instead of its upper half. Owner: "very low priority... I just wanted it tracked so that when things are slow we have them fix that." Bumped 1431 -> 1432 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-second pass): main line next free = **1431**.
 > *(CLI minted **1430** - the eight findings the two SEAM ORACLES surfaced on the day they shipped: three panels no player can open, and five authored data fields no code reads. Bumped 1430 -> 1431 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, eighty-first pass): main line next free = **1430**.
