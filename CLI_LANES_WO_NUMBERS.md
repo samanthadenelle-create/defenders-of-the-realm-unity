@@ -180,7 +180,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-06 (CLI, seventy-ninth pass): main line next free = **1428**.
+> ## RECONCILED 2026-09-06 (CLI, eightieth pass): main line next free = **1429**.
+> *(CLI minted **1428** - the Manage card grows to the owner's mockup: large building art, a before/after STATS table, a REQUIREMENTS checklist that ticks each resource against the player's balance, and a NEXT LEVEL art preview. Her mockup pasted 2026-09-06; it ABSORBS WO-1427 because the requirements block answers "why can't I?" visually. Bumped 1428 -> 1429 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, seventy-ninth pass): main line next free = **1428**.
 > *(CLI minted **1427** - "why can't I?" - every refused build/upgrade names its blocker in player words and offers a door to the ORDERED STEPS that clear it. Owner 2026-09-06, verbatim: "the idea came while testing, i had no way to figure out why i couldnt upgrade". Bumped 1427 -> 1428 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, seventy-eighth pass): main line next free = **1427**.
