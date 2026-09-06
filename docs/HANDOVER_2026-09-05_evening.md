@@ -109,3 +109,10 @@ Commit charge at 23:2x: **105.2 / 115.8 GB** - the leak that OOM-kills player bu
   1 Hz VM construction with a trace per second, a Pause "Resume" that never rendered. Every one was a claim until proven.
 - Rows built but culled by TMP (RaidSelection): a sub-29-unit text band is invisible in every headless capture - a
   kit/harness ticket to mint (`UiKitTextFitGuard` never fires in capture).
+
+## 7. 2026-09-06 00:31-00:45 - the chain ran after the reboot
+- Reboot confirmed 00:29 (uptime 2 min, commit charge 15 / 111.8 GB, no Unity process). F8 inbox NO_CAPTURE ack=4682.
+- `overnight-apk-build.ps1 -Tester` detached 00:31: SCHEMA_PARITY_OK 00:31, APK_OK 00:38 (463MB), R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271, APK_DONE 00:38 (`Builds/overnight-apk-status.txt`).
+- Installed via `install-apk-to-seeker.ps1 -Build:$false -Install:$true`: dumpsys versionCode=357453 versionName=2026.09.06.357453. Firebase App Distribution release 0kka4h6t9u400, testers notified.
+- Board: the 11 Status lines stamped with the build + BOARD.html regenerated, commit `b22cb98cd` (with the ProjectSettings stamp 357453).
+- OPEN: section 3 step 4 screencaps NOT taken - the Seeker sat on its keyguard (`mDreamingLockscreen=true` after a wake + swipe); needs the owner's unlock. The four `proof/` deletions in the working tree were there before this session and are untouched.
