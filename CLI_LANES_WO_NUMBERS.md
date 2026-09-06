@@ -180,7 +180,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## RECONCILED 2026-09-05 (CLI, seventy-fifth pass): main line next free = **1420**.
+> ## RECONCILED 2026-09-06 (CLI, seventy-sixth pass): main line next free = **1421**.
+> *(CLI minted **1420** - the wallet's silent reauthorize was REFUSED in 0.1s and WalletService reported a 30s TIMEOUT (F8 device capture seq 4683 on build 2026.09.06.357453). Bumped 1420 -> 1421 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-05 (CLI, seventy-fifth pass): main line next free = **1420**.
 > *(CLI minted **1419** - the Heartfire plate paints flame ICONS, not `[*] [ ]` ASCII pips (owner: "i hate those [*] items when we should use some icon, we have over 4000"); Codex tail, after the 1407 commit. Bumped 1419 -> 1420 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-05 (CLI, seventy-fourth pass): main line next free = **1419**.
