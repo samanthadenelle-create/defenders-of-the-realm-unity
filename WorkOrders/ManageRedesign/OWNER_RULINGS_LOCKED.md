@@ -405,3 +405,72 @@ the Wave 0 state model already separates (`ManageActionAvailability.InProgress` 
 *Oracle:* `[jump-returns-to-origin]` - entering a detail via a prerequisite route and pressing back lands on the origin;
 entering the same detail by browsing and pressing back lands on the grid. **Both directions**, or the case passes
 vacuously by always returning to the origin.
+
+**29. RUSH - one button, and the ad and the crystals buy the SAME thing: remaining time.**
+
+Owner ruling 2026-09-06, developed across several messages. Final shape, verbatim on the key idea: *"say you have a 30
+minute wait, says X crystals or watch a video and reduces cost of crystals to X minus ad reduction time"*, and on the
+empty-wallet case: *"if they try to click the crystal that's greyed, pop to the store?"*
+
+### The mechanic
+**ONE button, `RUSH`.** It opens a modal for the job in flight. Both offers act on the SAME axis - **remaining time**.
+
+```
+   RUSH - Barracks -> Tier 4
+   30m 00s left
+   [ WATCH AD  -20m ]   [ FINISH  30 crystals ]
+        ... after the ad ...
+   10m 00s left
+   [ WATCH AD  -20m ]   [ FINISH  10 crystals ]
+```
+
+**⛔ THE ENABLING MECHANIC, AND THE ONE THING THAT CAN BREAK IT: the crystal price MUST be a function of REMAINING
+TIME, not a flat price per job.** The ad removes time; the price is computed from what is left; therefore the ad makes
+the finish cheaper **with no discount logic anywhere**. If the price is flat, the ad reduces nothing and the design
+collapses. ⚠ The owner's own mockup shows a flat `SPEED UP 25` - **verify what the live path does before building.**
+
+*Why this beats two independent offers* (the CLI proposed those first and this is better): an ad that leaves you still
+paying full price is a toll. Here the ad genuinely advances the job, so a patient player can watch, wait out the
+cooldown, watch again and pay nothing - which is the "friendly, not challenging" line the owner has drawn all evening.
+It also solves the long-timer problem: a single ad cannot finish a four-hour build, but a fixed time cut always does
+something real.
+
+### The greyed crystal button opens the STORE
+Tapping `FINISH` without enough crystals routes to the store. **This is ruling 18 (direct prerequisite navigation)
+applied to CURRENCY** - a blocker that hands you the way forward. The store is not a special case; it is another node
+in the same graph.
+**And ruling 28 applies to it:** back from the store returns to the RUSH modal, still showing the same job, not to the
+store's own front page.
+⚠ Show `FINISH` **greyed with its real price, never hidden.** A hidden button teaches nothing; a greyed one with a
+number teaches the price and offers the route.
+
+### What already exists - verified at source 2026-09-06, this is a PLACEMENT job not new machinery
+- `BuildTimerService.CanWatchAdToSkip(channel, structureId)` (`:1152`, `:1160`) - **already carries a cooldown AND a
+  daily cap**, which gives the ad natural limits without inventing rules.
+- `BuildTimerService` header (`:3`, `:83`): *"CoC-style timed jobs + rewarded-ad/instant speedups"*.
+- `AdGateService.Offer(placementId)` / `IsOffered` / `Present` / `RecordWatch` / `RemainingToday`
+  (`Village/Monetization/AdGateService.cs:143-386`) - the placement, availability and cap surface.
+- `ConvenienceRedeemer.TrySkipBuildTimer()` (`BuildTimerService.cs:772`) - an existing skip path.
+
+### Where RUSH appears
+On the **origin screen** as well as in the queue overlay - i.e. when ruling 28 returns the player to the locked
+Outrider and the Barracks is upgrading beneath it, RUSH is right there. That is the moment of peak motivation: the
+player has just decided they want the thing, can see exactly what blocks it, and the wait has a number on it. Making
+them go and find the queue wastes it.
+
+### Two guard rails, recorded because they are how this goes wrong
+1. **The wait must be fair WITHOUT paying.** If the timer is reasonable, the skip is a convenience. If it is punitive,
+   the skip is the real price and the timer is theatre. That is the difference between helpful and extractive, and it
+   is a BALANCE question - the owner rules on it.
+2. **The AD should be the prominent option.** Owner, recorded earlier: every unit of revenue so far is her own, and the
+   business problem is getting people to PLAY. An ad costs the player nothing and still pays. Crystals sit quietly
+   beside it.
+
+### Interaction with ruling 26b, worth knowing
+Automatic collector overflow removed a reason to open the app (the "come tap me" prompt now fires only when collector
+AND storage are both full). A *"your Barracks finished while you were away"* moment gives a reason back - **the same
+retention hook, without punishing absence**, which is the shape the owner has chosen every time it has come up.
+
+*Oracle sketch:* `[rush-price-tracks-remaining-time]` - the crystal price for the same job strictly decreases as
+remaining time falls, and an ad watch reduces it. **RED: make the price a constant.** Plus `[greyed-finish-routes-to-store]`
+and `[rush-returns-to-origin]` (ruling 28).
