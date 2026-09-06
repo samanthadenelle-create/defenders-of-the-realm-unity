@@ -50,6 +50,7 @@ Docs index: `docs/README.md`.
 | `docs/reference/DEFECT_INDEX_2026-08-05.md` | Same, for the earlier half of 2026-08-05 (dungeon P0, wallet, catalog fallback drift). **Frozen ledger** |
 | `KEY_FACTS.md` | The living fact sheet + ⭐ NORTH STAR state — always current, updated in place |
 | `START_HERE.md` | The single entry point / boot sequence a fresh CLI session follows |
+| `CLI_SESSION_PLAYBOOK.md` | The executed step-by-step script of a whole CLI session (boot -> routing -> see the truth -> close the tree -> Codex lane -> instrument -> ship -> close), a measured RECEIPT per step, STOP rules (owner directive 2026-09-05) |
 | `CLAUDE.md` | **Agent rules — read first, non-negotiable** (§15 = canon maintenance) |
 | `SESSION_CANON_LOADER.md` | At-a-glance SME primer (live thread + current state + key files) |
 | `docs/HANDOVER.md` | Operator's manual + newest ★★ session block (**2026-08-06**) |

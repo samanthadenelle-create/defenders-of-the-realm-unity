@@ -9,6 +9,11 @@ ANYTHING until the boot sequence below is complete and reported.**
 
 ## 1. BOOT SEQUENCE (in this order, every session)
 
+> **Then EXECUTE `CLI_SESSION_PLAYBOOK.md` (repo root, owner directive 2026-09-05)** - the step-by-step script of a
+> whole session (boot -> routing -> see the truth -> close the tree -> Codex lane -> instrument -> ship -> close), with
+> a RECEIPT you must post at every step from something you measured. It is executed, not read; a receipt you cannot
+> fill is a STOP. The boot table below is Phase 0 of it.
+
 | # | Read | Why |
 |---|------|-----|
 | 0 | `KEY_FACTS.md` (repo root) | The LIVING fact sheet + ⭐ NORTH STAR state. Always current; update in place. |
