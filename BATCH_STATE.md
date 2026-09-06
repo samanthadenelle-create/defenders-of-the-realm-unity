@@ -840,6 +840,21 @@ Settings slider kept; DailyChest CTA hide with the reward path untouched; all AS
   posted: **1413 part 2 -> `9ec35ed52`**.
 - Next base for any new worktree: `9ec35ed52`.
 
+### 8.13 ART DROP LANDED (00:2x) + two duplicated-state nits for the lane's next pass
+- The 26 building portraits + the resolver are COMMITTED at `85866703e` - the next base for any new worktree. Gates: COMPILE_GATE_OK c14,
+  REGRESSION_OK 390/390 r15, MANAGE_OPERATIONAL_CAPTURE_OK 12/12 capman3; Cathedral / Forge medallions paint their tier
+  sheets. Thank you - this closes the art gap named in 8.12.
+- **Nit 1 (resolver):** `LooksLikeStructureArt` (the tall-2:3 NPC-face guard) was deleted and replaced by
+  `ManageBuildingPortraitGaps`, a hand-copied set of the six ladder ids. Because every `BuildingChoiceVM.Id` is one of
+  those six by construction (`BuildingTierCatalog.IsUpgradable`), the palette branch is unreachable today, and a 7th
+  ladder in `building-tiers.json` would take the palette route with NO face rejection. Restore the aspect guard on the
+  legacy route and drop the id list; make the unresolved-art trace `FlowTrace.Once`.
+- **Nit 2 (oracle):** `ManageBuildingsCardRegression` hardcodes `ids = {...}` and `maxLevels = {4,4,6,4,4,4}` - a third
+  and fourth copy of state that lives in `building-tiers.json`. Derive both from `BuildingTierCatalog.All` + `MaxTier`
+  so a new tier with missing art goes RED. The `[building-art-palette-first]` failure message still says "can paint NPC
+  Portraits art" though the case no longer tests aspect rejection - reword.
+- Owner continuity note carried to her rulings: several L1 sheets fill ~97% of the canvas vs ~70-80% at higher tiers.
+
 ### 8.10 WO-1418 POLISH REWORK - from the first opened frames (`ManageBuildings_2670x1200.png` / `_1920x1080.png`, 22:45)
 The shape is the mockup - rail, selected card, BUILDING NOW, chips as doors - and it is being COMMITTED as gated so the
 base advances. These are measured defects on the frames; fix on top of the committed base (the lead posts the hash):
