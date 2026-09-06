@@ -143,3 +143,19 @@ Saved under `logs/device/screens/seeker-357453-*.png` (untracked, sent to the ow
 2. The WO quoted the research job id `building-research:arcane-tower:warding`. `warding` is NOT a perk id - the authored id is `arcane-warding-runes`. `IsResearching` compares the whole job id, so **the Researching state has been unreachable in every capture ever taken.** Corrected in the fixture.
 
 **Art:** `docs/ART_REQUEST_2026-09-06_manage_tab_portraits.md` (41976a7ce) - 62 files, 12 of them re-cuts, for the Codex art seat. It names the real trap: two portrait conventions exist and only `Portraits/Buildings/` is tier-aware, so `archer-tower-2.png` sits on disk unreachable by any Manage loader.
+
+### 8b. 02:20-02:50 - landed, gated, on the device
+**Commits:** `9ad5c7e3c` (both WOs, five lanes) -> `230dd6b9a` (board + RESULT files) -> `5920ea35c` (the fixture grammar fix).
+**Build `2026.09.06.357569`** is on the Seeker and on Firebase App Distribution. ⚠ It PREDATES `5920ea35c`, so the Defense queue-band name/art fix is NOT in it - a final build follows.
+
+**Gates, fresh logs, marker-judged:** COMPILE_GATE_OK (c19 02:43), REGRESSION_OK **393/393 -- 393 green, 0 red, 0 skipped** (r18 02:46), MANAGE_OPERATIONAL_CAPTURE_OK 12/12 touch=clean (capman7 02:44). Six oracles proven RED then GREEN (rRED1/2/3); the tree was committed first so every mutation was undone with `git checkout --`.
+
+**⚠ THE FIXTURE WAS LYING, AND IT HID THREE REAL BEHAVIOURS.** `SeedManageCaptureQueue` enqueued `tower_ground_archer:7:0`. `PlacedUpgradeKey.Compose` is the ONLY composer in the tree and emits `<itemId>@<cellX>_<cellZ>`; `TryParse` requires that `@` and rejected the colon form outright. So: the BUILDING NOW band could not resolve a name or art; the Archer Tower card read `Upgradable` while its own job ran (`HasPlacedBuilderJob` matches the key exactly); and the rail never showed its Building state. **All three were correct code behind a fixture speaking a language the game does not.** Fixed by calling `PlacedUpgradeKey.Compose` in the seed. There is now an unconditional `[Flow:Manage] BUILDING NOW band:` trace naming tab / jobId / buildingId / what resolved / art / which label won, so the next capture proves this instead of a seat inferring it.
+
+**Still open, measured on the device, NOT hidden:**
+1. The locked Research card paints TWO half-width faces and both truncate - `UPGRADE THE BUILDING T...` / `UPGRADE CATHEDRAL OF M...`. A lock REASON is a sentence and does not belong on a button. A lane is on it.
+2. Rail sub-lines truncate on the real town (`Cathedral of Magic ....`).
+3. The BUILDINGS tab's own queue band still resolves `<none>` when its first Builder job is a placed structure - the new trace says so out loud.
+4. The longest Research names still ellipsize at the 26px floor; Buildings shares this.
+
+**Her Defense tab on the real save shows LUMBERYARD and FOUNDRY, not towers** - which is exactly open question 1 in the WO (storage containers carry an upgrade ladder, so they qualify). She rules on membership; nothing was changed.
