@@ -137,6 +137,19 @@ namespace DeNelle.Village
         /// </summary>
         public bool IsAlive => _hp > 0f;
 
+        /// <summary>
+        /// WO-1439 — DERIVED from who owns the loaded scene, never serialized. Identical
+        /// expression to <see cref="WallSegment.Faction"/> and <see cref="Gate.Faction"/>
+        /// on purpose: SceneOwnership is this repo's ONE runtime answer to "is the active
+        /// scene enemy-owned?", and a second answer is the failure mode this ticket exists to
+        /// close. The player cannot build in an enemy-owned scene (BuildModeController gates
+        /// on the same flag), so any Building standing in one belongs to the garrison — which
+        /// is precisely why a garrison must not chew on it. A serialized field would let a
+        /// prefab or a stale scene lie about allegiance.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
+
         /// <summary>Raised whenever HP changes -- carries (current, max). HUD / damage flash subscribe.</summary>
         public event Action<float, float> HpChanged;
 

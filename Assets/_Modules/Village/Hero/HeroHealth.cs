@@ -1622,6 +1622,13 @@ namespace DeNelle.Village
         bool IDamageableStructure.IsAlive => IsAlive;
         void IDamageableStructure.ApplyContactDamage(float amount) => TakeDamage(amount);
 
+        /// <summary>
+        /// WO-1439 — the hero is the player. Constant Friendly, so a Hostile enemy's contact
+        /// probe still finds and hits the hero exactly as before (the hero is the ONE
+        /// IDamageableStructure the enemy is supposed to swing at in a raid).
+        /// </summary>
+        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+
         // ── IMGUI health bar (no UIDocument dependency) ───────────────────────
         private static Texture2D Px => Texture2D.whiteTexture;
 

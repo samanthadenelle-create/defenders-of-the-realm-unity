@@ -16,6 +16,56 @@ Legend: **[LIVE]** wired & functional · **[STUB]** scaffolded/inert · **[DEAD]
 
 ---
 
+## DELTA 2026-09-06 — WO-1441: the backend session had NO ESTABLISHMENT PATH, and cloud save was dark for every wallet holder
+
+**Read this before touching `BackendRequestSigner`, `WalletSkinBootstrap`, or `api/auth/session.js`.**
+
+**The defect.** Nothing minted a wallet backend session outside a purchase or a promo redeem, so a
+wallet holder who had never bought a pack had **no cloud save at all** — every `/api/game/save`
+refused fail-closed. Proven on the owner's device (pid 7170, 2026-09-06,
+`logs/debug/raid-no-abilities-2026-09-06.log`): `Connect OK` at 12:50:06.956, warm-up deferred at
+.960, first `why=missing` at 12:50:11.556, and **`MintSessionAsync` appears ZERO times in 76 MB of
+that day's captures**. Present since the WO-1157 fail-bounce (2026-08-27).
+
+**Root cause — a method with zero call sites.** `BackendRequestSigner.MintSessionForExplicitConnectAsync`
+was written to be the establishment path and **was never called by anything**. Both connect paths
+called `WarmUpSessionAsync`, which deliberately did not mint and traced *"first authenticated action
+will mint"* — false since WO-1157, because `TryAttachSession` mints only when `allowMint` is set
+(`/api/purchases/*`, or `allowInteractiveSessionMint: true`, today only `PromoCodeService`). Cloud
+save is neither.
+
+| Now | Was |
+|---|---|
+| Both connect paths call `MintSessionForExplicitConnectAsync` | Both called `WarmUpSessionAsync` (no-op) |
+| `WarmUpSessionAsync` **DELETED** (no callers left) | The only thing connect called |
+| Auto-resume MINTS — one boot handshake | WO-1211: "boot never signs" |
+| `TryRenewSessionAsync` — signature-free renewal on the save path | nothing; `why` flipped to `expired` at 15 min |
+| `signed_at` caps the renewal chain at 12 h | renewal was uncapped = a permanent login |
+
+- ⭐ **OWNER RULING 2026-09-06 REVERSES WO-1211.** Auto-resume mints. It shows no connect prompt of
+  its own, so the handshake is the session's ONLY wallet sheet — under her stated two-prompt shape,
+  not over it. A first-run player still sees nothing (`TryAutoResumeAsync` returns early with no
+  sealed session). The reasoning WO-1211 was protecting is kept verbatim in-code at
+  `WalletSkinBootstrap.TryAutoResumeAsync`; only its arithmetic was wrong.
+- ⛔ **RENEWAL ALREADY EXISTED IN PRODUCTION, UNDOCUMENTED AND UNCAPPED.**
+  `wallet-auth.verifyWallet` tries the session rail FIRST when `x-session` is offered, so
+  `POST /api/auth/session` with a valid session and no nonce has always returned a fresh token with
+  no signature. Uncapped, that is exactly the "permanent login" the file's own TTL comment forbids.
+  WO-1441 adds the ceiling (`signed_at` + `SESSION_ABSOLUTE_TTL_SECONDS`, carried across rotations,
+  old token revoked), **not** the renewal. A capped refusal must `return`, never fall through to
+  `verifyWallet` — which would renew it anyway. Pinned by `test/auth.session.renewal-cap.test.js`.
+- ⚠ **`SESSION_TTL_SECONDS` (900) and `SESSION_ABSOLUTE_TTL_SECONDS` (43200) are different axes.**
+  The first is how long a STOLEN token is useful and must stay short; the second is how long the
+  player goes without a wallet sheet. Never "fix" renewal by raising the first.
+- ⚠ **Needs `api/schema.sql` applied** (`signed_at`). Until then `renewSession` reports
+  `likely_schema` and **falls through to the existing rail on purpose**, so a lagging DB degrades to
+  today's behaviour instead of losing renewal.
+- `NightMarketSharedCardSession.OpenBrowser()` is a **card-browser modal, not a web browser** — no
+  deep link, no return leg. It cost this triage a wrong first hypothesis; the trap is documented at
+  the method.
+
+---
+
 ## DELTA 2026-08-30 — WO-1282 Lane A: the store SPLIT into `DeNelle.Commerce` (rail-neutral) + `DeNelle.Wallet` (the Solana rail)
 
 **Read this before any file:line cite below that says `Assets/_Modules/Wallet/PackCatalog.cs` or

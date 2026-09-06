@@ -2351,6 +2351,67 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
+        /// WO-2006 / OWNER_RULINGS_LOCKED §25 — THE MANAGE PLACED DOOR'S LANDING.
+        ///
+        /// <para>Owner ruling 2026-09-06, from a friend's playtest: <i>"he accidentally put a
+        /// palisade down and he didn't mean to and now he has no way to move the Palisade"</i>.
+        /// The ruling's own finding is the important half: <b>the capability EXISTS and is
+        /// fully wired; only the DOOR was missing.</b></para>
+        ///
+        /// <para>⛔ THIS METHOD DELIBERATELY BUILDS NOTHING. It does not create a panel, does
+        /// not hold a selection, and does not introduce a second answer to "what is selected"
+        /// — the failure mode CLAUDE.md warns about four times. It clears any half-started
+        /// CREATE/EDIT state and ANNOUNCES the gesture, then gets out of the way: the already
+        /// live idle loops (<see cref="UpdateSelectLoop"/> on desktop,
+        /// <see cref="TryTapSelectAt"/> on touch/web) call <see cref="SelectStructure"/>,
+        /// which raises the real MOVE / UPGRADE / SELL panel (<see cref="BuildSelectionUI"/>).
+        /// The whole defect was that nothing on screen ever said so.</para>
+        ///
+        /// <para>§12: every branch names itself, and the placed-structure census is emitted
+        /// because "I tapped and nothing happened" splits into <i>nothing to select</i> vs
+        /// <i>the tap missed</i>, and only the census can tell those apart after the fact.</para>
+        /// </summary>
+        private void BeginManagePlaced()
+        {
+            if (!IsActive)
+            {
+                // Cannot happen through the palette (the browser only exists inside a live
+                // session) — but a silent no-op here would look exactly like the bug this
+                // door fixes, so it is said out loud rather than swallowed.
+                FlowTrace.Warn("Build",
+                    "ManagePlaced requested while build mode is NOT active — ignored. The palette " +
+                    "should only be able to raise this from inside a live session.");
+                return;
+            }
+
+            CancelArmed();     // a half-armed CREATE entry must not survive into EDIT
+            ClearSelection();  // start from no selection; the player's tap chooses
+
+            int placed = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None).Length;
+
+            if (placed <= 0)
+            {
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    "Nothing is built yet — place something first.",
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+                FlowTrace.Warn("Build",
+                    "ManagePlaced entered with ZERO live PlacedStructure bodies — the player was told " +
+                    "via toast instead of being left tapping an empty map (§12: no silent refusal).");
+                return;
+            }
+
+            DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                "Tap a building or wall to move, upgrade or sell it.",
+                DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+
+            FlowTrace.Step("Build",
+                $"ManagePlaced ENTERED (ruling §25 door): armed cleared, selection cleared, " +
+                $"{placed} live PlacedStructure bodies are selectable. The next world tap routes " +
+                "through the EXISTING UpdateSelectLoop/TryTapSelectAt -> SelectStructure -> " +
+                "BuildSelectionUI (Move/Upgrade/Sell). No new selection state was created.");
+        }
+
+        /// <summary>
         /// Select a placed structure: highlight it and show the Move/Sell/Cancel
         /// action panel (refund = 50% of its catalog buildCost, rounded down). Any
         /// previously-armed CREATE entry is dropped so the modes never overlap.
@@ -3983,6 +4044,11 @@ namespace DeNelle.Village
             // cancel every other return-to-carousel already uses (CancelArmed -> Expand), so
             // the tab introduces a new DOOR, never a second set of refund/teardown rules.
             _palette.OnRestoreRequested += () => CancelArmed();
+            // WO-2006 / OWNER_RULINGS_LOCKED §25 — the MANAGE PLACED door. Like
+            // OnRestoreRequested above, this is a DOOR to an existing verb, never a second
+            // set of rules: it hands the session to the same tap-to-select loop that already
+            // raises BuildSelectionUI.
+            _palette.OnManagePlacedRequested += BeginManagePlaced;
 
             // WO-352 preview (tap card -> Structure Info Preview -> "Place" -> arm) is
             // DISABLED 2026-06-19 (owner playtest): its UIToolkit panel adopted a bad/null

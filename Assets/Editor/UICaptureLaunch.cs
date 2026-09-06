@@ -6776,9 +6776,28 @@ namespace DeNelle.Editor
 
         /// <summary>
         /// Focused three-ratio gate for every operational Manage destination. Unlike the empty-town
-        /// Defense capture, this installs a throwaway founded-town state so Buildings, Troops, and
-        /// Research are genuinely disclosed by the same authoritative BaseLayout rules used at runtime.
+        /// Defense capture, this installs a throwaway founded-town state so every destination is
+        /// genuinely disclosed by the same authoritative BaseLayout rules used at runtime.
         /// The prior singleton is restored after every frame; capture cannot mutate the editor save.
+        ///
+        /// <para>⛔ WO-1444 (2026-09-06) -- THIS ENTRY POINT CARRIED THE SAME TWO FAULTS AS THE FLOW
+        /// MAP, AND THE ANSWER TO "does it share them" IS YES ON BOTH.
+        /// <list type="number">
+        /// <item>Its four destinations were the LEGACY tabs, and <c>ManageScreenVM.LegacyTabOf</c>
+        /// maps BOTH <c>Defense</c> and <c>Buildings</c> to <c>ManageTabId.Build</c> (ruling 4) --
+        /// so <c>ManageDefense_*</c> and <c>ManageBuildings_*</c> were the SAME SCREEN under two
+        /// names, at all three widths. Six of twelve frames were duplicates.</item>
+        /// <item>Its per-width "card grammar" variation wrote <c>_selectedBuildingId</c> /
+        /// <c>_selectedDefenseId</c> / <c>_selectedResearchKey</c> by reflection. Nothing reads
+        /// those while the workspace owns the well (ManageScreenPanel.RenderList:1974), so the
+        /// three widths differed only in resolution -- and <c>SetPrivateField</c> merely WARNS on a
+        /// field it cannot find, so the run stayed silent about it.</item>
+        /// </list>
+        /// It also swept nothing, so a frame it failed to re-take stayed on disk looking current.
+        /// The destinations are now the THREE REAL TABS plus the Research school->perks screen (the
+        /// count stays 12 because that fourth destination is a real, distinct screen, not a filler),
+        /// three ratios of the SAME screen each -- which is what a geometry gate is for. Detail /
+        /// card-state coverage lives in the flow map, whose frames now reach it honestly.</para>
         /// </summary>
         public static void RunManageOperationalCaptureHeadless()
         {
@@ -6789,20 +6808,72 @@ namespace DeNelle.Editor
             _touchFailures.Clear();
             _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
 
+            var shots = new[]
+            {
+                new KeyValuePair<DeNelle.Core.Manage.ManageTabId, bool>(DeNelle.Core.Manage.ManageTabId.Build, false),
+                new KeyValuePair<DeNelle.Core.Manage.ManageTabId, bool>(DeNelle.Core.Manage.ManageTabId.Army, false),
+                new KeyValuePair<DeNelle.Core.Manage.ManageTabId, bool>(DeNelle.Core.Manage.ManageTabId.Research, false),
+                new KeyValuePair<DeNelle.Core.Manage.ManageTabId, bool>(DeNelle.Core.Manage.ManageTabId.Research, true),
+            };
+            int expected = shots.Length * LandscapeTargets.Length;   // DERIVED, never a constant
+
+            var expectedFiles = new List<string>(expected);
+            for (int s = 0; s < shots.Length; s++)
+                for (int t = 0; t < LandscapeTargets.Length; t++)
+                    expectedFiles.Add(OutDir + ManageOperationalShotName(shots[s].Key, shots[s].Value) +
+                                      "_" + LandscapeTargets[t].Tag + ".png");
+            BeginCaptureLedger("MANAGE_OPERATIONAL", expectedFiles, RetiredManageOperationalFrames());
+
             int count = 0;
-            count += CaptureManageOperational(ManageTab.Defense);
-            count += CaptureManageOperational(ManageTab.Buildings);
-            count += CaptureManageOperational(ManageTab.Troops);
-            count += CaptureManageOperational(ManageTab.Research);
+            using (new ManageLastTabPin())
+                for (int s = 0; s < shots.Length; s++)
+                    count += CaptureManageOperational(shots[s].Key, shots[s].Value);
+
+            int ledger = EndCaptureLedger();
 
             ReportFidelity();
             ReportGeometry();
             ReportTouchOracle();
-            if (count == 12 && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
-                Debug.Log("MANAGE_OPERATIONAL_CAPTURE_OK " + count + "/12 frames; four destinations; touch=clean");
+            if (count == expected && ledger == 0 && _fidelityDegraded == 0 &&
+                _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_OPERATIONAL_CAPTURE_OK " + count + "/" + expected +
+                          " frames; four destinations; touch=clean");
             else
-                Debug.LogError("MANAGE_OPERATIONAL_CAPTURE_FAIL frames=" + count + "/12 fidelity=" +
-                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+                Debug.LogError("MANAGE_OPERATIONAL_CAPTURE_FAIL frames=" + count + "/" + expected +
+                    " ledger=" + ledger + " fidelity=" + _fidelityDegraded +
+                    " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        /// <summary>The operational shot's stable file stem.</summary>
+        private static string ManageOperationalShotName(DeNelle.Core.Manage.ManageTabId tab, bool schoolPerks)
+        {
+            if (schoolPerks) return "ManageResearchSchool";
+            switch (tab)
+            {
+                case DeNelle.Core.Manage.ManageTabId.Army: return "ManageArmy";
+                case DeNelle.Core.Manage.ManageTabId.Research: return "ManageResearch";
+                default: return "ManageBuild";
+            }
+        }
+
+        /// <summary>
+        /// Frame names this entry point has RETIRED: <c>ManageBuildings_*</c> named the same screen
+        /// as <c>ManageDefense_*</c>, and <c>ManageTroops_*</c> is now <c>ManageArmy_*</c>. Both are
+        /// swept and not re-taken, so no png survives under a name whose screen no longer exists.
+        ///
+        /// <para>⛔ <c>ManageDefense_*</c> IS DELIBERATELY NOT ON THIS LIST, even though this entry
+        /// point stopped writing it. <see cref="RunManageDefenseCaptureHeadless"/> (marker
+        /// <c>MANAGE_DEFENSE_CAPTURE_OK</c>) is a SEPARATE entry point that owns exactly those three
+        /// filenames. A sweep list is a delete list: putting a name on it that another entry point
+        /// writes would make this run silently destroy that run's evidence -- which is the same
+        /// class of harm the ledger exists to prevent, pointed the other way.</para>
+        /// </summary>
+        private static IEnumerable<string> RetiredManageOperationalFrames()
+        {
+            string[] retired = { "ManageBuildings", "ManageTroops" };
+            for (int r = 0; r < retired.Length; r++)
+                for (int t = 0; t < LandscapeTargets.Length; t++)
+                    yield return OutDir + retired[r] + "_" + LandscapeTargets[t].Tag + ".png";
         }
 
         /// <summary>
@@ -6900,9 +6971,9 @@ namespace DeNelle.Editor
             });
         }
 
-        private static int CaptureManageOperational(ManageTab tab)
+        private static int CaptureManageOperational(DeNelle.Core.Manage.ManageTabId tab, bool schoolPerks)
         {
-            string shotName = "Manage" + tab;
+            string shotName = ManageOperationalShotName(tab, schoolPerks);
             return ForEachTarget(shotName, target =>
             {
                 GameStateService prior = GameStateService.Instance;
@@ -7028,45 +7099,24 @@ namespace DeNelle.Editor
                     var panel = panelHost.AddComponent<ManageScreenPanel>();
                     InvokePrivate(panel, "Awake");
                     panel.Open();
-                    InvokePrivate(panel, "ShowOperational", tab);
-                    if (tab == ManageTab.Buildings)
-                    {
-                        // Across the three canonical frames, prove the complete card grammar:
-                        // an upgradable choice with costs/CTAs, a maxed choice, and a gated choice.
-                        string selectedId = target.W >= 2600 ? "arcane-tower" :
-                                            target.W >= 2200 ? "forge" : "lumbermill";
-                        SetPrivateField(panel, "_selectedBuildingId", selectedId);
-                        InvokePrivate(panel, "Render");
-                    }
-                    else if (tab == ManageTab.Defense)
-                    {
-                        // Same discipline as Buildings above: across the three canonical frames,
-                        // prove the whole Defence card grammar rather than one happy row.
-                        //   2670 -> the two-instance archer type (one rail row, lowest level L1)
-                        //   1920 -> the maxed catapult (no CTA, "Max" state word)
-                        //   below -> the six-rung container mid-climb
-                        // SetPrivateField only WARNS on an unknown field, so this stays harmless
-                        // until lane B's _selectedDefenseId lands and never fails a frame.
-                        string selectedDefenseId = target.W >= 2600 ? "tower_ground_archer" :
-                                                   target.W >= 2200 ? "tower_catapult" : "lumberyard";
-                        SetPrivateField(panel, "_selectedDefenseId", selectedDefenseId);
-                        InvokePrivate(panel, "Render");
-                    }
-                    else if (tab == ManageTab.Research)
-                    {
-                        // The key is "<buildingId>:<perkId>" — BuildingPerkService.Key's shape
-                        // (BuildingPerkService.cs:68), which is also the OwnedBuildingPerks key.
-                        //   2670 -> Available  (barracks tier 3, unlock tier 3)
-                        //   1920 -> Locked     (lumbermill sits at tier 1, perk needs tier 3)
-                        //   below -> Researched (owned above)
-                        // The Researching card is reachable at every width from the rail; the queue
-                        // job "building-research:arcane-tower:arcane-warding-runes" supplies it.
-                        string selectedResearchKey = target.W >= 2600 ? "barracks:barracks-expanded-capacity" :
-                                                     target.W >= 2200 ? "lumbermill:lumber-construction-aid" :
-                                                                        "forge:forge-efficient-smelting";
-                        SetPrivateField(panel, "_selectedResearchKey", selectedResearchKey);
-                        InvokePrivate(panel, "Render");
-                    }
+
+                    // ⛔ THE MODEL DRIVES THE SCREEN. The old body called ShowOperational with a
+                    // LEGACY tab and then wrote a private selection field by reflection; see this
+                    // entry point's summary for why neither survived the redesign. EnterTab is the
+                    // seam the tab row itself uses, and a refusal is a THROWN frame, never a
+                    // silently-substituted one.
+                    var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
+                    if (vm == null)
+                        throw new InvalidOperationException("ManageScreenPanel exposed no _vm -- nothing to drive");
+                    vm.EnterTab(tab);
+                    if (vm.Nav == null || vm.Nav.Tab != tab)
+                        throw new InvalidOperationException(
+                            "the model refused tab " + tab + " -- this destination is not available in " +
+                            "this fixture, so the frame cannot be shot honestly");
+                    if (schoolPerks && !TryOpenManageFlowSchool(vm, out string _))
+                        throw new InvalidOperationException(
+                            "no research school could be opened -- the perks screen cannot be shot honestly");
+
                     Canvas.ForceUpdateCanvases();
                     canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
                     return canvas != null && RenderCanvasToPng(canvas,
@@ -7147,6 +7197,213 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        //  ⛔ THE CAPTURE LEDGER (WO-1444, 2026-09-06) -- A CAPTURE THAT RESOLVES
+        //     NOTHING MUST NEVER LEAVE A FRAME THAT LOOKS FRESH.
+        // ---------------------------------------------------------------------
+        //  THE DEFECT THIS EXISTS FOR, measured on 2026-09-06 and worse than the
+        //  broken resolve that exposed it:
+        //
+        //    The 14:59 RunManageFlowMapCaptureHeadless run wrote 21/21 pngs into
+        //    Builds/ui-capture/ and withheld MANAGE_FLOW_MAP_OK (geometry=132
+        //    touch=116). But WITHIN each tab the files were BYTE-IDENTICAL --
+        //    ManageFlow_Defense_{railtop,railbottom,locked,max} all 1319974 bytes,
+        //    Troops all 1198852, Research all 1386082. Sixteen of the twenty-one
+        //    frames were ONE image wearing FIVE FILENAMES, because the scroll seam
+        //    and the selection seam had both died with the redesign and the harness
+        //    reported neither. A reviewer opening "_locked" saw the grid.
+        //
+        //    Meanwhile docs/manage-flow-map/ still held the 09:17 baseline. Nothing
+        //    in this harness has ever written there (OutDir is Builds/ui-capture/),
+        //    so a directory of PNGs from BEFORE the redesign sat looking current.
+        //
+        //  THREE RULES, and they are cheap enough that there is no excuse:
+        //
+        //   1. SWEEP FIRST. Every frame a run intends to take -- plus every frame
+        //      name the run has RETIRED -- is DELETED before the run starts. A
+        //      frame that cannot be re-taken is then honestly ABSENT. Absence is a
+        //      finding; a stale png is a lie.
+        //   2. HASH AFTER. Two DIFFERENT filenames with IDENTICAL bytes inside one
+        //      run is a FAILURE, not a coincidence: it means the state the second
+        //      filename claims was never reached. This alone would have caught the
+        //      14:59 run.
+        //   3. DERIVE THE COUNT. The expected total comes from the PLAN, never from
+        //      a `const int Expected = 21` sitting beside it. A hand-maintained
+        //      count next to the thing it counts is duplicated state and it goes
+        //      stale exactly like CLAUDE.md §2's WO-number block and §5's
+        //      dependency table.
+        //
+        //  NOTE the ledger does NOT decide the marker on its own -- it CONTRIBUTES a
+        //  failure count that the entry point folds into its own OK/FAIL test, so a
+        //  run can never be green with a missing or duplicated frame.
+        // =====================================================================
+
+        private static readonly List<string> _ledgerExpected = new List<string>();
+
+        /// <summary>
+        /// Frames whose bytes are allowed to match a sibling's because the SCREEN cannot differ.
+        /// The only member so far: a "gridbottom" frame whose grid content already fits inside the
+        /// viewport -- there is no bottom to scroll to, so gridtop and gridbottom ARE one picture
+        /// and the filename is still truthful. Populated by the probe, which is the only place that
+        /// can MEASURE it (content px vs viewport px on the settled layout); never a hardcoded
+        /// exemption list, because a hardcoded one would grow into a way to silence real duplicates.
+        /// </summary>
+        private static readonly HashSet<string> _ledgerIdenticalByConstruction =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private static string _ledgerRun;
+
+        /// <summary>
+        /// ⛔ PIN THE LAST-USED TAB, AND PUT IT BACK. ManageScreenPanel.Open calls
+        /// ManageScreenVM.OpenDefaultScreen, which reads PlayerPrefs "manage.lasttab"
+        /// (ManageScreenVM.cs:2866/2953) -- so WITHOUT this pin the opening screen of every frame
+        /// is whatever tab the PREVIOUS RUN happened to leave behind, and a capture whose content
+        /// depends on run history is not evidence. EnterTab WRITES that pref too, so the harness
+        /// was also silently editing the editor's own preferences. Both ends are closed here.
+        /// </summary>
+        private sealed class ManageLastTabPin : IDisposable
+        {
+            private readonly bool _had;
+            private readonly int _prior;
+
+            public ManageLastTabPin()
+            {
+                _had = PlayerPrefs.HasKey(ManageScreenVM.LastTabPrefKey);
+                _prior = PlayerPrefs.GetInt(ManageScreenVM.LastTabPrefKey, (int)DeNelle.Core.Manage.ManageTabId.Build);
+                PlayerPrefs.SetInt(ManageScreenVM.LastTabPrefKey, (int)DeNelle.Core.Manage.ManageTabId.Build);
+            }
+
+            public void Dispose()
+            {
+                if (_had) PlayerPrefs.SetInt(ManageScreenVM.LastTabPrefKey, _prior);
+                else PlayerPrefs.DeleteKey(ManageScreenVM.LastTabPrefKey);
+            }
+        }
+
+        /// <summary>
+        /// Delete every frame this run intends to write, plus every frame name it has retired,
+        /// so nothing older than this run can survive in the output directory under a name the
+        /// run owns. Logs the sweep so the count is in the log even when the run then dies.
+        /// </summary>
+        private static void BeginCaptureLedger(string runName, IEnumerable<string> expectedFiles,
+                                               IEnumerable<string> retiredFiles)
+        {
+            _ledgerRun = runName;
+            _ledgerExpected.Clear();
+            _ledgerIdenticalByConstruction.Clear();
+            int deleted = 0;
+
+            if (expectedFiles != null)
+            {
+                foreach (var f in expectedFiles)
+                {
+                    if (string.IsNullOrEmpty(f)) continue;
+                    _ledgerExpected.Add(f);
+                    if (TryDeleteCaptureFile(f)) deleted++;
+                }
+            }
+
+            if (retiredFiles != null)
+            {
+                foreach (var f in retiredFiles)
+                {
+                    // A RETIRED name is swept but NOT expected back. This is what stops a frame
+                    // whose screen no longer exists from sitting in the directory forever, still
+                    // looking like current evidence of a screen the redesign deleted.
+                    if (!string.IsNullOrEmpty(f) && TryDeleteCaptureFile(f)) deleted++;
+                }
+            }
+
+            Debug.Log("CAPTURE_LEDGER_SWEPT " + runName + " deleted=" + deleted +
+                      " expected=" + _ledgerExpected.Count +
+                      " -- any frame missing after this run was NOT re-taken, and is absent on purpose.");
+        }
+
+        private static bool TryDeleteCaptureFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                File.Delete(path);
+                return true;
+            }
+            catch (Exception e)
+            {
+                // A file we cannot delete is the dangerous case -- it is exactly the stale frame
+                // this ledger exists to remove -- so it is an ERROR, never a silent skip.
+                Debug.LogError("[UICap-HL] CAPTURE_LEDGER could not sweep '" + path + "': " + e.Message +
+                               " -- a frame from an earlier run may survive under a name this run owns.");
+                return false;   // NOT deleted: the count must never claim a sweep that did not happen
+            }
+        }
+
+        /// <summary>
+        /// Close the ledger: every expected frame must exist, and no two expected frames may carry
+        /// identical bytes. Returns the FAILURE COUNT (0 == clean) so the caller folds it into its
+        /// own marker test rather than this method inventing a second marker.
+        /// </summary>
+        private static int EndCaptureLedger()
+        {
+            int failures = 0;
+            var byHash = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            using (var md5 = System.Security.Cryptography.MD5.Create())
+            {
+                for (int i = 0; i < _ledgerExpected.Count; i++)
+                {
+                    string path = _ledgerExpected[i];
+                    if (!File.Exists(path))
+                    {
+                        Debug.LogError("CAPTURE_LEDGER_MISSING " + (_ledgerRun ?? "?") + " " + path +
+                                       " -- the run did not write this frame. It was swept before the run, " +
+                                       "so there is NO stale image standing in for it. Treat as absent.");
+                        failures++;
+                        continue;
+                    }
+
+                    string hash;
+                    try
+                    {
+                        hash = BitConverter.ToString(md5.ComputeHash(File.ReadAllBytes(path)));
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("CAPTURE_LEDGER_UNREADABLE " + path + ": " + e.Message);
+                        failures++;
+                        continue;
+                    }
+
+                    if (byHash.TryGetValue(hash, out string first))
+                    {
+                        // MEASURED EXEMPTION, not a hardcoded one: the probe proved this frame's grid
+                        // already fits its viewport, so there is no bottom to scroll to and the two
+                        // filenames are both truthful. The mockup's screen 4 ("all 9 troops visible,
+                        // no scrolling") makes this the DESIRED state on ARMY, not a defect.
+                        if (_ledgerIdenticalByConstruction.Contains(path) ||
+                            _ledgerIdenticalByConstruction.Contains(first))
+                        {
+                            Debug.Log("CAPTURE_LEDGER_IDENTICAL_BY_CONSTRUCTION " + Path.GetFileName(path) +
+                                      " == " + Path.GetFileName(first) + " -- the grid fits its viewport, " +
+                                      "so there is no scrolled state to differ. Not counted as a failure.");
+                            continue;
+                        }
+                        Debug.LogError("CAPTURE_LEDGER_DUPLICATE " + (_ledgerRun ?? "?") + " '" +
+                            Path.GetFileName(path) + "' is BYTE-IDENTICAL to '" + Path.GetFileName(first) +
+                            "'. Two filenames, one image: the state the second name claims was never " +
+                            "reached, so that frame's filename is a lie. This is a FAILURE, not a " +
+                            "coincidence -- fix the seam that was supposed to change the screen.");
+                        failures++;
+                        continue;
+                    }
+                    byHash[hash] = path;
+                }
+            }
+
+            Debug.Log("CAPTURE_LEDGER_CLOSED " + (_ledgerRun ?? "?") + " expected=" + _ledgerExpected.Count +
+                      " present=" + byHash.Count + " failures=" + failures);
+            return failures;
+        }
+
+        // =====================================================================
         //  MANAGE FLOW MAP (2026-09-06) -- a DOCUMENTATION capture, not a fit gate.
         //
         //  THE PROBLEM IT EXISTS FOR, in the owner's words: "the disconnect is the
@@ -7162,11 +7419,71 @@ namespace DeNelle.Editor
         //  ADDITIVE second door with its own marker and its own fixture.
         //
         //  TWO ARTEFACTS, and the TEXT one is worth as much as the pixels:
-        //    Builds/ui-capture/ManageFlow_<Tab>_<state>_2670x1200.png
-        //    MANAGE_FLOW_INVENTORY <Tab>: rail rows=<n> (vm=.. rendered=..) visible=<f>
+        //    Builds/ui-capture/ManageFlow_<TAB>_<state>_2670x1200.png
+        //    MANAGE_FLOW_INVENTORY <TAB>: grid tiles=<n> (vm=.. rendered=..) visible=<f>
         //        viewport=<px> content=<px> pitch=<px> queueRows(line=<Channel>)=<n>
         //  "visible" is the number the owner is actually asking about: how much of the
-        //  rail a player sees before scrolling.
+        //  screen's content a player sees before scrolling.
+        //
+        //  ⚠ THE OUTPUT DIRECTORY IS Builds/ui-capture/, NOT docs/manage-flow-map/.
+        //  CAPTURE_LOOP_GOAL.md said "Output: docs/manage-flow-map/" and NOTHING in this
+        //  harness has ever written there. That folder is the FROZEN 09:17 baseline every
+        //  WO-200x cites as "run Builds/flowmap1"; a reader comparing a new build against
+        //  it was comparing against pre-redesign pixels. Read fresh frames out of OutDir.
+        //
+        // ---------------------------------------------------------------------
+        //  WO-1444 (2026-09-06) -- REPOINTED AT THE WORKSPACE, AND THE OLD SEAM IS DEAD.
+        //
+        //  ⛔ WHAT THIS HARNESS USED TO RESOLVE, AND WHY IT RESOLVES NOTHING NOW.
+        //  It looked up a rail by the authored zone name -- "DefenseSelectorRail" /
+        //  "BuildingSelectorRail" / "TroopSelectorRail" / "ResearchSelectorRail" -- and
+        //  took the ScrollRect under it. Those zones are built by RenderBuildingsDestination
+        //  and its three siblings, which are reached ONLY through ManageScreenPanel.
+        //  RenderList. Since WO-2001 that method's FIRST LINE is
+        //      if (WorkspaceActive) { RenderWorkspace(); return; }
+        //  (ManageScreenPanel.cs:1974). ManageWorkspacePanel owns the body well, the legacy
+        //  list band is SetActive(false) (ShowWorkspace, :784), and NO rail object is ever
+        //  constructed. So the lookup answered null on every tab -- the four
+        //  "no rail ScrollRect resolved" lines in Builds/manage-capture-r1.log.
+        //
+        //  WHAT IT MUST RESOLVE INSTEAD: the workspace GRID.
+        //      _workspaceHost ("ManageWorkspace")            ManageScreenPanel.cs:765
+        //        -> "ManageGridScroll"  (ScrollRect + RectMask2D)  ManageWorkspacePanel.cs:475
+        //             -> "Content"      (GridLayoutGroup, FixedColumnCount)          :487
+        //                  -> "ManageTile" x N                                       :546
+        //  The rows are DERIVED (ceil(tiles / constraintCount)) and the pitch is
+        //  cellSize.y + spacing.y -- read off the live GridLayoutGroup, never authored here.
+        //
+        //  ⛔ AND THE SELECTION SEAM IS DEAD TOO. The old body wrote _selectedBuildingId /
+        //  _selectedTroopId / _selectedDefenseId / _selectedResearchKey by reflection. Those
+        //  fields are read only by the LEGACY row factories, which no longer run, so the
+        //  "locked" and "max" frames were the plain grid under a filename that claimed a
+        //  card. Selection is now a SCREEN: the model's ManageNavEntry (Kind=Detail), reached
+        //  by invoking the tile's OWN Activate callback -- the exact seam a player's tap
+        //  uses. If the fixture produces no tile in the wanted state the frame FAILS; it is
+        //  never quietly substituted.
+        //
+        //  ⛔ THE HUB FRAME HAS NO ANALOGUE AND IS RETIRED, NOT SILENTLY DROPPED. WO-2001
+        //  deleted the four-tile chooser: ManageScreenPanel.Open builds the launcher cards
+        //  (they remain the record of the 2026-08-31 approved art) but ShowWorkspace hides
+        //  the host and it is never shown again. Manage now OPENS on a tab grid, so the hub
+        //  frame and the BUILD gridtop frame would be the same picture -- which is precisely
+        //  the duplicate-filename lie the ledger above now fails on. Replaced by
+        //  ManageFlow_RESEARCH_school, the one screen in the new flow that nothing else
+        //  covers (canon 5: school first, THEN its perks).
+        //
+        //  ⚠ AND IT MAY COME BACK -- that is a DIVERGENCE, not a settled decision. The owner's
+        //  mockup (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png, screen 1) shows a HUB of
+        //  three large BUILD / ARMY / RESEARCH cards, and CAPTURE_LOOP_GOAL 3.0c records that
+        //  the mockup WINS where it disagrees with a ruling. This frame is retired because the
+        //  hub is UNREACHABLE IN THE BUILD AS IT STANDS, not because a hub is wrong. If the hub
+        //  is restored, put a Hub member back on ManageFlowFrame and into BuildManageFlowPlan --
+        //  the plan is the only place the frame set lives.
+        //
+        //  ⛔ FOUR TABS COLLAPSED TO THREE. ManageScreenVM.LegacyTabOf maps BOTH Defense and
+        //  Buildings to ManageTabId.Build (ruling 4 -- they share the Builder line), so the
+        //  old Defense_* and Buildings_* frames were the same screen twice. The plan below
+        //  enumerates ManageTabId, which is the axis the screen actually has.
         // =====================================================================
 
         /// <summary>ONE landscape target. This is a documentation capture; three ratios would
@@ -7177,26 +7494,98 @@ namespace DeNelle.Editor
         };
 
         /// <summary>Which frame of the Manage flow a single capture body is shooting.</summary>
-        private enum ManageFlowFrame { Hub, RailTop, RailBottom, QueueDrawer, LockedCard, MaxCard }
+        private enum ManageFlowFrame { GridTop, GridBottom, QueueDrawer, LockedDetail, MaxDetail, SchoolPerks }
+
+        /// <summary>One planned shot. The PLAN is the only place the frame set is written down,
+        /// and <c>Expected</c> is its Length -- never a constant beside it (CLAUDE.md §2/§5:
+        /// a hand-kept count next to the thing it counts is duplicated state).</summary>
+        private struct ManageFlowShot
+        {
+            public readonly DeNelle.Core.Manage.ManageTabId Tab;
+            public readonly ManageFlowFrame Frame;
+            public ManageFlowShot(DeNelle.Core.Manage.ManageTabId tab, ManageFlowFrame frame)
+            { Tab = tab; Frame = frame; }
+        }
+
+        private static string ManageFlowStateWord(ManageFlowFrame frame)
+        {
+            switch (frame)
+            {
+                case ManageFlowFrame.GridTop: return "gridtop";
+                case ManageFlowFrame.GridBottom: return "gridbottom";
+                case ManageFlowFrame.QueueDrawer: return "queue";
+                case ManageFlowFrame.LockedDetail: return "locked";
+                case ManageFlowFrame.MaxDetail: return "max";
+                default: return "school";
+            }
+        }
+
+        private static string ManageFlowShotName(ManageFlowShot shot)
+        {
+            return "ManageFlow_" + ManageScreenVM.TabWordOf(shot.Tab) + "_" + ManageFlowStateWord(shot.Frame);
+        }
+
+        /// <summary>
+        /// THE PLAN. Three real tabs x five states, plus the Research school->perks screen that
+        /// replaces the retired hub. Change the flow set HERE and nowhere else.
+        /// </summary>
+        private static ManageFlowShot[] BuildManageFlowPlan()
+        {
+            var tabs = new[]
+            {
+                DeNelle.Core.Manage.ManageTabId.Build,
+                DeNelle.Core.Manage.ManageTabId.Army,
+                DeNelle.Core.Manage.ManageTabId.Research,
+            };
+            var frames = new[]
+            {
+                ManageFlowFrame.GridTop, ManageFlowFrame.GridBottom, ManageFlowFrame.QueueDrawer,
+                ManageFlowFrame.LockedDetail, ManageFlowFrame.MaxDetail,
+            };
+            var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 1);
+            for (int t = 0; t < tabs.Length; t++)
+                for (int f = 0; f < frames.Length; f++)
+                    plan.Add(new ManageFlowShot(tabs[t], frames[f]));
+            plan.Add(new ManageFlowShot(DeNelle.Core.Manage.ManageTabId.Research, ManageFlowFrame.SchoolPerks));
+            return plan.ToArray();
+        }
+
+        /// <summary>
+        /// The 21 frame names this entry point USED to write. They are SWEPT and not re-taken:
+        /// four of them name a tab the screen no longer has (Defense/Buildings are one BUILD tab)
+        /// and one names a hub that no longer exists. Leaving them on disk is exactly the lie the
+        /// ledger exists to stop -- a reader listing the folder would see current-looking evidence
+        /// of screens that were deleted.
+        /// </summary>
+        private static IEnumerable<string> RetiredManageFlowFrames()
+        {
+            var tag = ManageFlowMapTargets[0].Tag;
+            yield return OutDir + "ManageFlow_Hub_" + tag + ".png";
+            string[] legacyTabs = { "Defense", "Buildings", "Troops", "Research" };
+            string[] legacyStates = { "railtop", "railbottom", "queue", "locked", "max" };
+            for (int t = 0; t < legacyTabs.Length; t++)
+                for (int s = 0; s < legacyStates.Length; s++)
+                    yield return OutDir + "ManageFlow_" + legacyTabs[t] + "_" + legacyStates[s] + "_" + tag + ".png";
+        }
 
         // Hand-off from the capture body to the settled-layout probe. Set before
         // RenderCanvasToPng, cleared in the body's finally -- never read anywhere else.
-        private static ScrollRect _flowRailScroll;
-        private static bool _flowRailToBottom;
-        private static bool _flowMeasureRail;
+        private static ScrollRect _flowGridScroll;
+        private static bool _flowGridToBottom;
+        private static bool _flowMeasureGrid;
         private static string _flowMeasureTab;
-        private static int _flowVmRailRows;
+        private static int _flowVmGridTiles;
         private static int _flowVmQueueRows;
         private static string _flowQueueChannel;
         private static readonly List<string> _flowInventory = new List<string>();
         private static readonly List<string> _flowStateNotes = new List<string>();
 
         /// <summary>
-        /// Documents the ENTIRE Manage flow: the hub, and for each of the four destinations the
-        /// rail at the top, the rail SCROLLED TO THE BOTTOM (so the full list length is visible),
-        /// the queue drawer, and the two card states a player cannot act on (blocked/locked and
-        /// max/researched). 21 frames, plus a per-tab TEXT INVENTORY of how many rows each rail
-        /// holds versus how many fit on screen.
+        /// Documents the ENTIRE Manage flow: for each of the three workspace tabs the grid at the
+        /// top, the grid SCROLLED TO THE BOTTOM (so the full content length is visible), the queue
+        /// drawer, and the two DETAIL screens a player cannot act on (locked and max) -- plus the
+        /// Research school->perks screen. Each frame carries a per-tab TEXT INVENTORY of how many
+        /// tiles the grid holds versus how many fit on screen.
         /// </summary>
         public static void RunManageFlowMapCaptureHeadless()
         {
@@ -7209,36 +7598,39 @@ namespace DeNelle.Editor
             _flowInventory.Clear();
             _flowStateNotes.Clear();
 
-            const int Expected = 21;   // 1 hub + 4 tabs x (railtop, railbottom, queue, locked, max)
+            var plan = BuildManageFlowPlan();
+            int expected = plan.Length;   // DERIVED from the plan. Never a constant beside it.
+
+            // ⛔ SWEEP BEFORE THE RUN. Every frame this run owns -- and every frame name it has
+            // retired -- is deleted first, so nothing that survives can be older than this run.
+            var expectedFiles = new List<string>(expected);
+            for (int i = 0; i < plan.Length; i++)
+                expectedFiles.Add(OutDir + ManageFlowShotName(plan[i]) + "_" + ManageFlowMapTargets[0].Tag + ".png");
+            BeginCaptureLedger("MANAGE_FLOW_MAP", expectedFiles, RetiredManageFlowFrames());
+
             int count = 0;
+            using (new ManageLastTabPin())
+                for (int i = 0; i < plan.Length; i++) count += CaptureManageFlowFrame(plan[i]);
 
-            count += CaptureManageFlowFrame(ManageTab.Defense, ManageFlowFrame.Hub);
-
-            var tabs = new[] { ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.RailTop);
-                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.RailBottom);
-                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.QueueDrawer);
-                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.LockedCard);
-                count += CaptureManageFlowFrame(tabs[i], ManageFlowFrame.MaxCard);
-            }
-
-            // The inventory prints BEFORE the marker so it survives a FAIL: the row counts are the
+            // The inventory prints BEFORE the marker so it survives a FAIL: the tile counts are the
             // answer to the owner's question even on a run where a frame did not render.
             for (int i = 0; i < _flowStateNotes.Count; i++) Debug.Log("MANAGE_FLOW_STATE " + _flowStateNotes[i]);
             for (int i = 0; i < _flowInventory.Count; i++) Debug.Log(_flowInventory[i]);
 
+            int ledger = EndCaptureLedger();
+
             ReportFidelity();
             ReportGeometry();
             ReportTouchOracle();
-            if (count == Expected && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
-                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; hub + 4 destinations x " +
-                          "(rail top, rail bottom, queue, locked, max); inventory lines=" + _flowInventory.Count);
+            if (count == expected && ledger == 0 && _fidelityDegraded == 0 &&
+                _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; 3 destinations x " +
+                          "(grid top, grid bottom, queue, locked, max) + research school; inventory lines=" +
+                          _flowInventory.Count);
             else
-                Debug.LogError("MANAGE_FLOW_MAP_FAIL frames=" + count + "/" + Expected + " fidelity=" +
-                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count +
-                    " inventory=" + _flowInventory.Count);
+                Debug.LogError("MANAGE_FLOW_MAP_FAIL frames=" + count + "/" + expected + " ledger=" + ledger +
+                    " fidelity=" + _fidelityDegraded + " geometry=" + _geoFailures.Count +
+                    " touch=" + _touchFailures.Count + " inventory=" + _flowInventory.Count);
         }
 
         /// <summary>
@@ -7256,58 +7648,88 @@ namespace DeNelle.Editor
         /// </summary>
         private static void ManageFlowRailProbe(GameObject canvasGo, string label, int w, int h)
         {
-            var scroll = _flowRailScroll;
+            var scroll = _flowGridScroll;
             if (scroll == null || scroll.content == null)
             {
-                if (_flowMeasureRail)
+                if (_flowMeasureGrid)
                 {
-                    // NO SILENT FAILURE (§12): a missing rail is a finding, not an empty line.
-                    Debug.LogWarning("[UICap-HL] MANAGE_FLOW_MAP " + label + ": no rail ScrollRect resolved -- " +
-                                     "the inventory line for " + (_flowMeasureTab ?? "<null>") + " cannot be measured.");
-                    _flowMeasureRail = false;
+                    // NO SILENT FAILURE (§12): a missing grid is a finding, not an empty line.
+                    // It is an ERROR, not a warning: on 2026-09-06 this printed as a WARNING four
+                    // times and the run still wrote 21 files, so the only thing that said the
+                    // instrument was blind was a line nobody had to read.
+                    Debug.LogError("[UICap-HL] MANAGE_FLOW_MAP " + label + ": no ManageGridScroll resolved " +
+                                   "under the workspace host -- the inventory line for " +
+                                   (_flowMeasureTab ?? "<null>") + " cannot be measured, and this frame's " +
+                                   "scroll state is whatever the panel happened to leave.");
+                    _flowMeasureGrid = false;
                 }
                 return;
             }
 
             LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
             scroll.StopMovement();
-            scroll.verticalNormalizedPosition = _flowRailToBottom ? 0f : 1f;
+            scroll.verticalNormalizedPosition = _flowGridToBottom ? 0f : 1f;
             Canvas.ForceUpdateCanvases();
 
-            if (!_flowMeasureRail) return;
-            _flowMeasureRail = false;
+            // ⚠ ManageWorkspacePanel does NOT assign ScrollRect.viewport (Content is anchored
+            // directly under the scroll object), and Unity then uses the ScrollRect's OWN rect as
+            // the view rect. Reading scroll.viewport.rect blindly would have reported 0 px.
+            float viewPx = scroll.viewport != null
+                ? scroll.viewport.rect.height
+                : ((RectTransform)scroll.transform).rect.height;
+            float contentHeightPx = scroll.content.rect.height;
 
-            // Count the RENDERED rows the way the panel names them: "<Prefix>ChoiceRow_<id>"
-            // (ManageScreenPanel.cs:2002 / 2465 / 2931 / 3244), never the tail spacer the rail
-            // appends for its own alignment range (":1976" and its three siblings).
+            // A "gridbottom" frame whose grid ALREADY FITS has no bottom to scroll to, so it is the
+            // same picture as its "gridtop" sibling BY CONSTRUCTION -- and the mockup's screen 4
+            // ("all 9 troops visible, no scrolling") makes that the desired state, not a defect.
+            // Say so in the log AND exempt it from the ledger's duplicate rule, so the rule keeps
+            // its teeth for the case it was built for (a dead scroll seam) without crying wolf on
+            // a screen that is working exactly as specified.
+            if (_flowGridToBottom && contentHeightPx <= viewPx + 0.5f)
+            {
+                _ledgerIdenticalByConstruction.Add(OutDir + label + ".png");
+                Debug.Log("[UICap-HL] MANAGE_FLOW_MAP " + label + ": the grid does not scroll (content=" +
+                          contentHeightPx.ToString("0") + "px viewport=" + viewPx.ToString("0") +
+                          "px) -- gridbottom IS gridtop, by construction.");
+            }
+
+            if (!_flowMeasureGrid) return;
+            _flowMeasureGrid = false;
+
+            // Count the RENDERED tiles the way the renderer names them: "ManageTile"
+            // (ManageWorkspacePanel.cs:546). There is no tail spacer in the grid path.
             int rendered = 0;
-            float firstRowPx = 0f;
             for (int i = 0; i < scroll.content.childCount; i++)
             {
                 var child = scroll.content.GetChild(i) as RectTransform;
                 if (child == null || !child.gameObject.activeSelf) continue;
-                if (child.name.IndexOf("TailSpacer", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                if (child.name.IndexOf("ChoiceRow_", StringComparison.Ordinal) < 0) continue;
+                if (!string.Equals(child.name, "ManageTile", StringComparison.Ordinal)) continue;
                 rendered++;
-                if (firstRowPx <= 0f) firstRowPx = child.rect.height;
             }
 
-            var vlg = scroll.content.GetComponent<VerticalLayoutGroup>();
-            float spacing = vlg != null ? vlg.spacing : 0f;
-            float pitch = firstRowPx > 0f ? firstRowPx + spacing : 0f;
-            float viewportPx = scroll.viewport != null ? scroll.viewport.rect.height : 0f;
-            float contentPx = scroll.content.rect.height;
-            float visible = pitch > 0.01f ? viewportPx / pitch : 0f;
+            // Rows are DERIVED from the live GridLayoutGroup, never authored here: the model
+            // REQUESTS the column count (ManageTabVM.GridColumns) and the renderer sets it on the
+            // group, so reading it back is the only honest source.
+            var grid = scroll.content.GetComponent<GridLayoutGroup>();
+            int columns = grid != null ? Mathf.Max(1, grid.constraintCount) : 1;
+            float pitch = grid != null ? grid.cellSize.y + grid.spacing.y : 0f;
+            int rows = columns > 0 ? Mathf.CeilToInt(rendered / (float)columns) : 0;
+
+            float viewportPx = viewPx;
+            float contentPx = contentHeightPx;
+            float visibleRows = pitch > 0.01f ? viewportPx / pitch : 0f;
 
             _flowInventory.Add("MANAGE_FLOW_INVENTORY " + (_flowMeasureTab ?? "<null>") +
-                ": rail rows=" + _flowVmRailRows +
-                " (vm=" + _flowVmRailRows + " rendered=" + rendered + ")" +
-                " visible=" + visible.ToString("0.0") +
+                ": grid tiles=" + _flowVmGridTiles +
+                " (vm=" + _flowVmGridTiles + " rendered=" + rendered + ")" +
+                " columns=" + columns +
+                " rows=" + rows +
+                " visibleRows=" + visibleRows.ToString("0.0") +
                 " viewport=" + viewportPx.ToString("0") + "px" +
                 " content=" + contentPx.ToString("0") + "px" +
                 " pitch=" + pitch.ToString("0") + "px" +
                 " queueRows(line=" + (_flowQueueChannel ?? "?") + ")=" + _flowVmQueueRows +
-                (rendered != _flowVmRailRows ? "  ** VM/RENDERED MISMATCH **" : ""));
+                (rendered != _flowVmGridTiles ? "  ** VM/RENDERED MISMATCH **" : ""));
         }
 
         /// <summary>
@@ -7440,142 +7862,189 @@ namespace DeNelle.Editor
                                  "document one row fewer on that line.");
         }
 
-        /// <summary>
-        /// Pick the choice this frame must select. Resolved from the LIVE VM rather than a
-        /// hardcoded id, so the frame documents whatever state the fixture actually produced.
-        /// Returns false when the tab has no choice in that state -- the caller then LOGS it and
-        /// the frame fails, because a silently-substituted card is a frame whose filename lies.
-        /// </summary>
-        private static bool TryPickManageFlowChoice(ManageScreenVM vm, ManageTab tab, bool wantBlocked,
-                                                    out string selection, out string note)
+        /// <summary>The tab VM the workspace is currently painting, or null.</summary>
+        private static DeNelle.Core.Manage.ManageTabVM ActiveManageTabVm(ManageScreenVM vm)
         {
-            selection = null;
+            return vm == null ? null : vm.ComposeWorkspace().ActiveTab;
+        }
+
+        /// <summary>
+        /// Find a tile in the wanted visual state on the screen the model is currently painting.
+        /// Returns null when there is none -- the caller then FAILS the frame rather than shooting
+        /// a substitute, because a silently-substituted screen is a frame whose filename lies.
+        /// </summary>
+        private static DeNelle.Core.Manage.ManageTileVM FindManageFlowTile(
+            ManageScreenVM vm, DeNelle.Core.Manage.ManageTileVisualState want)
+        {
+            var tab = ActiveManageTabVm(vm);
+            if (tab == null || tab.Tiles == null) return null;
+            for (int i = 0; i < tab.Tiles.Count; i++)
+            {
+                var t = tab.Tiles[i];
+                if (t != null && t.VisualState == want) return t;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The states the current screen ACTUALLY produced, for a failure message. §11B: a failure
+        /// that names what it saw settles the question in ONE run; a failure that only says "not
+        /// found" costs a second run to answer "then what was there?".
+        /// </summary>
+        private static string ManageFlowObservedStates(ManageScreenVM vm)
+        {
+            var tab = ActiveManageTabVm(vm);
+            if (tab == null || tab.Tiles == null || tab.Tiles.Count == 0) return "<no tiles>";
+            var seen = new List<string>(5);
+            for (int i = 0; i < tab.Tiles.Count; i++)
+            {
+                var t = tab.Tiles[i];
+                if (t == null) continue;
+                string s = t.VisualState.ToString();
+                if (!seen.Contains(s)) seen.Add(s);
+            }
+            return string.Join(",", seen.ToArray()) + " over " + tab.Tiles.Count + " tiles";
+        }
+
+        /// <summary>
+        /// Drive the model to the DETAIL screen of an item in the wanted state, using the tile's
+        /// OWN <c>Activate</c> callback -- the exact seam a player's tap runs through.
+        ///
+        /// <para>⛔ THIS REPLACES A REFLECTION WRITE THAT NOTHING READ. The old body set
+        /// <c>_selectedBuildingId</c> / <c>_selectedTroopId</c> / <c>_selectedDefenseId</c> /
+        /// <c>_selectedResearchKey</c> on the panel. Those fields are consumed only by the legacy
+        /// row factories, which ManageScreenPanel.RenderList short-circuits past whenever the
+        /// workspace owns the well - so the write landed and changed nothing, and every "locked"
+        /// and "max" png was the plain grid. SetPrivateField only WARNS on a field it cannot find,
+        /// so even DELETING those fields would not have failed the run.</para>
+        ///
+        /// <para>RESEARCH is two levels deep by canon 5 (school, then its perks), so this walks each
+        /// school's perk grid in turn. It re-enters the tab rather than pressing Back between
+        /// schools, because Back on a root grid raises CloseRequested and would tear the panel down
+        /// mid-capture.</para>
+        /// </summary>
+        private static bool TryNavigateManageFlowDetail(ManageScreenVM vm,
+                                                        DeNelle.Core.Manage.ManageTabId tab,
+                                                        bool wantLocked, out string note)
+        {
             note = null;
             if (vm == null) return false;
+            var want = wantLocked
+                ? DeNelle.Core.Manage.ManageTileVisualState.Locked
+                : DeNelle.Core.Manage.ManageTileVisualState.Max;
+            string word = wantLocked ? "locked" : "max";
 
-            switch (tab)
+            // ⚠ BUILD and ARMY are ONE level deep: a grid tile's Activate opens that item's Detail.
+            // RESEARCH is TWO (canon 5), and its top-level tiles are SCHOOLS whose Activate opens a
+            // perk grid, not a Detail - so a Locked SCHOOL must NOT be mistaken for the Locked item
+            // this frame is after. That is why Research skips this branch entirely.
+            if (tab != DeNelle.Core.Manage.ManageTabId.Research)
             {
-                case ManageTab.Defense:
-                    // ⚠ DefenseChoiceVM HAS NO Locked FIELD. Its StateWord is documented as
-                    // "Building" | "Max" | "Upgradable" (ManageScreenVM.cs:353) -- there is no
-                    // village-tier lock on a placed defensive type. The blocked state a Defence
-                    // row CAN reach is "Building", supplied by the running archer job.
-                    for (int i = 0; i < vm.DefenseChoices.Count; i++)
-                    {
-                        var c = vm.DefenseChoices[i];
-                        if (c == null) continue;
-                        bool hit = string.Equals(c.StateWord, wantBlocked ? "Building" : "Max", StringComparison.Ordinal);
-                        if (!hit) continue;
-                        selection = c.Id;
-                        note = "Defense/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id + " state=" + c.StateWord;
-                        return true;
-                    }
-                    return false;
+                var hit = FindManageFlowTile(vm, want);
+                if (hit == null) return false;
+                hit.Activate?.Invoke();
+                note = ManageScreenVM.TabWordOf(tab) + "/" + word + " -> " + (hit.Id ?? "<null>") +
+                       " state=" + hit.VisualState + " screen=" +
+                       (vm.Nav != null ? vm.Nav.Kind.ToString() : "<null>");
+                return vm.Nav != null && vm.Nav.Kind == ManageScreenKind.Detail;
+            }
 
-                case ManageTab.Buildings:
-                    for (int i = 0; i < vm.BuildingChoices.Count; i++)
-                    {
-                        var c = vm.BuildingChoices[i];
-                        if (c == null) continue;
-                        bool hit = wantBlocked ? c.Locked
-                                               : string.Equals(c.StateWord, "Max", StringComparison.Ordinal);
-                        if (!hit) continue;
-                        selection = c.Id;
-                        note = "Buildings/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id +
-                               " state=" + (c.StateWord ?? "<null>");
-                        return true;
-                    }
-                    return false;
+            // Descend into each school in turn. The school list is re-read after every re-entry
+            // because the tiles carry live callbacks bound to the composition that produced them.
+            var schools = ActiveManageTabVm(vm);
+            int schoolCount = schools != null && schools.Tiles != null ? schools.Tiles.Count : 0;
+            for (int s = 0; s < schoolCount; s++)
+            {
+                vm.EnterTab(DeNelle.Core.Manage.ManageTabId.Research);   // back to the school grid
+                var grid = ActiveManageTabVm(vm);
+                if (grid == null || grid.Tiles == null || s >= grid.Tiles.Count) break;
+                var school = grid.Tiles[s];
+                if (school == null) continue;
+                string schoolId = school.Id;
+                school.Activate?.Invoke();                                // -> that school's perks
 
-                case ManageTab.Troops:
-                    for (int i = 0; i < vm.TroopChoices.Count; i++)
-                    {
-                        var c = vm.TroopChoices[i];
-                        if (c == null) continue;
-                        bool hit = wantBlocked ? !c.Unlocked : (c.Unlocked && !c.HasNextLevel);
-                        if (!hit) continue;
-                        selection = c.Id;
-                        note = "Troops/" + (wantBlocked ? "locked" : "max") + " -> " + c.Id +
-                               " unlocked=" + c.Unlocked + " hasNext=" + c.HasNextLevel;
-                        return true;
-                    }
-                    return false;
-
-                case ManageTab.Research:
-                    for (int i = 0; i < vm.ResearchChoices.Count; i++)
-                    {
-                        var c = vm.ResearchChoices[i];
-                        if (c == null) continue;
-                        bool hit = wantBlocked ? c.Locked
-                                               : string.Equals(c.StateWord, "Researched", StringComparison.Ordinal);
-                        if (!hit) continue;
-                        // The selection key shape is ResearchKeyOf's, "<buildingId>:<perkId>"
-                        // (ManageScreenPanel.cs:1912) -- composed identically here.
-                        selection = (c.BuildingId ?? "") + ":" + (c.PerkId ?? "");
-                        note = "Research/" + (wantBlocked ? "locked" : "max") + " -> " + selection +
-                               " state=" + (c.StateWord ?? "<null>");
-                        return true;
-                    }
-                    return false;
+                var perk = FindManageFlowTile(vm, want);
+                if (perk == null) continue;
+                perk.Activate?.Invoke();                                  // -> the perk's detail
+                note = "RESEARCH/" + word + " -> " + (schoolId ?? "?") + " / " + (perk.Id ?? "<null>") +
+                       " state=" + perk.VisualState + " screen=" +
+                       (vm.Nav != null ? vm.Nav.Kind.ToString() : "<null>");
+                return vm.Nav != null && vm.Nav.Kind == ManageScreenKind.Detail;
             }
             return false;
         }
 
-        /// <summary>The panel's private selection field for each destination.</summary>
-        private static string ManageFlowSelectionField(ManageTab tab)
+        /// <summary>
+        /// Drive the model to a Research SCHOOL's perk grid (canon 5). This is the screen that
+        /// REPLACES the retired hub frame: it is the only screen in the new flow no other frame
+        /// covers, and it is the long one -- 17 perks over five ladders in this fixture.
+        /// </summary>
+        private static bool TryOpenManageFlowSchool(ManageScreenVM vm, out string note)
+        {
+            note = null;
+            if (vm == null) return false;
+            var grid = ActiveManageTabVm(vm);
+            int count = grid != null && grid.Tiles != null ? grid.Tiles.Count : 0;
+
+            // ⚠ NOT Tiles[0] BLIND. building-tiers.json authors perks for only FIVE ladders and the
+            // fixture also places 'collector_farm', 'market', 'mill', 'workshop' and 'jeweler'; a
+            // school that authors no perks paints the "This school authors no perks yet." empty
+            // state, and shooting that as THE perks screen would be a frame whose filename lies.
+            // Walk until one actually holds perks.
+            for (int i = 0; i < count; i++)
+            {
+                vm.EnterTab(DeNelle.Core.Manage.ManageTabId.Research);   // back to the school grid
+                var schools = ActiveManageTabVm(vm);
+                if (schools == null || schools.Tiles == null || i >= schools.Tiles.Count) break;
+                var school = schools.Tiles[i];
+                if (school == null) continue;
+                school.Activate?.Invoke();
+                if (vm.Nav == null || vm.Nav.Kind != ManageScreenKind.ResearchPerks) continue;
+                var perks = ActiveManageTabVm(vm);
+                int perkCount = perks != null && perks.Tiles != null ? perks.Tiles.Count : 0;
+                if (perkCount == 0) continue;
+                note = "RESEARCH/school -> " + (school.Id ?? "<null>") + " perks=" + perkCount;
+                return true;
+            }
+            Debug.LogError("[UICap-HL] MANAGE_FLOW_MAP: none of the " + count + " research schools " +
+                           "opened a non-empty perk grid.");
+            return false;
+        }
+
+        /// <summary>The production line each destination rides (CLAUDE.md §8). BUILD is the Builder
+        /// line because Defense and Buildings MERGED into it (ManageScreenVM.LegacyTabOf).</summary>
+        private static string ManageFlowChannelName(DeNelle.Core.Manage.ManageTabId tab)
         {
             switch (tab)
             {
-                case ManageTab.Defense: return "_selectedDefenseId";
-                case ManageTab.Buildings: return "_selectedBuildingId";
-                case ManageTab.Troops: return "_selectedTroopId";
-                case ManageTab.Research: return "_selectedResearchKey";
+                case DeNelle.Core.Manage.ManageTabId.Army: return "Train";
+                case DeNelle.Core.Manage.ManageTabId.Research: return "Research";
+                default: return "Builder";
             }
-            return null;
         }
 
         /// <summary>
-        /// The rail zone's authored name per destination. ⚠ THREE OF THE FOUR ARE SINGULAR while
-        /// the tab is plural: "BuildingSelectorRail" (ManageScreenPanel.cs:1952),
-        /// "TroopSelectorRail" (:2413), "DefenseSelectorRail" (:2884), "ResearchSelectorRail"
-        /// (:3195). Getting this wrong resolves no ScrollRect and the rail is never scrolled.
+        /// Find the workspace GRID's ScrollRect, inactive included (the queue drawer deactivates
+        /// the workspace host). Resolved by the renderer's own object name "ManageGridScroll"
+        /// (ManageWorkspacePanel.cs:475) under the panel's "_workspaceHost", NOT by a legacy zone
+        /// name -- see this region's header for why the zone lookup answers null now.
         /// </summary>
-        private static string ManageFlowRailZoneName(ManageTab tab)
+        private static ScrollRect FindManageFlowGrid(ManageScreenPanel panel)
         {
-            switch (tab)
+            var host = GetPrivateFieldValue(panel, "_workspaceHost") as RectTransform;
+            if (host == null)
             {
-                case ManageTab.Defense: return "DefenseSelectorRail";
-                case ManageTab.Buildings: return "BuildingSelectorRail";
-                case ManageTab.Troops: return "TroopSelectorRail";
-                case ManageTab.Research: return "ResearchSelectorRail";
+                Debug.LogError("[UICap-HL] MANAGE_FLOW_MAP: the panel has no _workspaceHost -- the " +
+                               "workspace renderer is not the one painting this screen, so the grid " +
+                               "cannot be scrolled or measured.");
+                return null;
             }
-            return null;
-        }
-
-        /// <summary>The production line each destination rides (CLAUDE.md §8 / ManageTab's own doc).</summary>
-        private static string ManageFlowChannelName(ManageTab tab)
-        {
-            switch (tab)
+            var scrolls = host.GetComponentsInChildren<ScrollRect>(true);
+            for (int i = 0; i < scrolls.Length; i++)
             {
-                case ManageTab.Defense: return "Builder";
-                case ManageTab.Buildings: return "Builder";
-                case ManageTab.Troops: return "Train";
-                case ManageTab.Research: return "Research";
-            }
-            return "?";
-        }
-
-        /// <summary>Find the rail's ScrollRect by its authored zone name, inactive included (the
-        /// queue drawer deactivates the browse band on three of the four tabs).</summary>
-        private static ScrollRect FindManageFlowRail(GameObject canvasGo, ManageTab tab)
-        {
-            string zoneName = ManageFlowRailZoneName(tab);
-            if (canvasGo == null || string.IsNullOrEmpty(zoneName)) return null;
-            var rects = canvasGo.GetComponentsInChildren<RectTransform>(true);
-            for (int i = 0; i < rects.Length; i++)
-            {
-                if (rects[i] == null || !string.Equals(rects[i].name, zoneName, StringComparison.Ordinal)) continue;
-                return rects[i].GetComponentInChildren<ScrollRect>(true);
+                if (scrolls[i] == null) continue;
+                if (!string.Equals(scrolls[i].gameObject.name, "ManageGridScroll", StringComparison.Ordinal)) continue;
+                return scrolls[i];
             }
             return null;
         }
@@ -7587,14 +8056,12 @@ namespace DeNelle.Editor
         /// shared BuildingTierDef gate and the catalog registry, which are process-wide statics
         /// that would otherwise poison every later capture in the same run.
         /// </summary>
-        private static int CaptureManageFlowFrame(ManageTab tab, ManageFlowFrame frame)
+        private static int CaptureManageFlowFrame(ManageFlowShot shot)
         {
-            string state = frame == ManageFlowFrame.Hub ? "hub" :
-                           frame == ManageFlowFrame.RailTop ? "railtop" :
-                           frame == ManageFlowFrame.RailBottom ? "railbottom" :
-                           frame == ManageFlowFrame.QueueDrawer ? "queue" :
-                           frame == ManageFlowFrame.LockedCard ? "locked" : "max";
-            string shotName = frame == ManageFlowFrame.Hub ? "ManageFlow_Hub" : "ManageFlow_" + tab + "_" + state;
+            var tab = shot.Tab;
+            var frame = shot.Frame;
+            string state = ManageFlowStateWord(frame);
+            string shotName = ManageFlowShotName(shot);
 
             return ForEachTarget(shotName, ManageFlowMapTargets, target =>
             {
@@ -7643,55 +8110,78 @@ namespace DeNelle.Editor
                     panelHost = new GameObject("~UICap" + shotName);
                     var panel = panelHost.AddComponent<ManageScreenPanel>();
                     InvokePrivate(panel, "Awake");
-                    panel.Open();   // the HUB: "Choose a path" launcher cards
+                    // Open() lands on the model's LAST-USED tab (OpenDefaultScreen reads
+                    // PlayerPrefs "manage.lasttab"); the pref is pinned to BUILD around this whole
+                    // run so the opening screen is the same on every frame and in every run.
+                    panel.Open();
 
-                    if (frame != ManageFlowFrame.Hub)
+                    var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
+                    if (vm == null)
+                        throw new InvalidOperationException("ManageScreenPanel exposed no _vm -- nothing to drive");
+
+                    // The tab is entered through the MODEL, not through the legacy ShowOperational
+                    // adapter: the plan's axis is ManageTabId, which is the axis the screen has.
+                    vm.EnterTab(tab);
+                    if (vm.Nav == null || vm.Nav.Tab != tab)
+                        throw new InvalidOperationException(
+                            "the model refused tab " + tab + " (it is not available in this fixture) -- " +
+                            "this frame cannot be shot honestly");
+
+                    if (frame == ManageFlowFrame.LockedDetail || frame == ManageFlowFrame.MaxDetail)
                     {
-                        InvokePrivate(panel, "ShowOperational", tab);
-
-                        if (frame == ManageFlowFrame.LockedCard || frame == ManageFlowFrame.MaxCard)
-                        {
-                            var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
-                            bool wantBlocked = frame == ManageFlowFrame.LockedCard;
-                            if (!TryPickManageFlowChoice(vm, tab, wantBlocked, out string selection, out string note))
-                                throw new InvalidOperationException(
-                                    "no " + state + " choice on the " + tab + " tab -- the fixture did not " +
-                                    "produce that card state, so this frame cannot be shot honestly");
-                            _flowStateNotes.Add(note);
-                            SetPrivateField(panel, ManageFlowSelectionField(tab), selection);
-                            // Render() rebuilds the rail AND re-runs its own alignment seam, so it
-                            // must happen BEFORE any scroll of ours (which lives in the probe).
-                            InvokePrivate(panel, "Render");
-                        }
-
-                        if (frame == ManageFlowFrame.QueueDrawer)
-                            InvokePrivate(panel, "ToggleQueueDrawer");
+                        bool wantLocked = frame == ManageFlowFrame.LockedDetail;
+                        if (!TryNavigateManageFlowDetail(vm, tab, wantLocked, out string note))
+                            throw new InvalidOperationException(
+                                "no " + state + " item reachable on the " + ManageScreenVM.TabWordOf(tab) +
+                                " tab -- the fixture did not produce that state, so this frame cannot be " +
+                                "shot honestly. States actually present: " + ManageFlowObservedStates(vm) +
+                                ". (Known candidates: on ARMY, ManageTileBadge.Max is only reached when " +
+                                "the troop is neither Trainable nor QueueBlocked -- ruling 13 lets those " +
+                                "win -- so a full Train line or an affordable train can mask it. On BUILD, " +
+                                "the active filter decides which items are on screen at all.)");
+                        _flowStateNotes.Add(note);
+                    }
+                    else if (frame == ManageFlowFrame.SchoolPerks)
+                    {
+                        if (!TryOpenManageFlowSchool(vm, out string schoolNote))
+                            throw new InvalidOperationException(
+                                "no research school could be opened -- the perks screen cannot be shot honestly");
+                        _flowStateNotes.Add(schoolNote);
+                    }
+                    else if (frame == ManageFlowFrame.QueueDrawer)
+                    {
+                        InvokePrivate(panel, "ToggleQueueDrawer");
                     }
 
                     Canvas.ForceUpdateCanvases();
                     canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
                     if (canvas == null) return 0;
 
-                    // Hand the probe its work. The queue-drawer frame deliberately gets NO rail:
-                    // ApplyDrawerPlacement hides the browse band on three of the four tabs, so
-                    // scrolling a hidden rail would prove nothing.
-                    _flowRailScroll = frame == ManageFlowFrame.Hub || frame == ManageFlowFrame.QueueDrawer
-                        ? null
-                        : FindManageFlowRail(canvas, tab);
-                    _flowRailToBottom = frame == ManageFlowFrame.RailBottom;
+                    // Hand the probe its work. The queue-drawer frame deliberately gets NO grid:
+                    // ShowWorkspace/RenderWorkspace deactivate the workspace host while the drawer
+                    // is open, so scrolling a hidden grid would prove nothing. A DETAIL screen has
+                    // no grid either (FillActiveTab hands it Tiles = empty and a visible Selection).
+                    bool frameHasGrid = frame == ManageFlowFrame.GridTop ||
+                                        frame == ManageFlowFrame.GridBottom ||
+                                        frame == ManageFlowFrame.SchoolPerks;
+                    _flowGridScroll = frameHasGrid ? FindManageFlowGrid(panel) : null;
+                    _flowGridToBottom = frame == ManageFlowFrame.GridBottom;
 
-                    // Measure ONCE per tab, on the unscrolled rail-top frame.
-                    if (frame == ManageFlowFrame.RailTop)
+                    // Measure ONCE per tab, on the unscrolled grid-top frame -- AND on the school
+                    // perks screen, which is the LONGEST grid in the flow (17 perks over five
+                    // ladders in this fixture) and is exactly the "how much data is in Manage"
+                    // question this capture exists to answer. Measuring only the tab roots would
+                    // have left the deepest screen unmeasured.
+                    if (frame == ManageFlowFrame.GridTop || frame == ManageFlowFrame.SchoolPerks)
                     {
-                        var vm = GetPrivateFieldValue(panel, "_vm") as ManageScreenVM;
-                        _flowMeasureRail = true;
-                        _flowMeasureTab = ManageScreenVM.TabLabels[(int)tab];
+                        _flowMeasureGrid = true;
+                        _flowMeasureTab = frame == ManageFlowFrame.SchoolPerks
+                            ? "RESEARCH/school"
+                            : ManageScreenVM.TabWordOf(tab);
                         _flowQueueChannel = ManageFlowChannelName(tab);
-                        _flowVmQueueRows = vm != null ? vm.QueueRows.Count : 0;
-                        _flowVmRailRows = vm == null ? 0 :
-                            tab == ManageTab.Defense ? vm.DefenseChoices.Count :
-                            tab == ManageTab.Buildings ? vm.BuildingChoices.Count :
-                            tab == ManageTab.Troops ? vm.TroopChoices.Count : vm.ResearchChoices.Count;
+                        _flowVmQueueRows = vm.QueueRows.Count;
+                        var activeTab = ActiveManageTabVm(vm);
+                        _flowVmGridTiles = activeTab != null && activeTab.Tiles != null ? activeTab.Tiles.Count : 0;
                     }
 
                     _settledProbe = ManageFlowRailProbe;
@@ -7706,9 +8196,9 @@ namespace DeNelle.Editor
                 finally
                 {
                     _settledProbe = null;
-                    _flowRailScroll = null;
-                    _flowRailToBottom = false;
-                    _flowMeasureRail = false;
+                    _flowGridScroll = null;
+                    _flowGridToBottom = false;
+                    _flowMeasureGrid = false;
                     if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
                     if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
                     RestoreCaptureQueue(priorQueue);

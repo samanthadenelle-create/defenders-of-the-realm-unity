@@ -107,8 +107,26 @@ namespace DeNelle.Editor.Regression
                 !browser.Contains("enableWordWrapping=true") || !browser.Contains("enableAutoSizing=true") ||
                 !browser.Contains("overflowMode=TextOverflowModes.Overflow"))
                 return Fail("collection cards can truncate/ellipsize required copy or lack a full-copy wrapping path", out reason);
-            if (!palette.Contains("_collectionBrowser.Show(entry => OnEntrySelected?.Invoke(entry))"))
+            // WO-2006 (OWNER_RULINGS_LOCKED sec.25) RE-POINTED 2026-09-06. This pin used to
+            // require the ENTIRE call as one literal, closing paren included:
+            //     "_collectionBrowser.Show(entry => OnEntrySelected?.Invoke(entry))"
+            // which pinned the call's FORMATTING, not the seam it means to protect. The moment
+            // the browser's Show gained its second argument (the MANAGE PLACED door callback)
+            // the literal stopped matching and this suite would have failed a change that
+            // preserves the Arm seam perfectly -- an oracle blocking the ruling it never had an
+            // opinion about. Split into the two facts that ARE the seam: the palette opens the
+            // browser, and the entry callback still routes through OnEntrySelected (-> Arm).
+            // Do not re-fuse these into one literal; the next argument would break it again.
+            if (!palette.Contains("_collectionBrowser.Show(") ||
+                !palette.Contains("entry => OnEntrySelected?.Invoke(entry)"))
                 return Fail("existing Arm event seam bypassed", out reason);
+            // The door itself is a SEPARATE oracle (PlacedStructureDoorRegression [placed-door]),
+            // which walks the whole chain card -> palette event -> controller handler. Asserted
+            // here only as the one fact this file already owns: the palette supplies the callback,
+            // because BuildCollectionBrowser refuses to build a card it cannot honour.
+            if (!palette.Contains("OnManagePlacedRequested?.Invoke()"))
+                return Fail("palette no longer supplies the Manage Placed door callback to the browser " +
+                            "(ruling 25) -- the card would not be built at all", out reason);
             if (!browser.Contains("upgradeCard.name = \"DefenseUpgradeCard\"") ||
                 !browser.Contains("\"Upgrade Defenses\"") ||
                 !browser.Contains("PanelRouter.Open(PanelId.Manage, \"Defense\")"))

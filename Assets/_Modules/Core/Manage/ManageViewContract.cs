@@ -287,8 +287,11 @@ namespace DeNelle.Core.Manage
         public string TimerText;
         /// <summary>"2 QUEUED" - already counted and worded by the model (canon 9 bans queue reads).</summary>
         public string QueuedCountText;
-        /// <summary>Opens the global Queue (ruling 17).</summary>
-        public Action OpenQueue;
+        // ⛔ NO OpenQueue COMMAND. The strip is a STATUS GLANCE, not a second door.
+        // Removed 2026-09-06 (WO-1443): the capture showed its button on screen beside the tab-row
+        // QUEUE door - two entries for one verb, which is the exact ambiguity CLAUDE.md 7's "one
+        // Queues entry" rule exists to remove, and the same shape the HUD Builders chip was
+        // stripped of in WO-911. The field went with the button rather than being left unbound.
     }
 
     // ── The global queue door ─────────────────────────────────────────────────
@@ -297,18 +300,37 @@ namespace DeNelle.Core.Manage
     /// WO-2002's <c>ManageQueueVM</c>. The always-available global QUEUE affordance (canon 2).
     /// <see cref="AtCapacity"/> is a MODEL verdict - canon 9 forbids the View computing queue
     /// capacity, which is precisely the <c>if (queue.Count &lt; max)</c> shape the work order bans.
+    ///
+    /// <para>⛔ IT IS A **DOOR**, NOT A FOURTH TAB, AND THE DISTINCTION IS LOAD-BEARING.
+    /// WO-1443 section 1B (owner ruling 2026-09-06) seats it as the last entry of the TAB ROW -
+    /// WO-2001's own header spec, <c>BACK | MANAGE | BUILD | ARMY | RESEARCH | QUEUE[count]</c> -
+    /// so it shares that row's geometry. It does NOT share its semantics: it is never the ACTIVE
+    /// tab, never carries an underline, never selects a workspace, and lives OUTSIDE
+    /// <see cref="ManageWorkspaceVM.Tabs"/> so <c>ActiveTabIndex</c> can never address it. It
+    /// opens an overlay and returns. "Looks like a tab, behaves like a door" is exactly the
+    /// ambiguity that would produce the next round of this conversation, so the separation is
+    /// structural rather than a comment: the renderer reads it from a different field.</para>
     /// </summary>
     public sealed class ManageQueueVM
     {
         public bool Visible = true;
         /// <summary>The door's words ("QUEUE").</summary>
         public string Label;
-        /// <summary>"3 RUNNING" - model-counted.</summary>
-        public string CountText;
-        /// <summary>"5 OF 5" - model-counted.</summary>
-        public string CapacityText;
-        /// <summary>Model verdict. The renderer paints a WORD and a shape for it, never a colour alone.</summary>
-        public bool AtCapacity;
+        /// <summary>
+        /// The count that rides ON the door's face, e.g. "0 OF 5" or "FULL 5 OF 5" - model-counted.
+        /// <para>⚠ REPLACED <c>CountText</c> ("IDLE" / "3 RUNNING") AND <c>CapacityText</c> ("0 OF 5")
+        /// on 2026-09-06. Those two fed a SECOND LINE printed under the old header chip, and the
+        /// owner's ruling deleted that line: <i>"remove heart level queue"</i>, with the count
+        /// riding on the face instead. Two fields feeding a band that no longer exists would have
+        /// been the composed-but-unpainted duplicated state this file has already been burned by
+        /// once today (see ManageWorkspaceVM.HeaderTitle), so they were replaced, not left.</para>
+        /// </summary>
+        public string FaceCountText;
+        // ⛔ NO AtCapacity FLAG. "Full" reaches the player as the WORD "FULL" inside
+        // FaceCountText, which the model composes. The flag existed so the renderer could add a
+        // gold pip beside the face; the 2026-09-06 14:59 capture showed that pip rendering as a
+        // stray vertical bar outside the button art, so the pip went - and the flag went with it
+        // rather than sitting here unread. One channel, and it is words.
         public Action Open;
     }
 
@@ -350,11 +372,25 @@ namespace DeNelle.Core.Manage
         public IReadOnlyList<ManageTileVM> Tiles = Array.Empty<ManageTileVM>();
 
         /// <summary>
-        /// Columns the model wants. BUILD asks 4 (canon 3: 12+ visible), ARMY asks 3 (canon 4:
-        /// one 3x3 grid). The renderer treats this as a REQUEST and reports in px when the
-        /// measured well cannot honour it - it never silently re-columns.
+        /// Columns the model wants. BUILD asks 5, ARMY asks 3, RESEARCH asks 4 - read off the
+        /// owner's mockup, panel by panel, not derived. The renderer treats this as a REQUEST and
+        /// reports in px when the measured well cannot honour it - it never silently re-columns.
         /// </summary>
         public int GridColumns = 3;
+
+        /// <summary>
+        /// Rows the model wants VISIBLE AT REST. ⛔ THIS IS A REQUIREMENT, NOT A DERIVED NUMBER.
+        /// <para>docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png states capacity in words on the
+        /// panels themselves - screen 4: <i>"All 9 troops visible, no scrolling"</i> (3x3), screen 2
+        /// draws ten buildings as 5 columns x 2 rows. So the geometry is derived FROM the capacity,
+        /// which is the reverse of what this renderer did before: it sized a cell from the leftover
+        /// band and let the row count fall out, which is how a screen ended up offering FOUR tiles
+        /// under a chip that says ALL.</para>
+        /// <para>The renderer sizes SQUARE cells to fit <c>GridRows</c> x <see cref="GridColumns"/>
+        /// and, when the band cannot seat them at the touch/legibility floor, says so in px through
+        /// FlowTrace rather than quietly showing fewer.</para>
+        /// </summary>
+        public int GridRows = 3;
 
         /// <summary>ASCII sentence when <see cref="Tiles"/> is empty. Model-supplied - the View invents no copy.</summary>
         public string EmptyText;
@@ -374,8 +410,17 @@ namespace DeNelle.Core.Manage
     /// </summary>
     public sealed class ManageWorkspaceVM
     {
+        /// <summary>
+        /// The one heading for this screen, e.g. "MANAGE / ARMY". The HOST chrome binds it into
+        /// the panel title; <see cref="ManageWorkspacePanel"/> deliberately paints no copy of it.
+        /// <para>⛔ THERE IS NO HeaderSubtitle, AND IT IS NOT COMING BACK. WO-1443 section 1, owner
+        /// felt-test 2026-09-06: the screen stacked THREE headings - the panel title, this
+        /// breadcrumb and a sub line ("Every troop, unlocked or not.") - and her ruling was to keep
+        /// one. The field was deleted rather than left composed-but-unpainted, because a value
+        /// nothing reads is the duplicated state this repo has been burned by (CLAUDE.md 2 / 5 / 16):
+        /// the next seat would have re-rendered it believing it was load-bearing.</para>
+        /// </summary>
         public string HeaderTitle;
-        public string HeaderSubtitle;
 
         public IReadOnlyList<ManageTabVM> Tabs = Array.Empty<ManageTabVM>();
 

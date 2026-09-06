@@ -499,6 +499,33 @@ namespace DeNelle.Village
         /// <summary>Current hit points.</summary>
         public float Hp => _hp;
 
+        // WO-1439 — this enemy's OWN side, read from the required EnemyDamageable adapter
+        // (the class that already declares it) rather than hardcoded here. Cached lazily
+        // with a fake-null-safe re-resolve, exactly like EnemyDamageable.E does, because
+        // [RequireComponent] can add the adapter BEFORE Enemy on a runtime AddComponent and
+        // an Awake-only cache would then be null forever (the 2026-06-02 root fix recorded
+        // in EnemyDamageable.cs). Falls back to Hostile — an Enemy that somehow lost its
+        // adapter is still a Hollow One, and the safe default must never turn a defender
+        // Friendly-to-the-garrison and re-open this ticket.
+        private EnemyDamageable _selfDamageable;
+
+        /// <summary>
+        /// WO-1439 — the faction this enemy fights FOR. Every structure/body selection it
+        /// makes is arbitrated against this through
+        /// <see cref="DeNelle.Core.Combat.CombatFactionRules.MayAttack"/>; nothing compares
+        /// factions inline.
+        /// </summary>
+        public DeNelle.Core.Combat.CombatFaction SelfFaction
+        {
+            get
+            {
+                if (_selfDamageable == null) _selfDamageable = GetComponent<EnemyDamageable>();
+                return _selfDamageable != null
+                    ? _selfDamageable.Faction
+                    : DeNelle.Core.Combat.CombatFaction.Hostile;
+            }
+        }
+
         /// <summary>Max hit points.</summary>
         public float MaxHp => _maxHp;
 
@@ -2052,6 +2079,24 @@ namespace DeNelle.Village
         {
             if (target == null || damage <= 0f) return;
 
+            // ═══ WO-1439 §6 — THE SEAM ORACLE: no actor may damage an asset of its own faction.
+            // Every part of this system worked in the owner's raid — probing probed, scoring
+            // scored, damage applied — and NOTHING asserted that a combatant only attacks things
+            // it should. This is the one assertion that would have caught it on the day it
+            // shipped, and it lives at the DAMAGE SINK (all three enemy strike paths — melee,
+            // ranged and caster — funnel here) rather than at a selection site, so it holds even
+            // if a future selection path forgets to call CombatFactionRules. FlowTrace.Fail, not
+            // a silent return: §12 forbids swallowing, and a Fail line names the offender.
+            if (DeNelle.Core.Combat.CombatFactionRules.IsFriendlyFire(SelfFaction, target))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("EnemyAggro",
+                    $"{_enemyId}: FRIENDLY FIRE REFUSED — tried to deal {damage:0.#} to " +
+                    $"'{(target as MonoBehaviour)?.name ?? "<non-MB>"}' which is {target.Faction}, " +
+                    $"the same faction as the attacker (contact={contact}). Target selection let a " +
+                    "same-faction asset through; fix the SELECTION site, this sink only stops the blow.");
+                return;
+            }
+
             if (target is HeartController)
             {
                 float mult = DeNelle.Village.Walls.WallDefense.CurrentHeartDamageMultiplier();
@@ -2350,7 +2395,11 @@ namespace DeNelle.Village
             DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"probe-in-{_enemyId}", 2f,
                 $"{_enemyId}: ProbeForStructure ENTRY fwdProbeDist={_contactProbeDistance:F1}m " +
                 $"sweepRadius={_structureSweepRadius:F1}m mask=~0(all layers) " +
-                $"awareFlag={DeNelle.Core.FeatureFlags.EnemyStructureAwareness} heart={(_heart != null)}");
+                $"awareFlag={DeNelle.Core.FeatureFlags.EnemyStructureAwareness} heart={(_heart != null)} " +
+                // WO-1439: the acquisition params never named the ONE input that decides
+                // friend from foe. Printing it here means a future capture answers
+                // "did the faction test even have a faction?" without a code read.
+                $"selfFaction={SelfFaction}");
 
             // 1. Legacy forward probe — keeps hero contact damage + path-blocking structures.
             IDamageableStructure forward = ProbeForStructureForward();
@@ -2410,13 +2459,26 @@ namespace DeNelle.Village
                 // The structure may host the interface on the collider's object
                 // or a parent (the collider is often a child blocker).
                 var structure = hit.collider.GetComponentInParent<IDamageableStructure>();
-                if (structure != null && structure.IsAlive)
+                // WO-1439 — FRIEND-OR-FOE. This lane used to accept on `!= null && IsAlive`
+                // alone, which is how 11,620 `ProbeForStructure hit 'RaidSpire'` lines happened:
+                // a Hostile garrison walked into its own Hostile objective and the probe said
+                // yes. CombatFactionRules.MayAttack folds in the null + alive checks, so this is
+                // the SAME three conditions plus the missing one — never a second copy of the
+                // comparison (see CombatFactionRules' header on why that matters here).
+                if (DeNelle.Core.Combat.CombatFactionRules.MayAttack(SelfFaction, structure))
                     return structure;
                 // F8-41 gate: the forward cast HIT geometry but it carried no live structure —
-                // name why (no interface on parent vs dead) so the null return is not silent.
+                // name why (no interface on parent vs dead vs OUR OWN SIDE) so the null return
+                // is not silent. The same-faction arm is WO-1439's proving line: before the fix
+                // there was no branch that could ever print it.
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"fwd-reject-{_enemyId}", 2f,
                     $"{_enemyId}: forward SphereCast HIT '{hit.collider.name}' but rejected " +
-                    $"({(structure == null ? "no IDamageableStructure on parent" : "structure is DEAD")}) -> no forward target");
+                    // NOTE (CLI, at the gate 2026-09-06): this ternary was authored across three
+                    // lines INSIDE a non-verbatim interpolated string, which is CS8967 under the
+                    // project's C# 9 language version. Folded onto one line - the emitted text is
+                    // byte-identical, only the source layout changed.
+                    $"({(structure == null ? "no IDamageableStructure on parent" : !structure.IsAlive ? "structure is DEAD" : $"SAME FACTION ({structure.Faction}) as attacker - friendly fire refused")}) " +
+                    "-> no forward target");
             }
             return null;
         }
@@ -2461,7 +2523,11 @@ namespace DeNelle.Village
             // F8-41 reject tally — split silent `continue`s into named reasons so a capture shows
             // WHY the sweep found nothing: count=0 (radius too small / no colliders) vs all-filtered
             // (only hero/dead/no-component in range). Behaviour-neutral: same accepts, same `nearest`.
-            int rejNull = 0, rejNoComp = 0, rejDead = 0, rejHero = 0, accepted = 0;
+            // WO-1439 adds rejFaction. That tally is what PROVED this ticket: the pre-fix
+            // capture read `rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=RaidSpire`,
+            // and because the tally enumerates every filter the loop has, the absence of a
+            // faction bucket IS the absence of the test. Keep new filters visible here.
+            int rejNull = 0, rejNoComp = 0, rejDead = 0, rejHero = 0, rejFaction = 0, accepted = 0;
             for (int i = 0; i < count; i++)
             {
                 var c = _structureScanBuffer[i];
@@ -2472,6 +2538,12 @@ namespace DeNelle.Village
                 // The hero implements IDamageableStructure — never grab it via the siege
                 // sweep (the verified hero-aggro path owns hero engagement).
                 if (structure is HeroHealth) { rejHero++; continue; }
+                // WO-1439 — FRIEND-OR-FOE, the filter this loop never had. Checked AFTER the
+                // hero arm deliberately: the hero is Friendly to a Hostile sweeper and would
+                // otherwise be counted as a faction reject, which would blur the one signal
+                // this tally exists to give. Same predicate as the forward lane; no second copy.
+                if (!DeNelle.Core.Combat.CombatFactionRules.MayAttack(SelfFaction, structure))
+                { rejFaction++; continue; }
                 accepted++;
                 float sqr = (c.transform.position - transform.position).sqrMagnitude;
                 float dist = Mathf.Sqrt(sqr);
@@ -2487,7 +2559,8 @@ namespace DeNelle.Village
             // filter did the rejecting.
             DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"sweep-scan-{_enemyId}", 2f,
                 $"{_enemyId}: sweep OverlapSphere r={radius:F1}m colliders={count} -> accepted={accepted} " +
-                $"rejected[null={rejNull},noStructComp={rejNoComp},dead={rejDead},hero={rejHero}] " +
+                $"rejected[null={rejNull},noStructComp={rejNoComp},dead={rejDead},hero={rejHero}," +
+                $"sameFaction={rejFaction}] self={SelfFaction} " +
                 $"nearest={((nearest as MonoBehaviour)?.name ?? "<null>")}");
 
             if (nearest != null)
@@ -2878,6 +2951,17 @@ namespace DeNelle.Village
             _scannedAnimatorController = null; // force a fresh parameter scan on reuse
             _navWarned             = false;
             _attackCooldown        = 0f;
+
+            // WO-1439 — the SelfFaction cache. A GetComponent result held on a POOLED object is
+            // the textbook latch: PrepareForReuse revives an instance rather than rebuilding it,
+            // so this reference would ride into whatever enemy takes the slot next. Two ways it
+            // bites, and the second is the bad one: a stale ref to a destroyed adapter (fake-null,
+            // so SelfFaction silently falls back to Hostile), or the WRONG FACTION ANSWER carried
+            // across a reuse — which would silently re-open the very friendly-fire hole this
+            // ticket closed, and re-open it INTERMITTENTLY, only on reused bodies. Cleared, not
+            // exempted: the property re-resolves lazily on first read, so the cost of clearing is
+            // one GetComponent per life and the cost of not clearing is a returning P0.
+            _selfDamageable        = null;
 
             // AI / nav seam — the reused body re-acquires from scratch (the brain re-scores
             // on its own interval; these clear the Enemy-side half of that seam).

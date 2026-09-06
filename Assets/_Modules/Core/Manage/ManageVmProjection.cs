@@ -247,9 +247,23 @@ namespace DeNelle.Core.Manage
             {
                 Visible = true,
                 Title = item.DisplayName,
+                // ⭐ EVERY DETAIL PANEL IN THE MOCKUP SHOWS A LEVEL UNDER THE NAME - panel 3
+                // "Level 2", panel 5 "Level 1", panel 9 "Level 1". The capture showed troops with
+                // NO level line at all, and the cause was this expression: it emitted a line only
+                // when a CEILING was known, and ComposeTroopItem sets MaxLevel = 0 on purpose
+                // ("TroopChoiceVM authors no ceiling, and asserting one here would be a second
+                // reading of a ladder this VM does not own"). That reasoning is right and stands -
+                // so the fallback states the level WITHOUT inventing a maximum.
+                // ⛔ RESEARCH IS EXCLUDED, and deliberately: ManageResearchCardRegression's
+                // [no-level-zero] case records that research has no level, and its items project
+                // UpgradeTrack.NotApplicable. Gating on the TRACK rather than on the level keeps
+                // that true instead of relying on a perk happening to have Level 0.
+                // Case matches the mockup ("Level 2"), not the old shouted "LEVEL 2 OF 6".
                 LevelText = item.MaxLevel > 0
-                    ? "LEVEL " + item.Level + " OF " + item.MaxLevel
-                    : null,
+                    ? "Level " + item.Level + " of " + item.MaxLevel
+                    : (item.Level > 0 && item.UpgradeTrack != ManageUpgradeTrack.NotApplicable
+                        ? "Level " + item.Level
+                        : null),
                 Description = description,
                 State = state,
                 StateText = item.BadgeText,

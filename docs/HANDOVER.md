@@ -134,6 +134,42 @@
 
 ---
 
+## ★★ SESSION HANDOVER — 2026-09-06 (WO-1441: the wallet session that was never created) ★★
+
+**One line:** cloud save has been dark for **every wallet holder who never bought a pack** since
+2026-08-27, because the method that creates the backend session **had zero call sites**.
+
+- **Proof, not inference** (pid 7170, `logs/debug/raid-no-abilities-2026-09-06.log`): `Connect OK`
+  12:50:06.956 → `session warm-up deferred` .960 → `why=missing /api/game/save` 12:50:11.556, and
+  **`MintSessionAsync` appears ZERO times across 76 MB of that day's four captures.** `why=missing`
+  means NEVER CREATED — not expired, not refused.
+- **`MintSessionForExplicitConnectAsync` was never called by anything.** Both connect paths called
+  `WarmUpSessionAsync`, which does not mint and traced *"first authenticated action will mint"* —
+  false since WO-1157 made minting `allowMint`-only (purchases + promo). **Cloud save is neither.**
+  Now: both paths mint; `WarmUpSessionAsync` is **deleted** (an uncalled method is what caused this).
+- ⭐ **OWNER RULING 2026-09-06 — auto-resume MINTS. This reverses WO-1211's "boot never signs."**
+  Auto-resume shows no connect prompt, so the handshake is the session's only wallet sheet. WO-1211's
+  reasoning is preserved verbatim in-code at `WalletSkinBootstrap.TryAutoResumeAsync` — only its
+  arithmetic (it assumed an EXTRA prompt) was wrong. First-run players still see nothing.
+- ⛔ **A REGRESSION ORACLE WAS PINNING THE LIE.** `BackendSaveAuthRegression` *required* the literal
+  string `"first authenticated action will mint"`, guarding a false trace against correction for ten
+  days. **An oracle that pins PROSE pins whatever the prose says, true or not — pin behaviour.** The
+  new pin is the one that would have caught this: the mint's **call site**, not its body.
+- ⛔ **Session renewal already existed in production, undocumented and UNCAPPED.**
+  `wallet-auth.verifyWallet` tries the session rail first, so `POST /api/auth/session` with a valid
+  `X-Session` and no nonce always returned a fresh token with no signature — i.e. one signature could
+  be walked forward forever, the "permanent login" that file's own TTL comment forbids. WO-1441 adds
+  the **ceiling** (`signed_at`, 12 h absolute, token rotated on renew), not the feature.
+  **Needs `api/schema.sql` applied**; until then it degrades to today's rail on purpose.
+- **`NightMarketSharedCardSession.OpenBrowser()` is a card modal, not a web browser.** Two log lines
+  14 s apart with "nothing coming back" were stack frames, not a failed round trip. If you arrive
+  there hunting a deep link, stop — there is none.
+- **Verified from the client only.** The fix reaches the owner through a **store submission**; no
+  server deploy can help, because the client aborts before sending. Outstanding device proof: a
+  successful save, the queue drain (`offline queue DRAINED`), and that renewal actually renews.
+
+---
+
 ## ★★ SESSION HANDOVER — 2026-09-02 (the night "data-driven" turned out not to mean what everyone assumed) ★★
 
 **Anchor:** **`../CANON_GROUND_TRUTH_2026-09-02.md`** — minted tonight, supersedes the 08-23 anchor

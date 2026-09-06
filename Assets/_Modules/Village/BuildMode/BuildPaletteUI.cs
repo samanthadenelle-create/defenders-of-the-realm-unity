@@ -54,6 +54,14 @@ namespace DeNelle.Village
         public event Action OnExitRequested;
 
         /// <summary>
+        /// WO-2006 / OWNER_RULINGS_LOCKED §25 — raised when the player taps the "Manage
+        /// Placed" card in the category browser. The controller answers by putting the live
+        /// build session into its EXISTING tap-to-select state (BeginManagePlaced); this
+        /// event carries no selection state of its own and never opens a second panel.
+        /// </summary>
+        public event Action OnManagePlacedRequested;
+
+        /// <summary>
         /// WO-1010 P2: the player tapped the minimized "^ Buildings (n)" tab and wants the
         /// carousel back. The BRAIN decides what that means — it routes to the SAME no-charge
         /// cancel every other return-to-carousel uses, so an un-placed ghost is dropped
@@ -331,7 +339,12 @@ namespace DeNelle.Village
                     _collectionBrowser = gameObject.AddComponent<BuildCollectionBrowser>();
             }
             if (_canvas != null) _canvas.SetActive(false);
-            _collectionBrowser.Show(entry => OnEntrySelected?.Invoke(entry));
+            // WO-2006 (ruling §25): the second callback is the MANAGE PLACED door. Passing
+            // it here is what makes the card exist at all — BuildCollectionBrowser refuses to
+            // build a card it cannot honour.
+            _collectionBrowser.Show(
+                entry => OnEntrySelected?.Invoke(entry),
+                () => OnManagePlacedRequested?.Invoke());
         }
 
         public void Hide()

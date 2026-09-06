@@ -298,8 +298,12 @@ namespace DeNelle.Core.Catalog
         /// <c>DeNelle.Core.Economy.TownBankCapacity</c> reads this to decide which BUILT
         /// structures raise the town bank cap.</para>
         /// <para>STILL OPEN — TARGETING: wire this seam into the ff.enemystructureaware sweep
-        /// (Enemy.SweepForNearestStructure currently scores ANY live IDamageableStructure via
-        /// ISiegeLootTarget) so shops are excluded and the container set is the loot-target set.
+        /// so shops are excluded and the container set is the loot-target set.
+        /// ⚠ NARROWED 2026-09-06 (WO-1439): this used to read "Enemy.SweepForNearestStructure
+        /// currently scores ANY live IDamageableStructure via ISiegeLootTarget". It no longer
+        /// scores ANY — the sweep now also rejects SAME-FACTION targets through
+        /// CombatFactionRules.MayAttack. What is still open is the SHOP-vs-CONTAINER
+        /// distinction, a different axis from friend-or-foe and untouched by that change.
         /// STILL OPEN — RAID STEAL: nothing debits the town wallet on an enemy action today
         /// (a siege break only voids a collector's un-banked pending). When that lands it must move
         /// the ONE authoritative total, never a per-container balance (WO-842); the what-if seam

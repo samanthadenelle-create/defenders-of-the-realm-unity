@@ -592,6 +592,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-session suite", () => { if (!DeNelle.Editor.Regression.WalletSessionPersistenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-session] " + r); });
             // --- WO-1211: boot reads are cached-only (never sign); writes retain fail-closed shared auth ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "backend-save-auth suite", () => { if (!DeNelle.Editor.Regression.BackendSaveAuthRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[backend-save-auth] " + r); });
+            // --- WO-1420 + WO-1441 (2026-09-06): a connect refused in 0.4s reported "TIMED OUT after 30s", and NOTHING ever minted the backend session for an auto-resumed wallet, so every cloud save refused fail-closed with why=missing all day. Pins the measured refusal-vs-deadline branch, the one-line association-close correlation, and the explicit-connect mint call site ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-connect-attribution suite", () => { if (!DeNelle.Editor.Regression.WalletConnectFailureAttributionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-connect-attribution] " + r); });
             // --- login gate (2026-08-18): her wallet auto-resumed at boot and the SIGN IN wall was presented anyway 5s later. The gate read Firebase ONLY on a wallet-first build; it must continue for connected OR attested-bound OR signed-in, and still present on a genuine first run ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "login-gate suite", () => { if (!DeNelle.Editor.Regression.LoginGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[login-gate] " + r); });
             // --- WO-1322 pi login gate (2026-09-02): she signed in with Pi in real Pi Browser ([Flow:Pi] Signed in as ..., skin auth=PiSdk) and the CHOOSE YOUR WALLET modal was presented anyway - the gate sampled only the two WALLET inputs and was skin-blind. Pins (a) Pi skin + signed in => CONTINUE, (b) Pi skin + not signed in => unchanged, (c) the SKR/Solana truth table byte-for-byte identical ---
@@ -1044,9 +1046,15 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-state-model suite", () => { if (!DeNelle.Editor.ManageStateModelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-state-model] " + r); });
             // --- WO-2005 BUILD inventory + filters (ALL/ECONOMY/DEFENSE/CRAFT/STORAGE/CIVIC), storage singleton, art-key mapping ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-inventory-filters suite", () => { if (!DeNelle.Editor.Regression.BuildInventoryFilterRegression.Run(out var r)) failures.Add(r); else log.AppendLine(r); });
+            // --- 2026-09-06 Manage portrait lane: every id a Manage tab can DISPLAY resolves to a sprite, or is named on a DATED art exemption ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-portrait-coverage suite", () => { if (!DeNelle.Editor.Regression.ManagePortraitCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine(r); });
             // --- SEAM ORACLES (CLI driving plan section 1): every panel has a door; no authored field goes unread ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "panel-door suite", () => { if (!DeNelle.Editor.PanelDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[panel-door] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "authored-field-reader suite", () => { if (!DeNelle.Editor.AuthoredFieldReaderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[authored-field-reader] " + r); });
+            // WO-2006 / OWNER_RULINGS_LOCKED sec.25 -- the same door question one layer below a panel:
+            // a WIRED VERB (move/upgrade/sell on a placed structure) with no signpost is as dead to a
+            // player as a panel with no spawner. RED on C3/C4/C5 before WO-2006.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "placed-door suite", () => { if (!DeNelle.Editor.PlacedStructureDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[placed-door] " + r); });
             // --- WO-1432: the honest-feedback thank-you DELIVERS 1000/1000/1000 against a near-cap bank (an EarnedIncome control proves the fixture bites), and a second claim is a traced no-op ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "honest-feedback-grant suite", () => { if (!DeNelle.Editor.HonestFeedbackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[honest-feedback-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "honest-feedback-once suite", () => { if (!DeNelle.Editor.HonestFeedbackClaimOnceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[honest-feedback-once] " + r); });
@@ -1054,6 +1062,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "primary-fallback suite", () => { if (!DeNelle.Editor.Regression.PrimaryFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[primary-fallback] " + r); });
             // --- WO-2002: the common Manage renderer is DUMB - 16 banned shapes, each with a planted-fixture proof ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-dumb-view suite", () => { if (!DeNelle.Editor.ManageDumbViewRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-dumb-view] " + r); });
+            // --- WO-1443: ONE heading per Manage screen (the host title binds the model breadcrumb; the shared renderer paints no copy on BUILD/ARMY/RESEARCH), and the selection band COLLAPSES when nothing is selected ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-one-heading suite", () => { if (!DeNelle.Editor.Regression.ManageOneHeadingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-one-heading] " + r); });
             // --- OWNER RULING 26b: a full collector spills into its matching storage; nothing is ever burned ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-overflow suite", () => { if (!DeNelle.Editor.Regression.CollectorOverflowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-overflow] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
@@ -1396,6 +1406,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-payout-visibility suite", () => { if (!DeNelle.Editor.Regression.RaidPayoutVisibilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-payout-visibility] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-escalation suite", () => { if (!DeNelle.Editor.RaidEscalationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-escalation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-selection-spoils suite", () => { if (!DeNelle.Editor.Regression.RaidSelectionSpoilsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-selection-spoils] " + r); });
+            // WO-1442 - the raid camp list's GEOMETRY (a different axis from the spoils suite's
+            // words + band-height case F): card rects measured on a live canvas at four camps
+            // AND at eight, plus the source guards for the three defects on the 2026-09-06 frame.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-selection-layout suite", () => { if (!DeNelle.Editor.Regression.RaidSelectionLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-selection-layout] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-season-xp suite", () => { if (!DeNelle.Editor.Regression.RaidSeasonXpRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-season-xp] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-funnel suite", () => { if (!DeNelle.Editor.Regression.RaidFunnelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-funnel] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-army-grant suite", () => { if (!DeNelle.Editor.Regression.StarterArmyGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-army-grant] " + r); });
@@ -1884,6 +1898,13 @@ namespace DeNelle.Editor
             public bool Alive = true;
             public bool IsAlive => Alive;
             public void ApplyContactDamage(float amount) { }
+
+            // WO-1439 — the stand-in now has to declare a side. Settable, because the new
+            // friendly-fire case (below) needs a HOSTILE stand-in to prove a Hostile enemy
+            // refuses it; the three pre-existing sweep cases keep the Friendly default and
+            // therefore keep their old outcomes exactly.
+            public DeNelle.Core.Combat.CombatFaction Side = DeNelle.Core.Combat.CombatFaction.Friendly;
+            public DeNelle.Core.Combat.CombatFaction Faction => Side;
         }
 
         private static void SetPrivateField(object obj, string field, object value)
@@ -2118,6 +2139,97 @@ namespace DeNelle.Editor
                     failures.Add($"structure sweep CASE C (flag off): should be legacy forward-only, but sweep returned '{(c as MonoBehaviour)?.name}' — not reversible");
                 else
                     log.AppendLine("  CASE C flag-off: sweep inert (legacy) OK");
+
+                // =============================================================
+                //  WO-1439 — FRIENDLY FIRE. A defender must never select a structure
+                //  of its OWN faction. Cases D/E cover the all-direction sweep lane,
+                //  F/G the forward SphereCast lane; both lanes could acquire the spire.
+                //
+                //  ⛔ RED PROOF (state it in-file, per the WO's acceptance criteria):
+                //  against the pre-WO-1439 build CASE D and CASE F both FAIL. Before the
+                //  fix, IDamageableStructure carried no Faction at all, so this file did
+                //  not even compile — and with the stub's Faction stubbed out, the sweep's
+                //  filter chain was null -> IsAlive -> `is HeroHealth` and NOTHING ELSE
+                //  (Enemy.cs SweepForNearestStructure), while the forward lane's was
+                //  `structure != null && structure.IsAlive` (ProbeForStructureForward).
+                //  A Hostile stand-in in front of a Hostile Enemy was therefore ACQUIRED
+                //  and RETURNED by both lanes — which is precisely the shipped defect:
+                //  11,620 `[Flow:EnemyAggro] raidguard-*: ProbeForStructure hit 'RaidSpire'`
+                //  lines in logs/debug/raid-ai-and-pets-2026-09-06.log, 8,359 of them after
+                //  the scene had already resolved Enemy-owned. Cases E and G are the other
+                //  half of the proof: they pin that the gate is FACTION-specific and did
+                //  not simply break acquisition for everyone.
+                // =============================================================
+                PlayerPrefs.SetInt(FlagKey, 1);            // sweep lane back ON
+                SetPrivateField(enemy, "_heroTransform", null);
+                structGo.transform.position = new Vector3(2.5f, 0f, 0f);   // to the SIDE => sweep lane
+                Physics.SyncTransforms();
+
+                // The Enemy under test is Hostile (EnemyDamageable, auto-added by RequireComponent).
+                // Read it rather than asserting it, so a future faction change surfaces here.
+                var selfFactionProp = typeof(Enemy).GetProperty("SelfFaction");
+                var self = selfFactionProp != null
+                    ? (DeNelle.Core.Combat.CombatFaction)selfFactionProp.GetValue(enemy)
+                    : DeNelle.Core.Combat.CombatFaction.Hostile;
+                if (selfFactionProp == null)
+                    failures.Add("WO-1439: Enemy.SelfFaction not found (renamed?) — the friendly-fire " +
+                                 "cases below cannot prove which side the attacker is on");
+                log.AppendLine($"  WO-1439 attacker faction = {self}");
+
+                // CASE D — SAME-faction structure in sweep range -> MUST be refused.
+                structure.Side = self;
+                var d = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (d != null)
+                    failures.Add($"WO-1439 CASE D (sweep, same faction): a {self} enemy acquired the " +
+                                 $"{structure.Side} structure '{(d as MonoBehaviour)?.name}'. A defender is " +
+                                 "attacking its own side — this is the raid-spire defect (a garrison razing " +
+                                 "the objective it guards).");
+                else
+                    log.AppendLine("  CASE D sweep same-faction: refused OK");
+
+                // CASE E — OPPOSING structure in the same spot -> must STILL be acquired.
+                structure.Side = self == DeNelle.Core.Combat.CombatFaction.Hostile
+                    ? DeNelle.Core.Combat.CombatFaction.Friendly
+                    : DeNelle.Core.Combat.CombatFaction.Hostile;
+                var e = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (!ReferenceEquals(e, structure))
+                    failures.Add($"WO-1439 CASE E (sweep, opposing faction): expected the {structure.Side} " +
+                                 $"structure to still be acquired, got '{(e as MonoBehaviour)?.name ?? "null"}' — " +
+                                 "the faction gate broke acquisition for EVERYONE, not just friendlies.");
+                else
+                    log.AppendLine("  CASE E sweep opposing-faction: acquired OK");
+
+                // CASE F/G — the FORWARD SphereCast lane. It returns before the sweep ever
+                // runs, so a faction gate on the sweep alone would leave the defect wide open
+                // for anything the defender happens to be facing — which is exactly how the
+                // spire was hit (the captured line is the forward lane's "ProbeForStructure hit").
+                // Dead AHEAD and clear of the cast's start sphere: the cast begins at
+                // (0, 0.5, 0) with radius 0.4, so a box centred at z=1.0 (spanning 0.5..1.5)
+                // is reached by the sweep but does NOT overlap at t=0 — an initial overlap
+                // makes SphereCast's hit degenerate and the case would prove nothing.
+                structGo.transform.position = new Vector3(0f, 0f, 1.0f);   // probe dist 1.1
+                Physics.SyncTransforms();
+
+                structure.Side = self;
+                var f = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (f != null)
+                    failures.Add($"WO-1439 CASE F (forward probe, same faction): a {self} enemy acquired the " +
+                                 $"{structure.Side} structure '{(f as MonoBehaviour)?.name}' straight ahead. " +
+                                 "ProbeForStructureForward is the lane the shipped capture fired on.");
+                else
+                    log.AppendLine("  CASE F forward same-faction: refused OK");
+
+                structure.Side = self == DeNelle.Core.Combat.CombatFaction.Hostile
+                    ? DeNelle.Core.Combat.CombatFaction.Friendly
+                    : DeNelle.Core.Combat.CombatFaction.Hostile;
+                var g = probe.Invoke(enemy, null) as DeNelle.Core.Combat.IDamageableStructure;
+                if (!ReferenceEquals(g, structure))
+                    failures.Add($"WO-1439 CASE G (forward probe, opposing faction): expected the " +
+                                 $"{structure.Side} structure straight ahead to still be acquired, got " +
+                                 $"'{(g as MonoBehaviour)?.name ?? "null"}' — the forward lane now refuses " +
+                                 "everything, which would stop enemies hitting the hero.");
+                else
+                    log.AppendLine("  CASE G forward opposing-faction: acquired OK");
             }
             catch (System.Exception ex)
             {

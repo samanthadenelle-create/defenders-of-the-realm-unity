@@ -47,6 +47,10 @@ namespace DeNelle.Editor
             public float Hp;
             public float Max;
             public bool IsAlive => Hp > 0f;
+            // WO-1439 — burn is a structure's OWN fire ticking itself down, not an actor
+            // attacking it, so the faction here is inert; Friendly matches every real
+            // burnable in the player's town and keeps this suite's outcomes unchanged.
+            public CombatFaction Faction => CombatFaction.Friendly;
             public void ApplyContactDamage(float amount) => Hp = Mathf.Max(0f, Hp - amount);
             public float Fraction => Max > 0f ? Mathf.Clamp01(Hp / Max) : 0f;
         }

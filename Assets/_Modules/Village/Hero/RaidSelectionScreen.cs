@@ -19,6 +19,20 @@
 // shardDropChance (resource icon + an Echo-Shard hint). Tapping a card opens
 // RaidDeployScreen.Open(def).
 //
+// 2026-09-06 - WO-1442: THREE DEFECTS ON ONE FRAME, ALL NAMED FROM SOURCE.
+//   D1 the gold bar across card one = button-pressed-empty, swapped in by
+//      Selectable.SpriteSwap because MedievalUiSkin.ApplyButton (an ACTION-button skin)
+//      was applied to a LIST ROW. Removed at CreateRaidCard; read the block there.
+//   D2 the list ALREADY SCROLLED - its gilt rail is in the owner's own frame at 7 device
+//      px. The well band is now DERIVED from the kit's live footer / sub-header zones
+//      (it used to be a typed 0.20/0.80 whose floor sat INSIDE the shared Close band),
+//      the rail is wider, and the camp COUNT is said in words in the sub-header.
+//   D3 the world showed through because this panel had no opaque layer at all:
+//      withBackdrop:false + chrome.content at alpha 0 + a modal-frame-16x9 shell whose
+//      centre is alpha 0. The kit's named Backdrop is back (the default the two panels
+//      this header claims parity with already take).
+//   The card's band table below is UNCHANGED - nothing here shrinks a text band.
+//
 // 2026-09-05 (evening) - THE CARD IS FIVE ROWS AND IT IS 178 px, not 142. The WO-1402
 // spoils line shipped INVISIBLE - built, traced, and culled by TMP because its band was
 // 22.7 px and a 22 pt line needs ~29. So did the clock, the lock sentence and the canon
@@ -56,6 +70,12 @@ namespace DeNelle.Village.Hero
         private GameObject _ui;
         private RectTransform _bodyZone;              // chrome.layout.body — the ONE content well
         private ElarionUiKit.ScrollZoneHandle _scroll; // kit fit-or-scroll handle (§1.14)
+        // WO-1442: FrameCore's designed sub-header band — the camp-count caption's home.
+        // Null only on a frame that authors none (the fallback path traces and skips it).
+        private RectTransform _captionZone;
+        // WO-1442: the well band this open resolved to, as panel fractions. Kept so the
+        // §12 line can print the geometry that decided the capacity, not just the outcome.
+        private float _wellBandY0, _wellBandY1;
 
         // The pure ViewModel owns the SceneConfigCatalog projection; this View renders
         // vm.Raids + the per-card helpers and never touches the catalog itself.
@@ -108,8 +128,94 @@ namespace DeNelle.Village.Hero
         // 1.18 + 2. Never author a band as a bare fraction again — add it to the table below
         // and let RaidSelectionSpoilsRegression case F do the arithmetic. A band that fails it
         // does not "look tight"; it renders NOTHING, silently, and only a screenshot finds it.
-        private const float CardHeightPx = 178f;
-        private const float CardGapPx    = 12f;
+        public const float CardHeightPx = 178f;
+        public const float CardGapPx    = 12f;
+
+        // =====================================================================
+        // WO-1442 - THE WELL'S GEOMETRY, DERIVED. NEVER A CARD COUNT.
+        // ---------------------------------------------------------------------
+        // Owner felt-test 2026-09-06 on build 2026.09.06.358245: four camps, two and a
+        // half visible, the third cut mid-row. THE COUNT GROWS AS SHE WINS, so a fix that
+        // happens to seat four is the identical bug at five. Everything below is measured
+        // off the owner's own frame (scratchpad raid-ui.png, adb screencap 2670x1200):
+        //
+        //   canvas scale  = 2^(avg(log2(2670/1080), log2(1200/1920)))            = 1.2431
+        //     -> proven by the card itself: CardHeightPx 178 rendered 221 device px
+        //        (green accent bar, x=545, rows 293-513), 221/178 = 1.2416.
+        //   row pitch     = CardHeightPx + CardGapPx = 190 ref px -> 236 device (529-293) ✓
+        //   well height   = 634 device (dark viewport rows 283-916) = 510.0 ref px
+        //     -> exactly 0.60 x the panel height, i.e. the hardcoded 0.20/0.80 band below.
+        //   capacity      = floor((510.0 - 2*8 + 12) / 190) = floor(2.66) = 2 WHOLE CARDS.
+        //
+        // ⛔ THE LIST ALREADY SCROLLS - do not "add scrolling". The kit scroll zone's gilt
+        // handle is IN that frame, 7 device px wide at x 2133-2139, spanning rows 286-704
+        // of a ~634 px track: a 0.66 fill, which is four cards of content in a two-card
+        // well. So iron_bastion WAS reachable; nothing on screen said so at a size a thumb
+        // or an eye could find. The defect is the AFFORDANCE and the mid-row cut, not the
+        // scroll.
+        //
+        // ⛔ AND THE BAND WAS NOT MERELY SMALL - IT OVERLAPPED THE CLOSE. The kit reserves
+        // a Close band whose top lands at 0.050 + CanonCtaHeight/(panelFrac * canvasH) =
+        // 0.2054 for this panel; the screen's hardcoded floor of 0.20 sat ~4.6 ref px BELOW
+        // it. OpenInternal now reads the kit's OWN relocated footer/sub-header zones instead
+        // of retyping any of that (the stale-copy failure this repo keeps paying for).
+        private const int ScrollPadPx = 8;
+
+        /// <summary>Reference px from one card's top edge to the next - the ONE pitch.</summary>
+        public static float RowPitchPx => CardHeightPx + CardGapPx;
+
+        /// <summary>
+        /// WHOLE cards a well of <paramref name="wellPx"/> reference px seats with no card
+        /// cut. DERIVED, so it answers 2 on the owner's 2670x1200 ultrawide and 3 on a 16:9
+        /// phone without either number being typed anywhere. Never compare this to the camp
+        /// count to decide layout - it decides only what the caption SAYS.
+        /// </summary>
+        public static int VisibleCardCapacity(float wellPx)
+        {
+            float usable = wellPx - 2f * ScrollPadPx;
+            if (usable < CardHeightPx) return 0;
+            return Mathf.Max(0, Mathf.FloorToInt((usable + CardGapPx) / RowPitchPx));
+        }
+
+        // ── The kit's FrameCore bands, mirrored for the NULL-FALLBACK and the oracle ──
+        // ⚠ THESE ARE NOT THE SOURCE. OpenInternal reads chrome.layout.footer /
+        // chrome.layout.subHeader off the LIVE chrome; these two only answer when a frame
+        // hands back no such zone, and give RaidSelectionLayoutRegression a band to measure
+        // without standing up the whole factory. RaidSelectionLayoutRegression case L3 reds
+        // this file if the live path ever stops reading chrome.layout - which is the only
+        // way these mirrors could quietly become the source of truth.
+        public const float FallbackFooterY0    = 0.2204f;   // FrameCore footer after the kit's Close relocation
+        public const float FallbackSubHeaderY0 = 0.845f;    // FrameCore designed sub-header band floor
+        public const float FallbackSubHeaderY1 = 0.896f;    // ... and its ceiling (the caption's band)
+
+        /// <summary>The modal panel's rect as a fraction of the canvas — the ONE place this
+        /// screen's panel geometry is written, so the oracle measures the panel it builds.</summary>
+        public static readonly Vector2 PanelAnchorMin = new Vector2(0.16f, 0.06f);
+        public static readonly Vector2 PanelAnchorMax = new Vector2(0.84f, 0.94f);
+        /// <summary>Breathing gap between the caption band and the top of the card well.</summary>
+        public const float WellTopGapFrac = 0.010f;
+
+        /// <summary>
+        /// The card well's band as a fraction of the panel, from the kit's own reserved
+        /// zones: floor = the footer band the factory already re-seated just above the
+        /// shared Close, ceiling = just under the sub-header (which carries the camp-count
+        /// caption). Pure, so the oracle measures the same band the screen builds.
+        /// </summary>
+        public static void ComputeWellBand(float footerY0, float subHeaderY0,
+                                           out float y0, out float y1)
+        {
+            y0 = Mathf.Clamp01(footerY0);
+            y1 = Mathf.Clamp01(subHeaderY0 - WellTopGapFrac);
+            // Never invert or collapse: a frame with odd zones gets a thin-but-real well
+            // rather than a zero-height one that would render the grid as nothing.
+            if (y1 <= y0 + 0.05f) y1 = Mathf.Min(0.99f, y0 + 0.05f);
+        }
+
+        // WO-1442 - the kit's slim scrollbar is 10 ref px, which MEASURED 7 device px on the
+        // owner's frame (the gilt sliver at x 2133-2139). It was doing its job and could not
+        // be seen. Widened LOCALLY on this screen - MakeScrollZone is shared kit and other
+        // lanes ride it. The words in the caption are the real affordance; this is the glance.
+        private const float ScrollbarWidthPx = 18f;
 
         // ── The card's text bands (fractions of CardHeightPx, bottom-up) ──────────────
         // Five rows: title+badge / clock+scout / lock-or-reward / spoils / canon flavour.
@@ -123,7 +229,9 @@ namespace DeNelle.Village.Hero
 
         // Row fonts, named so the band oracle can pair each band with the size it must seat.
         private const int TitleFontPt   = 30;
-        private const int RowFontPt     = 22;
+        // Public: RaidSelectionLayoutRegression pairs the camp-count caption's band with the
+        // font it must seat, and a copy of "22" over there could not fail with this one.
+        public  const int RowFontPt     = 22;
         private const int FlavourFontPt = 18;
 
         /// <summary>Pixel height a band gives its row, at the live <c>CardHeightPx</c>.</summary>
@@ -368,8 +476,34 @@ namespace DeNelle.Village.Hero
 
             // WO-562: canonical obsidian chrome (black + gold trim + gold header "RAIDS" + shared
             // Close) replaces PanelFramed + a bespoke Header + a per-panel "X" Danger button.
+            // =============================================================
+            // WO-1442 D3 - THE PANEL GETS ITS BACKDROP BACK, AND THE MISSING
+            // LAYER HAS A NAME.
+            // =============================================================
+            // Owner felt-test 2026-09-06: "wood 113  iron 38" from the town behind was
+            // legible THROUGH this modal. It is not a z-order problem and there is nothing
+            // to nudge - that text is CLIPPED by the card plates in her own frame
+            // (raid-ui.png, the glyph tops cut dead flat at the card-3 plate's lower edge),
+            // which proves it renders BELOW this canvas. The modal simply had no opaque
+            // layer anywhere in its body, and that is provable three times over:
+            //   1. this call passed `withBackdrop: false`, so the kit's named "Backdrop"
+            //      (a 0.94-alpha plate, the ONE layer designed for exactly this) was never
+            //      built;
+            //   2. BuildObsidianPanel builds `chrome.content` at alpha 0 by design, and
+            //      MedievalUiSkin.ApplyShell then re-asserts alpha 0 on it (MedievalUiSkin
+            //      .cs:31-33, "the approved shell owns its textured center");
+            //   3. the shell it swaps in, UI/ElarionMedieval/frames/modal-frame-16x9, is
+            //      HOLLOW - alpha 0 at every interior sample of the 1672x941 art. So the
+            //      shell does NOT own a textured centre for this frame, and the comment
+            //      promising one is describing a different sprite.
+            // The Scrim is a screen-wide veil at 0.85, not a panel backing: it still passes
+            // 15% of bright world text, and it rides the panel-open fade (her capture was
+            // taken mid-fade at CanvasGroup ~0.70, which is why the whole world reads at an
+            // effective ~0.59 veil there). Restoring the default is also PARITY: this file's
+            // own header says it mirrors PartyShopPanelMvvm and TroopTrainingPanel, and both
+            // of those take `withBackdrop` at its default of true.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAIDS",
-                new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false,
+                PanelAnchorMin, PanelAnchorMax, Close,
                 frameName: RpgUiCatalog.FrameCore);
             MedievalUiSkin.ApplyShell(chrome);
 
@@ -384,15 +518,62 @@ namespace DeNelle.Village.Hero
             _bodyZone = chrome.layout != null && chrome.layout.body != null
                 ? chrome.layout.body
                 : (RectTransform)chrome.content.transform;
+            // Seed the recorded band from whatever the factory handed back, so a frame that
+            // supplies no zones still reports a REAL well rather than a zero one.
+            if (_bodyZone != null)
+            {
+                _wellBandY0 = _bodyZone.anchorMin.y;
+                _wellBandY1 = _bodyZone.anchorMax.y;
+            }
             if (_bodyZone != null && chrome.layout != null)
             {
-                // The generic frame body reserves far more footer space than this selector
-                // uses, leaving the third of only three camps clipped above a dead lower half.
-                // Reclaim that verified-empty band while preserving the Close keep-out.
-                _bodyZone.anchorMin = new Vector2(_bodyZone.anchorMin.x, 0.20f);
-                _bodyZone.anchorMax = new Vector2(_bodyZone.anchorMax.x, 0.80f);
+                // =========================================================
+                // WO-1442 D2 - THE WELL IS DERIVED FROM THE KIT'S OWN BANDS.
+                // =========================================================
+                // ⚠ WHAT WAS HERE WAS A PAIR OF TYPED FRACTIONS, 0.20 AND 0.80, AND THE
+                // FLOOR WAS WRONG BY MEASUREMENT. The kit reserves a Close band topping out
+                // at 0.050 + CanonCtaHeight/(panelFrac * postScaleCanvasHeight) = 0.2054 for
+                // this panel, so a body floor of 0.20 put the scroll well ~4.6 ref px INSIDE
+                // the shared Close - the exact class of collision the factory's close-band
+                // reservation exists to end, re-introduced by hand. And the ceiling of 0.80
+                // gave away the whole 0.80-0.845 strip to nothing: in the owner's frame the
+                // Heart's branches show through it.
+                //
+                // Both edges now come off the LIVE chrome the factory just built:
+                //   floor   = layout.footer.anchorMin.y   - the factory ALREADY re-seated
+                //             that band to sit just above the Close (sweep-9413 relocation),
+                //             so reading it is how we inherit the reservation instead of
+                //             re-deriving it and drifting from it;
+                //   ceiling = layout.subHeader.anchorMin.y - WellTopGapFrac - the sub-header
+                //             is FrameCore's designed meta band and now carries the camp-
+                //             count caption, so the well stops just below it.
+                // The mirrors are used ONLY when a frame hands back no such zone, and that
+                // path says so out loud rather than silently laying out over the Close.
+                var footerZone    = chrome.layout.footer;
+                var subHeaderZone = chrome.layout.subHeader;
+                if (footerZone == null || subHeaderZone == null)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                        "raid grid: frame '" + RpgUiCatalog.FrameCore + "' handed back " +
+                        (footerZone == null ? "NO footer zone" : "a footer zone") + " and " +
+                        (subHeaderZone == null ? "NO sub-header zone" : "a sub-header zone") +
+                        " - falling back to the mirrored FrameCore bands (" +
+                        FallbackFooterY0.ToString("0.###") + ".." +
+                        FallbackSubHeaderY0.ToString("0.###") + "). The well is still derived, " +
+                        "but it is no longer inheriting the kit's live Close reservation.");
+
+                float footerY0    = footerZone    != null ? footerZone.anchorMin.y    : FallbackFooterY0;
+                float subHeaderY0 = subHeaderZone != null ? subHeaderZone.anchorMin.y : FallbackSubHeaderY0;
+                float wellY0, wellY1;
+                ComputeWellBand(footerY0, subHeaderY0, out wellY0, out wellY1);
+
+                _bodyZone.anchorMin = new Vector2(_bodyZone.anchorMin.x, wellY0);
+                _bodyZone.anchorMax = new Vector2(_bodyZone.anchorMax.x, wellY1);
                 _bodyZone.offsetMin = Vector2.zero;
                 _bodyZone.offsetMax = Vector2.zero;
+
+                _captionZone = subHeaderZone;
+                _wellBandY0 = wellY0;
+                _wellBandY1 = wellY1;
             }
 
             // WO-714 P8: the ONE shared open ease (scale target = the panel rect, never the canvas).
@@ -466,11 +647,130 @@ namespace DeNelle.Village.Hero
 
             // WO-714 W4: the ONE kit scroll zone (§1.14) replaces the hand-rolled
             // viewport/content/fitter plumbing — screens add no scroll plumbing of their own.
-            _scroll = ElarionUiKit.MakeScrollZone(_bodyZone, spacing: CardGapPx, padding: 8);
+            _scroll = ElarionUiKit.MakeScrollZone(_bodyZone, spacing: CardGapPx, padding: ScrollPadPx);
             foreach (var item in raids)
                 CreateRaidCard(_scroll.content, item);
 
+            // Order matters and is measured-first: widen the rail (it changes the viewport
+            // width under AutoHideAndExpandViewport), SETTLE, and only then read the well's
+            // resolved height for the caption. Reading it before the settle returns the
+            // creation-frame rect, which is the same trap PostScaleCanvasHeight exists for.
+            WidenScrollbar();
             FinalizeScroll();
+            BuildCampCountCaption(raids.Count);
+            TraceWellGeometry(raids.Count);
+        }
+
+        /// <summary>
+        /// §12 - ONE line that answers "how many cards fit, and why" from data. A future
+        /// "the list is cut off again" report is settled from this without a screenshot:
+        /// it prints the resolved well, the pitch, the derived capacity and the camp count,
+        /// so a mismatch names whether the band shrank or the card grew.
+        /// </summary>
+        private void TraceWellGeometry(int campCount)
+        {
+            float wellPx = WellHeightPx();
+            int capacity = VisibleCardCapacity(wellPx);
+            // THE DISCRIMINATOR. On the owner's 2670x1200 device this line must read
+            // scale~1.24 / well~522 / capacity 2. If it ever reads scale 1 / well ~649 /
+            // capacity 3, the RAW device rect leaked into the measurement instead of the
+            // post-scale height - a wrong caption, not a wrong layout, and answerable here.
+            var canvas = _ui != null ? _ui.GetComponent<Canvas>() : null;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "raid grid geometry: canvas scale " +
+                (canvas != null ? canvas.scaleFactor.ToString("0.###") : "?") +
+                ", post-scale canvas h " +
+                (_bodyZone != null
+                    ? ElarionUiKit.PostScaleCanvasHeight(_bodyZone).ToString("0")
+                    : "?") + "; well band " + _wellBandY0.ToString("0.###") + ".." +
+                _wellBandY1.ToString("0.###") + " of the panel = " + wellPx.ToString("0") +
+                " ref px; pitch " + RowPitchPx.ToString("0") + " (card " +
+                CardHeightPx.ToString("0") + " + gap " + CardGapPx.ToString("0") +
+                "), pad " + ScrollPadPx + " -> capacity " + capacity + " WHOLE cards; campCount=" +
+                campCount + ". " +
+                (campCount > capacity
+                    ? "The list overflows and the caption says so in words; the rail is " +
+                      ScrollbarWidthPx.ToString("0") + " ref px."
+                    : "Everything fits; nothing is cut."));
+        }
+
+        /// <summary>
+        /// WO-1442 D2 - the glance half of the scroll affordance. The kit's shared slim
+        /// scrollbar is 10 reference px, which MEASURED 7 device px on the owner's 2670x1200
+        /// frame - a gilt sliver at x 2133-2139 that was correctly reporting a 0.66 fill
+        /// (four cards of content in a two-card well) at a size nothing could find. Widened
+        /// HERE and not in <c>MakeScrollZone</c>: that is shared kit and other lanes ride it.
+        /// Shape and position carry the meaning; no hue is added (the owner is red/green
+        /// colourblind, and the caption below is the part that actually says it).
+        /// </summary>
+        private void WidenScrollbar()
+        {
+            if (_scroll == null || _scroll.scrollbar == null) return;
+            var sbRt = _scroll.scrollbar.transform as RectTransform;
+            if (sbRt == null) return;
+            sbRt.offsetMin = new Vector2(-ScrollbarWidthPx, sbRt.offsetMin.y);
+        }
+
+        /// <summary>
+        /// WO-1442 D2 - THE AFFORDANCE IS A SENTENCE, AND THE SENTENCE COUNTS THE CAMPS.
+        /// ---------------------------------------------------------------------------
+        /// "The Veiled Enclave is chopped at the bottom... a FOURTH camp is not reachable on
+        /// screen at all" was never a scrolling bug - the list scrolls, and its scrollbar was
+        /// on screen. What the player had no way to know was HOW MANY camps exist. So the row
+        /// that answers it reads the count off the VM (<see cref="RaidSelectionVM.CampCountLine"/>)
+        /// and grows with her wins: 4 camps today, 8 when she has earned them, with no number
+        /// typed on either side of the seam.
+        ///
+        /// ⛔ WORDS, NOT A HUE AND NOT AN ICON. The owner is red/green colourblind, so a
+        /// fading gradient or a coloured "more below" chevron would say nothing to her; it
+        /// also survives greyscale unchanged because it never had a colour to lose.
+        ///
+        /// ⛔ AND IT SEATS IN THE KIT'S OWN SUB-HEADER BAND, NOT A NEW FRACTION. FrameCore
+        /// authors that band (0.845-0.896) for exactly this - "badge / stars / target-time
+        /// meta rows seat here instead of stacking into the body top" - so the caption cannot
+        /// steal a card's height, and its px height comes from the frame rather than from a
+        /// literal that would render BLANK on a taller aspect (a band under NeedPx(22)=29.1
+        /// does not render small, it renders nothing; RaidSelectionSpoilsRegression case F).
+        /// </summary>
+        private void BuildCampCountCaption(int campCount)
+        {
+            if (_vm == null || campCount <= 0) return;
+            int visible = VisibleCardCapacity(WellHeightPx());
+            string line = _vm.CampCountLine(visible);
+            if (string.IsNullOrEmpty(line)) return;
+
+            if (_captionZone == null)
+            {
+                // Never silent: a frame with no meta band loses the caption, and the capture
+                // must say so rather than leaving "where did the sentence go" to a screenshot.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "raid grid: no sub-header zone on this frame, so the camp-count caption \"" +
+                    line + "\" has nowhere to seat. The list still scrolls; the player is no " +
+                    "longer told how many camps there are.");
+                return;
+            }
+
+            var caption = ElarionUiKit.Label(_captionZone, line, 0f, 1f,
+                ElarionUi.Parchment, RowFontPt, TMPro.TextAlignmentOptions.Left, 0.01f, 0.99f);
+            caption.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(caption);
+        }
+
+        /// <summary>
+        /// The card well's height in REFERENCE px, on the frame it is built.
+        /// ⚠ DELIBERATELY NOT <c>_bodyZone.rect.height</c>. On the canvas's creation frame a
+        /// parent rect returns RAW SCREEN PIXELS, not post-scale local units — the trap
+        /// <see cref="ElarionUiKit.PostScaleCanvasHeight"/> exists for, and whose own remarks
+        /// say it is public precisely so a screen can size bands in reference px on that frame.
+        /// Reading the live rect here would have answered ~649 instead of ~522 on the owner's
+        /// 2670x1200 device and told the caption three cards fit when two do.
+        /// </summary>
+        private float WellHeightPx()
+        {
+            if (_bodyZone == null) return 0f;
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(_bodyZone);
+            float panelFracH = Mathf.Max(0.01f, PanelAnchorMax.y - PanelAnchorMin.y);
+            return Mathf.Max(0f, (_wellBandY1 - _wellBandY0) * panelFracH * canvasH);
         }
 
         // One framed raid plaque: difficulty-tinted frame, fortress name (gold serif),
@@ -527,8 +827,40 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.ApplyRounded(cardImg);
             var cardBtn = card.GetComponent<Button>();
             cardBtn.targetGraphic = cardImg;
+            // =============================================================
+            // WO-1442 D1 - THE STRAY GOLD BAR WAS AN ACTION BUTTON'S PRESSED FACE.
+            // =============================================================
+            // ⛔ DO NOT PUT MedievalUiSkin.ApplyButton BACK ON THIS ROW. It was here, and it
+            // is what painted the ornate gold plate straight across The Forsaken Camp in the
+            // owner's 2026-09-06 capture - swallowing "Clock: 3:00", mangling "- x1 Loot" and
+            // cutting through the spoils line.
+            //
+            // IDENTIFIED BY PIXELS, NOT BY INSPECTION. The bar's own gold rails, sampled at
+            // x=1400 down card one (card rows 293-513, so height 221), sit at fractions
+            // 0.1810 / 0.2127 / 0.2398 / 0.7104 / 0.7421. The rails of
+            // UI/ElarionMedieval/buttons/button-pressed-empty sit at 0.1823-0.1837 /
+            // 0.2099-0.2141 / 0.2390-0.2445 / 0.7030-0.7127 / 0.7403-0.7445 - all five match
+            // inside 0.002. button-normal-empty (0.1948 / 0.2058 / 0.2141-0.2293 / 0.6478 /
+            // 0.6892-0.7238) and frames/content-panel (0.1148 / 0.1286 / 0.1403 / 0.8151) are
+            // BOTH excluded. So it is not a selection highlight, not a focus ring and not a
+            // mis-anchored loot pill: it is one specific button sprite.
+            //
+            // AND THAT SPRITE HAD EXACTLY ONE WAY IN. ApplyButton (MedievalUiSkin.cs:74-80)
+            // sets Selectable.Transition.SpriteSwap and stuffs button-pressed-empty into the
+            // highlighted, selected AND pressed slots. The line below then overwrote only
+            // image.sprite with content-panel - it never touched spriteState or the
+            // transition. So the card looked right in the Normal state and, the instant the
+            // row went highlighted / selected / pressed, Unity's Selectable wrote
+            // button-pressed-empty into image.overrideSprite and repainted the WHOLE card as a
+            // 3:1 action plate, under the labels. (Cards two and three hid it only because
+            // they are locked and tint to near-black; this was never a one-card bug.)
+            //
+            // The fix is to stop skinning a LIST ROW as an ACTION BUTTON. ApplyButton is built
+            // for CTAs - a 4:1 plate, a 44 pt uppercased label, sprite-swap states - and none
+            // of that belongs on a plaque that already carries five text bands.
+            // StyleButtonColors leaves the row on ColorTint, so press feedback is a tint of
+            // the card's own art and no sprite can ever replace it.
             ElarionUiKit.StyleButtonColors(cardBtn);
-            MedievalUiSkin.ApplyButton(cardBtn, primary: !dimmed);
             var medievalCard = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
             if (medievalCard != null)
             {
@@ -853,6 +1185,17 @@ namespace DeNelle.Village.Hero
         private void ClearContent()
         {
             _scroll = null;
+            // WO-1442: the camp-count caption lives OUTSIDE the body well (in the frame's
+            // sub-header band), so a rebuild that only cleared the well would stack a second
+            // sentence on top of the first. Clear the band this screen wrote into, and only it.
+            // The kit paints its own backing plates into zones (ZoneBacking); clear only what
+            // this screen wrote, exactly as the body loop below does.
+            if (_captionZone != null)
+                for (int i = _captionZone.childCount - 1; i >= 0; i--)
+                {
+                    var cap = _captionZone.GetChild(i);
+                    if (cap != null && cap.name != "ZoneBacking") Destroy(cap.gameObject);
+                }
             if (_bodyZone == null) return;
             for (int i = _bodyZone.childCount - 1; i >= 0; i--)
             {
@@ -874,6 +1217,7 @@ namespace DeNelle.Village.Hero
             if (_ui != null) ElarionUiKit.ClosePanelWithFx(_ui);
             _ui = null;
             _bodyZone = null;
+            _captionZone = null;
             _scroll = null;
             IsScreenOpen = false;   // WO-725: lets the Herald re-arm + fires its Arena close trace
         }

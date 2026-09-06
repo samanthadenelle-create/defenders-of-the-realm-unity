@@ -22,7 +22,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Core.Web3;          // BackendRequestSigner.WarmUpSessionAsync - handshake at connect
+using DeNelle.Core.Web3;          // BackendRequestSigner - the handshake/mint at connect (WO-1441)
 using DeNelle.Core.Platform;
 using DeNelle.Core.State;
 
@@ -134,6 +134,39 @@ namespace DeNelle.Wallet
             AuthOutcome outcome = default;
             try
             {
+                // ⭐ OWNER RULING 2026-09-06 (WO-1441): AUTO-RESUME MINTS. ONE HANDSHAKE ON BOOT.
+                //
+                // ⛔ THIS DELIBERATELY REVERSES WO-1211, WHICH FORBADE MINTING HERE. That rule is not
+                // being deleted, because its reasoning was sound and must stay legible: boot runs
+                // with no player action, so a SignMessage here is an unasked-for wallet sheet on
+                // EVERY launch, and WO-1157's bounce had already found the owner objecting to
+                // exactly that ("a Title sheet after CONTINUE"). Nothing about that argument was
+                // wrong.
+                //
+                // WHAT CHANGED IS THE ARITHMETIC, NOT THE PRINCIPLE. WO-1211 was written assuming a
+                // mint here would be an EXTRA prompt on top of the connect prompt. On this path it
+                // is not: auto-resume reconnects SILENTLY (that is its entire purpose - no connect
+                // prompt is ever shown), so the handshake is the FIRST and ONLY wallet sheet of the
+                // session. That is ONE prompt, which sits UNDER the owner's own stated shape of
+                // "a connect, then the handshake" (2026-08-24) rather than over it.
+                //
+                // AND THE COST OF NOT MINTING WAS PROVEN, NOT THEORETICAL. With this deferred, an
+                // auto-resumed wallet holder had NO backend session for the entire session, so every
+                // cloud save was refused fail-closed with why=missing - all day, on the owner's own
+                // device (pid 7170, 2026-09-06; WO-1441). WO-1211 traded a prompt for silent total
+                // loss of cloud save, which is not the trade it believed it was making.
+                //
+                // ⚠ SO THE INVARIANT IS NARROWED, NOT ABANDONED: boot may raise AT MOST ONE wallet
+                // sheet, and only when a sealed session already auto-resumed. A first-run player
+                // still sees nothing - TryAutoResumeAsync returns early above when there is no
+                // sealed session, so this line is unreachable for them. Do not widen it further
+                // without a ruling.
+                //
+                // ⚠ NO `explicitConnect` FLAG. The first cut of this fix carried one so auto-resume
+                // could opt out of minting; the ruling above means BOTH callers now mint, and a
+                // parameter every caller sets identically is dead state that rots (CLAUDE.md §5,
+                // §2). The distinction lives in this comment, where it belongs, not in an argument
+                // nothing varies.
                 outcome = await ConnectForLoginAsync();
             }
             catch (Exception ex)
@@ -209,21 +242,24 @@ namespace DeNelle.Wallet
                 // the other shape: connect, then the auth handshake, and later ONE prompt to pay.
                 // Same three signatures; this one does not interrupt the purchase.
                 //
-                // ⚠ BEST-EFFORT AND DELIBERATELY NOT AWAITED FOR CORRECTNESS: TryAttachSession still
-                // mints on demand, so a declined or failed warm-up costs one later prompt and never a
-                // broken purchase. Awaited here only so the two wallet dialogs are ORDERED - firing
-                // them concurrently would stack two prompts on the player at once.
+                // ⚠ AWAITED SO THE TWO WALLET DIALOGS ARE ORDERED - firing them concurrently would
+                // stack two prompts on the player at once.
+                //
+                // ⛔ WO-1441: this used to call WarmUpSessionAsync and the comment claimed
+                // "TryAttachSession still mints on demand". FALSE since WO-1157 - only a purchase or
+                // a promo redeem mints on demand; cloud SAVE never does. Reaching here means the
+                // player TAPPED the corner Connect button, which is an explicit action, so mint.
                 try
                 {
-                    await BackendRequestSigner.WarmUpSessionAsync(account.Address);
+                    await BackendRequestSigner.MintSessionForExplicitConnectAsync(account.Address);
                 }
                 catch (Exception warmEx)
                 {
-                    // Caught AND LOGGED, never swallowed (§12). Correctness is unaffected - the
-                    // lazy mint still runs on the first authed call.
+                    // Caught AND LOGGED, never swallowed (§12). A failed mint leaves the state we
+                    // were already in; the purchase path still mints at the till.
                     FlowTrace.Warn("Wallet",
-                        $"session warm-up threw ({warmEx.GetType().Name}) - harmless; the first authed " +
-                        "call will mint on demand. " + warmEx.Message);
+                        $"session mint threw ({warmEx.GetType().Name}) - connect stands, but cloud SAVE " +
+                        "will refuse fail-closed until a session exists. " + warmEx.Message);
                 }
 
                 var skin = CurrencySkinResolver.Active;
@@ -317,18 +353,36 @@ namespace DeNelle.Wallet
                 // silent reconnect and no handshake at all, exactly as before the fix.
                 //
                 // ⚠ THIS IS THE SHARED PATH: auto-resume AND the login surface both land here, so
-                // warming up here covers every route a connect can arrive by. WarmUpSessionAsync is
-                // idempotent (it no-ops when a usable session is already held), so the copy in
-                // ConnectAsync is harmless rather than a second owner.
+                // minting here covers every route a connect can arrive by. The mint is idempotent
+                // (a usable session makes it a no-op), so the copy in ConnectAsync is harmless
+                // rather than a second owner.
+                //
+                // ⛔ WO-1441 — WARMING UP WAS NEVER ENOUGH, AND SAYING IT WAS COST A DAY OF SAVES.
+                // This called WarmUpSessionAsync and the comment claimed "the first authed call mints
+                // on demand". FALSE since the WO-1157 fail-bounce: BackendRequestSigner mints only
+                // when allowMint is set, which /api/game/save never sets. So this branch warmed up,
+                // found nothing, minted nothing, and every cloud save for the rest of the session was
+                // refused fail-closed with why=missing. Proven on device (pid 7170, 2026-09-06):
+                // connect OK at 12:50:06.956, warm-up deferred at .960, first why=missing at 12:50:11.556,
+                // and "MintSessionAsync" appears ZERO times in 76 MB of that day's captures.
+                //
+                // MINTS UNCONDITIONALLY, per the owner's 2026-09-06 ruling recorded at
+                // TryAutoResumeAsync above (it reverses WO-1211's "boot never signs"). Both callers
+                // want the handshake; see that comment for why one boot sheet is the right trade and
+                // why the first-run player still sees nothing.
                 try
                 {
-                    await BackendRequestSigner.WarmUpSessionAsync(account.Address);
+                    await BackendRequestSigner.MintSessionForExplicitConnectAsync(account.Address);
                 }
                 catch (Exception warmEx)
                 {
+                    // Caught AND LOGGED, never swallowed (§12). Correctness is unaffected: a failed
+                    // mint leaves exactly the state we were already in, and the purchase path still
+                    // mints on demand at the till.
                     FlowTrace.Warn("Wallet",
-                        $"session warm-up threw on the login path ({warmEx.GetType().Name}) - harmless; " +
-                        "the first authed call mints on demand. " + warmEx.Message);
+                        $"session mint threw on the login path ({warmEx.GetType().Name}) - connect " +
+                        "itself stands, but cloud SAVE will refuse fail-closed until a session exists. " +
+                        warmEx.Message);
                 }
 
                 return new AuthOutcome { Success = true, UserId = account.Address, Email = string.Empty, Error = string.Empty };

@@ -104,6 +104,13 @@ namespace DeNelle.Village
         /// <summary>Raids can hit the settlement only while it stands and is harvesting/held.</summary>
         public bool IsAlive => _phase != SettlementPhase.Razed && _hp > 0f;
 
+        /// <summary>
+        /// WO-1439 — a settlement IS the player's claim on a node; there is no enemy-built
+        /// settlement. Constant Friendly, so the wandering tribes that raid it (WO-160) keep
+        /// selecting it exactly as before.
+        /// </summary>
+        public CombatFaction Faction => CombatFaction.Friendly;
+
         public void ApplyContactDamage(float amount)
         {
             if (amount <= 0f || _phase == SettlementPhase.Razed) return;

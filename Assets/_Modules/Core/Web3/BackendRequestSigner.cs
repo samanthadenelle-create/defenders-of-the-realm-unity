@@ -277,37 +277,56 @@ namespace DeNelle.Core.Web3
             return true;
         }
 
-        /// <summary>
-        /// Connect/auto-resume hook. Returns true when a usable in-memory session is already held.
-        /// Does not mint — boot/auto-resume must stay silent (WO-1211).
-        /// <para>
-        /// ⛔ WHY (owner, 2026-08-24): <i>"normally on a new game ... I see a Wallet connect, which
-        /// gives it the account, but another one which is the handshake for the authentication. Then
-        /// when you go to the store you already have two, so then you get the third one as the actual
-        /// payment."</i> That is the pattern players know. Ours minted the session LAZILY, so the
-        /// prompts landed 1-at-connect then TWO-at-first-purchase (session + payment) - the same
-        /// three signatures, but the handshake interrupts the PURCHASE instead of the setup, which is
-        /// precisely where a player is least willing to be surprised by an extra prompt.
-        /// </para>
-        /// <para>
-        /// ⚠ WO-1211: auto-resume AND boot share this entry, so this method MUST NOT mint.
-        /// A SignMessage here is the "every launch" sheet. Non-purchase authed calls wait.
-        /// Purchase mints if no live session. Explicit connect uses
-        /// <see cref="MintSessionForExplicitConnectAsync"/>.
-        /// </para>
-        /// </summary>
-        public static UniTask<bool> WarmUpSessionAsync(string wallet)
-        {
-            bool held = !string.IsNullOrEmpty(wallet) && SessionUsable(wallet);
-            FlowTrace.Step("Wallet", held
-                ? "session warm-up found an existing usable in-memory session; no wallet action needed."
-                : "session warm-up deferred - first authenticated action will mint; boot/connect never signs.");
-            return UniTask.FromResult(held);
-        }
+        // =====================================================================================
+        //  ⛔ WarmUpSessionAsync IS GONE (WO-1441, 2026-09-06). READ THIS BEFORE REINSTATING IT.
+        // -------------------------------------------------------------------------------------
+        //  It was the connect/auto-resume hook that checked for a live session and, by WO-1211's
+        //  rule, DELIBERATELY DID NOT MINT ONE. Its trace said "first authenticated action will
+        //  mint", which had been false since the WO-1157 fail-bounce (2026-08-27): only
+        //  the /api/purchases routes and allowInteractiveSessionMint callers mint, and cloud save
+        //  is neither. So both connect paths called this, warmed up, minted nothing, and every cloud
+        //  save failed fail-closed with why=missing for the whole session. Device proof
+        //  (pid 7170, 2026-09-06, logs/debug/raid-no-abilities-2026-09-06.log):
+        //
+        //      12:50:06.956 [Flow:Wallet] Connect OK - CHKK…sfkC (Solana Wallet).
+        //      12:50:06.960 [Flow:Wallet] session warm-up deferred - first authenticated action will mint...
+        //      12:50:11.556 [Flow:Wallet] authed call has no live session ... why=missing /api/game/save
+        //
+        //  with "MintSessionAsync" appearing ZERO times in 76 MB of that day's captures.
+        //
+        //  ⭐ OWNER RULING 2026-09-06 REVERSED WO-1211: auto-resume now MINTS - one handshake on
+        //  boot. Auto-resume shows no connect prompt of its own, so that handshake is the only
+        //  wallet sheet of the session, under her stated two-prompt shape rather than over it.
+        //  With both connect paths minting, this method had NO CALLERS LEFT.
+        //
+        //  ⚠ IT IS DELETED RATHER THAN LEFT UNCALLED **BECAUSE AN UNCALLED METHOD IS WHAT CAUSED
+        //  THIS OUTAGE**: MintSessionForExplicitConnectAsync sat here with zero call sites and
+        //  nothing noticed, because dead code fails silently and forever. Leaving a second one
+        //  behind "in case" would repeat the exact mistake. Its only useful behaviour - "already
+        //  live? do nothing" - is inside MintSessionForExplicitConnectAsync's SessionUsable
+        //  short-circuit, so nothing was lost.
+        // =====================================================================================
 
         /// <summary>
-        /// Mint now because the player explicitly connected. Auto-resume/boot must keep
-        /// calling <see cref="WarmUpSessionAsync"/> (deferred). A live session is a no-op.
+        /// Mint the backend session at connect time. A live session is a no-op, so this is safe to
+        /// call on every connect path and needs no "already warmed" variant.
+        /// <para>
+        /// ⛔ WO-1441: this had ZERO CALL SITES from the day it was written until 2026-09-06. It is
+        /// now called from BOTH connect paths — <c>WalletSkinBootstrap.ConnectForLoginAsync</c> (the
+        /// login surface AND boot auto-resume) and <c>WalletSkinBootstrap.ConnectAsync</c> (the SKR
+        /// corner button). If you ever find this uncalled again, cloud save is dark for every wallet holder
+        /// who has not bought a pack or redeemed a promo. A regression pins the call site
+        /// (BackendSaveAuthRegression).
+        /// </para>
+        /// <para>
+        /// ⚠ THIS BUYS 15 MINUTES, NOT A FIX. api/_lib/wallet-auth.js SESSION_TTL_SECONDS = 900 and
+        /// there is no refresh path, so <c>why</c> becomes <c>expired</c> a quarter-hour after the
+        /// mint and nothing re-mints (save still passes allowMint:false, correctly — WO-1157 banned
+        /// the mid-walk SignMessage sheet). The load-bearing fix is a signature-free renewal on the
+        /// SERVER (POST /api/auth/session accepting a still-valid X-Session, sliding window);
+        /// <see cref="InstallVerifiedSession"/> is the client-side precedent for a session issued
+        /// without a fresh wallet signature. That is a server lane, deliberately not done here.
+        /// </para>
         /// </summary>
         public static UniTask<bool> MintSessionForExplicitConnectAsync(string wallet)
         {
@@ -352,11 +371,35 @@ namespace DeNelle.Core.Web3
             string why = SessionGapWhy(wallet);
             string scene = CurrentSceneName();
             string caller = DescribeCaller(req);
+
+            // ── WO-1441: RENEW BEFORE GIVING UP, AND WITHOUT A WALLET SHEET ──────────────
+            // A 15-minute server TTL with no renewal meant a session minted at boot died
+            // mid-play and `why` flipped missing -> expired, with nothing able to re-mint
+            // (save may not raise SignMessage - WO-1157). Renewal needs NO signature, so it
+            // is legal on exactly the routes that may not mint. This is the difference
+            // between "cloud save works for 15 minutes" and "cloud save works".
+            //
+            // ⚠ ONLY for `expired`. `missing` means we hold no token at all, so there is
+            // nothing to present and a renewal would be a wasted round trip on every single
+            // authed call before the first mint.
+            if (why == "expired" && await TryRenewSessionAsync(wallet, caller))
+            {
+                AttachSessionHeaders(req, wallet);
+                return true;
+            }
+
             if (!allowMint)
             {
-                FlowTrace.Step("Wallet",
-                    $"authed call has no live session; waiting without SignMessage. " +
-                    $"why={why} scene={scene} caller={caller}");
+                // WO-1441: was FlowTrace.Step, so it never reached F8 and the only visible symptom
+                // was GameStateService's LogError two lines later ("[Sync] Wallet cloud SAVE
+                // aborted"), which names the effect and not the cause. Warn, and say plainly what
+                // WOULD mint - "waiting" implied something was coming, and for a save nothing ever is.
+                FlowTrace.Warn("Wallet",
+                    $"authed call has no live session and this route may NOT mint (no SignMessage here). " +
+                    $"why={why} scene={scene} caller={caller}. " +
+                    "It will keep failing until a mint happens elsewhere: an explicit Connect tap, " +
+                    "a purchase (any /api/purchases route), or a promo redeem. why=missing means NEVER MINTED; " +
+                    "why=expired means the 15-minute server TTL lapsed and nothing renews it.");
                 return false;
             }
 
@@ -480,6 +523,90 @@ namespace DeNelle.Core.Web3
             }
         }
 
+        /// <summary>
+        /// WO-1441. Trade a still-valid (or barely-lapsed) session for a fresh one by presenting the
+        /// token itself — NO wallet signature, so this is legal on routes that may not mint.
+        /// <para>
+        /// ⛔ THIS IS WHY CLOUD SAVE SURVIVES PAST FIFTEEN MINUTES. Without it, the boot handshake
+        /// bought exactly one TTL and then every save failed again with why=expired for the rest of
+        /// the session, which is the same outage as why=missing with a slower fuse.
+        /// </para>
+        /// <para>
+        /// ⚠ FAIL-CLOSED, AND IT DROPS THE DEAD TOKEN. A refused renewal means the chain is over
+        /// (expired past the server's absolute cap, revoked, or the schema is behind). Clearing the
+        /// cached token turns the next <c>why</c> into <c>missing</c>, which is HONEST and also stops
+        /// this retrying a doomed renewal on every authed call. The player then re-signs on their
+        /// next explicit connect or purchase — never silently, never unauthenticated.
+        /// </para>
+        /// </summary>
+        private static async UniTask<bool> TryRenewSessionAsync(string wallet, string caller)
+        {
+            if (string.IsNullOrEmpty(_sessionToken) || string.IsNullOrEmpty(wallet)) return false;
+
+            string scene = CurrentSceneName();
+            FlowTrace.Step("Wallet", $"RenewSessionAsync (no signature required) scene={scene} caller={caller}");
+
+            using var req = new UnityWebRequest(SessionUrl, UnityWebRequest.kHttpVerbPOST);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.timeout = RequestTimeoutSeconds;
+            req.SetRequestHeader("Accept", "application/json");
+            req.SetRequestHeader("X-Wallet", wallet);
+            // ⛔ NO X-Nonce. The server routes to renewal on the ABSENCE of nonce material, so
+            // sending any would take the verifying path and fail for want of a signature.
+            req.SetRequestHeader("X-Session", _sessionToken);
+
+            try { await req.SendWebRequest(); }
+            catch (Exception e)
+            {
+                // A transport failure is NOT proof the session is dead — the player may simply be
+                // in a tunnel. Keep the token and let the next call try again; only a real refusal
+                // from the server (below) clears it.
+                FlowTrace.Warn("Wallet",
+                    $"RenewSessionAsync threw ({req.responseCode}/{e.GetType().Name}) - keeping the token; " +
+                    $"this may be transport, not expiry. scene={scene} caller={caller}");
+                return false;
+            }
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                FlowTrace.Warn("Wallet",
+                    $"RenewSessionAsync refused (http {req.responseCode}) - dropping the dead session; " +
+                    $"the next authed call will read why=missing until something mints. scene={scene} caller={caller}");
+                ClearSession();
+                return false;
+            }
+
+            try
+            {
+                var res = JsonConvert.DeserializeObject<SessionResponse>(req.downloadHandler.text);
+                if (res == null || !res.Ok || string.IsNullOrEmpty(res.Token))
+                {
+                    FlowTrace.Warn("Wallet", $"RenewSessionAsync empty token scene={scene} caller={caller}");
+                    ClearSession();
+                    return false;
+                }
+
+                _sessionToken = res.Token;
+                _sessionWallet = wallet;
+                _sessionExpiresUtc = DateTime.TryParse(res.ExpiresAt, null,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal |
+                        System.Globalization.DateTimeStyles.AssumeUniversal,
+                        out var parsed)
+                    ? parsed
+                    : DateTime.UtcNow.AddSeconds(res.TtlSeconds > 0 ? res.TtlSeconds : 60);
+
+                FlowTrace.Step("Wallet",
+                    $"RenewSessionAsync held - session extended with NO wallet prompt. scene={scene} caller={caller}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Wallet", $"RenewSessionAsync parse {ex.GetType().Name} scene={scene} caller={caller}");
+                ClearSession();
+                return false;
+            }
+        }
+
         private static bool IsPurchaseRoute(UnityWebRequest req)
         {
             string path = RequestPath(req);
@@ -522,6 +649,19 @@ namespace DeNelle.Core.Web3
             return string.IsNullOrEmpty(frame) ? path : frame + " " + path;
         }
 
+        /// <summary>
+        /// Names the first frame OUTSIDE this class, so a trace says who asked.
+        /// <para>
+        /// ⛔ WO-1441 — THIS WAS BLIND TO ASYNC AND NAMED THE WRONG THING FOR MONTHS. The device
+        /// capture read <c>caller=&lt;TryAttachSession&gt;d__20.MoveNext /api/game/save</c>: an
+        /// async method compiles to a generated state-machine struct nested INSIDE this class, so
+        /// <c>DeclaringType</c> is <c>BackendRequestSigner+&lt;TryAttachSession&gt;d__20</c> — never
+        /// equal to <c>typeof(BackendRequestSigner)</c>, so the skip never fired and the walk stopped
+        /// on our OWN frame. Every caller token this method ever produced from an async path named
+        /// this file instead of the real caller, which is why the save trace could not say
+        /// GameStateService. Unwrapping the state machine restores the whole point of the field.
+        /// </para>
+        /// </summary>
         private static string FirstExternalFrame()
         {
             try
@@ -531,12 +671,47 @@ namespace DeNelle.Core.Web3
                 {
                     var m = st.GetFrame(i)?.GetMethod();
                     var t = m?.DeclaringType;
-                    if (t == null || t == typeof(BackendRequestSigner)) continue;
-                    return t.Name + "." + m.Name;
+                    if (t == null) continue;
+
+                    // Compiler-generated async/iterator state machines and lambda closures are
+                    // named "<Method>d__N" / "<>c__DisplayClassN" and are NESTED in their owner.
+                    // Resolve to the owner before deciding whether this frame is ours.
+                    var owner = t;
+                    string method = m.Name;
+                    if (owner.Name.Length > 0 && owner.Name[0] == '<' && owner.DeclaringType != null)
+                    {
+                        method = MethodNameFromGeneratedType(owner.Name) ?? method;
+                        owner = owner.DeclaringType;
+                    }
+
+                    if (owner == typeof(BackendRequestSigner)) continue;
+
+                    // Between our frame and the real caller sit the async PLUMBING frames -
+                    // AsyncUniTaskMethodBuilder<T>.Start, AsyncMethodBuilderCore, MoveNextRunner.
+                    // Their type names do NOT start with '<' and they are not this class, so without
+                    // this skip the very first thing returned is "AsyncUniTaskMethodBuilder`1.Start"
+                    // - which names the compiler, not the caller, and is exactly as useless as the
+                    // state-machine name it replaced.
+                    string ns = owner.Namespace ?? string.Empty;
+                    if (ns.StartsWith("Cysharp.", StringComparison.Ordinal) ||
+                        ns.StartsWith("System.Runtime.CompilerServices", StringComparison.Ordinal) ||
+                        ns.StartsWith("System.Threading", StringComparison.Ordinal))
+                        continue;
+
+                    return owner.Name + "." + method;
                 }
             }
             catch { /* IL2CPP may omit frames */ }
             return string.Empty;
+        }
+
+        /// <summary>"&lt;SendCurrentSnapshot&gt;d__214" -&gt; "SendCurrentSnapshot"; null when unparseable.</summary>
+        private static string MethodNameFromGeneratedType(string generatedTypeName)
+        {
+            if (string.IsNullOrEmpty(generatedTypeName) || generatedTypeName[0] != '<') return null;
+            int close = generatedTypeName.IndexOf('>');
+            if (close <= 1) return null;
+            return generatedTypeName.Substring(1, close - 1);
         }
 
         private sealed class SessionResponse

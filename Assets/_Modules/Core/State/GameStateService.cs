@@ -2727,7 +2727,34 @@ namespace DeNelle.Core.State
                 JsonConvert.SerializeObject(queue, SaveSchema.JsonSettings));
             PlayerPrefs.Save();
             Debug.LogWarning($"[Sync] Queued offline payload (queue depth: {queue.Count}).");
+
+            // ⛔ WO-1441 — THIS QUEUE IS UNBOUNDED AND THAT WAS INVISIBLE. On 2026-09-06 it reached
+            // 100 entries in one session (measured across that day's four device captures: 96 -> 97
+            // -> 100) because no session was ever minted and every save refused fail-closed. The
+            // per-enqueue LogWarning above is a Debug line, so nothing reached F8 and the growth was
+            // only discovered by grepping a 22 MB log after the fact.
+            //
+            // ⚠ NO DATA IS AT RISK, AND THAT IS WHY THIS ONLY WARNS. Entries are retry MARKERS, not
+            // bodies (see SendCurrentSnapshot / FlushOfflineQueue): the upload is always the CURRENT
+            // full snapshot, so ONE successful save drains every entry at once and the player's
+            // progress lives in the local save regardless of queue depth. Do NOT "fix" the growth by
+            // trimming or clearing the queue - a queue that forgets it has unsent work is how a
+            // fail-closed refusal quietly becomes real data loss.
+            //
+            // The threshold is a smell detector, not a limit: nothing is dropped and nothing is
+            // capped. Crossing it means saves have been failing for a long time, which is the
+            // finding worth waking someone for.
+            if (queue.Count >= OfflineQueueDepthWarn && queue.Count % OfflineQueueDepthWarn == 0)
+                FlowTrace.Warn("Sync",
+                    $"offline save queue has reached {queue.Count} unsent markers - cloud saves have been " +
+                    "failing continuously. Nothing is lost (the queue drains as ONE upload of the current " +
+                    "snapshot the moment a save succeeds), but identity is still unresolved: check the " +
+                    "[Flow:Wallet] line naming why= for this session.");
         }
+
+        /// <summary>Depth at which a still-growing offline queue starts reporting to F8 (WO-1441).
+        /// A detector, never a cap - see <see cref="EnqueueOffline"/>.</summary>
+        private const int OfflineQueueDepthWarn = 25;
 
         /// <summary>
         /// Drains the retry queue. Because the upload is always the CURRENT snapshot under
@@ -2780,10 +2807,30 @@ namespace DeNelle.Core.State
                 // The queued work is now on the server; record it so the caller's own
                 // delta build sees "no changes" instead of posting the same bytes again.
                 _lastSyncedSnapshot = Snapshot();
+
+                // ⛔ WO-1441: THE DRAIN USED TO BE COMPLETELY SILENT. DeleteKey logged nothing, and
+                // SendCurrentSnapshot's "[Sync] Saved N bytes" is byte-identical to an ordinary save,
+                // so there was NO WAY to prove from a log that a backlog had actually cleared. That
+                // is not a cosmetic gap: WO-1441's acceptance is "the queued offline deltas DRAIN,
+                // proven by measurement", and the only honest answer was "unprovable". This line IS
+                // the measurement - grep it after identity returns.
+                FlowTrace.Step("Sync",
+                    $"offline queue DRAINED - {mine.Count} queued marker(s) cleared by ONE successful " +
+                    "upload of the current snapshot (markers are retry flags, not bodies, so a single " +
+                    "save covers every one of them).");
             }
             else
+            {
                 PlayerPrefs.SetString(SyncQueueKey,
                     JsonConvert.SerializeObject(mine, SaveSchema.JsonSettings));
+
+                // The other half of the same blindness: a failed drain re-queued in silence, so a
+                // queue that never empties looked exactly like a queue that was never full.
+                FlowTrace.Warn("Sync",
+                    $"offline queue drain FAILED - {mine.Count} marker(s) re-queued and RETAINED (never " +
+                    "dropped). The player's progress is safe in the local save; it is the cloud copy " +
+                    "that is behind. Check the [Flow:Wallet] why= line for the identity reason.");
+            }
             PlayerPrefs.Save();
         }
 

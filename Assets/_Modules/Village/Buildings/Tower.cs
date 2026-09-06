@@ -140,6 +140,15 @@ namespace DeNelle.Village
         /// <summary>IDamageableStructure — true while this tower still stands (hp &gt; 0 and not broken).</summary>
         public bool IsAlive => _hp > 0f && !_broken;
 
+        /// <summary>
+        /// WO-1439 — DERIVED from scene ownership, same expression as WallSegment/Gate/Building.
+        /// A tower baked into a RaidBase_* scene is the garrison's and must not be a target for
+        /// the garrison itself; the player's own Elarion towers read Friendly and the Hollow
+        /// wave still attacks them exactly as before.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
+
         /// <summary>True once enemies broke this tower (hp 0) — inoperable until <see cref="Repair"/>. (WO-672)</summary>
         public bool IsBroken => _broken;
 

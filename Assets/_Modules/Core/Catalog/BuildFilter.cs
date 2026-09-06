@@ -54,17 +54,30 @@ namespace DeNelle.Core.Catalog
         /// <summary>Resource storage containers.</summary>
         public const string Storage = "STORAGE";
 
-        /// <summary>Town services that fit none of the above — Barracks, Cathedral of
-        /// Magic, Echo Hollow, Store, Healing Caravan.</summary>
-        public const string Civic = "CIVIC";
+        // ⛔ THERE IS NO CIVIC CHIP. Do not add one back.
+        // Owner mockup docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png, screen 2, draws exactly
+        // FIVE chips: ALL / ECONOMY / DEFENSE / CRAFT / STORAGE. The mockup is the spec and it
+        // supersedes ruling 5's six (CAPTURE_LOOP_GOAL.md 3.0c item 1). CIVIC was a bucket for
+        // "town services that fit none of the above", and a bucket named after not-fitting is a
+        // sign the other four were read as narrower than they are. The five rows it held were
+        // re-homed by WHAT EACH BUILDING DOES, and every one of them is still reachable:
+        //   barracks         -> DEFENSE  (it produces the army; that IS the town's defence)
+        //   healing_caravan  -> DEFENSE  (it heals the army; it exists for the same fight)
+        //   market   (Store) -> ECONOMY  (it trades - the plainest economy verb there is)
+        //   pet-house(Echo Hollow) -> ECONOMY (Echoes harvest resources; the hollow is a
+        //                                      production building wearing a friendlier name)
+        //   arcane-tower (Cathedral of Magic) -> CRAFT (it makes spells, beside forge/armorer/
+        //                                      jeweler/workshop, which are the other makers)
+        // The mapping is recorded here rather than only in a WO because this array is where a
+        // future seat would look to re-derive it.
 
         /// <summary>
-        /// The five AUTHORABLE tokens, in the owner's chip order. <see cref="All"/> is
+        /// The four AUTHORABLE tokens, in the owner's chip order. <see cref="All"/> is
         /// excluded on purpose — see the header.
         /// </summary>
         public static readonly string[] Membership =
         {
-            Economy, Defense, Craft, Storage, Civic
+            Economy, Defense, Craft, Storage
         };
 
         /// <summary>
@@ -73,7 +86,7 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public static readonly string[] Chips =
         {
-            All, Economy, Defense, Craft, Storage, Civic
+            All, Economy, Defense, Craft, Storage
         };
 
         /// <summary>

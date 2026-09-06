@@ -114,13 +114,29 @@ namespace DeNelle.Editor.Regression
                              "the route registers nowhere and PanelId.Heart opens nothing");
 
             // ...and Manage carries the ALWAYS-PRESENT face. This is the route the owner could not find.
+            //
+            // ⚠ THE SEAT MOVED 2026-09-06 (WO-1443); THE DOOR DID NOT. This case used to read as
+            // "the Manage HEADER has a HEART face". The face is now on the HUB (mockup panel 1's
+            // screen), because it appears in none of the owner's nine panels and three attempts to
+            // make it small enough for the chrome row ended with "HEART ..." truncating - shrinking
+            // a face below its own label makes it broken, not quiet.
+            // WHAT THIS CASE DEFENDS IS UNCHANGED and is still every clause below: the face is
+            // BUILT, it is NAMED so a capture can find it, and it OPENS PanelId.Heart. The hub is
+            // Manage's root and is reachable from every screen by the back arrow, so the route is
+            // still unconditional. If the Heart ever gains a door elsewhere, move this pin with it -
+            // and delete the hub face, rather than ending up with two.
             if (panel != null &&
                 (!panel.Contains("BuildHeartFace();") ||
                  !panel.Contains("PanelRouter.Open(PanelId.Heart)") ||
                  !panel.Contains("ManageHeartFace")))
-                failures.Add("[heart-has-a-door] the Manage header has no HEART face into PanelId.Heart. The gate " +
+                failures.Add("[heart-has-a-door] Manage has no HEART face into PanelId.Heart. The gate " +
                              "that gates nearly all content is back to having no direct route - the exact defect " +
                              "the owner reported on 2026-09-06");
+            // ...and it is built into the HUB, not back into the chrome row the mockup keeps clear.
+            if (panel != null && !panel.Contains("private void BuildHubHeartDoor()"))
+                failures.Add("[heart-has-a-door] the HEART face is no longer seated on the hub. It must not " +
+                             "return to the chrome row: that row is the mockup's back arrow, centred title " +
+                             "and queue pill, and nothing else on any of its nine panels");
 
             // ...and the gated CTAs that SAY "UPGRADE THE HEART" open the Heart, not another screen.
             if (vm != null &&

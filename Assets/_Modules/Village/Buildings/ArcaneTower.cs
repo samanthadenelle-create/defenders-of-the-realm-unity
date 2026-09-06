@@ -110,7 +110,14 @@ namespace DeNelle.Village
         // implement IDamageableStructure, so Enemy.SweepForNearestStructure's
         // collider.GetComponentInParent<IDamageableStructure>() returned null for the spire —
         // enemies marched straight past it. Implementing the interface (mirrors WallSegment / Gate)
-        // makes the arcane spire a real siege target. The arcane tower is always player-owned.
+        // makes the arcane spire a real siege target.
+        //
+        // ⚠ "The arcane tower is always player-owned" USED TO BE ASSERTED HERE and was retired by
+        // WO-1439 (2026-09-06). It was an ASSUMPTION about placement, not a fact about the class:
+        // nothing stops a baked enemy-owned scene carrying one, and that assumption is the same
+        // species of missing-ownership thinking that let a raid garrison spend a whole raid
+        // destroying its own RaidSpire. Ownership is now DERIVED from SceneOwnership (see Faction
+        // below), which answers correctly in both scenes instead of being right by habit.
         //
         // HP: no per-entry hp is authored in structures-catalog.json / RepoProps, so this is a
         // serialized default. 160 is sturdier than a wall (WallSegment's 0-100 track) but a touch
@@ -153,6 +160,13 @@ namespace DeNelle.Village
         /// <summary><see cref="IDamageableStructure"/> — true while the spire still stands
         /// (hp &gt; 0 and not broken, WO-672).</summary>
         public bool IsAlive => Hp > 0f && !_broken;
+
+        /// <summary>
+        /// WO-1439 — DERIVED from scene ownership, same expression as WallSegment/Gate/Building/Tower.
+        /// One answer to "whose is this?", never a per-class invention.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
 
         /// <summary>
         /// WO-672 (F8-42): full restore — HP back to max, broken cleared; the Update fire

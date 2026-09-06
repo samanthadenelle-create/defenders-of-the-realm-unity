@@ -74,6 +74,13 @@ namespace DeNelle.Village.World
         };
 
         public bool IsAlive => _hp > 0f;
+
+        /// <summary>
+        /// WO-1439 — the hub is spawned by ClaimableCamp after the player pays for it, so it
+        /// is the player's asset. Constant Friendly.
+        /// </summary>
+        public CombatFaction Faction => CombatFaction.Friendly;
+
         public int CurrentDefenderCount => _defenders.Count;
         public IReadOnlyList<OutpostDefender> Defenders => _defenders;
 

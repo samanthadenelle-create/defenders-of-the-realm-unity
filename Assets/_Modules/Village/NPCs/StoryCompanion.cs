@@ -96,6 +96,12 @@ namespace DeNelle.Village
         void IDamageableStructure.ApplyContactDamage(float amount) => TakeDamage(amount);
 
         /// <summary>
+        /// WO-1439 — a story companion walks with the player. Constant Friendly, so enemies
+        /// keep attacking it and no defender ever mistakes it for one of its own.
+        /// </summary>
+        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+
+        /// <summary>
         /// Applies <paramref name="amount"/> damage. At 0 HP the companion FALLS:
         /// it stops following / fighting / speaking and is deactivated (no revive
         /// this session — a fresh body respawns on the next Village entry). Simple

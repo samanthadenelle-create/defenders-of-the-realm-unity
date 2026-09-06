@@ -168,6 +168,15 @@ namespace DeNelle.Village.Buildings.Progression
         // IDamageableStructure
         public bool IsAlive => _hp > 0f && !_broken;
 
+        /// <summary>
+        /// WO-1439 — DERIVED from scene ownership, same expression as WallSegment/Gate/Building.
+        /// A collector in the player's town is Friendly and the CoC-style siege loot targeting
+        /// (WO-664) still prioritises it for a Hostile raider; a collector baked into an
+        /// enemy-owned base belongs to that garrison and is no longer a target for it.
+        /// </summary>
+        public CombatFaction Faction =>
+            SceneOwnership.IsEnemyOwned ? CombatFaction.Hostile : CombatFaction.Friendly;
+
         // ISiegeLootTarget
         public Transform LootTransform => transform;
         public bool IsLootTargetAlive => IsAlive;

@@ -76,3 +76,45 @@ Same species as WO-1430, WO-1436 and WO-1437: every part worked - probing probed
 scored - and **nothing asserted that a combatant only attacks things it should.** Consider the general
 form: **no actor may damage an asset of its own faction.** That is one assertion and it would have caught
 this on the day it shipped.
+
+## 7. IMPLEMENTATION RECORD (2026-09-06, edit-only lane - NOT yet gated/committed)
+
+**Seam chosen: `CombatFaction Faction { get; }` ON `IDamageableStructure`** (the §4 "honest place"),
+NOT a raid-scene-local lookup. The deciding argument is that this **collapses** a source of truth
+rather than adding one: `IDamageable` already declares `CombatFaction Faction { get; }`, and the four
+dual-implementers (`RaidSpire`, `WallSegment`, `Gate`, `DefenseTower`) satisfy the new member with the
+**one property they already had** - zero new state, zero new declarations for the classes that matter
+most here. The 14 single-implementers each source their answer from an EXISTING authority: constant
+`Friendly` for things that ARE the player (hero, troops, Heart, companion, caravan, claimed
+outposts/settlements/harvest sites), and `SceneOwnership.IsEnemyOwned ? Hostile : Friendly` - the
+identical expression `WallSegment`/`Gate` already use - for scene-placed structures (`Building`,
+`Tower`, `ArcaneTower`, `ResourceCollector`).
+
+**What the raid-scene-local lookup would have cost:** one small new file and one call site, but a
+THIRD answer to "whose is this?" standing beside `IDamageable.Faction` and `DefenseTower.Allegiance`,
+needing a populate lifecycle from whatever bakes the scene, and knowing only about raids - so the home
+village and the world camps would keep the identical hole. That is this repo's documented dominant
+failure mode (CLAUDE.md §2 stale WO block, §5 retired dependency table, §8 restated constants, §16 the
+inlined R2 push/verify that drifted). It was rejected on that ground, not on size.
+
+**The proving line, from the owner's own device capture** (`logs/debug/raid-ai-and-pets-2026-09-06.log`):
+
+```
+[Flow:EnemyAggro] raidguard-raider_camp_small-0: sweep OverlapSphere r=3.0m colliders=2
+                  -> accepted=1 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=RaidSpire
+```
+
+That reject tally **enumerates every filter the sweep had** - null, no-component, dead, is-it-the-hero
+- and faction is not among them. The spire was accepted because nothing asked whose it was. Counts:
+**11,620** `ProbeForStructure hit 'RaidSpire'` lines, of which **8,359 land AFTER**
+`[Flow:World] SceneOwnership resolved 'RaidBase_raider_camp_small' -> Enemy-owned (IsEnemyOwned=True)`
+- which rules the ownership machinery IN and isolates the defect to the target test.
+
+**RED proof for the new regression** (`DataRegression` structure-sweep group, CASES D-G): against the
+pre-fix build, D (sweep lane) and F (forward lane) both FAIL - the sweep's filter chain was
+null -> IsAlive -> `is HeroHealth` and the forward lane's was `structure != null && structure.IsAlive`,
+so a Hostile stand-in in front of a Hostile `Enemy` was acquired and returned by both. E and G pin
+that the gate is faction-SPECIFIC and did not break acquisition for everyone.
+
+**Seam oracle (§6) implemented** at `Enemy.DealStructureDamage` - the single sink all three enemy
+strike paths funnel through - as a `FlowTrace.Fail` + refusal, mirrored in `DragonBoss.DealStrike`.

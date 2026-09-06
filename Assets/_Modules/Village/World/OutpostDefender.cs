@@ -38,6 +38,13 @@ namespace DeNelle.Village.World
 
         public bool IsAlive => _hp > 0f;
 
+        /// <summary>
+        /// WO-1439 — a recruited outpost defender is bought by the player and guards the
+        /// player's hub. Constant Friendly, so hostiles still engage it and it is never
+        /// mistaken for one of their own.
+        /// </summary>
+        public CombatFaction Faction => CombatFaction.Friendly;
+
         public void ApplyContactDamage(float amount)
         {
             if (_hp <= 0f) return;

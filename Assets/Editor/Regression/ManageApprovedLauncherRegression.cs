@@ -13,13 +13,47 @@ namespace DeNelle.Editor.Regression
             const string path = "Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs";
             string panel = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
 
-            foreach (string copy in new[] { "Choose a path", "Towers, walls & gates",
-                         "Town structures & upgrades", "Build a Barracks to unlock",
-                         "Discover realm advancements" })
+            // ⚠ PIN MOVED 2026-09-06 (WO-1443), WITH THE RULING. This suite pinned the 2026-08-31
+            // APPROVED FOUR-CARD launcher: its order, and its copy. The owner has since drawn the
+            // screen herself - docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png panel 1 - and it is
+            // THREE cards (BUILD / ARMY / RESEARCH) with her own one-line descriptions on them.
+            // CAPTURE_LOOP_GOAL.md 3.0c: where a text ruling and the mockup disagree, the mockup
+            // wins, because it is the picture of the thing she wants and the ruling is a sentence
+            // about it. So the approved copy MOVED to hers; it was not dropped.
+            //   "Town structures & upgrades"  -> "Construct and upgrade your town"
+            //   "Train and improve your army" -> "Train and manage your troops"
+            //   "Discover realm advancements" -> "Unlock powerful advancements"
+            // Defense's line survives because PurposeFor still answers for that tab elsewhere.
+            // Everything else this suite defends - the lock feedback, the layered card art, the
+            // rapid-tap guard, the shared shell - is untouched and still pinned below.
+            foreach (string copy in new[] { "Towers, walls & gates",
+                         "Construct and upgrade your town", "Build a Barracks to unlock",
+                         "Unlock powerful advancements", "Train and manage your troops" })
                 if (!panel.Contains(copy)) failures.Add("missing approved copy: " + copy);
 
-            if (!panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
-                failures.Add("four-card order drifted");
+            // ⛔ "Choose a path" IS RETIRED, and this case now FORBIDS it rather than requiring it.
+            // Mockup panel 1 carries the title MANAGE and nothing else above the cards; the three
+            // cards and their descriptions already say what the choice is. It is the same class of
+            // line the owner had struck from every other Manage screen on 2026-09-06 ("remove the
+            // manage army and sub line"), and it only survived here because the hub had not been
+            // rendered since WO-2001 deleted ShowLauncher.
+            // The pin flipped direction rather than being deleted: an approved string that is no
+            // longer approved needs a guard against its RETURN, not the absence of a guard.
+            if (panel.Contains("\"Choose a path\""))
+                failures.Add("the retired 'Choose a path' heading is rendered again - mockup panel 1 " +
+                             "has the title and the three cards, and nothing between them");
+
+            if (!panel.Contains("ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add("hub card order drifted - the mockup's panel 1 is BUILD / ARMY / RESEARCH");
+            if (panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add("the hub is back to FOUR cards - Defense and Buildings are ONE destination " +
+                             "since WO-2001 and a Defense card opens the Build tab");
+            // The player-facing words are the mockup's, not the internal tab labels.
+            if (!panel.Contains("case ManageTab.Troops: return \"ARMY\";") ||
+                !panel.Contains("private static string HubTitleFor(ManageTab tab)"))
+                failures.Add("the hub cards no longer carry the mockup's own words (BUILD / ARMY / " +
+                             "RESEARCH). TabLabels reads 'Buildings' and 'Troops', which the player " +
+                             "meets nowhere else on this screen");
             if (panel.Contains("QueueBadgePlate_") || panel.Contains("0/5 queued\";"))
                 failures.Add("launcher reintroduced non-actionable queue-depth clutter");
             if (!panel.Contains("MedievalUiSkin.ApplyShell(chrome)"))

@@ -187,7 +187,45 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, eighty-ninth pass): main line next free = **1440**.
+> ## RECONCILED 2026-09-06 (CLI, ninety-third pass): main line next free = **1444**.
+> *(CLI minted **1443** - Manage/Army on build 2026.09.06.358245, from the owner's capture plus THREE
+> rulings given in the same felt-test: (1) *"remove the manage army and sub line replace the manage top"* -
+> three stacked headings become one breadcrumb in the title; (2) *"remove heart level queue"* - the
+> HEART L1 chip, the QUEUE chip and its IDLE 0 OF 5 line all go, **gated on proving the queue keeps a
+> door** (WO-1430 found three panels no player could open); (3) *"dont need the bottom line, close buttoin
+> is enough"* - the hint sentence goes and the empty selection band collapses. Six chrome elements removed
+> from one screen. Also carries the CONFIRMED empty troop portraits - the WO-2001 lane predicted this exact
+> miss and recorded it NOT VERIFIED rather than claiming success. Bumped 1443 -> 1444 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-second pass): main line next free = **1443**.
+> *(CLI minted **1442** - the RAIDS selection screen is hard to use on build 2026.09.06.358245: a stray
+> gold bar is painted ACROSS card one (swallowing its Clock line and cutting the spoils text), card three
+> is CLIPPED with a fourth camp unreachable, and world text (`wood 113 iron 38`) bleeds THROUGH the modal.
+> Proven from an adb screencap. The owner confirmed her "very hard to use" covers BOTH this screen and the
+> IN-FIGHT HUD - the in-fight half awaits a mid-raid capture and gets its own WO, deliberately not
+> absorbed here. Bumped 1442 -> 1443 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-first pass): main line next free = **1442**.
+> *(CLI minted **1441** - the wallet session is NEVER ESTABLISHED. `BackendRequestSigner.TryAttachSession`
+> logs `why=missing` - not expired, not refused, never created - so every cloud save is
+> `aborted - shared authentication unavailable (fail-closed). Delta re-queued offline`. **The owner's
+> whole day of progress is device-only.** `NightMarketSharedCardSession.OpenBrowser()` fired twice 14s
+> apart with nothing returning, so the browser return leg is the shape to chase.
+> **This ticket OWNS THE WHOLE WALLET SESSION INCLUDING WO-1420** (silent reauthorize refused in 0.1s
+> vs a reported 30s timeout) - one subsystem, one lane. Bumped 1441 -> 1442 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninetieth pass): main line next free = **1441**.
+> *(CLI minted **1440** - **LIVE PROMO BLOCKER.** The FIRSTWATCH 500-crystal campaign is PUBLIC on X
+> (`@EchoesOfElarion`) and nobody can redeem it: `api/promo/redeem.js` is WALLET-RAIL-ONLY since
+> 2026-08-18, and the post sends people to the Solana dApp Store - i.e. the PUBLISHED build - so a new
+> player is a GUEST and is refused before the code is read. A wallet holder fails too
+> (`authed call has no live session; why=missing`), which also means cloud saves are failing.
+> **The owner REVERSED the 2026-08-18 wallet-only ruling for this endpoint, with the residual risk
+> stated to her: the 500 cap, not the identity check, is the real bound.** Server-side only - a client
+> fix cannot reach the store build. Owner granted FULL OVERRIDE to deploy immediately.
+> Bumped 1440 -> 1441 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eighty-ninth pass): main line next free = **1440**.
 > *(CLI minted **1439** - the raid GARRISON attacks its OWN spire: **10,687 of the defenders' 13,800
 > `[Flow:EnemyAggro]` lines** are `ProbeForStructure hit 'RaidSpire' -> stopping agent to attack`, plus 37
 > `(contact)` damage hits on it. `IDamageableStructure` carries no faction and `EnemyBrain` applies no

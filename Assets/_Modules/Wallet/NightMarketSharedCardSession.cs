@@ -66,6 +66,25 @@ namespace DeNelle.Wallet
         public bool IsOpen => _host != null && _host.IsOpen;
         public int NavigationDepth => _host != null ? _host.NavigationDepth : 0;
 
+        /// <summary>
+        /// Opens the CARD BROWSER — the in-game offer list rendered by
+        /// <see cref="FocusedModalHost"/>. Everything it touches is a Unity UI object.
+        /// <para>
+        /// ⛔ THIS IS NOT A WEB BROWSER AND THERE IS NO ROUND TRIP. The name cost a P0 triage a
+        /// wrong first hypothesis on 2026-09-06 (WO-1441 §2): a device log showed
+        /// <c>NightMarketSharedCardSession:OpenBrowser()</c> twice, fourteen seconds apart, with
+        /// nothing coming back, and the ticket was written around "the app left for a browser and
+        /// never returned" — a deep link, a custom scheme, an intent filter, a return leg to
+        /// instrument. None of that exists. Both lines were STACK FRAMES under
+        /// <c>[Flow:Pause] WorldHold ACQUIRE 'focused-card-modal'</c>, i.e. the player opening the
+        /// Night Market twice; "nothing came back" because nothing ever left. The real defect was
+        /// elsewhere entirely (no backend session was ever minted).
+        /// </para>
+        /// <para>
+        /// ⚠ The method is deliberately NOT renamed: it is public API and a rename is churn that
+        /// buys nothing. This note is the fix — if you arrived here hunting a deep link, stop.
+        /// </para>
+        /// </summary>
         public bool OpenBrowser()
         {
             if (_host == null)

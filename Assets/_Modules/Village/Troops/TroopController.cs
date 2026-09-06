@@ -340,6 +340,15 @@ namespace DeNelle.Village
         void IDamageableStructure.ApplyContactDamage(float amount) => TakeDamage(amount);
 
         /// <summary>
+        /// WO-1439 — a deployed troop is the PLAYER's warband, always. Constant Friendly.
+        /// This is the same side the file header already states ("Troops are
+        /// CombatFaction.Friendly conceptually; they only READ foes") — now DECLARED rather
+        /// than left as a comment, which is what lets a Hostile garrison tell the player's
+        /// troops apart from its own structures at the one shared predicate.
+        /// </summary>
+        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+
+        /// <summary>
         /// Wires this troop from a <see cref="TroopDef"/> + spawn position. Called by
         /// the factory right after instantiation. HP, damage, speed and reach are read
         /// off the def.

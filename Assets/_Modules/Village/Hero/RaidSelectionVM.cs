@@ -174,6 +174,48 @@ namespace DeNelle.Village.Hero
         /// Never null.</summary>
         public IReadOnlyList<ItemVM> Raids => _raids;
 
+        // -- WO-1442: how many camps there are, said in words -------------------
+
+        /// <summary>Player-facing noun for the camp count - singular at one, never "camp(s)".</summary>
+        public const string CampWordSingular = " camp";
+        public const string CampWordPlural   = " camps";
+        /// <summary>The instruction half of the overflow caption. ASCII only (device tofu risk).</summary>
+        public const string CampScrollHint = " - drag the list to see them all.";
+
+        /// <summary>
+        /// WO-1442 - THE SCROLL AFFORDANCE, IN WORDS, WITH THE COUNT IN IT.
+        /// -----------------------------------------------------------------------
+        /// The owner had four camps, could see two and a half, and had no way to learn that a
+        /// fourth existed: the list scrolled and its 7-device-px rail was the only thing that
+        /// said so. This sentence is what a player actually reads - and because it counts
+        /// <see cref="Raids"/>, it says "8 camps" the day she has earned eight, with no number
+        /// typed in the View and none typed here.
+        ///
+        /// ⛔ WORDS, NOT A COLOUR AND NOT A GLYPH (the owner is red/green colourblind, and this
+        /// screen's whole lock/difficulty language already carries its meaning in words). It is
+        /// unchanged in greyscale because it never had a hue to lose.
+        ///
+        /// <paramref name="visibleCards"/> is the WHOLE cards the well seats, derived by the
+        /// View from live geometry (<c>RaidSelectionScreen.VisibleCardCapacity</c>). It decides
+        /// only whether the hint half is appended - never what the count says.
+        /// Null when there are no camps at all: the View already paints its own empty state.
+        /// </summary>
+        public string CampCountLine(int visibleCards) =>
+            CampCountLine(_raids != null ? _raids.Count : 0, visibleCards);
+
+        /// <summary>
+        /// The sentence itself, PURE — so RaidSelectionLayoutRegression can assert the exact
+        /// words at four camps and at eight without standing up a catalog. The instance
+        /// overload above is the only caller that decides <c>camps</c>; splitting it any other
+        /// way would leave the suite proving a copy of the copy.
+        /// </summary>
+        public static string CampCountLine(int camps, int visibleCards)
+        {
+            if (camps <= 0) return null;
+            string counted = camps + (camps == 1 ? CampWordSingular : CampWordPlural);
+            return visibleCards >= camps ? counted + "." : counted + CampScrollHint;
+        }
+
         /// <summary>The raw SceneConfigDef for a card id (the View forwards it to the deploy
         /// screen so it never re-pulls the catalog itself), or null.</summary>
         public SceneConfigDef DefFor(string id) =>

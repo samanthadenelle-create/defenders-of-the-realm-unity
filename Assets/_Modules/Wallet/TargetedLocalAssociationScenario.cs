@@ -129,6 +129,36 @@ namespace DeNelle.Wallet
             "ag.jup.jupiter.android",          // Jupiter — LAST: the incumbent that rejected us
         };
 
+        /// <summary>
+        /// UTC of the last time a wallet retired its one-shot association endpoint on us, or
+        /// <see cref="DateTime.MinValue"/> if it has never happened this process.
+        /// <para>
+        /// WO-1420 item 2. STATIC because the reader is <c>WalletService.Connect</c>'s exception
+        /// handler, which has no reference to the scenario instance the transport built for that
+        /// attempt, and because the fact is about the SESSION ("a wallet refused us just now"), not
+        /// about one object. Written on a WebSocket callback thread (15249 in capture seq 4683) and
+        /// read on the main thread; a stale or torn read only ever costs one imprecise word in a log
+        /// line, so no lock is warranted — but do NOT grow this into behaviour state, where that
+        /// would stop being true.
+        /// </para>
+        /// <para>
+        /// ⚠ DELIBERATELY OUTSIDE <c>#if SOLANA_SDK</c>, unlike every other member below. The reader
+        /// is compiled on every target, so guarding this would break the editor and desktop builds;
+        /// only the WRITER needs the SDK. Without it the value stays MinValue and the correlation
+        /// note simply never appears, which is correct — there is no MWA association to close.
+        /// </para>
+        /// <para>
+        /// ⚠ CORRELATION, NOT CAUSATION. A close inside the attempt's window means the wallet closed
+        /// the endpoint during this connect; it does not prove that is why the connect failed. The
+        /// trace is worded "a wallet closed ... during this attempt" for exactly that reason.
+        /// </para>
+        /// </summary>
+        public static DateTime LastAssociationCloseUtc { get; private set; } = DateTime.MinValue;
+
+        /// <summary>Records an endpoint retirement. Internal: only the association transport may
+        /// assert this fact, and only from its own OnClose callback.</summary>
+        internal static void NoteAssociationClosed() => LastAssociationCloseUtc = DateTime.UtcNow;
+
 #if SOLANA_SDK
         // ── Association state ────────────────────────────────────────────────
         private readonly TimeSpan _clientTimeout;
@@ -196,7 +226,14 @@ namespace DeNelle.Wallet
                 // let the pending MWA request complete/fail and let the caller decide whether
                 // to begin a fresh association.
                 if (!_closed)
+                {
                     FlowTrace.Warn("Wallet", "MWA wallet closed its one-shot association endpoint; not reconnecting to the retired port.");
+                    // WO-1420 item 2: record it so WalletService's catch can NAME the cause in the
+                    // same line. This fires on a WebSocket callback thread (15249 in the capture)
+                    // while the failure is reported on the main thread, so a triage previously had
+                    // to correlate two threads by timestamp to learn why a connect died.
+                    NoteAssociationClosed();
+                }
             };
             _webSocket.OnError += e => FlowTrace.Warn("Wallet", $"MWA socket error: {e}");
             _webSocket.OnMessage += ReceivePublicKeyHandler;

@@ -62,6 +62,13 @@ namespace DeNelle.Village.World.Camps
         // -- IDamageableStructure ---------------------------------------------
         public bool IsAlive => _hp > 0f;
 
+        /// <summary>
+        /// WO-1439 — an outpost only ever exists on a camp the PLAYER has claimed and built
+        /// on (see ClaimableCamp), so it is Friendly by construction. Raiding tribes are
+        /// Hostile and keep attacking it exactly as before.
+        /// </summary>
+        public CombatFaction Faction => CombatFaction.Friendly;
+
         public void ApplyContactDamage(float amount)
         {
             if (_hp <= 0f) return;

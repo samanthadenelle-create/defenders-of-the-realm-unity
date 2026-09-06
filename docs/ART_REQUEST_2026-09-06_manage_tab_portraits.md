@@ -6,7 +6,7 @@ morning to get all the detailed art for all the different components"*.
 workspace that WO-1418 gave Buildings. **The code ships without any of this art** (it falls back), but every card in
 those three tabs will show either flat art at all tiers or a generic icon until these land.
 
-⚠ **Everything below was measured this session by enumerating `Assets/Resources/`.** Counts and filenames are read off
+âš  **Everything below was measured this session by enumerating `Assets/Resources/`.** Counts and filenames are read off
 disk, not from a doc.
 
 ---
@@ -119,3 +119,105 @@ Every card falls back, in this order: level-suffixed portrait, unsuffixed portra
 alias table, `ConceptIconResolver`, then a generic hammer icon with a `FlowTrace.Warn` naming the id. **Nothing breaks
 and nothing is blocked** - the tabs simply show flat or generic art. Grep a capture log for that warn line to get the
 live list of ids with no art.
+
+âš  **Section 6 describes the LEGACY `ManageScreenPanel` card ONLY. The new Manage BUILD/ARMY tile grid has NO fallback
+chain at all** - `ManageWorkspacePanel.cs:565` calls `ManageArt.LoadSprite(tile.PortraitKey)` once and paints the
+warm-tan placeholder disc if it misses. That is deliberate and it should stay: a wrong icon is a lie, a blank frame that
+logs once is honest. But it means a missing tile on the GRID is invisible in a way it never was on the card, which is
+why section 7 exists.
+
+---
+
+## 7. BUILD TILE GRID - the exact missing set (added 2026-09-06, portrait lane)
+
+Measured this session against the tree, not inferred. Pinned by
+`Assets/Editor/Regression/ManagePortraitCoverageRegression.cs`, whose dated exemption list holds exactly the ids below
+and **FAILS the moment one of them starts resolving**, so a delivered file forces its own line out of this document.
+
+### 7a. FIXED IN CODE, NOT AN ART REQUEST - the 20 tier keys
+
+`BuildBuildingChoices` emitted `Portraits/<ladder>[-N]` (the mixed root), so **every owned building above level 1
+painted a blank tile in the grid while its art sat in `Portraits/Buildings/`**. All 26 authored tiers of the six
+ladders are present in that folder; the root was missing all twenty of the `-2..-6` keys. Re-pointed to
+`ManageArt.BuildingPortraitKey`. **No art needed. Nothing to draw.**
+
+---
+
+## ✅ OWNER RULING 2026-09-06 - OPTION A. This section is now settled.
+
+**Building art is ONE folder - `Assets/Resources/Portraits/Buildings/` - and every file is named by its CATALOG ID.**
+Matches the 27 files already there, matches `heart.png` as delivered, and matches what section 0 of this document
+already asked for.
+
+Landed with the ruling: `ComposeUnplacedItem` now keys through `ManageArt.BuildingPortraitKey(row.Id, 0)`, and
+`manageArtKey` goes back to being what the catalog note always called it - **the art-to-id join label, never a
+Resources key.** Both halves are pinned by `ManagePortraitCoverageRegression`
+(`[unplaced-uses-building-portrait-key]`, `[vm-uses-building-portrait-key]`).
+
+⭐ **The exemption list was re-keyed in the same change, and that is the part that matters.** It used to hold the 24
+Sheet-A names. Nobody will ever author `building-store.png` - they will author `market.png` - so those exemptions
+could never expire and would have become permanent silent skips. Keyed off the catalog id, they are now the *exact*
+filename the artist writes: **drop the PNG in and the suite FAILS as stale until its line is deleted from this
+document.** The list cannot rot.
+
+### 7b. THE ART REQUEST - 20 files, exact filenames
+
+Author each as `Assets/Resources/Portraits/Buildings/<filename>`, 1024x1024 PNG, matching the look of the 27 files
+already in that folder (round-medallion friendly, readable at 112 px and at ~150 px).
+
+| # | Filename to author | Building, as the player sees it | Sheet A tile |
+|---|---|---|---|
+| 1 | `healing_caravan.png` | Healing Caravan | `building-healing-caravan` |
+| 2 | `pet-house.png` | Echo Hollow | `building-echo-hollow` |
+| 3 | `workshop.png` | Crafting Station | `building-crafting-station` |
+| 4 | `market.png` | Store | `building-store` |
+| 5 | `collector_farm.png` | **Quarry** | `building-quarry` |
+| 6 | `collector_forge.png` | **Iron Mine** | `building-iron-mine` |
+| 7 | `collector_lumbermill.png` | **Lumber Mill** | `building-lumber-mill` |
+| 8 | `lumberyard.png` | Lumberyard (wood store) | `building-lumberyard` |
+| 9 | `silo.png` | Stoneyard (stone store) | `building-stoneyard` |
+| 10 | `foundry.png` | Foundry (iron store) | `building-foundry` |
+| 11 | `mine_crystal.png` | Crystal Mine | `building-crystal-mine` |
+| 12 | `jeweler.png` | Jeweler | `building-jeweler` |
+| 13 | `tower_ground_archer.png` | Archer Tower | `building-archer-tower` |
+| 14 | `tower_ballista.png` | Ballista | `building-ballista` |
+| 15 | `tower_arcane_spire.png` | Arcane Spire | `building-arcane-spire` |
+| 16 | `tower_catapult.png` | Catapult | `building-catapult` |
+| 17 | `tower_siege_tower.png` | Sky Ballista (Anti-Air) | `building-sky-ballista` |
+| 18 | `wall_wood.png` | Wooden Palisade | `building-wooden-palisade` |
+| 19 | `wall_stone.png` | Stone Wall | `building-stone-wall` |
+| 20 | `gate_stone.png` | Stone Gate | `building-stone-gate` |
+
+**Already covered - do NOT draw these four.** `arcane-tower` (Cathedral of Magic), `armorer`, `barracks`, `forge`
+(Weaponsmith) each already have art under their own catalog id in that folder, tiers and all. Sheet A draws a tile for
+them; it is not needed.
+
+⛔ **Rows 5-7 are the ones that will produce wrong files if skimmed.** `collector_farm`, `collector_forge` and
+`collector_lumbermill` are **catalog ids**; the existing `farm.png`, `forge.png`, `lumbermill.png` are named for
+**ladder ids**, which are a different namespace that happens to overlap. They are NOT the same picture and the display
+names prove it - `collector_farm` is the **Quarry**, not a farm, and `collector_forge` is the **Iron Mine**, not a
+forge.
+
+### 7c. TWO THINGS THAT NEED A RULING, NOT ART
+
+**Q1 - `mill` (Mill / gristmill): is this still content?** It has a catalog entry, no tile on any of the three sheets,
+and **no `manageArtKey`** - so it is invisible to the sheets *and* to the oracle, which skips rows with no art key.
+It is not on the list above because nothing says it should be. It is being raised rather than quietly dropped or
+quietly included. **If it is still content it needs a `manageArtKey` row and a `mill.png`; if it is not, it should
+come out of the catalog.**
+
+**Q2 - `collector_forge` ("Iron Mine") shares the `forge` upgrade ladder with `forge` ("Weaponsmith").** Measured
+from `repo.collectorBuildingId`. That means the *placed* Iron Mine already paints the **Weaponsmith's** portrait, and
+has for as long as that path has existed - a wrong icon, not a blank one, and therefore invisible to every oracle.
+`collector_farm` -> ladder `farm` and `collector_lumbermill` -> ladder `lumbermill` have the same shape but no id
+collision. **This is a data question about whether an Iron Mine should ride the Weaponsmith's ladder at all**, and it
+is out of the portrait lane's scope. Authoring `collector_forge.png` fixes the *unplaced* tile; the placed one still
+needs this ruling.
+
+### 7d. Reference material - do NOT import
+
+`ArtSource/ManageUiSliced/` holds 231 PNGs sliced from the contact sheets. They carry the **sheet background instead
+of transparency** and some crops caught neighbouring labels, so they are a **reference set for confirming what the
+sheets depict**, never a drop-in pack. One thing they surfaced: a sheet label reads `filter-chic`, a typo for
+`filter-civic`.
+

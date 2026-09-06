@@ -15,8 +15,24 @@ namespace DeNelle.Editor
 
             if (!vm.Contains("CountPlacedThisTown()") || !vm.Contains("BuildVisibleTabs()"))
                 failures.Add("categories are not derived from authoritative current-town placements");
-            if (!panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
-                failures.Add("the stable four-card Manage launcher is missing or reordered");
+            // ⚠ PIN MOVED 2026-09-06 (WO-1443), WITH THE RULING - four cards became THREE.
+            // The owner drew the screen herself: docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png
+            // panel 1 is "MANAGE (MAIN) - Simple entry with three core options", BUILD / ARMY /
+            // RESEARCH, and CAPTURE_LOOP_GOAL.md 3.0c item 2 states that it supersedes WO-2001's
+            // launcher retirement for that screen. Where a text ruling and the mockup disagree, the
+            // mockup wins - it is the picture of the thing she wants.
+            // ⛔ AND DEFENSE COULD NOT SURVIVE AS A CARD: WO-2001 merged it into BUILD, and
+            // ManageScreenPanel.ShowOperational (:1189-1191) maps Defense and Buildings alike onto
+            // ManageTabId.Build. A fourth card would open the same destination as the first.
+            // WHAT THIS CASE DEFENDS IS UNCHANGED: a STABLE, ORDERED set of launcher cards, so the
+            // hub cannot silently re-order or lose one. It now pins the three that exist, and fails
+            // if the retired four-card array returns.
+            if (!panel.Contains("ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add("the stable three-card Manage hub is missing or reordered " +
+                             "(mockup panel 1: BUILD / ARMY / RESEARCH)");
+            if (panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add("the retired FOUR-card launcher is back - Defense and Buildings are one " +
+                             "destination since WO-2001, so a Defense card opens the Build tab");
             if (!panel.Contains("BarracksUnlock.IsUnlocked") ||
                 !panel.Contains("Build a Barracks to unlock") ||
                 !panel.Contains("ActivateLauncherCard"))

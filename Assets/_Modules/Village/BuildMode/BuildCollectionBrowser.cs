@@ -46,6 +46,12 @@ namespace DeNelle.Village
         private int _page;
         private Action<CatalogEntry> _place;
 
+        // WO-2006 / OWNER_RULINGS_LOCKED §25 — the MANAGE PLACED door. Raised when the
+        // player taps the "Manage Placed" category card; the palette forwards it to
+        // BuildModeController, which puts the session into its existing tap-to-select
+        // state. Null when the host never supplied one (older Show overload).
+        private Action _managePlaced;
+
         protected override string WorkspaceName => "Build Collections";
 
         protected override string TitleFor(BuildCollectionPage page) =>
@@ -65,9 +71,19 @@ namespace DeNelle.Village
             else RenderCollection();
         }
 
-        public void Show(Action<CatalogEntry> place)
+        public void Show(Action<CatalogEntry> place) => Show(place, null);
+
+        /// <summary>
+        /// WO-2006 (ruling §25) — open the category root, with the MANAGE PLACED door.
+        /// <paramref name="managePlaced"/> is invoked (after <see cref="Close"/>) when the
+        /// player taps the "Manage Placed" card. The single-argument overload stays for
+        /// callers that predate the door; it simply supplies no callback, in which case the
+        /// card is not built at all (a card that does nothing is worse than no card).
+        /// </summary>
+        public void Show(Action<CatalogEntry> place, Action managePlaced)
         {
             _place = place;
+            _managePlaced = managePlaced;
             BuildFirstUseGuide.BeginSession();
             _catalog = CardCollectionCatalog.CreateDefault(Application.persistentDataPath, Application.version);
             _remote = new CardCollectionRemoteService(_catalog,
@@ -210,6 +226,107 @@ namespace DeNelle.Village
             upgradeSubtitle.color = ElarionUi.Parchment;
             upgradeSubtitle.raycastTarget = false;
             ElarionUiKit.FitBlock(upgradeSubtitle, 18f, 21f);
+
+            BuildManagePlacedCard(grid);
+        }
+
+        // =====================================================================
+        //  WO-2006 / OWNER_RULINGS_LOCKED §25 — THE "MANAGE PLACED" DOOR.
+        //
+        //  Owner ruling 2026-09-06, from a friend's playtest: "he accidentally put a
+        //  palisade down and he didn't mean to and now he has no way to move the
+        //  Palisade... we might need to add one more card, which is just move or manage".
+        //
+        //  ⛔ THIS ADDS NO CAPABILITY AND NO SECOND SELECTION SYSTEM. Move / Upgrade /
+        //  Sell already exist, fully wired, on BuildSelectionUI (OnMoveRequested /
+        //  OnUpgradeRequested / OnSellRequested -> BuildModeController.BeginMoveSelected /
+        //  UpgradeSelected / SellSelected, subscribed in EnsureSelectionUi). The ONLY
+        //  missing thing was a DOOR: the sole route in was "enter build mode, then tap the
+        //  exact placed piece", which a player who mis-tapped during placement has no
+        //  reason to guess. This card closes the browser and hands the session to that
+        //  SAME tap-to-select loop (BuildModeController.BeginManagePlaced), announcing the
+        //  gesture out loud. One selection owner, one panel, one new signpost.
+        //
+        //  ⚠ Built ONLY when a callback was supplied. A category card that closes the
+        //  browser and then does nothing would be a worse defect than the one it fixes.
+        // =====================================================================
+        private void BuildManagePlacedCard(RectTransform grid)
+        {
+            if (_managePlaced == null)
+            {
+                FlowTrace.Step("BuildCollections",
+                    "Manage Placed card SKIPPED — Show() was called without a managePlaced callback " +
+                    "(legacy single-arg overload); the card would close onto nothing.");
+                return;
+            }
+
+            // ⚠ A CARD THAT LEADS TO AN EMPTY MAP IS A DEAD END, AND THE FTUE HITS IT FIRST.
+            // Tapping the card CLOSES this browser; with nothing placed the player would land on a
+            // bare build camera holding a toast, which is a worse experience than the missing door.
+            // This file's own neighbours already state the rule -- BuildPaletteUI.RebuildChips:
+            // "an empty section grows no chip (a chip that filters to nothing is a dead end)", and
+            // RenderCategories above drops any category with no visible items. Same rule here.
+            //
+            // ⚠ COUNTS LIVE BODIES, NOT PERSISTED ROWS, AND THAT IS DELIBERATE. During the founding
+            // load the BAKED TWIN stands in for a persisted BaseLayout row and carries NO
+            // PlacedStructure (BuildModeController.Enter's census says so at length). A baked twin
+            // is not tap-selectable either, so a persisted-row count would show the card for pieces
+            // the door genuinely cannot reach. Live bodies is the honest number.
+            int selectable = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None).Length;
+            if (selectable <= 0)
+            {
+                FlowTrace.Step("BuildCollections",
+                    "Manage Placed card SKIPPED — zero live PlacedStructure bodies, so the card would " +
+                    "close the browser onto a map with nothing selectable (the FTUE state). The card " +
+                    "returns on the next render once something is built.");
+                return;
+            }
+
+            var manageCard = BuildCategoryCard(grid, () =>
+            {
+                FlowTrace.Step("BuildCollections",
+                    "Manage Placed card TAPPED — closing the browser and handing the session to the " +
+                    "existing tap-to-select loop (ruling §25 door).");
+                Close();
+                _managePlaced?.Invoke();
+            });
+            manageCard.name = "ManagePlacedCard";
+
+            var manageArt = ElarionUiKit.AddImage(manageCard.transform, "CategoryArtwork",
+                new Vector2(.10f, .38f), new Vector2(.90f, .91f), Color.white, false);
+            var manageImage = manageArt.GetComponent<Image>();
+            manageImage.preserveAspect = true;
+            manageImage.raycastTarget = false;
+            // No bespoke art is authored for this card yet; SetArtworkOrFallback owns the
+            // art-absent read, exactly as the Upgrade Defenses card does above.
+            SetArtworkOrFallback(manageArt.transform, manageImage,
+                Resources.Load<Sprite>("UI/ElarionMedieval/cards/buildings"));
+
+            var manageDivider = ElarionUiKit.AddImage(manageCard.transform, "CardDivider",
+                new Vector2(.08f, .35f), new Vector2(.92f, .355f), ElarionUi.Gold, false);
+            manageDivider.GetComponent<Image>().raycastTarget = false;
+
+            var manageTitle = Label(manageCard.transform, "Manage Placed", 30,
+                TextAlignmentOptions.Center, new Vector2(.07f, .22f), new Vector2(.93f, .34f));
+            manageTitle.color = ElarionUi.Gold;
+            manageTitle.fontStyle = FontStyles.Bold;
+            manageTitle.enableWordWrapping = false;
+            manageTitle.enableAutoSizing = true;
+            manageTitle.fontSizeMin = 15f;
+            manageTitle.fontSizeMax = 26f;
+            manageTitle.transform.SetAsLastSibling();
+
+            var manageSubtitle = Label(manageCard.transform,
+                "Move, upgrade or sell anything already built.", 21, TextAlignmentOptions.Top,
+                new Vector2(.08f, .05f), new Vector2(.92f, .21f));
+            manageSubtitle.color = ElarionUi.Parchment;
+            manageSubtitle.raycastTarget = false;
+            ElarionUiKit.FitBlock(manageSubtitle, 18f, 21f);
+
+            FlowTrace.Step("BuildCollections",
+                $"Manage Placed card BUILT in the category grid over {selectable} selectable placed " +
+                "bodies (ruling §25 door; the move/upgrade/sell controls themselves are " +
+                "BuildSelectionUI's and are untouched).");
         }
 
         private async void OpenCollection(CardCollectionDefinition collection)

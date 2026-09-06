@@ -13,10 +13,25 @@
 //   * frame-max       - HOLLOW centre
 // So they CANNOT be 9-sliced against one another and they cannot be swapped in a
 // single Image without the layer under them changing too. The renderer therefore
-// paints a PLATE first (always), then the portrait, then the frame as a
-// preserve-aspect overlay, and carries frame-selected on a SEPARATE, LARGER rect
+// paints a PLATE first (always), then the frame as a preserve-aspect layer, then
+// the PORTRAIT ON TOP OF IT, and carries frame-selected on a SEPARATE, LARGER rect
 // so its bleed has somewhere to go. A frame swap is then a sprite swap, which is
 // what WO-2002 asks for - but only because the stack under it never moves.
+//
+// ⛔ CORRECTED 2026-09-06 (WO-1443 section 2) - THIS PARAGRAPH USED TO SAY "then the
+// portrait, then the frame as a preserve-aspect OVERLAY", i.e. the frame ABOVE the
+// portrait. That order is only correct if every frame's centre is hollow, and the
+// four lines above this one say in the same breath that two of them are not. The
+// consequence shipped: an OWNED item wears frame-tile, whose centre alpha MEASURED
+// 253/255 across the portrait zone, so the near-black centre painted over the
+// portrait and the tile rendered as an EMPTY FRAME. The owner captured it on
+// 2026-09-06 - Footman and Archer (barracks tier 1, unlocked, frame-tile) blank while
+// Spearman (tier 2, Locked, frame-locked, centre alpha 0) showed its art - and every
+// owned BUILD tile had the same defect. Nothing was missing: LoadSprite resolved every
+// key and therefore logged no art-miss, which is why the device log carried no troop
+// portrait line at all. THE FIX IS THE LAYER ORDER, NOT THE KEY AND NOT THE LOADER.
+// A design note that contradicts its own measurements is the failure mode this file's
+// header exists to prevent; it is corrected here rather than restated somewhere new.
 //
 // ⛔ DO NOT 9-SLICE THESE. Do not set Image.type = Sliced on a manage frame; the
 // two hollow members have no consistent border inset with the two opaque ones and
@@ -106,6 +121,46 @@ namespace DeNelle.Core.Manage
             }
         }
 
+        // ── Building portrait keys ────────────────────────────────────────────
+
+        /// <summary>Resources folder that holds STRUCTURE portraits, one per ladder id per tier.</summary>
+        public const string BuildingPortraitFolder = "Portraits/Buildings/";
+
+        /// <summary>
+        /// The Resources key for a placed building's portrait at <paramref name="level"/>.
+        /// Shape: <c>Portraits/Buildings/&lt;ladderId&gt;</c> for level 1, plus a
+        /// <c>-&lt;level&gt;</c> suffix from level 2 up.
+        ///
+        /// <para>⛔ THE FOLDER IS <c>Portraits/Buildings/</c> AND IT IS NOT INTERCHANGEABLE WITH
+        /// <c>Portraits/</c>. Measured 2026-09-06 against building-tiers.json (six ladders:
+        /// arcane-tower/armorer/barracks/farm/forge/lumbermill, 26 tiers between them):
+        /// <c>Portraits/Buildings/</c> holds ALL 26; the <c>Portraits/</c> ROOT holds only the six
+        /// level-1 legacy JPGs and is missing all TWENTY tier keys
+        /// (barracks-2..6, arcane-tower-2..4, armorer-2..4, farm-2..4, forge-2..4, lumbermill-2..4).
+        /// The root is also a MIXED namespace of NPC and structure art - which is precisely why
+        /// <c>ManageScreenPanel.ManageBuildingPortraitGaps</c> exists and lists exactly these six
+        /// ids as the ones whose root route resolves a PERSON rather than a building.</para>
+        ///
+        /// <para>⚠ THIS DELIBERATELY DOES NOT SLUG THE ID. <c>ManageScreenVM.ResolveBuildingPortraitKey</c>
+        /// lowercases and maps <c>_</c> to <c>-</c>; <c>ManageScreenPanel.LoadManageBuildingSprite</c>,
+        /// which is the shipped path that PROVES this folder works, uses the raw ladder id. Two
+        /// spellings of one filename is the duplicated state CLAUDE.md 2/5/16 keeps paying for, so
+        /// this method matches the loader byte-for-byte. All six live ladder ids are already
+        /// lowercase-with-hyphens, so the two agree today; if a future ladder id is authored with an
+        /// underscore the FILE is named with the underscore too, and nothing has to be kept in sync.</para>
+        ///
+        /// <para>⛔ NO TIER-TO-BASE FALLBACK, ON PURPOSE. A tier whose art has not been delivered
+        /// must go BLANK and LOG (a missing portrait renders as the placeholder disc, see
+        /// <see cref="LoadSprite"/>), so the oracle catches it and the owner gets an art request.
+        /// Quietly serving the level-1 sheet for a level-4 building is a wrong icon, and a wrong
+        /// icon is a lie the capture loop cannot see.</para>
+        /// </summary>
+        public static string BuildingPortraitKey(string ladderId, int level)
+        {
+            if (string.IsNullOrEmpty(ladderId)) return null;
+            return BuildingPortraitFolder + ladderId + (level >= 2 ? "-" + level : "");
+        }
+
         // ── Loader ────────────────────────────────────────────────────────────
 
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
@@ -117,8 +172,18 @@ namespace DeNelle.Core.Manage
         ///
         /// <para>A miss returns null and is announced ONCE per key through FlowTrace - never
         /// swallowed (CLAUDE.md 12: a catch or a fallback that does not log turns a visible
-        /// defect into an invisible one). The renderer then makes the Image fully transparent
-        /// rather than painting a white box.</para>
+        /// defect into an invisible one).</para>
+        ///
+        /// <para>⚠ CORRECTED 2026-09-06 (WO-1443 section 2). This paragraph used to end "the
+        /// renderer then makes the Image fully transparent rather than painting a white box",
+        /// and that is NOT what the shipped path does. ManageWorkspacePanel hands the null to
+        /// ElarionUiKit.Portrait, which (ElarionUiKit.cs:2274) falls through to
+        /// <c>disc.sprite = CircleSprite; disc.color = PortraitPlaceholder;</c> and then always
+        /// adds the medallion Ring on top. So a missing portrait renders as the warm-tan
+        /// PLACEHOLDER DISC inside its ring - visible, not invisible - AND it logs. That is the
+        /// better of the two behaviours and it is what actually happens; the sentence describing
+        /// a transparent slot was wrong, and a wrong description of a fallback is how a seat
+        /// mis-diagnoses the next blank tile.</para>
         /// </summary>
         public static Sprite LoadSprite(string resourceKey)
         {
@@ -137,9 +202,16 @@ namespace DeNelle.Core.Manage
                 }
             }
             if (art == null)
+                // ⚠ The old text here read "the slot renders transparent rather than as a white
+                // box", which the doc comment eight lines above already records as FALSE - the slot
+                // renders the warm-tan PLACEHOLDER DISC inside its ring. A log line that misdescribes
+                // what the player sees is how the next seat mis-diagnoses the next blank tile, so the
+                // sentence now says what was measured and names the two things it could be.
                 FlowTrace.Once("Manage", "art-miss:" + resourceKey,
                     "manage art unresolved at Resources/" + resourceKey +
-                    " - the slot renders transparent rather than as a white box");
+                    " - the slot renders the placeholder disc inside its ring, NOT the real portrait." +
+                    " Either the art has not been delivered (art request) or the key names a folder" +
+                    " the file is not in (mis-key). Do not add a substitute icon: a wrong icon is a lie.");
 
             Cache[resourceKey] = art;
             return art;

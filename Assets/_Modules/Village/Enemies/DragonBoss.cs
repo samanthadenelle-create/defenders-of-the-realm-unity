@@ -1130,8 +1130,14 @@ namespace DeNelle.Village
             foreach (var a in FindObjectsByType<ArcaneTower>(FindObjectsSortMode.None))
             {
                 // No cast needed here (unlike the DefenseTower loop above): ArcaneTower implements
-                // ONLY IDamageableStructure (ArcaneTower.cs:39) and has no EnemyOwned variant
-                // (ArcaneTower.cs:254), so it has a single IsAlive and no seam to mismatch.
+                // ONLY IDamageableStructure (ArcaneTower.cs:39) and has no EnemyOwned ALLEGIANCE
+                // FIELD, so it has a single IsAlive and no seam to mismatch. ⚠ Narrowed
+                // 2026-09-06 (WO-1439): "no EnemyOwned variant" is now only true of IsAlive.
+                // ArcaneTower DOES carry a Faction, derived from SceneOwnership like
+                // WallSegment/Gate/Building — so one in an enemy-owned scene reads Hostile. That
+                // does not change this loop (the dragon is a home-village encounter and the
+                // DealStrike sink arbitrates faction anyway), but do not read this comment as
+                // "an ArcaneTower is always the player's".
                 if (a == null || !a.IsAlive) continue;
                 float sqr = (a.transform.position - here).sqrMagnitude;
                 if (sqr < bestSqr) { bestSqr = sqr; best = a; bestMb = a; bestPos = a.transform.position; }
@@ -1586,8 +1592,20 @@ namespace DeNelle.Village
         private void DealStrike(float amount)
         {
             IDamageableStructure tgt = _currentTarget ?? _heartStructure;
-            if (tgt != null && tgt.IsAlive)
+            // WO-1439 §6 — the same one-line seam oracle Enemy.DealStructureDamage carries:
+            // no actor may damage an asset of its own faction. Behaviour-NEUTRAL today (the
+            // apex dragon is Hostile and every target it can reach in the home village -
+            // player towers and the Heart - is Friendly), which is exactly why it belongs
+            // here: it costs nothing now and it is the assertion that catches the day a
+            // dragon is ever placed in an enemy-owned scene. MayAttack folds in the null +
+            // IsAlive pair this line already tested, so no check is lost.
+            if (CombatFactionRules.MayAttack(Faction, tgt))
                 tgt.ApplyContactDamage(amount);
+            else if (CombatFactionRules.IsFriendlyFire(Faction, tgt))
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Dragon",
+                    $"FRIENDLY FIRE REFUSED - dragon tried to deal {amount:0.#} to " +
+                    $"'{(tgt as MonoBehaviour)?.name ?? "<non-MB>"}' which is {tgt.Faction}, the " +
+                    "dragon's own faction. Fix the SELECTION site; this sink only stops the blow.");
 
             if (_phaseVfxEnabled && _strikeImpactVfx != VFXType.None)
                 VFXManager.Play(_strikeImpactVfx, TargetPosition());

@@ -88,6 +88,17 @@ namespace DeNelle.Village
         public float CurrentHp => _hp;
 
         /// <summary>
+        /// WO-1439 — the healing caravan is the PLAYER's, in both of its two modes: the
+        /// stationary town structure and the hero-following raid escort. Constant Friendly.
+        /// ⚠ Deliberately NOT the SceneOwnership expression WallSegment/Gate use, even though
+        /// this class latches SceneOwnership.IsEnemyOwned a few lines up — that latch decides
+        /// MOBILITY (does it follow the hero), never ownership. A caravan inside an
+        /// enemy-owned raid scene is still the player's, and reading the latch here would
+        /// have made a raid garrison ignore the one support unit it should be killing.
+        /// </summary>
+        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+
+        /// <summary>
         /// True when this caravan is the OFFENSIVE, hero-following escort (an enemy-owned
         /// scene); false when it is the DEFENSIVE town structure, stationary where the player
         /// placed it. THE SINGLE SOURCE for the split — <c>BaseLayoutLoader.Spawn</c> keys the

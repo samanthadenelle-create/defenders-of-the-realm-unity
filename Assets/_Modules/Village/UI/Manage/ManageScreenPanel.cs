@@ -88,7 +88,25 @@ namespace DeNelle.Village.UI
         // and operational modes so the title clears BOTH header controls in BOTH states. FrameCore's
         // header zone is content x 0.24-0.88 (ElarionUiKit.cs:442), so local 0.30-0.78 resolves to
         // content 0.432-0.739: clear of the HEART face (ends 0.395) and of QUEUE (starts 0.795).
-        private const float TitleLocalX0 = 0.30f, TitleLocalX1 = 0.78f;
+        // ⚠ RIGHT EDGE PULLED IN 2026-09-06: the title was CLIPPED under the QUEUE pill.
+        // MEASURED, not inferred - the two rects genuinely overlapped. FrameCore's header zone is
+        // content x 0.24-0.88 (ElarionUiKit.cs:443), so a local 0.78 resolved to content 0.739;
+        // the chrome row spans content 0.055-0.945 and the pill sits at 0.72-0.95 OF THAT ROW, i.e.
+        // content 0.696-0.900. 0.739 > 0.696, so the title ran 4.3% of the panel underneath it.
+        // Local 0.68 resolves to content 0.675 and clears the pill by 0.021.
+        // The left edge widens to 0.10 (content 0.304) so the title still reads centred over the
+        // body now that the back arrow and the Heart face no longer sit beside it.
+        private const float TitleLocalX0 = 0.10f, TitleLocalX1 = 0.68f;
+
+        // The BACK / HEART / QUEUE chrome row, and the body's ceiling. It sits between the body and
+        // the frame's own header zone (which starts at 0.900), so raising the body to meet it costs
+        // nothing and hands the grid the strip that used to hold nothing. WO-1443, 2026-09-06.
+        // 0.845-0.975 = 0.130 of the panel. At the measured reference (canvas ~921px, panel 96% =
+        // ~884px) that is ~115px, clear of ElarionUiKit.MinTouchPx (112). AUTHORED to the floor,
+        // not left to ClampMinTouch - the capture auditor caught the whole old chrome row at
+        // 110.4px, 1.6px short, precisely because a nominal band was inset until it fell under.
+        private const float WorkspaceHeaderY0 = 0.845f;
+        private const float WorkspaceHeaderY1 = 0.975f;
 
         private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
         private const float CloseGapY = 0.020f;     // body floor clears the Close box by this much
@@ -239,6 +257,13 @@ namespace DeNelle.Village.UI
         private GameObject _operationalListBand;
         private RectTransform _operationalWell;
         private RectTransform _launcherHost;
+        /// <summary>True while the HUB (mockup panel 1) owns the screen. The ONE authority - read
+        /// it, never `_launcherHost.activeSelf`, and change it only through ShowLauncher /
+        /// ShowWorkspace so ApplyScreenVisibility stays the single writer.</summary>
+        private bool _hubShowing;
+        /// <summary>The model's nav entry at the moment the hub went up. A different reference means
+        /// the player asked for a screen; see ShowLauncher.</summary>
+        private ManageNavEntry _hubNav;
         private RectTransform _launcherGrid;
         // WO-2001 - the three-tab workspace. It owns the WHOLE body well (the largest well this
         // chrome can offer) because the redesign's grid + selection band stack does not fit the
@@ -269,7 +294,13 @@ namespace DeNelle.Village.UI
         private float _listBandPx;
         private RectTransform _drawerList;        // the drawer's scroll zone host
         private RectTransform _drawerSlotOffer;   // Buy-Builder offer; the drawer list's LAST row
-        private GameObject _drawerHeading;        // "BUILDERS / QUEUE" + HIDE: full-body mode only
+        // The overlay's header: a centred "QUEUE" title and a corner X (mockup panel 8). Both are
+        // full-body mode only - band mode hides them (ApplyDrawerPlacement).
+        // ⚠ The names are legacy. _drawerHeading read "BUILDERS / QUEUE" and _drawerHide was a HIDE
+        // button seated over the first queue card's verb until WO-1443; the FIELDS were left named
+        // as they were rather than renamed in the same change that fixed the geometry, so a reader
+        // of ApplyDrawerPlacement still finds them. Rename them when panel 8's rows are built.
+        private GameObject _drawerHeading;
         private GameObject _drawerHide;
         private bool _drawerBandMode;             // true while the drawer is seated as a band
         private RectTransform _tabsHost;
@@ -377,7 +408,7 @@ namespace DeNelle.Village.UI
             // are the only things the model cannot do for itself, because they leave its own graph.
             _vm.OpenQueueRequested = () => { if (!_queueDrawerOpen) ToggleQueueDrawer(); };
             _vm.OpenHeartRequested = OpenHeartSurface;
-            _vm.CloseRequested = Close;
+            _vm.CloseRequested = OnModelWantsOut;   // root BACK returns to the hub (mockup panel 1)
             _vm.OpenTownBuilderRequested = OpenTownBuilder;
 
             var svc = BuildTimerService.Instance;
@@ -391,14 +422,16 @@ namespace DeNelle.Village.UI
             }
 
             _vm.Rebuild();
-            // The approved launcher cards are still BUILT (they remain the source of record for the
-            // 2026-08-31 art + copy) but the host is never shown again - WO-2001 removes the
-            // required chooser. See ShowWorkspace, and the pin list in this WO's hand-back.
+            // ⭐ MANAGE OPENS ON THE HUB. Owner mockup panel 1 - "MANAGE (MAIN) - Simple entry with
+            // three core options" - and CAPTURE_LOOP_GOAL.md 3.0c item 2 states in words that this
+            // supersedes WO-2001's launcher retirement for this screen.
+            // ⚠ WO-2001's "Entry" rule (open the last-used tab, never a chooser) is therefore
+            // RETIRED, and the model's OpenDefaultScreen is still what picks the tab once a card is
+            // tapped - the UI has not started deciding destinations. What changed is that the
+            // player is asked WHICH destination first, because the owner's picture asks them.
             RenderLauncherCards();
-            ShowWorkspace();
-            // WO-2001 "Entry": the last-used tab when it is still available, otherwise BUILD. The
-            // decision is the MODEL's - the UI must not decide the default tab.
             _vm.OpenDefaultScreen();
+            ShowLauncher();
 
             // WO-465: a panel that never notifies reads as an invisible scrim and PanelRouter
             // reports the open as failed.
@@ -534,9 +567,33 @@ namespace DeNelle.Village.UI
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
+            // ⛔ THE PANEL IS DELIBERATELY NEAR-FULL-BLEED, AND THAT IS A CAPACITY DECISION.
+            // Owner mockup docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png: the GRID dominates every
+            // panel and the chrome is thin. The measured gap on 2026-09-06 was one number -
+            // MANAGE_FLOW_INVENTORY reported ARMY content=590px in a 190px viewport while screen 4
+            // says in words "All 9 troops visible, no scrolling". At 0.05-0.95 the panel took 90% of
+            // a ~921px reference canvas and the workspace well measured 533px, which cannot seat
+            // three 150px rows (470px) once anything else is on screen. 0.02-0.98 lifts the panel to
+            // 96%, and the well with it. This is the "(b) the modal's own chrome must go full-bleed"
+            // half of the hand-back ManageWorkspacePanel's header has been naming since WO-2002.
+            // ⛔ THE PANEL IS NARROW ON PURPOSE. Do not stretch it back across the canvas.
+            // THE MEASUREMENT THAT FORCED IT: FrameCore is a 1210x1815 PORTRAIT frame
+            // (ElarionUiKit.cs:437-458, pixel-measured 2026-07-03) and Manage was stretching it
+            // across a 2670x1200 landscape canvas. Its body zone is x 0.055-0.945 - so at full
+            // width the workspace band came out roughly 2400 x 450px, an 8:1 strip, and NO tile
+            // shape can be right inside it. Round 4 proved both horns: square cells filling the
+            // height left the grid a narrow strip with the panel black on either side (22% of the
+            // width on ARMY); wide cells filling the width read as BARS at 793x134 (5.9:1).
+            // The owner's mockup panels are content areas of roughly 2:1, and their tiles are
+            // ~1:1 on BUILD and ~2.3:1 on ARMY. That is only reachable by making the PANEL the
+            // shape the design assumes instead of asking the grid to absorb the difference:
+            //   0.18-0.82 of the canvas width = 64% -> content ~1218px against a ~583px well.
+            // ARMY 3 cols x 3 rows then lands near 399x188 (2.1:1) once the tab row leaves the
+            // body, and BUILD 5x2 near 236x220 (1.07:1) - both inside the mockup's proportions.
+            // The scrim owns the margins either side, which is what a modal is for.
             var chrome = ElarionUiKit.BuildObsidianPanel(
                 _ui.transform, "MANAGE",
-                new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.95f),
+                new Vector2(0.18f, 0.02f), new Vector2(0.82f, 0.98f),
                 Close, frameName: RpgUiCatalog.FrameCore);
             if (chrome == null)
             {
@@ -591,6 +648,17 @@ namespace DeNelle.Village.UI
 
             RectTransform bodyRt = chrome.layout != null ? chrome.layout.body : null;
             float bodyTop = bodyRt != null ? bodyRt.anchorMax.y : 0.835f;
+            // ⭐ RECLAIM THE DEAD STRIP BETWEEN THE BODY AND THE TITLE.
+            // The frame's header zone starts at y 0.900 (ElarionUiKit.cs:442,
+            // `z.header = new Vector4(0.24f, 0.900f, 0.88f, 0.972f)`), and the body stops at 0.835 -
+            // so 6.5% of the panel between them belonged to nothing. WorkspaceHeaderY0 (0.865) puts
+            // the BACK / HEART / QUEUE row there at 0.865-0.975 and hands the body everything below
+            // it. The row is 0.11 x ~884px = ~97px... see WorkspaceHeaderY0's own note: it is sized
+            // against MinTouchPx and the buttons inside it are authored to the band, not clamped.
+            // MEASURED REASON: the grid band is the screen (mockup), and every px above it that
+            // holds nothing is a px the tiles do not get.
+            if (bodyRt != null && WorkspaceHeaderY0 > bodyTop && WorkspaceHeaderY0 - bodyFloor > 0.05f)
+                bodyTop = WorkspaceHeaderY0;
             if (bodyRt != null && bodyTop - bodyFloor > 0.05f)
             {
                 bodyRt.anchorMin = new Vector2(bodyRt.anchorMin.x, bodyFloor);
@@ -691,8 +759,19 @@ namespace DeNelle.Village.UI
             // The title already reads MANAGE - {DESTINATION}. Repeating that destination in a
             // full touch-height body band spent the first fold without adding information.
             // Queue is a title-row action in the approved reference, opposite Back.
+            // ⛔ THE CHROME ROW SPANS THE FRAME'S OWN BODY X-ZONE, NOT 0..1 OF THE PANEL.
+            // This is the fix for the clipped QUEUE pill, and it is MEASURED rather than inferred:
+            // ElarionUiKit.cs:458 authors FrameCore's body as x 0.055-0.945, i.e. the ornate border
+            // owns the outer 5.5% on each side. The row used to span 0..1, so a pill seated at
+            // 0.925 of the ROW was at 0.925 of the PANEL - inside the border art, where the frame
+            // clipped "QUEUE" mid-word and pushed its badge outside the panel entirely. Pulling the
+            // pill in twice did not help because the row itself was the wrong rect; the second
+            // attempt (0.775-0.925) was still reading a rendered edge instead of the frame's zone.
+            // Anchoring the ROW to the body zone makes every child's fraction a fraction of the
+            // usable content, which is what those fractions were always meant to be - and it lines
+            // the back arrow up with the grid's left edge for free.
             _tabsHost = MakeZone(chrome.content.transform, "ManageHeaderActions",
-                new Vector2(0f, 0.835f), new Vector2(1f, 0.965f));
+                new Vector2(0.055f, WorkspaceHeaderY0), new Vector2(0.945f, WorkspaceHeaderY1));
             BuildTabs();
 
             // WO-1393: the drawer band is seated from these three numbers (ApplyDrawerPlacement).
@@ -719,16 +798,25 @@ namespace DeNelle.Village.UI
             BuildQueueDrawer(well);
 
             BuildLauncher(well);
-            _workspaceBack = ElarionUiKit.BuildObsidianButton(chrome.content.transform, "BACK",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.035f, 0.835f), new Vector2(0.205f, 0.965f), OnBackPressed);
-            if (_workspaceBack != null)
-            {
-                _workspaceBack.gameObject.name = "ManageWorkspaceBack";
-                ElarionUiKit.ClampMinTouch(_workspaceBack);
-                MedievalUiSkin.ApplyButton(_workspaceBack);
-                _workspaceBack.gameObject.SetActive(false);
-            }
+            // ⭐ THE BACK CONTROL IS A `<-` ARROW AT TOP-LEFT, not a BACK word-button.
+            // docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png draws it on all eight numbered panels;
+            // CAPTURE_LOOP_GOAL.md 3.0b states it. It is a SMALL SQUARE seat (0.035-0.115 of the
+            // panel width) rather than the old 0.035-0.205 word slab, because in the mockup the
+            // chrome is thin and the grid is the screen.
+            // ⚠ ASCII "<-" AND NOT THE "left arrow" CHARACTER: this project's fonts render
+            // non-ASCII as tofu (CLAUDE.md 7's canon-strings note; ManageScreenVM.Ascii exists for
+            // exactly this). Assets/Resources/RpgUi/button/arrow.png was measured and rejected as
+            // the face - it is a filled RIGHT-pointing PLAY triangle, and mirroring a play glyph
+            // reads as "rewind", not "back". Recorded rather than silently substituted.
+            // ⛔ THE BACK ARROW IS BUILT IN BuildTabs, NOT HERE. Do not construct it at chrome time.
+            // MEASURED 2026-09-06 in ManageFlow_ARMY_gridtop: the arrow was GONE - the row started
+            // with the HEART face and the screen had no visible way back. Cause, and it is mine:
+            // round 5 re-parented the arrow from chrome.content to _tabsHost so its fractions would
+            // mean fractions of usable content - and BuildTabs DESTROYS every child of _tabsHost on
+            // entry (its rebuild loop), on the first Render. A control built once into a host that
+            // is cleared every paint is a control that exists for exactly one frame.
+            // It is now rebuilt with its siblings, which is what the heart face and the queue pill
+            // already did and why they survived.
         }
 
         // =====================================================================
@@ -776,29 +864,123 @@ namespace DeNelle.Village.UI
         /// never made visible again - WO-2001 removes the required chooser, and BACK no longer has
         /// a launcher to return to.
         /// </summary>
+        /// <summary>
+        /// ⛔ THE ONE WRITER OF "WHICH SCREEN IS ON". Every SetActive on the hub host, the
+        /// operational well and the workspace host goes through here, and nowhere else.
+        ///
+        /// <para>THE BUG THIS EXISTS TO END, measured 2026-09-06 in
+        /// Builds/ui-capture/ManageFlow_ARMY_gridtop_2670x1200.png plus
+        /// <c>MANAGE_FLOW_INVENTORY ARMY: tiles=9 rendered=9 viewport=586px content=0px</c>:
+        /// the model composed nine tiles, the renderer reported building nine, and the grid content
+        /// measured ZERO height, because the tiles were built into a subtree whose ANCESTOR was
+        /// inactive. <c>_workspaceHost</c> is a child of <c>_operationalWell</c>; ShowLauncher
+        /// deactivated the WELL, and RenderWorkspace only ever re-activated the HOST. A
+        /// SetActive(true) on a child of an inactive parent changes nothing on screen and runs no
+        /// layout - so every tab rendered the hub and Manage had three doors onto nothing.</para>
+        ///
+        /// <para>Two independent writers deciding one piece of state by last-write-wins is the
+        /// whole defect. There is now one flag and one writer, and the well is always re-asserted
+        /// with the host it contains.</para>
+        /// </summary>
+        private void ApplyScreenVisibility()
+        {
+            if (_launcherHost != null) _launcherHost.gameObject.SetActive(_hubShowing);
+            // The WELL is the workspace host's PARENT. It must follow the same state, or the host's
+            // own flag is meaningless - that is exactly what produced content=0px.
+            if (_operationalWell != null) _operationalWell.gameObject.SetActive(!_hubShowing);
+            if (_workspaceHost != null)
+                _workspaceHost.gameObject.SetActive(!_hubShowing && !_queueDrawerOpen);
+            // BACK belongs to the workspace: the hub is the root and CLOSE is its way out.
+            if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(!_hubShowing);
+        }
+
         private void ShowWorkspace()
         {
-            if (_launcherHost != null) _launcherHost.gameObject.SetActive(false);
-            if (_operationalWell != null) _operationalWell.gameObject.SetActive(true);
+            _hubShowing = false;
+            ApplyScreenVisibility();
             if (_stripHost != null) _stripHost.gameObject.SetActive(false);
             if (_operationalListBand != null) _operationalListBand.SetActive(false);
-            if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(!_queueDrawerOpen);
-            if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(true);
-            // ONE queue affordance on screen: the workspace header's own door (ruling 17). The
-            // panel-header toggle stood in for it before the workspace existed; two controls for one
-            // verb, in two chrome layers, is the ambiguity the redesign exists to remove. The
-            // drawer's own HIDE closes it, which is why forcing full-body mode below matters.
-            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(false);
-            if (_workspaceTitle != null)
-            {
-                _workspaceTitle.text = "MANAGE";
-                var titleRt = _workspaceTitle.rectTransform;
-                titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
-                titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
-                titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
-                titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
-                ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
-            }
+            // ⛔ THE QUEUE PILL STAYS UP IN WORKSPACE MODE. Do not re-add a SetActive(false) here.
+            // It used to be hidden because the workspace painted its own queue face; the owner's
+            // mockup retires that face and makes this pill the one door, on every panel. Hiding it
+            // now would strand the queue outright: measured 2026-09-06, with the workspace up the
+            // operational OPEN QUEUE bands are in a list band that is SetActive(false), the activity
+            // strip is retired, and the HUD Builders chip's door went in WO-911. This IS the door.
+            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(true);
+            // The title's RECT is set by ApplyWorkspaceTitle, not here - see its note. "MANAGE" is
+            // only what stands in for the frame between Show and the first Render.
+            ApplyWorkspaceTitle("MANAGE");
+        }
+
+        /// <summary>
+        /// ⭐ WO-1443 section 1 - THE ONE HEADING ON THIS SCREEN, and it lives HERE, in the host
+        /// chrome's panel title. Owner felt-test 2026-09-06, verbatim: <i>"remove the manage army and
+        /// sub line replace the manage top"</i>.
+        /// <para>Before this ruling the screen stacked THREE: this title read the bare word "MANAGE",
+        /// and <see cref="DeNelle.Core.Manage.ManageWorkspacePanel"/> then painted the breadcrumb
+        /// ("MANAGE / ARMY") and a sub line ("Every troop, unlocked or not.") down the top of the
+        /// body. The breadcrumb MOVED UP into this title; the renderer paints neither, and
+        /// <c>HeaderSubtitle</c> is deleted from the contract outright.</para>
+        /// <para>⚠ The model still owns the string - this method binds
+        /// <c>ManageWorkspaceVM.HeaderTitle</c> and never composes a breadcrumb of its own. A second
+        /// place that knows how to spell "MANAGE / ARMY" is the duplicated state that produced this
+        /// defect in the first place.</para>
+        /// <para>⚠ FIT, AND IT IS NOT PROVEN. The title zone is content x 0.432-0.739 (~31% of the
+        /// content width), and the longest breadcrumb is "MANAGE / RESEARCH / SCHOOL" at 26
+        /// characters against the old "MANAGE" at 6. FitSingleLine autosizes 34-52pt, so it should
+        /// seat - but that is arithmetic, not a capture. WO-1443 acceptance requires a headless
+        /// capture with the PNG opened; until then treat the long breadcrumbs as UNVERIFIED.</para>
+        /// </summary>
+        private void ApplyWorkspaceTitle(string headerTitle)
+        {
+            if (_workspaceTitle == null) return;
+
+            // ⛔ THE TITLE'S RECT IS NARROWED HERE, NOT IN ShowWorkspace. ONE WRITER, EVERY PATH.
+            //
+            // THE DEFECT, measured by the capture auditor on EVERY frame:
+            //   BUTTON OVER TEXT 'ManageHeaderActions/ManageQueueDrawerToggle' (x 269.2..550.6)
+            //   covers 'Zone_Header/Label' ("MANAGE / BUILD") (x -357.4..522.4) by 253.2x66.7 ref px
+            // The load-bearing number is the LABEL'S OWN LEFT EDGE: -357.4, i.e. its rect reached
+            // 357px LEFT OF THE PANEL. That is the kit frame's default full-width header rect - it
+            // had never been narrowed on those frames. The visible TEXT is centred inside it and
+            // looks clear (the last three captures confirm the title is not clipped), so this reads
+            // as a rect overlap rather than an ink overlap - but a rect that wide will sit under any
+            // control in the header row, and the auditor is right to fail it.
+            //
+            // WHY IT WAS NEVER NARROWED: the anchors were set in ShowWorkspace, which the CARD-TAP
+            // path runs and the MODEL path does not. `panel.Open()` then `vm.EnterTab(tab)` -
+            // the harness's own route (UICaptureLaunch.cs:7101-7111) and every deep-link door -
+            // dismisses the hub inside RenderWorkspace and never touches ShowWorkspace at all.
+            // ⚠ THIS IS THE SAME BUG AS THE DEAD SUBTREE, IN A DIFFERENT PLACE: one piece of state
+            // owned by two paths, correct on the one that was tested by hand and wrong on the one
+            // the harness uses. The cure is the same - the writer moves to where the value is set.
+            //
+            // ⛔ AND THERE IS NO SECOND QUEUE TOGGLE. Searched at source this round:
+            // `ManageQueueDrawerToggle` is constructed exactly ONCE (BuildTabs), and its 281px width
+            // in the audit matches the pill's authored 0.72-0.95 of a 1223px row exactly. The name
+            // is legacy - it IS the pill. The "exactly one queue affordance" claim holds here; what
+            // did not hold was my claim about the title's geometry.
+            var titleRt = _workspaceTitle.rectTransform;
+            titleRt.anchorMin = new Vector2(TitleLocalX0, titleRt.anchorMin.y);
+            titleRt.anchorMax = new Vector2(TitleLocalX1, titleRt.anchorMax.y);
+            titleRt.offsetMin = new Vector2(0f, titleRt.offsetMin.y);
+            titleRt.offsetMax = new Vector2(0f, titleRt.offsetMax.y);
+
+            string text = string.IsNullOrEmpty(headerTitle) ? "MANAGE" : headerTitle;
+            _workspaceTitle.text = text;
+            ElarionUiKit.FitSingleLine(_workspaceTitle, 34f, 52f);
+
+            // Print the rect the auditor measures, so the next capture NAMES it rather than leaving
+            // anyone to reason about a label they cannot see the bounds of. Same reason the queue
+            // pill prints its own rect: four rounds of coordinate theories ended with one printed
+            // rectangle, and this title has now produced a defect nobody could see either.
+            var corners = new Vector3[4];
+            titleRt.GetWorldCorners(corners);
+            FlowTrace.Step("Manage", "MANAGE_TITLE_RECT '" + text + "' world x " +
+                corners[0].x.ToString("0.#") + ".." + corners[2].x.ToString("0.#") +
+                " | size " + titleRt.rect.width.ToString("0") + "x" +
+                titleRt.rect.height.ToString("0") + "px | anchors " +
+                titleRt.anchorMin.x.ToString("0.###") + ".." + titleRt.anchorMax.x.ToString("0.###"));
         }
 
         /// <summary>
@@ -829,13 +1011,29 @@ namespace DeNelle.Village.UI
 
             if (_operationalListBand != null) _operationalListBand.SetActive(false);
             if (_stripHost != null) _stripHost.gameObject.SetActive(false);
-            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(false);
-            if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(!_queueDrawerOpen);
+            // The QUEUE pill is the ONE door and stays up on every paint - see ShowWorkspace's note.
+            if (_queueDrawerToggle != null) _queueDrawerToggle.gameObject.SetActive(true);
+
+            // ⭐ THE MODEL MOVED => LEAVE THE HUB. See ShowLauncher's note: EnterTab mints a fresh
+            // nav entry every time, so a changed reference means the player (or the harness, or a
+            // deep-link door) asked for a SCREEN. Without this, `panel.Open()` followed by
+            // `vm.EnterTab(tab)` left the hub in front of a fully-built grid - three doors onto
+            // nothing, and `content=0px` on every tab.
+            if (_hubShowing && _vm != null && !ReferenceEquals(_vm.Nav, _hubNav))
+            {
+                _hubShowing = false;
+                FlowTrace.Step("Manage", "hub dismissed - the model entered a screen");
+            }
+            ApplyScreenVisibility();
+            if (_hubShowing) return;           // the hub owns the screen; the workspace paints nothing
             if (_workspace == null || _vm == null) return;
             if (_queueDrawerOpen) return;      // the overlay owns the screen; nothing under it paints
 
             var nav = _vm.Nav;
-            _workspace.Bind(_vm.ComposeWorkspace());
+            var workspaceVm = _vm.ComposeWorkspace();
+            // WO-1443 section 1: the breadcrumb is bound into the PANEL TITLE, once, from the model.
+            ApplyWorkspaceTitle(workspaceVm.HeaderTitle);
+            _workspace.Bind(workspaceVm);
             FlowTrace.Step("Manage", "workspace screen=" +
                 (nav != null ? nav.Kind + "/" + ManageScreenVM.TabWordOf(nav.Tab) : "<none>") +
                 " item='" + (nav != null ? (nav.ItemId ?? nav.SchoolId ?? "-") : "-") +
@@ -857,13 +1055,23 @@ namespace DeNelle.Village.UI
             var bg = go.GetComponent<Image>();
             bg.color = new Color(0.012f, 0.014f, 0.018f, 0.995f);
 
-            BuildLauncherSummaries();
-            var pathHeading = ElarionUiKit.Label(_launcherHost, "Choose a path", 0.705f, 0.825f,
-                ElarionUi.Parchment, (int)ElarionUi.FontTitle, TextAlignmentOptions.Center,
-                0.04f, 0.96f, bold: true);
-            pathHeading.fontSize = 52f;
-            ElarionUiKit.FitSingleLine(pathHeading, 40f, 52f);
-
+            // ⛔ NO SUMMARY PANELS ON THE HUB. Do not call BuildLauncherSummaries here again.
+            // TWO independent reasons, and either alone is enough:
+            //  1. Mockup panel 1 is the title, three cards and CLOSE. There is no status row.
+            //  2. MEASURED: the summaries seat at y 0.835-0.985 of the host = 0.15 x ~583px = ~87px,
+            //     against ElarionUiKit.MinTouchPx (112). They have been ~25px short the whole time
+            //     and nobody saw it, because the hub has not been rendered since WO-2001 deleted
+            //     ShowLauncher - the geometry auditor only started reporting them when round 5
+            //     accidentally put the hub on every frame.
+            // They also sat exactly where the chrome row now lives (0.845-0.975 of the panel), so
+            // they would have overprinted the back arrow and the queue pill.
+            // ⛔ NO 'Choose a path' HEADING (single quotes here on purpose: the oracle that forbids
+            // it matches the double-quoted LITERAL, and a comment must not read as the defect).
+            // Mockup panel 1 has the title MANAGE and nothing else
+            // above the cards - the three cards, with their own descriptions, already say what the
+            // choice is. It is the same "a line that restates what the screen shows" the owner had
+            // removed from every other Manage screen on 2026-09-06 ("remove the manage army and sub
+            // line"), and it was only still here because the hub had not been shown since WO-2001.
             var gridGo = new GameObject("ManageCategoryGrid", typeof(RectTransform), typeof(GridLayoutGroup));
             var grid = (RectTransform)gridGo.transform;
             _launcherGrid = grid;
@@ -874,16 +1082,22 @@ namespace DeNelle.Village.UI
             grid.anchorMin = new Vector2(0.03f, 0.055f);
             grid.anchorMax = new Vector2(0.97f, 0.695f);
             grid.offsetMin = grid.offsetMax = Vector2.zero;
+            // ⭐ THREE CARDS IN ONE ROW - the owner's mockup, panel 1 ("MANAGE (MAIN) - Simple entry
+            // with three core options"): BUILD / ARMY / RESEARCH, each with a one-line description,
+            // CLOSE beneath. CAPTURE_LOOP_GOAL.md 3.0c item 2 supersedes WO-2001's launcher
+            // retirement FOR THIS SCREEN, and says so in those words.
+            // It was a 2x2 of FOUR (Defense / Buildings / Troops / Research). Defense and Buildings
+            // are ONE destination since WO-2001 merged them into BUILD, so the fourth card had been
+            // pointing at half of a tab that no longer exists on its own.
             var layout = gridGo.GetComponent<GridLayoutGroup>();
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            layout.constraintCount = 2;
-            layout.spacing = new Vector2(24f, 20f);
+            layout.constraintCount = 3;
+            layout.spacing = new Vector2(24f, 0f);
             layout.padding = new RectOffset(14, 14, 14, 14);
             Canvas.ForceUpdateCanvases();
-            float width = Mathf.Max(1f, grid.rect.width - layout.padding.horizontal - layout.spacing.x);
-            float height = Mathf.Max(1f, grid.rect.height - layout.padding.vertical - layout.spacing.y);
-            layout.cellSize = new Vector2(width * 0.5f, height * 0.5f);
-
+            float width = Mathf.Max(1f, grid.rect.width - layout.padding.horizontal - layout.spacing.x * 2f);
+            float height = Mathf.Max(1f, grid.rect.height - layout.padding.vertical);
+            layout.cellSize = new Vector2(width / 3f, height);
         }
 
         private void RenderLauncherCards()
@@ -892,28 +1106,35 @@ namespace DeNelle.Village.UI
             for (int i = _launcherGrid.childCount - 1; i >= 0; i--)
                 Destroy(_launcherGrid.GetChild(i).gameObject);
 
+            // ⛔ THREE, IN THIS ORDER, AND DEFENSE IS NOT ONE OF THEM.
+            // Mockup panel 1 draws BUILD / ARMY / RESEARCH. `ManageTab.Buildings` IS the mockup's
+            // BUILD: ShowOperational maps Defense and Buildings alike onto ManageTabId.Build
+            // (:1189-1191), because WO-2001 merged them. A Defense card here would open the same
+            // destination as the Build card and read as a fourth place to go.
             ManageTab[] tabs =
             {
-                ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research
+                ManageTab.Buildings, ManageTab.Troops, ManageTab.Research
             };
             for (int i = 0; i < tabs.Length; i++)
             {
                 ManageTab captured = tabs[i];
-                bool available = captured == ManageTab.Defense || captured == ManageTab.Research
-                    || _vm.VisibleTabs.Contains(captured);
+                bool available = captured == ManageTab.Research
+                    || _vm.VisibleTabs.Contains(captured) || _vm.VisibleTabs.Contains(ManageTab.Defense);
                 // BarracksUnlock is the one runtime authority used by the building,
                 // drillmaster and training door. Do not derive this from a second flag.
                 if (captured == ManageTab.Troops) available = BarracksUnlock.IsUnlocked;
-                string title = ManageScreenVM.TabLabels[(int)captured];
+                // The card WORDS are the mockup's, not the legacy tab labels: panel 1 reads
+                // BUILD / ARMY / RESEARCH. "Buildings" and "Troops" are this host's internal
+                // vocabulary and the player never sees them anywhere else on this screen.
+                string title = HubTitleFor(captured);
                 string purpose = captured == ManageTab.Troops && !available
                     ? "Build a Barracks to unlock" : PurposeFor(captured);
                 string faceText = captured == ManageTab.Troops && !available
-                    ? "BUILD A BARRACKS" : title.ToUpperInvariant();
+                    ? "BUILD A BARRACKS" : title;
                 var card = ElarionUiKit.BuildObsidianButton(_launcherGrid, faceText,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
-                    !available ? ElarionUiKit.ObsidianButtonColor.Gray : captured == ManageTab.Defense
-                        ? ElarionUiKit.ObsidianButtonColor.Red
-                        : ElarionUiKit.ObsidianButtonColor.Yellow,
+                    !available ? ElarionUiKit.ObsidianButtonColor.Gray
+                               : ElarionUiKit.ObsidianButtonColor.Yellow,
                     Vector2.zero, Vector2.one, () => ActivateLauncherCard(captured));
                 if (card == null) continue;
                 // Locked cards remain tappable so the refusal is explicit. Navigation
@@ -931,38 +1152,77 @@ namespace DeNelle.Village.UI
                 // border are art, while title, purpose, count and interaction remain live.
                 // Put the sprite on the Button's own target graphic so its full rectangle
                 // remains the hit target and ColorTint supplies focus/press feedback.
-                var cardFace = card.GetComponent<Image>();
-                var cardSprite = Resources.Load<Sprite>(LauncherArtPath(captured));
-                if (cardFace != null && cardSprite != null)
-                {
-                    cardFace.sprite = cardSprite;
-                    cardFace.type = Image.Type.Simple;
-                    cardFace.preserveAspect = false; // kit card aspect is authored for this seat
-                    cardFace.color = Color.white;
-                    card.targetGraphic = cardFace;
-                }
-
+                // ⛔ THE CARD IS STACKED - ART ON TOP, NAME, THEN THE DESCRIPTION - which is what
+                // mockup panel 1 draws. The previous seat was art-LEFT / text-RIGHT (title at
+                // x 0.49-0.96), correct for the 2x2 of wide cards and wrong for three tall ones.
+                // ⚠ ART GAP, NAMED NOT FAKED: the delivered card plates
+                // (Assets/Resources/UI/ElarionMedieval/cards/*.png) are 1963x789 LANDSCAPE strips
+                // with the illustration in their left third - drawn for the old wide seat. They are
+                // painted preserveAspect INSIDE the art zone so a tall card letterboxes them rather
+                // than stretching them, which is honest but is not what the mockup shows. The three
+                // portrait-shaped hub images the mockup draws (a building, a helmet, a book) do not
+                // exist on disk, and `cards/troops.png` - the UNLOCKED army card - has never
+                // existed at all; only `cards/troops-locked.png` does. That is an art request.
+                // ⛔ THE HUB CARDS CARRY NO ILLUSTRATION, ON PURPOSE, UNTIL THE ART EXISTS.
+                // OWNER-FACING REASON, and the coordinator's call after seeing it: the delivered
+                // plates (Assets/Resources/UI/ElarionMedieval/cards/*.png) are 1963x789 LANDSCAPE
+                // strips with the illustration in their left third, drawn for the retired wide
+                // 2x2 seat. preserveAspect-ing one into a tall card letterboxes it, leaving
+                // two-thirds of the card black - which reads as BROKEN, not as art-pending, and was
+                // the most visible thing on the screen. Text-only cards read as deliberate.
+                // ⚠ THIS IS AN INTERIM, AND THE ART IS STILL OWED: mockup panel 1 draws three
+                // PORTRAIT images filling each card (a building, a helmet, a book). They do not
+                // exist on disk, and `cards/troops.png` - the UNLOCKED army card - has never existed
+                // at all; only `cards/troops-locked.png` does. Restore the art here the day those
+                // three files land, and not by re-pointing at the landscape strips.
+                // LauncherArtPath is kept: it still answers for the locked-card badge path and it is
+                // the name an art request should quote.
+                // ⛔ THE CARD TEXT FORMAT IS SHARED WITH THE HERO DECK AND IS PINNED ACROSS BOTH.
+                // HudLabelFitRegression's [deck-card-labels] case reads THIS FILE as the REFERENCE
+                // and requires PlayerDeckWorkspace's Hero cards to match it, line for line:
+                // It parities four things: the title's font SIZE, its ALIGNMENT, its FitSingleLine
+                // range, and the description's FitSingleLine range.
+                //
+                // ⛔ DO NOT WRITE THOSE SEARCH TOKENS INTO THIS COMMENT. (CLI, at the gate
+                // 2026-09-06.) The suite scans this file for the token and reads to the next ';',
+                // and it does NOT strip comments first - so a comment quoting `face.` + `fontSize`
+                // made the parser read the COMMENT instead of the assignment forty lines below,
+                // reporting the value as '", "'. That is a whole regression round spent on prose.
+                // The identical failure hit the wallet lane the same afternoon, where a `/api/...*`
+                // path inside a comment opened a false block comment and ate 73% of a file before
+                // its oracle searched it. Describe the tokens; never spell them.
+                //
+                // The WO-1443 hub rewrite quietly broke all four - it deleted the title's size line,
+                // moved the title fit to 30f/48f and replaced the description's FitSingleLine with a
+                // fixed fontSize. The suite caught it, which is exactly what the coupling is for:
+                // two card surfaces drifting apart is invisible until someone opens both.
+                // REALIGNED TO THE DECK rather than re-pointed away: 36f / Center / 30f-40f /
+                // 24f-30f are the deck's proven numbers, they are legible at the hub's card width,
+                // and Manage stays the reference. If these ever need to move, MOVE BOTH FILES.
                 var face = card.GetComponentInChildren<TMP_Text>();
                 if (face != null)
                 {
                     var rt = face.rectTransform;
-                    rt.anchorMin = new Vector2(0.49f, 0.55f);
-                    rt.anchorMax = new Vector2(0.96f, 0.90f);
+                    rt.anchorMin = new Vector2(0.04f, 0.52f);
+                    rt.anchorMax = new Vector2(0.96f, 0.74f);
                     rt.offsetMin = rt.offsetMax = Vector2.zero;
                     face.fontSize = 36f;
                     face.alignment = TextAlignmentOptions.Center;
                     face.color = available ? ElarionUi.Gold : ElarionUi.ParchmentDim;
                     ElarionUiKit.FitSingleLine(face, 30f, 40f);
                 }
-                var description = ElarionUiKit.Label(card.transform, purpose, 0.26f, 0.52f,
+                var description = ElarionUiKit.Label(card.transform, purpose, 0.26f, 0.48f,
                     available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
-                    (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.49f, 0.96f);
+                    (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.08f, 0.92f);
                 ElarionUiKit.FitSingleLine(description, 24f, 30f);
 
                 if (!available && captured == ManageTab.Troops)
                     BuildLockBadge(card.transform);
 
             }
+
+            // The Heart's door lives on the hub now, not in the chrome row - see BuildHeartFace.
+            BuildHeartFace();
         }
 
         private void BuildLauncherSummaries()
@@ -1038,6 +1298,46 @@ namespace DeNelle.Village.UI
             image.raycastTarget = false;
         }
 
+        /// <summary>
+        /// ⭐ SHOW THE HUB - mockup panel 1. Restored by WO-1443 after WO-2001 deleted it.
+        /// <para>⚠ WO-2001's ShowLauncher was deleted because a REQUIRED four-tile chooser stood
+        /// between the player and every destination while each destination was a narrow rail. Both
+        /// halves of that have changed: the chooser is now THREE cards the owner drew herself, and
+        /// what it leads to is a full-width grid. It is also what lets the BUILD/ARMY/RESEARCH row
+        /// leave the workspace body and give the grid back its ~132px.</para>
+        /// </summary>
+        private void ShowLauncher()
+        {
+            _hubShowing = true;
+            // ⭐ REMEMBER WHICH SCREEN THE MODEL WAS ON when the hub went up. RenderWorkspace drops
+            // the hub the moment the model moves to a DIFFERENT nav entry, which is what makes
+            // `vm.EnterTab(...)` - the path the capture harness and every non-card door use
+            // (UICaptureLaunch.cs:7101-7111) - land on the grid instead of leaving the hub in front
+            // of it. EnterTab always assigns a FRESH ManageNavEntry (ManageScreenVM.cs:2976), even
+            // for a re-entry into the same tab, so reference identity is a reliable "did the player
+            // ask for a screen" signal. A plain Rebuild (a queue tick, a timer) reuses the entry and
+            // therefore does NOT dismiss the hub, which is the behaviour we want.
+            _hubNav = _vm != null ? _vm.Nav : null;
+            ApplyScreenVisibility();
+            if (_operationalListBand != null) _operationalListBand.SetActive(false);
+            if (_stripHost != null) _stripHost.gameObject.SetActive(false);
+            _categoryNavigationCommitted = false;
+            if (_workspaceTitle != null) ApplyWorkspaceTitle("MANAGE");
+            FlowTrace.Step("Manage", "hub shown (BUILD / ARMY / RESEARCH)");
+        }
+
+        /// <summary>
+        /// The model asked to leave the screen. On a root grid that now means RETURN TO THE HUB,
+        /// not close: the mockup's back arrow walks BUILD -> hub, and only CLOSE leaves Manage.
+        /// Closing from a root grid would skip panel 1 entirely and make the hub unreachable
+        /// after the first tap - a door that exists but that no player can get back to.
+        /// </summary>
+        private void OnModelWantsOut()
+        {
+            if (!_hubShowing) { ShowLauncher(); return; }
+            Close();
+        }
+
         private void ActivateLauncherCard(ManageTab tab, bool commitLauncherNavigation = true)
         {
             if (commitLauncherNavigation && _categoryNavigationCommitted) return;
@@ -1085,10 +1385,27 @@ namespace DeNelle.Village.UI
             switch (tab)
             {
                 case ManageTab.Defense: return "Towers, walls & gates";
-                case ManageTab.Buildings: return "Town structures & upgrades";
-                case ManageTab.Troops: return "Train and improve your army";
-                case ManageTab.Research: return "Discover realm advancements";
+                case ManageTab.Buildings: return "Construct and upgrade your town";
+                case ManageTab.Troops: return "Train and manage your troops";
+                case ManageTab.Research: return "Unlock powerful advancements";
                 default: return "Open this management line";
+            }
+        }
+
+        /// <summary>
+        /// The hub card's PLAYER-FACING word, straight off mockup panel 1: BUILD / ARMY / RESEARCH.
+        /// <para>⚠ Deliberately NOT <c>ManageScreenVM.TabLabels</c>. Those read "Buildings" and
+        /// "Troops" - this host's internal vocabulary, which the player meets nowhere else on the
+        /// Manage screens (the workspace already says BUILD and ARMY). Two words for one destination
+        /// is the naming drift CLAUDE.md 7 keeps recording; the mockup settles which word wins.</para>
+        /// </summary>
+        private static string HubTitleFor(ManageTab tab)
+        {
+            switch (tab)
+            {
+                case ManageTab.Troops: return "ARMY";
+                case ManageTab.Research: return "RESEARCH";
+                default: return "BUILD";
             }
         }
 
@@ -1296,16 +1613,60 @@ namespace DeNelle.Village.UI
             drawerImage.type = Image.Type.Sliced;
             drawerImage.color = Color.white;
 
-            var heading = ElarionUiKit.Label(drawer, "BUILDERS / QUEUE", 0.87f, 0.98f,
-                ElarionUi.Gold, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                0.04f, 0.66f, bold: true);
-            ElarionUiKit.FitSingleLine(heading);
+            // ⛔ THE OVERLAY'S HEADER IS A CENTRED "QUEUE" AND AN X. THERE IS NO 'HIDE' BUTTON.
+            //
+            // THE DEFECT IT REPLACES, measured by the capture auditor on EVERY tab:
+            //   BUTTON OVER TEXT [ManageFlow_BUILD_queue] 'ManageQueueDrawer/ObsBtn_HIDE'
+            //     (x 250.3..573.4, y 81.7..221.1) covers
+            //     '...QueueRail_Builder/Cards/Card_wall_wood:13:9/Verb/Txt' ("REPAIR")
+            //     (x 202.7..370.7, y 100.6..136.6) by 120.3x36 ref px
+            // ...and the same over "TRAIN" on ARMY and "LEARN" on RESEARCH, plus each card's icon.
+            // The arithmetic is plain once seen: HIDE was seated at y 0.70-0.99 while the list zone
+            // below runs 0.02-0.86, so its lower 16% sat ON the first queue card. THE BUTTON THAT
+            // PERFORMS THE JOB WAS UNDERNEATH THE BUTTON THAT CLOSES THE DRAWER - a player tapping
+            // REPAIR / TRAIN / LEARN on the top row hit HIDE instead. That is the whole of the
+            // outstanding geometry=20 / touch=20 count, on one control.
+            //
+            // The mockup's panel 8 settles the shape rather than the coordinate: title QUEUE centred,
+            // an X at the top-right, and nothing else in the header. The X is seated ABOVE the list
+            // zone's 0.86 ceiling with a gutter, so it cannot reach a card at any drawer height.
+            var heading = ElarionUiKit.Label(drawer, "QUEUE", 0.88f, 0.99f,
+                ElarionUi.Gold, (int)ElarionUi.FontBody, TextAlignmentOptions.Center,
+                0.20f, 0.80f, bold: true);
+            ElarionUiKit.FitSingleLine(heading, 28f, 44f);
             _drawerHeading = heading != null ? heading.gameObject : null;
-            var hide = ElarionUiKit.BuildObsidianButton(drawer, "HIDE",
+
+            // A SQUARE X in the corner, as drawn. ASCII "X", never a glyph character - this
+            // project's fonts render non-ASCII as tofu (the same rule that made BACK a "<-").
+            //
+            // ⛔ AUTHORED AT THE TOUCH FLOOR IN PIXELS, NOT AS A FRACTION OF THE DRAWER.
+            // MEASURED last round: 'ManageQueueOverlayClose' resolved 71.8x57.7 ref px - the short
+            // side 54.3px UNDER MinTouchPx(112), less than half the floor - because 0.875-0.995 of
+            // a drawer whose height varies is not a promise about pixels. That is the identical
+            // mistake the detail CTA made at 104.1px, and the identical cure: take the px, then
+            // convert to the fraction this rect needs. A clamp that grows a control symmetrically
+            // about its centre spills it into its neighbours, which on this header is the title.
+            // ⚠ A FIXED PIXEL SIZE PINNED TO THE CORNER, not an anchor fraction. `drawer.rect` is
+            // ZERO on the frame this is built - no layout has run yet - so any fraction derived
+            // from it would be a guess, and a fraction of a drawer whose height varies cannot
+            // promise a px floor anyway. Collapsing the anchors to the top-right corner and setting
+            // sizeDelta gives exactly MinTouchPx + 8 on both axes at every drawer size, with no
+            // measurement needed and nothing for ClampMinTouch to rescue.
+            const float ClosePx = 120f;   // ElarionUiKit.MinTouchPx (112) + 8px margin
+            var close = ElarionUiKit.BuildObsidianButton(drawer, "X",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.70f, 0.70f), new Vector2(0.97f, 0.99f), ToggleQueueDrawer);
-            ElarionUiKit.ClampMinTouch(hide);
-            _drawerHide = hide != null ? hide.gameObject : null;
+                new Vector2(0.9f, 0.9f), new Vector2(0.99f, 0.99f), ToggleQueueDrawer);
+            if (close != null)
+            {
+                var closeRt = (RectTransform)close.transform;
+                closeRt.anchorMin = closeRt.anchorMax = new Vector2(1f, 1f);
+                closeRt.pivot = new Vector2(1f, 1f);
+                closeRt.sizeDelta = new Vector2(ClosePx, ClosePx);
+                closeRt.anchoredPosition = new Vector2(-14f, -10f);
+            }
+            ElarionUiKit.ClampMinTouch(close);
+            if (close != null) close.gameObject.name = "ManageQueueOverlayClose";
+            _drawerHide = close != null ? close.gameObject : null;
 
             // WO-1368: the rail no longer owns a fixed band of its own — it is mounted as the
             // first row of the list below (see RenderQueueDrawer), so the 200px of card art can
@@ -1448,7 +1809,15 @@ namespace DeNelle.Village.UI
         private void SyncQueueToggleFace()
         {
             if (_queueDrawerToggle == null) return;
-            _queueDrawerToggle.gameObject.SetActive(_vm != null && _vm.Channels.Count > 0);
+            // ⛔ UNCONDITIONALLY ACTIVE. This used to read
+            //     SetActive(_vm != null && _vm.Channels.Count > 0)
+            // which was safe while the workspace painted its own queue face and this was a spare
+            // chrome control. Since WO-1443 this pill IS the only door to the queue on every Manage
+            // screen (measured: the operational OPEN QUEUE bands are in a list band held inactive,
+            // the activity strip is retired, the HUD Builders chip's door went in WO-911), so a
+            // condition on it is a condition on the door - the WO-1430 defect class exactly.
+            // The mockup also draws the pill on all eight numbered panels with no empty state.
+            _queueDrawerToggle.gameObject.SetActive(true);
             var label = _queueDrawerToggle.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
             {
@@ -1525,19 +1894,17 @@ namespace DeNelle.Village.UI
             // to be looking at a building whose next tier was gated. A gate that gates nearly all
             // content had no door of its own. This face is that door.
             //
-            // SEAT: x 0.225-0.395 of the header-actions row. BACK owns 0.035-0.205 and QUEUE owns
-            // 0.795-0.965. MEASURED, not assumed: FrameCore's header zone is content x 0.24-0.88
-            // (ElarionUiKit.cs:442, `z.header = new Vector4(0.24f, 0.900f, 0.88f, 0.972f)`), and the
-            // title is anchored to its LOCAL 0.30-0.78 inside that zone in BOTH launcher and
-            // operational modes = content x 0.432-0.739. So the title starts 0.037 clear of this
-            // face's right edge. ⚠ At the title's previous local 0.22 it resolved to content 0.381
-            // and would have overlapped this face by 0.004 - the frame's header does NOT start at
-            // 0.28; that is a DIFFERENT frame's zone (line 469, FrameOptions).
-            // The medallion socket ends at content x 0.220 (`z.medallion` :439), which this face
-            // clears; BACK at 0.035-0.205 already sits over that socket and always has.
-            // HEIGHT: the row is 0.835-0.965 of the panel (0.13 x ~972px = ~126px), clear of
+            // ⚠ SEAT RE-CUT 2026-09-06 (WO-1443, the mockup round). The chrome row is now
+            //   <-  HEART Ln | BUILD  ARMY  RESEARCH |  QUEUE(n)
+            // in ONE thin band (WorkspaceHeaderY0..Y1), because the mockup gives the GRID the screen
+            // and leaves the chrome a single row. The Heart face keeps its door and its live level
+            // but is deliberately small and unobtrusive: it appears NOWHERE in the mockup and
+            // survives only because it is the sole unconditional route to PanelId.Heart and
+            // HeartSurfaceRegression.cs:118-123 fails without it. When a door for the Heart exists
+            // elsewhere, this face is the first thing that should go.
+            // HEIGHT: the row is 0.845-0.975 (~115px at the measured reference), clear of
             // MinTouchPx(112) without ClampMinTouch having to rescue it.
-            BuildHeartFace();
+            BuildBackArrow();
 
             if (_vm == null || _vm.VisibleTabs.Count == 0)
             {
@@ -1545,16 +1912,160 @@ namespace DeNelle.Village.UI
                     ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.40f, 1f);
                 return;
             }
+            // ⚠ NO DESTINATION FACES IN THIS ROW YET, AND THAT IS A DELIBERATE HOLD.
+            // The mockup's navigation is the HUB (screen 1) plus the back arrow - there is no tab
+            // row on any panel. Moving BUILD/ARMY/RESEARCH up here as chrome would free the
+            // workspace's 132px band, and the arithmetic says that is worth ~45px per ARMY tile.
+            // It is NOT done in this round because this host's own tab vocabulary is the LEGACY
+            // four (`ManageScreenVM.VisibleTabs` is a `List<ManageTab>` of Defense/Buildings/Troops/
+            // Research) while the workspace speaks the WO-2001 three (`ManageTabId` Build/Army/
+            // Research). Rendering the legacy four here would put a DEFENSE tab back on a screen
+            // that merged it into BUILD - a visible regression traded for vertical space.
+            // The hub (screen 1) retires both lists at once and is the honest place to do this.
+
+            // ⭐ QUEUE IS A SMALL PILL AT TOP-RIGHT WITH A COUNT BADGE - the mockup draws it on all
+            // eight numbered panels and CAPTURE_LOOP_GOAL.md 3.0b states it. Owner, 2026-09-06:
+            // "the queuing doesn't deserve a place here... something small up with like the previous
+            // next back kind of buttons - I don't think it deserves its own lane."
+            // ⚠ THIS SUPERSEDES THE TAB-ROW SEAT of a few hours earlier: that was built from her
+            // words before her picture was in the repo, and the picture had said "small pill,
+            // top-right" since 09:26 that morning. The renderer no longer draws a queue face at all.
+            // ⚠ SEAT PULLED IN 2026-09-06 after the capture. At 0.845-0.965 the pill ran into the
+            // frame's ornate right border: ManageFlow_ARMY_gridtop_2670x1200.png shows "QUEUE" cut
+            // mid-word. 0.775-0.925 clears the border and is wide enough for the word plus its badge.
+            // MEASURED REFERENCE, not guessed: in that same frame the BUILD/ARMY/RESEARCH faces -
+            // which are laid out across the workspace band, i.e. the panel's real usable content -
+            // end at about x 0.895 of the frame, and the ornate border begins just outside that.
+            // Anything seated past it is drawn over the frame art or clipped by it.
             _queueDrawerToggle = ElarionUiKit.BuildObsidianButton(_tabsHost, "QUEUE",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.795f, 0f), new Vector2(0.965f, 1f), ToggleQueueDrawer);
+                // ⭐ WIDENED, AND THE INSTRUMENTATION IS WHY. Four rounds moved this pill's x
+                // coordinate on the theory that the frame border was clipping it. The rect it
+                // printed settled it:
+                //   MANAGE_QUEUE_PILL_RECT world x 1791.3..2019.4  size 184x120px
+                //   anchors 0.8..0.95  row size 1223x120px
+                // The row spans world ~813..2036, so the pill ENDED 17px INSIDE the row's own right
+                // edge - and the frame's border art (measured off frame_core.png: interior to
+                // x 0.950 at this height) was never near it. THE FRAME WAS INNOCENT. The label was
+                // overflowing its own 184px button, so the final E was cut off INSIDE the pill and
+                // the corner badge had nowhere to sit.
+                // 0.72-0.95 of a 1223px row = ~281px, which seats QUEUE at label size with room for
+                // the badge. Widening rather than shrinking the type, per the same law the rail chip
+                // records (HudKitController.cs:1866-1878): fewer characters or more room, never a
+                // smaller font - a band under ~24px renders BLANK, not small.
+                new Vector2(0.720f, 0f), new Vector2(0.950f, 1f), ToggleQueueDrawer);
             if (_queueDrawerToggle != null)
             {
                 _queueDrawerToggle.gameObject.name = "ManageQueueDrawerToggle";
                 // WO-1393: visible whether the drawer is open or closed - a second tap closes it.
                 SyncQueueToggleFace();
                 ElarionUiKit.ClampMinTouch(_queueDrawerToggle);
+                BuildQueueCountBadge(_queueDrawerToggle.transform);
+
+                // ⛔ INSTRUMENT, DO NOT INFER. THIS LINE EXISTS BECAUSE I GUESSED THREE TIMES.
+                // The pill has been reported clipped mid-word with its badge outside the frame in
+                // three consecutive captures, and each of my three fixes was a coordinate reasoned
+                // from a RENDERED EDGE - the same class of error as reading a comment instead of the
+                // code. MEASURED this round from the frame asset itself (System.Drawing alpha walk
+                // over Assets/Resources/RpgUi/frame/frame_core.png, 1230x1833): at the chrome row's
+                // own height the border art ends at x 0.048..0.950 of the frame, and the pill's
+                // computed seat is nowhere near that - so my model of the failure is WRONG, and a
+                // fourth guess would be worth nothing.
+                // This prints where the pill ACTUALLY lands, in reference px, so the next capture
+                // names the rect instead of me theorising about it. Read this line before touching
+                // the pill's coordinates again (CLAUDE.md 12: the data pinpoints the dead step).
+                var pillRt = _queueDrawerToggle.transform as RectTransform;
+                if (pillRt != null)
+                {
+                    var corners = new Vector3[4];
+                    pillRt.GetWorldCorners(corners);
+                    FlowTrace.Step("Manage", "MANAGE_QUEUE_PILL_RECT world x " +
+                        corners[0].x.ToString("0.#") + ".." + corners[2].x.ToString("0.#") +
+                        " y " + corners[0].y.ToString("0.#") + ".." + corners[2].y.ToString("0.#") +
+                        " | size " + pillRt.rect.width.ToString("0") + "x" +
+                        pillRt.rect.height.ToString("0") + "px" +
+                        " | anchors " + pillRt.anchorMin.x.ToString("0.###") + ".." +
+                        pillRt.anchorMax.x.ToString("0.###") +
+                        " | row size " + _tabsHost.rect.width.ToString("0") + "x" +
+                        _tabsHost.rect.height.ToString("0") + "px");
+                }
             }
+        }
+
+        /// <summary>
+        /// The red count badge that rides the QUEUE pill's top-right corner, exactly as the mockup
+        /// draws it on every panel.
+        /// <para>⚠ COLOURBLIND LAW (CAPTURE_LOOP_GOAL 3c): the owner is red/green colourblind and
+        /// meaning may never be carried by hue alone. The MEANING here is the DIGIT - how many jobs
+        /// are in flight - and the digit is legible in greyscale. The red disc is decoration that
+        /// matches her picture, not the channel. If the badge ever loses its number, it stops
+        /// meaning anything and must be removed rather than kept as a coloured dot.</para>
+        /// <para>Zero jobs paints NOTHING - the mockup shows a badge only where there is a count,
+        /// and a "0" badge is a notification that nothing happened.</para>
+        /// </summary>
+        private void BuildQueueCountBadge(Transform pill)
+        {
+            if (pill == null) return;
+            int jobs = 0;
+            if (_vm != null)
+                for (int i = 0; i < _vm.Channels.Count; i++)
+                    jobs += Mathf.Max(0, _vm.Channels[i].Depth);
+            if (jobs <= 0) return;
+
+            // ⛔ THE BADGE LIVES INSIDE THE PILL. Do not push it past 1.0 on either axis again.
+            // It was authored at 0.78-1.06 x / 0.52-1.18 y - i.e. deliberately overhanging the
+            // corner, the way a notification badge usually does. MEASURED in
+            // ManageFlow_ARMY_gridtop_2670x1200.png: the overhang put it OUTSIDE THE PANEL FRAME
+            // ENTIRELY, a red square with "15" floating above the top-right corner of the modal,
+            // detached from the pill it belongs to. A rect that leaves its parent leaves the panel;
+            // this chrome row sits at the frame's edge and has no margin to overhang into.
+            // Tucked on the pill's top-right corner and FULLY INSIDE it - the mockup's badge sits on
+            // the corner within the panel, and this project has already proved that an overhanging
+            // rect at this seat leaves the frame entirely (round 3: a red "15" floating above the
+            // modal). On the widened pill (~281px) this is a ~59px disc, which is a badge rather
+            // than a second button.
+            var disc = ElarionUiKit.AddImage(pill, "ManageQueueCountBadge",
+                new Vector2(0.74f, 0.50f), new Vector2(0.95f, 0.94f),
+                new Color(0.72f, 0.10f, 0.10f, 1f), rounded: true);
+            var discImage = disc != null ? disc.GetComponent<Image>() : null;
+            if (discImage != null) discImage.raycastTarget = false;
+            if (disc == null) return;
+
+            var count = ElarionUiKit.Label(disc.transform, jobs.ToString(), 0.06f, 0.94f,
+                ElarionUi.Parchment, (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.02f, 0.98f,
+                bold: true);
+            ElarionUiKit.FitSingleLine(count, 20f, 30f);
+        }
+
+        /// <summary>
+        /// ⭐ THE BACK ARROW - mockup 3.0b, on every numbered panel, top-LEFT.
+        /// <para>Built HERE, inside the row's own rebuild, because <see cref="BuildTabs"/> clears
+        /// every child of <c>_tabsHost</c> on entry. Round 5 built it once at chrome time and the
+        /// first Render deleted it; the capture showed a Manage screen with no way back.</para>
+        /// <para>⚠ ASCII "&lt;-", never the left-arrow character - this project's fonts render
+        /// non-ASCII as tofu. <c>RpgUi/button/arrow.png</c> was measured and rejected: it is a
+        /// filled RIGHT-pointing play triangle, and a mirrored play glyph reads as "rewind".</para>
+        /// <para>Hidden on the hub (<see cref="ApplyScreenVisibility"/>): panel 1 is the root, and
+        /// CLOSE is its way out.</para>
+        /// </summary>
+        private void BuildBackArrow()
+        {
+            if (_tabsHost == null) return;
+            // 0-0.095 of the row. At the measured reference (~1218px row) that is ~116px, clear of
+            // MinTouchPx(112) - authored to the floor, not left to ClampMinTouch.
+            _workspaceBack = ElarionUiKit.BuildObsidianButton(_tabsHost, "<-",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0f, 0f), new Vector2(0.095f, 1f), OnBackPressed);
+            if (_workspaceBack == null)
+            {
+                FlowTrace.Fail("Manage", "the BACK arrow failed to build - the screen has no visible " +
+                    "way back, which is what ManageFlow_ARMY_gridtop showed on 2026-09-06.");
+                return;
+            }
+            _workspaceBack.gameObject.name = "ManageWorkspaceBack";
+            ElarionUiKit.ClampMinTouch(_workspaceBack);
+            MedievalUiSkin.ApplyButton(_workspaceBack);
+            _workspaceBack.gameObject.SetActive(!_hubShowing);
         }
 
         /// <summary>
@@ -1566,11 +2077,54 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void BuildHeartFace()
         {
-            if (_tabsHost == null) return;
-            var heart = ElarionUiKit.BuildObsidianButton(_tabsHost,
+            // ⭐ THE HEART DOOR MOVED TO THE HUB. It is no longer in the chrome row on ANY screen.
+            //
+            // It sat there since WO-2003/WO-2017 for one reason - it was the only unconditional
+            // route to PanelId.Heart, and this suite's own [heart-has-a-door] case exists to stop it
+            // vanishing. That reason is unchanged and the door is unchanged; only its SEAT moved.
+            //
+            // WHY IT MOVED: it appears in none of the mockup's nine panels, and three rounds of
+            // trying to make it small enough to be unobtrusive ended with "HEART ..." truncating at
+            // ~177px. Shrinking a face below its own label does not make it quiet, it makes it
+            // broken - and the honest fix, which the hub finally makes possible, is to put it where
+            // a root-level destination belongs. Panel 1 does not draw it either; it is there because
+            // the Heart must keep a door, and the hub is the least wrong place for one extra
+            // affordance: it is the ROOT, it already lists destinations, and grid screens 2/4/6 now
+            // match the mockup's chrome exactly - back arrow, centred title, queue pill, nothing else.
+            //
+            // ⛔ DO NOT re-seat it in the chrome row to "make it reachable faster". If the Heart
+            // ever gets a door elsewhere (the town, the HUD, a quest), delete the hub face too and
+            // move HeartSurfaceRegression's pin with it - do not end up with two.
+            BuildHubHeartDoor();
+        }
+
+        /// <summary>
+        /// The Heart's door, on the HUB. Small, under the three cards, carrying the LIVE level.
+        /// <para>⚠ The level is read from <c>HeartProgression.Level</c> at build time and never
+        /// cached here - a second copy of a live number is the duplicated state this file keeps
+        /// paying for. The face is rebuilt with the hub, so the number cannot go stale.</para>
+        /// </summary>
+        private void BuildHubHeartDoor()
+        {
+            if (_launcherHost == null) return;
+            // RenderLauncherCards clears the CARD GRID, not this host, so a re-render would stack a
+            // second heart on the first. Drop any previous one before building.
+            for (int i = _launcherHost.childCount - 1; i >= 0; i--)
+            {
+                var child = _launcherHost.GetChild(i);
+                if (child == null || child.name != "ManageHeartFace") continue;
+                if (Application.isPlaying) Destroy(child.gameObject); else DestroyImmediate(child.gameObject);
+            }
+            var heart = ElarionUiKit.BuildObsidianButton(_launcherHost,
                 "HEART L" + DeNelle.Village.Buildings.Progression.HeartProgression.Level,
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.225f, 0f), new Vector2(0.395f, 1f), OpenHeartSurface);
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                // Under the card grid (which ends at 0.695) and above the shared CLOSE band.
+                // 0.38-0.62 of a ~1218px host is ~292px wide; 0.70-0.82 of a ~583px host is ~70px...
+                // NOT ENOUGH, so the band is 0.70-0.83 => ~76px. ⚠ ClampMinTouch is left to raise it
+                // to the 112px floor here, and that is stated rather than hidden: the hub's vertical
+                // budget between the cards and CLOSE is genuinely under one touch target, and the
+                // right fix is the hub's own band arithmetic, not a silently short button.
+                new Vector2(0.38f, 0.70f), new Vector2(0.62f, 0.83f), OpenHeartSurface);
             if (heart == null)
             {
                 FlowTrace.Fail("Manage", "the HEART face failed to build - the direct route to " +
@@ -1578,7 +2132,7 @@ namespace DeNelle.Village.UI
                 return;
             }
             heart.gameObject.name = "ManageHeartFace";
-            MedievalUiSkin.ApplyButton(heart, true);
+            MedievalUiSkin.ApplyButton(heart, false);
             ElarionUiKit.ClampMinTouch(heart);
         }
 

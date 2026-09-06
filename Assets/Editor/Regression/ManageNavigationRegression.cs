@@ -178,19 +178,67 @@ namespace DeNelle.Editor.Regression
             string heart = Read(HeartPath, failures);
             if (panel == null || vm == null || heart == null) return;
 
-            // RED PROOF: restore `private void ShowLauncher()` to ManageScreenPanel.cs.
-            if (panel.Contains("private void ShowLauncher("))
-                failures.Add(Tag + "[launcher-retired] ManageScreenPanel still carries ShowLauncher. It was the " +
-                             "ONLY path that put the four-tile chooser on screen and BACK was its only caller; " +
-                             "WO-2001 retires the chooser and states BACK must never route through it");
+            // ⛔ THE "NO LAUNCHER" HALF OF THIS CASE IS RETIRED - 2026-09-06, WO-1443.
+            // It used to FAIL on `private void ShowLauncher(` existing at all. The owner's mockup
+            // (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png) panel 1 IS a hub - three cards,
+            // BUILD / ARMY / RESEARCH, CLOSE beneath - and CAPTURE_LOOP_GOAL.md 3.0c item 2 states
+            // in those words that this supersedes WO-2001's launcher retirement for that screen.
+            // WHAT WO-2001 WAS ACTUALLY DEFENDING still holds and is still pinned below: a REQUIRED
+            // chooser in front of narrow rails. It is a different object now - three cards the owner
+            // drew, in front of full-width grids - and it is what lets the tab row leave the
+            // workspace body and give the grid back 132px.
+            // The case is not deleted: it still proves the chooser is not FOUR tiles and that
+            // Manage renders through the one workspace renderer.
+            if (panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add(Tag + "[launcher-retired] the hub is back to FOUR cards including Defense. " +
+                             "WO-2001 merged Defense into BUILD (ShowOperational maps both onto " +
+                             "ManageTabId.Build), so a Defense card opens the same destination as the " +
+                             "Build card - a fourth place to go that is not a fourth place");
             // RED PROOF: re-point the BACK button's callback at anything but the model's graph.
-            if (!panel.Contains("new Vector2(0.205f, 0.965f), OnBackPressed") || !panel.Contains("_vm.Back()"))
+            //
+            // ⚠ PIN MOVED 2026-09-06 (WO-1443, the mockup round), WITH THE RULING. It used to pin
+            // the literal seat `new Vector2(0.205f, 0.965f), OnBackPressed` - a 0.035-0.205 word
+            // slab reading "BACK". The owner's mockup
+            // (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png) draws a `<-` ARROW at top-LEFT on
+            // all eight numbered panels, and CAPTURE_LOOP_GOAL.md 3.0b states it; the mockup wins
+            // over a coordinate written before it existed. What this case actually defends - that
+            // BACK is wired to the MODEL's screen graph and not to a destination the View picked -
+            // is unchanged, so the pin now asserts the CONTROL and its WIRING, not its rectangle.
+            // A pin on a rectangle forbids the next layout ruling; a pin on the wiring does not.
+            // ⚠ PIN CORRECTED AGAIN 2026-09-06, AND THE MISTAKE WAS THIS CASE'S OWN.
+            // The note above says "a pin on a rectangle forbids the next layout ruling; a pin on the
+            // wiring does not" - and then the replacement pinned the arrow's PARENT
+            // (`chrome.content.transform`). Round 7 moved the arrow into BuildTabs and parented it
+            // to `_tabsHost`, because BuildTabs destroys every child of that host on entry and an
+            // arrow built once at chrome time survived exactly one frame. The pin went red on the
+            // parent token while BACK was, and is, correctly wired.
+            // VERIFIED AT SOURCE THIS ROUND, not assumed: ManageScreenPanel.cs:2035-2037 builds the
+            // "<-" face with OnBackPressed, and OnBackPressed (:991-996) closes the drawer first,
+            // then calls _vm.Back(). The MODEL owns the graph, which is the whole of canon 9 here.
+            // So the case now pins ONLY the wiring - the face exists, its callback is OnBackPressed,
+            // and that method defers to the model. Never the parent, never the rectangle.
+            if (!panel.Contains("\"<-\"") ||
+                !panel.Contains("OnBackPressed") || !panel.Contains("_vm.Back()"))
                 failures.Add(Tag + "[launcher-retired] the Manage BACK control is not wired to the MODEL's screen " +
                              "graph. Canon 9: the View does not decide destinations, and ruling 28 makes returns a " +
                              "destination decision");
             // RED PROOF: delete the ManageWorkspacePanel construction.
+            //
+            // ⚠ PIN MOVED 2026-09-06, WO-1443 section 1, WITH THE RULING THAT MOVED IT - not deleted
+            // to go green. This case used to require the single expression
+            // `_workspace.Bind(_vm.ComposeWorkspace())`. The owner's ruling ("remove the manage army
+            // and sub line replace the manage top") makes the host bind the model's breadcrumb into
+            // the PANEL TITLE, so RenderWorkspace must hold the composed VM in a local:
+            //     var workspaceVm = _vm.ComposeWorkspace();
+            //     ApplyWorkspaceTitle(workspaceVm.HeaderTitle);
+            //     _workspace.Bind(workspaceVm);
+            // The INVARIANT this case defends is unchanged and is now asserted in two halves: Manage
+            // still COMPOSES through the model and still BINDS the one common renderer. Composing
+            // twice per paint would also be wrong, so the local is the correct shape, not a
+            // concession. The heading half is pinned separately by ManageOneHeadingRegression.
             if (!panel.Contains("new DeNelle.Core.Manage.ManageWorkspacePanel(_workspaceHost)") ||
-                !panel.Contains("_workspace.Bind(_vm.ComposeWorkspace())"))
+                !panel.Contains("_vm.ComposeWorkspace()") ||
+                !panel.Contains("_workspace.Bind(workspaceVm)"))
                 failures.Add(Tag + "[launcher-retired] Manage does not render through the ONE common workspace " +
                              "renderer - canon 10 asks for one presentation path, not a second UI system");
 

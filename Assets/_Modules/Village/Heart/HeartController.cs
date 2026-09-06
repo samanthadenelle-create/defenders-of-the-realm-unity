@@ -321,6 +321,13 @@ namespace DeNelle.Village
         bool IDamageableStructure.IsAlive => _hp > 0f;
         void IDamageableStructure.ApplyContactDamage(float amount) => SetHp(_hp - amount);
 
+        /// <summary>
+        /// WO-1439 — the Heart of Elarion IS the player's win condition; it is Friendly in
+        /// every scene there is, so this is a constant and NOT the SceneOwnership expression
+        /// the scene-placed structures use. Hostile waves keep attacking it exactly as before.
+        /// </summary>
+        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+
         /// <summary>Parses a 6-digit hex string ("rrggbb") into a Color.</summary>
         private static Color Hex(string rrggbb)
         {

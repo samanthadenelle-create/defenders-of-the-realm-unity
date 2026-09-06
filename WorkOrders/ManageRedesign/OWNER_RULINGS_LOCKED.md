@@ -205,6 +205,26 @@ about build mode.
 3. Does MOVE cost anything, and is a moved structure's upgrade progress preserved? `CommitMove` writes the validated
    snap cell (`UpdateLayoutEntry`), so the record follows - but confirm the level does too.
 
+*ANSWERED 2026-09-06 (WO-2006 lane, read at source this session - not inferred):*
+1. **A placed wall IS selectable, structurally.** `BaseLayoutLoader.Spawn` (`BaseLayoutLoader.cs:375`) attaches
+   `PlacedStructure` to EVERY reloaded row including walls, and `AddFootprintBlocker` (`:348`) puts the
+   collider-of-record on the same ROOT object the marker sits on - which is exactly what
+   `GetComponentInParent<PlacedStructure>()` needs. A wall/gate is additionally moved onto the `"Structure"` layer
+   (`:366`), and `RaycastGroundAt`
+   (`BuildModeController.cs:805-810`) falls back to `~0` after its `_groundMask` pass, so the layer cannot exclude it.
+   ⚠ **This is a SOURCE proof, not a runtime one.** It shows nothing structurally prevents the tap; it does NOT prove a
+   palisade's blocker is actually hit on a device. `AutoPilotDriver.cs:2912`'s *"tap on structure never showed
+   BuildSelectionUI"* is still the seam that would close it - a palisade case in that fleet is unwritten.
+2. **SELL refunds ~50% of INVESTED cost, and it DIFFERS from the WO-911 cancel rule.** `RefundCostFor`
+   (`BuildModeController.cs:2955` post-WO-2006; `:2894` before it) sums the build cost PLUS every upgrade step paid to reach the current level, then
+   halves each resource slot (floored); the Steward/Salvager talent (`salvage`) raises that fraction. So it is
+   level-aware and multi-resource, where the WO-911 cancel refund is 100% of the paid basket, flat. Two deliberately
+   different rules - do not "reconcile" them without a ruling.
+3. **MOVE is FREE and preserves the level.** `CommitMove` (`:2876` post-WO-2006; `:2815` before it) touches cell / footprint / yaw / worldY /
+   wallMounted and re-points any in-flight build-timer job by its cell-derived key; it never reads or writes
+   `PlacedStructure.level`, and its own log line says `(free)`. The wall-walk elevation perk is correctly re-evaluated
+   for the new seat (gained moving onto a wall, lost moving off).
+
 ⚠ **The through-line, stated because it keeps recurring:** this is the fifth capability found on 2026-09-06 that is
 built, correct, and unreachable - alongside the barracks panel, the village-tier control, the Talent tree panel and the
 kill-drop materials the player is granted but never shown. **`PanelDoorRegression` (shipped this wave) catches the

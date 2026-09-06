@@ -645,6 +645,17 @@ namespace DeNelle.Village
         public float CurrentHealth => _enemy != null ? _enemy.Hp : 0f;
 
         /// <summary>
+        /// WO-1439 — the faction this brain's body fights for, forwarded from
+        /// <see cref="Enemy.SelfFaction"/> (which reads the EnemyDamageable adapter). ONE
+        /// declaration of "whose side am I on", read by every target-selection arm through
+        /// <see cref="CombatFactionRules.MayAttack"/>. Hostile when the Enemy is missing —
+        /// the safe default, since a defender defaulting Friendly-to-its-own-base would
+        /// re-open exactly the defect this ticket closes.
+        /// </summary>
+        private CombatFaction SelfFaction =>
+            _enemy != null ? _enemy.SelfFaction : CombatFaction.Hostile;
+
+        /// <summary>
         /// Hook called by EnemyBehaviorTree's StopAndEngage leaf, and by this brain
         /// while kiting. For melee enemies it remains a no-op (Enemy.TickContactAttack
         /// fires automatically once the agent stops). WO-145 (#7): when this enemy is
@@ -1585,11 +1596,17 @@ namespace DeNelle.Village
             {
                 if (_scanBuffer[i] == null) continue;
 
+                // WO-1439 — every arm below is gated on CombatFactionRules.MayAttack, the ONE
+                // predicate. Before this, all three accepted on `!= null && IsAlive`, so a
+                // garrison scored its own towers, its own collectors and its own spire as
+                // targets. `continue` semantics are preserved exactly: a same-faction hit still
+                // consumes the candidate for that arm rather than falling through to the next.
                 var tower = _scanBuffer[i].GetComponentInParent<Tower>();
                 if (tower != null && tower.IsAlive)
                 {
-                    ConsiderCandidate(tower.transform, 0.5f, 1f, 0.6f,
-                                      scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+                    if (CombatFactionRules.MayAttack(SelfFaction, tower))
+                        ConsiderCandidate(tower.transform, 0.5f, 1f, 0.6f,
+                                          scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
                     continue;
                 }
 
@@ -1597,13 +1614,20 @@ namespace DeNelle.Village
                 var loot = _scanBuffer[i].GetComponentInParent<ISiegeLootTarget>();
                 if (loot != null && loot.IsLootTargetAlive)
                 {
-                    ConsiderCandidate(loot.LootTransform, loot.SiegeRoleValue, 1f, 0.55f,
-                                      scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
+                    // ISiegeLootTarget carries no faction of its own; every implementor is also
+                    // an IDamageableStructure, so arbitrate through that seam rather than adding
+                    // a second faction declaration to a second interface. A loot target that is
+                    // somehow NOT a damageable structure keeps its old behaviour (MayAttack's
+                    // null guard would reject it, so test the cast explicitly).
+                    var lootStructure = loot as IDamageableStructure;
+                    if (lootStructure == null || CombatFactionRules.MayAttack(SelfFaction, lootStructure))
+                        ConsiderCandidate(loot.LootTransform, loot.SiegeRoleValue, 1f, 0.55f,
+                                          scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
                     continue;
                 }
 
                 var structure = _scanBuffer[i].GetComponentInParent<IDamageableStructure>();
-                if (structure != null && structure.IsAlive)
+                if (CombatFactionRules.MayAttack(SelfFaction, structure))
                     ConsiderCandidate(_scanBuffer[i].transform, 0.3f, 1f, 0.3f,
                                       scanR, roleW, lowHpW, threatW, distW, bias, ref best, ref bestScore);
             }
@@ -1714,7 +1738,9 @@ namespace DeNelle.Village
             {
                 if (_scanBuffer[i] == null) continue;
                 var structure = _scanBuffer[i].GetComponentInParent<IDamageableStructure>();
-                if (structure == null || !structure.IsAlive) continue;
+                // WO-1439 — MayAttack folds in the null + IsAlive checks this line already did,
+                // and adds the friend-or-foe test it never had.
+                if (!CombatFactionRules.MayAttack(SelfFaction, structure)) continue;
                 float sqr = (_scanBuffer[i].transform.position - transform.position).sqrMagnitude;
                 if (sqr < nearestSqr) { nearestSqr = sqr; nearest = _scanBuffer[i].transform; }
             }
@@ -1742,7 +1768,10 @@ namespace DeNelle.Village
             {
                 if (_scanBuffer[i] == null) continue;
                 var tower = _scanBuffer[i].GetComponentInParent<Tower>();
-                if (tower == null || !tower.IsAlive) continue;
+                // WO-1439 — Tower is an IDamageableStructure, so the one predicate covers the
+                // null + alive + faction triple here too. A raid garrison must not detour to
+                // smash the turrets that are shooting FOR it.
+                if (!CombatFactionRules.MayAttack(SelfFaction, tower)) continue;
                 float sqr = (tower.transform.position - transform.position).sqrMagnitude;
                 if (sqr < nearestSqr) { nearestSqr = sqr; nearest = tower.transform; }
             }

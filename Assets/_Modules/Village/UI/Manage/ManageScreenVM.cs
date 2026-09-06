@@ -1219,7 +1219,12 @@ namespace DeNelle.Village.UI
                     Name = Ascii(def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id),
                     Level = level,
                     MaxLevel = maxLevel,
-                    IconKey = ResolveBuildingPortraitKey(entry, id, level),
+                    // ⛔ RE-POINTED 2026-09-06: this used the mixed-root portrait resolver, which emits
+                    // "Portraits/<ladder>[-N]" and misses all 20 tier keys. Why, and why the DEFENCE
+                    // projection still uses that resolver: ManageArt.BuildingPortraitKey's doc comment.
+                    // Pinned by ManagePortraitCoverageRegression [vm-uses-building-portrait-key], which
+                    // greps this method body - so do not name the old resolver here, in any comment.
+                    IconKey = ManageArt.BuildingPortraitKey(id, level),
                     Locked = isLocked,
                     // WO-2003: the rail sub-line said "Level 1 . T2", where "T" was the fourth way
                     // the same gate was spelled on screen. It now names the gate the player can
@@ -3203,7 +3208,15 @@ namespace DeNelle.Village.UI
                     Label = TabWordOf(id),
                     IsActive = isActive,
                     Activate = () => EnterTab(captured),
-                    GridColumns = id == ManageTabId.Build ? 4 : 3
+                    // ⛔ READ OFF THE OWNER'S MOCKUP, PANEL BY PANEL - not derived, not tuned.
+                    // docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png:
+                    //   screen 2 BUILD    - ten buildings as 5 columns x 2 rows
+                    //   screen 4 ARMY     - "All 9 troops visible, no scrolling" => 3 x 3
+                    //   screen 6 RESEARCH - four research buildings in one row => 4 x 1
+                    // BUILD was 4 columns and its row count fell out of whatever band was left,
+                    // which is how the capture showed FOUR tiles of seventeen under the ALL chip.
+                    GridColumns = id == ManageTabId.Build ? 5 : id == ManageTabId.Research ? 4 : 3,
+                    GridRows = id == ManageTabId.Build ? 2 : id == ManageTabId.Research ? 1 : 3
                 };
                 if (isActive) FillActiveTab(tab, nav);
                 tabs.Add(tab);
@@ -3217,18 +3230,33 @@ namespace DeNelle.Village.UI
             {
                 tabs[0].Tiles = Array.Empty<ManageTileVM>();
                 tabs[0].EmptyText = "Pick a tab above to start.";
-                tabs[0].Selection = new ManageSelectionVM
-                {
-                    Visible = false,
-                    EmptyText = "Pick a tab above to start."
-                };
+                // The sentence lives on the GRID's EmptyText (above), which is the band that is
+                // actually empty. The selection band carries no copy at all - WO-1443 section 3.
+                tabs[0].Selection = new ManageSelectionVM { Visible = false, EmptyText = null };
                 tabs[0].Activity = new ManageActivityVM { Visible = false };
+            }
+
+            // ⭐ A DETAIL SCREEN IS TITLED WITH THE ITEM'S OWN NAME, not a breadcrumb.
+            // Mockup panels 3, 5 and 9 are headed LUMBER MILL / ARCHER / OUTRIDER with the level
+            // beneath - never "MANAGE / ARMY / DETAIL". The capture showed two defects from that one
+            // cause: the breadcrumb was long enough to run under the QUEUE pill and clip, and the
+            // troop's NAME appeared nowhere on the panel at all - a horseman, a description and a
+            // requirement, with nothing saying which unit it was.
+            // The name is taken from the ACTIVE TAB'S SELECTION, which is the model's own composed
+            // title for the thing on screen; the View is not deriving it from an id.
+            string headerTitle = HeaderTitle(navPaintable ? nav : null);
+            if (activeIndex >= 0 && activeIndex < tabs.Count)
+            {
+                var activeSel = tabs[activeIndex].Selection;
+                if (activeSel != null && activeSel.Visible && !string.IsNullOrEmpty(activeSel.Title))
+                    // CAPS, like every other title on this screen and like the mockup's own detail
+                    // headings (OUTRIDER / LUMBER MILL / ARCHER). The capture read "Outrider".
+                    headerTitle = activeSel.Title.ToUpperInvariant();
             }
 
             return new ManageWorkspaceVM
             {
-                HeaderTitle = HeaderTitle(navPaintable ? nav : null),
-                HeaderSubtitle = HeaderSubtitle(navPaintable ? nav : null),
+                HeaderTitle = headerTitle,
                 Tabs = tabs,
                 ActiveTabIndex = activeIndex,
                 Queue = ComposeQueueDoor()
@@ -3243,39 +3271,64 @@ namespace DeNelle.Village.UI
             return "MANAGE / " + TabWordOf(nav.Tab);
         }
 
-        private string HeaderSubtitle(ManageNavEntry nav)
-        {
-            if (nav == null) return "";
-            switch (nav.Kind)
-            {
-                case ManageScreenKind.Detail: return "Back returns to where you came from.";
-                case ManageScreenKind.ResearchPerks: return "Pick a perk to see what it does.";
-                default:
-                    if (nav.Tab == ManageTabId.Build) return "Filter: " + _activeFilter;
-                    if (nav.Tab == ManageTabId.Army) return "Every troop, unlocked or not.";
-                    return "Pick a school, then a perk.";
-            }
-        }
+        // ⛔ HeaderSubtitle IS DELETED - WO-1443 section 1 (owner felt-test 2026-09-06, "remove the
+        // manage army and sub line replace the manage top"). It used to return, per screen:
+        //   Detail        -> "Back returns to where you came from."   (the BACK button says this)
+        //   ResearchPerks -> "Pick a perk to see what it does."       (the tiles say this)
+        //   Build         -> "Filter: <chip>"                         (the FILTER CHIP ROW says this
+        //                                                              - ComposeFilters marks the
+        //                                                              active chip IsActive, so no
+        //                                                              information is lost)
+        //   Army          -> "Every troop, unlocked or not."          (the tiles say this)
+        //   Research      -> "Pick a school, then a perk."            (the tiles say this)
+        // Every line restated something already on screen, which is the owner's whole objection.
+        // The one line with real state - the Build filter - is carried by the chips.
 
         private ManageQueueVM ComposeQueueDoor()
         {
             ChannelId channel = ChannelOf(Tab);
-            int depth = 0, cap = 0, busy = 0;
+            // `Busy` is deliberately NOT read any more: it fed the retired "n RUNNING" / "IDLE"
+            // word on the deleted second line (WO-1443 section 1B).
+            int depth = 0, cap = 0;
             for (int i = 0; i < Channels.Count; i++)
             {
                 if (Channels[i].Channel != channel) continue;
                 depth = Channels[i].Depth;
                 cap = Channels[i].DepthCap;
-                busy = Channels[i].Busy;
                 break;
             }
+            // ⭐ WO-1443 section 1B, owner ruling 2026-09-06. The QUEUE affordance MOVED into the
+            // tab row and the separate "IDLE . 0 OF 5" line under it is DELETED - the count rides
+            // on the face. What survives is the information that changes a decision: how full the
+            // line is, and the word FULL when it will refuse. "IDLE" said nothing "0 OF 5" did not
+            // already say, which is the owner's standing objection to this whole screen.
+            //
+            // ⛔ Visible STAYS unconditionally true, and that is a DOOR guarantee, not a default.
+            // MEASURED 2026-09-06: in workspace mode this is the ONLY live route to the queue when
+            // nothing is running - ManageScreenPanel.ShowWorkspace deactivates the legacy header
+            // toggle, the operational OPEN QUEUE bands live in a list band that is SetActive(false),
+            // the activity strip is Visible=false while idle, and the HUD Builders chip's door was
+            // retired in WO-911. Making this conditional strands the queue (WO-1430's defect class).
+            // ⛔ KEEP FaceCountText SHORT - IT IS ONE QUARTER OF A TAB ROW, NOT A LINE OF ITS OWN.
+            // MEASURED in Builds/ui-capture/ManageFlow_Troops_railtop_2670x1200.png (2026-09-06,
+            // 14:59): the first draft composed "FULL 5 OF 5", the face read
+            //   QUEUE  .  FULL 5 O...
+            // and the count the field exists to show was the part that got cut. The face cannot be
+            // fixed by shrinking the type - ElarionUiKit's FontFloor is a FLOOR and a band under
+            // ~24px renders BLANK, not small (this file's renderer states the same law). So the fix
+            // is FEWER CHARACTERS, exactly as HudKitController.cs:1866-1878 records for the rail
+            // chip, where "Tap to collect" was authored down rather than scaled down.
+            //   normal     -> "0/5"   => face "QUEUE 0/5"   (9 chars)
+            //   at capacity-> "FULL"  => face "QUEUE FULL"  (10 chars)
+            // FULL replaces the digits rather than joining them: "5/5" already implies it, and the
+            // WORD is what survives greyscale and colourblindness. The exact depth is one tap away
+            // in the drawer, which is what the door opens.
+            bool full = cap > 0 && depth >= cap;
             return new ManageQueueVM
             {
                 Visible = true,
                 Label = "QUEUE",
-                CountText = busy > 0 ? busy + " RUNNING" : "IDLE",
-                CapacityText = cap > 0 ? depth + " OF " + cap : null,
-                AtCapacity = cap > 0 && depth >= cap,
+                FaceCountText = cap > 0 ? (full ? "FULL" : depth + "/" + cap) : null,
                 Open = () => OpenQueueRequested?.Invoke()
             };
         }
@@ -3300,8 +3353,9 @@ namespace DeNelle.Village.UI
                 IconKey = null,
                 Title = Ascii(running.Label ?? ""),
                 TimerText = Ascii(running.StateText ?? ""),
-                QueuedCountText = queued > 0 ? queued + " QUEUED" : null,
-                OpenQueue = () => OpenQueueRequested?.Invoke()
+                // No OpenQueue: the strip is a status glance and the tab-row door is the one entry
+                // (WO-1443, after the 2026-09-06 capture showed both on screen at once).
+                QueuedCountText = queued > 0 ? queued + " QUEUED" : null
             };
         }
 
@@ -3312,7 +3366,20 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void FillActiveTab(ManageTabVM tab, ManageNavEntry nav)
         {
-            tab.Activity = ComposeActivity();
+            // ⛔ NO ACTIVITY STRIP ON A MANAGE SCREEN. Do not re-enable it here.
+            // docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png draws NINE panels and not one of them
+            // carries a "what is running" strip: screens 2/4/6 are title + chips + grid, and 3/5/7
+            // are title + detail. Running work lives in TWO places in the mockup and both already
+            // exist - the red count badge on the QUEUE pill, and the QUEUE overlay (screen 8) that
+            // the pill opens. A third copy on every screen is the duplicated state this project
+            // keeps paying for (CLAUDE.md 2 / 5 / 16).
+            // It also cost 132px of the band on every screen, and the measured shortfall is the
+            // whole defect: MANAGE_FLOW_INVENTORY ARMY reported content=590px in a 190px viewport
+            // while the mockup's screen 4 says "All 9 troops visible, no scrolling". The strip was
+            // spending the space the tiles need.
+            // ComposeActivity is KEPT, not deleted: the overlay lane (screen 8) needs exactly that
+            // projection, and deleting it would make the next seat re-derive it.
+            tab.Activity = new ManageActivityVM { Visible = false };
 
             if (nav.Kind == ManageScreenKind.Detail)
             {
@@ -3347,11 +3414,16 @@ namespace DeNelle.Village.UI
                     break;
             }
 
-            tab.Selection = new ManageSelectionVM
-            {
-                Visible = false,
-                EmptyText = "Pick one to see what it does, what it costs and what you can do."
-            };
+            // ⛔ WO-1443 section 3 - NO HINT SENTENCE HERE. Owner felt-test 2026-09-06, verbatim:
+            // "dont need the bottom line, close button is enough". The old EmptyText ("Pick one to
+            // see what it does, what it costs and what you can do.") explained something the screen
+            // already makes obvious - you tap a troop, you see the troop - and it was the ONLY
+            // content in a bordered band worth roughly 40% of her screen. With the sentence gone the
+            // band has nothing to hold, so ManageWorkspacePanel.Build COLLAPSES it to 0px whenever
+            // Visible is false and the grid takes the room. Re-adding a sentence here silently
+            // un-collapses nothing - the band is keyed on Visible - but it does put the copy back on
+            // a screen the owner asked to have it removed from.
+            tab.Selection = new ManageSelectionVM { Visible = false, EmptyText = null };
         }
 
         private List<ManageFilterVM> ComposeFilters()
@@ -3433,7 +3505,11 @@ namespace DeNelle.Village.UI
             if (_inventoryTiles != null &&
                 string.Equals(_inventoryChip, _activeFilter, StringComparison.OrdinalIgnoreCase))
                 return _inventoryTiles;
-            _inventoryTiles = BuildInventoryModel.Tiles(_activeFilter);
+            // ManageTiles, not Tiles: the Manage grid SHOWS not-yet-unlocked rows as locked tiles
+            // (mockup panel 9 - selectable, padlock, requirement line), where the BUILD browser
+            // still hides them. A chip that says ALL and hides rows is a claim the screen does not
+            // honour, and it is why ManageFlow_BUILD_locked had no locked tile to capture.
+            _inventoryTiles = BuildInventoryModel.ManageTiles(_activeFilter);
             _inventoryChip = _activeFilter;
             return _inventoryTiles;
         }
@@ -3449,7 +3525,16 @@ namespace DeNelle.Village.UI
                 var item = ComposeBuildItem(row);
                 if (item == null) continue;
                 string id = item.ItemId;
-                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                // ⭐ THE FIRST TILE IS SELECTED BY DEFAULT, on every grid in this file.
+                // docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png never draws a grid with nothing
+                // selected: screen 2 shows Lumber Mill with the gold border, screen 4 shows Archer,
+                // screen 6 shows Cathedral of Magic. That is not decoration - the selected tile is
+                // how the screen explains what a tile IS and what tapping one will do. The 2026-09-06
+                // capture had no tile selected on any tab, which is a difference from the picture and
+                // also a screen that teaches nothing on arrival.
+                // `tiles.Count == 0` rather than `i == 0` deliberately: several of these loops skip
+                // rows with `continue`, so the first INDEX is not always the first TILE.
+                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Build, id, null, null)));
             }
             return tiles;
@@ -3471,7 +3556,15 @@ namespace DeNelle.Village.UI
             {
                 ItemId = row.Id,
                 DisplayName = Ascii(string.IsNullOrEmpty(row.DisplayName) ? row.Id : row.DisplayName),
-                IconId = row.ArtKey,
+                // ⛔ OWNER RULING 2026-09-06 (Option A): building art is ONE folder, keyed by CATALOG
+                // ID. This used to pass the row's manageArtKey straight through - which the catalog's
+                // own note calls "the Sheet A tile name for this row", a DELIVERY LABEL and not a
+                // Resources key. Being a bare name with no folder, Resources.Load searched the
+                // Resources root and every not-yet-built tile rendered the placeholder disc: the four
+                // civic tiles the owner captured. manageArtKey stays as the art-to-id join.
+                // Pinned by ManagePortraitCoverageRegression [unplaced-uses-building-portrait-key],
+                // which greps this method body - so do not name the retired field here, in any comment.
+                IconId = ManageArt.BuildingPortraitKey(row.Id, 0),
                 Ownership = ManageOwnership.NotUnlocked,
                 UpgradeTrack = ManageUpgradeTrack.NotApplicable,
                 Level = 0,
@@ -3677,7 +3770,8 @@ namespace DeNelle.Village.UI
                 if (c == null) continue;
                 var item = ComposeTroopItem(c);
                 string id = c.Id;
-                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                // First tile selected by default - see ComposeBuildTiles' note (mockup screen 4).
+                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Army, id, null, null)));
             }
             return tiles;
@@ -3827,7 +3921,8 @@ namespace DeNelle.Village.UI
                 // own Activate below. A ManageAction here would be a button nothing ever paints -
                 // dead code that looks like a shipped feature (ManageQueueDrawerRegression:103-113).
                 string school = c.BuildingId;
-                tiles.Add(ManageVmProjection.ProjectTile(item, false, () => OpenSchool(school, null)));
+                // First tile selected by default - see ComposeBuildTiles' note (mockup screen 6).
+                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0, () => OpenSchool(school, null)));
             }
             return tiles;
         }
@@ -3844,7 +3939,8 @@ namespace DeNelle.Village.UI
                 var item = ComposeResearchItem(c);
                 string perk = c.PerkId;
                 string school = c.BuildingId;
-                tiles.Add(ManageVmProjection.ProjectTile(item, false,
+                // First tile selected by default - see ComposeBuildTiles' note (mockup screen 7).
+                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Research, perk, school, null)));
             }
             return tiles;

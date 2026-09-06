@@ -234,6 +234,42 @@ namespace DeNelle.Village
             return result;
         }
 
+        /// <summary>
+        /// ⭐ THE MANAGE GRID's rows for <paramref name="chip"/>: <see cref="Tiles"/> PLUS the rows
+        /// that are authored, categorised and simply not unlocked yet.
+        ///
+        /// <para>This is the SECOND ACCESSOR <see cref="Tiles"/>'s own doc comment asks for -
+        /// <i>"Teasing a HiddenPendingUnlock row as a locked tile is a legitimate design choice and
+        /// an OWNER call... If that is revisited, add a second accessor; do not widen this one."</i>
+        /// It has been revisited, and the owner made the call in a picture rather than a sentence:
+        /// docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png panel 9 draws a locked item as a normal,
+        /// SELECTABLE tile carrying a padlock and the line <i>"Requires Barracks Tier 4"</i>, and
+        /// the ARMY grid on panel 4 shows locked troops in place beside unlocked ones. That
+        /// supersedes the 2026-08-29 <i>"hide cards that are not unlocked"</i> ruling FOR MANAGE.
+        /// <see cref="Tiles"/> is untouched, so the BUILD browser still hides them.</para>
+        ///
+        /// <para>⛔ AND IT FIXES A DEFECT IN ITS OWN RIGHT: a chip labelled ALL that hides rows is
+        /// a screen making a claim it does not honour - the seam-oracle defect WO-1430 catalogued,
+        /// and the reason ManageFlow_BUILD_locked could not be captured at all (the ALL grid held
+        /// no locked row to photograph). "Don't hide future content" is the same rule the troop
+        /// grid already follows, which is why nine troops render with padlocks on six of them.</para>
+        ///
+        /// <para>Still excluded, and each for a reason that is NOT "the player has not got there
+        /// yet": <see cref="BuildAvailability.NotPlayerContent"/> (deco_torch / repair_default -
+        /// they carry no Manage filter at all), <see cref="BuildAvailability.HiddenByArtGate"/> (a
+        /// dead tile no data edit can revive) and <see cref="BuildAvailability.NotInAnyCollection"/>
+        /// (no player action can ever reach it). Showing those would be teasing content that does
+        /// not exist, which is the opposite failure.</para>
+        /// </summary>
+        public static List<BuildInventoryRow> ManageTiles(string chip)
+        {
+            var result = new List<BuildInventoryRow>();
+            foreach (var r in For(chip))
+                if (r.Availability == BuildAvailability.Offered ||
+                    r.Availability == BuildAvailability.HiddenPendingUnlock) result.Add(r);
+            return result;
+        }
+
         // ---------------------------------------------------------------------
 
         private static BuildInventoryRow Reconcile(

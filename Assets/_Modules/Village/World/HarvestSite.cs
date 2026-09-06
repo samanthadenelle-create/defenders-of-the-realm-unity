@@ -72,6 +72,11 @@ namespace DeNelle.Village.World
         // sweeps skip it), but the site stays in the world until repaired.
         public bool IsAlive => _hp > 0f && !_broken;
 
+        /// <summary>
+        /// WO-1439 — a harvest site is player-claimed by definition. Constant Friendly.
+        /// </summary>
+        public CombatFaction Faction => CombatFaction.Friendly;
+
         public void ApplyContactDamage(float amount)
         {
             if (_hp <= 0f || _broken) return;

@@ -165,9 +165,21 @@ namespace DeNelle.Editor.Regression
             // must stay on screen while open, and a second call must flip the state back.
             // RED mutations: restore `_queueDrawerToggle.gameObject.SetActive(!_queueDrawerOpen)`
             // in either site; change `_queueDrawerOpen = !_queueDrawerOpen` to `= true`.
+            // ⚠ PIN CORRECTED 2026-09-06: it pinned a COORDINATE, and the coordinate moved.
+            // It required the literal `new Vector2(0.965f, 1f), ToggleQueueDrawer);`. WO-1443 moved
+            // the queue face three times under owner rulings and one measurement - into the tab row,
+            // out to the host's top-right pill, then wider (0.72-0.95) once the printed rect proved
+            // the LABEL was overflowing its 184px button rather than the frame clipping it. Each
+            // move was right; the pin failed on the x value every time.
+            // ⛔ THE INVARIANT WAS NEVER THE RECTANGLE. It is that the QUEUE face exists, is named
+            // so a capture can find it, and its tap raises ToggleQueueDrawer - the door this suite
+            // spent three rounds protecting. VERIFIED AT SOURCE THIS ROUND:
+            // ManageScreenPanel.cs:1919-1935 builds it on _tabsHost with ToggleQueueDrawer as the
+            // callback, and :1938 names the object ManageQueueDrawerToggle.
+            // Pinning the wiring keeps the guard and stops the case from forbidding the next ruling.
             string tabs = Body(panel, "private void BuildTabs()", "//  RENDER");
             if (tabs == null || !tabs.Contains("ManageQueueDrawerToggle") ||
-                !tabs.Contains("new Vector2(0.965f, 1f), ToggleQueueDrawer);"))
+                !tabs.Contains("ToggleQueueDrawer)"))
                 failures.Add("[queue-toggle-closes] the title-row QUEUE face is not wired to ToggleQueueDrawer");
             if (tabs != null && tabs.Contains("SetActive(!_queueDrawerOpen"))
                 failures.Add("[queue-toggle-closes] BuildTabs rebuilds the QUEUE face HIDDEN while the drawer is " +
@@ -179,11 +191,19 @@ namespace DeNelle.Editor.Regression
                 !toggle.Contains("\"collapsed\""))
                 failures.Add("[queue-toggle-closes] ToggleQueueDrawer is not a flip (a second call must collapse " +
                              "and trace 'queue drawer collapsed')");
+            // ⚠ PIN MOVED 2026-09-06 (WO-1443), WITH THE RULING, AND IT MOVED IN THE STRICTER
+            // DIRECTION. It used to REQUIRE `SetActive(_vm != null && _vm.Channels.Count > 0)`.
+            // That condition was safe while the workspace painted its own queue face and this was a
+            // spare chrome control; it is NOT safe now that this pill is the only door to the queue
+            // on every Manage screen. A door behind a condition is the WO-1430 defect class, so the
+            // case now FORBIDS the condition it used to demand. The other half - the face reading as
+            // the close while the drawer is open - is unchanged and still pinned.
             string sync = Body(panel, "private void SyncQueueToggleFace()", "private void ToggleQueueDrawer()");
-            if (sync == null || !sync.Contains("SetActive(_vm != null && _vm.Channels.Count > 0)") ||
+            if (sync == null || !sync.Contains("_queueDrawerToggle.gameObject.SetActive(true);") ||
                 !sync.Contains("\"HIDE QUEUE\""))
-                failures.Add("[queue-toggle-closes] SyncQueueToggleFace does not keep the QUEUE face visible " +
-                             "(and reading as the close) while the drawer is open");
+                failures.Add("[queue-toggle-closes] SyncQueueToggleFace does not keep the QUEUE pill " +
+                             "unconditionally visible (and reading as the close) while the drawer is open. " +
+                             "It is the one door to the queue; gating it strands the surface");
             if (toggle != null && !toggle.Contains("SyncQueueToggleFace()"))
                 failures.Add("[queue-toggle-closes] ToggleQueueDrawer does not re-sync the QUEUE face");
 
@@ -273,6 +293,62 @@ namespace DeNelle.Editor.Regression
                 !panel.Contains("ApplyDrawerPlacement();\r\n                // WO-1368"))
                 failures.Add("[drawer-clear-of-card] Render() does not re-seat the drawer after RenderList rebuilt " +
                              "the TRAINING NOW band - it comes back active under the drawer");
+
+            // ── 10 [queue-door-in-workspace] — WO-1443 section 1B (owner ruling 2026-09-06) ──────
+            // ⛔ THE DOOR THIS CASE PINS HAD NO PIN AT ALL, AND THAT IS WHY IT IS HERE.
+            // MEASURED 2026-09-06: in WORKSPACE mode (which is every Manage screen since WO-2001)
+            // the QUEUE affordance rendered by ManageWorkspacePanel is the ONLY live route to the
+            // queue while nothing is running. ShowWorkspace deactivates the legacy header toggle,
+            // `_operationalListBand` (which owns the three OPEN QUEUE bands) is SetActive(false),
+            // the activity strip is Visible=false while idle, and the HUD Builders chip's door was
+            // retired in WO-911. PanelDoorRegression CANNOT see this: it only inventories
+            // MonoBehaviour types named *Panel, and ManageWorkspacePanel is deliberately a plain
+            // class. So the single most load-bearing door on the screen was unguarded - the exact
+            // shape WO-1430 catalogued three times over. The owner's ruling MOVED it from the
+            // header into the tab row; a door that moves and breaks is worse than a chip that was
+            // ugly, so the move brought its pin with it.
+            // RED mutations: drop `BuildQueueDoor(band, vm.Queue, tabs.Count, slots)` from
+            // BuildTabs; change ComposeQueueDoor's `Visible = true` to a condition.
+            string wsPath = Path.Combine("Assets", "_Modules", "Core", "Manage", "ManageWorkspacePanel.cs");
+            string ws2 = File.Exists(wsPath) ? File.ReadAllText(wsPath) : string.Empty;
+            string vmPath = Path.Combine("Assets", "_Modules", "Village", "UI", "Manage", "ManageScreenVM.cs");
+            string vm2 = File.Exists(vmPath) ? File.ReadAllText(vmPath) : string.Empty;
+            if (ws2.Length == 0 || vm2.Length == 0)
+                failures.Add("[queue-door-in-workspace] ManageWorkspacePanel.cs or ManageScreenVM.cs is MISSING - " +
+                             "the door cannot be evaluated, reported as a FAILURE rather than passing vacuously");
+            else
+            {
+                // ⚠ PIN MOVED 2026-09-06, SECOND TIME IN ONE DAY, AND THE REASON IS RECORDED SO
+                // THE NEXT SEAT DOES NOT MOVE IT BACK. This case first pinned the door in the
+                // WORKSPACE TAB ROW, because the owner's ruling had reached us as words. Her MOCKUP
+                // (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png) then landed in the repo and
+                // draws QUEUE as a SMALL PILL AT TOP-RIGHT with a count badge on every one of its
+                // eight numbered panels - and it had said so since 09:26 that morning. The mockup is
+                // the spec (CAPTURE_LOOP_GOAL.md 3.0c) and it wins over a sentence about it.
+                // THE INVARIANT IS UNCHANGED: the queue keeps a live, unconditional door on every
+                // Manage screen. Only its SEAT moved, from the renderer to the host chrome.
+                if (!panel.Contains("BuildQueueCountBadge(_queueDrawerToggle.transform)"))
+                    failures.Add("[queue-door-in-workspace] the QUEUE pill carries no count badge. The mockup " +
+                                 "draws a badge on every panel and the DIGIT is the meaning (the owner is " +
+                                 "red/green colourblind, so a coloured disc alone says nothing)");
+                if (ws2.Contains("private void BuildQueueDoor("))
+                    failures.Add("[queue-door-in-workspace] the renderer has grown a queue face again. The door " +
+                                 "is the HOST's top-right pill; a second one in the body is the two-affordances " +
+                                 "defect the 2026-09-06 14:59 capture showed, and its tab-row seat is what " +
+                                 "truncated to 'QUEUE . FULL 5 O...'");
+                if (!ws2.Contains("Queue = vm.Queue;"))
+                    failures.Add("[queue-door-in-workspace] ManageWorkspacePanel no longer binds the queue model. " +
+                                 "The host reads it from there so ONE composed projection serves the screen");
+                string compose = Body(vm2, "private ManageQueueVM ComposeQueueDoor()",
+                                      "private ManageActivityVM ComposeActivity()");
+                if (compose == null)
+                    failures.Add("[queue-door-in-workspace] could not locate ComposeQueueDoor's body - the " +
+                                 "always-visible assertion cannot be evaluated, reported as a FAILURE");
+                else if (!compose.Contains("Visible = true,") || !compose.Contains("Label = \"QUEUE\","))
+                    failures.Add("[queue-door-in-workspace] ComposeQueueDoor no longer publishes an unconditionally " +
+                                 "visible QUEUE door. Gating it on queue contents is what strands it while idle - " +
+                                 "the state the owner was actually in when she captured this screen");
+            }
 
             reason = failures.Count == 0
                 ? "MANAGE_QUEUE_DRAWER_OK tower choices lead; queue administration is opt-in AND REACHABLE " +
