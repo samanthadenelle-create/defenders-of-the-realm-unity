@@ -76,3 +76,30 @@ Owner ruling 2026-09-06, in answer to "there are two barracks levels, which way 
    No new screen, and ruling 18 (direct prerequisite navigation) is satisfied with a door that genuinely opens.
 5. An oracle must fail the build if any troop's unlock level exceeds the barracks ladder's max tier - the same shape as
    `ProgressionReachabilityRegression`, which now guards the village-tier axis.
+
+**22. THE CATHEDRAL LADDER IS PRICED IN STONE, NOT CRYSTALS. The DATA is corrected to match the CHARGE.**
+
+Owner ruling 2026-09-06, verbatim: **"i think stone is better as getting crystals is very hard, we can always revisit
+if we see."**
+
+*The defect this settles* (`docs/PREREQUISITE_REGISTRY_2026-09-06.md`): the Cathedral of Magic tier 2 is AUTHORED as
+2,560 Crystals in `building-tiers.json`, and the player is CHARGED 2,560 **Stone**. `BuildingUpgradeService.TierCost`
+(`:190-199`) picks the lane by TIER INDEX - T1 Wood, T2 Stone, T3+ Iron - from `Max(costWood, costCrystal)`, so the
+authored currency is ignored and the screens show the charged lane. The JSON lies; the charge is what the player feels.
+
+**Ruling: the CHARGE is right and the AUTHORING is wrong.** Correct the data to say what is actually taken. Do NOT
+"fix" the code to start charging crystals - crystals are the scarce currency (250 at founding, and the village-tier
+ladder already costs 250 x next), and re-pointing this ladder at them would price the Cathedral out of reach.
+Revisit later if play shows otherwise.
+
+⚠ **Consequence to signpost, not to balance away:** stone's base bank is **2,000** and this rung costs **2,560**, so it
+is unpayable until a **Silo** is built and raised - the same shape as Archer Tower L3 at 3,150 wood against a 3,000
+wood ceiling. Nothing told the player that before tonight. The cap-aware refusal added in WO-1425
+(`TownBankCapacity.StorageBlockMessage`) must name the Silo and the level here. **Do not lower the cost to fit the base
+cap** - the owner rules on balance and the ladder is deliberate.
+
+⚠ **The lane-picker itself is a latent trap beyond this one ladder.** Because `TierCost` derives the resource from the
+tier INDEX rather than the authored key, EVERY tier-2 row in the game is charged Stone regardless of what its JSON
+says, and `EconomySinkCapRegression` mis-attributes those costs when it scans. Reconciling that is WO-2005's job
+(BUILD inventory reconciliation) - it must read the CHARGED lane, not the authored one, or every cost it reports is
+wrong for tier 2 and above.
