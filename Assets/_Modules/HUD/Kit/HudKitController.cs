@@ -2301,11 +2301,11 @@ namespace DeNelle.HUD.Kit
                 UiStyle.Icon("block", "shield", "defense"), null);
             if (_adaptiveCombatSlots[1] != null && _adaptiveCombatSlots[1].root != null)
                 _adaptiveCombatSlots[1].root.AddComponent<HudBlockPressRelay>();
-            _adaptiveCombatSlots[2] = BuildCombatDockSlot(2, "SKILL I",
+            _adaptiveCombatSlots[2] = BuildCombatDockSlot(2, "EMPTY",
                 UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(0));
-            _adaptiveCombatSlots[3] = BuildCombatDockSlot(3, "SKILL II",
+            _adaptiveCombatSlots[3] = BuildCombatDockSlot(3, "EMPTY",
                 UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(1));
-            _adaptiveCombatSlots[4] = BuildCombatDockSlot(4, "SKILL III",
+            _adaptiveCombatSlots[4] = BuildCombatDockSlot(4, "EMPTY",
                 UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(2));
             _adaptiveCombatSlots[5] = BuildCombatDockSlot(5, "ITEM",
                 UiStyle.Icon("potion", "consumable", "bag"), OpenItemPicker);
@@ -2337,7 +2337,7 @@ namespace DeNelle.HUD.Kit
             slot.SetIcon(icon);
             slot.SetCaption(caption);
             // Same authored caption degradation as the peaceful dock: NoWrap + bounded autosize
-            // + Ellipsis, floored at FontHardFloor. "SKILL III" can shorten, never spill.
+            // + Ellipsis, floored at FontHardFloor. Long skill names shorten, never spill.
             if (slot.caption != null)
                 ElarionUiKit.FitSingleLine(slot.caption, ElarionUiKit.FontHardFloor, ElarionUi.FontMicro);
             if (slot.button != null) ElarionUiKit.ClampMinTouch(slot.button);
@@ -3547,14 +3547,17 @@ namespace DeNelle.HUD.Kit
                     if (i >= a.Slots.Count)
                     {
                         h.SetIcon(null);
+                        h.SetCaption("EMPTY");
                         h.SetCooldown(0f, 0f);
                         if (h.button != null) h.button.interactable = false;
                         continue;
                     }
                     var s = a.Slots[i];
-                    h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                    bool equipped = s.Equipped;
+                    h.SetIcon(equipped && !string.IsNullOrEmpty(s.IconKey) ? UiStyle.Icon(s.IconKey) : null);
+                    h.SetCaption(equipped && !string.IsNullOrWhiteSpace(s.Name) ? s.Name : "EMPTY");
                     h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
-                    if (h.button != null) h.button.interactable = s.Equipped;
+                    if (h.button != null) h.button.interactable = equipped;
                 }
             }
         }

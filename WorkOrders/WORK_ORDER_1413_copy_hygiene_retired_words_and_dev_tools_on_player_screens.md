@@ -1,6 +1,6 @@
 # WO-1413: copy hygiene across several screens - retired words, dev tools on a player Help, unreadable and redundant controls
 
-**Status:** IN PROGRESS - part 1 FIXED 2026-09-05 23:16 (Help reset confirm, Echo workforce additive copy, Settings slider, Daily Chest CTA, prose; Pause reverted per s8.9 ruling) gated COMPILE_GATE_OK + REGRESSION_OK 389/389; part 2 (UICaptureLaunch fixtures, HudKitController faces, dialogue twins, CopyHygieneRegression) unlocked at ecf647b53 and re-dispatched to the Codex lane (BATCH_STATE s8.11). *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
+**Status:** FIXED 2026-09-05 23:5x - part 1 (458baf57f: Help reset confirm, Echo workforce additive copy, Settings slider, Daily Chest CTA, prose; Pause reverted per s8.9 ruling) + part 2 (fixture verbs, live combat skill faces, CopyHygieneRegression with the lead's retired-pet scan correction) gated COMPILE_GATE_OK + REGRESSION_OK 390/390 (RESULT file); device build after the owner's reboot; felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 ## Evidence
 AGREED by both reviewers, CLI SEEN `Builds/ui-capture/Settings_2670x1200.png` (`REVIEW_MERGED.md` row 12;

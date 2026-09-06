@@ -1081,7 +1081,7 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
-        //  Panel: DialogueView in its OPTIONS state (WO-1030: 'Repair structures'
+        //  Panel: DialogueView in its OPTIONS state (WO-1030: the longest option
         //  was sliced by the panel edge in landscape; the option band is now
         //  reserved FIRST and the text well scrolls). Shot at every landscape
         //  target (including the Seeker's real 2670x1200) in two flavors:
@@ -1148,8 +1148,8 @@ namespace DeNelle.Editor
         {
             string[] labels =
             {
+                "Show me the rumor board.",
                 "Gather resources",
-                "Repair structures",
                 "Stand watch at the gate",
                 "Rest by the Heart of Elarion",
             };
@@ -4090,7 +4090,7 @@ namespace DeNelle.Editor
                 for (int i = 1; i <= 2; i++)
                 {
                     _defs.Add(MakeRumor("uicap_rumor_watch" + i,
-                        "Standing Watch Over the Western Fields " + i, i == 1 ? "story" : "gear",
+                        "Standing Watch Over the Western Fields - Part " + i + " of 2", i == 1 ? "story" : "gear",
                         "Hold the western fields until the lantern wardens return from the ridge.",
                         40, 20, 0, null));
                 }
