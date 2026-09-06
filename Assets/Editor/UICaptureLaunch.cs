@@ -145,6 +145,7 @@ using DeNelle.Village.Hero; // RumorBoardPanel, RumorBoardVM, IRumorBoardBackend
 using DeNelle.Village.UI; // TowerManagerPanel, PlacedTowerListVM (WO-795)
 using DeNelle.Village.Talents; // HeroSkillTreePanelMvvm (tree + hot-swap rail capture)
 using DeNelle.Village.Crafting; // disclosure/confirmation modal capture
+using DeNelle.Village.Buildings.Progression; // PlacedUpgradeKey - the ONE composer of a placed-structure job key (WO-1422)
 using DeNelle.Village.Monetization; // Daily Chest production modal capture
 
 namespace DeNelle.Editor
@@ -7249,7 +7250,16 @@ namespace DeNelle.Editor
         {
             if (queue == null) throw new ArgumentNullException(nameof(queue));
 
-            queue.Enqueue(JobKind.TowerUpgrade, ChannelId.Builder, "tower_ground_archer:7:0", 420d, 2);
+            // WO-1422 (CLI, 2026-09-06): this seeded "tower_ground_archer:7:0" - a COLON shape the live
+            // game NEVER produces. PlacedUpgradeKey.Compose is the only composer in the tree
+            // (BuildModeController.cs:2451,2529; ManageScreenVM.cs:995,1358) and it emits
+            // "<itemId>@<cellX>_<cellZ>". PlacedUpgradeKey.TryParse requires that '@' and rejected the
+            // colon form outright, so the capture was exercising a grammar that cannot occur: the
+            // BUILDING NOW band could not resolve a name or art, AND the Archer Tower card read
+            // "Upgradable" while its own job was running, because HasPlacedBuilderJob matches the key
+            // exactly. A fixture that speaks a language the game does not is not a test.
+            // The cell MUST match the placement seeded above (3,7) or the key names a tower that is not there.
+            queue.Enqueue(JobKind.TowerUpgrade, ChannelId.Builder, PlacedUpgradeKey.Compose("tower_ground_archer", 3, 7), 420d, 2);
             queue.Enqueue(JobKind.Upgrade, ChannelId.Builder, "barracks:2:0", 660d, 4);
             queue.Enqueue(JobKind.Repair, ChannelId.Builder, "gate:4:1", 180d);
 

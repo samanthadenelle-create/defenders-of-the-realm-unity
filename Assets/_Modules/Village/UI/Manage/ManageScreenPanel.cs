@@ -2272,6 +2272,25 @@ namespace DeNelle.Village.UI
                     ? DefenseSprite(defenseJob)
                     : BuildingSprite(FindBuildingChoice(first.BuildingId));
                 string jobLabel = defenseJob != null ? ManageScreenVM.Ascii(defenseJob.Name ?? "") : null;
+                // §12 — the next capture PROVES which arm fired instead of leaving us to infer it
+                // from pixels. A resolve used to be silent, so "resolved and painted" was
+                // indistinguishable from "resolved but Name was blank and the raw key came back".
+                //   tab=Defense resolved=<id> art=yes label='Archer Tower'  -> fixed.
+                //   tab=Defense resolved=<none> art=no label=<fallback:...> -> still broken, and
+                //     FindDefenseChoiceForJob's Warn above names the id it could not place.
+                //   tab=Defense resolved=<id> label=<fallback:...>          -> resolved but the
+                //     choice's Name was blank; the resolver is fine, the projection is not.
+                //   tab=Buildings ...                                       -> the Defence branch
+                //     was NOT reached, i.e. the tab check is the suspect, not the resolver.
+                // Printed UNCONDITIONALLY so that last case is observable rather than merely
+                // described - a tab-gated trace can never prove the tab gate.
+                FlowTrace.Step("Manage", "BUILDING NOW band: tab=" + _vm.Tab + " jobId='" +
+                        (first.JobId ?? "<null>") + "' buildingId='" + (first.BuildingId ?? "") +
+                        "' resolved=" + (defenseJob != null ? defenseJob.Id : "<none>") +
+                        " art=" + (jobArt != null ? "yes" : "no") +
+                        " label=" + (!string.IsNullOrEmpty(jobLabel)
+                            ? "'" + jobLabel + "'"
+                            : "<fallback:" + ManageScreenVM.Ascii(first.Label ?? "") + ">"));
                 Guard.Try("Manage", "building now job 1", () => BuildTroopTrainingNowJob(band, 1, first,
                     0.175f, 0.205f, 0.21f, 0.27f, 0.28f, 0.45f, 0.46f, 0.60f, 0.61f, ClusterX1 + 0.01f,
                     jobArt, jobLabel));
@@ -3050,11 +3069,24 @@ namespace DeNelle.Village.UI
         /// ("tower_ground_archer@3_7"), and <c>QueueRowVM.BuildingId</c> is populated only when the
         /// job resolves to a <c>BuildingTierCatalog</c> row — which a tower never does — so the band
         /// fell back to the title-cased job key and neutral art.
-        /// ⛔ THE KEY SHAPE IS NOT TRUSTED: the id is matched against the catalog-derived
-        /// <c>DefenseChoices</c>, never rendered on its own. Three shapes are tried — the parsed
-        /// placed key, the raw JobId (a fixture may seed a bare item id) and BuildingId — all
-        /// OrdinalIgnoreCase. On a miss this returns null, the caller's existing fallback art runs,
-        /// and a Warn names the id. It never throws.
+        /// ⛔ THE KEY SHAPE IS NOT TRUSTED, AND THE FIRST PASS OF THIS HELPER TRUSTED IT TOO MUCH.
+        /// It derived the item id from <c>PlacedUpgradeKey.TryParse</c> ALONE, which accepts only
+        /// the live <c>itemId@cellX_cellZ</c> grammar (PlacedUpgradeKey.cs:42 — no '@', no parse).
+        /// The Manage capture fixture seeds the Builder job as <c>"tower_ground_archer:7:0"</c>
+        /// (Assets/Editor/UICaptureLaunch.cs:7252), a COLON key, so TryParse returned false, every
+        /// remaining arm missed, and ManageDefense_2670x1200.png printed the title-cased raw key
+        /// beside empty art — the exact defect this helper was written to close.
+        /// FOUR derivations are now tried, all OrdinalIgnoreCase:
+        ///   1. <c>choice.JobKey</c> vs <c>r.JobId</c> — the literal string the card's own CTA
+        ///      composed for this instance; an exact hit needs no id grammar at all.
+        ///   2. the parsed placed key (live '@' shape).
+        ///   3. the PREFIX CUT at the first ':' or '@' — the SAME cut
+        ///      <c>ManageScreenVM.NormalizeBuildingJobId</c> already applies (ManageScreenVM.cs:1653),
+        ///      with underscores KEPT because <c>DefenseChoiceVM.Id</c> is the raw BaseLayout itemId
+        ///      while that method hyphenates for the tier catalog.
+        ///   4. <c>r.BuildingId</c>, for the fixture that seeds a bare catalog id.
+        /// On a miss this returns null, the caller's existing fallback art runs, and a Warn names
+        /// the id. It never throws.
         /// </summary>
         private DefenseChoiceVM FindDefenseChoiceForJob(QueueRowVM r)
         {
@@ -3065,12 +3097,23 @@ namespace DeNelle.Village.UI
                 !DeNelle.Village.Buildings.Progression.PlacedUpgradeKey.TryParse(r.JobId, out itemId, out _, out _))
                 itemId = null;
 
+            // The shape-agnostic cut. Never rendered — only matched against authored ids.
+            string cutId = null;
+            if (!string.IsNullOrEmpty(r.JobId))
+            {
+                int suffix = r.JobId.IndexOfAny(new[] { ':', '@' });
+                cutId = (suffix > 0 ? r.JobId.Substring(0, suffix) : r.JobId).Trim();
+                if (cutId.Length == 0) cutId = null;
+            }
+
             for (int i = 0; i < _vm.DefenseChoices.Count; i++)
             {
                 var choice = _vm.DefenseChoices[i];
                 if (choice == null || string.IsNullOrEmpty(choice.Id)) continue;
-                if ((itemId != null && string.Equals(choice.Id, itemId, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrEmpty(r.JobId) && string.Equals(choice.Id, r.JobId, StringComparison.OrdinalIgnoreCase)) ||
+                if ((!string.IsNullOrEmpty(choice.JobKey) && !string.IsNullOrEmpty(r.JobId) &&
+                        string.Equals(choice.JobKey, r.JobId, StringComparison.OrdinalIgnoreCase)) ||
+                    (itemId != null && string.Equals(choice.Id, itemId, StringComparison.OrdinalIgnoreCase)) ||
+                    (cutId != null && string.Equals(choice.Id, cutId, StringComparison.OrdinalIgnoreCase)) ||
                     (!string.IsNullOrEmpty(r.BuildingId) && string.Equals(choice.Id, r.BuildingId, StringComparison.OrdinalIgnoreCase)))
                     return choice;
             }
@@ -3082,7 +3125,8 @@ namespace DeNelle.Village.UI
             // is how a real signal gets tuned out. Warn ONLY for the genuinely unnameable job.
             if (string.IsNullOrEmpty(r.BuildingId))
                 FlowTrace.Warn("Manage", "defence job id '" + (r.JobId ?? "<null>") + "' (parsed item '" +
-                    (itemId ?? "<none>") + "') does not resolve to an authored type in DefenseChoices (" +
+                    (itemId ?? "<none>") + "', cut item '" + (cutId ?? "<none>") +
+                    "') does not resolve to an authored type in DefenseChoices (" +
                     _vm.DefenseChoices.Count + " known) AND carries no BuildingId - the BUILDING NOW row " +
                     "keeps the band's fallback name and art");
             else
