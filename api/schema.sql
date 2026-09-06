@@ -504,6 +504,64 @@ CREATE INDEX IF NOT EXISTS idx_promo_redemptions_code
 CREATE INDEX IF NOT EXISTS idx_promo_redemptions_player
     ON promo_redemptions (player_id);
 
+-- ⚠ CORRECTION 2026-09-06 (WO-1440): "Counting rows per code enforces max_redemptions"
+-- above WAS THE BUG, not just the documentation of it. A SELECT COUNT(*) followed by an
+-- INSERT is two transactions on the HTTP driver; measured with a cap of 20 and fifty
+-- concurrent actors, ALL FIFTY were granted. The cap is now claimed in the SAME statement
+-- as the insert, by an UPDATE on promo_codes carrying
+-- `(max_redemptions IS NULL OR redemption_count < max_redemptions)` — the row lock is what
+-- makes it atomic. The count above survives only as a cheap early-out.
+--
+-- ⛔ THEREFORE `promo_codes.redemption_count` IS NOW LOAD-BEARING FOR EVERY CODE, not just
+--    tiered ones: every grant path bumps it. Never repair the ledger by deleting
+--    promo_redemptions rows without also lowering redemption_count, or the code's cap will
+--    stay spent. (Verified in step 2026-09-06: all live codes' counters were in step with
+--    their ledgers before the change.)
+--
+-- MIGRATION (idempotent, nullable, safe on the live table) — the attributability column
+-- the guest-redeem reversal requires. Deliberately outside the CREATE body, like
+-- promo_codes.created_by, so tools/schema-parity.mjs cannot read it as drift:
+--     ALTER TABLE promo_redemptions ADD COLUMN IF NOT EXISTS ip_hash TEXT;
+-- Ships with promo_ip_budget in
+--     api/migrations/20260906_0019_promo_guest_redeem_ip_budget.sql
+
+
+-- =============================================================================
+-- 4b. promo_ip_budget — the guest promo rail's only NON-FORGEABLE gate (WO-1440).
+-- -----------------------------------------------------------------------------
+-- Endpoint : POST /api/promo/redeem   (guest rail only)
+--
+-- The owner reversed the wallet-only rule on promo redemption 2026-09-06 so the live
+-- FIRSTWATCH campaign could reach the published build's players, who are guests. A
+-- guest id is MINTED BY THE CLIENT and is therefore not a scarcity key. The caller's
+-- IP is the one signal the client cannot choose, so redemption spends a fixed-window
+-- budget per (hashed IP, code) — counted on GRANTS ONLY, so a typo or an expired code
+-- never costs a household a slot, and never counted for a proven wallet.
+--
+-- ip_hash is audit.js's existing salted digest. ONE hashing rule project-wide, so this
+-- table joins to the auth-reject rows. A raw IP is stored nowhere.
+--
+-- The threshold lives in api/promo/redeem.js (PROMO_IP_MAX_GRANTS_PER_WINDOW), not
+-- here — a limit copied into two places is the duplicated state that goes stale.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS promo_ip_budget (
+    ip_hash           TEXT        NOT NULL,            -- audit.hashIp(req): salted, truncated, non-reversible
+    code              TEXT        NOT NULL,            -- the promo code (uppercase)
+    window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    grants            INTEGER     NOT NULL DEFAULT 0,  -- grants inside the CURRENT fixed window
+    total_grants      BIGINT      NOT NULL DEFAULT 0,  -- lifetime, never reset — the farming signal
+    last_grant_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (ip_hash, code)
+);
+
+-- Sweep/aging reads only; nothing in the request path scans these.
+CREATE INDEX IF NOT EXISTS idx_promo_ip_budget_last_grant
+    ON promo_ip_budget (last_grant_at);
+
+-- The after-the-fact clawback query: which IPs took the most of one campaign.
+CREATE INDEX IF NOT EXISTS idx_promo_ip_budget_code_total
+    ON promo_ip_budget (code, total_grants DESC);
+
 
 -- =============================================================================
 -- 5. referrals  — each player's own unique referral code.

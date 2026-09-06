@@ -254,10 +254,18 @@ prior table being populated):
 1. `player_data` — already live; load/save round-trip from the game.
 2. `analytics_events` — boot the game; `session_start` should appear.
 3. `promo_codes`/`promo_redemptions` — redeem `TEST10`; a redemption row appears,
-   a second redeem returns `ALREADY_REDEEMED`. **Two 2026-08-18 caveats:** the code
-   must have been seeded opt-in (note 9), and `/api/promo/redeem` is now **wallet
-   rail only** — a guest (`X-Guest-Id`) is refused with `AUTH_WALLET_REQUIRED`, so
-   smoke-test it from a wallet-connected client, not a guest one.
+   a second redeem returns `ALREADY_REDEEMED`. **Caveat:** the code must have been
+   seeded opt-in (note 9).
+   > ⚠ **CORRECTED 2026-09-06 (WO-1440).** This paragraph used to end: *"and
+   > `/api/promo/redeem` is now **wallet rail only** — a guest (`X-Guest-Id`) is
+   > refused with `AUTH_WALLET_REQUIRED`, so smoke-test it from a wallet-connected
+   > client, not a guest one."* That was true from 2026-08-18 and the owner **reversed
+   > it on 2026-09-06**: guests may redeem promo codes again, because the live
+   > FIRSTWATCH campaign points at the published dApp-Store build, whose players are
+   > overwhelmingly guests. The gate is now `authenticatePromoRedeem()`, which admits
+   > a guest and then requires a per-(IP, code) grant budget. **Smoke-test BOTH rails.**
+   > `/api/referral/claim` is UNCHANGED and still refuses guests. Full reasoning and
+   > residual risk: the header of `api/promo/redeem.js`.
 4. `referrals` — call generate twice; same code both times.
 5. `referral_claims` — claim from a *second* player; `SELF_REFERRAL` from the
    same player; `ALREADY_CLAIMED` on a second claim. **2026-08-18:** `/api/referral/claim`
@@ -485,7 +493,27 @@ save / load / nonce / bug-report that were broken.
    and `auth/nonce.js` / `auth/session.js` / `verifyWallet` / `verifySession` are
    untouched by it.
 
-5. **Pi (U2A) payment rail (WO-1318) — DORMANT until the key is set.**
+5. **Guest promo redemption (WO-1440, 2026-09-06) — LIVE, and it needs one migration.**
+
+   ```bash
+   psql "$DATABASE_URL" -f api/migrations/20260906_0019_promo_guest_redeem_ip_budget.sql
+   ```
+
+   Additive and idempotent: creates `promo_ip_budget` (a fixed-window grant budget per
+   hashed caller IP per code) and adds nullable `promo_redemptions.ip_hash`.
+   **Applied to production and verified 2026-09-06** (`MIGRATION_0019_OK`).
+
+   ⛔ **`api/promo/redeem.js` FAILS CLOSED on the guest rail if that table is missing** —
+   a guest grant is refused (un-consumed, retryable) rather than paid without its only
+   non-forgeable check. This is a deliberate divergence from `guest_rate_limit`, which
+   fails OPEN: that one guards saves, where "we could not check" must never cost a
+   player their progress; this one stands in front of a payout.
+
+   | Env var | Required | What it is |
+   |---|---|---|
+   | `PROMO_GUEST_REDEEM_ENABLED` | no | Default **ON**. Set `false` to lock guests back out of `/api/promo/redeem` with no redeploy. Scoped to that ONE route — unlike `GUEST_SAVE_ENABLED=false`, it does not touch guest saves. |
+
+6. **Pi (U2A) payment rail (WO-1318) — DORMANT until the key is set.**
 
    ⛔ **APPLY THE MIGRATION BEFORE THE FIRST PI PAYMENT, NOT AFTER.**
    `POST /api/pi/complete` runs with the Pioneer's Pi **already moved** and there is
