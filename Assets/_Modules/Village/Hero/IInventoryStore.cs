@@ -4,8 +4,9 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
 // A future InventoryVM reads OWNED items + their defs through this seam so it never
-// names the concretes (VillageInventory / GearCatalog) — the same pattern IShopEquipTarget
-// / IEconomy proved (ARCHITECTURE_PRINCIPLES.md §2). PURE C#: no UnityEngine UI types, so a
+// names the concretes (VillageInventory / GearCatalog) — the same pattern IEquipTarget
+// / IEconomy proved (ARCHITECTURE_PRINCIPLES.md §2; the original exemplar was the shop's
+// IShopEquipTarget, deleted with ShopVM.cs on 2026-09-06, WO-1430). PURE C#: no UnityEngine UI types, so a
 // fake implementation drives the VM in EditMode with no scene / no singleton.
 //
 // Exposes exactly what an inventory viewer needs:

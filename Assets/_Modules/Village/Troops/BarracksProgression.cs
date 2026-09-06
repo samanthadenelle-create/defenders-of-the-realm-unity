@@ -66,9 +66,10 @@ namespace DeNelle.Village
         /// <see cref="EffectiveBarracksLevelOf"/>, and nothing else may compare a troop against it.
         /// The stored field had exactly one writer - <see cref="ApplyBarracksUpgrade"/>, the
         /// completion effect of a BarracksUpgrade job composed only by BarracksPanelVM, reachable
-        /// only from BarracksPanel.ShowBarracksUI, which has ZERO CALLERS (verified 2026-09-06 by
+        /// only from BarracksPanel.ShowBarracksUI, which had ZERO CALLERS (verified 2026-09-06 by
         /// source grep AND a script-GUID search of every .unity/.prefab/.asset: no hits for
-        /// b245a5682900ee14cbff23be363845d3). So it sat at its founding value of 1 forever
+        /// b245a5682900ee14cbff23be363845d3; BOTH FILES WERE DELETED the same day by WO-1430 Group A,
+        /// so those names are history, not paths). So it sat at its founding value of 1 forever
         /// (GameStateService.cs:1235) and seven of the nine troops were unreachable by any player
         /// action. Ask <see cref="EffectiveBarracksLevelOf"/> instead.</para>
         /// </summary>
@@ -303,10 +304,13 @@ namespace DeNelle.Village
         /// authored max). The completion effect of a BarracksUpgrade job.
         ///
         /// <para>⚠ DEAD PATH, DELIBERATELY LEFT IN PLACE (owner ruling 21, 2026-09-06). The only
-        /// composer of a <c>JobKind.BarracksUpgrade</c> job is BarracksPanelVM, reachable only from
-        /// BarracksPanel.ShowBarracksUI, which has ZERO CALLERS - so nothing in the game calls this.
-        /// It is NOT deleted in this lane because WO-2009 may reuse BarracksPanel as the troop DETAIL
-        /// surface; the CLI seat sequences that decision. It deliberately still increments the RAW
+        /// composer of a <c>JobKind.BarracksUpgrade</c> job WAS BarracksPanelVM, reachable only from
+        /// BarracksPanel.ShowBarracksUI, which had ZERO CALLERS - so nothing in the game calls this.
+        /// ⛔ Both of those files were DELETED on 2026-09-06 (WO-1430 Group A); WO-2009's troop DETAIL
+        /// surface is the Manage Army tab, not that panel. THIS METHOD IS NOT DELETED WITH THEM: a
+        /// pre-existing save can still hold a queued JobKind.BarracksUpgrade job, and that job's
+        /// completion effect must keep resolving. Retiring it needs a save migration, not an edit -
+        /// tracked as the WO-1430 follow-up. It deliberately still increments the RAW
         /// stored value (<see cref="BarracksLevelOf"/>), NOT the merged one: incrementing the merge
         /// would let this path grant unlocks ABOVE the barracks the player actually built, which is
         /// the very split ruling 21 closes.</para>

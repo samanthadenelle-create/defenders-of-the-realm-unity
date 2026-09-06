@@ -7,7 +7,7 @@
 // and research perk is a TILE the player taps to UNLOCK. VERBIAGE LAW: "Unlock
 // perk" / "Enhancement" language only; the words "Upgrade Building" never appear.
 //
-// ALL grid STATE + LOGIC lives here, view-agnostic. Mirrors ShopVM:
+// ALL grid STATE + LOGIC lives here, view-agnostic. Mirrors PartyShopVM:
 //   * implements DeNelle.Core.UI.Mvvm.IPanelViewModel (Title / Changed / Close / Dispose)
 //   * NO UnityEngine UI types; unit-testable without a scene (ARCHITECTURE_PRINCIPLES §2/§2c).
 //   * the View binds it, re-renders on Changed, and routes taps back as commands;

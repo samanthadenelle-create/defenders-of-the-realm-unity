@@ -16,8 +16,10 @@
 // TroopUnlock.IsTrainable already took the MAX — a SPLIT-BRAIN gate. The Manage ARMY tab
 // requires BOTH (ManageScreenVM.cs:1892-1893, `unlocked && trainable`), so the stricter,
 // permanently-1 half dominated and seven of nine troops were unreachable. One authority now.
-// The BarracksPanel this file's header used to name has ZERO CALLERS and is marked dead;
-// so is the BarracksUpgrade job path below (see BarracksProgression.ApplyBarracksUpgrade).
+// The BarracksPanel this file's header used to name had ZERO CALLERS and was DELETED on
+// 2026-09-06 (WO-1430 Group A) - do not go looking for it. The BarracksUpgrade job path
+// below is likewise dead (see BarracksProgression.ApplyBarracksUpgrade), kept only so a
+// pre-existing queued job still completes.
 //   • Barracks upgrade  -> JobKind.BarracksUpgrade on the BUILDER channel.
 //   • Troop track upgrade -> JobKind.TroopUpgrade   on the RESEARCH channel.
 //   • Troop training      -> JobKind.TrainTroop     on the TRAIN channel.
@@ -557,7 +559,8 @@ namespace DeNelle.Village
         // BarracksService.Changed was a complete signal. Now the level moves when a barracks
         // BUILDING tier lands (CompletedUpgradeApplier -> ModifierService.Recompute), and the two
         // surfaces that listen for a roster change subscribe to THIS event only
-        // (ArmyMusterPanel.cs:364, BarracksPanelVM.cs:166). Without this bridge a freshly unlocked
+        // (ArmyMusterPanel.cs:364; BarracksPanelVM.cs:166 was the second, until that file was DELETED
+        // on 2026-09-06 by WO-1430 - the bridge is still needed for the surviving one). Without it a freshly unlocked
         // troop would appear on the next panel OPEN rather than live - a silent staleness, which is
         // the class of failure CLAUDE.md §12 forbids. Re-raise, guarded against the re-entrant
         // double-fire from our own PersistAndNotify (which calls Recompute and then Changed).

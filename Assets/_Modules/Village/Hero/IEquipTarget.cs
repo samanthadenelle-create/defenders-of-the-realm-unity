@@ -3,17 +3,19 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
-// Generalizes the shop's IShopEquipTarget: a future EquipVM equips/unequips and reads
+// Generalizes the shop's old IShopEquipTarget (deleted with ShopVM.cs on 2026-09-06,
+// WO-1430 - see the consolidation note below): a future EquipVM equips/unequips and reads
 // the equipped loadout of a TARGET (the hero OR a companion) through this seam, never
 // naming GearLoadout. PURE C#: no UnityEngine UI types, so a fake drives the VM in
 // EditMode with no scene (ARCHITECTURE_PRINCIPLES.md §2 / §2c).
 //
-// CONSOLIDATION NOTE (WO-434): IShopEquipTarget (DeNelle.Village.Hero) is LEFT UNTOUCHED.
-// It is a tighter, shop-only contract (equipped names + mults + EquipById) and ShopPanel's
-// private LoadoutEquipTarget already implements it against the panel, not a GearLoadout.
-// Folding it into IEquipTarget would force ShopPanel's adapter to grow Unequip + def +
-// identity members it does not use — a behaviour risk this additive phase avoids. The two
-// coexist; a later phase may retire IShopEquipTarget once EquipVM owns the equip surface.
+// CONSOLIDATION NOTE (WO-434, RESOLVED 2026-09-06 by WO-1430): IShopEquipTarget was LEFT
+// UNTOUCHED here as a tighter, shop-only contract (equipped names + mults + EquipById),
+// implemented by ShopPanel's private LoadoutEquipTarget adapter. ⛔ IT NO LONGER EXISTS —
+// it was declared inside the legacy ShopPanel/ShopVM pair, which was DELETED as doorless
+// (no production file opened that panel). Do not go looking for it. IEquipTarget is now the
+// ONE equip contract, and PartyShopVM consumes it directly, which is the consolidation this
+// note said "a later phase" would reach.
 // =============================================================================
 
 using System;

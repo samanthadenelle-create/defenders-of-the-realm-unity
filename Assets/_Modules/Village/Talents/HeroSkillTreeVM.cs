@@ -621,7 +621,9 @@ namespace DeNelle.Village.Talents
         }
 
         // ── Respec (refund spent Wisdom for a Crystal cost) ──────────────────────
-        // Mirrors the legacy TalentTreePanel.OnRespecClicked path so the LIVE MVVM panel
+        // Mirrors the respec path of the legacy TalentTreePanel (a UI-Toolkit screen that was
+        // never wired to any button and was DELETED on 2026-09-06, WO-1430 - do not go looking
+        // for TalentTreePanel.OnRespecClicked) so the LIVE MVVM panel
         // surfaces the same in-game respec (owner F8: "no respec option"). Spends
         // HeroTalentCatalog.RespecCostCrystals via EconomyService (Crystals-only), then
         // WisdomCurrencyService.RespecHero wipes this hero's unlocked nodes + refunds the

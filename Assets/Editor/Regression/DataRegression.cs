@@ -1031,6 +1031,12 @@ namespace DeNelle.Editor
             // --- SEAM ORACLES (CLI driving plan section 1): every panel has a door; no authored field goes unread ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "panel-door suite", () => { if (!DeNelle.Editor.PanelDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[panel-door] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "authored-field-reader suite", () => { if (!DeNelle.Editor.AuthoredFieldReaderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[authored-field-reader] " + r); });
+            // --- WO-1429: a refused primary falls through to the FREE melee sweep; the per-class table is gone ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "primary-fallback suite", () => { if (!DeNelle.Editor.Regression.PrimaryFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[primary-fallback] " + r); });
+            // --- WO-2002: the common Manage renderer is DUMB - 16 banned shapes, each with a planted-fixture proof ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-dumb-view suite", () => { if (!DeNelle.Editor.ManageDumbViewRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-dumb-view] " + r); });
+            // --- OWNER RULING 26b: a full collector spills into its matching storage; nothing is ever burned ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-overflow suite", () => { if (!DeNelle.Editor.Regression.CollectorOverflowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-overflow] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
             // --- WO-1404 Journey deck subtitles carry state (Quests / Raids), one pure Core VM, change-only publisher (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-subtitle suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckSubtitleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-subtitle] " + r); });

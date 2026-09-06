@@ -1965,8 +1965,9 @@ the filesystem max. Migrated off Linear; see `NOTION_SOURCE_OF_TRUTH.md`.
   never declared and a GameObject has only one tag (CLAUDE.md §7).
 - **Vendor-stock contract.** `Assets/_Modules/Village/Hero/VendorStockContract.cs` is the single
   source of truth for what each store TYPE sells (armorer=armor, etc.). Two consumers read the same
-  `AllowedFor()` mapping: `ShopPanel.ShowBuy` filters stock; the AutoPilot bot asserts the built
-  stock matches — so the bot checks intent, not a duplicate.
+  `AllowedFor()` mapping: `PartyShopVM` (`:248`) filters stock; the AutoPilot bot asserts the built
+  stock matches — so the bot checks intent, not a duplicate. *(Re-pointed 2026-09-06, WO-1430: the
+  first consumer used to be the legacy `ShopPanel.ShowBuy`; that panel was deleted as doorless.)*
 - **Seam radius / nav lesson.** The seam is a **proximity** trigger; the hero (a `NavMeshAgent`)
   stops at the **navmesh edge**, so the trigger radius must overlap the walkable surface or the hero
   never reaches it. Tune the seam against the bake, not the visual mesh.

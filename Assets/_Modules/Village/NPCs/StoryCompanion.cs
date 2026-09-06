@@ -786,7 +786,8 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Resolves the Keeper. WO-438 (FIX 1): robust hero resolution mirroring
-        /// ShopPanel.FindActiveHeroGO's priority — tag "Player" (the hero IS tagged
+        /// the old ShopPanel.FindActiveHeroGO's priority (that panel was deleted 2026-09-06,
+        /// WO-1430; the ORDER below is the surviving statement of it) — tag "Player" (the hero IS tagged
         /// Player, set in HeroControlEnsurer.Ensure, CLAUDE.md §7 / WO-450) → the
         /// typed HeroLocomotion lookup → a name-prefix sweep ("Hero ("). The earlier
         /// comment that "Player" was undeclared is stale; FindWithTag returns null

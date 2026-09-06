@@ -12,7 +12,10 @@
 // TIME, so registration order vs. hero spawn order cannot break them.
 //
 // Registered here:
-//   attack      -> Mage/Ranger authored Q primary; Knight basic weapon attack.
+//   attack      -> the class's ranged basic (DERIVED via HeroAbilities.
+//                  TryGetRangedPrimary, never a class-name table) when it can be
+//                  paid for, and ALWAYS the free melee sweep otherwise — a
+//                  refused cast falls THROUGH instead of returning (WO-1429).
 //   cycleSelect -> HeroTargetIndicator.EngageLock on the Enemy whose instance
 //                  id matches the TargetRecord.Id (mirrors the retired
 //                  BattleHud9Zone.SelectCycleRow WO-512 routing).
@@ -62,21 +65,74 @@ namespace DeNelle.Village.Hud
                     FlowTrace.Step("HudKit", "attack gated while Block is held");
                     return;
                 }
+                // ── ⭐ WO-1429 — YOU PRESSED ATTACK, SO YOU ATTACK ────────────────────────────
+                //
+                // THE DEFECT THIS REPLACES, from a CAPTURE and not a theory
+                // (logs/device/freeze-20260904-095249.log:544639, a real Seeker session):
+                //     [Flow:HudKit] command 'attack' fired
+                //     [Flow:HeroMana] cast REFUSED slot=Q 'Fireball': cd=0.47s Mana 21.08/24.00 cost=3.00
+                //     [Flow:HudKit] primary command -> class Q for mage gated
+                // ...and NOTHING follows. The tap produced NO VERB. The code here used to be a
+                // hardcoded per-class table — `heroClass == "mage" || heroClass == "ranger"` ->
+                // TryCast(Q) -> `return`, BEFORE the melee swing could ever be reached — so every
+                // refusal was a dead button. Note the numbers: that refusal is a COOLDOWN refusal at
+                // near-full mana. HeroAbilities.TryCast:813 refuses on `cd > 0 || _mana < cost` and
+                // BOTH exit the same `return false`, so this was never an out-of-mana edge case: the
+                // button died in every cooldown gap, several times a minute, all game.
+                //
+                // THE RULE, and it needs no class name: **a refused primary — for ANY reason,
+                // cooldown or cost — falls THROUGH to the free melee sweep.** No thresholds, no mana
+                // check, no hysteresis (a 0.47s cooldown gap must not lock the hero to the staff
+                // until mana climbs to 50% — that would be strictly worse than the defect).
+                //
+                // WHY THE TABLE IS DELETED RATHER THAN EXTENDED: HeroAbilities.TryGetRangedPrimary
+                // is "the SINGLE decision seam" (its own doc comment) and is DERIVED from the
+                // authored def's effect shape + RangedPrimaryReachFactor, not from a class id.
+                // Measured against Assets/StreamingAssets/Data/Canonical/abilities.json this session:
+                // mage.q Fireball (effect=strike, range=14) -> true, ranger.q Quick Shot
+                // (effect=strike, range=15) -> true, knight.q Sword Heroic (effect=dash) -> false —
+                // the EXACT set the string table hardcoded, now derived, and it generalises to any
+                // future class for free. PlayerAttackController and HeroTargetIndicator gate on the
+                // same call, so input and targeting still cannot disagree.
+                //
+                // THE SWEEP IS FREE BY CONSTRUCTION (owner ruling, WO-1429 §7: "No swing Staff
+                // should have no cost only casting magic should"): PlayerAttackController spends no
+                // resource anywhere — its only pool contact is a GRANT, the ranger's on-hit
+                // RestoreMana at PlayerAttackController.cs:816-820, and that one is gated OFF for a
+                // class with a ranged basic. Free is the only cost that keeps "the hero always has a
+                // verb" true at every instant.
+                //
+                // MOBILE ONLY: PlayerAttackController.Update:328 already melees unconditionally for
+                // every class on keyboard/gamepad/mouse. That path is untouched — which is why the
+                // owner only ever felt this on the Seeker.
+                var atk = Object.FindAnyObjectByType<PlayerAttackController>();
                 var abilities = Object.FindAnyObjectByType<HeroAbilities>();
-                string heroClass = abilities != null ? abilities.HeroClass : null;
-                if (abilities != null && (string.Equals(heroClass, "mage", System.StringComparison.OrdinalIgnoreCase) ||
-                                          string.Equals(heroClass, "ranger", System.StringComparison.OrdinalIgnoreCase)))
+
+                AbilityDef qDef = null;
+                bool hasRangedPrimary = abilities != null &&
+                                        abilities.TryGetRangedPrimary(atk != null ? atk.AttackRange : 0f, out qDef);
+
+                if (hasRangedPrimary)
                 {
-                    bool cast = abilities.TryCast(AbilitySlot.Q);
-                    FlowTrace.Step("HudKit", "primary command -> class Q for " + heroClass + " " +
-                                               (cast ? "FIRED" : "gated"));
-                    return;
+                    if (abilities.TryCast(AbilitySlot.Q))
+                    {
+                        FlowTrace.Step("HudKit", "primary command -> class Q '" +
+                                                   (qDef != null ? qDef.Id : "(none)") + "' FIRED");
+                        return;
+                    }
+                    // §12: name the fall-through explicitly. HeroAbilities already logged WHICH gate
+                    // refused (cd/cost/wind-up) one line above this in any capture, so the pair reads
+                    // "refused, and here is the verb the player got instead" in a single look.
+                    FlowTrace.Step("HudKit", "primary command -> class Q '" +
+                                               (qDef != null ? qDef.Id : "(none)") +
+                                               "' REFUSED - falling through to the free melee sweep (WO-1429)");
                 }
 
-                var atk = Object.FindAnyObjectByType<PlayerAttackController>();
                 if (atk == null) { FlowTrace.Warn("HudKit", "attack fired but no PlayerAttackController in scene"); return; }
                 bool swung = atk.TriggerBasicAttack();
-                FlowTrace.Step("HudKit", "primary command -> knight basic swing " + (swung ? "SWUNG" : "gated"));
+                FlowTrace.Step("HudKit", "primary command -> melee sweep " + (swung ? "SWUNG" : "gated") +
+                                           (hasRangedPrimary ? " (fallback after a refused class Q)"
+                                                             : " (class has no ranged primary)"));
             });
 
             HudCommands.RegisterBlock(held =>

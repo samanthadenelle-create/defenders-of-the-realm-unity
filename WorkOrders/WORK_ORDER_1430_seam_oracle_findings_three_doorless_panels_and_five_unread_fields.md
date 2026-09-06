@@ -37,6 +37,29 @@ that mistake and had to retract it.)
    the flag branch or retire the panel and fix the stale canon (CLAUDE.md section 15).
 3. **TalentTreePanel** - the clearest delete. Also UI-Toolkit, which CLAUDE.md section 8 records as not working in builds.
 
+### DECISIONS TAKEN - 2026-09-06, Group A lane. ALL THREE RETIRED.
+
+| Panel | Decision | The evidence that decided it |
+|---|---|---|
+| **BarracksPanel + BarracksPanelVM** | **DELETED** | `OWNER_RULINGS_LOCKED.md` section 21 point 3 already named them "dead weight" and point 4 routes WO-2008's locked-tile CTA to *"the barracks BUILDING card in BUILD, which already exists and already works. **No new screen.**"* And WO-2009's own body puts troop detail on the Manage Army tab under a View that **"may not ... call BarracksService directly"** - the exact opposite of this panel, which binds a VM that owns `BarracksService`. **WO-2009 loses nothing.** |
+| **ShopPanel + ShopVM** | **DELETED** | Restoring the flag branch was rejected as gaming the oracle: it would be a door to a screen `FeatureFlags` itself calls *"two sell bars, no party selection, blank icons"*, on a branch that is dead while `ff.partyshop` defaults ON - and `PanelDoorRegression`'s own header concedes "a door that is itself dead code still counts as a door here". `PartyShopVM` covers gold-priced weapons, armor, accessories AND consumables (`:1052 AddBuyConsumableRow`), so no player capability is lost. The stale `FeatureFlags` claim is corrected in the same change. |
+| **TalentTreePanel** | **DELETED** | Superseded by `HeroSkillTreePanelMvvm`; `DialogueCommandSink` re-pointed `OpenTalents` to `PanelId.HeroSkillTree` and removed the legacy route. UI-Toolkit (CLAUDE.md section 8). Nothing in the tree constructed it. |
+
+**No `PanelId` member was touched.** Verified: there is no `PanelId.Shop`; `BarracksPanel` opened via
+`BarracksPanelVM.ResolveOrCreateHost`, never the router; `PanelId.HeroTalents = 0` was already retired-with-comment
+and stays at its value. `JobKind.BarracksUpgrade` and `GameState.BarracksLevel` are **persisted save keys and were
+left alone** - `BarracksProgression.ApplyBarracksUpgrade` is kept for the same reason (a pre-existing save can still
+hold a queued job whose completion effect must resolve).
+
+**All three allowlist entries were DELETED from `PanelDoorRegression`; that allowlist is now empty.**
+
+**Coverage lost, recorded not hidden:** `UICaptureLaunch`'s `RealmGoldStore` / `RealmStorePurchase` captures were the
+only headless assertion that a buy moves gold by exactly the total price and inventory by exactly the quantity.
+`PartyShopVM` exposes no `Quantity`/`TotalPrice`, so they could not be re-pointed. **Follow-up owed: an equivalent
+PartyShop purchase proof.** By contrast the AutoPilot `AssertVendorContracts` and `AssertEconomyDeduct` phases WERE
+re-pointed onto `PartyShopPanelMvvm` (two passthrough properties added), so they now exercise the shop the player
+actually opens.
+
 ## 3. FINDING GROUP B - five authored fields no production code reads
 
 `AuthoredFieldReaderRegression` measured **463** authored `[JsonProperty]` string fields; **58** have no production
@@ -59,7 +82,9 @@ delete the field to silence the oracle** - that discards the design intent someo
 deliberate act that should be recorded.
 
 ## 4. How each is parked, and what happens next
-- Group A: named in `PanelDoorRegression`'s `Allowlist`, each entry dated and pointing here, stating what retires it.
+- Group A: **RESOLVED 2026-09-06** - all three panels retired, all three allowlist entries deleted, the allowlist is
+  empty. See the decision table in section 2. Group B is still parked.
+- Group A (as parked, for the record): named in `PanelDoorRegression`'s `Allowlist`, each entry dated and pointing here, stating what retires it.
 - Group B: named in `AuthoredFieldReaderRegression`'s exemption set, same discipline.
 - **Both oracles still FAIL on anything NEW.** A fourth doorless panel or a sixth unread mechanical field fails the
   build immediately. The exemptions are a ratchet, not an amnesty.

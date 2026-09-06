@@ -35,7 +35,8 @@
 //     rule and would blur what this oracle proves.
 //   * Everything outside Assets/_Modules (Editor tooling, tests, DevTools drivers
 //     live under _Modules/DevTools and are handled below as NON-doors).
-// Measured 2026-09-06: 35 types satisfy (a)+(b)+(c).
+// Measured 2026-09-06: 35 types satisfy (a)+(b)+(c) -- 32 after WO-1430 Group A
+// deleted BarracksPanel, ShopPanel and TalentTreePanel the same day.
 //
 // -----------------------------------------------------------------------------
 // WHAT COUNTS AS A DOOR (and what deliberately does not)
@@ -45,10 +46,13 @@
 //     <P>.cs, <P>VM.cs, <P>Bootstrap.cs, and with Stem = P minus its
 //     "Panel"/"PanelMvvm" suffix: <Stem>VM.cs, <Stem>Panel.cs, <Stem>PanelVM.cs,
 //     <Stem>Bootstrap.cs, <Stem>PanelBootstrap.cs.
-// The home set exists because of BarracksPanel: its ONLY construction site is
-// BarracksPanelVM.ResolveOrCreateHost (BarracksPanelVM.cs:183-187), which is
+// The home set exists because of BarracksPanel: its ONLY construction site was
+// BarracksPanelVM.ResolveOrCreateHost (BarracksPanelVM.cs:183-187), which was
 // called only from BarracksPanel.Open (BarracksPanel.cs:82). A View and its VM
 // constructing each other is a closed loop, not a door.
+// ⚠ Both files were DELETED 2026-09-06 (WO-1430 Group A) once the oracle proved
+// the loop, so those two citations are HISTORY, not paths you can open. The rule
+// they motivated stands and is why the home set is still computed.
 //
 // P has a door iff ANY of:
 //   D1  some .cs under Assets/_Modules/ that is NOT in P's home set and NOT under
@@ -95,7 +99,10 @@
 //     around by weakening the rule.
 //
 // Marker: PANEL_DOOR_OK / PANEL_DOOR_FAIL <case>.
-// EXPECTED ON ARRIVAL: **RED**, on three real defects (see the allowlist note).
+// EXPECTED ON ARRIVAL (2026-09-06): **RED**, on three real defects. All three were
+// RETIRED the same day by WO-1430 Group A (BarracksPanel, ShopPanel, TalentTreePanel
+// deleted with their VMs), so the allowlist is now genuinely EMPTY and the suite is
+// expected GREEN. A fourth doorless panel fails the build immediately.
 //
 // Wire (DataRegression.RunAll):
 //   DeNelle.Core.Diagnostics.Guard.Try("Regression", "panel-door suite", () => { if (!DeNelle.Editor.PanelDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[panel-door] " + r); });
@@ -115,65 +122,42 @@ namespace DeNelle.Editor
         private const string Tag = "[panel-door]";
 
         // ---------------------------------------------------------------------
-        // THE ALLOWLIST. It is EMPTY, on purpose, and that is a statement.
+        // THE ALLOWLIST. It is EMPTY, and that is the point.
         //
-        // Three panels fail this oracle on the day it is written, and NONE of them
-        // is excused here, because each is a finding the CLI seat must triage
-        // rather than an exception the oracle should tolerate:
-        //   * BarracksPanel     -- OWNER_RULINGS_LOCKED §21, the defect that
-        //                          stranded 7 of 9 troops. Being fixed by WO-2011.
-        //   * ShopPanel         -- the legacy merchant screen. DialogueCommandSink
-        //                          "OpenShop" routes UNCONDITIONALLY to
-        //                          PanelId.PartyShop (DialogueCommandSink.cs:88-93),
-        //                          so the FeatureFlags claim that the legacy path
-        //                          opens when ff.partyshop is OFF
-        //                          (FeatureFlags.cs:152-156) is not true of the
-        //                          code. Only AutoPilotDriver + UICaptureLaunch
-        //                          construct it.
-        //   * TalentTreePanel   -- superseded by HeroSkillTreePanelMvvm; the
-        //                          "OpenTalents" verb was re-pointed to
-        //                          PanelId.HeroSkillTree and the legacy
-        //                          PanelId.HeroTalents route was REMOVED
-        //                          (DialogueCommandSink.cs:104-106). Its own header
-        //                          still carries an INTEGRATOR NOTE saying to wire
-        //                          the button; that was never done.
+        // Three panels failed this oracle on the day it was written. They were
+        // parked here for ONE DAY with a decision owed, and on 2026-09-06 the CLI
+        // seat took all three decisions in WO-1430 GROUP A: every one was RETIRED,
+        // deleted from the tree with its ViewModel, its harness callers and its
+        // stale canon. So there is nothing left to excuse.
+        //   * BarracksPanel + BarracksPanelVM -- DELETED. Obsolete as a level
+        //     control after OWNER_RULINGS_LOCKED §21 merged the two barracks
+        //     levels; ruling 21 point 4 routes WO-2008's locked-tile CTA to the
+        //     barracks BUILDING card in Build ("no new screen"), and WO-2009's
+        //     troop detail is the Manage Army tab, whose View "may not call
+        //     BarracksService directly" -- the exact opposite of this panel's
+        //     shape. WO-2009 therefore loses nothing.
+        //   * ShopPanel + ShopVM -- DELETED. Superseded by PartyShopPanelMvvm,
+        //     which DialogueCommandSink routes to unconditionally. Restoring the
+        //     flag branch was rejected as gaming the oracle: it would have been a
+        //     door to a screen FeatureFlags itself calls "two sell bars, no party
+        //     selection, blank icons", behind a branch that is dead while
+        //     ff.partyshop defaults ON. The stale FeatureFlags claim was corrected
+        //     in the same change (CLAUDE.md §15).
+        //   * TalentTreePanel -- DELETED. Superseded by HeroSkillTreePanelMvvm;
+        //     the "OpenTalents" verb was re-pointed to PanelId.HeroSkillTree and
+        //     the legacy PanelId.HeroTalents route REMOVED. Also UI-Toolkit, which
+        //     CLAUDE.md §8 records as not working in builds.
         //
         // To add an entry: name the type, and state in the comment WHY it is
         // legitimately doorless (editor-only tooling, reflection-only open,
         // deliberately parked system) and what would retire the entry. An
-        // unexplained exclusion is how the next dead panel hides.
+        // unexplained exclusion is how the next dead panel hides. An exemption that
+        // outlives its finding is the exact rot this oracle exists to prevent --
+        // DELETE the entry in the same change that resolves the finding, as
+        // WO-1430 did with all three.
         // ---------------------------------------------------------------------
         private static readonly HashSet<string> Allowlist = new HashSet<string>(StringComparer.Ordinal)
         {
-            // PARKED 2026-09-06 by the CLI seat, each with a decision owed. Full evidence and the
-            // decision per panel: WorkOrders/WORK_ORDER_1430_seam_oracle_findings_three_doorless_
-            // panels_and_five_unread_fields.md
-            //
-            // ⚠ THIS IS A RATCHET, NOT AN AMNESTY. The oracle still FAILS on any panel not named
-            // here, so a FOURTH doorless panel breaks the build immediately. Each entry states what
-            // retires it; DELETE the entry in the same change that resolves the finding. An
-            // exemption that outlives its finding is the exact rot this oracle exists to prevent.
-
-            // Obsolete as a level control after OWNER_RULINGS_LOCKED §21 merged the two barracks
-            // levels - this is the panel whose absent door stranded 7 of 9 troop types. NOT deleted
-            // because WO-2009 may reuse it as the troop DETAIL surface.
-            // RETIRES WHEN: WO-2009 either wires it as that surface, or it is deleted.
-            "BarracksPanel",
-
-            // The legacy merchant screen, superseded by PartyShop. FeatureFlags.cs:152-156 claims it
-            // opens when ff.partyshop is OFF; that is NOT true of the code - DialogueCommandSink.cs:
-            // 88-93 routes OpenShop unconditionally to PanelId.PartyShop. So the canon is stale, not
-            // the wiring.
-            // RETIRES WHEN: the flag branch is restored, or the panel is retired and FeatureFlags'
-            // claim is corrected in the same change (CLAUDE.md §15).
-            "ShopPanel",
-
-            // Superseded by HeroSkillTreePanelMvvm; DialogueCommandSink.cs:104-106 re-pointed
-            // OpenTalents to PanelId.HeroSkillTree and REMOVED the legacy PanelId.HeroTalents route.
-            // Its own header still carries an INTEGRATOR NOTE saying to wire the button - never done.
-            // Also UI-Toolkit, which CLAUDE.md §8 records as not working in builds.
-            // RETIRES WHEN: deleted (the clearest of the three), or genuinely wired.
-            "TalentTreePanel",
         };
 
         // A panel-like type and where it was declared.
@@ -269,7 +253,8 @@ namespace DeNelle.Editor
             if (panels.Count < InventoryFloor)
             {
                 failures.Add(Tag + " only " + panels.Count + " panel-like types were discovered under " +
-                             "Assets/_Modules (floor " + InventoryFloor + ", measured 35 on 2026-09-06). The " +
+                             "Assets/_Modules (floor " + InventoryFloor + ", measured 35 on 2026-09-06, 32 after " +
+                             "WO-1430 retired three doorless panels the same day). The " +
                              "detector is broken or the tree moved; an empty inventory would pass every case " +
                              "vacuously. FAIL, not a skip");
                 return;

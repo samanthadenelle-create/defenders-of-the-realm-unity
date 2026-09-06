@@ -1221,7 +1221,7 @@ namespace DeNelle.DevTools
             if (state == null) return;
 
             // Wood/Iron live in TWO spendable wallets that don't sync: the EconomyService
-            // in-session pool (ShopPanel + the HUD resource bar) and GameState.Wood/Iron
+            // in-session pool (the gear shop + the HUD resource bar) and GameState.Wood/Iron
             // (the structure-upgrade flow's ResourceLedger). Writing GameState directly
             // (as this used to) filled only the upgrade wallet, so the shop + HUD bar saw
             // nothing. Route Wood/Iron through EconomyService.GrantSpendable so ONE dev

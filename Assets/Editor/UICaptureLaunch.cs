@@ -2251,14 +2251,17 @@ namespace DeNelle.Editor
             else Debug.LogError("BAG_CAPTURE_FAIL " + count + "/3");
         }
 
-        /// <summary>Focused three-ratio proof for the ordinary gold-currency storefront.</summary>
-        public static void RunRealmGoldStoreCaptureHeadless()
-        {
-            Directory.CreateDirectory(OutDir);
-            int count = ForEachTarget("RealmGoldStore", CaptureRealmGoldStoreOnce);
-            if (count == 3) Debug.Log("REALM_GOLD_STORE_CAPTURE_OK 3/3");
-            else Debug.LogError("REALM_GOLD_STORE_CAPTURE_FAIL " + count + "/3");
-        }
+        // RETIRED 2026-09-06 (WO-1430): RunRealmGoldStoreCaptureHeadless and
+        // RunRealmGoldStorePurchaseCaptureHeadless photographed the legacy ShopPanel, which was
+        // DELETED as doorless in that change (PanelDoorRegression [panel-door-is-harness-only]: only
+        // this file and AutoPilotDriver ever constructed it, and a harness that AddComponents a panel
+        // so it can be photographed is not a door). The gold-currency storefront the player really
+        // opens is PanelId.PartyShop -> PartyShopPanelMvvm; its proof is
+        // RunPartyShopPopulatedCaptureHeadless below.
+        // ⚠ COVERAGE LOST, recorded rather than hidden: RealmStorePurchase was the ONLY headless
+        // assertion that a buy moves gold by exactly the total price and inventory by exactly the
+        // quantity. PartyShopVM exposes no Quantity/TotalPrice, so it could not be re-pointed; an
+        // equivalent PartyShop purchase proof is a follow-up, not a silent deletion.
 
         /// <summary>Focused three-ratio proof for Hero Skills/Talents.</summary>
         public static void RunHeroSkillTreeCaptureHeadless()
@@ -2381,159 +2384,6 @@ namespace DeNelle.Editor
                 if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
             }
             return saved;
-        }
-
-        private static int CaptureRealmGoldStoreOnce(CaptureTarget target)
-        {
-            GameObject eventSystem = null;
-            GameObject host = null;
-            GameObject canvas = null;
-            try
-            {
-                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
-                {
-                    eventSystem = new GameObject("~UICapEventSystem");
-                    eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
-                }
-                PanelManager.CloseAll();
-                host = new GameObject("~UICapRealmGoldStore");
-                var panel = host.AddComponent<ShopPanel>();
-                panel.Open("", "REALM STORE");
-                canvas = GetPrivateGameObject(panel, "_ui");
-                if (canvas == null) return 0;
-                return RenderCanvasToPng(canvas, OutDir + "RealmGoldStore_" + target.Tag + ".png",
-                    target.W, target.H) ? 1 : 0;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError("[UICap-HL] realm gold store capture threw: " + e);
-                return 0;
-            }
-            finally
-            {
-                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
-                if (host != null) UnityEngine.Object.DestroyImmediate(host);
-                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
-            }
-        }
-
-        /// <summary>
-        /// Stateful Realm Store proof. Opens the real Market catalog with an affordable wallet,
-        /// selects the canonical healing draught, raises quantity to three through ShopVM, and
-        /// executes Buy. Evidence is accepted only when gold falls by exactly total price and
-        /// persisted inventory rises by exactly three.
-        /// </summary>
-        public static void RunRealmGoldStorePurchaseCaptureHeadless()
-        {
-            Directory.CreateDirectory(OutDir);
-            _fidelityOk = _fidelityDegraded = 0;
-            _fidelityReasons.Clear();
-            _geoFailures.Clear();
-            _touchFailures.Clear();
-            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
-
-            int frames = ForEachTarget("RealmGoldStorePurchase", CaptureRealmGoldStorePurchaseOnce);
-            ReportFidelity();
-            ReportGeometry();
-            ReportTouchOracle();
-            if (frames == 6 && _fidelityDegraded == 0 && _geoFailures.Count == 0 &&
-                _touchFailures.Count == 0)
-                Debug.Log("REALM_STORE_PURCHASE_CAPTURE_OK 6/6 frames; quantity=3; gold+inventory asserted; touch=clean");
-            else
-                Debug.LogError("REALM_STORE_PURCHASE_CAPTURE_FAIL frames=" + frames + "/6 fidelity=" +
-                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" +
-                    _touchFailures.Count);
-        }
-
-        private static int CaptureRealmGoldStorePurchaseOnce(CaptureTarget target)
-        {
-            const string potionId = "minor-heal-potion";
-            GameStateService priorState = GameStateService.Instance;
-            VillageInventory priorInventory = VillageInventory.Instance;
-            EconomyService priorEconomy = EconomyService.Instance;
-            GameObject stateHost = null, inventoryHost = null, economyHost = null, panelHost = null, canvas = null;
-            GameState fixture = null;
-            ShopPanel panel = null;
-            try
-            {
-                PanelManager.CloseAll();
-                fixture = ScriptableObject.CreateInstance<GameState>();
-                fixture.Onboarded = true;
-                fixture.GearInventory = new Dictionary<string, int>();
-                var wallet = fixture.Resources;
-                wallet.Coins = 100;
-                fixture.Resources = wallet;
-                stateHost = new GameObject("~UICapRealmStoreState");
-                if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
-                    throw new InvalidOperationException("GameStateService capture seam unavailable");
-
-                inventoryHost = new GameObject("~UICapRealmStoreInventory");
-                var inventory = inventoryHost.AddComponent<VillageInventory>();
-                InstallCaptureVillageInventory(inventory);
-                economyHost = new GameObject("~UICapRealmStoreEconomy");
-                var economy = economyHost.AddComponent<EconomyService>();
-                InstallCaptureEconomy(economy);
-
-                panelHost = new GameObject("~UICapRealmStorePanel");
-                panel = panelHost.AddComponent<ShopPanel>();
-                panel.Open("market", "REALM STORE");
-                var vm = GetPrivateFieldValue(panel, "_vm") as ShopVM;
-                if (vm == null) throw new InvalidOperationException("Realm Store built without ShopVM");
-                bool stocked = false;
-                foreach (var item in vm.Items)
-                    if (string.Equals(item.Id, potionId, StringComparison.Ordinal)) { stocked = true; break; }
-                if (!stocked) throw new InvalidOperationException("Market stock omitted " + potionId);
-
-                vm.Select(potionId);
-                vm.ChangeQuantity(2);
-                if (vm.Quantity != 3 || vm.SelectedUnitPrice <= 0 || !vm.CanExecuteSelected)
-                    throw new InvalidOperationException("quantity fixture unavailable: qty=" + vm.Quantity +
-                        " unit=" + vm.SelectedUnitPrice + " canBuy=" + vm.CanExecuteSelected);
-                int coinsBefore = economy.Coins;
-                int countBefore = inventory.Get(potionId);
-                int expectedCost = vm.TotalPrice;
-                Canvas.ForceUpdateCanvases();
-                canvas = GetPrivateGameObject(panel, "_ui");
-                if (canvas == null) throw new InvalidOperationException("Realm Store built no public canvas");
-
-                int saved = RenderCanvasToPng(canvas,
-                    OutDir + "RealmStorePurchase_Quantity3_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
-                vm.Buy();
-                Canvas.ForceUpdateCanvases();
-                int coinsAfter = economy.Coins;
-                int countAfter = inventory.Get(potionId);
-                if (coinsAfter != coinsBefore - expectedCost || countAfter != countBefore + 3 ||
-                    vm.Quantity != 1 || string.IsNullOrEmpty(vm.Status) ||
-                    vm.Status.IndexOf("Purchased", StringComparison.OrdinalIgnoreCase) < 0)
-                    throw new InvalidOperationException("production Store purchase assertion failed: gold " +
-                        coinsBefore + "->" + coinsAfter + " expectedCost=" + expectedCost + ", count " +
-                        countBefore + "->" + countAfter + ", qtyAfter=" + vm.Quantity + ", status='" +
-                        (vm.Status ?? "<null>") + "'");
-                Debug.Log("[UICap-RealmStore] production assertion OK target=" + target.Tag +
-                    " gold=" + coinsBefore + "->" + coinsAfter + " count=" + countBefore + "->" + countAfter);
-                if (RenderCanvasToPng(canvas,
-                    OutDir + "RealmStorePurchase_Bought3_" + target.Tag + ".png", target.W, target.H)) saved++;
-                return saved;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError("[UICap-RealmStore] purchase capture threw: " + e);
-                return 0;
-            }
-            finally
-            {
-                try { if (panel != null) InvokePrivate(panel, "Close"); } catch { }
-                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
-                if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
-                RestoreCaptureEconomy(priorEconomy);
-                if (economyHost != null) UnityEngine.Object.DestroyImmediate(economyHost);
-                RestoreCaptureVillageInventory(priorInventory);
-                if (inventoryHost != null) UnityEngine.Object.DestroyImmediate(inventoryHost);
-                RestoreCaptureState(priorState);
-                if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
-                if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
-                PanelManager.CloseAll();
-            }
         }
 
         /// <summary>

@@ -12,8 +12,20 @@ namespace DeNelle.Editor.Regression
             try
             {
                 string bridge = File.ReadAllText("Assets/_Modules/Village/HUD/HudKitCommandBridge.cs");
-                Require(bridge, "string.Equals(heroClass, \"mage\"");
-                Require(bridge, "string.Equals(heroClass, \"ranger\"");
+                // ⛔ RE-POINTED 2026-09-06 WITH THE RULING (WO-1429). These two lines used to
+                // Require the per-class table `string.Equals(heroClass, "mage"/"ranger")`. That
+                // table WAS THE DEFECT: it caught the two classes by NAME, called TryCast(Q), and
+                // `return`ed before ever reaching the melee swing - so a refused cast (cooldown OR
+                // cost) produced NO verb at all. Captured on a real Seeker at cd=0.47s with mana
+                // 21.08/24.00 (logs/device/freeze-20260904-095249.log:544639).
+                // The table is DELETED, not extended. The same decision is now DERIVED from the
+                // ability's own shape via HeroAbilities.TryGetRangedPrimary, which independently
+                // resolves to exactly the same two classes - which is the proof the table was
+                // doing a job the data could already do.
+                // A pin that requires the defect is a pin that forbids the fix.
+                Forbid(bridge, "string.Equals(heroClass, \"mage\"");
+                Forbid(bridge, "string.Equals(heroClass, \"ranger\"");
+                Require(bridge, "TryGetRangedPrimary");
                 Require(bridge, "abilities.TryCast(AbilitySlot.Q)");
                 Require(bridge, "atk.TriggerBasicAttack()");
 
@@ -58,6 +70,15 @@ namespace DeNelle.Editor.Regression
         {
             if (source.IndexOf(token, StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException("missing contract: " + token);
+        }
+
+        /// <summary>WO-1429 - the inverse of <see cref="Require"/>: a token that MUST be gone.
+        /// Used when a pin re-points from "the old shape exists" to "the old shape is retired",
+        /// so a revert cannot pass this suite.</summary>
+        private static void Forbid(string src, string token)
+        {
+            if (src != null && src.Contains(token))
+                throw new InvalidOperationException("retired contract is BACK: " + token);
         }
     }
 }

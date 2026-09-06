@@ -3,10 +3,10 @@
 // docs/RAID_TROOP_UI.md). Code-built uGUI (NO UXML — UXML does not render in
 // player builds, project hard rule), routed through the SHARED presentation kit
 // (DeNelle.Core.UI.ElarionUiKit) so it reads as the SAME designed game as the
-// town HUD / ShopPanel / TroopTrainingPanel: dark-wood + gold framing, gold serif
+// town HUD / PartyShopPanelMvvm / TroopTrainingPanel: dark-wood + gold framing, gold serif
 // header, framed portraits, scroll list, and a big glowing DEPLOY CTA.
 // -----------------------------------------------------------------------------
-// MIRRORS ShopPanel / TroopTrainingPanel: BuildModalCanvas (sortingOrder 31050 —
+// MIRRORS PartyShopPanelMvvm / TroopTrainingPanel: BuildModalCanvas (sortingOrder 31050 —
 // one band ABOVE RaidSelectionScreen so the deploy screen sits over the grid) +
 // tap-outside Scrim + a framed dark-glass panel + a Header.
 //

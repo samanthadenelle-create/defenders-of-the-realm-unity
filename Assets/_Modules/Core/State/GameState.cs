@@ -507,9 +507,11 @@ namespace DeNelle.Core.State
         /// existing save can only move up. The doc here used to say this field "drives which troops
         /// are unlocked", and it did — which is exactly the defect: its only writer was the
         /// completion effect of a BarracksUpgrade job composed only by BarracksPanelVM, reachable
-        /// only from BarracksPanel.ShowBarracksUI, which has ZERO CALLERS. So it sat at 1 forever
+        /// only from BarracksPanel.ShowBarracksUI, which had ZERO CALLERS. So it sat at 1 forever
         /// and seven of the nine troops were unreachable while the player upgraded a barracks
-        /// BUILDING that did nothing for the army.</para>
+        /// BUILDING that did nothing for the army. ⛔ Both of those files were DELETED on 2026-09-06
+        /// (WO-1430 Group A) — they are named here as HISTORY, not as paths to open. THE FIELD
+        /// SURVIVES THEM: it is a live save key and is read-migrated, never dropped.</para>
         ///
         /// Day-one = 1. Raised (on the now-dead path only) when a
         /// <see cref="DeNelle.Core.Jobs.JobKind.BarracksUpgrade"/> job completes on

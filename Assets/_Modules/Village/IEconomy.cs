@@ -3,7 +3,8 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// A thin, testable contract over the resource economy so a pure ViewModel (ShopVM)
+// A thin, testable contract over the resource economy so a pure ViewModel (originally
+// ShopVM - deleted 2026-09-06 with its doorless panel, WO-1430; PartyShopVM now)
 // can read balances, check affordability, spend, grant, and observe change WITHOUT
 // newing up the concrete EconomyService singleton or touching a scene. EconomyService
 // implements it ADDITIVELY (no member is removed/rewritten); tests inject a fake.
@@ -19,7 +20,7 @@ namespace DeNelle.Village
     /// <summary>
     /// The slice of the economy a shop ViewModel needs: read balances, check + perform
     /// transactions, and observe change. Implemented by <see cref="EconomyService"/> (additive)
-    /// and by unit-test fakes so <c>ShopVM</c> is testable without a scene.
+    /// and by unit-test fakes so a shop VM is testable without a scene.
     /// </summary>
     public interface IEconomy
     {

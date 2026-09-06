@@ -22,7 +22,7 @@
 // Icons are carried as KEYS (IconRole = kind, IconName = id) — the View resolves the
 // real Sprite. Rounding uses System.Math, never UnityEngine.Mathf, so the VM is unit-
 // testable with a fake IInventoryStore / IEquipTarget and no scene
-// (ARCHITECTURE_PRINCIPLES.md §2 / §2c; mirrors ShopVM).
+// (ARCHITECTURE_PRINCIPLES.md §2 / §2c; mirrors PartyShopVM).
 //
 // Implements DeNelle.Core.UI.Mvvm.IPanelViewModel: the View binds it, re-renders on
 // Changed, routes input back as commands, and never reads game state.
@@ -658,7 +658,7 @@ namespace DeNelle.Village.Hero
             return effect;
         }
 
-        // ── Description (mirrors ShopVM.DescribeGear) ─────────────────────────────
+        // ── Description (mirrored ShopVM.DescribeGear; ShopVM deleted 2026-09-06, WO-1430) ──
         private static string DescribeGear(string job, string rarity)
         {
             string r = string.IsNullOrEmpty(rarity) ? "" : char.ToUpper(rarity[0]) + (rarity.Length > 1 ? rarity.Substring(1) : "");

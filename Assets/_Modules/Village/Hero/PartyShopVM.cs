@@ -3,8 +3,11 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
-// THE COMPLETE store-to-spec ViewModel that replaces the broken ShopVM/ShopPanel
-// experience (two sell bars, no party selection, blank icons). It composes the
+// THE COMPLETE store-to-spec ViewModel that replaced the broken ShopVM/ShopPanel
+// experience (two sell bars, no party selection, blank icons). ⛔ That pair was DELETED
+// on 2026-09-06 (WO-1430 Group A) once PanelDoorRegression proved no production file
+// opened it, so this is now the ONLY gear shop - there is no legacy twin to fall back to
+// and FeatureFlags.PartyShop is a kill-switch, not a chooser. It composes the
 // PROVEN MVVM seams already in the repo - IEconomy (wallet/spend), IInventoryStore
 // (owned set + gear defs + fit-by-class), and IEquipTarget (per-member loadout +
 // equip/unequip) - into ONE unified shop:
@@ -1449,12 +1452,13 @@ namespace DeNelle.Village.Hero
 
         // -- Title ----------------------------------------------------------------
         //
-        // ⛔ This was a COPY of ShopVM.ResolveTitle, and its own comment said so
+        // ⛔ This was a COPY of the legacy ShopVM.ResolveTitle, and its own comment said so
         // ("mirrors ShopVM.ResolveTitle"). Both copies invented the header from
         // substrings of the vendor context, which is how the weapon shop and the armour
-        // shop wore each other's names. There is now exactly ONE implementation and both
-        // VMs call it; it resolves the word from the catalog row that claims the vendor's
-        // ROLE (StructureRoles), the single naming authority.
+        // shop wore each other's names. There is now exactly ONE implementation
+        // (VendorStockResolver) and this VM calls it; it resolves the word from the catalog
+        // row that claims the vendor's ROLE (StructureRoles), the single naming authority.
+        // (ShopVM itself was DELETED on 2026-09-06 with its doorless ShopPanel - WO-1430.)
 
         private string ResolveTitle() =>
             VendorStockResolver.TitleFor(_vendorContext, _displayName);

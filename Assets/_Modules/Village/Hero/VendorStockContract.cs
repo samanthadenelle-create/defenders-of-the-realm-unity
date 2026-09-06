@@ -4,16 +4,17 @@
 // "Limit each pull to the store type." The owner reported the armorer selling
 // weapons + potions (should be armor) and the marketplace selling swords. The old
 // fix lived as ad-hoc ctx.Contains("armor")/ctx.Contains("forge") checks inside
-// ShopPanel.ShowBuy that fell through to "sell everything" for market/jeweler —
-// that scatter is the bug. This contract centralizes the mapping so there is ONE
-// place that decides which gear categories a given vendor offers.
+// the legacy ShopPanel's ShowBuy that fell through to "sell everything" for market/
+// jeweler — that scatter is the bug. This contract centralizes the mapping so there is
+// ONE place that decides which gear categories a given vendor offers.
 //
-// ONE CONTRACT, TWO CONSUMERS:
-//   1. ShopPanel.ShowBuy  — CONSUMES the contract to FILTER which catalog items it
-//      stocks for a vendor (weapons / armor / potions).
+// ONE CONTRACT, TWO CONSUMERS (re-pointed 2026-09-06, WO-1430 — the legacy ShopPanel
+// named here was DELETED as a doorless panel; PartyShopPanelMvvm is the live shop):
+//   1. PartyShopVM's stock build — CONSUMES the contract to FILTER which catalog items
+//      it stocks for a vendor (weapons / armor / potions).
 //   2. The AutoPilot bot (DevTools / editor) — CONSUMES the same contract to ASSERT
-//      that the store's ACTUAL built stock (ShopPanel.CurrentStock) matches what the
-//      contract allows, catching a filter regression automatically.
+//      that the store's ACTUAL built stock (PartyShopPanelMvvm.CurrentStock) matches
+//      what the contract allows, catching a filter regression automatically.
 // Because both sides read the same AllowedFor() mapping, the bot is checking the
 // intent, not a duplicated copy of it. Keep this file pure data/logic (no
 // UnityEngine dependency) so the editor/bot assembly can reference it freely.
@@ -60,7 +61,7 @@ namespace DeNelle.Village
         Potion    = 4,
         // CRAFTING as shoppable (capability-unify pass): a crafting/forge-craft vendor offers
         // CRAFTABLE RECIPES rather than finished gear. Additive flag — existing bitmask consumers
-        // (ShopVM/AutoPilot/PartyShopVM) test Weapon/Armor/Potion explicitly, so they ignore this.
+        // (AutoPilot/PartyShopVM/ShopCatalog) test Weapon/Armor/Potion explicitly, so they ignore this.
         Craftable = 8,
         // WO-543: ACCESSORIES (rings + amulets) — sold exclusively at the Jeweler (Sable Vey).
         Accessory = 16,
@@ -73,7 +74,7 @@ namespace DeNelle.Village
     /// <summary>
     /// The single source of truth for what each store TYPE sells, keyed off the
     /// vendor context string the game passes (e.g. "forge", "jeweler", "market",
-    /// "armorer"). Consumed by BOTH <c>ShopPanel</c> (to FILTER the stock it builds)
+    /// "armorer"). Consumed by BOTH <c>PartyShopVM</c> (:248, to FILTER the stock it builds)
     /// AND the AutoPilot bot (to ASSERT the built stock matches). One contract, two
     /// consumers — so the assertion validates intent, not a divergent copy.
     /// </summary>
@@ -94,7 +95,7 @@ namespace DeNelle.Village
         ///      Potion, so a stall NPC can never end up selling swords. The moment one of
         ///      those earns a catalog row with a role, step 2 answers first and it drops out.
         ///   • empty / unknown -> Weapon|Armor|Potion, a SAFE general default so an
-        ///     unrecognized vendor is never broken or empty (ShopPanel additionally
+        ///     unrecognized vendor is never broken or empty (the shop VM additionally
         ///     never-empty-guards against the gear catalog being empty).
         ///
         /// ⛔ NO STEP MATCHES A DISPLAY WORD. See the file header: "armorer" contains
@@ -108,7 +109,7 @@ namespace DeNelle.Village
 
             // ── 1. WO-598: the vendors.json REGISTRY is consulted FIRST (one truth). A
             //    registered vendor's kinds derive from its declared stock-query categories,
-            //    so the legacy shop, ShopCatalog, the MVVM PartyShop AND the AutoPilot
+            //    so ShopCatalog, the MVVM PartyShop AND the AutoPilot
             //    oracle all read the same mapping. Unregistered contexts (and a missing/
             //    broken vendors.json) fall through to the role below. ──
             var registered = RegistryKinds(vendorContext);

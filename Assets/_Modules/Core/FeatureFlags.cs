@@ -148,12 +148,23 @@ namespace DeNelle.Core
 
         /// <summary>When ON, opening a weapon/armor shop opens the native code-built MVVM
         /// <c>PartyShopPanelMvvm</c> (party-member selector + tap-to-filter + unified single-tap
-        /// buy/equip/sell + real item images + stat/buff deltas) instead of the legacy
-        /// <c>ShopPanel</c> (two sell bars, no party selection, blank icons). Presentation +
-        /// transaction routing through the proven IEconomy / IInventoryStore / IEquipTarget seams;
-        /// the catalog + equip math is unchanged. Default OFF. PlayerPrefs "ff.partyshop". The MVVM
-        /// bootstrap only spawns when ON, and CmdOpenShop routes to PanelRouter→PartyShop only when
-        /// ON (legacy ShopPanel path when OFF), so the two never double-open.</summary>
+        /// buy/equip/sell + real item images + stat/buff deltas). Presentation + transaction routing
+        /// through the proven IEconomy / IInventoryStore / IEquipTarget seams; the catalog + equip
+        /// math is unchanged. Default ON. PlayerPrefs "ff.partyshop".
+        /// <para>⚠ THIS FLAG IS NOW A KILL-SWITCH, NOT A CHOOSER (corrected 2026-09-06, WO-1430).
+        /// The legacy <c>ShopPanel</c> twin was DELETED, so OFF means NO gear shop spawns at all —
+        /// <c>PartyShopPanelMvvmBootstrap</c> is the only spawner and it returns early when OFF, and
+        /// <c>PanelId.PartyShop</c> then has no registrant. Same shape as
+        /// <see cref="BuildingUpgradePanel"/> after its UIDocument twin was deleted.</para>
+        /// <para>⛔ THE OLD TEXT HERE WAS FALSE AND IS RETIRED. It read "Default OFF ... CmdOpenShop
+        /// routes to PanelRouter→PartyShop only when ON (legacy ShopPanel path when OFF)". BOTH
+        /// halves were wrong at the time of writing: the flag has always read
+        /// <c>defaultOn: true</c> on the very next line, and <c>DialogueCommandSink</c>'s "OpenShop"
+        /// verb routes to <c>PanelId.PartyShop</c> UNCONDITIONALLY (there is no flag branch, and
+        /// <c>DialogueService</c>'s shop route likewise). That stale sentence is what made ShopPanel
+        /// look reachable, which is how a doorless panel survived in the tree until
+        /// <c>PanelDoorRegression</c> asked. A hand-written claim about what a flag branch does is
+        /// duplicated state; read the routing site, not this comment.</para></summary>
         public static bool PartyShop => Get("partyshop", defaultOn: true);
 
         /// <summary>WO-455 / WO-557 — dialogue runs through OUR code-built system (DeNelle.Core.Dialogue:

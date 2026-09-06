@@ -440,7 +440,9 @@ namespace DeNelle.Core.Quests
             // shipped — harvesting (MineNode + OfflineHarvestService + WorkerManager),
             // tower-build (BuildModeController), cosmetic-shop (CosmeticCatalog +
             // CosmeticOwnershipService + CosmeticShopPanel), hero-talents
-            // (HeroTalentCatalog + WisdomCurrencyService + TalentTreePanel).
+            // (HeroTalentCatalog + WisdomCurrencyService + HeroSkillTreePanelMvvm -
+            // this line used to name TalentTreePanel, which was never wired to any
+            // button and was DELETED on 2026-09-06, WO-1430 Group A).
             "harvesting"    => true,
             "tower-build"   => true,
             "cosmetic-shop" => true,

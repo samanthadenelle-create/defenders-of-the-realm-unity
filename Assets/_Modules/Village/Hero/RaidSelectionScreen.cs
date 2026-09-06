@@ -3,10 +3,10 @@
 // docs/RAID_TROOP_UI.md). Code-built uGUI (NO UXML — UXML does not render in
 // player builds, project hard rule), routed through the SHARED presentation kit
 // (DeNelle.Core.UI.ElarionUiKit) so it reads as the SAME designed game as the
-// town HUD / ShopPanel / TroopTrainingPanel: dark-wood + gold framing, gold serif
+// town HUD / PartyShopPanelMvvm / TroopTrainingPanel: dark-wood + gold framing, gold serif
 // title, framed cards.
 // -----------------------------------------------------------------------------
-// MIRRORS ShopPanel / TroopTrainingPanel: BuildModalCanvas (sortingOrder 31000 +
+// MIRRORS PartyShopPanelMvvm / TroopTrainingPanel: BuildModalCanvas (sortingOrder 31000 +
 // overrideSorting, above the world-HUD band) + tap-outside Scrim + a framed
 // dark-glass panel + a Header. The RAIDS banner heads the panel (Resources.Load,
 // null-safe — decorative; the panel works without it). A scrollable grid of raid
@@ -359,7 +359,7 @@ namespace DeNelle.Village.Hero
             _vm = RaidSelectionVM.CreateDefault(Close);
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin
-            // sortingOrder 31000 + overrideSorting (mirrors ShopPanel) so the panel +
+            // sortingOrder 31000 + overrideSorting (mirrors PartyShopPanelMvvm) so the panel +
             // its scrim render ABOVE the world-HUD band but below the top overlays.
             _ui = ElarionUiKit.BuildModalCanvas("RaidSelectionScreenUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();

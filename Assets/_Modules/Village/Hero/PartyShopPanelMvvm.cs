@@ -7,7 +7,8 @@
 // kit) and BINDS a PartyShopVM. ALL state/logic (party filter, buy/sell/equip,
 // affordability, deltas) lives in the VM - the View never reads game state.
 //
-// MIRRORS EquipmentPanel + ShopPanel exactly:
+// MIRRORS EquipmentPanel (and the legacy ShopPanel it replaced - that panel was DELETED
+// on 2026-09-06, WO-1430, so its name below is lineage, not a file to open):
 //   * BuildModalCanvas (sortingOrder 31000 + overrideSorting) + Scrim(onTapClose) + PanelFramed;
 //   * TOP-LEFT a row of PARTY-MEMBER icon buttons (one per member, portrait/crest) - tap
 //     selects -> vm.SelectMember -> Render re-filters; the selected member is highlighted;
@@ -18,9 +19,13 @@
 //   * scrim / Close ? (touch - no Escape; hotkeys are gone).
 //
 // Code-built uGUI ONLY (no UXML - ?8). It builds its own Canvas on Open, so it needs no
-// PanelSettings. Registered with PanelManager + PanelRouter (PanelId.PartyShop). SHIPS
-// BEHIND FeatureFlags.PartyShop (OFF): the bootstrap only spawns when ON, and CmdOpenShop
-// suppresses the legacy ShopPanel when ON, so the two never double-open.
+// PanelSettings. Registered with PanelManager + PanelRouter (PanelId.PartyShop).
+// ⚠ FLAG CORRECTED 2026-09-06 (WO-1430): FeatureFlags.PartyShop defaults ON (it always did -
+// the "(OFF)" written here was never true of the code) and is now a KILL-SWITCH: the legacy
+// ShopPanel twin is DELETED, the dialogue "OpenShop" verb routes to PanelId.PartyShop with NO
+// flag branch (DialogueCommandSink.cs:88-93; DialogueService.cs:113 likewise, guarded only by
+// the shops-closed-during-combat check), and this bootstrap is the only spawner - so flag OFF
+// means no gear shop at all, not a fallback screen.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -140,6 +145,17 @@ namespace DeNelle.Village.Hero
         private const float LockedRowAlpha = 0.45f;
 
         public bool IsOpen => _ui != null;
+
+        // WO-1430 (2026-09-06): the AutoPilot vendor-contract phase used to read these off the
+        // legacy ShopPanel, which was DELETED as doorless in the same change. They are passthroughs
+        // to the bound VM (the state owner) so the bot judges the shop the player actually opens,
+        // and the View still reads no game state of its own. Null/empty before the first Open.
+        /// <summary>The stock the CURRENT vendor context actually built, for contract assertions.</summary>
+        public IReadOnlyList<(string id, GearKind kind)> CurrentStock =>
+            _vm != null ? _vm.CurrentStock : System.Array.Empty<(string, GearKind)>();
+
+        /// <summary>The vendor context this panel is currently showing ("" when generic).</summary>
+        public string VendorContext => _vm != null ? _vm.VendorContext : _vendorContext;
 
         // -- Registration (mirror BuildingUpgradePanelMvvm) ------------------------
 
@@ -473,8 +489,9 @@ namespace DeNelle.Village.Hero
             // -- Bottom action bar (WO-501 owner point 4): Purchase/Sell toggle + Equip --
             // Close is the SHARED top-right Obsidian Close button (WO-554) — no per-panel footer Close.
 
-            // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the proven ShopPanel
-            // pattern, ShopPanel.cs:341-344) - routes through _vm.Act on the selected id.
+            // ONE Purchase/Sell button whose label + action TOGGLE on _vm.Tab (the pattern proven by
+            // the legacy ShopPanel, deleted 2026-09-06 by WO-1430 - the old ShopPanel.cs:341-344
+            // citation no longer resolves) - routes through _vm.Act on the selected id.
             // Orchestrator capture 2026-07-06 #3: FrameMerchant declares NO footer zone and the
             // SHARED Close is force-seated at the panel's bottom-centre DefaultCloseZone (fixed
             // 360x120 CTA, drawn last = over us) — buttons at body-y 0.03-0.105 sat at panel-y

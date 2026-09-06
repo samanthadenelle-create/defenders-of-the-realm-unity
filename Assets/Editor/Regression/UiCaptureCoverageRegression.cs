@@ -99,6 +99,16 @@ namespace DeNelle.Editor.Regression
                 "is not missing: HeroSkillTreePanelMvvm serves both rows and is captured as " +
                 "panel_HeroSkillTree.png. This row is a duplicate view of one screen, not a gap."
             },
+            {
+                "ShopPanel",
+                "RETIRED 2026-09-06 (WO-1430): the legacy ShopPanel was DELETED as a doorless panel - " +
+                "no production file opened it, and only AutoPilotDriver + UICaptureLaunch constructed " +
+                "it so it could be photographed, which PanelDoorRegression reports as " +
+                "[panel-door-is-harness-only]. The MERCHANT SCREEN is not missing: PartyShopPanelMvvm " +
+                "registers PanelId.PartyShop and the OpenEachHUDPanel sweep shoots panel_PartyShop.png. " +
+                "This row is a duplicate view of one screen, not a gap - same shape as HeroTalents " +
+                "above. The owner should retire the row rather than have it routed."
+            },
         };
 
         /// <summary>Standalone batch entry - prints the distinct marker a gate can grep.</summary>

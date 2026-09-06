@@ -8,7 +8,7 @@ namespace DeNelle.Core.UI.Mvvm
     ///
     /// The View binds to this, re-renders on <see cref="Changed"/>, and raises commands; it never
     /// reads game state or calls a service directly. Concrete ViewModels add their own typed data
-    /// (e.g. ShopVM.Items) which the View downcasts to in IPanelView.Bind.
+    /// (e.g. PartyShopVM.Items) which the View downcasts to in IPanelView.Bind.
     /// </summary>
     public interface IPanelViewModel
     {

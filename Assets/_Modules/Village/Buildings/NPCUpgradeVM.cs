@@ -13,7 +13,7 @@
 //
 // PURE C# over the IEconomy seam (no UnityEngine UI types) — unit-testable with a
 // fake economy (ARCHITECTURE_PRINCIPLES §2c). CreateDefault is the sole resolution
-// site for EconomyService.Instance (mirrors ShopVM/BuildingUpgradeVM).
+// site for EconomyService.Instance (mirrors PartyShopVM/BuildingUpgradeVM).
 // =============================================================================
 
 namespace DeNelle.Village

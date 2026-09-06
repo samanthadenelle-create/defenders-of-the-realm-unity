@@ -119,7 +119,11 @@ namespace DeNelle.Editor
             "Assets/_Modules/Village/Buildings/UI/LevelUpSkillPopupBootstrap.cs",
             "Assets/_Modules/Village/Buildings/UI/LevelUpSkillPopup.cs",
             "Assets/_Modules/Village/Harvest/UI/WelcomeBackPopup.cs",
-            "Assets/_Modules/Village/Talents/TalentTreePanel.cs",
+            // TalentTreePanel.cs REMOVED 2026-09-06 (WO-1430): the file is DELETED. It was a UI-Toolkit
+            // screen superseded by HeroSkillTreePanelMvvm - DialogueCommandSink re-pointed "OpenTalents"
+            // to PanelId.HeroSkillTree and removed the legacy route, so nothing ever opened it. Its own
+            // header still carried an INTEGRATOR NOTE saying to wire the button; that was never done.
+            // Left here it would have reported as a baseline entry that "no longer constructs UIDocument".
             "Assets/_Modules/Village/UI/SeatingEditorOverlay.cs",
             "Assets/_Modules/Village/UI/TowerPlacementRotateMenu.cs",
             "Assets/_Modules/Village/Tutorial/TutorialHudOverlay.cs",

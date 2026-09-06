@@ -8,8 +8,9 @@
 // WHAT BROKE (the class of bug, not one instance): troop unlocks were gated on
 // GameState.BarracksLevel -- a field whose ONLY writer was the completion effect of a
 // JobKind.BarracksUpgrade job, composed only by BarracksPanelVM, reachable only from
-// BarracksPanel.ShowBarracksUI, which has ZERO CALLERS (source grep + a script-GUID
-// search of every .unity/.prefab/.asset, 2026-09-06). So the field sat at its founding
+// BarracksPanel.ShowBarracksUI, which had ZERO CALLERS (source grep + a script-GUID
+// search of every .unity/.prefab/.asset, 2026-09-06; both files were DELETED the same day
+// by WO-1430 Group A, so those names are history). So the field sat at its founding
 // value of 1 forever and SEVEN OF NINE TROOPS -- Spearman, Field Cleric, Shieldguard,
 // Outrider, Siege Catapult, Battlemage, Echo Legionnaire -- could not be trained by any
 // player action, while the barracks BUILDING the player CAN upgrade did nothing for the

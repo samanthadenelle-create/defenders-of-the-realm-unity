@@ -43,6 +43,24 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         private const double MaxAwaySeconds = 30.0 * 24.0 * 3600.0;
 
+        /// <summary>
+        /// Ruling 26b auto-overflow: how much owed production is treated as "nothing left" and ends
+        /// the spill loop. Deliberately HALF A UNIT, not float epsilon - the pool banks in WHOLE
+        /// units (<see cref="SettleOverflow"/> floors), so a sub-unit remainder can never be spilled
+        /// and must not be allowed to spin the loop against a bank that will take 0 for it.
+        /// Pinned by CollectorOverflowRegression [partial-overflow] (fractional-remainder case).
+        /// </summary>
+        public const double OverflowEpsilon = 0.5;
+
+        /// <summary>
+        /// Ruling 26b auto-overflow: hard bound on spill passes in ONE <see cref="Accrue"/> call.
+        /// NOT a balance dial - every pass banks at least one unit and permanently consumes storage
+        /// headroom, so the real bound is the bank's own capacity (~5 passes for a 7,500 collector
+        /// into a 34,000 L6 bank, measured 2026-09-06). This exists only so a pathological
+        /// capacity-to-headroom ratio cannot spin a long offline catch-up.
+        /// </summary>
+        public const int MaxOverflowPasses = 64;
+
         private const float DefaultMaxHp = 120f;
 
         [SerializeField] private string _buildingId = ResourceBuildingProgression.FarmId;
@@ -384,7 +402,58 @@ namespace DeNelle.Village.Buildings.Progression
             double cap = Capacity;
             double before = _pending;
             int stepsBefore = FilledSteps;
-            _pending = System.Math.Min(cap, _pending + amount * (double)health);
+
+            // =================================================================
+            //  OWNER RULING 26b, SECOND HALF - AUTOMATIC OVERFLOW TO STORAGE.
+            // -----------------------------------------------------------------
+            //  Owner, verbatim: "the collectors had a cap as the collectors hit their cap. They
+            //  couldn't produce anymore unless they had a storage to put it in - the overflow by
+            //  default would automatically go to their matching storage."
+            //
+            //  The CAP and the STALL were already real (the clamp below, and the at-cap branch at
+            //  the end of this method). What did NOT exist was the spill: before this loop the ONLY
+            //  deposit path in the game was the manual Collect() tap, so a full collector simply
+            //  discarded production until the player tapped. Now, when a tick is owed and the pool
+            //  is full, the pool empties into the matching town-bank axis and production resumes -
+            //  which is what turns a storage upgrade from "hold more" into UPTIME.
+            //
+            //  ! THE NORMAL CASE IS PARTIAL. A full Quarry (7,500) does not fit in a level-1 bank
+            //  (3,000) - measured 2026-09-06, ruling 26 "MEASURED". So the loop is written so that
+            //  "some fits, some does not" is the ordinary path: what fits banks, what does not
+            //  STAYS PENDING here, and the collector stays stalled until room appears.
+            //
+            //  ! NOTHING ALREADY HELD CAN BE BURNED. TryOverflowToBank asks for
+            //  min(floor(pending), storage headroom) and drains the pool by what the grant
+            //  APPLIED (SettleCollect - the WO-1392 arithmetic the tap already uses). The only
+            //  quantity this method can still lose is FUTURE production the stalled collector was
+            //  never able to hold, which is the stall itself and is the design.
+            //
+            //  ! THE MANUAL TAP IS UNTOUCHED. Collect() below is unchanged, and there is NO tap
+            //  bonus here: whether tapping should pay one is an OPEN owner question in ruling 26.
+            // =================================================================
+            double owed = amount * (double)health;
+            int spilled = 0;
+            int passes = 0;
+            while (true)
+            {
+                double poolBefore = _pending;
+                _pending = System.Math.Min(cap, _pending + owed);
+                owed -= _pending - poolBefore;                   // what the pool actually absorbed
+                if (owed <= OverflowEpsilon) { owed = 0.0; break; }
+
+                // The pool is FULL and production is still owed. Spill into the matching storage.
+                if (++passes > MaxOverflowPasses)
+                {
+                    FlowTrace.Warn("Harvest",
+                        $"auto-overflow '{_buildingId}': hit the {MaxOverflowPasses}-pass guard with {owed:F0} still " +
+                        "owed - the remainder is not produced this tick (guard only; it bounds a pathological " +
+                        "capacity/headroom ratio, it is NOT a balance dial).");
+                    break;
+                }
+                int moved = TryOverflowToBank(cap);
+                if (moved <= 0) break;                           // no storage room: the collector STALLS
+                spilled += moved;
+            }
 
             // ! WO-859 sec.4, THE HIGHEST-RISK LINE IN THE WHOLE CHANGE - and it is deliberately
             // OUTSIDE the `_pending > before` block below. The stamp records "production up to
@@ -401,19 +470,26 @@ namespace DeNelle.Village.Buildings.Progression
             if (_pending > before)
             {
                 FlowTrace.Throttle("Harvest", $"accrue-{_buildingId}", 2f,
-                    $"accrue-pending building={_buildingId} pending={_pending:F0}/{cap:F0}");
+                    $"accrue-pending building={_buildingId} pending={_pending:F0}/{cap:F0}" +
+                    (spilled > 0 ? $" (+{spilled} auto-overflowed to storage this tick)" : ""));
                 SaveState();
-                RaiseStepChangedIfMoved(stepsBefore);
             }
             else
             {
                 // At cap: nothing banked, but the advanced stamp above MUST be persisted, or a
                 // relaunch would read the pre-cap stamp off disk and refill from the backlog.
                 SaveState();
-                FlowTrace.Throttle("Harvest", $"atcap-{_buildingId}", 30f,
-                    $"collector '{_buildingId}' is AT CAP ({_pending:F0}/{cap:F0}) - production is being " +
-                    "DISCARDED and the last-accrual stamp still advances (no frozen backlog).");
+                if (spilled <= 0)
+                    FlowTrace.Throttle("Harvest", $"atcap-{_buildingId}", 30f,
+                        $"collector '{_buildingId}' is AT CAP ({_pending:F0}/{cap:F0}) and its storage has NO ROOM - " +
+                        "production is STALLED (not banked, not burned: what is held stays here) and the " +
+                        "last-accrual stamp still advances (no frozen backlog). Ruling 26b: build or upgrade " +
+                        "the matching storage, or spend, and it resumes by itself.");
             }
+            // Raised OUTSIDE the branches (moved here for the auto-overflow): a spill can leave the
+            // pool LOWER than it started while resources genuinely moved, so the fill view must
+            // re-pose on that edge too. No-op when the discrete step count did not change.
+            RaiseStepChangedIfMoved(stepsBefore);
         }
 
         /// <summary>CoC collect - pending to spendable wallet at home. Returns what BANKED.</summary>
@@ -530,6 +606,171 @@ namespace DeNelle.Village.Buildings.Progression
             leftPending = (int)System.Math.Floor(after);
             return after;
         }
+
+        // =====================================================================
+        //  OWNER RULING 26b - the automatic overflow into the matching storage.
+        //  Placed AFTER SettleCollect deliberately: CollectorIncomeRegression Case 8 slices
+        //  "Accrue's body" as IndexOf("public void Accrue(") -> IndexOf("public int Collect("),
+        //  so anything wedged between those two members pollutes that oracle's window.
+        // =====================================================================
+
+        /// <summary>
+        /// THE NO-BURN LINE, and it is one expression: the pool may only ever be asked to move
+        /// <c>min(floor(pending), storage headroom)</c>.
+        ///
+        /// <para>Two properties fall out of asking for exactly what fits, and both matter:
+        /// (1) NOTHING BURNS - the pool drains through <see cref="SettleCollect"/> by what the grant
+        /// applied, and any remainder is reported as still pending, exactly as the manual tap does
+        /// since WO-1392; (2) NO FALSE LOSS REPORT - <c>TownBankCapacity.ClampGrant</c> raises an
+        /// unthrottled "BANK FULL ... LOST N" warn and fires <c>Overflowed</c> (which
+        /// <c>BankOverflowToastPresenter</c> renders, verified at
+        /// BankOverflowToastPresenter.cs:107) whenever a request exceeds the room. An automatic,
+        /// once-per-tick spill that over-asked would scold the player about a loss that did not
+        /// happen, every tick, forever.</para>
+        ///
+        /// <para>PURE - no wallet, no services - so the oracle can pin it. A negative pending or a
+        /// negative room is clamped rather than trusted.</para>
+        /// </summary>
+        /// <param name="pendingBefore">Units held in the collector right now.</param>
+        /// <param name="bankRoom">Units the matching storage can still take (see
+        /// <c>ResourceCollectorService.HeadroomFor</c>).</param>
+        /// <param name="moved">Whole units that move to storage.</param>
+        /// <param name="leftPending">Whole units still waiting here afterwards.</param>
+        /// <returns>The collector's pending pool after the spill.</returns>
+        public static double SettleOverflow(double pendingBefore, int bankRoom, out int moved, out int leftPending)
+        {
+            if (pendingBefore < 0.0) pendingBefore = 0.0;
+            if (bankRoom < 0) bankRoom = 0;
+            int whole = (int)System.Math.Floor(pendingBefore);
+            moved = whole < bankRoom ? whole : bankRoom;
+            return SettleCollect(pendingBefore, moved, out leftPending);
+        }
+
+        /// <summary>
+        /// The PURE model of one <see cref="Accrue"/> call under ruling 26b: fill the pool, and
+        /// whenever it is full with production still owed, spill the whole pool into storage and
+        /// carry on. Mirrors the loop in <see cref="Accrue"/> line for line, with the single
+        /// simplification that a grant applies exactly what was asked (which is true whenever
+        /// <c>TownBankCapacity.RoomFor</c> and the clamp read the same wallet - the reason the
+        /// runtime spill refuses to run without a live GameState).
+        ///
+        /// <para>The two accounting identities the oracle asserts on this:
+        /// <c>pendingAfter + banked + unproduced == pendingBefore + owed</c> (the books close) and
+        /// <c>pendingAfter + banked &gt;= pendingBefore</c> (NOTHING ALREADY HELD IS EVER LOST -
+        /// the WO-1392 / ruling-26b line). <paramref name="unproduced"/> is future production a
+        /// stalled collector could not hold; it is the STALL, which is the design, and it is never
+        /// something the player already had.</para>
+        /// </summary>
+        public static double SimulateAccrueWithOverflow(
+            double pending, double capacity, double owed, int bankRoom,
+            out int banked, out double unproduced)
+        {
+            banked = 0;
+            if (pending < 0.0) pending = 0.0;
+            if (capacity < 0.0) capacity = 0.0;
+            if (owed < 0.0) owed = 0.0;
+            if (bankRoom < 0) bankRoom = 0;
+
+            int passes = 0;
+            while (true)
+            {
+                double poolBefore = pending;
+                pending = System.Math.Min(capacity, pending + owed);
+                owed -= pending - poolBefore;
+                if (owed <= OverflowEpsilon) { owed = 0.0; break; }
+                if (++passes > MaxOverflowPasses) break;
+
+                double after = SettleOverflow(pending, bankRoom, out int moved, out _);
+                if (moved <= 0) break;                       // storage full: the collector STALLS
+                pending = after;
+                banked += moved;
+                bankRoom -= moved;
+            }
+            unproduced = owed;
+            return pending;
+        }
+
+        /// <summary>
+        /// Move as much of the held pool as the matching storage will take, right now. Returns the
+        /// whole units that actually landed (0 = the collector stays full and STALLS).
+        ///
+        /// <para>Routes through the SAME <c>EconomyService.GrantSpendable</c> the manual tap uses
+        /// and reads the APPLIED basket back, so this adds no second route to the wallet and cannot
+        /// drift from the tap. The pool then drains through <see cref="SettleCollect"/> - by what
+        /// banked, never by what was asked.</para>
+        ///
+        /// <para>! REFUSES TO RUN WITHOUT A LIVE GameState, and that guard is load-bearing rather
+        /// than defensive. <c>EconomyService.Grant</c> clamps wood/iron against
+        /// <c>GameStateService.Instance.State</c> when it exists and against its own unsaved
+        /// FALLBACK POOL when it does not (EconomyService.cs:424-460), while the headroom read here
+        /// resolves through <c>TownBankCapacity.CurrentOf</c>, which is GameState-only. With no save
+        /// service the two disagree, the trace would lie about what fit, and - worse - the grant
+        /// would land in the fallback pool, which <c>ReportFallbackPoolMutation</c> correctly
+        /// reports as a Fail because the player never keeps it. This path runs unattended from
+        /// <c>Start</c> (the away catch-up), so a boot that beats the save service must simply not
+        /// spill: the collector stays capped, exactly as it behaved before this change.</para>
+        /// </summary>
+        private int TryOverflowToBank(double cap)
+        {
+            var eco = EconomyService.Instance;
+            var gs = GameStateService.Instance;
+            if (eco == null || gs == null || gs.State == null)
+            {
+                FlowTrace.Once("Harvest", "overflow-no-wallet",
+                    $"auto-overflow '{_buildingId}': SKIPPED - no EconomyService/GameState yet " +
+                    $"(eco={(eco != null ? "yes" : "no")} state={(gs != null && gs.State != null ? "yes" : "no")}). " +
+                    "The pool is left intact and the collector simply stays capped; spilling here would " +
+                    "clamp against a different wallet than it reads and land in the unsaved fallback pool.");
+                return 0;
+            }
+            if (_pending < 1.0) return 0;
+
+            var res = ResolveResource();
+            int want = (int)System.Math.Floor(_pending);
+            int room = ResourceCollectorService.HeadroomFor(res);
+            if (room < 0) room = 0;
+            int ask = want < room ? want : room;     // THE NO-BURN / NO-FALSE-TOAST LINE
+            if (ask <= 0)
+            {
+                FlowTrace.Throttle("Harvest", $"overflow-full-{_buildingId}", 30f,
+                    $"auto-overflow '{_buildingId}': storage for {res} has NO ROOM (headroom={room}) - " +
+                    $"0 moved, {want} STAYS PENDING here and the collector STALLS at {_pending:F0}/{cap:F0}. " +
+                    "Nothing is burned; it spills by itself the moment storage frees up (ruling 26b).");
+                return 0;
+            }
+
+            int banked = 0;
+            switch (res)
+            {
+                case HarvestResource.Wood:     banked = eco.GrantSpendable(wood: ask).Wood;         break;
+                case HarvestResource.Iron:     banked = eco.GrantSpendable(iron: ask).Iron;         break;
+                case HarvestResource.Food:     banked = eco.GrantSpendable(food: ask).Food;         break;
+                case HarvestResource.Crystals: banked = eco.GrantSpendable(crystals: ask).Crystals; break;
+            }
+            if (banked <= 0)
+            {
+                FlowTrace.Warn("Harvest",
+                    $"auto-overflow '{_buildingId}': asked storage for {ask} {res} against headroom {room} and " +
+                    $"NOTHING applied - {want} stays pending here, nothing burned. The collector stalls.");
+                return 0;
+            }
+
+            _pending = SettleOverflowPool(banked, out int leftPending);
+            FlowTrace.Step("Harvest",
+                $"auto-overflow '{_buildingId}': moved {banked} {res} -> storage " +
+                $"(held {want}, storage headroom {room}, asked {ask}); {leftPending} LEFT PENDING here " +
+                (leftPending > 0
+                    ? "because the storage could not take the rest - it is NOT burned and spills on a later tick "
+                    : "- the whole pool fit ") +
+                $"(collector {_pending:F0}/{cap:F0}). Owner ruling 26b: production resumes now there is room.");
+            return banked;
+        }
+
+        /// <summary>Drain this collector's pool by what actually banked, through the shared WO-1392
+        /// never-burn arithmetic. Separate one-liner so the spill and the tap provably use the same
+        /// settle - the oracle lints for it.</summary>
+        private double SettleOverflowPool(int banked, out int leftPending)
+            => SettleCollect(_pending, banked, out leftPending);
 
         /// <summary>
         /// Popup tint per resource. Deliberately the SAME palette MineNode.ResourceTint

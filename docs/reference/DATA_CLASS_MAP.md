@@ -210,8 +210,8 @@ The dual-copy mirror gate (`DataWebRegression.cs:148-157`) actively maintains al
 | `waves.json` | `WaveDataLoader.LoadAsync` `WaveData.cs:466` | `WaveSchedule` `:400`; `WaveDef` `:314`, `WaveBatch` `:267` | `WaveManager`, `WaveCompositionBuilder`, `OutpostEnemyGroupSpawner` |
 | `spawn-areas.json` | `SpawnAreaTable.EnsureLoaded` `…/Core/World/SpawnAreaTable.cs:265` | `SpawnAreaFile` `:87` | `OverworldEncounterSpawner`, `RegionMobSpawner` |
 | `troops.json` | `TroopCatalog` `…/Village/Troops/TroopCatalog.cs:84` | `TroopCatalogData` `:26`; rows `TroopDef` `TroopDef.cs:29` | `TroopFactory`, `TroopController`, `BarracksService`, `TroopTrainingVM` |
-| `troop-upgrades.json` | `TroopUpgradeCatalog` `…/Troops/TroopStatResolver.cs:186` | `TroopUpgradeCatalogData` `…/Troops/Data/BarracksData.cs:139` | `TroopStatResolver`, `BarracksPanelVM`, `BarracksProgression` |
-| `barracks.json` | `BarracksCatalog` `TroopStatResolver.cs:264` | `BarracksCatalogData` `BarracksData.cs:130`; rows `BarracksDef` `:50` | `BarracksProgression`, `BarracksService`, `BarracksPanelVM` |
+| `troop-upgrades.json` | `TroopUpgradeCatalog` `…/Troops/TroopStatResolver.cs:186` | `TroopUpgradeCatalogData` `…/Troops/Data/BarracksData.cs:139` | `TroopStatResolver`, `BarracksProgression` (`BarracksPanelVM` was a consumer until it was DELETED 2026-09-06, WO-1430) |
+| `barracks.json` | `BarracksCatalog` `TroopStatResolver.cs:264` | `BarracksCatalogData` `BarracksData.cs:130`; rows `BarracksDef` `:50` | `BarracksProgression`, `BarracksService` (`BarracksPanelVM` DELETED 2026-09-06, WO-1430) |
 | `garrison-recipes.json` | `GarrisonRecipeCatalog` `…/Core/Data/GarrisonRecipeCatalog.cs:61` | `GarrisonRecipeFile` `…/Core/Data/GarrisonRecipe.cs:120` | ⚠ **editor-only** — `GarrisonSceneBuilder`, `EnemyStrongholdBuilder`, `CoreCatalogRegression` |
 | `motion-castings.json` | runtime `ActionBundleCatalog.EnsureLoaded` `…/Village/Vfx/ActionBundleCatalog.cs:179`; editor `Assets/Editor/MotionCastings.cs:285` | hand-walked `JObject` `:196`; rows `ActionBundleRow` `:46` | `ActionBundlePlayer`, `HeroAbilities`, `KnightPackageControllerBuilder` |
 | `weaponskill-animations.json` | ⚠ `KnightPackageControllerBuilder.cs:511` — `File.ReadAllText`, **bypasses `CanonicalJson`**, editor-only | `WsFile` `:542` | that builder only |
@@ -469,7 +469,7 @@ Also Resources-only by design (declared at `DataWebRegression.cs:106-115`): `ad-
 
 Two traps worth knowing:
 - **`ShoppableKind { Weapon, Armor, Craftable }`** (`…/Village/Hero/ShopCatalog.cs:44`) looks like the answer and is not — `ShopCatalog.cs` **reads no JSON at all** (zero `CanonicalJson`/`Data/Canonical` hits in that file). It is a narrower, non-data-driven duplicate of `VendorWareKind`.
-- The **UI-only** shop enums are none of them data-sourced: `ShopMode` (`ShopVM.cs:31`), `PartyShopTab`/`PartyShopCategory`/`PartyShopType` (`PartyShopVM.cs:46,55,63`), `InventoryTabKind` (`InventoryVM.cs:63`).
+- The **UI-only** shop enums are none of them data-sourced: `PartyShopTab`/`PartyShopCategory`/`PartyShopType` (`PartyShopVM.cs:46,55,63`), `InventoryTabKind` (`InventoryVM.cs:63`). *(`ShopMode` was a fourth, in `ShopVM.cs:31`; that file was DELETED 2026-09-06 by WO-1430 and nothing else referenced the enum.)*
 
 **Divergences on the vendor axis:**
 - ⚠ `VendorWareKind.Craftable` / `GearKind.Craftable` are **never triggered by data** — both resolvers handle the case (`VendorStockResolver.cs:359-364`, `VendorStockContract.cs:160`) but no `vendors.json` row declares that category; reachable only via the unregistered-vendor heuristic.

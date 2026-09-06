@@ -4406,11 +4406,17 @@ namespace DeNelle.DevTools
         //  PHASE: AssertVendorContracts
         //  The point of the chain: bots judge whether a vendor sells the RIGHT
         //  category. For each KNOWN vendor context the game uses, open the shop for
-        //  that context and assert its ACTUAL built stock (ShopPanel.CurrentStock)
+        //  that context and assert its ACTUAL built stock (PartyShopPanelMvvm.CurrentStock)
         //  stays within VendorStockContract.AllowedFor(context). A violation is a
         //  LogError (FlowTrace.Fail) -> break-log -> ticket. Runs even if building
         //  discovery found 0 vendors, because it opens shops DIRECTLY by context via
-        //  ShopPanel.Open — the same seam DialogueCommandBridge.OpenShop uses.
+        //  PartyShopPanelMvvm.Open — the same seam DialogueCommandSink "OpenShop" uses
+        //  (PanelId.PartyShop).
+        //
+        //  ⚠ WO-1430 (2026-09-06): this phase used to drive the legacy ShopPanel, which was
+        //  DELETED as doorless in that change (no production file opened it; only this bot and
+        //  UICaptureLaunch constructed it, and a harness is not a door). It now drives the LIVE
+        //  party shop, so a throw here is a real player-facing defect rather than a dead screen's.
         //
         //  Known contexts: the spec set {forge, market, jeweler, armorer} PLUS the
         //  contexts the castle actually wires (CastleVendorNpcInjector.VendorFor):
@@ -4431,16 +4437,28 @@ namespace DeNelle.DevTools
             };
             Shuffle(contexts); // seeded order so different bots probe contexts differently
 
-            // One reusable ShopPanel host: find an existing one, else create our own.
+            // ⚠ CLEAR THE MODAL ARBITER FIRST (WO-1430). PartyShopPanelMvvm registers with
+            // PanelManager and its Open() BAILS on a NotifyOpened rejection - and its Close()
+            // has already run DisposeViewModel(), which NULLS _vm. A rejected open therefore
+            // reads back as EMPTY stock, and this phase would warn "built EMPTY stock" on every
+            // context: a false signal in the break-log. The old ShopPanel never registered with
+            // PanelManager, so this was not needed before. Mirrors UICaptureLaunch's party-shop
+            // capture, which clears the arbiter the same way.
+            try { PanelManager.CloseAll(); } catch { }
+
+            // One reusable PartyShopPanelMvvm host: find an existing one, else create our own.
+            // (AddComponent runs Awake -> PanelRouter.Register x3; Register is a dictionary
+            // assignment and never throws - PanelRouter.cs:204/229/253 - and we only create a
+            // host when none was found, so no live registration is clobbered.)
             // Re-Open(ctx) closes the prior surface, so vendors never stack. We destroy
             // the host we created at the end.
-            ShopPanel panel = UnityEngine.Object.FindAnyObjectByType<ShopPanel>();
+            PartyShopPanelMvvm panel = UnityEngine.Object.FindAnyObjectByType<PartyShopPanelMvvm>();
             bool createdHost = false;
             GameObject host = null;
             if (panel == null)
             {
-                host = new GameObject("AutoPilotShopPanelHost");
-                panel = host.AddComponent<ShopPanel>();
+                host = new GameObject("AutoPilotPartyShopPanelHost");
+                panel = host.AddComponent<PartyShopPanelMvvm>();
                 createdHost = true;
             }
 
@@ -4450,7 +4468,7 @@ namespace DeNelle.DevTools
                 try
                 {
                     FlowTrace.Step("Auto", $"AssertVendorContracts: opening shop for context '{ctx}'.");
-                    panel.Open(ctx);
+                    panel.Open(ctx, null);
                 }
                 catch (Exception ex)
                 {
@@ -4458,9 +4476,22 @@ namespace DeNelle.DevTools
                     continue;
                 }
 
-                // Wait a frame so ShowBuy (called inside Open) has built the rows + populated
-                // CurrentStock. (Open->ShowBuy is synchronous, but a frame is cheap insurance.)
+                // Wait a frame so the stock build (inside Open) has populated CurrentStock.
+                // (It is synchronous, but a frame is cheap insurance.)
                 yield return null;
+
+                // A NotifyOpened REFUSAL (in battle, or another modal holds the arbiter) leaves
+                // the panel closed with a disposed VM, so CurrentStock reads EMPTY. Distinguish
+                // that from a genuinely empty vendor - reporting a refused open as an empty
+                // vendor would be measuring the wrong thing (CLAUDE.md §11B).
+                if (!panel.IsOpen)
+                {
+                    FlowTrace.Warn("Auto", $"AssertVendorContracts: '{ctx}' open was REFUSED by PanelManager " +
+                        "(battle/another modal) - the panel is closed and its VM disposed, so stock cannot be " +
+                        "read. NOT counted as an empty vendor.");
+                    yield return Wait(SettleSeconds);
+                    continue;
+                }
 
                 try
                 {
@@ -4521,8 +4552,9 @@ namespace DeNelle.DevTools
             }
 
             // Close/dispose: re-Open's Close ran per ctx; destroy our host so nothing lingers.
-            // (ShopPanel.Close is private + the panel doesn't register with PanelManager, so
-            // destroying the host is the bot's clean teardown.) Belt-and-braces CloseOpen too.
+            // (PartyShopPanelMvvm DOES register with PanelManager in Awake and unregisters in
+            // OnDestroy, so destroying the host is still the bot's clean teardown.) Belt-and-braces
+            // CloseOpen too.
             try { PanelManager.CloseOpen(); } catch { }
             if (createdHost && host != null) UnityEngine.Object.Destroy(host);
 
@@ -4686,19 +4718,21 @@ namespace DeNelle.DevTools
         //  PHASE: AssertEconomyDeduct  (ASSERTION-DEPTH EXPANSION)
         //  Correctness, not just "didn't crash": a buy must DEDUCT exactly the item
         //  cost from EconomyService AND grow VillageInventory by one. Open a vendor's
-        //  shop (the same ShopPanel.Open(ctx) seam AssertVendorContracts uses), read the
+        //  shop (the same PartyShopPanelMvvm.Open(ctx) seam AssertVendorContracts uses), read the
         //  resource snapshot BEFORE, pick the first AFFORDABLE item in CurrentStock,
         //  perform the buy, read AFTER, and assert the delta is EXACTLY the cost and the
         //  inventory gained the item. A mismatch is FlowTrace.Fail -> break-log -> ticket.
         //
-        //  FALLBACK (documented): ShopPanel's real buy handlers (TryBuyWeapon/Armor/Potion)
-        //  are PRIVATE — the bot cannot cleanly trigger the panel's own buy. So per the
-        //  spec it asserts the LOWER-LEVEL invariant the handlers are built on: for an
-        //  affordable item, EconomyService.TrySpend(cost) deducts exactly that cost and
-        //  VillageInventory.Add(id,1) grows the count — exactly the two lines each Try*
-        //  handler runs on success. Potions are SKIPPED for cost-resolution (their cost is
-        //  private to ShopPanel); we resolve weapon/armor cost via GearCatalog.GetBuyCost,
-        //  which is the authoritative cost the handlers spend.
+        //  FALLBACK (documented): the shop's real buy handlers are PRIVATE — the bot cannot
+        //  cleanly trigger the panel's own buy. So per the spec it asserts the LOWER-LEVEL
+        //  invariant the handlers are built on: for an affordable item,
+        //  EconomyService.TrySpend(cost) deducts exactly that cost and VillageInventory.Add(id,1)
+        //  grows the count — exactly the two lines each Try* handler runs on success. Potions are
+        //  SKIPPED for cost-resolution (their cost is not exposed on the panel); we resolve
+        //  weapon/armor cost via GearCatalog.GetBuyCost, which is the authoritative cost the
+        //  handlers spend.
+        //  ⚠ WO-1430 (2026-09-06): re-pointed off the legacy ShopPanel (deleted as doorless) onto
+        //  the live PartyShopPanelMvvm, so this phase now exercises the shop the player opens.
         // =====================================================================
         private IEnumerator AssertEconomyDeduct()
         {
@@ -4711,28 +4745,39 @@ namespace DeNelle.DevTools
                 yield break;
             }
 
-            // One reusable ShopPanel host (mirror of AssertVendorContracts' teardown).
-            ShopPanel panel = UnityEngine.Object.FindAnyObjectByType<ShopPanel>();
+            // Clear the modal arbiter first - PartyShopPanelMvvm registers with PanelManager and
+            // its Open() bails on a NotifyOpened refusal (see AssertVendorContracts for the full
+            // note). Here a refusal is benign: an empty stock falls through to the documented
+            // synthetic-cost fallback below rather than raising a ticket, but the Warn keeps the
+            // REASON honest instead of reading as "the catalog had nothing affordable".
+            try { PanelManager.CloseAll(); } catch { }
+
+            // One reusable PartyShopPanelMvvm host (mirror of AssertVendorContracts' teardown).
+            PartyShopPanelMvvm panel = UnityEngine.Object.FindAnyObjectByType<PartyShopPanelMvvm>();
             bool createdHost = false;
             GameObject host = null;
             if (panel == null)
             {
                 host = new GameObject("AutoPilotEconomyPanelHost");
-                panel = host.AddComponent<ShopPanel>();
+                panel = host.AddComponent<PartyShopPanelMvvm>();
                 createdHost = true;
             }
 
             // Open a general vendor (empty context -> "all" contract, the widest stock) so
             // we maximize the chance of finding an affordable, cost-resolvable gear item.
-            try { panel.Open(""); }
+            try { panel.Open("", null); }
             catch (Exception ex)
             {
-                FlowTrace.Fail("Auto", $"AssertEconomyDeduct: ShopPanel.Open('') threw — {ex.Message}");
+                FlowTrace.Fail("Auto", $"AssertEconomyDeduct: PartyShopPanelMvvm.Open('') threw — {ex.Message}");
                 if (createdHost && host != null) UnityEngine.Object.Destroy(host);
                 _lastDetail = "Open threw";
                 yield break;
             }
-            yield return null; // let ShowBuy populate CurrentStock
+            yield return null; // let the stock build populate CurrentStock
+            if (!panel.IsOpen)
+                FlowTrace.Warn("Auto", "AssertEconomyDeduct: the shop open was REFUSED by PanelManager " +
+                    "(battle/another modal), so CurrentStock is empty for that reason - the synthetic-cost " +
+                    "fallback below still exercises the TrySpend/Add invariant.");
 
             // Pick the first AFFORDABLE weapon/armor in the actual built stock whose cost is
             // resolvable + non-zero (a free item can't prove a deduction). Potions skipped.
@@ -4754,7 +4799,7 @@ namespace DeNelle.DevTools
                         if (a == null) continue;
                         cost = GearCatalog.GetBuyCost(a);
                     }
-                    else continue; // potion cost is private to ShopPanel — not assertable here
+                    else continue; // potion cost is not exposed on the panel — not assertable here
 
                     if (cost.IsZero) continue;        // need a real cost to prove a deduction
                     if (!eco.CanAfford(cost)) continue;
@@ -4835,13 +4880,13 @@ namespace DeNelle.DevTools
         //  Correctness: equipping a weapon must CHANGE the hero's loadout/stat. Resolve
         //  (or attach) the hero's GearLoadout, pick a catalog weapon, add it to the
         //  inventory, equip it via GearLoadout.EquipWeaponById (the same public seam the
-        //  ShopPanel EQUIP tab uses), and assert EquippedWeapon is non-null afterward AND
+        //  the shop's EQUIP action uses), and assert EquippedWeapon is non-null afterward AND
         //  the loadout actually reflects what we equipped (or WeaponMult moved). A no-op
         //  equip (loadout unchanged) is FlowTrace.Fail -> break-log -> ticket.
         // =====================================================================
         private IEnumerator AssertEquip()
         {
-            // Resolve the hero's GearLoadout (lazily attach if absent — the ShopPanel EQUIP
+            // Resolve the hero's GearLoadout (lazily attach if absent — the shop's EQUIP
             // path does the same: AddComponent<GearLoadout>() on the hero when none exists).
             GameObject heroGo = _hero != null ? _hero.gameObject : null;
             if (heroGo == null)
@@ -6391,10 +6436,14 @@ namespace DeNelle.DevTools
                 yield return Wait(SettleSeconds);
             }
 
-            // ── 31 Merchant Shop — DeNelle.Village.Hero.ShopPanel. Close() is private and OnDestroy
-            //    tears down its own modal canvas, so drive it on a THROWAWAY host we destroy to close
-            //    (never touches a real in-scene ShopPanel). Vendor context is a stub so it renders chrome. ──
-            yield return CaptureThrowawayPanel<ShopPanel>("ShopPanel", m => m.Open("merchant", "Merchant"));
+            // ── 31 Merchant Shop — REMOVED 2026-09-06 (WO-1430). This shot drove the legacy
+            //    DeNelle.Village.Hero.ShopPanel on a throwaway host; that panel is DELETED (it had no
+            //    door - this bot and UICaptureLaunch were its only constructors). The merchant screen
+            //    is NOT missing from the review set: PanelId.PartyShop is registered by
+            //    PartyShopPanelMvvm, so the OpenEachHUDPanel sweep already shoots panel_PartyShop.png.
+            //    The UI_REVIEW row keyed "ShopPanel" is therefore a duplicate view of one screen and is
+            //    named in UiCaptureCoverageRegression.KnownUncapturable with that reason - the same
+            //    shape as the retired "HeroTalents" row.
 
             // ── 28 Raid Selection — DeNelle.Village.Hero.RaidSelectionScreen (static self-heal Open) ──
             {
@@ -6629,7 +6678,7 @@ namespace DeNelle.DevTools
 
             _lastDetail = $"{_extraShotCount} extra panels captured";
             FlowTrace.Step("Auto", $"CaptureExtraPanels: {_extraShotCount} gameplay-scene panels captured " +
-                "(BuildMenu/Settings/Pause/TowerManager/TroopTraining/Inventory/ShopPanel/RaidSelection/RaidDeploy/EndState/EchoWorkforce/BugReport/HeroSelect/Dialogue).");
+                "(BuildMenu/Settings/Pause/TowerManager/TroopTraining/Inventory/RaidSelection/RaidDeploy/EndState/EchoWorkforce/BugReport/HeroSelect/Dialogue).");
         }
 
         // Find-or-create a component of type T, GUARD-open it, screenshot panel_<shotName>.png,
@@ -6682,7 +6731,10 @@ namespace DeNelle.DevTools
 
         // Create a THROWAWAY host carrying T, GUARD-open it, screenshot, then DESTROY the host
         // (its OnDestroy tears down the modal). For panels with no public Close whose OnDestroy
-        // owns cleanup (ShopPanel) — never touches a real in-scene instance.
+        // owns cleanup — never touches a real in-scene instance. (Its last caller, the legacy
+        // ShopPanel merchant shot, was removed with that panel in WO-1430; the helper is kept
+        // because it is the general recipe for any Close-less panel and UiCaptureCoverageRegression
+        // still recognises CaptureThrowawayPanel calls as a coverage route.)
         private IEnumerator CaptureThrowawayPanel<T>(string shotName, Action<T> openFn)
             where T : MonoBehaviour
         {

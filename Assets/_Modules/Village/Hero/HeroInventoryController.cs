@@ -189,7 +189,8 @@ namespace DeNelle.Village
             SafeRun(ResolveLoadout, "ResolveLoadout");
 
             // 1b) WO-434 Phase C — construct the model seams + the pure ViewModel at the open-site
-            //     (mirrors ShopPanel.Open injecting EconomyService). The View binds the VM; all
+            //     (mirrored ShopPanel.Open injecting EconomyService; ShopPanel deleted 2026-09-06,
+            //     WO-1430 - PartyShopPanelMvvm.ConstructViewModel is the live example). The View binds the VM; all
             //     state/logic (owned-list projection, tabs, select->detail, equip routing) lives in it.
             SafeRun(ConstructViewModel, "ConstructViewModel");
 

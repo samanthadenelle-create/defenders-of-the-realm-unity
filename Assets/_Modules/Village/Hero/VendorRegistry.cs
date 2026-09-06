@@ -24,8 +24,9 @@
 // consumer falls back to the legacy VendorStockContract heuristic — never throws.
 //
 // ONE TRUTH: VendorStockContract.AllowedFor consults this registry FIRST (categories
-// → GearKind flags), so the legacy ShopPanel/ShopVM, ShopCatalog, PartyShopVM AND the
-// AutoPilot vendor oracle all read the same mapping. VendorStockResolver reads the
+// → GearKind flags), so ShopCatalog, PartyShopVM AND the AutoPilot vendor oracle all
+// read the same mapping. (The legacy ShopPanel/ShopVM pair read it too, until both were
+// DELETED as doorless panels on 2026-09-06 - WO-1430 Group A.) VendorStockResolver reads the
 // full query (roster/level/emptyLine/layout) for the MVVM shelf.
 // =============================================================================
 

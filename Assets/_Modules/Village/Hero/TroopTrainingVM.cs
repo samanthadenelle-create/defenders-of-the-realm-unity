@@ -1,6 +1,6 @@
 // =============================================================================
 // TroopTrainingVM — the Barracks "train troops" panel's PURE ViewModel (WO-744
-// MVVM migration; extracted from TroopTrainingPanel). Mirrors ShopVM /
+// MVVM migration; extracted from TroopTrainingPanel). Mirrors PartyShopVM /
 // BuildingUpgradeVM: ALL state + logic (catalog, unlock gate, army cap, cost,
 // affordability, TRAIN) lives here; the View binds it, re-renders on Changed,
 // and routes taps back as commands, reading NO game state.
@@ -142,7 +142,8 @@ namespace DeNelle.Village.Hero
         /// <summary>
         /// The View-side entry point (audit §3.1): resolves the economy handle + the persisted army
         /// HERE so the View never touches EconomyService / GameStateService itself. The Save seam is
-        /// wired to GameStateService too — the sole resolution site. Mirrors ShopVM.CreateDefault.
+        /// wired to GameStateService too — the sole resolution site. Mirrored ShopVM.CreateDefault
+        /// (ShopVM deleted 2026-09-06, WO-1430; PartyShopVM is the live shop VM).
         /// WO-778: live train path is timed via BarracksService.EnqueueTraining (Train channel).
         /// </summary>
         public static TroopTrainingVM CreateDefault(Action onClose)

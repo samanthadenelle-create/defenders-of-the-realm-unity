@@ -32,9 +32,14 @@ namespace DeNelle.Editor.Regression
         {
             new Pin("_Modules/Village/BuildMode/BuildPaletteUI.cs", "private static string CostLabel(", "CostFormat.Words", "CostParts"),
             new Pin("_Modules/Village/BuildMode/BuildStructureInfoPanel.cs", "private static IReadOnlyList<CostPart> CostParts(", "CostFormat.Parts"),
-            new Pin("_Modules/Village/Hero/BarracksPanelVM.cs", "private static string CostStr(", "CostFormat.Words", "CostFormat.Parts"),
+            // RETIRED 2026-09-06 (WO-1430): the BarracksPanelVM.CostStr and ShopVM.CostString pins are
+            // gone because BOTH FILES WERE DELETED in that change - BarracksPanel/VM (doorless, owner
+            // ruling 21) and ShopPanel/ShopVM (harness-only door, superseded by PartyShop). The pin did
+            // not "move": there is no surviving barracks cost-string surface to pin, and the live
+            // troop/barracks cost copy is now emitted by ManageScreenVM.DescribeCost, which is pinned
+            // below. THE SUITE IS NOT WEAKENED - ScanSources still lints every .cs under _Modules for
+            // letter-suffix emitters, so a re-inlined "120W" anywhere still FAILS.
             new Pin("_Modules/Village/Hero/PartyShopVM.cs", "private static string CostString(", "CostFormat.Words", "CostFormat.Parts"),
-            new Pin("_Modules/Village/Hero/ShopVM.cs", "private string CostString(", "CostFormat.Words", "CostFormat.Parts"),
             new Pin("_Modules/Village/Hero/TroopTrainingVM.cs", "private static string CostString(", "CostFormat.Words", "CostFormat.Parts"),
             new Pin("Editor/Regression/DataRegression.cs", "private static string CostStr(", "CostFormat.Words", "CostFormat.Parts"),
             new Pin("_Modules/Village/Buildings/NPCUpgradeStation.cs", "private string CostString(", "CostFormat.Words", "CostFormat.Parts"),
@@ -59,7 +64,7 @@ namespace DeNelle.Editor.Regression
                 reason = "cost-format-source: " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 13 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry";
+            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 11 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry";
             return true;
         }
 
@@ -83,7 +88,11 @@ namespace DeNelle.Editor.Regression
 
         private static void CheckPins(string assets, List<string> failures)
         {
-            if (Pins.Length != 13) failures.Add("ticket-owned adapter pin count is not 13");
+            // WO-1430 (2026-09-06): 13 -> 11. The BarracksPanelVM.CostStr and ShopVM.CostString
+            // pins RETIRED WITH their panels - both types were deleted as unreachable (no door),
+            // so there is no surviving cost surface to re-point them at. The live emitter
+            // ManageScreenVM.DescribeCost is already pinned below.
+            if (Pins.Length != 11) failures.Add("ticket-owned adapter pin count is not 11");
             var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (Pin pin in Pins)
             {

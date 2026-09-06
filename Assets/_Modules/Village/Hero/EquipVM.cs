@@ -16,7 +16,7 @@
 // PURE: NO UnityEngine UI types. Icons are KEYS (IconRole/IconName). Rounding uses
 // System.Math, never UnityEngine.Mathf, so the VM is unit-testable with fake
 // IInventoryStore / IEquipTarget and no scene (ARCHITECTURE_PRINCIPLES.md §2 / §2c;
-// mirrors ShopVM / InventoryVM).
+// mirrors PartyShopVM / InventoryVM).
 //
 // Implements DeNelle.Core.UI.Mvvm.IPanelViewModel.
 // =============================================================================

@@ -170,3 +170,42 @@ class, at every mana value AND during cooldown, the resolved primary is non-null
 **0 mana specifically has no capture.** No in-tree log holds a mana-starved refusal - only the two cooldown ones. That
 `_mana < cost` reaches the identical dead end is a SOURCE READ (`HeroAbilities.cs:813`, both conditions exit one
 `return false`) chained onto a captured cooldown refusal. Say it that way; do not claim a capture that does not exist.
+
+
+## 0.7 ⛔ OWNER RULING NEEDED - CLAUDE.md section 7 vs the mobile battle HUD
+
+The implementing lane could not satisfy section 0.5's `[ranger-spends-no-arrow]` case **because it is unsatisfiable as
+written**, and it refused to ship a permanently-RED case or one asserting the opposite of canon. It is right, and the
+conflict is real.
+
+**CLAUDE.md section 7 states:** *"the phone's one attack button never spends an arrow."*
+
+**Measured against the HUD data:** in the `hostile(activebattle)` posture, `hud-areas.json:242-249` leaves the
+`actionRail` **EMPTY** - no attack pill, no Q/W/E/R arc - and `actionBar` carries only `combatDock`, whose slot 0 is
+`HudCommands.Attack` (`HudKitController.cs:2298-2299`). Slots 2-4 are `AssignableCast`.
+**So on the mobile battle HUD the attack button is the ONLY dispatch for the class Q.** Commit `a6daaf44c` added the
+per-class table for exactly that reason. Making Attack always-melee would strand **Fireball AND Quick Shot entirely** -
+the mage and ranger would have no way to cast their basic in battle at all.
+
+**Two ways out. This is the owner's call, not a seat's:**
+1. **Amend the canon.** Accept that on the combat dock the attack face IS the class Q, with a free melee fallback when
+   it is refused. Section 7's sentence is then rewritten to say so, in the same change (CLAUDE.md section 15).
+2. **Change the HUD.** Restore a Q medallion to `activebattle` in `hud-areas.json` and make Attack always-melee. That
+   honours the canon as written but is a posture/HUD change outside this WO.
+
+**Shipped in the meantime:** `[ranger-fallback-spends-no-arrow]` - exactly ONE `TryCast` in the handler, and the
+WO-1105 R3 no-double-refund gate still intact. **Versus today the ranger's behaviour is unchanged except that the
+dagger now fills refusals**, so nothing regresses while the ruling is pending.
+
+## 0.8 Two presentation gaps, recorded not fixed
+- **The mage's fallback swing plays the CAST animation.** `PlayerAttackController.StartAttack:513-517` calls
+  `_actor.PlayCast()` for `mage`/`cleric`, so a free melee swing will read visually as a spell. Damage resolves
+  normally. Presentation only.
+- **Section 3.4 (the player must SEE which primary is live) is NOT implemented.** The dock caption still shows the Q
+  verb; the cooldown sweep is the only tell. A face-swap is a creative call and was flagged rather than invented.
+
+## 0.9 One more unverified item worth a capture
+Wind-up: `TryCast` also refuses while a cast is in flight (`HeroAbilities.cs:802`), so the hero now swings on that too.
+`StartAttack` reads `_abilities` only for class/attack-speed and never cancels an in-flight cast - **but** it re-triggers
+the same animator `Cast` trigger for mage/cleric. **NOT VERIFIED at runtime.** If it looks wrong in play, the fix is a
+public `IsCasting` on `HeroAbilities` and skipping the fallback on that one refusal.

@@ -598,10 +598,16 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
   **`BarracksService.EnqueueTraining`** → training is TIMED on the Train channel
   (`TrainOutcome.Queued`); the instant `ArmyStorage.TrainNow` loop survives only for tests.
   Ladder shows ALL 7 troops incl. locked (tier education).
-- **BarracksPanel** (452) + **BarracksPanelVM** (430): the WO-771.9 UPGRADE panel — barracks
-  level card + per-troop levels/abilities/costs over `BarracksService`/`BarracksProgression`;
-  VM also owns host resolution (deliberately not-pure — scene lookups belong in the VM layer
-  here). Gated on `BarracksUnlock.IsUnlocked`. Barracks charges the REAL wallet (`ce74ac41`).
+- ⛔ **BarracksPanel + BarracksPanelVM — DELETED 2026-09-06 (WO-1430 Group A). Do not look for
+  them.** They were the WO-771.9 UPGRADE panel (barracks level card + per-troop levels/abilities/
+  costs over `BarracksService`/`BarracksProgression`), and the panel **had no door** — its only
+  entry point `ShowBarracksUI()` had zero callers, proven by source grep and a script-GUID search
+  of every scene/prefab (`PanelDoorRegression`). That is the defect that stranded 7 of 9 troops
+  (`OWNER_RULINGS_LOCKED.md` §21): the panel was the sole composer of the `JobKind.BarracksUpgrade`
+  job that was the sole writer of `GameState.BarracksLevel`, the old unlock gate. Troop unlocks now
+  read the barracks **BUILDING tier**; the player-facing barracks and troop surfaces are the Manage
+  screen's **Build** and **Army** tabs. `JobKind.BarracksUpgrade` and `GameState.BarracksLevel`
+  survive the deletion because both are persisted save keys.
 
 ### Rumor board (⚠ 2026-08-02 conformance wave IN FLIGHT)
 - **RumorBoardPanel** (689): WO-810 owner-signed master-detail — scrollable full-label filter
@@ -635,10 +641,15 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
   (WO-550); global dedupe.
 
 ### Shops / vendors
-- **ShopPanel** (935) + **ShopVM** (766): the legacy-context vendor shop, fully MVVM'd (WO-431)
-  — VM owns economy reads, stock building (VendorStockContract ∩ type filter), WO-406
-  never-empty fallback, buy/sell/equip, vendor-gold pools, `CurrentStock` (AutoPilot asserts
-  it). Opened by `CmdOpenShop` when `ff.partyshop` is OFF.
+- ⛔ **ShopPanel + ShopVM — DELETED 2026-09-06 (WO-1430 Group A). Do not look for them.** The
+  legacy-context vendor shop (WO-431 MVVM slice). `PanelDoorRegression` reported it
+  `[panel-door-is-harness-only]`: the ONLY constructors were `AutoPilotDriver` and
+  `UICaptureLaunch`, harnesses that AddComponent every panel so it can be photographed. The claim
+  that it "opened when `ff.partyshop` is OFF" was **never true of the code** — `DialogueCommandSink`
+  and `DialogueService` both route `OpenShop` to `PanelId.PartyShop` unconditionally. `ff.partyshop`
+  is now a **kill-switch**, not a chooser. Deleted with it: `IShopEquipTarget`, `ShopMode`,
+  `ShopDetail` (all declared in `ShopVM.cs`), `ShopVMTests`, `ShopPanelRowRenderTests`, and the
+  `RealmGoldStore` / `RealmStorePurchase` capture entry points in `UICaptureLaunch`.
 - **PartyShopPanelMvvm** (1631) + **PartyShopVM** (1596) + **PartyShopPanelMvvmBootstrap** (75):
   the store-to-spec party shop (STORE_EQUIP_SPEC): party-member selector (IEquipTarget), tap→
   filter by class/level/vendor-type, BUY/SELL same screen, real item art + stat deltas.
@@ -769,8 +780,10 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
 ### Duplicate / parallel systems (by design or debt)
 - Two footstep systems (HeroLocomotion.DriveFootsteps LIVE vs HeroFootstepController unwired).
 - Two victory-pose subscribers on OnWaveCleared (locomotion live; bridge inert).
-- Two shop stacks (ShopPanel legacy-context vs PartyShopPanelMvvm flag-gated) — deliberate
-  flag migration, `CmdOpenShop` is the router.
+- ~~Two shop stacks (ShopPanel legacy-context vs PartyShopPanelMvvm flag-gated)~~ — **RESOLVED
+  2026-09-06 (WO-1430):** there is now ONE shop stack, `PartyShopPanelMvvm` + `PartyShopVM`. The
+  legacy pair was deleted; it was never actually a live alternative, because the `OpenShop` route
+  had no flag branch. `ff.partyshop` OFF now means no gear shop at all.
 - Two inventory-ish surfaces (HeroInventoryController modal vs EquipmentPanel gear-preview) —
   both live, different jobs (bag vs paperdoll/preview).
 - Namespace split `DeNelle.Village` vs `DeNelle.Village.Hero` persists — check the `using`

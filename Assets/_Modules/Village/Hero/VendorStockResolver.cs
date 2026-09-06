@@ -181,8 +181,9 @@ namespace DeNelle.Village.Hero
         }
 
         /// <summary>
-        /// THE shop header, for every shop screen. ONE implementation — <c>ShopVM</c> and
-        /// <c>PartyShopVM</c> both call this.
+        /// THE shop header, for every shop screen. ONE implementation — <c>PartyShopVM</c> calls
+        /// this (the legacy <c>ShopVM</c> did too, until it was DELETED with its doorless
+        /// ShopPanel on 2026-09-06, WO-1430; the paragraph below is that history).
         ///
         /// <para>⛔ Both VMs used to invent titles from substrings of the vendor context
         /// ("Armorer's Shop", "The Forge", "Market Stalls", "Jeweler's Bench", "Lumbermill

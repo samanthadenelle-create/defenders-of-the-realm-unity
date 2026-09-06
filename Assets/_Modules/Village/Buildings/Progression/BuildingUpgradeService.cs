@@ -162,7 +162,7 @@ namespace DeNelle.Village.Buildings.Progression
                 // a broke player minted an F8 error (plus a screenshot) on every tier tap and buried
                 // the real captures. Every sibling spend path already logs this non-error
                 // (PlacedStructureUpgradeService, ResourceBuildingState, WallRepairController,
-                // ShopVM). The state dump is UNCHANGED; only the severity is honest now.
+                // PartyShopVM). The state dump is UNCHANGED; only the severity is honest now.
                 FlowTrace.Capture("Upgrade", id + " tier-" + targetTier + " spend REJECTED - need W"
                     + def.PrimaryMaterialCost + " primary/G" + def.CostGold + ", wallet W"
                     + ResourceLedger.Balance(HarvestResource.Wood) + "/S"

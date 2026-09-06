@@ -51,8 +51,9 @@ companion introducer (`SylasStewardInjector.cs:6-8`).
 **Yarn is FULLY REMOVED (WO-557).** There is no YarnSpinner runtime, no DialogueRunner
 prefab, no Yarn command registration anywhere (`AddCommandHandler` / `[YarnCommand]`:
 zero hits in `Assets/`, save one comment in `Troops/TroopDialogueCommands.cs`).
-**`NPCCommandBridge` is DEAD** — no class exists; the name survives only as a stale header
-comment in `Village/Hero/ShopPanel.cs:9` and in `_Modules/HUD/README*.md`.
+**`NPCCommandBridge` is DEAD** — no class exists; the name survives only in
+`_Modules/HUD/README*.md`. *(It also sat in `Village/Hero/ShopPanel.cs:9`; that file was DELETED
+2026-09-06 by WO-1430, so that copy of the stale claim is gone with it.)*
 
 The live chain:
 
@@ -536,9 +537,10 @@ until `IsCastleHubScene` learns its name (the vendor code itself warns about thi
    The hero IS tagged `Player` (CLAUDE.md §7; every newer file does `FindWithTag("Player")` first).
    The name-based-only fallbacks still WORK but the rationale is wrong, and hero-resolution
    strategy remains inconsistent (tag-first vs name-only) across the area.
-4. **`CastleCompanionIntroducerInjector.cs` header (:25-33)** and `ShopPanel.cs:9` — still speak
-   of "Yarn node" / "command bridge" / "NPCCommandBridge". Yarn is removed; the flow is
-   dialogues.json + DialogueCommandSink.
+4. **`CastleCompanionIntroducerInjector.cs` header (:25-33)** — still speaks of "Yarn node" /
+   "command bridge" / "NPCCommandBridge". Yarn is removed; the flow is dialogues.json +
+   DialogueCommandSink. *(`ShopPanel.cs:9` carried the same stale header; that file was DELETED
+   2026-09-06 by WO-1430, so only one site is left to fix.)*
 5. **`CastleVendorNpcInjector.cs:1-30` header** — "wired to the existing YarnSpinner structure
    dialogue... parameterized Yarn structure dialogue". The mechanism is now
    `DialogueService.PlayStructure` → custom runner/panels. Flow correct, wording stale.

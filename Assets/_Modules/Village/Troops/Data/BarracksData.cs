@@ -16,9 +16,12 @@
 // See CanonicalJson / LocalJsonCatalogSource. Loaders live in TroopStatResolver.cs.
 //
 // SCOPE (WO-771.9 foundation half): pure data + a side-effect-free stat resolver.
-// The BarracksService, job-enqueue/completion, gating, spawn-wiring and the
-// code-built BarracksPanel come in the LATER integration agent (after WO-773
-// lands the queue + the v34->v35 save-schema migration). NONE of those live here.
+// The BarracksService, job-enqueue/completion, gating and spawn-wiring came in the
+// LATER integration agent (after WO-773 landed the queue + the v34->v35 save-schema
+// migration). NONE of those live here.
+// ⛔ The "code-built BarracksPanel" this line used to promise WAS built, was never given a
+// door, and was DELETED on 2026-09-06 (WO-1430 Group A, owner ruling 21). The barracks and
+// troop surfaces the player uses are the Manage screen's Build and Army tabs.
 //
 // ResourceCost is REUSED verbatim from DeNelle.Village.ResourceCost
 // (EconomyService.cs) — the same struct EconomyService.CanAfford/TrySpend consume,

@@ -584,7 +584,8 @@ namespace DeNelle.Village
         ///
         ///   1. <c>GameState.GearInventory</c> — THE persisted source of truth (SaveSchema.cs:262,
         ///      "gearInventory", save v20; GameState.cs:135). Shop purchases land here via
-        ///      ShopVM.TryBuyWeapon -> VillageInventory.Add -> SyncToState.
+        ///      ShopVM.TryBuyWeapon -> VillageInventory.Add -> SyncToState. (ShopVM was DELETED
+        ///      2026-09-06, WO-1430; the live equivalent is PartyShopVM's buy path.)
         ///   2. <c>VillageInventory.Instance.Counts</c> — the runtime cache over (1). Read as well
         ///      as (1) so a grant made THIS session before a save flush still counts.
         ///   3. The authored STARTER KIT ids for this class. The kit is GRANTED, not purchased, so

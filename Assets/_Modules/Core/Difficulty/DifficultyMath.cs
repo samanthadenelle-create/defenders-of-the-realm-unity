@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Core   Namespace: DeNelle.Core.Adaptive
 //
 // NO UnityEngine TYPES. NO Mathf. NO MonoBehaviour. NO singleton. System.Math
-// only -- the same deliberate choice ShopVM / InventoryVM made so their logic is
+// only -- the same deliberate choice PartyShopVM / InventoryVM made so their logic is
 // unit-testable without a scene. That is what makes the headless oracle possible
 // at all: the reference sketch put this arithmetic inside a DontDestroyOnLoad
 // MonoBehaviour, where an EditMode test cannot inject a history, cannot advance a

@@ -728,7 +728,7 @@ namespace DeNelle.Village
         /// "the knight", "the knight or cleric", "the knight, ranger or mage".
         ///
         /// PUBLIC and shared because WO-1241 made `job` a possible LIST, and the three
-        /// DescribeGear copies (ShopVM / InventoryVM / PartyShopVM) each pasted the raw string
+        /// DescribeGear copies (the deleted ShopVM / InventoryVM / PartyShopVM) each pasted the raw string
         /// straight into a sentence — which would have shipped "Suited to the knight,cleric."
         /// to the player. ASCII only (CLAUDE.md canon).
         /// </summary>

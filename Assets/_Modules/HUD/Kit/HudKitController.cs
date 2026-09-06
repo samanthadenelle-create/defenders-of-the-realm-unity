@@ -3489,8 +3489,34 @@ namespace DeNelle.HUD.Kit
                 primary.SetIcon(string.IsNullOrEmpty(q.IconKey) ? null : UiStyle.Icon(q.IconKey));
                 primary.SetCaption(string.IsNullOrEmpty(q.Verb) ? "ATTACK" : q.Verb.ToUpperInvariant());
                 primary.SetCooldown(q.CooldownRemaining, q.CooldownTotal);
+                // ⭐ WO-1429: the ATTACK face is ALWAYS pressable — the HUD half of the dead-button
+                // defect. It used to be gated on `q.Equipped && q.Affordable && q.CooldownRemaining
+                // <= 0f`, i.e. exactly while the class Q was cooling or unaffordable.
+                //
+                // ⚠ CAREFUL WITH THE MECHANISM — the capture disproves the obvious story. The
+                // owner's tap DID reach the bridge at cd=0.47s (freeze-20260904-095249.log:544639),
+                // so the face was still live at press time. This producer refreshes on a 0.20s
+                // cadence (AbilityLoadoutProducer's `base(m, 0.20f)`, HudModelProducers.cs:580), so
+                // the face went dark on the NEXT refresh after the cast, not instantly: the old
+                // behaviour was a button that blinked out for most of each cooldown and was
+                // pressable only inside the refresh lag. Either way the tap that DID land produced
+                // no verb, which is the bridge's half of the fix.
+                //
+                // Why it must be unconditional: in the hostile(activebattle) posture the combat
+                // dock is the ONLY combat control (Assets/StreamingAssets/Data/Canonical/
+                // hud-areas.json:242-249 — the actionRail area is EMPTY, so there is no attack pill
+                // and no Q/W/E/R arc), and HudKitCommandBridge now falls a refused Q through to the
+                // FREE melee sweep. A press is therefore always a real attack, and the button must
+                // be able to receive it.
+                //
+                // ORDER IS LOAD-BEARING: ActionSlotHandle.SetCooldown itself ends with
+                // `if (button != null) button.interactable = !cooling;`
+                // (ElarionUiKitObsidian.cs:1138). This assignment MUST stay AFTER the SetCooldown
+                // call above or the kit re-disables the face every refresh. The cooldown SWEEP is
+                // deliberately kept: the player still watches the spell cool on the face, they just
+                // get the free sweep instead of silence meanwhile.
                 if (primary.button != null)
-                    primary.button.interactable = q.Equipped && q.Affordable && q.CooldownRemaining <= 0f;
+                    primary.button.interactable = true;
             }
         }
 

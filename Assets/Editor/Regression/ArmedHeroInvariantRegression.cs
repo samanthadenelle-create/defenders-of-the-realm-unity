@@ -95,7 +95,10 @@ namespace DeNelle.Editor.Regression
         private static readonly string[] DisplaySrcs =
         {
             "Assets/_Modules/Village/Hero/EquipVM.cs",
-            "Assets/_Modules/Village/Hero/ShopVM.cs",
+            // ShopVM.cs REMOVED 2026-09-06 (WO-1430): the file was DELETED with the doorless
+            // ShopPanel it served. ReadSource FAILS on a missing path by design ("the file moved
+            // without updating this oracle"), so a stale entry here would have turned a deliberate
+            // retirement into a red suite. PartyShopVM is the surviving display site for gear stats.
             "Assets/_Modules/Village/Hero/PartyShopVM.cs",
         };
 

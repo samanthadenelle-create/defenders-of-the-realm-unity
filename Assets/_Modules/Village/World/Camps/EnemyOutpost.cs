@@ -854,7 +854,8 @@ namespace DeNelle.Village.World.Camps
         }
 
         // Locate the active hero's GearLoadout (the real armory grant surface),
-        // mirroring ShopPanel.FindActiveHeroGO: Player tag -> add/get GearLoadout.
+        // mirroring the old ShopPanel.FindActiveHeroGO (panel deleted 2026-09-06, WO-1430;
+        // the rule is stated here): Player tag -> add/get GearLoadout.
         private static HeroGearRef FindHeroLoadout()
         {
             GameObject heroGo = GameObject.FindWithTag("Player");

@@ -5,11 +5,15 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
-// FLAG GATE: the MVVM party shop registers PanelId.PartyShop, and CmdOpenShop
-// routes a weapon/armor vendor to PanelRouter→PartyShop only when the flag is ON
-// (legacy DeNelle.Village.Hero.ShopPanel path when OFF). So:
-//   • flag ON  -> this bootstrap spawns the MVVM panel; CmdOpenShop routes to it.
-//   • flag OFF -> this bootstrap does nothing; the legacy ShopPanel opens as before.
+// FLAG GATE (corrected 2026-09-06, WO-1430): the MVVM party shop registers
+// PanelId.PartyShop, and the dialogue "OpenShop" verb routes there UNCONDITIONALLY
+// (DialogueCommandSink / DialogueService — there is no flag branch on the route). So:
+//   • flag ON  -> this bootstrap spawns the MVVM panel; OpenShop reaches it.
+//   • flag OFF -> this bootstrap does nothing and NOTHING registers PanelId.PartyShop,
+//                 so the gear shop does not open at all. The flag is a KILL-SWITCH.
+// ⛔ The old text here said "legacy DeNelle.Village.Hero.ShopPanel path when OFF". That
+// was never true of the routing code, and that panel is now DELETED (it had no door:
+// only AutoPilotDriver + UICaptureLaunch ever constructed it). Do not restore the claim.
 //
 // The MVVM panel is pure code-built uGUI (it builds its own Canvas on Open), so it
 // needs NO PanelSettings — it just needs a hero in the scene (Title / HeroSelect skip),
@@ -37,7 +41,7 @@ namespace DeNelle.Village.Hero
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
-            if (!DeNelle.Core.FeatureFlags.PartyShop) return;   // flag OFF -> legacy ShopPanel owns the open
+            if (!DeNelle.Core.FeatureFlags.PartyShop) return;   // flag OFF -> kill-switch: no gear shop spawns (WO-1430)
 
             // WO-550: the party gear SHOP (economy) does NOT bootstrap in enemy-owned RAID scenes
             // (Village2); the home hub (MainCastle_Hall) is unaffected. Gate on the ACTIVE scene.

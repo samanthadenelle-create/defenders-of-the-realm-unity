@@ -5,7 +5,7 @@
 // THE BUG THIS GUARDS: the DEV "Load up (full base)" grant could leave the owner
 // with no SPENDABLE Wood/Iron because those resources live in TWO stores that do
 // not sync —
-//   * EconomyService's in-session pool (Wood/Iron) — read by ShopPanel + the HUD
+//   * EconomyService's in-session pool (Wood/Iron) — read by the gear shop + the HUD
 //     resource bar (HeartHudBridge -> EconomyService.Snapshot).
 //   * GameState.Wood / GameState.Iron — read + spent by the building-upgrade flow
 //     (ResourceBuildingProgression.ResourceLedger).
@@ -85,7 +85,7 @@ namespace DeNelle.Tests.EditMode
             _econ.GrantSpendableUncapped(wood: 50000, iron: 50000);
 
             Assert.That(_econ.Wood, Is.EqualTo(wood0 + 50000),
-                "in-session Wood (ShopPanel + HUD bar wallet) must grow by the grant");
+                "in-session Wood (gear shop + HUD bar wallet) must grow by the grant");
             Assert.That(_econ.Iron, Is.EqualTo(iron0 + 50000),
                 "in-session Iron must grow by the grant");
         }
