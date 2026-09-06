@@ -85,7 +85,11 @@ namespace DeNelle.HUD
             {
                 case PlayerDeckKind.Realm: return "Realm services, records, and guidance.";
                 case PlayerDeckKind.Hero: return "Your equipment, inventory, skills, loadout, and wardrobe.";
-                default: return "Quests, raids, dungeons, the realm map, and the season.";
+                // WO-1421 (owner 2026-09-06): the deck is two cards, so the line names two.
+                // Labelled explicitly for symmetry with the two arms above; `default:` is stacked
+                // on the same return so the enum stays exhaustively covered.
+                case PlayerDeckKind.Journey:
+                default: return "Your quests, and the camps your army can raid.";
             }
         }
 
@@ -712,54 +716,17 @@ namespace DeNelle.HUD
                             LockedArtKey = "raids-locked",
                             Available = () => PostureSignals.RaidCapable,
                             LockReason = () => PostureSignals.RaidLockCopy(PostureSignals.RaidLock),
-                            Open = RaidEntryGate.RequestOpen },
-                        // WO-1376 / WO-1394 / WO-1396 - JOURNEY IS FIVE CARDS (PROGRAM_RAID_ECONOMY
-                        // section 8, owner 2026-09-04: "Two cards makes Journey look unfinished").
-                        // The three below carry NO ArtKey by construction: no PNG has been authored
-                        // for them (Assets/Resources/UI/ElarionMedieval/cards/ holds no dungeons /
-                        // realm-map / season file), so they render through the text-free branch
-                        // (card-frame-empty + concept medallion) exactly as the Hero deck's Wardrobe
-                        // does. Purpose lines are the WO-1378 canon record (canon-strings.json
-                        // journeyCard*Subtitle), never typed here.
-                        //
-                        // DUNGEONS. PROVEN 2026-09-05: there is NO screen door to a dungeon in this
-                        // repo - no PanelId names one, nothing registers one, and the only way in is
-                        // the world portal (DungeonPortal proximity prompt -> EnterDungeon). The one
-                        // SCREEN that knows where the live portals stand is the Realm Map: it pins
-                        // every DungeonPortal as a RealmPinKind.Dungeon (RealmPinProducers.
-                        // PublishDungeons) and its detail pane says "Here: 1 dungeon". So this card
-                        // opens that map with the "dungeons" context - a real destination, not a
-                        // no-op - and the door's AVAILABILITY is the fail-closed status rail
-                        // (DungeonStatusCatalog, owner ruling 2026-08-26): open only while at least
-                        // one gated portal id resolves Open (kill switch included). Sealed = the
-                        // card stays VISIBLE and locked with the ruled WORLD copy as its reason
-                        // (dungeonSealedHeadline), never build status. A dedicated dungeon screen is
-                        // an owner call, not this lane's.
-                        new Card { Title = "Dungeons", Purpose = HudStrings.Get(HudStrings.KeyJourneyDungeons),
-                            Concept = "dungeon",
-                            Available = () => PanelRouter.IsRegistered(PanelId.RealmMap) && AnyDungeonOpen(),
-                            LockReason = () => PanelRouter.IsRegistered(PanelId.RealmMap)
-                                ? HudStrings.Get(HudStrings.KeyDungeonSealedHeadline)
-                                : null,
-                            Open = () =>
-                            {
-                                FlowTrace.Step("Navigation", "Dungeons card -> Realm Map (" + DescribeDungeonDoors() + ")");
-                                PanelRouter.Open(PanelId.RealmMap, "dungeons");
-                            } },
-                        // REALM MAP (WO-1396). Routed like its siblings; Available follows
-                        // PanelRouter.IsRegistered(PanelId.RealmMap), which RealmMapPanel.Awake sets
-                        // in every hero scene (RealmMapPanelBootstrap). The map opens READ-ONLY: travel
-                        // is the WO-827 stub and the panel words that state from canon-strings instead
-                        // of showing a greyed button. This is the ONE door - the Bag's flag-gated
-                        // MapTab route (FeatureFlags.MapTab + InventoryUIBuilder.OpenRealmMap) was
-                        // deleted in the same change so the map has exactly one public entry.
-                        Route("Realm Map", HudStrings.Get(HudStrings.KeyJourneyRealmMap), "map", PanelId.RealmMap),
-                        // SEASON (WO-1394). PanelId.BattlePass has been registered by
-                        // BattleMonthlyPanelsBootstrap since 2026-08-21 and opened by nothing - this
-                        // card is its first and only public door (PackStore's FREE band stays clear,
-                        // NightMarketUiRegression pins that). Raids feed the track (RaidSeasonXpRegression
-                        // [wired]), so the card is the reason to tap the next raid.
-                        Route("Season", HudStrings.Get(HudStrings.KeyJourneySeason), "season", PanelId.BattlePass)
+                            Open = RaidEntryGate.RequestOpen }
+                        // WO-1421 (owner ruling 2026-09-06, verbatim: "under journey, please remove
+                        // dungeons season in realm map as they should not be displayed there right
+                        // now"). The deck is TWO cards again. The three doors that used to follow
+                        // this line are DELETED, not flagged: the flag of that shape was retired on
+                        // 2026-09-05 and its absence is pinned, so a flag would fail the gate. The
+                        // destination panels stay compiled and registered - a re-add is one line
+                        // when there is content behind them. Their canon-strings rows and the three
+                        // HudStrings keys stay DORMANT on purpose; deleting a key breaks
+                        // HudLabelFitRegression Case 1 (canon parity across both copies).
+                        // Pinned by JourneyDeckTwoCardRegression + PublicNavigationRetirementRegression.
                     };
                 }
                 default:
@@ -773,41 +740,13 @@ namespace DeNelle.HUD
             }
         }
 
-        /// <summary>WO-1376 - the Dungeons card predicate: TRUE while at least one gated portal id
-        /// resolves Open on the fail-closed status rail (DungeonStatusCatalog.For honours the
-        /// kill switch, the cache and the live table in that order). No table / no network /
-        /// bad payload = every id Sealed = the card is locked, which is the owner's 2026-08-26
-        /// ruling shown on a card instead of at a portal. Guarded: a fault reads as CLOSED and
-        /// says so.</summary>
-        private static bool AnyDungeonOpen()
-        {
-            bool open = false;
-            bool ok = Guard.Try("HUD", "read dungeon door states for the Dungeons card", () =>
-            {
-                var ids = DeNelle.Core.World.DungeonStatusCatalog.PortalDungeonIds;
-                for (int i = 0; i < ids.Length && !open; i++)
-                    open = DeNelle.Core.World.DungeonStatusCatalog.IsOpen(ids[i]);
-            });
-            if (!ok) return false;
-            return open;
-        }
-
-        /// <summary>One trace fragment naming how many gated dungeons are open and where the
-        /// standing table came from, so a headless log says WHY the card was open or locked.</summary>
-        private static string DescribeDungeonDoors()
-        {
-            int open = 0, total = 0;
-            string provenance = "?";
-            Guard.Try("HUD", "describe dungeon doors", () =>
-            {
-                var ids = DeNelle.Core.World.DungeonStatusCatalog.PortalDungeonIds;
-                total = ids.Length;
-                for (int i = 0; i < ids.Length; i++)
-                    if (DeNelle.Core.World.DungeonStatusCatalog.IsOpen(ids[i])) open++;
-                provenance = DeNelle.Core.World.DungeonStatusCatalog.Provenance;
-            });
-            return "open " + open + "/" + total + ", provenance=" + provenance;
-        }
+        // WO-1421 (2026-09-06): the two dungeon-door helpers that used to live here existed ONLY
+        // to decide whether the removed card was available and to narrate its Open lambda. With
+        // the card gone they were unreachable, so they are deleted rather than left as dead
+        // private state (CLAUDE.md section 5's duplicated-state drift). The status rail itself is
+        // untouched and still read by the portal and by its own suites. The traces that went with
+        // them are named in the WO-1421 hand-back; none was reachable from a surviving path, so
+        // section 12's never-strip rule is not engaged.
 
         /// <summary>WO-1404: one trace per built state-bearing Journey card.</summary>
         private static string TraceJourneySubtitle(string card, string subtitle)

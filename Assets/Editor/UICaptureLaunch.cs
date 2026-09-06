@@ -7063,9 +7063,22 @@ namespace DeNelle.Editor
                 GameObject canvas = null;
                 BuildingTierDef gatedTier = null;
                 int priorGate = 0;
+                bool hydratedCatalog = false;
                 try
                 {
                     PanelManager.CloseAll();
+
+                    // ⛔ THE REASON THE DEFENCE FRAME WAS EMPTY, AND IT IS NOT THE FIXTURE'S LEVELS.
+                    // CatalogBootstrap registers structures from a [RuntimeInitializeOnLoadMethod]
+                    // (CatalogBootstrap.cs:96), which never runs in an -executeMethod capture. So
+                    // CatalogRegistry.Get(placed.itemId) returned NULL for every BaseLayout row and
+                    // BuildDefenseBrowse bailed at ManageScreenVM.cs:821 before it could ever reach
+                    // the ceiling test — a level-1 archer under a ceiling of 3 emitted no row.
+                    // Seeding more structures without this would have changed nothing.
+                    // Idempotent, registers only absent ids, and restored below when WE hydrated.
+                    hydratedCatalog = DeNelle.Core.Catalog.CatalogRegistry.Count == 0;
+                    HydrateCatalogForCapture();
+
                     fixture = ScriptableObject.CreateInstance<GameState>();
                     fixture.Onboarded = true;
                     fixture.BarracksLevel = 3;
@@ -7076,6 +7089,30 @@ namespace DeNelle.Editor
                         new PlacedStructureData("arcane-tower", 6, 3, 0, 4),
                         new PlacedStructureData("forge", 8, 3, 0, 4),
                         new PlacedStructureData("lumbermill", 10, 3, 0, 4),
+
+                        // WO-1422 lane D: the DEFENCE fixture. Before this the tab had exactly ONE
+                        // placed defensive structure, so the frame could not prove a rail, a
+                        // per-type tally, a Max card or a six-rung ladder — it proved a sentence.
+                        // Every id + ceiling below is read from structures-catalog.json:
+                        //   tower_ground_archer :15 maxLevel 3 (:31)   tower_ballista :88 maxLevel 3 (:103)
+                        //   tower_catapult      :226 maxLevel 3 (:241) wall_wood      :288 maxLevel 2 (:304)
+                        //   lumberyard          :1289 maxLevel 6 (:1309)
+                        // A SECOND archer at a HIGHER level: the per-TYPE ruling (3.1) must fold
+                        // these two into one rail row whose Level is the LOWEST placed (L1 at 3,7),
+                        // so a per-instance rail regresses visibly here.
+                        new PlacedStructureData("tower_ground_archer", 5, 9, 0, 2),
+                        new PlacedStructureData("tower_ballista", 7, 9, 0, 1),
+                        // AT its ceiling (3 of 3) -> the "Max" card with no CTA. The retired paged
+                        // path SKIPS a maxed row (ManageScreenVM.cs:828), which is exactly why the
+                        // old fixture could never paint one.
+                        new PlacedStructureData("tower_catapult", 9, 9, 0, 3),
+                        // Mid-climb on the only SIX-rung ladder in the catalog (WO-966 containers).
+                        new PlacedStructureData("lumberyard", 11, 9, 0, 3),
+                        // Three segments of one wall type: the card must read "3 placed . lowest L1"
+                        // and the rail must still show ONE row (the unbounded-rail trap, ruling 3.1).
+                        new PlacedStructureData("wall_wood", 13, 9, 0, 1),
+                        new PlacedStructureData("wall_wood", 14, 9, 0, 1),
+                        new PlacedStructureData("wall_wood", 15, 9, 0, 1),
                     };
                     fixture.Wood = 100000;
                     fixture.Iron = 100000;
@@ -7090,6 +7127,25 @@ namespace DeNelle.Editor
                     fixture.BuildingTiers["forge"] = BuildingTierCatalog.MaxTier("forge");
                     fixture.BuildingTiers["lumbermill"] = 1;
                     fixture.VillageTier = 4;
+
+                    // WO-1422 lane D: RESEARCH must reach all FOUR state words in ONE frame.
+                    // Perk ids read from building-tiers.json (17 perks over 5 buildings; 'farm'
+                    // authors none):
+                    //   Researched  -> owned outright, below. BuildingPerkService.IsOwned reads
+                    //                  GameState.OwnedBuildingPerks for the key "<building>:<perk>"
+                    //                  (BuildingPerkService.cs:111-115, Key at :68).
+                    //   Researching -> "arcane-tower:arcane-warding-runes", the running Research job
+                    //                  seeded in SeedManageCaptureQueue (IsResearching, :122-132).
+                    //   Available   -> every barracks perk (BuildingTiers["barracks"] = 3, unlock
+                    //                  tiers 1/2/3) and forge's remaining two; Coins = 100000 pays.
+                    //   Locked      -> lumbermill sits at tier 1, so its tier 2/3/4 perks fail
+                    //                  CanResearch with "Upgrade the building to Tier N first."
+                    //                  (BuildingPerkService.cs:181).
+                    // This lives on the throwaway fixture GameState, so nothing global is mutated.
+                    fixture.OwnedBuildingPerks = new List<string>
+                    {
+                        "forge:forge-efficient-smelting",
+                    };
 
                     // Capture-only presentation fixtures: production canon currently tops out at
                     // Village Tier 3 requirements, so temporarily raise one real next-tier gate.
@@ -7131,6 +7187,35 @@ namespace DeNelle.Editor
                         SetPrivateField(panel, "_selectedBuildingId", selectedId);
                         InvokePrivate(panel, "Render");
                     }
+                    else if (tab == ManageTab.Defense)
+                    {
+                        // Same discipline as Buildings above: across the three canonical frames,
+                        // prove the whole Defence card grammar rather than one happy row.
+                        //   2670 -> the two-instance archer type (one rail row, lowest level L1)
+                        //   1920 -> the maxed catapult (no CTA, "Max" state word)
+                        //   below -> the six-rung container mid-climb
+                        // SetPrivateField only WARNS on an unknown field, so this stays harmless
+                        // until lane B's _selectedDefenseId lands and never fails a frame.
+                        string selectedDefenseId = target.W >= 2600 ? "tower_ground_archer" :
+                                                   target.W >= 2200 ? "tower_catapult" : "lumberyard";
+                        SetPrivateField(panel, "_selectedDefenseId", selectedDefenseId);
+                        InvokePrivate(panel, "Render");
+                    }
+                    else if (tab == ManageTab.Research)
+                    {
+                        // The key is "<buildingId>:<perkId>" — BuildingPerkService.Key's shape
+                        // (BuildingPerkService.cs:68), which is also the OwnedBuildingPerks key.
+                        //   2670 -> Available  (barracks tier 3, unlock tier 3)
+                        //   1920 -> Locked     (lumbermill sits at tier 1, perk needs tier 3)
+                        //   below -> Researched (owned above)
+                        // The Researching card is reachable at every width from the rail; the queue
+                        // job "building-research:arcane-tower:arcane-warding-runes" supplies it.
+                        string selectedResearchKey = target.W >= 2600 ? "barracks:barracks-expanded-capacity" :
+                                                     target.W >= 2200 ? "lumbermill:lumber-construction-aid" :
+                                                                        "forge:forge-efficient-smelting";
+                        SetPrivateField(panel, "_selectedResearchKey", selectedResearchKey);
+                        InvokePrivate(panel, "Render");
+                    }
                     Canvas.ForceUpdateCanvases();
                     canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
                     return canvas != null && RenderCanvasToPng(canvas,
@@ -7151,6 +7236,10 @@ namespace DeNelle.Editor
                     if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
                     if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
                     if (gatedTier != null) gatedTier.RequiresVillageTier = priorGate;
+                    // Leave the static registry exactly as this frame found it: we clear ONLY when
+                    // this frame is the one that filled an empty registry, so a registry another
+                    // capture (or a real bootstrap) owns is never wiped.
+                    if (hydratedCatalog) DeNelle.Core.Catalog.CatalogRegistry.Clear();
                     PanelManager.CloseAll();
                 }
             });
@@ -7168,8 +7257,15 @@ namespace DeNelle.Editor
             queue.Enqueue(JobKind.TrainTroop, ChannelId.Train, "train:archer:capture-b", 360d);
             queue.Enqueue(JobKind.TrainTroop, ChannelId.Train, "train:militia:capture-c", 240d);
 
+            // ⚠ THE PERK ID WAS NOT REAL. This read "building-research:arcane-tower:warding" and
+            // building-tiers.json authors NO perk 'warding' — the arcane-tower tier-3 perk is
+            // 'arcane-warding-runes'. BuildingPerkService.IsResearching compares the WHOLE job id
+            // (BuildingPerkService.cs:128-131), so the mismatch meant NO perk ever read as
+            // in-progress and the "Researching" state word was unreachable in every capture.
+            // Ruling 3.9 also parses index 2 of this id to resolve the NOW band's perk icon, which
+            // an invented id would silently fail.
             queue.Enqueue(JobKind.BuildingResearch, ChannelId.Research,
-                "building-research:arcane-tower:warding", 540d);
+                "building-research:arcane-tower:arcane-warding-runes", 540d);
             queue.Enqueue(JobKind.TroopUpgrade, ChannelId.Research, "troop-upgrade:militia", 720d, 2);
             queue.Enqueue(JobKind.LearnMagic, ChannelId.Research, "magic:frost-nova", 480d);
         }

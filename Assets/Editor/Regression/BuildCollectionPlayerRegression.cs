@@ -115,14 +115,32 @@ namespace DeNelle.Editor.Regression
                 return Fail("separate Upgrade Defenses card no longer opens the placed-defense upgrade destination", out reason);
             string managePanel = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs");
             string manageVm = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs");
-            if (!managePanel.Contains("UPGRADABLE TOWERS - affordable first") ||
-                !managePanel.Contains("\"Build defense\", OpenDefenseBuilder") ||
+            // -- WO-1422 ruling 3.4 --------------------------------------------
+            // RE-POINTED 2026-09-06. This block used to open with
+            //   !managePanel.Contains("UPGRADABLE TOWERS - affordable first")
+            // which required the PAGED Defense list's section heading. WO-1422 replaces that list
+            // with the WO-1418 workspace (portrait rail + one selected card + BUILDING NOW), so the
+            // heading is gone -- and it was never true anyway: the Defense tab also lists walls, a
+            // crystal mine, a healing caravan and three storage containers (ruling 3.2). Keeping the
+            // pin would have made this suite block the ruling, and its own failure text would have
+            // gone on asserting the retired design (CLAUDE.md section 15).
+            //
+            // What this suite is actually FOR -- "the Upgrade Defenses card opens a destination that
+            // WORKS" -- is unchanged and now stated as the destination method plus the SECONDARY
+            // BUILD ROUTE, which ruling 3.4 explicitly keeps verbatim.
+            // RED PROOF: delete RenderDefenseDestination from ManageScreenPanel.cs.
+            if (!managePanel.Contains("private void RenderDefenseDestination("))
+                return Fail("Manage's Defense tab has no RenderDefenseDestination, so the Upgrade Defenses card opens onto nothing", out reason);
+            // ⛔ THIS EXACT CALL MUST STAY GREEN (ruling 3.4). It is the Defense destination's footer
+            // door and ManageApprovedLauncherRegression:52 pins the same literal.
+            // RED PROOF: delete the AddActionNoteRow("Need another tower?", "Build defense", OpenDefenseBuilder) footer.
+            if (!managePanel.Contains("\"Build defense\", OpenDefenseBuilder") ||
                 !managePanel.Contains("controller?.EnterBuildMode(DeNelle.Core.Catalog.BuildType.Defense)") ||
                 !managePanel.Contains("Action<string>") ||
                 !manageVm.Contains("PlacedStructureUpgradeService.MaxLevelFor") ||
                 !manageVm.Contains("UpgradeCostFor(entry, level)") ||
                 !manageVm.Contains("grid \" + placed.cellX"))
-                return Fail("Defense upgrade screen lost identity/location, authority cost, empty state, or secondary build route", out reason);
+                return Fail("Defense upgrade screen lost its authority ceiling, authority cost, placed-instance identity, or the secondary Build-defense route", out reason);
             reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus separate Upgrade Defenses card, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam; WO-1417 kit-card: item card is the kit obsidian plate + gold bezel, cost through the one shared formatter, no bracket glyph and no NO COST in any palette string literal";
             return true;
         }

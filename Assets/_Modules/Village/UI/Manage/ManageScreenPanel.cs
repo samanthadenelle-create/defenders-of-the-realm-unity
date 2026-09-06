@@ -214,11 +214,19 @@ namespace DeNelle.Village.UI
         private const float DrawerModeMinPx = SectionHeaderPx + RowHeightPx + 20f;
         private const string TrainingNowPrefix = "TroopTrainingNow";   // band + its extra rows
         private const string BuildingNowPrefix = "BuildingNow";       // building band + its extra rows
+        // WO-1422: Research rides its OWN channel, so it needs its own collapse prefix. Defence
+        // deliberately has none - it reuses the Builder band verbatim (ruling 3.3), so
+        // BuildingNowPrefix already collapses it and a second name for one queue is never minted.
+        private const string ResearchNowPrefix = "ResearchNow";       // research band + its extra rows
 
         private ManageScreenVM _vm;
-        private int _browsePage;
+        // WO-1422: _browsePage is GONE with the pager it indexed. Its only reader was the paged
+        // browse block in RenderList; leaving a field three call sites still reset would be state
+        // nothing consumes - the same dead-code-that-looks-alive shape ruling 3.4 deletes.
         private string _selectedTroopId;
         private string _selectedBuildingId;
+        private string _selectedDefenseId;      // WO-1422: one selection per TYPE (ruling 3.1)
+        private string _selectedResearchKey;    // WO-1422: "<buildingId>:<perkId>" (ResearchKeyOf)
         private GameObject _ui;
         private RectTransform _listContent;
         private GameObject _operationalListBand;
@@ -377,7 +385,10 @@ namespace DeNelle.Village.UI
             if (string.Equals(requestedTab, "Defense", StringComparison.OrdinalIgnoreCase))
             {
                 ShowOperational(ManageTab.Defense);
-                FlowTrace.Step("Manage", "context open -> UPGRADABLE TOWERS (Defense tab).");
+                // WO-1422: the destination is the Defence rail + card workspace. The old heading
+                // this line echoed retired with the paged list (ruling 3.2 - it claimed "towers"
+                // while the tab also lists walls, the mine, the caravan and three containers).
+                FlowTrace.Step("Manage", "context open -> Defense destination (rail + selected card).");
                 return;
             }
             if (string.Equals(requestedTab, "Buildings", StringComparison.OrdinalIgnoreCase))
@@ -939,7 +950,6 @@ namespace DeNelle.Village.UI
 
         private void ShowOperational(ManageTab tab)
         {
-            _browsePage = 0;
             if (_launcherHost != null) _launcherHost.gameObject.SetActive(false);
             if (_operationalWell != null) _operationalWell.gameObject.SetActive(true);
             if (_stripHost != null) _stripHost.gameObject.SetActive(true);
@@ -1174,9 +1184,12 @@ namespace DeNelle.Village.UI
             _queueDrawer.SetActive(false);
         }
 
-        /// <summary>WO-1393/1418: the drawer is a BAND below either selected-card workspace;
-        /// Defense and Research retain the WO-1368 full-body drawer.</summary>
-        private bool DrawerInBandMode => _vm != null && (_vm.Tab == ManageTab.Troops || _vm.Tab == ManageTab.Buildings);
+        /// <summary>WO-1393/1418/1422: the drawer is a BAND below the selected-card workspace, and
+        /// since WO-1422 ALL FOUR destinations carry that workspace - so all four are band mode and
+        /// the WO-1368 full-body drawer no longer has a tab that uses it (it stays for safety).
+        /// ⛔ APPEND ONLY: ManageBuildingsCardRegression.cs:154 pins the verbatim substring
+        /// "ManageTab.Troops || _vm.Tab == ManageTab.Buildings" - reordering these terms fails it.</summary>
+        private bool DrawerInBandMode => _vm != null && (_vm.Tab == ManageTab.Troops || _vm.Tab == ManageTab.Buildings || _vm.Tab == ManageTab.Defense || _vm.Tab == ManageTab.Research);
 
         /// <summary>
         /// ⛔ WO-1393 - THE ONE PLACE THE DRAWER, THE LIST BAND AND THE TRAINING NOW BAND ARE
@@ -1199,7 +1212,8 @@ namespace DeNelle.Village.UI
                 {
                     var child = _listContent.GetChild(i);
                     if (child.name.StartsWith(TrainingNowPrefix, StringComparison.Ordinal) ||
-                        child.name.StartsWith(BuildingNowPrefix, StringComparison.Ordinal))
+                        child.name.StartsWith(BuildingNowPrefix, StringComparison.Ordinal) ||
+                        child.name.StartsWith(ResearchNowPrefix, StringComparison.Ordinal))   // WO-1422
                         child.gameObject.SetActive(!band);
                 }
 
@@ -1402,12 +1416,31 @@ namespace DeNelle.Village.UI
                     objectName.StartsWith("ManageCard_", StringComparison.Ordinal) ||
                     objectName.StartsWith("TroopChoice_", StringComparison.Ordinal) ||
                     objectName.StartsWith("BuildingChoice_", StringComparison.Ordinal) ||
+                    // WO-1422 POLISH (MEASURED 2026-09-06, ManageDefense/ManageResearch_2670x1200.png):
+                    // the two NEW rails were MISSING from this skip-list, so the bulk pass below ran
+                    // MedievalUiSkin.ApplyButton on every rail row - and that method rewrites the
+                    // row's FIRST label (MedievalUiSkin.cs:83-95): ToUpperInvariant, characterSpacing
+                    // 2, the wide TITLE face, and a re-fit whose floor is 30 instead of the rail's 26.
+                    // "Archer Tower" became "ARCHER T..." and "Expanded Capacity" "EXPANDE..." while
+                    // the Troops rail, already skipped here, fitted "Footman" at the same width.
+                    // The rail row is a FLAT selectable face, never a gold button plate - same reason
+                    // TroopChoice_ is on this list.
+                    objectName.StartsWith("DefenseChoice_", StringComparison.Ordinal) ||
+                    objectName.StartsWith("ResearchChoice_", StringComparison.Ordinal) ||
                     // WO-1382: the two card CTAs are skinned by their builder (TRAIN primary,
                     // UPGRADE secondary) - the copy-keyed pass below would promote "UPGRADE TO L2"
                     // to primary and erase the one-primary hierarchy the owner asked for. The
                     // Training-chip tap plate has no label and must never be painted as a CTA.
                     objectName.StartsWith("TroopCta_", StringComparison.Ordinal) ||
                     objectName.StartsWith("BuildingCta_", StringComparison.Ordinal) ||
+                    // WO-1422 POLISH - same reason, INFERRED from the copy test below rather than
+                    // measured in a frame: BuildDefenseCard / BuildResearchCard already call
+                    // MedievalUiSkin.ApplyButton with the correct primary flag, and the copy-keyed
+                    // pass would re-promote the GRAY dead faces ("RESEARCHING" contains "RESEARCH",
+                    // "UPGRADE TO L2" contains "UPGRADE") to the primary face, erasing the
+                    // one-primary hierarchy the owner asked for.
+                    objectName.StartsWith("DefenseCta_", StringComparison.Ordinal) ||
+                    objectName.StartsWith("ResearchCta_", StringComparison.Ordinal) ||
                     objectName.StartsWith("ManageLineStatus_", StringComparison.Ordinal)) continue;
 
                 var label = button.GetComponentInChildren<TMP_Text>(true);
@@ -1696,6 +1729,21 @@ namespace DeNelle.Village.UI
                 return;
             }
 
+            // WO-1422 (owner ruling 2026-09-06): Defence and Research take the SAME rail + card +
+            // NOW band + footer shape as Buildings. The paged text list they used to share is
+            // retired with its pager and its row painter - see ruling 3.4.
+            if (_vm.Tab == ManageTab.Defense)
+            {
+                RenderDefenseDestination(channel);
+                return;
+            }
+
+            if (_vm.Tab == ManageTab.Research)
+            {
+                RenderResearchDestination(channel);
+                return;
+            }
+
             // The DEMOTED rail (see the band budget): its own fixed-pixel row at the head of the
             // list, so it keeps its full 200px and simply scrolls away instead of overprinting.
             if (!_railPinned)
@@ -1705,26 +1753,19 @@ namespace DeNelle.Village.UI
             // The selected structure and its action lead the scroll content, keeping the primary
             // task above the queue history on a phone viewport.
             AddSectionHeader(BrowseHeading(_vm.Tab));
+            // ⛔ WO-1422 - THE PAGED BROWSE PATH IS RETIRED AND IS NOT COMING BACK.
+            // Every one of the four Manage destinations now branches above into its own rail +
+            // card workspace, so the page-count sentence, its two page doors, AddBrowseRow and
+            // BuildBrowseRowContent had no reachable call site left. They are DELETED rather than
+            // parked: a private method with zero callers is dead code that LOOKS like a shipped
+            // feature - the exact failure ManageQueueDrawerRegression's [rows-have-a-home] case was
+            // written to catch for the drawer's own row builder. The VM's BrowseRows STAYS (three
+            // suites drive it, and the Troops "Saved army compositions" row still reads it); only
+            // the PANEL stopped painting it.
+            // ⚠ Nothing in THIS method may name the drawer's row builder, not even in a comment:
+            // [rows-not-inline] bans that token anywhere inside RenderList's body.
             if (_vm.BrowseRows.Count == 0)
                 AddNoteRow(BrowseEmptyState(_vm.Tab));
-            else
-            {
-                const int pageSize = 4;
-                int pageCount = Mathf.CeilToInt(_vm.BrowseRows.Count / (float)pageSize);
-                _browsePage = Mathf.Clamp(_browsePage, 0, pageCount - 1);
-                int first = _browsePage * pageSize;
-                int end = Mathf.Min(first + pageSize, _vm.BrowseRows.Count);
-                AddNoteRow("Showing " + (first + 1) + "-" + end + " of " + _vm.BrowseRows.Count +
-                           " - page " + (_browsePage + 1) + " of " + pageCount);
-                for (int i = first; i < end; i++) AddBrowseRow(_vm.BrowseRows[i]);
-                if (_browsePage > 0)
-                    AddActionNoteRow("Earlier placed structures", "Previous page", () => { _browsePage--; Render(); });
-                if (end < _vm.BrowseRows.Count)
-                    AddActionNoteRow((_vm.BrowseRows.Count - end) + " more placed structures", "Next page", () => { _browsePage++; Render(); });
-            }
-
-            if (_vm.Tab == ManageTab.Defense)
-                AddActionNoteRow("Need another tower?", "Build defense", OpenDefenseBuilder);
 
             // ⛔ NO QUEUE ROWS HERE, AND THE VERBS ARE NOT MISSING — THEY ARE IN THE DRAWER.
             // Queue inspection and queue actions live in the explicit header Queue drawer
@@ -1763,6 +1804,115 @@ namespace DeNelle.Village.UI
                 if (_vm.Channels[i].Channel == channel) return _vm.Channels[i].Describe();
             return BuildTimerService.ChannelWord(channel);
         }
+
+        // =====================================================================
+        //  WO-1422 - THE DEFENCE AND RESEARCH DESTINATIONS
+        // ---------------------------------------------------------------------
+        // ⛔ PLACEMENT IS LOAD-BEARING. Both live AFTER FindSummary and BEFORE
+        // RenderBuildingsDestination. ManageQueueDrawerRegression.cs:90 and
+        // ManageBuildingsCardRegression.cs:158 both scope their bans to
+        // Body(panel, "private void RenderList()", "private string FindSummary"); anything defined
+        // inside that window enters the ban. ManageBuildingsCardRegression.cs:141 scopes the
+        // Buildings destination to Body("RenderBuildingsDestination(", "AddBuildingWorkspaceRow("),
+        // so nothing may be inserted between those two either. This gap is the one seat that is
+        // outside every window. Do not move these methods.
+        // =====================================================================
+
+        /// <summary>
+        /// WO-1422 ruling 3.1/3.3: the Defence destination is the Buildings shape - one rail row
+        /// per placed upgradable TYPE (never per instance: wall_wood alone would make the rail
+        /// unbounded), one selected card, and the SHARED Builder band, named BUILDING NOW.
+        /// Defence and Buildings ride ONE queue; a second name for it would be duplicated state.
+        /// </summary>
+        private void RenderDefenseDestination(ChannelId channel)
+        {
+            if (_vm == null) return;
+            if (_vm.DefenseChoices.Count == 0)
+            {
+                // The no-fixture Defence capture (RunManageDefenseCaptureHeadless) renders exactly
+                // this path, and two suites pin the "Build defense" door off it.
+                AddNoteRow(BrowseEmptyState(ManageTab.Defense));
+                AddActionNoteRow("Need another tower?", "Build defense", OpenDefenseBuilder);
+                MakeRowHost("ListTailSpacer", ListTailPx);
+                FlowTrace.Warn("Manage", "defense destination has no upgradable placed types - " +
+                    "empty state + the Build defense door are the whole screen");
+                return;
+            }
+
+            DefenseChoiceVM selected = null;
+            for (int i = 0; i < _vm.DefenseChoices.Count; i++)
+                if (string.Equals(_vm.DefenseChoices[i].Id, _selectedDefenseId, StringComparison.OrdinalIgnoreCase))
+                { selected = _vm.DefenseChoices[i]; break; }
+            if (selected == null)
+            {
+                // DefenseChoiceVM carries no Locked flag (lane A contract); "has something to do"
+                // is Activate != null, which is null only at Max.
+                for (int i = 0; i < _vm.DefenseChoices.Count; i++)
+                    if (_vm.DefenseChoices[i] != null && _vm.DefenseChoices[i].Activate != null)
+                    { selected = _vm.DefenseChoices[i]; break; }
+                if (selected == null) selected = _vm.DefenseChoices[0];
+                _selectedDefenseId = selected.Id;
+            }
+
+            AddDefenseWorkspaceRow(selected);
+            AddBuildingNowBand();   // ruling 3.3 - the ONE Builder rail, verbatim
+            AddActionNoteRow("Need another tower?", "Build defense", OpenDefenseBuilder);
+            if (!string.IsNullOrEmpty(_vm.RepairOfferText))
+                AddActionNoteRow(_vm.RepairOfferText, "Repair", () => { _vm.RepairAll(); FlushNotice(); });
+            MakeRowHost("ListTailSpacer", ListTailPx);
+            FlowTrace.Step("Manage", "defense destination: rail=" + _vm.DefenseChoices.Count +
+                " selected=" + selected.Id + " placed=" + selected.PlacedCount +
+                " level=" + selected.Level + " jobs=" + _vm.QueueRows.Count +
+                " (channel=" + channel + ", shared with Buildings)");
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.6/3.7: the Research destination is the Buildings shape - one rail row
+        /// per authored PERK (never per building: a per-building card would need three or four
+        /// verbs in one CTA band and no card grammar here supports that), one selected card
+        /// showing the whole tree including Researched and Researching, and its own RESEARCHING NOW
+        /// band. Research has no LEVEL, so the card's level slot carries the tier requirement.
+        /// </summary>
+        private void RenderResearchDestination(ChannelId channel)
+        {
+            if (_vm == null) return;
+            if (_vm.ResearchChoices.Count == 0)
+            {
+                AddNoteRow(BrowseEmptyState(ManageTab.Research));
+                MakeRowHost("ListTailSpacer", ListTailPx);
+                FlowTrace.Warn("Manage", "research destination has no perk choices - no owned " +
+                    "building authors a tier ladder in this town");
+                return;
+            }
+
+            ResearchChoiceVM selected = null;
+            for (int i = 0; i < _vm.ResearchChoices.Count; i++)
+                if (string.Equals(ResearchKeyOf(_vm.ResearchChoices[i]), _selectedResearchKey, StringComparison.OrdinalIgnoreCase))
+                { selected = _vm.ResearchChoices[i]; break; }
+            if (selected == null)
+            {
+                for (int i = 0; i < _vm.ResearchChoices.Count; i++)
+                    if (_vm.ResearchChoices[i] != null && !_vm.ResearchChoices[i].Locked)
+                    { selected = _vm.ResearchChoices[i]; break; }
+                if (selected == null) selected = _vm.ResearchChoices[0];
+                _selectedResearchKey = ResearchKeyOf(selected);
+            }
+
+            AddResearchWorkspaceRow(selected);
+            AddResearchNowBand();
+            MakeRowHost("ListTailSpacer", ListTailPx);
+            FlowTrace.Step("Manage", "research destination: rail=" + _vm.ResearchChoices.Count +
+                " selected=" + ResearchKeyOf(selected) + " state=" + (selected.StateWord ?? "<null>") +
+                " jobs=" + _vm.QueueRows.Count + " (channel=" + channel + ")");
+        }
+
+        /// <summary>
+        /// The Research selection key. ⛔ SHAPE IS A CROSS-LANE CONTRACT: "&lt;buildingId&gt;:&lt;perkId&gt;",
+        /// which is BuildingPerkService.Key's shape (BuildingPerkService.cs:68) and the shape the
+        /// capture fixture writes into _selectedResearchKey. Compose it in exactly one place.
+        /// </summary>
+        private static string ResearchKeyOf(ResearchChoiceVM choice) =>
+            choice == null ? null : (choice.BuildingId ?? "") + ":" + (choice.PerkId ?? "");
 
         private void RenderBuildingsDestination(ChannelId channel)
         {
@@ -1860,7 +2010,6 @@ namespace DeNelle.Village.UI
             button.onClick.AddListener(() =>
             {
                 _selectedBuildingId = choice.Id;
-                _browsePage = 0;
                 FlowTrace.Step("Manage", "building rail selected=" + choice.Id);
                 Render();
             });
@@ -2026,10 +2175,17 @@ namespace DeNelle.Village.UI
                 return;
             }
 
+            // WO-1422 ruling 3.5 (owner: "Keep one door, but name what's behind it"): the second
+            // door is no longer the developer word VIEW DETAILS. It carries the VM's DoorLabel -
+            // "PERKS" on a ladder that authors perks - and is HIDDEN when DoorLabel is null (the
+            // Farm authors zero perks, so the Farm card is ONE full-width CTA; that is the
+            // feature). ⛔ The GameObject NAME stays BuildingCta_Details - ManageBuildingsCardRegression
+            // pins it, and renaming it breaks the pin for no player-visible gain.
+            bool hasDoor = !string.IsNullOrEmpty(selected.DoorLabel);
             var upgrade = ElarionUiKit.BuildObsidianButton(card, "UPGRADE TO L" + selected.NextTier,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 selected.UpgradeReady ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1),
+                new Vector2(0.02f, TroopCtaY0), new Vector2(hasDoor ? 0.48f : 0.98f, TroopCtaY1),
                 () => Guard.Try("Manage", "upgrade building", () => selected.Activate?.Invoke()));
             if (upgrade != null)
             {
@@ -2039,10 +2195,18 @@ namespace DeNelle.Village.UI
             }
             ElarionUiKit.ClampMinTouch(upgrade);
 
-            var details = ElarionUiKit.BuildObsidianButton(card, "VIEW DETAILS",
+            if (!hasDoor)
+            {
+                FlowTrace.Step("Manage", "building card " + selected.Id +
+                    " has no second door (DoorLabel null) - UPGRADE is full width");
+                return;
+            }
+
+            var details = ElarionUiKit.BuildObsidianButton(card,
+                ManageScreenVM.Ascii(selected.DoorLabel.ToUpperInvariant()),
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
-                () => Guard.Try("Manage", "view building details", () => selected.ViewDetails?.Invoke()));
+                () => Guard.Try("Manage", "open building door " + selected.DoorLabel, () => selected.ViewDetails?.Invoke()));
             if (details != null) details.gameObject.name = "BuildingCta_Details";
             ElarionUiKit.ClampMinTouch(details);
         }
@@ -2093,9 +2257,25 @@ namespace DeNelle.Village.UI
 
             var first = _vm.QueueRows[0];
             if (first != null)
+            {
+                // WO-1422 POLISH (MEASURED 2026-09-06, ManageDefense_2670x1200.png): this ONE band
+                // serves Buildings AND Defence (ruling 3.3), and on Defence it read "Tower Ground
+                // Archer..." beside an art-less medallion. A placed-structure upgrade is not a
+                // BuildingTierCatalog row, so QueueRowVM.BuildingId is empty and FindBuildingChoice
+                // can never match it. The Defence tab therefore resolves the job against
+                // DefenseChoices - exactly the way ResearchJobSprite matches ResearchChoices, which
+                // is the band that already reads "Warding Runes" with its real perk icon.
+                // ⛔ The Buildings expression below stays VERBATIM (ManageBuildingsCardRegression
+                // pins `BuildingSprite(FindBuildingChoice(first.BuildingId))` as a literal).
+                DefenseChoiceVM defenseJob = _vm.Tab == ManageTab.Defense ? FindDefenseChoiceForJob(first) : null;
+                Sprite jobArt = defenseJob != null
+                    ? DefenseSprite(defenseJob)
+                    : BuildingSprite(FindBuildingChoice(first.BuildingId));
+                string jobLabel = defenseJob != null ? ManageScreenVM.Ascii(defenseJob.Name ?? "") : null;
                 Guard.Try("Manage", "building now job 1", () => BuildTroopTrainingNowJob(band, 1, first,
                     0.175f, 0.205f, 0.21f, 0.27f, 0.28f, 0.45f, 0.46f, 0.60f, 0.61f, ClusterX1 + 0.01f,
-                    BuildingSprite(FindBuildingChoice(first.BuildingId))));
+                    jobArt, jobLabel));
+            }
             if (hiddenJobs > 0)
                 FlowTrace.Step("Manage", "building now capped inside band: painted=1 hidden=" + hiddenJobs);
         }
@@ -2235,7 +2415,6 @@ namespace DeNelle.Village.UI
             button.onClick.AddListener(() =>
             {
                 _selectedTroopId = choice.Id;
-                _browsePage = 0;
                 // WO-1389: the REAL rail tap is a route hop of the post-raid beat ("Pick a troop" ->
                 // the UPGRADE face). Raised BEFORE Render so the spotlight's next target (the CTA
                 // face, registered by BuildTroopCard) is rebuilt on the same frame it is asked for.
@@ -2305,7 +2484,8 @@ namespace DeNelle.Village.UI
             plate.GetComponent<Image>().raycastTarget = false;
 
             // Card bands at TroopWorkspacePx = 260 (see the fold arithmetic on the constants):
-            //   name + LEVEL   0.745-1.000 -> 66px   (title line box <= 48 fits)
+            //   name + LEVEL   0.845-1.000 -> 40px   (a 30px title line needs ~35px)
+            //   army + badge   0.740-0.840 -> 26px   (WO-1422 polish; 18px CULLED both labels)
             //   desc + status  0.585-0.735 -> 39px   (one line, 24-30)
             //   train fact     0.455-0.575 -> 31px   (one line, 22-26)
             //   CTAs           0.010-0.445 -> 113px  >= MinTouchPx
@@ -2319,16 +2499,41 @@ namespace DeNelle.Village.UI
             // NAME band at title size + LEVEL n right-aligned, always on screen (it is the first
             // band of a row that starts at scroll 0 - the name can no longer scroll off the top).
             var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
-                0.82f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                0.845f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
                 TextAlignmentOptions.Left, 0.19f, 0.74f, bold: true);
             ElarionUiKit.FitSingleLine(name, 30f, 48f);
-            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.82f, 1.0f, ElarionUi.Parchment,
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.845f, 1.0f, ElarionUi.Parchment,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.75f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(level, 26f, 36f);
+            // WO-1422 ruling 3.10.1: the army summary gives up its right edge (x1 0.98 -> 0.72) so
+            // the state-word badge has a seat. ⚠ DELIBERATE DEVIATION from "the same zone Buildings
+            // uses" (0.74,0.70)-(0.98,0.83): on the Troops card that rect overprints BOTH the army
+            // line (y 0.745-0.815) and the top of the status label (y 0.585-0.735, x 0.71-0.98),
+            // because the Buildings card has no army line. The badge takes the army band's right
+            // half instead - same x, y clipped to the army band - which overlaps nothing.
+            //
+            // ⚠ WO-1422 POLISH (MEASURED 2026-09-06, ManageTroops_1920x1080.png): the badge PLATE
+            // painted and its WORD did not, and the army summary beside it was missing too. Neither
+            // was a text bug - the band was 0.745-0.815 = 0.07 x TroopWorkspacePx(260) = 18.2px, and
+            // TMP's Ellipsis overflow CULLS THE WHOLE LINE when the line at fontSizeMin cannot seat
+            // in the rect (ElarionUiKitObsidian.cs:3110-3116 states this as the proven cause of the
+            // "bare plate" class). FitSingleLine's floor is FontHardFloor=20, whose line is ~23-24px,
+            // so nothing in an 18px band can ever render. The band is now 0.74-0.84 = 26px and the
+            // NAME band gives up the 0.025 it can spare (it keeps 40.3px, well over the ~35px a
+            // 30px title line needs). ⛔ Never re-shrink a text band below ~24px on this card.
             var army = ElarionUiKit.Label(card, ManageScreenVM.Ascii(_vm.TroopArmySummaryText ?? ""),
-                0.745f, 0.815f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
-                TextAlignmentOptions.Left, 0.19f, 0.98f);
+                0.74f, 0.84f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.19f, 0.72f);
             ElarionUiKit.FitSingleLine(army, 18f, 26f);
+            if (!string.IsNullOrEmpty(selected.StateWord))
+            {
+                var troopBadge = ElarionUiKit.AddImage(card, "TroopStateBadge", new Vector2(0.74f, 0.74f),
+                    new Vector2(0.98f, 0.84f), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
+                troopBadge.GetComponent<Image>().raycastTarget = false;
+                var troopState = ElarionUiKit.Label(troopBadge.transform, ManageScreenVM.Ascii(selected.StateWord), 0f, 1f,
+                    ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
+                ElarionUiKit.FitSingleLine(troopState, 18f, 26f);
+            }
 
             // Description left, status WORD ("Available" / "Requires Barracks Tier 2") right, one
             // band - words carry the state; the old green/red tint pair was the same colour to a
@@ -2362,8 +2567,33 @@ namespace DeNelle.Village.UI
             // The fact SENTENCE (ruling #4) - composed by the VM, painted here, directly ABOVE the
             // TRAIN button it explains.
             var trainFact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.TrainFactText ?? ""), 0.455f, 0.575f,
-                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.49f, bold: true);
             ElarionUiKit.FitSingleLine(trainFact, 22f, 26f);
+
+            // WO-1422 ruling 3.10.2 - THE MEASURED TRUNCATION FIX. On the device the destination
+            // sentence rode the UPGRADE face's sub-line as the THIRD clause and was cut mid-word:
+            // "4m 30s . Ready . L3 unlocks Sweepi...". It now has its own row, at Buildings'
+            // wording ("After upgrade: <benefit>"), and the sub-line keeps only cost + state.
+            // ⚠ DELIBERATE DEVIATION from the WO's literal y 0.445-0.535: that band is already the
+            // train-fact row on this card (0.455-0.575) and Buildings has no such row. The split is
+            // HORIZONTAL instead - each sentence sits directly above the button it explains, which
+            // is WO-1382 ruling #4's actual requirement: train fact over TRAIN (x 0.02-0.49),
+            // upgrade benefit over UPGRADE (x 0.51-0.98). No font was shrunk to make it fit.
+            var troopBenefit = ElarionUiKit.Label(card,
+                string.IsNullOrEmpty(selected.NextUnlockText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.NextUnlockText),
+                0.455f, 0.575f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.51f, 0.98f);
+            ElarionUiKit.FitSingleLine(troopBenefit, ElarionUiKit.FontHardFloor, 26f);
+
+            // WO-1422 ruling 3.10.3 / 3.5: the Troops card's CTA band carries TWO faces at the
+            // touch floor (113.1px tall, 0.02-0.48 and 0.52-0.98) and has NO third slot. Ruling
+            // 3.10's own escape hatch says drop the SECOND DOOR before the touch height, so a
+            // DoorLabel authored here is REPORTED, never squeezed in.
+            if (!string.IsNullOrEmpty(selected.DoorLabel))
+                FlowTrace.Warn("Manage", "troop " + selected.Id + " authors DoorLabel='" + selected.DoorLabel +
+                    "' but the Troops CTA band already holds TRAIN + UPGRADE at the 112px floor - " +
+                    "the door is NOT painted (WO-1422 ruling 3.10 escape hatch). A third face needs a " +
+                    "taller card, which is the Phase 2 unification WO.");
 
             // THE DOOR is unchanged: the VM's verb-led "Train <name>" row -> TrainTroop ->
             // BarracksService.EnqueueTraining -> the Train line. One job per tap, no count picker
@@ -2399,13 +2629,11 @@ namespace DeNelle.Village.UI
                 string upgradeSub = string.IsNullOrEmpty(selected.UpgradeCostText)
                     ? selected.UpgradeStateText
                     : selected.UpgradeCostText + " . " + selected.UpgradeStateText;
-                // WO-1389: the DESTINATION rides the same sub-line ("1m 30s . Ready . L3 unlocks
-                // Sweeping Cut") - the 260px card has no spare band, and the sentence must stay
-                // with the button it explains (ruling #4). FitSingleLine shrinks, never clips.
-                if (!string.IsNullOrEmpty(selected.NextUnlockText))
-                    upgradeSub = string.IsNullOrEmpty(upgradeSub)
-                        ? selected.NextUnlockText
-                        : upgradeSub + " . " + selected.NextUnlockText;
+                // ⛔ WO-1422 ruling 3.10.2: NextUnlockText NO LONGER rides this sub-line. WO-1389
+                // appended it as a third clause ("1m 30s . Ready . L3 unlocks Sweeping Cut") and
+                // the device frame proved it truncates. It is painted as its own row above this
+                // face (troopBenefit) - the panel still READS the field, which is what
+                // ManageTroopsTrainDoorRegression case 7 asserts.
                 upgrade = BuildTwoLineCta(card, "UPGRADE TO L" + (selected.Level + 1), upgradeSub,
                     ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
@@ -2498,8 +2726,12 @@ namespace DeNelle.Village.UI
                 Guard.Try("Manage", "training now row " + ordinal, () =>
                 {
                     var row = MakeRowHost("TroopTrainingNowRow_" + ordinal, TrainingNowRowPx);
+                    // WO-1422 POLISH (MEASURED 2026-09-06, ManageTroops_1920x1080.png): at alpha
+                    // 0.28 over the dark screen the extra rows had no visible plate at all, so
+                    // "2. Archer x1" read as SPILLING BELOW the TRAINING NOW band rather than as
+                    // its continuation. Same plate colour as the band above it - one band, two rows.
                     var plate = ElarionUiKit.AddImage(row, "RowPlate", Vector2.zero, Vector2.one,
-                        new Color(0f, 0f, 0f, 0.28f));
+                        new Color(0.05f, 0.04f, 0.03f, 0.70f));
                     plate.GetComponent<Image>().raycastTarget = false;
                     BuildTroopTrainingNowJob(row, ordinal, r,
                         0.005f, 0.05f, 0.055f, 0.115f, 0.13f, 0.46f, 0.48f, 0.78f, 0.80f, 0.99f);
@@ -2515,7 +2747,8 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void BuildTroopTrainingNowJob(RectTransform row, int ordinal, QueueRowVM r,
             float numX0, float numX1, float medX0, float medX1, float nameX0, float nameX1,
-            float barX0, float barX1, float timeX0, float timeX1, Sprite artOverride = null)
+            float barX0, float barX1, float timeX0, float timeX1, Sprite artOverride = null,
+            string labelOverride = null)
         {
             var number = ElarionUiKit.Label(row, ordinal + ".", 0.15f, 0.85f, ElarionUi.Gold,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, numX0, numX1, bold: true);
@@ -2525,7 +2758,14 @@ namespace DeNelle.Village.UI
             Sprite art = artOverride ?? (!string.IsNullOrEmpty(r.IconRole) ? RpgUiCatalog.Get(r.IconRole, r.IconKey) : null);
             ElarionUiKit.Portrait(medallion, art, active: !r.Queued);
 
-            var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.15f, 0.85f, ElarionUi.Parchment,
+            // WO-1422 POLISH: labelOverride wins when the CALLER can name the job better than the
+            // queue row can. A placed-structure upgrade carries no BuildingTierCatalog identity
+            // (ManageScreenVM.cs:765-772 leaves BuildingId empty and falls back to
+            // ObsidianQueueHud.FormatJobTarget), so the Builder band printed the raw job key
+            // title-cased - "Tower Ground Archer..." - measured in ManageDefense_2670x1200.png.
+            var name = ElarionUiKit.Label(row,
+                string.IsNullOrEmpty(labelOverride) ? ManageScreenVM.Ascii(r.Label ?? "") : labelOverride,
+                0.15f, 0.85f, ElarionUi.Parchment,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, nameX0, nameX1, bold: true);
             ElarionUiKit.FitSingleLine(name, 24f, 36f);
 
@@ -2565,11 +2805,650 @@ namespace DeNelle.Village.UI
             }
         }
 
+        // =====================================================================
+        //  WO-1422 — THE DEFENCE WORKSPACE: rail (one row per TYPE) + selected-defence card
+        // ---------------------------------------------------------------------
+        // ⛔ ONE ROW PER TYPE, NEVER PER PLACED INSTANCE (ruling 3.1). wall_wood is upgradable and
+        // a town carries many segments, so a per-instance rail is UNBOUNDED. The card names the
+        // type, says how many are placed and at what level, and its CTA upgrades the FIRST placed
+        // instance at the LOWEST level - which is exactly what the JobKey already targeted before
+        // this ticket, so this is presentation, not behaviour.
+        // =====================================================================
+
+        private void AddDefenseWorkspaceRow(DefenseChoiceVM selected)
+        {
+            var workspace = MakeRowHost("DefenseSplitWorkspace", TroopWorkspacePx);
+            var railZone = MakeZone(workspace, "DefenseSelectorRail", new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+            var railPlate = ElarionUiKit.AddImage(railZone, "RailPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            railPlate.GetComponent<Image>().raycastTarget = false;
+            var railScroll = ElarionUiKit.MakeScrollZone(railZone, spacing: 6f, padding: 8);
+            if (railScroll == null || railScroll.content == null)
+                FlowTrace.Fail("Manage", "defense rail MakeScrollZone returned no content - the rail has no build site.");
+            else
+            {
+                int selectedIndex = 0;
+                _rowParent = railScroll.content;
+                try
+                {
+                    for (int i = 0; i < _vm.DefenseChoices.Count; i++)
+                    {
+                        var choice = _vm.DefenseChoices[i];
+                        if (choice == null) continue;
+                        bool isSelected = string.Equals(choice.Id, selected.Id, StringComparison.OrdinalIgnoreCase);
+                        if (isSelected) selectedIndex = i;
+                        Guard.Try("Manage", "defense rail row " + choice.Id, () => BuildDefenseRailRow(choice, isSelected));
+                    }
+                    MakeRowHost("DefenseRailTailSpacer", TroopWorkspacePx - TroopRailRowPx);
+                }
+                finally { _rowParent = null; }
+
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(railScroll.content);
+                if (railScroll.scroll != null)
+                {
+                    var viewport = railScroll.scroll.viewport;
+                    float viewportPx = viewport != null ? viewport.rect.height : TroopWorkspacePx;
+                    float maxScrollPx = Mathf.Max(0f, railScroll.content.rect.height - viewportPx);
+                    float selectedTopPx = Mathf.Min(maxScrollPx, selectedIndex * (TroopRailRowPx + 6f));
+                    railScroll.scroll.StopMovement();
+                    railScroll.scroll.verticalNormalizedPosition = maxScrollPx > 0.5f
+                        ? 1f - selectedTopPx / maxScrollPx
+                        : 1f;
+                    FlowTrace.Step("Manage", "defense rail aligned row=" + selectedIndex +
+                        " topPx=" + selectedTopPx.ToString("0") + " maxPx=" + maxScrollPx.ToString("0"));
+                }
+            }
+
+            var card = MakeZone(workspace, "DefenseSelectedCard", new Vector2(0.275f, 0f), new Vector2(1f, 1f));
+            BuildDefenseCard(card, selected);
+        }
+
+        private void BuildDefenseRailRow(DefenseChoiceVM choice, bool isSelected)
+        {
+            var row = MakeRowHost("DefenseChoiceRow_" + choice.Id, TroopRailRowPx);
+            var faceGo = ElarionUiKit.AddImage(row, "DefenseChoice_" + choice.Id, Vector2.zero, Vector2.one,
+                isSelected ? new Color(0.24f, 0.18f, 0.08f, 0.90f) : new Color(0f, 0f, 0f, 0.28f), rounded: false);
+            var face = faceGo.GetComponent<Image>();
+            face.raycastTarget = true;
+            var button = faceGo.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.onClick.AddListener(() =>
+            {
+                _selectedDefenseId = choice.Id;
+                FlowTrace.Step("Manage", "defense rail selected=" + choice.Id);
+                Render();
+            });
+            if (isSelected)
+            {
+                var outline = faceGo.AddComponent<Outline>();
+                outline.effectColor = ElarionUi.Gold;
+                outline.effectDistance = new Vector2(4f, -4f);
+                outline.useGraphicAlpha = false;
+            }
+
+            var medallion = MakeZone(faceGo.transform, "Medallion", new Vector2(0.03f, 0.08f), new Vector2(0.27f, 0.92f));
+            ElarionUiKit.Portrait(medallion, DefenseSprite(choice), active: isSelected);
+
+            var name = ElarionUiKit.Label(faceGo.transform, ManageScreenVM.Ascii(choice.Name ?? ""), 0.52f, 0.96f,
+                ElarionUi.Parchment, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.30f, 0.84f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 26f, 38f);
+            // The rail sub-line states the LEVEL the card acts on (the lowest placed) and, when the
+            // type has more than one instance, how many - so "one row" never reads as "one tower".
+            string railState = "Level " + choice.Level +
+                (string.Equals(choice.StateWord, "Max", StringComparison.Ordinal) ? " . Max" :
+                 string.Equals(choice.StateWord, "Building", StringComparison.Ordinal) ? " . Building" : "") +
+                (choice.PlacedCount > 1 ? " . x" + choice.PlacedCount : "");
+            var sub = ElarionUiKit.Label(faceGo.transform, railState,
+                0.06f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.30f, 0.84f);
+            ElarionUiKit.FitSingleLine(sub, 22f, 30f);
+            var chevron = ElarionUiKit.Label(faceGo.transform, ">", 0.10f, 0.90f,
+                isSelected ? ElarionUi.Gold : ElarionUi.ParchmentDim,
+                (int)ElarionUi.FontBody, TextAlignmentOptions.Center, 0.84f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(chevron, 30f, 50f);
+            ElarionUiKit.ClampMinTouch(button);
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.8 — DEFENCE TIER ART. Assets/Resources/Portraits/ holds three tier
+        /// sheets each for archer-tower / ballista / catapult / arcane-spire / wizard-tower plus
+        /// the wall, mine, caravan and storage sheets, and NO code path could reach the tier
+        /// suffix: ResolveEntryArtPublic never appends one, and LoadManageBuildingSprite probes
+        /// only Portraits/Buildings/. This probes, in order: the LEVEL-SUFFIXED key, the base key,
+        /// the shared Build palette (which owns the alias table, e.g. wall_wood -> Wooden_Wall),
+        /// the concept resolver, then warns and falls back to the neutral hammer.
+        /// ⚠ This is NOT BuildingSprite and is deliberately not bound by its [building-art-palette-first]
+        /// ban - and it does not consult ManageBuildingPortraitGaps, which is a Buildings-only list.
+        /// </summary>
+        private static Sprite DefenseSprite(DefenseChoiceVM choice)
+        {
+            if (choice == null) return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+
+            Sprite art = Guard.Try<Sprite>("Manage", "defense art " + (choice.Id ?? "<null>"), () =>
+            {
+                // ResolveBuildingPortraitKey has ALREADY appended the level suffix, so the base key
+                // is recovered by stripping it - never by re-slugging the id a second way.
+                string key = choice.PortraitKey ?? "";
+                string levelSuffix = "-" + choice.Level;
+                string root = choice.Level > 1 && key.EndsWith(levelSuffix, StringComparison.Ordinal)
+                    ? key.Substring(0, key.Length - levelSuffix.Length)
+                    : key;
+                string tierKey = choice.Level > 1 ? root + "-" + choice.Level : null;
+                Sprite found = LoadManageBuildingSpriteAt(tierKey) ?? LoadManageBuildingSpriteAt(root);
+                if (found != null) return found;
+
+                // CatalogRegistry is NOT populated under -executeMethod unless the caller hydrates
+                // it, so Get can legitimately return null here - guard it, never assume.
+                var entry = string.IsNullOrEmpty(choice.CatalogEntryId)
+                    ? null
+                    : DeNelle.Core.Catalog.CatalogRegistry.Get(choice.CatalogEntryId);
+                if (entry == null) return null;
+                return DeNelle.Village.BuildPaletteUI.ResolveEntryArtPublic(entry)
+                       ?? DeNelle.Core.UI.ConceptIconResolver.ResolveAny(entry.id, entry.type.ToString());
+            }, null);
+
+            if (art == null)
+                FlowTrace.Warn("Manage", "defense art unresolved id=" + (choice.Id ?? "<null>") +
+                    " portraitKey=" + (choice.PortraitKey ?? "<null>") +
+                    " level=" + choice.Level + " catalogEntryId=" + (choice.CatalogEntryId ?? "<null>") +
+                    " - add Portraits/<key>[-level]; neutral hammer used");
+            return art ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+        }
+
+        /// <summary>
+        /// The SELECTED DEFENCE card. Same grammar as the Buildings card, plus the "n placed"
+        /// sub-line ruling 3.1 requires so one rail row never reads as one structure. Defence has
+        /// no second door (ruling 3.5: DoorLabel is null), so the CTA is FULL WIDTH.
+        /// </summary>
+        private void BuildDefenseCard(RectTransform card, DefenseChoiceVM selected)
+        {
+            var plate = ElarionUiKit.AddImage(card, "CardPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            plate.GetComponent<Image>().raycastTarget = false;
+            ElarionUiKit.GoldPerimeter(card);
+
+            var medallion = MakeZone(card, "DefensePortrait", new Vector2(0.02f, 0.59f), new Vector2(0.16f, 0.99f));
+            ElarionUiKit.Portrait(medallion, DefenseSprite(selected), active: true);
+
+            var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
+                0.855f, 1f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                TextAlignmentOptions.Left, 0.19f, 0.72f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 30f, 48f);
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.855f, 1f, ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.74f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(level, 26f, 36f);
+
+            // ⚠ WO-1422 POLISH (MEASURED 2026-09-06, ManageDefense_2670x1200.png): the card jumped
+            // from the name straight to "Upgrade: 540 240" - NEITHER this line NOR the description
+            // painted. The VM was innocent (ManageScreenVM.cs:1383-1384 substitutes "A village
+            // structure." for a blank, :1413-1415 always composes PlacedText); both labels were
+            // authored into 0.07 x TroopWorkspacePx(260) = 18.2px bands, and TMP's Ellipsis overflow
+            // CULLS THE WHOLE LINE when the fontSizeMin line (FontHardFloor 20 -> ~23-24px) cannot
+            // seat in the rect - the cause ElarionUiKitObsidian.cs:3110-3116 records for the "bare
+            // plate" class. Buildings' own description band (0.70-0.83 = 33.8px) is the only height
+            // proven to render on this card, so BOTH sentences now share it: ruling 3.1 asks for a
+            // card SUB-LINE, not a second band, and the placed tally leads so an ellipsis can only
+            // ever eat the flavour half. ⛔ Never re-author a text band on this card below ~24px.
+            string defenseSubLine = ManageScreenVM.Ascii(selected.PlacedText ?? "");
+            string defenseDesc = ManageScreenVM.Ascii(selected.Description ?? "");
+            if (defenseSubLine.Length > 0 && defenseDesc.Length > 0) defenseSubLine += " - " + defenseDesc;
+            else if (defenseSubLine.Length == 0) defenseSubLine = defenseDesc;
+            var desc = ElarionUiKit.Label(card, defenseSubLine, 0.70f, 0.83f,
+                ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.19f, 0.72f);
+            ElarionUiKit.FitSingleLine(desc, ElarionUiKit.FontHardFloor, 30f);
+
+            // The state WORD is the only carrier of state - the owner is red/green colourblind.
+            var badge = ElarionUiKit.AddImage(card, "DefenseStateBadge", new Vector2(0.74f, 0.70f),
+                new Vector2(0.98f, 0.83f), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
+            badge.GetComponent<Image>().raycastTarget = false;
+            var state = ElarionUiKit.Label(badge.transform, ManageScreenVM.Ascii(selected.StateWord ?? ""), 0f, 1f,
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(state, 20f, 28f);
+
+            if (string.Equals(selected.StateWord, "Max", StringComparison.Ordinal)) return;
+
+            ElarionUiKit.CostRow(card, selected.UpgradeCostParts, new Vector2(0.02f, 0.54f),
+                new Vector2(0.72f, 0.695f), ElarionUi.Parchment, prefix: "Upgrade:",
+                fontPx: (int)ElarionUi.FontMicro);
+            string readiness = selected.UpgradeReady ? "Ready" : "Short";
+            string factText = string.IsNullOrEmpty(selected.UpgradeTimeText)
+                ? readiness : selected.UpgradeTimeText + " . " + readiness;
+            var fact = ElarionUiKit.Label(card, factText, 0.54f, 0.695f, ElarionUi.Parchment,
+                (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.73f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(fact, 20f, 28f);
+
+            var benefit = ElarionUiKit.Label(card,
+                string.IsNullOrEmpty(selected.AfterUpgradeText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.AfterUpgradeText),
+                0.445f, 0.535f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.02f, 0.98f);
+            ElarionUiKit.FitSingleLine(benefit, ElarionUiKit.FontHardFloor, 26f);
+
+            if (string.Equals(selected.StateWord, "Building", StringComparison.Ordinal))
+            {
+                BuildCardFace(card, "DefenseCta_Building", "BUILDING", 0.02f, 0.98f);
+                return;
+            }
+
+            var upgrade = ElarionUiKit.BuildObsidianButton(card, "UPGRADE TO L" + selected.NextLevel,
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                selected.UpgradeReady ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                () => Guard.Try("Manage", "upgrade defense", () => selected.Activate?.Invoke()));
+            if (upgrade != null)
+            {
+                upgrade.gameObject.name = "DefenseCta_Upgrade";
+                upgrade.interactable = selected.UpgradeReady && selected.Activate != null;
+                MedievalUiSkin.ApplyButton(upgrade, true);
+            }
+            ElarionUiKit.ClampMinTouch(upgrade);
+        }
+
+        /// <summary>
+        /// WO-1422 POLISH — the BUILDING NOW medallion + name on the DEFENCE tab. A placed-structure
+        /// upgrade job is keyed by <c>PlacedUpgradeKey.Compose(itemId, cellX, cellZ)</c>
+        /// ("tower_ground_archer@3_7"), and <c>QueueRowVM.BuildingId</c> is populated only when the
+        /// job resolves to a <c>BuildingTierCatalog</c> row — which a tower never does — so the band
+        /// fell back to the title-cased job key and neutral art.
+        /// ⛔ THE KEY SHAPE IS NOT TRUSTED: the id is matched against the catalog-derived
+        /// <c>DefenseChoices</c>, never rendered on its own. Three shapes are tried — the parsed
+        /// placed key, the raw JobId (a fixture may seed a bare item id) and BuildingId — all
+        /// OrdinalIgnoreCase. On a miss this returns null, the caller's existing fallback art runs,
+        /// and a Warn names the id. It never throws.
+        /// </summary>
+        private DefenseChoiceVM FindDefenseChoiceForJob(QueueRowVM r)
+        {
+            if (r == null || _vm == null) return null;
+
+            string itemId;
+            if (string.IsNullOrEmpty(r.JobId) ||
+                !DeNelle.Village.Buildings.Progression.PlacedUpgradeKey.TryParse(r.JobId, out itemId, out _, out _))
+                itemId = null;
+
+            for (int i = 0; i < _vm.DefenseChoices.Count; i++)
+            {
+                var choice = _vm.DefenseChoices[i];
+                if (choice == null || string.IsNullOrEmpty(choice.Id)) continue;
+                if ((itemId != null && string.Equals(choice.Id, itemId, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(r.JobId) && string.Equals(choice.Id, r.JobId, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(r.BuildingId) && string.Equals(choice.Id, r.BuildingId, StringComparison.OrdinalIgnoreCase)))
+                    return choice;
+            }
+
+            // ⚠ A MISS IS NOT ALWAYS A DEFECT. The Builder line is SHARED, so the first job on the
+            // Defence tab can legitimately be a town building (Farm -> L2); the tier catalog already
+            // named it, BuildingId is populated, and the caller's Buildings expression resolves it
+            // correctly. Warning on that normal state would spam a §12 Warn on every Render, which
+            // is how a real signal gets tuned out. Warn ONLY for the genuinely unnameable job.
+            if (string.IsNullOrEmpty(r.BuildingId))
+                FlowTrace.Warn("Manage", "defence job id '" + (r.JobId ?? "<null>") + "' (parsed item '" +
+                    (itemId ?? "<none>") + "') does not resolve to an authored type in DefenseChoices (" +
+                    _vm.DefenseChoices.Count + " known) AND carries no BuildingId - the BUILDING NOW row " +
+                    "keeps the band's fallback name and art");
+            else
+                FlowTrace.Step("Manage", "defence tab BUILDING NOW job '" + r.JobId + "' is a catalog " +
+                    "building (buildingId=" + r.BuildingId + "), not a placed defence - Buildings art path used");
+            return null;
+        }
+
+        // =====================================================================
+        //  WO-1422 — THE RESEARCH WORKSPACE: rail (one row per PERK) + selected-perk card
+        // ---------------------------------------------------------------------
+        // ⛔ ONE ROW PER PERK (ruling 3.6), not per building: a per-building card would need three
+        // or four verbs inside the single CTA band and no card grammar here supports that. The
+        // owning building becomes the row's SUB-LINE, which is what kills the developer-shaped
+        // "Lumber Mill - Improved Logging" label. Research has NO LEVEL: the card's level slot
+        // carries "TIER n" (ruling 3.7) and never paints "LEVEL 0".
+        // =====================================================================
+
+        private void AddResearchWorkspaceRow(ResearchChoiceVM selected)
+        {
+            var workspace = MakeRowHost("ResearchSplitWorkspace", TroopWorkspacePx);
+            var railZone = MakeZone(workspace, "ResearchSelectorRail", new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+            var railPlate = ElarionUiKit.AddImage(railZone, "RailPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            railPlate.GetComponent<Image>().raycastTarget = false;
+            var railScroll = ElarionUiKit.MakeScrollZone(railZone, spacing: 6f, padding: 8);
+            if (railScroll == null || railScroll.content == null)
+                FlowTrace.Fail("Manage", "research rail MakeScrollZone returned no content - the rail has no build site.");
+            else
+            {
+                int selectedIndex = 0;
+                string selectedKey = ResearchKeyOf(selected);
+                _rowParent = railScroll.content;
+                try
+                {
+                    for (int i = 0; i < _vm.ResearchChoices.Count; i++)
+                    {
+                        var choice = _vm.ResearchChoices[i];
+                        if (choice == null) continue;
+                        bool isSelected = string.Equals(ResearchKeyOf(choice), selectedKey, StringComparison.OrdinalIgnoreCase);
+                        if (isSelected) selectedIndex = i;
+                        Guard.Try("Manage", "research rail row " + ResearchKeyOf(choice), () => BuildResearchRailRow(choice, isSelected));
+                    }
+                    MakeRowHost("ResearchRailTailSpacer", TroopWorkspacePx - TroopRailRowPx);
+                }
+                finally { _rowParent = null; }
+
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(railScroll.content);
+                if (railScroll.scroll != null)
+                {
+                    var viewport = railScroll.scroll.viewport;
+                    float viewportPx = viewport != null ? viewport.rect.height : TroopWorkspacePx;
+                    float maxScrollPx = Mathf.Max(0f, railScroll.content.rect.height - viewportPx);
+                    float selectedTopPx = Mathf.Min(maxScrollPx, selectedIndex * (TroopRailRowPx + 6f));
+                    railScroll.scroll.StopMovement();
+                    railScroll.scroll.verticalNormalizedPosition = maxScrollPx > 0.5f
+                        ? 1f - selectedTopPx / maxScrollPx
+                        : 1f;
+                    FlowTrace.Step("Manage", "research rail aligned row=" + selectedIndex +
+                        " topPx=" + selectedTopPx.ToString("0") + " maxPx=" + maxScrollPx.ToString("0"));
+                }
+            }
+
+            var card = MakeZone(workspace, "ResearchSelectedCard", new Vector2(0.275f, 0f), new Vector2(1f, 1f));
+            BuildResearchCard(card, selected);
+        }
+
+        private void BuildResearchRailRow(ResearchChoiceVM choice, bool isSelected)
+        {
+            string key = ResearchKeyOf(choice);
+            var row = MakeRowHost("ResearchChoiceRow_" + key, TroopRailRowPx);
+            var faceGo = ElarionUiKit.AddImage(row, "ResearchChoice_" + key, Vector2.zero, Vector2.one,
+                isSelected ? new Color(0.24f, 0.18f, 0.08f, 0.90f) : new Color(0f, 0f, 0f, 0.28f), rounded: false);
+            var face = faceGo.GetComponent<Image>();
+            face.raycastTarget = true;
+            var button = faceGo.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.onClick.AddListener(() =>
+            {
+                _selectedResearchKey = key;
+                FlowTrace.Step("Manage", "research rail selected=" + key);
+                Render();
+            });
+            if (isSelected)
+            {
+                var outline = faceGo.AddComponent<Outline>();
+                outline.effectColor = ElarionUi.Gold;
+                outline.effectDistance = new Vector2(4f, -4f);
+                outline.useGraphicAlpha = false;
+            }
+
+            var medallion = MakeZone(faceGo.transform, "Medallion", new Vector2(0.03f, 0.08f), new Vector2(0.27f, 0.92f));
+            var portrait = ElarionUiKit.Portrait(medallion, ResearchSprite(choice), active: isSelected);
+            if (choice.Locked && portrait?.image != null) portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);
+            if (choice.Locked) BuildLockBadge(medallion);
+
+            // NAME over SUB-LINE - the perk's own name, then the building that owns it. This is
+            // what retires the "Lumber Mill - Improved Logging" developer label (ruling 3.6).
+            var name = ElarionUiKit.Label(faceGo.transform, ManageScreenVM.Ascii(choice.Name ?? ""), 0.52f, 0.96f,
+                choice.Locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.30f, 0.84f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 26f, 38f);
+            string railSub = ManageScreenVM.Ascii(choice.BuildingName ?? "");
+            if (!string.IsNullOrEmpty(choice.StateWord))
+                railSub = string.IsNullOrEmpty(railSub) ? choice.StateWord : railSub + " . " + choice.StateWord;
+            var sub = ElarionUiKit.Label(faceGo.transform, railSub,
+                0.06f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.30f, 0.84f);
+            ElarionUiKit.FitSingleLine(sub, 22f, 30f);
+            var chevron = ElarionUiKit.Label(faceGo.transform, ">", 0.10f, 0.90f,
+                isSelected ? ElarionUi.Gold : ElarionUi.ParchmentDim,
+                (int)ElarionUi.FontBody, TextAlignmentOptions.Center, 0.84f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(chevron, 30f, 50f);
+            ElarionUiKit.ClampMinTouch(button);
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.6 — PERK ART. Assets/Resources/HudIcons/BuildingUpgrades/ holds 15 .jpg
+        /// plus Upgrade.png covering all 17 authored perks, and it is the folder
+        /// BuildingUpgradePanelMvvm.cs:2025 already loads from.
+        /// ⚠ BuildingPerkDef.IconId's doc comment (Assets/_Modules/Core/State/BuildingTierCatalog.cs)
+        /// names Resources/HudItems/BuildingUpgrades/ - THAT FOLDER DOES NOT EXIST. The comment is
+        /// wrong; the loader below is the truth. (The comment lives in another file and is flagged
+        /// in this lane's hand-back rather than edited here.)
+        /// </summary>
+        private static Sprite ResearchSprite(ResearchChoiceVM choice)
+        {
+            if (choice == null || string.IsNullOrEmpty(choice.IconName))
+                return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+
+            // LoadManageBuildingSpriteAt is reused for its Texture2D->Sprite fallback and its cache:
+            // these are .jpg files whose import type is not guaranteed to be Sprite.
+            Sprite art = Guard.Try<Sprite>("Manage", "research art " + choice.IconName,
+                () => LoadManageBuildingSpriteAt("HudIcons/BuildingUpgrades/" + choice.IconName), null);
+            if (art == null)
+                FlowTrace.Warn("Manage", "research perk art unresolved perk=" + ResearchKeyOf(choice) +
+                    " iconName=" + choice.IconName +
+                    " - expected Resources/HudIcons/BuildingUpgrades/<IconName>; neutral hammer used");
+            return art ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.9 — the RESEARCHING NOW medallion. A Research job carries no BuildingId
+        /// (QueueRowVM.BuildingId is populated only on the Builder channel), so the perk is read
+        /// back off the job id, whose shape is "building-research:&lt;buildingId&gt;:&lt;perkId&gt;".
+        /// ⛔ THE THIRD SEGMENT IS NOT TRUSTED: it is matched against the CATALOG-DERIVED
+        /// ResearchChoices, never used as art key on its own. A shipped fixture carried the perk id
+        /// `warding`, which is authored nowhere - so a segment that looks like a perk id can be one
+        /// that does not exist. On a miss this returns null (the band's existing fallback art runs)
+        /// and warns naming the id. It never throws.
+        /// </summary>
+        private Sprite ResearchJobSprite(QueueRowVM r)
+        {
+            if (r == null || string.IsNullOrEmpty(r.JobId)) return null;
+            string[] parts = r.JobId.Split(':');
+            if (parts.Length >= 3 && _vm != null)
+            {
+                for (int i = 0; i < _vm.ResearchChoices.Count; i++)
+                {
+                    var choice = _vm.ResearchChoices[i];
+                    if (choice == null) continue;
+                    if (string.Equals(choice.BuildingId, parts[1], StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(choice.PerkId, parts[2], StringComparison.OrdinalIgnoreCase))
+                        return ResearchSprite(choice);
+                }
+            }
+            FlowTrace.Warn("Manage", "research job id '" + r.JobId + "' does not resolve to an authored " +
+                "perk in ResearchChoices (" + (_vm != null ? _vm.ResearchChoices.Count : 0) + " known) - " +
+                "the RESEARCHING NOW medallion falls back to the band's default art");
+            return null;
+        }
+
+        /// <summary>
+        /// The SELECTED PERK card (ruling 3.7). The WHOLE tree is shown, including the two states
+        /// the retired list HID: an owned perk (Researched) and an in-flight one (Researching).
+        /// Researched -> no CTA. Researching -> one non-interactable RESEARCHING face. Locked -> the
+        /// CanResearch reason VERBATIM on a dead face beside the live door to its prerequisite.
+        /// Available -> RESEARCH. The parameter is named `choice` because
+        /// ManageProgressiveDisclosureRegression's migrated [research-locked-visible] case reads
+        /// this body for `choice.Locked` and `BuildLockBadge(`.
+        /// </summary>
+        private void BuildResearchCard(RectTransform card, ResearchChoiceVM choice)
+        {
+            var plate = ElarionUiKit.AddImage(card, "CardPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            plate.GetComponent<Image>().raycastTarget = false;
+            ElarionUiKit.GoldPerimeter(card);
+
+            var medallion = MakeZone(card, "ResearchPortrait", new Vector2(0.02f, 0.59f), new Vector2(0.16f, 0.99f));
+            var portrait = ElarionUiKit.Portrait(medallion, ResearchSprite(choice), active: true);
+            if (choice.Locked && portrait?.image != null) portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);
+            if (choice.Locked) BuildLockBadge(medallion);
+
+            var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((choice.Name ?? "").ToUpperInvariant()),
+                0.855f, 1f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                TextAlignmentOptions.Left, 0.19f, 0.72f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 30f, 48f);
+            // ⛔ TierText, never the Buildings level line: a perk has no level, so reusing that
+            // line would print a zero here (ruling 3.7). The literal is deliberately absent from
+            // this whole method - [no-level-zero] bans it from every Research card path.
+            var tier = ElarionUiKit.Label(card, ManageScreenVM.Ascii(choice.TierText ?? ""), 0.855f, 1f,
+                ElarionUi.Parchment, (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.74f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(tier, 26f, 36f);
+
+            // ⚠ WO-1422 POLISH (MEASURED 2026-09-06, ManageResearch_2670x1200.png): the card jumped
+            // from the name straight to "Research: 6400" - neither the OWNING BUILDING line nor the
+            // description painted, though the rail row beside it read "Barracks . Available". Not a
+            // VM defect: both labels sat in 0.07 x TroopWorkspacePx(260) = 18.2px bands, and TMP's
+            // Ellipsis overflow CULLS THE WHOLE LINE when the fontSizeMin line (FontHardFloor 20 ->
+            // ~23-24px) cannot seat in the rect (ElarionUiKitObsidian.cs:3110-3116). They now share
+            // Buildings' description band (0.70-0.83 = 33.8px), the only height on this card proven
+            // to render, with the owning building leading so an ellipsis eats only the flavour half.
+            // ⛔ Never re-author a text band on this card below ~24px.
+            string researchLine = ManageScreenVM.Ascii(choice.BuildingName ?? "");
+            string researchDesc = ManageScreenVM.Ascii(choice.Description ?? "");
+            if (researchLine.Length > 0 && researchDesc.Length > 0) researchLine += " - " + researchDesc;
+            else if (researchLine.Length == 0) researchLine = researchDesc;
+            var desc = ElarionUiKit.Label(card, researchLine, 0.70f, 0.83f,
+                ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.19f, 0.72f);
+            ElarionUiKit.FitSingleLine(desc, ElarionUiKit.FontHardFloor, 30f);
+
+            var badge = ElarionUiKit.AddImage(card, "ResearchStateBadge", new Vector2(0.74f, 0.70f),
+                new Vector2(0.98f, 0.83f), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
+            badge.GetComponent<Image>().raycastTarget = false;
+            var state = ElarionUiKit.Label(badge.transform, ManageScreenVM.Ascii(choice.StateWord ?? ""), 0f, 1f,
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(state, 20f, 28f);
+
+            // An owned perk is DONE: the word in the badge is the whole story, and a card with no
+            // verb is the honest shape (the same delta WO-1418 made when it stopped hiding maxed
+            // buildings). No cost row either - there is nothing left to pay.
+            if (string.Equals(choice.StateWord, "Researched", StringComparison.Ordinal))
+                return;
+
+            ElarionUiKit.CostRow(card, choice.CostParts, new Vector2(0.02f, 0.54f),
+                new Vector2(0.72f, 0.695f), ElarionUi.Parchment, prefix: "Research:",
+                fontPx: (int)ElarionUi.FontMicro);
+            string readiness = choice.Ready ? "Ready" : "Short";
+            string factText = string.IsNullOrEmpty(choice.TimeText) ? readiness : choice.TimeText + " . " + readiness;
+            var fact = ElarionUiKit.Label(card, factText, 0.54f, 0.695f, ElarionUi.Parchment,
+                (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.73f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(fact, 20f, 28f);
+
+            if (string.Equals(choice.StateWord, "Researching", StringComparison.Ordinal))
+            {
+                BuildCardFace(card, "ResearchCta_Researching",
+                    string.IsNullOrEmpty(choice.CtaLabel) ? "RESEARCHING" : choice.CtaLabel, 0.02f, 0.98f);
+                return;
+            }
+
+            if (choice.Locked)
+            {
+                // TWO faces, and only the DOOR is live: the reason must be readable at full length
+                // (it is CanResearch's own sentence) and the prerequisite must stay one tap away -
+                // that door is what [research-locked-visible] protects. Never a dead button alone.
+                BuildCardFace(card, "ResearchCta_Locked",
+                    string.IsNullOrEmpty(choice.LockReason) ? "LOCKED" : choice.LockReason, 0.02f, 0.48f);
+                var door = ElarionUiKit.BuildObsidianButton(card,
+                    ManageScreenVM.Ascii(string.IsNullOrEmpty(choice.CtaLabel) ? "OPEN" : choice.CtaLabel),
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                    () => Guard.Try("Manage", "open research prerequisite", () => choice.Activate?.Invoke()));
+                if (door != null)
+                {
+                    door.gameObject.name = "ResearchCta_Door";
+                    door.interactable = choice.Activate != null;
+                    MedievalUiSkin.ApplyButton(door, false);
+                }
+                ElarionUiKit.ClampMinTouch(door);
+                return;
+            }
+
+            var research = ElarionUiKit.BuildObsidianButton(card,
+                ManageScreenVM.Ascii(string.IsNullOrEmpty(choice.CtaLabel) ? "RESEARCH" : choice.CtaLabel),
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                choice.Ready ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                () => Guard.Try("Manage", "start research", () => choice.Activate?.Invoke()));
+            if (research != null)
+            {
+                research.gameObject.name = "ResearchCta_Start";
+                research.interactable = choice.Ready && choice.Activate != null;
+                MedievalUiSkin.ApplyButton(research, true);
+            }
+            ElarionUiKit.ClampMinTouch(research);
+        }
+
+        /// <summary>
+        /// A non-interactable CTA face at an ARBITRARY x-span. ⚠ Deliberately NOT a change to
+        /// BuildDisabledBuildingFace, which is hardcoded full-width AND is a Body() boundary marker
+        /// for ManageBuildingsCardRegression's card window - widening its signature would move that
+        /// boundary. Locked Research needs a HALF-width dead face beside a live door, so it gets
+        /// its own builder. The y-span is always the shared CTA band, so the touch floor is the
+        /// same 113.1px every other face on these cards clears.
+        /// </summary>
+        private static void BuildCardFace(RectTransform card, string objectName, string text, float x0, float x1)
+        {
+            var face = ElarionUiKit.BuildObsidianButton(card, ManageScreenVM.Ascii(text ?? ""),
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(x0, TroopCtaY0), new Vector2(x1, TroopCtaY1), null);
+            if (face == null) return;
+            face.gameObject.name = objectName;
+            face.interactable = false;
+            MedievalUiSkin.ApplyButton(face, false);
+            ElarionUiKit.ClampMinTouch(face);
+        }
+
+        /// <summary>
+        /// WO-1422 — the RESEARCHING NOW band: the Builder band's exact grammar on the Research
+        /// channel. One painted job plus "+N more"; the extra jobs are NOT given their own rows
+        /// (that is the Buildings shape, and [building-now-stays-in-band] is the pin that keeps it).
+        /// The host name starts with ResearchNowPrefix so ApplyDrawerPlacement collapses it when
+        /// the queue drawer opens over the card.
+        /// </summary>
+        private void AddResearchNowBand()
+        {
+            var band = MakeRowHost(ResearchNowPrefix + "Band", TrainingNowBandPx);
+            var bandPlate = ElarionUiKit.AddImage(band, "BandPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            bandPlate.GetComponent<Image>().raycastTarget = false;
+            int hiddenJobs = Mathf.Max(0, _vm.QueueRows.Count - 1);
+            var title = ElarionUiKit.Label(band, "RESEARCHING NOW", hiddenJobs > 0 ? 0.53f : 0.15f, 0.85f, ElarionUi.Gold,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.01f, 0.165f, bold: true);
+            ElarionUiKit.FitSingleLine(title, 22f, 32f);
+            if (hiddenJobs > 0)
+            {
+                var more = ElarionUiKit.Label(band, "+" + hiddenJobs + " more", 0.12f, 0.48f,
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                    TextAlignmentOptions.Left, 0.01f, 0.165f, bold: true);
+                ElarionUiKit.FitSingleLine(more, ElarionUiKit.FontHardFloor, 28f);
+            }
+            var open = ElarionUiKit.BuildObsidianButton(band, "OPEN QUEUE",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(PrimaryX0, BandCtrlY0), new Vector2(PrimaryX1, BandCtrlY1), ToggleQueueDrawer);
+            if (open != null) open.gameObject.name = "ResearchOpenQueue";
+            ElarionUiKit.ClampMinTouch(open);
+
+            if (_vm.QueueRows.Count == 0)
+            {
+                var empty = ElarionUiKit.Label(band, "No research under way", 0.15f, 0.85f,
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    0.18f, ClusterX1 + 0.01f);
+                ElarionUiKit.FitSingleLine(empty, 24f, 34f);
+                return;
+            }
+
+            var first = _vm.QueueRows[0];
+            if (first != null)
+                Guard.Try("Manage", "research now job 1", () => BuildTroopTrainingNowJob(band, 1, first,
+                    0.175f, 0.205f, 0.21f, 0.27f, 0.28f, 0.45f, 0.46f, 0.60f, 0.61f, ClusterX1 + 0.01f,
+                    ResearchJobSprite(first)));
+            if (hiddenJobs > 0)
+                FlowTrace.Step("Manage", "research now capped inside band: painted=1 hidden=" + hiddenJobs);
+        }
+
         private static string BrowseHeading(ManageTab tab)
         {
             switch (tab)
             {
-                case ManageTab.Defense: return "UPGRADABLE TOWERS - affordable first";
+                // WO-1422 ruling 3.2: the Defence arm is GONE with the paged path. The heading it
+                // returned promised upgradable TOWERS, and that was a measured LIE - the tab also
+                // lists walls, the crystal mine, the healing caravan and the three storage
+                // containers. The lie dies with the surface that printed it, not by rewording it.
+                // The literal itself is deliberately not repeated here: a re-pointed suite asserts
+                // it is absent from this FILE, not merely unreachable.
                 case ManageTab.Buildings: return "BUILDING UPGRADES - affordable first";
                 case ManageTab.Troops: return "TRAIN & UPGRADE TROOPS";
                 case ManageTab.Research: return "RESEARCH PROJECTS";
@@ -2937,62 +3816,16 @@ namespace DeNelle.Village.UI
             return btn;
         }
 
-        private void AddBrowseRow(BrowseRowVM r)
-        {
-            var row = MakeRowHost("BrowseRow", RowHeightPx);
-            BuildBrowseRowContent(row, r);
-        }
-
-        private void BuildBrowseRowContent(RectTransform row, BrowseRowVM r)
-        {
-            if (row == null || r == null) return;
-            ApplyRowSurface(row);
-
-            // Three disjoint x-columns: name+cost (0.02-0.50) | affordability (0.52-0.73) | CTA (0.76-0.98).
-            // WO-1058: the CTA moved LEFT from 0.84 to PrimaryX0 so it occupies the SAME primary
-            // slot as the queue row's "Finish Now". The affordability column was pulled back from
-            // 0.82 to 0.73 in the same edit — leaving it at 0.82 would have put a text box under
-            // the widened button ("BUTTON OVER TEXT", the WO-1060 oracle's own failure class).
-            // WO-1390: a LOCKED prerequisite row (Research) reads dim + carries the same padlock the
-            // Troops rail seats on a locked choice (BuildLockBadge), so "locked" is stated by words
-            // AND a shape, never a tint alone (colourblind law). The name column gives up its right
-            // edge to the badge; the CTA stays live because it is the DOOR to the prerequisite.
-            bool locked = r.Locked;
-            float nameX1 = locked ? 0.42f : 0.50f;
-            var nameColor = locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment;
-            var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.52f, 0.98f, nameColor,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, nameX1, bold: true);
-            ElarionUiKit.FitSingleLine(name);
-            var cost = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.CostText ?? ""), 0.04f, 0.48f, ElarionUi.ParchmentDim,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, nameX1);
-            ElarionUiKit.FitSingleLine(cost);
-            // Affordability is a SENTENCE ("Ready" / "Not enough Wood (400)") — never a tint alone.
-            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.20f, 0.80f, nameColor,
-                                           (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.52f, ClusterX1 + 0.01f);
-            ElarionUiKit.FitBlock(state);   // a shortfall sentence may need two lines inside its box
-            if (locked)
-            {
-                // BuildLockBadge fills a fixed sub-rect of its parent (x 0.345-0.50, y 0.20-0.76),
-                // so a host rect is sized to land the padlock in the gap between the name column
-                // (ends 0.42) and the state column (starts 0.52): host x 0.306-0.693 puts the badge
-                // at row x 0.44-0.50. Reuses the badge verbatim rather than a second padlock.
-                var host = new GameObject("LockBadgeHost", typeof(RectTransform));
-                var hrt = (RectTransform)host.transform;
-                hrt.SetParent(row, false);
-                hrt.anchorMin = new Vector2(0.306f, 0.0f);
-                hrt.anchorMax = new Vector2(0.693f, 1.0f);
-                hrt.offsetMin = hrt.offsetMax = Vector2.zero;
-                BuildLockBadge(hrt);
-            }
-
-            var act = ElarionUiKit.BuildObsidianButton(row, r.ActionText ?? "Open",
-                ElarionUiKit.ObsidianButtonStyle.Style1,
-                r.Affordable ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
-                () => { Guard.Try("Manage", "browse drill-in", () => r.Activate?.Invoke()); });
-            ElarionUiKit.ClampMinTouch(act);
-        }
-
+        // ⛔ WO-1422 - AddBrowseRow AND BuildBrowseRowContent WERE DELETED HERE, DELIBERATELY.
+        // They painted the paged text list ("Lumber Mill - Improved Logging  Ready - takes 11m 0s
+        // [RESEARCH]") that Defence and Research used to share. All four destinations now build a
+        // rail + selected card, so AddBrowseRow's ONE call site - the pager inside RenderList -
+        // went away with it and both methods had zero callers. Dead code that looks like a shipped
+        // feature is the exact failure ManageQueueDrawerRegression:103-113 was written to catch,
+        // so they are gone rather than parked. The LOCK treatment they carried (r.Locked + the
+        // BuildLockBadge padlock, WO-1390) MOVED to BuildResearchCard, which is the only surface
+        // that ever showed a locked browse row. _vm.BrowseRows itself is UNCHANGED and still built
+        // by the VM: three suites drive it, and the Troops "Saved army compositions" row reads it.
         private static void ApplyRowSurface(RectTransform row)
         {
             if (row == null) return;

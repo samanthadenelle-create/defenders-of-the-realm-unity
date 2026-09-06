@@ -1016,9 +1016,14 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-approved-launcher suite", () => { if (!DeNelle.Editor.Regression.ManageApprovedLauncherRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-approved-launcher] " + r); });
             // --- WO-1418 Manage - Buildings re-layout: rail + selected card + BUILDING NOW; ten RED-first cases (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-buildings-card suite", () => { if (!DeNelle.Editor.ManageBuildingsCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-buildings-card] " + r); });
+            // --- WO-1422 Manage - Defense and Research take the WO-1418 Buildings shape; the paged list is retired ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-defense-card suite", () => { if (!DeNelle.Editor.ManageDefenseCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-defense-card] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-research-card suite", () => { if (!DeNelle.Editor.ManageResearchCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-research-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
             // --- WO-1404 Journey deck subtitles carry state (Quests / Raids), one pure Core VM, change-only publisher (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-subtitle suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckSubtitleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-subtitle] " + r); });
+            // --- WO-1421 Journey deck is TWO cards: Dungeons / Realm Map / Season removed by owner ruling 2026-09-06 ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-two-card suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckTwoCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-two-card] " + r); });
             // --- WO-1413 copy hygiene: fixture verbs, retired numbered combat faces, EMPTY/live skill binding, dialogue-twin parity, retired Pet/multiplier copy (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "copy-hygiene suite", () => { if (!DeNelle.Editor.Regression.CopyHygieneRegression.Run(out var rCh)) failures.Add(rCh); else log.AppendLine("[copy-hygiene] " + rCh); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pause-medieval-skin suite", () => { if (!DeNelle.Editor.Regression.PauseMedievalSkinRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pause-medieval-skin] " + r); });

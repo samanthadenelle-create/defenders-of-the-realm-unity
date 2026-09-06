@@ -38,7 +38,13 @@ namespace DeNelle.Core.State
         [JsonProperty("effect")] public string Effect;
         /// <summary>Gold (economy Coins) cost to research this perk.</summary>
         [JsonProperty("goldCost")] public int GoldCost;
-        /// <summary>Sprite id under Resources/HudItems/BuildingUpgrades/&lt;iconId&gt;; defaults to <see cref="Id"/>.</summary>
+        /// <summary>Sprite id under Resources/HudIcons/BuildingUpgrades/&lt;iconId&gt;; defaults to <see cref="Id"/>.
+        /// <para>⚠ CORRECTED 2026-09-06 (WO-1422 ruling 3.6): this line said <c>Resources/HudItems/</c> and
+        /// THAT FOLDER HAS NEVER EXISTED. The real loader is
+        /// <c>BuildingUpgradePanelMvvm.cs:2025</c> -&gt; <c>Resources.Load&lt;Sprite&gt;("HudIcons/BuildingUpgrades/" + IconName)</c>,
+        /// and <c>Assets/Resources/HudIcons/BuildingUpgrades/</c> holds the 15 jpg + Upgrade.png that cover all 17
+        /// authored perks. A seat trusting this comment would have written a probe that can never hit.
+        /// The code is the authority; this comment is not.</para></summary>
         [JsonProperty("iconId")] public string IconId;
         /// <summary>The Tier-3 capstone signature (gilt-highlighted in the panel). Creative-owned design.</summary>
         [JsonProperty("isSignature")] public bool IsSignature;

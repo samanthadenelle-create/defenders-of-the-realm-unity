@@ -266,6 +266,25 @@ namespace DeNelle.Village.UI
         /// The View paints it under the UPGRADE face so the button has a destination, not just a
         /// number. Pinned by ManageTroopsTrainDoorRegression case 7.</summary>
         public string NextUnlockText = "";
+
+        // ── WO-1422 ruling 3.10 / 3.5 — Troops parity with the WO-1418 Buildings card ──
+        /// <summary>WO-1422 ruling 3.10 item 1 — the card's state BADGE word, exactly one of
+        /// <c>"Training" | "Locked" | "Max" | "Upgradable"</c> (ASCII; the WORD is the only carrier
+        /// of state, the owner is red/green colourblind).
+        /// <para>
+        /// "Training" is defined HERE because no suite pins it: it means WORK IN FLIGHT ON THIS
+        /// TROOP - either a TroopUpgrade job (<see cref="UpgradeInProgress"/>) or a Train-channel
+        /// job whose id carries this troop (BarracksService.TrainPrefix + id). That is the Troops
+        /// analogue of the Buildings card's "Building", which means a Builder job on the card's own
+        /// subject.
+        /// </para></summary>
+        public string StateWord = "";
+        /// <summary>WO-1422 ruling 3.5 - the SECOND door's label, or NULL when this troop has no
+        /// door behind it. Currently ALWAYS null: there is no troop skill/perk panel to open
+        /// (PanelRouter.PanelId carries HeroSkillTree/HeroTalents but no troop equivalent), and the
+        /// ruling forbids inventing one. Kept as a field so the View's contract is the same on all
+        /// four tabs.</summary>
+        public string DoorLabel;
     }
 
     /// <summary>One authoritative selector/card entry for Manage -&gt; Buildings.</summary>
@@ -291,6 +310,121 @@ namespace DeNelle.Village.UI
         public int NextTier;
         public Action Activate;
         public Action ViewDetails;
+        /// <summary>WO-1422 ruling 3.5 - the SECOND door's LABEL, or NULL when this ladder has
+        /// nothing behind it. "PERKS" when building-tiers.json authors at least one perk for this
+        /// ladder (<see cref="ManageScreenVM.HasAuthoredPerk"/>), else null - measured, the Farm
+        /// authors 0 perks, so the Farm card shows ONE full-width CTA and no second door. The door
+        /// itself is still <see cref="ViewDetails"/>; only the WORD changed (the owner's ruling
+        /// "keep one door, but name what's behind it" retires the developer label VIEW DETAILS).</summary>
+        public string DoorLabel;
+    }
+
+    /// <summary>
+    /// WO-1422 - one authoritative selector/card entry for Manage -&gt; DEFENSE.
+    ///
+    /// ⚠ ONE ROW PER TYPE, NEVER PER PLACED INSTANCE (ruling 3.1). <c>wall_wood</c> is upgradable and
+    /// a town has many segments; keying per instance would emit an unbounded rail. The card names the
+    /// TYPE, states how many are placed and at what level, and its CTA targets the FIRST placed
+    /// instance at the LOWEST level - which is exactly what the legacy browse row already targeted
+    /// (see the comment above <see cref="ManageScreenVM.BuildDefenseBrowse"/>'s job key), so this is
+    /// a PRESENTATION change and not a behaviour change.
+    /// </summary>
+    public sealed class DefenseChoiceVM
+    {
+        /// <summary>BaseLayout itemId, e.g. "tower_ground_archer".</summary>
+        public string Id;
+        /// <summary>The placed catalog row's id, for BuildPaletteUI.ResolveEntryArtPublic.</summary>
+        public string CatalogEntryId;
+        /// <summary>Display name only - never "X - grid 3, 7 - L1 -&gt; L2" (the retired browse label).</summary>
+        public string Name;
+        /// <summary>ResolveBuildingPortraitKey output, e.g. "Portraits/archer-tower-2".</summary>
+        public string PortraitKey;
+        /// <summary>The LOWEST placed level of this type - the one the CTA acts on.</summary>
+        public int Level;
+        /// <summary>PlacedStructureUpgradeService.MaxLevelFor(entry) - the shared clamped ceiling.</summary>
+        public int MaxLevel;
+        /// <summary>How many of this type stand in this town.</summary>
+        public int PlacedCount;
+        /// <summary>"3 placed . lowest L1" / "1 placed . L1" (ruling 3.1).</summary>
+        public string PlacedText;
+        /// <summary>"Building" | "Max" | "Upgradable" (ASCII, ruling 3.7 discipline).</summary>
+        public string StateWord;
+        /// <summary>One sentence: StructureCardVM.DescriptionFor, first clause.</summary>
+        public string Description;
+        /// <summary>BuildModeController.UpgradeCostFor(entry, Level); EMPTY at max level.</summary>
+        public IReadOnlyList<CostPart> UpgradeCostParts;
+        /// <summary>QueueRailView.FormatTime of the derived duration; NULL when it is not reachable
+        /// (no BuildTimerService / no config, or already at max) - never a hardcoded number.</summary>
+        public string UpgradeTimeText;
+        /// <summary>affordable AND not already building AND not maxed.</summary>
+        public bool UpgradeReady;
+        /// <summary>What the next level buys; "" when Max.</summary>
+        public string AfterUpgradeText;
+        /// <summary>Level + 1, or 0 when Max.</summary>
+        public int NextLevel;
+        /// <summary>PlacedUpgradeKey.Compose(itemId, cellX, cellZ) of the FIRST instance standing at
+        /// <see cref="Level"/> - the instance the CTA upgrades.</summary>
+        public string JobKey;
+        /// <summary>NULL for Defense (ruling 3.5): there is no per-defense detail page and the
+        /// ruling forbids inventing one.</summary>
+        public string DoorLabel;
+        /// <summary>() =&gt; UpgradePlaced(JobKey); NULL when Max.</summary>
+        public Action Activate;
+    }
+
+    /// <summary>
+    /// WO-1422 - one authoritative selector/card entry for Manage -&gt; RESEARCH.
+    ///
+    /// ⚠ ONE ROW PER PERK, NOT PER BUILDING (ruling 3.6), and the WHOLE TREE including the two states
+    /// the legacy browse list HID (ruling 3.7): an OWNED perk and an IN-PROGRESS perk both emitted no
+    /// row at all. This is the same deliberate delta WO-1418 made when it stopped hiding maxed
+    /// buildings - a ladder the player cannot see is a ladder they cannot plan against.
+    /// </summary>
+    public sealed class ResearchChoiceVM
+    {
+        /// <summary>The owning building's ladder id, e.g. "arcane-tower".</summary>
+        public string BuildingId;
+        /// <summary>The perk id, e.g. "warding".</summary>
+        public string PerkId;
+        /// <summary>The perk's display name, e.g. "Improved Logging" - NEVER "Lumber Mill - Improved
+        /// Logging"; the developer " - " label shape died with the paged list (ruling 3.6).</summary>
+        public string Name;
+        /// <summary>Rail sub-line + card sub-line, e.g. "Lumber Mill".</summary>
+        public string BuildingName;
+        /// <summary>BuildingPerkDef.IconId (defaulting to the perk id) - the View loads
+        /// <c>HudIcons/BuildingUpgrades/&lt;IconName&gt;</c>, the path BuildingUpgradePanelMvvm
+        /// already loads. ⚠ BuildingPerkDef.IconId's own doc comment names Resources/HudItems/
+        /// BuildingUpgrades/ and THAT FOLDER DOES NOT EXIST - do not follow the comment.</summary>
+        public string IconName;
+        /// <summary>BuildingTierCatalog.PerkUnlockTier(bId, pId).</summary>
+        public int UnlockTier;
+        /// <summary>"TIER 2" - what the card's LEVEL slot carries, because research has NO level
+        /// (ruling 3.7). Never paint "LEVEL 0".</summary>
+        public string TierText;
+        /// <summary>"Researched" | "Researching" | "Available" | "Locked" (ASCII, ruling 3.7).</summary>
+        public string StateWord;
+        /// <summary>StateWord == "Locked". The migrated lock-badge pin reads this.</summary>
+        public bool Locked;
+        /// <summary>BuildingPerkService.CanResearch's out reason, VERBATIM (no Ascii(), no
+        /// "Locked." substitution - a suite asserts exact equality); "" when not locked.</summary>
+        public string LockReason;
+        /// <summary>The perk's authored effect sentence.</summary>
+        public string Description;
+        /// <summary>Gold-only. ⚠ ResourceCost has NO gold field, which is why this is a
+        /// CostFormat.Parts list with an explicit ("gold","Gold",price) part - the same shape
+        /// BuildingUpgradeCostParts already uses. Do not add a field to ResourceCost.</summary>
+        public IReadOnlyList<CostPart> CostParts;
+        /// <summary>FormatTime(BuildingPerkService.ResearchSeconds(bId,pId)).</summary>
+        public string TimeText;
+        /// <summary>Available AND affordable.</summary>
+        public bool Ready;
+        /// <summary>"RESEARCH" | "RESEARCHING" | "UPGRADE THE HEART" | "UPGRADE &lt;NAME&gt;" | null.</summary>
+        public string CtaLabel;
+        /// <summary>NULL (ruling 3.5).</summary>
+        public string DoorLabel;
+        /// <summary>() =&gt; Research(bId,pId) when Available, OpenUpgradePanel(bId) when Locked;
+        /// NULL when Researched or Researching (both are non-interactable faces, ruling 3.7).</summary>
+        public Action Activate;
     }
 
     /// <summary>
@@ -318,6 +452,14 @@ namespace DeNelle.Village.UI
 
         /// <summary>Every placed building with an authored tier ladder, including maxed entries.</summary>
         public readonly List<BuildingChoiceVM> BuildingChoices = new List<BuildingChoiceVM>(16);
+
+        /// <summary>WO-1422 — every upgradable placed defense TYPE standing in this town, including
+        /// maxed ones. ONE entry per type, never per instance (ruling 3.1).</summary>
+        public readonly List<DefenseChoiceVM> DefenseChoices = new List<DefenseChoiceVM>(16);
+
+        /// <summary>WO-1422 — every authored perk of every owned ladder building, in all four
+        /// states including the two the legacy browse list hid (ruling 3.7).</summary>
+        public readonly List<ResearchChoiceVM> ResearchChoices = new List<ResearchChoiceVM>(24);
 
         /// <summary>WO-1406 Troops header copy, projected here so the View never reads game state.</summary>
         public string TroopArmySummaryText { get; private set; }
@@ -426,6 +568,8 @@ namespace DeNelle.Village.UI
                 BrowseRows.Clear();
                 TroopChoices.Clear();
                 BuildingChoices.Clear();
+                DefenseChoices.Clear();
+                ResearchChoices.Clear();
                 TroopArmySummaryText = null;
 
                 BuildVisibleTabs();
@@ -438,6 +582,12 @@ namespace DeNelle.Village.UI
                 BuildRepairOffer();
                 BuildBrowseRows();
                 BuildBuildingChoices();
+                // WO-1422 — UNCONDITIONAL, exactly like BuildBuildingChoices above. The card
+                // projections are NOT tab-gated: the View selects a row before the tab is opened
+                // (its selection default reads choice[0] on construction), so gating them on Tab
+                // would hand the panel an empty list on the very first paint of that tab.
+                BuildDefenseChoices();
+                BuildResearchChoices();
                 BuildTroopArmySummary();
             });
             Changed?.Invoke();
@@ -1071,6 +1221,12 @@ namespace DeNelle.Village.UI
                     NextTier = nextTier,
                     Activate = isMax ? null : (Action)(() => UpgradeBuilding(rowId, targetTier)),
                     ViewDetails = () => OpenUpgradePanel(rowId),
+                    // WO-1422 ruling 3.5 - the owner's "keep one door, but name what's behind it".
+                    // The door survives (it is still ViewDetails -> OpenUpgradePanel); only the WORD
+                    // changes, and it is HIDDEN when the ladder authors no perks. Measured against
+                    // building-tiers.json: the Farm authors ZERO perks, so the Farm card shows one
+                    // full-width CTA and no second door - that is the feature, not a gap.
+                    DoorLabel = HasAuthoredPerk(def) ? "PERKS" : null,
                 };
                 BuildingChoices.Add(choice);
                 if (isMax) maxed++;
@@ -1098,6 +1254,391 @@ namespace DeNelle.Village.UI
         private static bool BuildingJobMatches(string jobId, string buildingId) =>
             string.Equals(jobId, buildingId, StringComparison.OrdinalIgnoreCase) ||
             (!string.IsNullOrEmpty(jobId) && jobId.StartsWith(buildingId + ":", StringComparison.OrdinalIgnoreCase));
+
+        // =====================================================================
+        //  WO-1422 — DEFENSE and RESEARCH card projections (the WO-1418 shape)
+        // =====================================================================
+
+        /// <summary>
+        /// One type's placements, folded. <see cref="LowestLevel"/> and the cell beside it name the
+        /// FIRST instance standing at that level, in BaseLayout order — which is the instance the
+        /// card's CTA upgrades (ruling 3.1).
+        /// </summary>
+        private sealed class DefenseTally
+        {
+            public string ItemId;
+            public int Count;
+            public int LowestLevel = int.MaxValue;
+            public int CellX;
+            public int CellZ;
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.1 — the DEFENSE rail/card projection: ONE choice per placed upgradable
+        /// TYPE, never per instance.
+        ///
+        /// ⚠ THIS IS A PRESENTATION CHANGE, NOT A BEHAVIOUR CHANGE. <see cref="BuildDefenseBrowse"/>
+        /// keys its rows on <c>itemId + "#" + level</c> and its CTA already composes
+        /// <c>PlacedUpgradeKey.Compose</c> against ONE grid cell — the FIRST placed instance at that
+        /// level. This projection targets the same instance; it only stops emitting a second row when
+        /// a second copy of the same tower stands at a different level, and it keeps MAXED types
+        /// visible (the browse skipped them) so the card can say "Max" instead of the type vanishing.
+        ///
+        /// ⛔ Do NOT key this per instance. <c>wall_wood</c> is upgradable and a town has many
+        /// segments, so a per-instance rail would be unbounded — the exact trap the browse comment
+        /// has warned about since 2026-08-16.
+        /// </summary>
+        private void BuildDefenseChoices()
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null || state.BaseLayout == null)
+            {
+                // NO SILENT EMPTY LIST (CLAUDE.md §12): an empty Defense tab is read off a log line,
+                // never guessed at from a felt-test.
+                FlowTrace.Step("Manage", "defense choices: no game state / no BaseLayout -> 0 choices.");
+                return;
+            }
+
+            var tallies = new Dictionary<string, DefenseTally>(StringComparer.OrdinalIgnoreCase);
+            int skippedNoLadder = 0;
+            for (int i = 0; i < state.BaseLayout.Count; i++)
+            {
+                var placed = state.BaseLayout[i];
+                if (string.IsNullOrEmpty(placed.itemId)) continue;
+
+                // Guard.Try, not a bare read: ONE malformed catalog row logs and is SKIPPED rather
+                // than throwing out of Rebuild's outer Guard, which would also cost the Troops army
+                // summary and every producer queued behind this one (§12 step 2).
+                Guard.Try("Manage", "defense tally '" + placed.itemId + "'", () =>
+                {
+                    var entry = CatalogRegistry.Get(placed.itemId);
+                    if (entry == null || entry.repo == null) return;
+                    // The SHARED clamped ceiling — the same number BuildModeController and the
+                    // upgrade page use. Reading raw repo.maxLevel here would offer a rung the
+                    // controller then refuses.
+                    if (Buildings.Progression.PlacedStructureUpgradeService.MaxLevelFor(entry) <= 1)
+                    {
+                        skippedNoLadder++;
+                        return;                                  // no ladder: not a Defense card
+                    }
+
+                    int level = Mathf.Max(1, placed.level);
+                    if (!tallies.TryGetValue(placed.itemId, out var tally))
+                    {
+                        tally = new DefenseTally { ItemId = placed.itemId };
+                        tallies[placed.itemId] = tally;
+                    }
+                    tally.Count++;
+                    // STRICTLY LESS-THAN keeps the FIRST instance at the lowest level: a later
+                    // instance at the same level never displaces the one already recorded.
+                    if (level < tally.LowestLevel)
+                    {
+                        tally.LowestLevel = level;
+                        tally.CellX = placed.cellX;
+                        tally.CellZ = placed.cellZ;
+                    }
+                });
+            }
+
+            var queue = BuildTimerService.Instance;
+            int maxed = 0, building = 0, ready = 0;
+            foreach (var kv in tallies)
+            {
+                var tally = kv.Value;
+                Guard.Try("Manage", "defense choice '" + tally.ItemId + "'", () =>
+                {
+                    var entry = CatalogRegistry.Get(tally.ItemId);
+                    if (entry == null) return;
+
+                    int ceiling = Buildings.Progression.PlacedStructureUpgradeService.MaxLevelFor(entry);
+                    int level = Mathf.Clamp(tally.LowestLevel, 1, ceiling);
+                    bool isMax = level >= ceiling;
+                    int nextLevel = isMax ? 0 : level + 1;
+
+                    string jobKey = Buildings.Progression.PlacedUpgradeKey.Compose(
+                        tally.ItemId, tally.CellX, tally.CellZ);
+
+                    // BUSY IS PER KEY, NOT PER TYPE. PlacedStructureUpgradeService's own busy gate
+                    // asks IsBuilding(jobKey), so asking "is any instance of this type upgrading"
+                    // would grey out a CTA the service would have accepted — a behaviour change
+                    // ruling 3.1 forbids.
+                    bool isBuilding = HasPlacedBuilderJob(queue, jobKey);
+
+                    var cost = BuildModeController.UpgradeCostFor(entry, level);
+                    bool affordable = !isMax && CanAfford(cost);
+                    string stateWord = isBuilding ? "Building" : isMax ? "Max" : "Upgradable";
+
+                    string time = null;
+                    if (!isMax && queue != null && queue.Config != null)
+                    {
+                        // The SAME derivation BuildTimerService.StartUpgrade applies
+                        // (tier index = targetLevel - 2, floored at 0). Never a hardcoded number,
+                        // and NULL rather than a guess when there is no config to ask.
+                        int seconds = Mathf.CeilToInt(queue.Config.DurationSecondsForTier(
+                            Mathf.Max(0, nextLevel - 2), BuildJobKind.Upgrade));
+                        time = QueueRailView.FormatTime(seconds);
+                    }
+
+                    string name = NameOf(entry, tally.ItemId);
+                    string description = FirstClause(StructureCardVM.DescriptionFor(entry));
+                    if (string.IsNullOrWhiteSpace(description)) description = "A village structure.";
+
+                    // Placed structures author NO per-level effect sentence (verified: RepoProps
+                    // carries cost/maxLevel, not a benefit line). This mirrors the wording the
+                    // upgrade page itself composes for a placed structure
+                    // (BuildingUpgradeVM.ComposeNextPlaced) rather than inventing a second one, and
+                    // deliberately claims no stat number the tower ladder has not been asked for.
+                    string after = isMax
+                        ? ""
+                        : "Raises " + name + " to Level " + nextLevel + " of " + ceiling + ".";
+
+                    string capturedKey = jobKey;
+                    var choice = new DefenseChoiceVM
+                    {
+                        Id = tally.ItemId,
+                        CatalogEntryId = !string.IsNullOrEmpty(entry.id) ? entry.id : tally.ItemId,
+                        Name = name,
+                        // The DISPLAY-NAME slug, not the itemId: the tier portraits on disk are
+                        // named archer-tower[-2|-3].png / ballista / catapult / arcane-spire, which
+                        // is what PortraitSlug(entry.displayName) produces. Passing the itemId would
+                        // emit "Portraits/tower-ground-archer-2", which exists nowhere, and every
+                        // tier sheet would stay unreachable — the defect ruling 3.8 exists to close.
+                        // A name the slug cannot match (e.g. "Sky Ballista (Anti-Air)") simply falls
+                        // through to the View's alias table, which is where that mapping lives.
+                        PortraitKey = ResolveBuildingPortraitKey(
+                            entry, PortraitSlug(entry.displayName) ?? tally.ItemId, level),
+                        Level = level,
+                        MaxLevel = ceiling,
+                        PlacedCount = tally.Count,
+                        PlacedText = tally.Count == 1
+                            ? "1 placed . L" + level
+                            : tally.Count + " placed . lowest L" + level,
+                        StateWord = stateWord,
+                        Description = Ascii(description),
+                        UpgradeCostParts = isMax ? Array.Empty<CostPart>() : PlacedUpgradeCostParts(cost),
+                        UpgradeTimeText = time,
+                        UpgradeReady = affordable && !isBuilding && !isMax,
+                        AfterUpgradeText = Ascii(after),
+                        NextLevel = nextLevel,
+                        JobKey = jobKey,
+                        DoorLabel = null,          // ruling 3.5: Defense has no second door
+                        Activate = isMax ? null : (Action)(() => UpgradePlaced(capturedKey)),
+                    };
+                    DefenseChoices.Add(choice);
+
+                    if (isMax) maxed++;
+                    else if (isBuilding) building++;
+                    else if (choice.UpgradeReady) ready++;
+
+                    FlowTrace.Step("Manage", "defense choice id=" + choice.Id + " placed=" + choice.PlacedCount +
+                        " lowest=L" + level + "/" + ceiling + " state=" + stateWord + " ready=" + choice.UpgradeReady +
+                        " key='" + jobKey + "' portrait='" + (choice.PortraitKey ?? "<fallback>") + "'");
+                });
+            }
+
+            FlowTrace.Step("Manage", "defense choices projected=" + DefenseChoices.Count +
+                " (from " + state.BaseLayout.Count + " placement(s), " + skippedNoLadder +
+                " with no level ladder); max=" + maxed + " building=" + building + " ready=" + ready);
+        }
+
+        /// <summary>
+        /// True when a Builder job — running or queued — is addressed to EXACTLY this placed-upgrade
+        /// key. Deliberately an exact match, not a type prefix: the busy gate the service applies is
+        /// <c>IsBuilding(jobKey)</c>, so a different instance of the same type being upgraded must
+        /// NOT grey out this card's CTA.
+        /// </summary>
+        private static bool HasPlacedBuilderJob(BuildTimerService svc, string jobKey)
+        {
+            if (svc == null || string.IsNullOrEmpty(jobKey)) return false;
+            foreach (var job in svc.ActiveJobsOf(ChannelId.Builder))
+                if (string.Equals(job.StructureId, jobKey, StringComparison.Ordinal)) return true;
+            foreach (var job in svc.PendingJobsOf(ChannelId.Builder))
+                if (string.Equals(job.StructureId, jobKey, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>The four-material cost parts for a placed-structure upgrade. Uses the SAME
+        /// concept ids the rest of the screen uses — note "stone" carries <c>cost.food</c>, which is
+        /// the shipped icon key (<see cref="DescribeCost"/> and
+        /// <see cref="BuildingUpgradeCostParts"/> both do it); it looks like a typo and is not.</summary>
+        private static IReadOnlyList<CostPart> PlacedUpgradeCostParts(CoreCost cost)
+            => CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", cost.wood), ("stone", "Stone", cost.food),
+                ("iron", "Iron", cost.iron), ("crystal", "Crystals", cost.crystals)
+            });
+
+        /// <summary>
+        /// WO-1422 rulings 3.6 + 3.7 — the RESEARCH rail/card projection: ONE choice per PERK of
+        /// every ladder building standing in this town, in ALL FOUR states.
+        ///
+        /// ⚠ IT SHOWS THE TWO STATES THE BROWSE LIST HID. <see cref="BuildResearchBrowse"/> emits no
+        /// row for an OWNED perk and no row for one already IN PROGRESS, so the tab could never
+        /// answer "what have I already bought" or "what is running right now" — the player had to
+        /// infer both from the queue. This is the same deliberate delta WO-1418 made when it stopped
+        /// hiding maxed buildings.
+        ///
+        /// Research has NO LEVEL, so the card's level slot carries <see cref="ResearchChoiceVM.TierText"/>
+        /// ("TIER 2") instead. Painting "LEVEL 0" would be a lie about a ladder that does not exist.
+        /// </summary>
+        private void BuildResearchChoices()
+        {
+            var all = BuildingTierCatalog.All;
+            if (all == null)
+            {
+                FlowTrace.Warn("Manage", "research choices: BuildingTierCatalog.All is null - the tab can offer nothing.");
+                return;
+            }
+
+            // Ownership is the LIVE per-town placement count, keyed on the RESOLVED ladder id, which
+            // is the same id space building-tiers.json uses. (ModifierService.TierOf would answer a
+            // DIFFERENT question — "have you already upgraded this" — and that conflation is exactly
+            // the defect that made this tab empty for a player who owned a barracks at tier 0.)
+            var placedThisTown = CountPlacedThisTown();
+            int gold = GoldBalance();
+            int owned = 0, researched = 0, researching = 0, available = 0, locked = 0;
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                var def = all[i];
+                if (def == null || string.IsNullOrEmpty(def.Id) || def.Tiers == null) continue;
+                if (!placedThisTown.ContainsKey(def.Id)) continue;       // you do not own one HERE
+
+                owned++;
+                string buildingName = Ascii(string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName);
+                string upperName = buildingName.ToUpperInvariant();
+
+                for (int t = 0; t < def.Tiers.Count; t++)
+                {
+                    var tierDef = def.Tiers[t];
+                    if (tierDef?.Perks == null) continue;
+
+                    for (int p = 0; p < tierDef.Perks.Count; p++)
+                    {
+                        var perk = tierDef.Perks[p];
+                        if (perk == null || string.IsNullOrEmpty(perk.Id)) continue;
+
+                        // Captured by the CTA closures — never the loop variables.
+                        string bId = def.Id;
+                        string pId = perk.Id;
+                        var perkDef = perk;
+
+                        Guard.Try("Manage", "research choice '" + bId + ":" + pId + "'", () =>
+                        {
+                            bool isOwned = Buildings.Progression.BuildingPerkService.IsOwned(bId, pId);
+                            bool inProgress = !isOwned &&
+                                Buildings.Progression.BuildingPerkService.IsResearching(bId, pId);
+                            string reason = "";
+                            bool can = false;
+                            if (!isOwned && !inProgress)
+                            {
+                                // ⚠ ASKED ONLY AFTER the owned/in-progress tests, because CanResearch
+                                // reports BOTH of those as refusals ("Researched." / "Research
+                                // already in progress.") — asking it first would label a finished
+                                // perk Locked and print its own bookkeeping at the player.
+                                can = Buildings.Progression.BuildingPerkService.CanResearch(
+                                    bId, pId, out string why);
+                                reason = why ?? "";
+                            }
+
+                            int unlock = BuildingTierCatalog.PerkUnlockTier(bId, pId);
+                            int price = Mathf.Max(0, perkDef.GoldCost);
+                            float seconds = Buildings.Progression.BuildingPerkService.ResearchSeconds(bId, pId);
+
+                            string stateWord = isOwned ? "Researched"
+                                             : inProgress ? "Researching"
+                                             : can ? "Available" : "Locked";
+                            bool isLocked = stateWord == "Locked";
+
+                            string cta = null;
+                            Action activate = null;
+                            if (stateWord == "Available")
+                            {
+                                cta = "RESEARCH";
+                                activate = () => Research(bId, pId);
+                            }
+                            else if (stateWord == "Researching")
+                            {
+                                // A non-interactable face (ruling 3.7): the work is already on the
+                                // Research line and this screen must not offer to start it twice.
+                                cta = "RESEARCHING";
+                            }
+                            else if (isLocked)
+                            {
+                                // THE DOOR, not a dead button. Both gates open the SAME page through
+                                // the one existing start path: the building's upgrade page, whose
+                                // FIRST tile is the Heart-of-Elarion "Unlock Village Tier" control
+                                // (there is no separate Heart panel). The face names WHICH
+                                // prerequisite the player is going to.
+                                bool buildingLocked = ModifierService.TierOf(bId) < unlock;
+                                bool villageLocked = !buildingLocked &&
+                                    Buildings.Progression.VillageTierService.Current < unlock;
+                                cta = villageLocked ? "UPGRADE THE HEART" : "UPGRADE " + upperName;
+                                activate = () =>
+                                {
+                                    FlowTrace.Step("Manage", "research locked door '" + bId + ":" + pId +
+                                        "' (tier " + unlock + ") -> BuildingUpgrade page '" + bId + "'");
+                                    OpenUpgradePanel(bId);
+                                };
+                            }
+                            // "Researched" keeps cta == null and activate == null: there is nothing
+                            // left to do to it, so the card shows no CTA at all.
+
+                            string description = FirstClause(perkDef.Effect);
+                            if (string.IsNullOrWhiteSpace(description))
+                                description = Ascii(string.IsNullOrEmpty(perkDef.Name) ? pId : perkDef.Name);
+
+                            var choice = new ResearchChoiceVM
+                            {
+                                BuildingId = bId,
+                                PerkId = pId,
+                                Name = Ascii(string.IsNullOrEmpty(perkDef.Name) ? pId : perkDef.Name),
+                                BuildingName = buildingName,
+                                // BuildingPerkDef.IconId documents itself as "defaults to Id".
+                                IconName = !string.IsNullOrEmpty(perkDef.IconId) ? perkDef.IconId : pId,
+                                UnlockTier = unlock,
+                                TierText = "TIER " + unlock,
+                                StateWord = stateWord,
+                                Locked = isLocked,
+                                // VERBATIM. Not Ascii()'d and never replaced by a generic "Locked." —
+                                // the sentence CanResearch composes is the one that teaches the loop
+                                // ("Upgrade the building to Tier 2 first."), and a suite asserts it
+                                // matches that out-string exactly.
+                                LockReason = isLocked ? reason : "",
+                                Description = Ascii(description),
+                                // ⚠ ResourceCost has NO gold lane (RepoProps), which is why research
+                                // cost is composed as an explicit gold CostPart here rather than
+                                // formatted by hand the way the retired browse row did.
+                                CostParts = CostFormat.Parts(new[] { ("gold", "Gold", price) }),
+                                TimeText = FormatTime(seconds),
+                                Ready = stateWord == "Available" && gold >= price,
+                                CtaLabel = cta,
+                                DoorLabel = null,        // ruling 3.5
+                                Activate = activate,
+                            };
+                            ResearchChoices.Add(choice);
+
+                            if (isOwned) researched++;
+                            else if (inProgress) researching++;
+                            else if (can) available++;
+                            else locked++;
+
+                            FlowTrace.Step("Manage", "research choice " + bId + ":" + pId +
+                                " state=" + stateWord + " tier=" + unlock + " gold=" + price +
+                                " ready=" + choice.Ready + " cta='" + (cta ?? "<none>") + "'" +
+                                (isLocked ? " reason='" + choice.LockReason + "'" : ""));
+                        });
+                    }
+                }
+            }
+
+            // NO SILENT EMPTY LIST (§12): say how many ladder buildings this town owns and what that
+            // produced, so an empty Research tab is read off a log instead of a felt-test.
+            FlowTrace.Step("Manage", "research choices projected=" + ResearchChoices.Count +
+                " from " + owned + " owned ladder building(s) of " + placedThisTown.Count +
+                " placed type(s); researched=" + researched + " researching=" + researching +
+                " available=" + available + " locked=" + locked);
+        }
 
         /// <summary>"Barracks:2:0" / "lumbermill@15_7" / the dedicated Barracks
         /// upgrade key to the stable tier-catalog id.</summary>
@@ -1315,6 +1856,11 @@ namespace DeNelle.Village.UI
                         LockTier = Mathf.Max(1, def.UnlockBarracksTier),
                     };
                     TroopChoices.Add(choice);
+                    // WO-1422 ruling 3.10 item 1 - the state BADGE word, set on EVERY path so a
+                    // locked troop's card is never badge-less (Buildings paints one on all four of
+                    // its states). DoorLabel stays null: ruling 3.5 forbids inventing a door, and
+                    // there is no troop skill/perk panel to open.
+                    choice.StateWord = "Locked";
                     FlowTrace.Step("Manage", "troop choice id=" + id + " unlocked=" + choice.Unlocked +
                         " armyOwned=" + owned);
                     if (!unlocked || !trainable)
@@ -1329,6 +1875,7 @@ namespace DeNelle.Village.UI
                     //    no gold test any more - training charges nothing.
                     FillTrainFacts(choice, def);
                     FillUpgradeFacts(choice, id, level);
+                    FillTroopStateWord(choice, id);
 
                     // ── TRAIN ──────────────────────────────────────────────────
                     // WO-1387 (owner 2026-09-04 23:16, "training free ... just time"): a FREE row.
@@ -1436,6 +1983,48 @@ namespace DeNelle.Village.UI
                 choice.UpgradeReady = true;
             }
             choice.UpgradeFactText = "Upgrade: " + choice.UpgradeCostText + " . " + choice.UpgradeStateText;
+        }
+
+        /// <summary>
+        /// WO-1422 ruling 3.10 item 1 — the UNLOCKED troop's state badge word, exactly one of
+        /// "Training" / "Max" / "Upgradable" (the "Locked" arm is set before the locked early-return
+        /// in <see cref="BuildTroopsBrowse"/>).
+        ///
+        /// ⚠ "Training" IS DEFINED HERE, because nothing pinned it. It reads the Buildings meaning
+        /// of "Building" - WORK IN FLIGHT ON THIS CARD'S OWN SUBJECT - which for a troop is either a
+        /// TroopUpgrade job (already resolved into <see cref="TroopChoiceVM.UpgradeInProgress"/> by
+        /// <see cref="FillUpgradeFacts"/>, and note the engine runs those on the RESEARCH channel)
+        /// or a training job on the Train line whose id carries this troop. Precedence puts the
+        /// in-flight word first, because a card that says "Upgradable" while its own upgrade is
+        /// running is the state the badge exists to stop.
+        /// </summary>
+        private static void FillTroopStateWord(TroopChoiceVM choice, string troopId)
+        {
+            var svc = BuildTimerService.Instance;
+            bool training = choice.UpgradeInProgress;
+            if (!training && svc != null && !string.IsNullOrEmpty(troopId))
+            {
+                // The job-id grammar is BarracksService's own: "barracks-train:<troopId>:<guid8>"
+                // (BarracksService.cs:366). The TRAILING COLON is load-bearing: without it a troop
+                // id that is a PREFIX of another id would read the other troop's training job as
+                // its own. StackKeyOf keys on the same second colon-segment.
+                string prefix = BarracksService.TrainPrefix + troopId + ":";
+                foreach (var job in svc.ActiveJobsOf(ChannelId.Train))
+                {
+                    if (job.StructureId != null &&
+                        job.StructureId.StartsWith(prefix, StringComparison.Ordinal)) { training = true; break; }
+                }
+                if (!training)
+                    foreach (var job in svc.PendingJobsOf(ChannelId.Train))
+                    {
+                        if (job.StructureId != null &&
+                            job.StructureId.StartsWith(prefix, StringComparison.Ordinal)) { training = true; break; }
+                    }
+            }
+
+            choice.StateWord = training ? "Training" : !choice.HasNextLevel ? "Max" : "Upgradable";
+            FlowTrace.Step("Manage", "troop state id=" + troopId + " word=" + choice.StateWord +
+                " upgrading=" + choice.UpgradeInProgress + " hasNext=" + choice.HasNextLevel);
         }
 
         /// <summary>

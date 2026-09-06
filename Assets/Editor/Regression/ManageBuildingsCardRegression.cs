@@ -139,10 +139,27 @@ namespace DeNelle.Editor
                 failures.Add("[card-paints-the-word] BuildBuildingCard does not paint selected.StateWord");
 
             string destination = Body(panel, "private void RenderBuildingsDestination(", "private void AddBuildingWorkspaceRow(");
-            // RED: move the old Showing sentence back into RenderBuildingsDestination.
-            if (destination == null || destination.Contains("Showing ") ||
-                !panel.Contains("Showing \" + (first + 1)"))
-                failures.Add("[no-paging-when-it-fits] Buildings pages, or the still-live Defense/Research pager vanished");
+            // ⭐ RE-POINTED 2026-09-06 (WO-1422 ruling 3.4). The SECOND half of this check used to
+            // require `panel.Contains("Showing \" + (first + 1)")` — i.e. it asserted the paged
+            // Defense/Research list was STILL ALIVE, and its message said so in those words. WO-1422
+            // retires that path entirely: Defense and Research were AddBrowseRow's last two readers,
+            // so the pager, AddBrowseRow and BuildBrowseRowContent are DELETED. A pin that demands a
+            // deleted method is a doc arguing for a design the code no longer has (CLAUDE.md §15),
+            // and it would have made this suite the thing BLOCKING the ruling.
+            //
+            // The FIRST half is the half that was ever about Buildings, and it is unchanged: this
+            // destination fits its rail on one screen and must never page. The retirement itself is
+            // now pinned once, in ManageProgressiveDisclosureRegression's [pager-retired] case —
+            // one owner, not a copy here as well.
+            // RED PROOF: add an `AddNoteRow("Showing " + first + ...)` line to
+            // RenderBuildingsDestination.
+            if (destination == null)
+                failures.Add("[no-paging-when-it-fits] RenderBuildingsDestination was not found - the Buildings " +
+                             "workspace does not exist, so the no-paging pin could not be scoped. FAIL, not a skip");
+            else if (destination.Contains("Showing "))
+                failures.Add("[no-paging-when-it-fits] the Buildings destination has re-grown a \"Showing n-m of N\" " +
+                             "page-count sentence. All four Manage tabs render ONE workspace - portrait rail, one " +
+                             "selected card, a NOW band, one footer row - and nothing pages (WO-1418, WO-1422 3.4)");
 
             // RED: lower TroopCtaY1 until the replayed height is under 112px.
             float y0 = Const(panel, "TroopCtaY0"), y1 = Const(panel, "TroopCtaY1"), px = Const(panel, "TroopWorkspacePx");
