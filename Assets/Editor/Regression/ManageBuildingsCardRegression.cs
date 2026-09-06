@@ -164,7 +164,35 @@ namespace DeNelle.Editor
             if (strip == null || !strip.Contains("_vm.Channels[i].Describe()") || !strip.Contains("s.Describe()"))
                 failures.Add("[idle-chip-word] the VM's idle wording is not painted in both Manage chip surfaces");
 
-            log.AppendLine("source card/destination/touch/drawer/footer/idle-paint checks complete");
+            // RED: restore the loop which makes BuildingNowRow_n siblings below the dark band.
+            string buildingNow = Body(panel, "private void AddBuildingNowBand()", "private void RenderTroopsDestination(");
+            if (buildingNow == null || buildingNow.Contains("MakeRowHost(\"BuildingNowRow_") ||
+                !buildingNow.Contains("+\" + hiddenJobs + \" more") ||
+                !buildingNow.Contains("BuildingSprite(FindBuildingChoice(first.BuildingId))"))
+                failures.Add("[building-now-stays-in-band] queue rows escape the band, lack +N more, or use troop art");
+
+            // RED: paint selected.LockText on the disabled CTA again.
+            if (card == null || !card.Contains("UNLOCKS AT VILLAGE LEVEL ") ||
+                !card.Contains("selected.RequiresVillageTier"))
+                failures.Add("[locked-cta-names-village-level] locked CTA does not name its village-tier gate");
+
+            // RED: remove the tail spacer and restore count-normalized scrolling.
+            string workspace = Body(panel, "private void AddBuildingWorkspaceRow(", "private void BuildBuildingRailRow(");
+            if (workspace == null || !workspace.Contains("BuildingRailTailSpacer") ||
+                !workspace.Contains("selectedTopPx") || !workspace.Contains("StopMovement()"))
+                failures.Add("[building-rail-whole-row] selected rail row cannot align flush to the viewport top");
+
+            // RED: load the VM's Portraits IconKey before asking the palette resolver.
+            string art = Body(panel, "private static Sprite BuildingSprite(BuildingChoiceVM", "private void BuildBuildingCard(");
+            if (art == null || !art.Contains("ResolveEntryArtPublic") || art.Contains("Resources.Load") ||
+                !art.Contains("choice.CatalogEntryId") || !art.Contains("CatalogRegistry.Get(catalogEntryId)") ||
+                !art.Contains("LooksLikeStructureArt(art)") || !art.Contains("ConceptIconResolver.ResolveAny"))
+                failures.Add("[building-art-palette-first] Manage can paint NPC Portraits art or ignores the typed catalog id");
+
+            if (strip == null || !strip.Contains("FitSingleLine(cell, ElarionUiKit.FontHardFloor"))
+                failures.Add("[chip-fit-floor] operational chips are not fitted after their live text is assigned");
+
+            log.AppendLine("source card/destination/touch/drawer/footer/idle-paint/polish checks complete");
         }
 
         private static bool InstallState(GameStateService service, GameState state)

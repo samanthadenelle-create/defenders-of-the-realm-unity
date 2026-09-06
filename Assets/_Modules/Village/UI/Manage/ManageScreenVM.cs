@@ -82,15 +82,13 @@ namespace DeNelle.Village.UI
         public int DepthCap;
 
         /// <summary>
-        /// ASCII, colour-independent one-liner: "Builders 2/3 busy - 4/5 queued".
+        /// ASCII, colour-independent one-liner: "Builders 2/3 . 4 queued".
         /// State is TEXT because the owner is red/green colourblind.
         /// </summary>
         public string Describe()
         {
             if (Busy == 0) return $"{Name} idle - {Slots} free";
-            return DepthCap > 0
-                ? $"{Name} {Busy}/{Slots} busy - {Depth}/{DepthCap} queued"
-                : $"{Name} {Busy}/{Slots} busy - {Depth} queued";
+            return $"{Name} {Busy}/{Slots} . {Depth} queued";
         }
     }
 
@@ -108,6 +106,9 @@ namespace DeNelle.Village.UI
         public ChannelId Channel;
         /// <summary>The engine key. Null ONLY on a collapsed stack header.</summary>
         public string JobId;
+        /// <summary>Normalized BuildingTierCatalog id for Builder building jobs, otherwise empty.
+        /// The View resolves structure art from this typed identity without parsing <see cref="Label"/>.</summary>
+        public string BuildingId;
         /// <summary>True when the job has not started yet.</summary>
         public bool Queued;
         /// <summary>Position among pending jobs (0-based); -1 for an active job.</summary>
@@ -271,12 +272,16 @@ namespace DeNelle.Village.UI
     public sealed class BuildingChoiceVM
     {
         public string Id;
+        /// <summary>The actual placed structures-catalog palette id, never the shared ladder id.</summary>
+        public string CatalogEntryId;
         public string Name;
         public int Level;
         public int MaxLevel;
         public string IconKey;
         public bool Locked;
         public string LockText;
+        /// <summary>The authored Village level gate for the next tier; 0 when no gate applies.</summary>
+        public int RequiresVillageTier;
         public string StateWord;
         public string Description;
         public IReadOnlyList<CostPart> UpgradeCostParts;
@@ -606,10 +611,19 @@ namespace DeNelle.Village.UI
             // canon §6); every other kind keeps crystals and the View's "Finish Now" default.
             bool paysGold = BuildTimerService.FinishPaysGold(job.JobKind);
             int balance = paysGold ? GoldBalance() : crystals;
+            string buildingId = channel == ChannelId.Builder ? NormalizeBuildingJobId(job) : "";
+            var building = !string.IsNullOrEmpty(buildingId) ? BuildingTierCatalog.Find(buildingId) : null;
+            string label = ObsidianQueueHud.FormatJobTarget(job);
+            if (building != null)
+            {
+                string name = Ascii(!string.IsNullOrWhiteSpace(building.DisplayName)
+                    ? building.DisplayName : buildingId);
+                label = job.TargetTier > 0 ? name + " -> L" + job.TargetTier : name;
+            }
 
             return new QueueRowVM
             {
-                Label = ObsidianQueueHud.FormatJobTarget(job),
+                Label = label,
                 // Colourblind law: the state is a SENTENCE, never a tint.
                 // The percentage is stated IN WORDS beside the bar (colourblind law: the fill is
                 // never the only signal). WO-898's monetization driver is the player SEEING how
@@ -619,6 +633,7 @@ namespace DeNelle.Village.UI
                     : "Building - " + FormatTime(rem) + " left" + PercentSuffix(svc, channel, job.StructureId),
                 Channel = channel,
                 JobId = job.StructureId,
+                BuildingId = building != null ? buildingId : "",
                 Queued = queued,
                 PendingIndex = pendingIndex,
                 IsStackChild = isChild,
@@ -1016,8 +1031,9 @@ namespace DeNelle.Village.UI
                 bool isLocked = !isMax && next.RequiresVillageTier > villageTier;
                 var def = BuildingTierCatalog.Find(id);
                 var entry = kv.Value.SourceIds.Count > 0 ? CatalogRegistry.Get(kv.Value.SourceIds[0]) : null;
-                string description = entry != null ? StructureCardVM.DescriptionFor(entry) : null;   // DeNelle.Village.StructureCardVM (BuildMode is a folder, not a namespace)
-                if (string.IsNullOrWhiteSpace(description) && current != null) description = current.Effect;
+                string description = FirstClause(current != null ? current.Effect : null);
+                if (string.IsNullOrWhiteSpace(description) && entry != null)
+                    description = FirstClause(StructureCardVM.DescriptionFor(entry));   // DeNelle.Village.StructureCardVM (BuildMode is a folder, not a namespace)
                 if (string.IsNullOrWhiteSpace(description)) description = "A village structure.";
 
                 var cost = BuildingTierBasket(next);
@@ -1038,18 +1054,20 @@ namespace DeNelle.Village.UI
                 var choice = new BuildingChoiceVM
                 {
                     Id = id,
+                    CatalogEntryId = entry != null ? entry.id : "",
                     Name = Ascii(def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id),
                     Level = level,
                     MaxLevel = maxLevel,
                     IconKey = ResolveBuildingPortraitKey(entry, id, level),
                     Locked = isLocked,
                     LockText = isLocked ? "Level " + level + " . T" + next.RequiresVillageTier : "",
+                    RequiresVillageTier = isLocked ? next.RequiresVillageTier : 0,
                     StateWord = stateWord,
                     Description = Ascii(description),
                     UpgradeCostParts = isMax ? Array.Empty<CostPart>() : BuildingUpgradeCostParts(next),
                     UpgradeTimeText = time,
                     UpgradeReady = ready,
-                    AfterUpgradeText = isMax ? "" : Ascii(next.Effect),
+                    AfterUpgradeText = isMax ? "" : Ascii(FirstClause(next.Effect)),
                     NextTier = nextTier,
                     Activate = isMax ? null : (Action)(() => UpgradeBuilding(rowId, targetTier)),
                     ViewDetails = () => OpenUpgradePanel(rowId),
@@ -1080,6 +1098,30 @@ namespace DeNelle.Village.UI
         private static bool BuildingJobMatches(string jobId, string buildingId) =>
             string.Equals(jobId, buildingId, StringComparison.OrdinalIgnoreCase) ||
             (!string.IsNullOrEmpty(jobId) && jobId.StartsWith(buildingId + ":", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>"Barracks:2:0" / "lumbermill@15_7" / the dedicated Barracks
+        /// upgrade key to the stable tier-catalog id.</summary>
+        private static string NormalizeBuildingJobId(BuildJobData job)
+        {
+            string jobId = job.StructureId;
+            if (string.IsNullOrWhiteSpace(jobId)) return "";
+            if (job.JobKind == JobKind.BarracksUpgrade ||
+                string.Equals(jobId, BarracksService.BarracksJobId, StringComparison.OrdinalIgnoreCase))
+                return "barracks";
+            string id = jobId.Trim();
+            int suffix = id.IndexOfAny(new[] { ':', '@' });
+            if (suffix >= 0) id = id.Substring(0, suffix);
+            return id.Trim().ToLowerInvariant().Replace('_', '-');
+        }
+
+        /// <summary>One card line only: retain the first authored sentence including its period.</summary>
+        private static string FirstClause(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            string value = text.Trim();
+            int period = value.IndexOf('.');
+            return period >= 0 ? value.Substring(0, period + 1).Trim() : value;
+        }
 
         private static IReadOnlyList<CostPart> BuildingUpgradeCostParts(BuildingTierDef tier)
         {

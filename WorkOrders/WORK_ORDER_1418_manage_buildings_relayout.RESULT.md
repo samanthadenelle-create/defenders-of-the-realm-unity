@@ -34,6 +34,22 @@
 - Gates: see the commit message for the fresh `COMPILE_GATE_OK` / `REGRESSION_OK` / `MANAGE_OPERATIONAL_CAPTURE_OK`
   markers and the opened `ManageBuildings_*.png` frames.
 
+## Polish (BATCH_STATE s8.10, second Codex hand-back, landed on top)
+All six measured defects fixed and re-reviewed: chips `<Name> B/S . D queued` + FitSingleLine (no overflow at 1920);
+BUILDING NOW paints `<DisplayName> -> L<n>` and `+N more` INSIDE the plate; locked CTA `UNLOCKS AT VILLAGE LEVEL <n>`;
+rail seats the selected row flush; description/benefit one line (first clause); NPC faces can no longer land in a
+building medallion (tall 2:3 sheets rejected -> concept icon / hammer).
+**Art finding, corrected by the lead review:** every file in `Assets/Resources/Portraits/` is 784x1168 on disk; the
+"square tier sheets" in the hand-back are square only because their import profile scales to 1024x1024. None of the
+six Buildings ladders (arcane-tower, armorer, barracks, forge, lumbermill, farm/Quarry) has an authored STRUCTURE
+portrait - the medallions are honest blanks until the art drop. The lane also removed the `Portraits/<slug>-<level>`
+tier-sheet route; accepted for now because those sheets belong to Defense ladders that never appear on this tab; the
+pin `[building-art-palette-first]` is reworded when the route returns.
+Gates: `COMPILE_GATE_OK` (`Builds/c13` 23:51), `REGRESSION_OK 390/390` (`Builds/r14` 23:54),
+`MANAGE_OPERATIONAL_CAPTURE_OK 12/12 touch=clean` (`Builds/capman2` 23:49); `ManageBuildings_2670x1200.png` +
+`_1920x1080.png` opened. Minor, not blocking: the "+N more" count includes stack children (may overcount); the
+Open-build footer row is clipped by CLOSE at 1920 inside its scroll zone.
+
 ## Owed / open
 - `StoreReturnToManageRegression` + `NightMarketNoWalletRegression` (RED-first) - in-house follow-up.
 - The footer hint text ("Recommended next upgrades" in the mockup) ships as the moved "Need another town structure?"
