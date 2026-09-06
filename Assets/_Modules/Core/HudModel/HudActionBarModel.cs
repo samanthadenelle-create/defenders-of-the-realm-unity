@@ -281,6 +281,22 @@ namespace DeNelle.Core.HudModel
         /// <summary>The ordered active buttons (enum order, left to right).</summary>
         public IReadOnlyList<ActionBarButtonId> Active => _active;
 
+        /// <summary>
+        /// WO-1407 — the Village-published army SNAPSHOT, republished here so the View never
+        /// reads the gate itself. The army predicate is the model's (WO-835 View-purity law,
+        /// pinned by HudActionBarRegression.CheckViewPurity: HudKitController.cs may not contain
+        /// the literal RaidEntryGate.ArmyStatus), and the Heart plate's objective line needs the
+        /// whole struct — Version (change detection) and RequiredSlots (the WO-823 bar) are
+        /// SNAPSHOT FIELDS, not predicates.
+        ///
+        /// It deliberately bypasses <see cref="_source"/>: <see cref="ISource"/> carries only the
+        /// derived bools/ints the bar's own predicates need, and widening that interface would
+        /// force every fixture that implements it (the headless FakeSource + the EditMode fixture
+        /// it mirrors) to change for a value no bar face consumes.
+        /// </summary>
+        public DeNelle.Core.UI.RaidEntryGate.RaidArmyStatus ArmySnapshot =>
+            DeNelle.Core.UI.RaidEntryGate.ArmyStatus;
+
         /// <summary>True while Raids is applicable but the army is not full — the View
         /// tints the face toward Disabled and keeps it INTERACTABLE (owner ruling:
         /// a dimmed tap still opens the drillmaster redirect).</summary>

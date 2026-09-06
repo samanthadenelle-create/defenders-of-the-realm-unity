@@ -1,6 +1,6 @@
 # WO-1407: the town HUD never tells a non-raid-capable player how to become one; raw seconds, ASCII pips, no idle-builders surface
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-05 21:45 - objective line + minutes + idle-builders copy landed (HudStateCopy, model-published army snapshot), HudLabelFit cases 13-15 green, COMPILE_GATE_OK + REGRESSION_OK 385/385; `[*]` pips -> icons is WO-1419, chip-tap door needs a ruling (RESULT file); device build tonight. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 ## Evidence
 - Device frames (build 355952) - SEEN (`REVIEW_MERGED.md` row 6): `docs/qa/UI_REVIEW_2026-09-05/02-hud-town.png`,

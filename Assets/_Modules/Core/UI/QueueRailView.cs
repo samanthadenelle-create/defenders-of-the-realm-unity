@@ -752,11 +752,9 @@ namespace DeNelle.Core.UI
         /// <summary>ASCII h/m/s countdown ("3m 13s"). No clock glyph — the SDF font has none.</summary>
         public static string FormatTime(int seconds)
         {
-            if (seconds < 0) seconds = 0;
-            int h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60;
-            if (h > 0) return h + "h " + m + "m";
-            if (m > 0) return m + "m " + s + "s";
-            return s + "s";
+            // WO-1407: the grammar moved to ElarionUi.Duration so the wave countdown and this
+            // rail print the SAME words from ONE body. This name stays for its callers.
+            return ElarionUi.Duration(seconds);
         }
 
         private static string InitialOf(string label)

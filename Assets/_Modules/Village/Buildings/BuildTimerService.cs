@@ -2199,8 +2199,11 @@ namespace DeNelle.Village
         private void PublishArmyStatus()
         {
             var s = ArmyReadiness.Compute(State);
+            // WO-1407: RequiredSlots rides along (the WO-823 soft-gate bar, 3 or the cap) so the
+            // Heart plate's "Train N troops to unlock Raids" names the SAME number this gate
+            // judged Ready against - HeartObjectiveCopy.Resolve reads it off the seam.
             DeNelle.Core.UI.RaidEntryGate.PublishArmyStatus(
-                s.Ready, s.DeployableSlots, s.QueuedSlots, s.CapSlots);
+                s.Ready, s.DeployableSlots, s.QueuedSlots, s.CapSlots, s.RequiredSlots);
 
             // WO-1389 pressure point 6 - "Army N / M" for the Journey Raids card subtitle rides
             // the SAME relay, on the SAME cadence, off the SAME snapshot: this method is the one

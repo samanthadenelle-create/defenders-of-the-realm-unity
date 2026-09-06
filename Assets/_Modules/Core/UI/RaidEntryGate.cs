@@ -43,6 +43,14 @@ namespace DeNelle.Core.UI
             public int QueuedSlots;      // slots committed to in-flight Train jobs
             public int CapSlots;         // army.MaxArmySize
             public int Version;          // bumps ONLY on a value change (HUD change-detect)
+            /// <summary>
+            /// WO-1407: the slot bar Ready was judged against - ArmyReadiness.Snapshot.RequiredSlots
+            /// relayed verbatim (the WO-823 first-raid soft gate: 3 while the save has never
+            /// finished a raid, the cap afterwards). Surfaces that SAY a number ("Train 3 troops
+            /// to unlock Raids") read THIS, never CapSlots, or the copy disagrees with the gate
+            /// that produced it. 0 = never published (the Ready=true default).
+            /// </summary>
+            public int RequiredSlots;
         }
 
         private static int _armyStatusVersion;
@@ -56,19 +64,31 @@ namespace DeNelle.Core.UI
         /// field actually changed, so the HUD poll repaints on transitions alone.</summary>
         public static void PublishArmyStatus(bool ready, int deployableSlots, int queuedSlots, int capSlots)
         {
+            // Pre-WO-1407 callers judged against the cap; keep that as the relayed bar.
+            PublishArmyStatus(ready, deployableSlots, queuedSlots, capSlots, capSlots);
+        }
+
+        /// <summary>WO-1407 overload: also relays the slot bar <paramref name="ready"/> was
+        /// judged against (ArmyReadiness.Snapshot.RequiredSlots) so copy can say the number.</summary>
+        public static void PublishArmyStatus(bool ready, int deployableSlots, int queuedSlots, int capSlots,
+                                             int requiredSlots)
+        {
             var cur = ArmyStatus;
             if (cur.Ready == ready && cur.DeployableSlots == deployableSlots &&
-                cur.QueuedSlots == queuedSlots && cur.CapSlots == capSlots)
+                cur.QueuedSlots == queuedSlots && cur.CapSlots == capSlots &&
+                cur.RequiredSlots == requiredSlots)
                 return;   // unchanged — Version holds, HUD stays quiet
             if (cur.Ready != ready)
                 FlowTrace.Step("Raid", "army status -> " + (ready ? "READY" : "NOT READY") +
-                    " (deployable " + deployableSlots + " + queued " + queuedSlots + " / cap " + capSlots + ")");
+                    " (deployable " + deployableSlots + " + queued " + queuedSlots + " / cap " + capSlots +
+                    ", required " + requiredSlots + ")");
             ArmyStatus = new RaidArmyStatus
             {
                 Ready = ready,
                 DeployableSlots = deployableSlots,
                 QueuedSlots = queuedSlots,
                 CapSlots = capSlots,
+                RequiredSlots = requiredSlots,
                 Version = ++_armyStatusVersion
             };
         }

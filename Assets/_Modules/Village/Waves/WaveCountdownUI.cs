@@ -15,6 +15,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
+using DeNelle.Core.UI;   // WO-1407: ElarionUi.Duration - the one countdown formatter
 
 namespace DeNelle.Village
 {
@@ -136,7 +137,9 @@ namespace DeNelle.Village
         {
             if (_label == null) return;
             int whole = Mathf.CeilToInt(seconds);
-            _label.text = whole > 0 ? $"Next wave in {whole}s" : "Wave incoming!";
+            // WO-1407: "Next wave in 14m 15s", never a bare "855s" - one formatter, shared
+            // with the HudKit wave plate (HudKitController.OnWave) and the queue rail.
+            _label.text = whole > 0 ? "Next wave in " + ElarionUi.Duration(whole) : "Wave incoming!";
         }
 
         private void ShowLabel()

@@ -133,6 +133,15 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private TMP_Text _heartObjectiveLabel;
+        // WO-1407: the objective line is STATE, resolved in Core (HeartObjectiveCopy.Resolve)
+        // from the posture rail + the army seam. These are the change-detect inputs of the last
+        // paint, so the per-frame poll repaints (and traces) only on a transition.
+        private bool _heartObjectiveHostile;
+        private bool _heartObjectiveCapablePainted;
+        private PostureSignals.RaidLockReason _heartObjectiveLockPainted = PostureSignals.RaidLockReason.None;
+        private int _heartObjectiveArmyVersionPainted = -1;
+        private bool _heartObjectiveHostilePainted;
+        private bool _heartObjectiveEverPainted;
 
         // WO-1379 HEARTFIRE - the flame row + rekindle line under the Heart of Elarion
         // plate. Repainted from the Core posture rail (PostureSignals.SetHeartfire), the
@@ -1962,30 +1971,16 @@ namespace DeNelle.HUD.Kit
         // print the soonest countdown AND the job row printed the same value right under
         // it, so the owner saw "3m 13s" twice, stacked. Exactly ONE surface owns a
         // countdown now, and it is the card that the countdown belongs to.
+        //
+        // WO-1407: the words moved to Core (BuildersChipCopy.Format) so the regression can read
+        // them with a fixture; this View only relays. The chip now SAYS idle ("Builders idle 2")
+        // instead of "Builders 0/2" - a status glance that reports nothing when nothing is
+        // building is indistinguishable from a missing chip (the merged review row 6).
+        // The two-line shape ("\nTrain N", never " | ") and its 2026-08-05 numeral-1 reasoning
+        // travelled with the words - read them there.
         private static string FormatQueueChip(ObsidianQueueGate.WorkQueueStatus s)
         {
-            if (!s.Available) return "Builders";
-            string line = "Builders " + s.BuilderBusy + "/" + s.BuilderSlots;
-            // "Train", not "Training": at 1920x1080 the longer word ellipsized to
-            // "Trainin..." in the 2026-08-03 capture. The counts are the load-bearing part.
-            //
-            // NEWLINE, NOT " | " (2026-08-05, from a 2670x1200 capture): this chip's font
-            // draws the numeral 1 as a BARE VERTICAL STROKE with no flag or base, so
-            // "Builders 1/2 | Train 1" rendered as three identical vertical marks carrying
-            // three different meanings - two counts and a separator. The pipe was the worst
-            // offender because it sat directly between the digits it was being confused with.
-            // The chip is MinTouchPx tall and its label wraps, so the height for a second
-            // line is already reserved and costs nothing. Two short lines also survive a
-            // narrow chip better than one wrapped line.
-            // The underlying glyph problem was wider than this chip and is now FIXED AT THE
-            // SOURCE (2026-08-05, same day): ElarionUiKit's numeral-legibility gate measured the
-            // Body role font (Alata) drawing '1' at 7.23 ink units against its own 'l' 6.84 and
-            // '|' 6.14, rejected it, and fell every FontRole.Body surface through to the default
-            // chain. The two lines STAY regardless: this chip is 220 ref px wide and 112 tall, so
-            // one wrapped line would still ellipsize the Train count off a legible face, and the
-            // height for a second line is already reserved. Layout reason, no longer a font one.
-            if (s.TrainBusy > 0) line += "\nTrain " + s.TrainBusy;
-            return line;
+            return BuildersChipCopy.Format(s);
         }
 
         // ── WO-1384: THE HEART PLATE'S ROWS, top to bottom, as fractions of _heartPlate.Root ──
@@ -2080,12 +2075,20 @@ namespace DeNelle.HUD.Kit
                 nameRt.anchorMin = new Vector2(nameRt.anchorMin.x, HeartNameBandY0);
                 nameRt.anchorMax = new Vector2(nameRt.anchorMax.x, HeartNameBandY1);
             }
+            // WO-1407: line 2 carries STATE (Barracks hint / train count / wave line) - the words
+            // are resolved in Core (HeartObjectiveCopy) and painted by RepaintHeartObjective; the
+            // literal sentence no longer lives in this View. The row stays ONE fitted line in the
+            // WO-1384 band (the band seats exactly one 18 px line - a FitBlock wrap here would
+            // Truncate the second line away silently, while the single-line fit ellipsises
+            // visibly; HudLabelFitRegression [heart-objective-state] MEASURES the widest state
+            // string inside the row so neither happens).
             _heartObjectiveLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
-                "Prepare the realm for the next wave.", HeartObjectiveBandY0, HeartObjectiveBandY1,
+                string.Empty, HeartObjectiveBandY0, HeartObjectiveBandY1,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
                 HeartRowX0, HeartRowX1);
             _heartObjectiveLabel.enableAutoSizing = true;
             ElarionUiKit.FitSingleLine(_heartObjectiveLabel, HeartObjectiveFontMin, HeartObjectiveFontMax);
+            RepaintHeartObjective(force: true);
 
             // ── WO-1379 HEARTFIRE ────────────────────────────────────────────────────
             // Canon docs/CREATIVE_CANON_ELARION_2026-09-04.md section 4 draws three flames
@@ -3337,7 +3340,9 @@ namespace DeNelle.HUD.Kit
             }
             _waveCountdown.text = activeWave
                 ? Mathf.Max(0, w.EnemiesLive) + " enemies remain"
-                : (realCountdown ? "Next wave in " + Mathf.CeilToInt(w.CountdownRemaining) + "s" : "");
+                // WO-1407: "Next wave in 14m 15s", never "855s" - ElarionUi.Duration is the one
+                // formatter (shared with WaveCountdownUI and the queue rail).
+                : (realCountdown ? "Next wave in " + ElarionUi.Duration(Mathf.CeilToInt(w.CountdownRemaining)) : "");
             _waveProgress.SetValue(activeWave ? w.EnemiesLive : w.EnemiesTotal - w.EnemiesLive,
                 Mathf.Max(1, w.EnemiesTotal));
             _waveProgress.track.gameObject.SetActive(w.EnemiesTotal > 0);
@@ -4191,11 +4196,10 @@ namespace DeNelle.HUD.Kit
             OnPlayerStatus();
             OnTargetStatus();
             OnWave();   // wave block phase gate re-evaluates with the posture
-            if (_heartObjectiveLabel != null)
-                _heartObjectiveLabel.text = posture == HudPosture.HostilePrebattle ||
-                    posture == HudPosture.HostileActiveBattle
-                        ? "Defend the realm"
-                        : "Prepare the realm for the next wave.";
+            // WO-1407: the posture is ONE input to the objective line; the words come from Core.
+            _heartObjectiveHostile = posture == HudPosture.HostilePrebattle ||
+                                     posture == HudPosture.HostileActiveBattle;
+            RepaintHeartObjective(force: false);
 
             FlowTrace.Step("HudKit", "occupancy applied: posture " + HudPostureKeys.Key(posture) +
                            " -> " + shown + " widgets live");
@@ -4487,6 +4491,12 @@ namespace DeNelle.HUD.Kit
             // the collector chip below - repaint only when the published values move.
             RepaintHeartfire(force: false);
 
+            // WO-1407: the Heart plate's objective line - same cheap poll; the inputs are the
+            // Core posture rail (RaidCapable/RaidLock) + the model's army snapshot Version, all
+            // change-detected inside, so this is a few compares per frame and a repaint only on
+            // a transition.
+            RepaintHeartObjective(force: false);
+
             // WO-900 §4: the ambient collector chip — the same cheap poll, on the same terms.
             // The Village publisher bumps Version at most twice a second, so this repaints only
             // when the collectors actually moved; nothing here derives any collector state.
@@ -4563,6 +4573,60 @@ namespace DeNelle.HUD.Kit
             if (force || countMoved)
                 FlowTrace.Step("HudKit", "heartfire painted -> " + flames + " '" + label +
                                "' (" + lit + "/" + max + "), rekindle row '" + line + "'");
+        }
+
+        /// <summary>
+        /// WO-1407: paint the Heart plate's line 2 from Core state. PURE PRESENTATION - the
+        /// sentence is HeartObjectiveCopy.Resolve's, the inputs are PostureSignals.RaidCapable /
+        /// RaidLock (Village-published capability: flag + a standing Barracks) and the model's
+        /// HudActionBarModel.ArmySnapshot (Village-published readiness incl. the WO-823
+        /// RequiredSlots). ⛔ The army snapshot comes through the MODEL, never off the gate: the
+        /// army predicate belongs to HudActionBarModel (WO-835 View-purity law, pinned by
+        /// HudActionBarRegression.CheckViewPurity).
+        /// Change-detected on (hostile, capable, lock, army.Version): a repaint and ONE trace line
+        /// per transition, never per frame (the [Flow:Offset] ring-buffer lesson).
+        /// </summary>
+        private void RepaintHeartObjective(bool force)
+        {
+            if (_heartObjectiveLabel == null) return;
+
+            bool capable = PostureSignals.RaidCapable;
+            var lock_ = PostureSignals.RaidLock;
+            // The model owns the army read (WO-835): the View may not touch the gate.
+            // HudActionBarModel.Shared is the SAME instance BindActionBar assigns to _barModel,
+            // and _barModel is deliberately left null when the adaptive peaceful dock owns the
+            // bar (BindActionBar returns early there), so the fallback is the normal path on that
+            // branch - one source either way, never a second one.
+            var army = (_barModel ?? HudActionBarModel.Shared).ArmySnapshot;
+            bool hostile = _heartObjectiveHostile;
+
+            if (!force && _heartObjectiveEverPainted &&
+                capable == _heartObjectiveCapablePainted && lock_ == _heartObjectiveLockPainted &&
+                army.Version == _heartObjectiveArmyVersionPainted && hostile == _heartObjectiveHostilePainted)
+                return;
+
+            _heartObjectiveEverPainted = true;
+            _heartObjectiveCapablePainted = capable;
+            _heartObjectiveLockPainted = lock_;
+            _heartObjectiveArmyVersionPainted = army.Version;
+            _heartObjectiveHostilePainted = hostile;
+
+            int troopsNeeded;
+            string text = HeartObjectiveCopy.Resolve(hostile, capable, lock_, army, out troopsNeeded);
+            if (_heartObjectiveLabel.text != text) _heartObjectiveLabel.text = text;
+
+            // "barracks" is read off the lock reason - this View may not ask StructureSingleton
+            // (DeNelle.HUD never references DeNelle.Village); the bridge already folded the
+            // building test into RaidCapable/RaidLock, and NoBarracks/BarracksLost are the only
+            // two reasons that mean "no Barracks stands".
+            bool barracks = capable ||
+                            (lock_ != PostureSignals.RaidLockReason.NoBarracks &&
+                             lock_ != PostureSignals.RaidLockReason.BarracksLost);
+            FlowTrace.Step("HudKit", "objective -> '" + text + "' (raidCapable=" + capable +
+                           ", barracks=" + barracks + ", deployable=" + army.DeployableSlots +
+                           ", queued=" + army.QueuedSlots + ", required=" + army.RequiredSlots +
+                           ", ready=" + army.Ready + ", lock=" + lock_ + ", hostile=" + hostile +
+                           (troopsNeeded > 0 ? ", trainNeeded=" + troopsNeeded : "") + ")");
         }
 
         private static string Cap(string s) =>

@@ -178,6 +178,9 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "heartfire-inside-plate", () => Case10_HeartfireInsidePlate(failures, notes));
                 Case(failures, "night-market-standout", () => Case11_NightMarketStandout(failures, notes));
                 Case(failures, "night-market-aurora", () => Case12_NightMarketAurora(failures, notes));
+                Case(failures, "heart-objective-state", () => Case13_HeartObjectiveState(failures, notes));
+                Case(failures, "countdown-minutes", () => Case14_CountdownMinutes(failures, notes));
+                Case(failures, "builders-chip-idle", () => Case15_BuildersChipIdle(failures, notes));
             }
             catch (Exception ex)
             {
@@ -500,7 +503,10 @@ namespace DeNelle.Editor.Regression
 
             // (c) The countdown - the longest wave string - must fit the label column it now has.
             //     MEASURED at the floor, at both aspects.
-            string countdown = "Next wave in 45s";
+            //     WO-1407 RE-POINT: the string used to be "Next wave in 45s"; the countdown now
+            //     prints minutes ("Next wave in 14m 15s" - ElarionUi.Duration), which is the
+            //     WIDER form, so this is the one that has to fit the column.
+            string countdown = "Next wave in " + ElarionUi.Duration(855);
             foreach (var a in Aspects)
             {
                 float canvasW = a.W / ScaleFactor(a.W, a.H);
@@ -1769,6 +1775,271 @@ namespace DeNelle.Editor.Regression
             if (!m.Success) return false;
             return float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
                                   System.Globalization.CultureInfo.InvariantCulture, out value);
+        }
+
+        // =====================================================================
+        // CASE 13  [heart-objective-state]  THE HEART PLATE'S LINE 2 CARRIES STATE
+        //                                                          (WO-1407, 2026-09-05)
+        // ---------------------------------------------------------------------
+        // Merged UI review row 6: "Prepare the realm for the next wave." was a STATIC sentence
+        // on every device frame, and nothing on the town HUD told a non-raid-capable player how
+        // to become one. The words are now resolved in Core (HeartObjectiveCopy.Resolve) from
+        // the posture rail + the army seam, and the View only paints them.
+        //   13a  the View no longer authors the sentence: the literal is gone from HudSrc and
+        //        the Resolve call is present; the row is still ONE fitted line in its band;
+        //   13b  Resolve, driven by fixtures, returns the three state strings: a Barracks hint
+        //        for NoBarracks AND BarracksLost, a "Train N" line whose N is RequiredSlots minus
+        //        (deployable + queued) when a Barracks stands and the army is short, the wave
+        //        line when ready, and "Defend" in a hostile posture; all ASCII;
+        //   13c  every candidate string MEASURES inside the objective row at its effective floor
+        //        at both aspects (the WO-1384 geometry: HudLayoutBands.HeartMount x 0.96 plate,
+        //        HeartRowX0..X1 of it) - no state may ellipsise, because the state IS the word.
+        // RED, one line each: paste "Prepare the realm for the next wave." back into
+        // BuildHeartStatus (13a); make Resolve return PrepareWave for NoBarracks (13b); set
+        // BuildBarracks to a 70-character sentence (13c).
+        // =====================================================================
+        private static void Case13_HeartObjectiveState(List<string> failures, List<string> notes)
+        {
+            const string tag = "[heart-objective-state]";
+            string src = ReadSrc(HudSrc);
+            if (src == null) { failures.Add(tag + " cannot read " + HudSrc); return; }
+
+            // 13a - the View relays; it does not author.
+            if (src.IndexOf("\"" + HeartObjectiveCopy.PrepareWave + "\"", StringComparison.Ordinal) >= 0)
+                failures.Add(tag + " " + HudSrc + " still authors the literal '" + HeartObjectiveCopy.PrepareWave +
+                             "' - the plate line is a STATIC sentence again (the captured defect). The View must " +
+                             "paint HeartObjectiveCopy.Resolve and nothing else");
+            RequirePin(failures, tag, src, "HeartObjectiveCopy.Resolve(",
+                "the Heart plate's line 2 must come from the Core resolver so the words carry state");
+            RequirePin(failures, tag, src, "RepaintHeartObjective(force: false)",
+                "the objective line must be re-resolved on the cheap poll / posture flip, not painted once");
+            RequirePin(failures, tag, src,
+                "FitSingleLine(_heartObjectiveLabel, HeartObjectiveFontMin, HeartObjectiveFontMax)",
+                "the objective row is a ONE-line band (WO-1384); a FitBlock wrap here Truncates the tail silently");
+
+            // 13b - the resolver, driven.
+            var ready = new RaidEntryGate.RaidArmyStatus
+                { Ready = true, DeployableSlots = 3, QueuedSlots = 0, CapSlots = 10, RequiredSlots = 3 };
+            var empty = new RaidEntryGate.RaidArmyStatus
+                { Ready = false, DeployableSlots = 0, QueuedSlots = 0, CapSlots = 10, RequiredSlots = 3 };
+            var oneShort = new RaidEntryGate.RaidArmyStatus
+                { Ready = false, DeployableSlots = 1, QueuedSlots = 1, CapSlots = 10, RequiredSlots = 3 };
+            var legacy = new RaidEntryGate.RaidArmyStatus   // pre-WO-1407 publish: RequiredSlots 0 -> cap
+                { Ready = false, DeployableSlots = 4, QueuedSlots = 0, CapSlots = 10, RequiredSlots = 0 };
+            int n;
+
+            string noBarracks = HeartObjectiveCopy.Resolve(false, false, PostureSignals.RaidLockReason.NoBarracks, empty, out n);
+            if (noBarracks.IndexOf("Barracks", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " with NO Barracks the plate reads '" + noBarracks + "' - it must name the " +
+                             "Barracks and the door (Build > Realm); this is the player the review row is about");
+            string lost = HeartObjectiveCopy.Resolve(false, false, PostureSignals.RaidLockReason.BarracksLost, empty, out n);
+            if (lost.IndexOf("Barracks", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " with a LOST Barracks the plate reads '" + lost + "' - it must name the Barracks");
+            string train = HeartObjectiveCopy.Resolve(false, true, PostureSignals.RaidLockReason.None, empty, out n);
+            if (!train.StartsWith("Train 3 ", StringComparison.Ordinal) || train.IndexOf("unlock Raids", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " a Barracks with an empty army on a first-raid save reads '" + train +
+                             "' - expected 'Train 3 troops to unlock Raids' (RequiredSlots 3 - 0 fielded)");
+            if (n != 3)
+                failures.Add(tag + " troopsNeeded for an empty army against a bar of 3 is " + n + ", not 3");
+            string one = HeartObjectiveCopy.Resolve(false, true, PostureSignals.RaidLockReason.None, oneShort, out n);
+            if (!one.StartsWith("Train 1 ", StringComparison.Ordinal) || n != 1)
+                failures.Add(tag + " 1 deployable + 1 queued against a bar of 3 reads '" + one + "' (n=" + n +
+                             ") - queued troops must count, exactly as the raid door counts them");
+            string leg = HeartObjectiveCopy.Resolve(false, true, PostureSignals.RaidLockReason.None, legacy, out n);
+            if (!leg.StartsWith("Train 6 ", StringComparison.Ordinal))
+                failures.Add(tag + " a publish without RequiredSlots must fall back to the CAP (10 - 4 = 6); read '" +
+                             leg + "'");
+            string wave = HeartObjectiveCopy.Resolve(false, true, PostureSignals.RaidLockReason.None, ready, out n);
+            if (wave.IndexOf("wave", StringComparison.OrdinalIgnoreCase) < 0 || n != 0)
+                failures.Add(tag + " a raid-capable, army-ready save reads '" + wave + "' - expected the wave line");
+            string flagOff = HeartObjectiveCopy.Resolve(false, false, PostureSignals.RaidLockReason.FlagOff, ready, out n);
+            if (flagOff.IndexOf("Barracks", StringComparison.Ordinal) >= 0)
+                failures.Add(tag + " with the raid FLAG off the plate sends the player to build a Barracks ('" +
+                             flagOff + "') - there is no player action that opens that door");
+            string defend = HeartObjectiveCopy.Resolve(true, false, PostureSignals.RaidLockReason.NoBarracks, empty, out n);
+            if (defend != HeartObjectiveCopy.Defend)
+                failures.Add(tag + " in a hostile posture the plate reads '" + defend + "', not '" +
+                             HeartObjectiveCopy.Defend + "' - a wave in progress outranks every unlock hint");
+            if (HeartObjectiveCopy.TrainTroops(1).IndexOf("troops", StringComparison.Ordinal) >= 0)
+                failures.Add(tag + " 'Train 1 troops' - the singular must read 'troop'");
+
+            // 13c - every state string fits the row, measured, at both aspects.
+            string[] candidates =
+            {
+                HeartObjectiveCopy.BuildBarracks, HeartObjectiveCopy.TrainTroops(10),
+                HeartObjectiveCopy.PrepareWave, HeartObjectiveCopy.Defend,
+            };
+            float objMin, objMax, rowX0, rowX1;
+            if (!TryFloatConst(src, "HeartObjectiveFontMin", out objMin)) objMin = 16f;
+            if (!TryFloatConst(src, "HeartObjectiveFontMax", out objMax)) objMax = 18f;
+            if (!TryFloatConst(src, "HeartRowX0", out rowX0)) rowX0 = 0.05f;
+            if (!TryFloatConst(src, "HeartRowX1", out rowX1)) rowX1 = 0.95f;
+            float objFloor = Math.Min(Math.Max(objMin, ElarionUiKit.FontHardFloor), objMax);
+            foreach (string s in candidates)
+            {
+                for (int i = 0; i < s.Length; i++)
+                    if (s[i] > 126)
+                    {
+                        failures.Add(tag + " '" + s + "' carries a non-ASCII char U+" + ((int)s[i]).ToString("X4") +
+                                     " - the mobile font atlas has no glyph for it (tofu on device)");
+                        break;
+                    }
+                string detail;
+                float w = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, s, objFloor, out detail);
+                if (w < 0f) { notes.Add("objective '" + s + "' not measurable headlessly: " + detail); continue; }
+                foreach (var a in Aspects)
+                {
+                    var refSize = HudLayoutBands.CanvasReferenceSize(a.W, a.H);
+                    float plateW = HudLayoutBands.HeartMount.width * refSize.x * 0.97f;
+                    float rowW = (rowX1 - rowX0) * plateW;
+                    if (w > rowW)
+                        failures.Add(tag + " at " + a.Name + " the objective '" + s + "' MEASURES " + w.ToString("0.0") +
+                                     " ref px at its " + objFloor + "px floor but the row is " + rowW.ToString("0.0") +
+                                     " px wide (" + detail + ") - it would ellipsise, and the state is in the words. " +
+                                     "Shorten the sentence in HeartObjectiveCopy or grow HudLayoutBands.HeartMount; " +
+                                     "never the font down");
+                }
+                notes.Add("objective '" + s + "' " + w.ToString("0.0") + " px at " + objFloor + "px");
+            }
+        }
+
+        // =====================================================================
+        // CASE 14  [countdown-minutes]  A PLAYER-FACING COUNTDOWN NEVER PRINTS BARE SECONDS
+        //                                                          (WO-1407, 2026-09-05)
+        // ---------------------------------------------------------------------
+        // "Next wave in 855s" on every device frame (review row 6). ElarionUi.Duration is the
+        // ONE formatter; both wave call sites (HudKitController.OnWave, WaveCountdownUI) and
+        // the queue rail (QueueRailView.FormatTime) print through it.
+        //   14a  Duration(855) == "14m 15s"; small values stay seconds; hours drop seconds;
+        //   14b  a sweep of 61..7200 never yields a bare "<n>s";
+        //   14c  neither wave call site builds seconds by hand any more, and both call Duration.
+        // RED, one line each: return seconds + "s" from Duration (14a/14b); put
+        // `Mathf.CeilToInt(w.CountdownRemaining) + "s"` back in OnWave (14c).
+        // =====================================================================
+        private const string WaveOverlaySrc = "Assets/_Modules/Village/Waves/WaveCountdownUI.cs";
+        private const string QueueRailSrc = "Assets/_Modules/Core/UI/QueueRailView.cs";
+
+        private static void Case14_CountdownMinutes(List<string> failures, List<string> notes)
+        {
+            const string tag = "[countdown-minutes]";
+
+            // 14a
+            Expect(failures, tag, ElarionUi.Duration(855), "14m 15s", "the review frame's 855 s");
+            Expect(failures, tag, ElarionUi.Duration(45), "45s", "under a minute stays seconds");
+            Expect(failures, tag, ElarionUi.Duration(60), "1m 0s", "exactly one minute");
+            Expect(failures, tag, ElarionUi.Duration(3661), "1h 1m", "an hour drops the seconds");
+            Expect(failures, tag, ElarionUi.Duration(-5), "0s", "negative clamps to zero");
+            Expect(failures, tag, QueueRailView.FormatTime(855), ElarionUi.Duration(855),
+                   "the queue rail prints the same words as the wave line (one formatter)");
+
+            // 14b - never a bare seconds count above a minute.
+            var bare = new System.Text.RegularExpressions.Regex(@"^\d+s$");
+            for (int s = 61; s <= 7200; s++)
+            {
+                string d = ElarionUi.Duration(s);
+                if (bare.IsMatch(d))
+                {
+                    failures.Add(tag + " Duration(" + s + ") = '" + d + "' - a bare seconds count above 60 s; " +
+                                 "the player has to do the division the HUD exists to do");
+                    break;
+                }
+                for (int i = 0; i < d.Length; i++)
+                    if (d[i] > 126) { failures.Add(tag + " Duration(" + s + ") is not ASCII"); s = 7201; break; }
+            }
+
+            // 14c - both wave call sites go through the formatter.
+            string hud = ReadSrc(HudSrc);
+            if (hud == null) failures.Add(tag + " cannot read " + HudSrc);
+            else
+            {
+                if (hud.IndexOf("Mathf.CeilToInt(w.CountdownRemaining) + \"s\"", StringComparison.Ordinal) >= 0)
+                    failures.Add(tag + " " + HudSrc + " builds the wave countdown as raw seconds again " +
+                                 "(CeilToInt(...) + \"s\") - the captured 'Next wave in 855s'");
+                RequirePin(failures, tag, hud, "\"Next wave in \" + ElarionUi.Duration(",
+                    "the HudKit wave line must print through the one formatter");
+            }
+            string overlay = ReadSrc(WaveOverlaySrc);
+            if (overlay == null) failures.Add(tag + " cannot read " + WaveOverlaySrc);
+            else
+            {
+                if (overlay.IndexOf("{whole}s", StringComparison.Ordinal) >= 0)
+                    failures.Add(tag + " " + WaveOverlaySrc + " interpolates raw seconds ('{whole}s') - the " +
+                                 "UIElements overlay is the second wave call site and must use the same formatter");
+                if (overlay.IndexOf("ElarionUi.Duration(", StringComparison.Ordinal) < 0)
+                    failures.Add(tag + " " + WaveOverlaySrc + " does not call ElarionUi.Duration");
+            }
+            string rail = ReadSrc(QueueRailSrc);
+            if (rail != null && rail.IndexOf("ElarionUi.Duration(", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " " + QueueRailSrc + " no longer delegates FormatTime to ElarionUi.Duration - " +
+                             "two duration grammars will drift");
+            notes.Add("Duration(855)='" + ElarionUi.Duration(855) + "'");
+        }
+
+        private static void Expect(List<string> failures, string tag, string got, string want, string what)
+        {
+            if (!string.Equals(got, want, StringComparison.Ordinal))
+                failures.Add(tag + " " + what + ": got '" + got + "', want '" + want + "'");
+        }
+
+        // =====================================================================
+        // CASE 15  [builders-chip-idle]  THE BUILDERS CHIP SAYS IDLE, AND IS THERE TO SAY IT
+        //                                                          (WO-1407, 2026-09-05)
+        // ---------------------------------------------------------------------
+        // Review row 6: "no idle-builders surface". The chip is a STATUS GLANCE (CLAUDE.md s7 -
+        // the Manage face is the one Queues door), so at 0 active it must still carry a word.
+        //   15a  BuildersChipCopy.Format at 0 busy / 2 slots reads "Builders idle 2"; busy keeps
+        //        the "N/M" count; the Train line still rides as line two; unpublished is still
+        //        the bare word (never empty);
+        //   15b  the View relays the Core words (BuildersChipCopy.Format in HudSrc) and the chip
+        //        is not hidden on an idle queue (no SetActive keyed on BuilderBusy);
+        //   15c  "Builders idle 2" MEASURES inside the chip's label rect at the chip's own floor
+        //        (BuildRailChip fits 22..30).
+        // RED, one line each: return "Builders 0/2" for the idle case (15a); gate the chip root
+        // on s.BuilderBusy > 0 (15b); make the idle word "Builders standing idle: 2" (15c).
+        // =====================================================================
+        private static void Case15_BuildersChipIdle(List<string> failures, List<string> notes)
+        {
+            const string tag = "[builders-chip-idle]";
+
+            // 15a
+            var idle = new ObsidianQueueGate.WorkQueueStatus { Available = true, BuilderBusy = 0, BuilderSlots = 2 };
+            string idleText = BuildersChipCopy.Format(idle);
+            Expect(failures, tag, idleText, "Builders idle 2", "0 active of 2 builders");
+            var busy = new ObsidianQueueGate.WorkQueueStatus { Available = true, BuilderBusy = 1, BuilderSlots = 2 };
+            Expect(failures, tag, BuildersChipCopy.Format(busy), "Builders 1/2", "1 active of 2 builders");
+            var training = new ObsidianQueueGate.WorkQueueStatus
+                { Available = true, BuilderBusy = 0, BuilderSlots = 2, TrainBusy = 1 };
+            Expect(failures, tag, BuildersChipCopy.Format(training), "Builders idle 2\nTrain 1",
+                   "idle builders with one troop training (two lines, never a pipe)");
+            var unpublished = new ObsidianQueueGate.WorkQueueStatus { Available = false };
+            if (string.IsNullOrEmpty(BuildersChipCopy.Format(unpublished)))
+                failures.Add(tag + " an unpublished queue status renders an EMPTY chip - a blank face is a missing chip");
+
+            // 15b
+            string hud = ReadSrc(HudSrc);
+            if (hud == null) failures.Add(tag + " cannot read " + HudSrc);
+            else
+            {
+                RequirePin(failures, tag, hud, "BuildersChipCopy.Format(",
+                    "the chip's words come from Core so this suite can drive them");
+                string chipPoll = Between(hud, "var qs = ObsidianQueueGate.Status;", "RepaintHeartfire(force: false);");
+                if (chipPoll != null && chipPoll.IndexOf("SetActive(", StringComparison.Ordinal) >= 0 &&
+                    chipPoll.IndexOf("BuilderBusy", StringComparison.Ordinal) >= 0)
+                    failures.Add(tag + " the Builders chip poll toggles a SetActive on BuilderBusy - the chip hides " +
+                                 "itself when idle, which is the review's 'no idle-builders surface'");
+            }
+
+            // 15c - the idle word fits the chip at the chip's floor.
+            float boxW = RailChipWidthPx * ButtonLabelInset;
+            const float chipFloor = 22f;   // BuildRailChip: FitSingleLine(lbl, 22f, 30f)
+            string detail;
+            float w = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, idleText, chipFloor, out detail);
+            if (w < 0f) notes.Add("builders idle word not measurable headlessly: " + detail);
+            else if (w > boxW)
+                failures.Add(tag + " '" + idleText + "' MEASURES " + w.ToString("0.0") + " ref px at the chip's " +
+                             chipFloor + "px floor but the label rect is " + boxW.ToString("0.0") + " px (" + detail +
+                             ") - it would ellipsise the count, the one number that carries the state");
+            else notes.Add("builders idle chip '" + idleText + "' " + w.ToString("0.0") + " px in " + boxW.ToString("0") + " px");
         }
 
         private static void RequirePin(List<string> failures, string tag, string src, string literal, string why)

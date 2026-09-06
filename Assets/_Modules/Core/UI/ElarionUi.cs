@@ -157,6 +157,25 @@ namespace DeNelle.Core.UI
         /// <summary>Int convenience overload of <see cref="CompactNumber(long)"/>.</summary>
         public static string CompactNumber(int v) => CompactNumber((long)v);
 
+        /// <summary>
+        /// WO-1407: THE ONE player-facing duration formatter. ASCII h/m/s: "45s", "14m 15s",
+        /// "1h 5m". Every countdown a player reads (the Heart plate wave line, the UIElements
+        /// wave overlay, the queue rail timers) prints through here, so no surface can ever
+        /// show a bare "855s" again (the merged UI review row 6: raw seconds on the town HUD).
+        /// Above 60 seconds the result ALWAYS carries a minutes term - HudLabelFitRegression
+        /// [countdown-minutes] sweeps 61..7200 and fails on any bare seconds count.
+        /// Negative input clamps to "0s"; hours drop the seconds ("1h 5m"), because a 12-hour
+        /// build timer does not need its seconds and the rail column cannot seat them.
+        /// </summary>
+        public static string Duration(int seconds)
+        {
+            if (seconds < 0) seconds = 0;
+            int h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60;
+            if (h > 0) return h + "h " + m + "m";
+            if (m > 0) return m + "m " + s + "s";
+            return s + "s";
+        }
+
         // One tier of the compact grammar: one truncated decimal while the scaled
         // value is below 100 ("98.6k"), whole units at/above ("100k").
         private static string CompactTier(ulong a, ulong unit, string suffix)
