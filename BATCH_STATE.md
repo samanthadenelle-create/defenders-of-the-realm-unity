@@ -666,11 +666,13 @@ Assets/_Modules/Village/Waves/WaveCountdownUI.cs
 ```
 `BuildCollectionBrowser.cs` is on that list on purpose: lane A READS it to copy `AddGoldPerimeter`; it does not edit it.
 
-**UPDATE 22:05 - three lanes COMMITTED: `4ed44db76` (WO-1416), `15ca64163` (WO-1417), `04dec910a` (WO-1407).** The
-following files are therefore UNLOCKED and at their final shape for tonight - re-read them at `04dec910a` or later:
+**UPDATE 22:10 - three lanes COMMITTED: `9a9e65c8a` (WO-1416), `e3b082a1a` (WO-1417), `003b64ce2` (WO-1407); board
+`4ebbaccf7`.** (An earlier note named `4ed44db76`/`15ca64163`/`04dec910a` - those commits were redone with clean
+scoping and no longer exist; do not look for them.) The following files are therefore UNLOCKED and at their final
+shape for tonight - re-read them at `003b64ce2` or later:
 `HudKitController.cs`, `BuildTimerService.cs`, `HudActionBarModel.cs`, `HudStateCopy.cs`, `ElarionUi.cs`,
 `QueueRailView.cs`, `RaidEntryGate.cs`, `WaveCountdownUI.cs`, `BuildCollectionBrowser.cs`, `StructureRole.cs`, the
-three canonical JSON pairs, and the 1416/1417 suites. **WO-1404 and WO-1419 may start now** (base `04dec910a`).
+three canonical JSON pairs, and the 1416/1417 suites. **WO-1404 and WO-1419 may start now** (base `003b64ce2`).
 Still LOCKED (in flight, a lane is fixing two capture findings): `RaidDeployScreen.cs`, `RaidDeployVM.cs`,
 `RaidSelectionScreen.cs`, `RaidSelectionVM.cs`, `RaidScoring.cs`, `DataRegression.cs`, the two raid suites.
 
@@ -728,6 +730,88 @@ every PARK-list ticket (1373 / 1377 / 1292 / 1314 / 1327 / 1215 / 1184 / 1244).
 files changed with line numbers; brace + NUL counts per `.cs`; the `DataRegression.cs` registration line(s) as text;
 the RED recipe per case; node test output for anything under `api/`; what was NOT done and why; any file you needed
 but found locked or in another lane. Everything is a claim until the lead proves it against the tree.
+
+### 8.6 Hand-back received 22:2x (batch_results_state.md:607) - lead dispositions
+- **WO-1418 A-D:** received; under lead review + gate tonight (raid lane first, then the 1418 overlay, then capture).
+  The stale `ManageApprovedLauncherRegression.cs:32` toast pin is re-pointed BY THE LEAD with the WO-1406 ruling.
+  Lane D's two owed oracles (`NightMarketNoWalletRegression`, `StoreReturnToManageRegression`) are authored by an
+  in-house lane after the overlay lands on main - not owed by the dev lane.
+- **WO-1404:** received (base `003b64ce2`); gated with the overlay. Thank you for pulling the RaidSelectionVM hunk.
+- **WO-1413 partial:** received; gated with the overlay. The blocked halves (UICaptureLaunch fixtures, HudKitController
+  faces, dialogue twins) are UNLOCKED once the 1418 overlay is committed - the lead posts that hash here; finish then.
+- **WO-1348:** received; the rail glue is lead-owned and lands AFTER tonight's device build (it is not player-felt
+  tonight). No action for the dev lane.
+- **WO-1410 clean bounce - UNBLOCKED:** `canon-strings.json` (both twins) were locked only while WO-1416 was in flight;
+  1416 is committed at `9a9e65c8a`. Take 1410 now from base `003b64ce2`: author the `heroBag` / `heroSkills` /
+  `heroLoadout` keys in BOTH twins (byte-identical, binary-safe edits, LF count proven - PART 7.3) and the C# consumers.
+- **WO-1419:** lead selection recorded in 8.7 below; proceed to implementation from base `003b64ce2`.
+
+### 8.7 WO-1419 flame icon - LEAD SELECTION (greyscale gate, all three opened by the lead)
+**Candidate A: `ItemIcons/cons_emberfire_bomb`.** A literal flame inside a round ember medallion, transparent outer
+corners, mid-grey mean (~133/255) with a bright core: at pip scale it reads as a CHARGE TOKEN, which is what a
+Heartfire charge is. B is an opaque square (dims as a tile, not a pip); C is a flaming skull - a hostile emblem on the
+player's own Heart plate, wrong tone. Slot treatment: lit = A at alpha 1.0; spent = A at alpha 0.25 AND desaturated
+(Image colour grey 0.55) so the two states differ in shape-fill and luminance, never hue alone. Slot size = the label's
+line height, three slots + the `CountLabel` word form beside them. Proceed from base `003b64ce2`; re-point the
+`HeartfireRegression.cs:290/292` spent-bracket literals and the `HudLabelFitRegression.cs:1509` FlameRow composition WITH
+this WO (keep `FlameRow` for traces), RED recipes named.
+
+### 8.8 REWORK REQUEST - WO-1418 overlay (lead review 22:4x, read-only, every item cited in the worktree)
+Fix in the lane worktrees, refresh `D:\eoa-codex-1418-integration`, append a short hand-back. Base stays `44d46128d`.
+1. **COMPILE BLOCKER (lane B, `ManageScreenVM.cs` `BuildSlotOffer`):** `pack.AmountLabel(CurrencyKind.Skr)` and
+   `pack.UsdApprox()` are `DeNelle.Wallet` extension methods (`Assets/_Modules/Wallet/SolanaPackPricing.cs:106,115`,
+   `CurrencyKind` at `WalletService.cs:45`). `DeNelle.Village.asmdef` does not reference `DeNelle.Wallet`
+   (`PackCatalog.cs:329` records that those moved OUT of Commerce). Use the Commerce-visible price
+   (`pack.UsdReference`, what `PackStore.cs:~2913` uses) or publish the SKR label through Core; do NOT add an asmdef
+   reference from Village to Wallet.
+2. **Training chip bypasses the Barracks lock (lane C, panel ~1059-1067):** the chip tap calls `ShowOperational(dest)`
+   which has no `BarracksUnlock.IsUnlocked` guard (only the card path ~872 and `Open(string)` ~393 guard). Route the chip
+   through the same guarded door as the card: locked -> the `BUILD A BARRACKS` door, never a locked workspace.
+3. **Two hollow RED recipes (lane C suite):** case 1's recipe names the `continue` in `BuildBuildingsBrowse`, a different
+   method from `BuildBuildingChoices`, so restoring it changes nothing; case 2 cannot go RED because a third fallback
+   `"A village structure."` exists. Rewrite both recipes so each names a one-line revert INSIDE the code the case measures
+   (e.g. skip maxed ids in `BuildBuildingChoices`; blank the Description assignment).
+4. **Locked and Building cards early-return before the cost row and the benefit line** - WO section 4 says every non-Max
+   card carries both (the player must see what the locked tier costs and buys). Paint them; only the CTA differs.
+5. **Verify, then say so:** does `PackStore.CloseViaInteractor` reach `PanelManager.CloseAll()`? `PanelManager.cs:458`
+   calls `ClearReturnDoor("closeall")`, which would kill the return door before `PumpReturnDoor` fires. Cite the path.
+Accepted as-is (no rework): the PackStore.cs WO-1409 work (it was lane D's assignment); the registration line (it is in
+the hand-back, the lead adds it); `TrainingChipText` delegating to `Describe()`; `TroopChoiceVM.Requirement` "N in your
+army"; the return door living in the VM per ruling 8.5 #3; BUILDING NOW full-width. The `ManageApprovedLauncherRegression.cs:32`
+toast pin is re-pointed by the lead. `StoreReturnToManageRegression` + `NightMarketNoWalletRegression` are authored
+in-house after landing.
+
+### 8.9 REWORK REQUEST - WO-1404 and WO-1413 (lead review 22:2x, read-only, cited in the worktrees)
+**WO-1404** (`D:\eoa-codex-1404`, base `003b64ce2`):
+1. **COMPILE BLOCKER:** `JourneyDeckSubtitleRegression.cs:4` has `using DeNelle.HUD;` and news up `JourneyDeckSubtitleVM`.
+   `Assets/Editor/Regression/DeNelle.EditorRegression.asmdef` does NOT reference `DeNelle.HUD` (no suite in that folder
+   does; they lint HUD as text). Lead ruling: **move `JourneyDeckSubtitleVM` to `Assets/_Modules/Core/HudModel/`**
+   (Core, beside `HudStateCopy.cs` - it is a pure VM with no UnityEngine.UI types); the suite then uses
+   `DeNelle.Core.HudModel`. Do not widen the regression asmdef.
+2. **Open-camp count ignores the victory/escalation lock:** `BuildTimerService.cs:2237` counts a camp open on
+   `GarrisonCount(def) <= deployableBodies` alone; `RaidSelectionVM.IsLocked(id)` (`:370`, from `ResolveLock`) must also
+   be false. A locked camp advertised as open on the Journey card is the WO-1402/1403 door lying.
+3. **The producer runs at 1 Hz and constructs a full `RaidSelectionVM` (whose ctor emits a `FlowTrace.Step`) every
+   second** (`BuildTimerService.cs:2222-2240`, inside the 1 Hz `PublishArmyStatus`). That is one log line per second
+   forever - the `[Flow:Offset]` ring-buffer failure class. Recompute only when an input changes (army version, victory
+   count, catalog) and cache; `PostureSignals.SetRaidOpenCampCount` is already change-only, make the producer match.
+4. The capture fixture must publish an army cap so the Journey frame reads `Army 0 / 10`, not `0 / 0`.
+5. Hand-back wording: the `<=` predicate is newly authored in BuildTimerService (only `GarrisonCount` exists at base);
+   say so.
+**WO-1413** (`D:\eoa-codex-1413`, base `44d46128d`):
+6. **Pause:** the "Resume" write is inert - `MedievalUiSkin.ApplyShell` (`MedievalUiSkin.cs:104,137-140`) disables the
+   TMP child and the baked ornate plate reads CLOSE, so the screen shows Settings / Quit / CLOSE and
+   `PauseMedievalSkinRegression.cs:20` (`ApplyButton(resume, primary: true)`) goes RED. Lead ruling for tonight:
+   **revert the PauseController.cs change entirely**; "Pause: RESUME only" goes to the owner's rulings list (the primary
+   Resume face is owner-approved skin, and the ornate CLOSE is the kit shell - retiring either is her call).
+7. **`Assets/Tests/EditMode/EchoWorkforceVMTests.cs:98`** asserts `Does.Contain("x2")` on the old copy; the fake does not
+   implement the new `IEchoHarvestBonusReadout`. Update the test (that folder is not locked): implement the readout on
+   the fake and assert the new `Echoes 2/6 - harvest +N% together` shape.
+8. Stale prose the WO's own scan would catch: "Reset Hero & Pet" in comments at `HelpMenu.cs:8`, `PanelRouter.cs:146`
+   (Core - hand back as text), `SettingsController.cs:314`; `EchoWorkforceVM.cs:149` doc still says `xN`. Fix the two in
+   your files; report the Core one.
+Accepted: HelpMenu danger confirm via `ElarionUiKit.BuildConfirmModal`; `EchoBonusCalculator` numeric identity (verified);
+Settings slider kept; DailyChest CTA hide with the reward path untouched; all ASCII.
 
 ### 8.5 Prep findings from the dev lane (relayed by the owner) - lead rulings, all three ACCEPTED
 1. **WO-1406 chips:** yes - all three channel chips activate their tab (Builders -> Buildings, Training -> Troops,
