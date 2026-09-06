@@ -1,6 +1,6 @@
 # WO-1403: Raid Deploy offers BEGIN ASSAULT at zero troops and tells the player to "Visit the Barracks" in a sentence, not a door
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-05 21:45 - TRAIN TROOPS primary at zero, one Manage door, readiness through the ONE ArmyReadiness snapshot, RaidDeployZeroArmyRegression green, COMPILE_GATE_OK + REGRESSION_OK 385/385; deviations in the RESULT file; device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 Sprint framing, one line: the owner said "creating reason to raid is big" - a new player's first deploy screen must send them to train, not let them lose.
 

@@ -19,11 +19,11 @@
 //   Right    three DISJOINT bands (WO-1385): the ENEMY BASE line (crest + stats +
 //            copy), the ECHO GUIDE block (header / name + CHANGE / two-line quote),
 //            then the SCOUT REPORT well. Band constants above BuildCenterColumn.
-//   Bottom   total troops / a simple power rating (sum of deployable), an
-//            a quiet "Army Ready?" peek (the old "Auto Recommend" stub was REMOVED in
-//            the 2026-08-09 honesty pass — it was toast-only with no loadout AI; the
-//            handler is still named OnAutoRecommend, which is the stale part),
-//            and a big glowing DEPLOY button -> SceneRouter.GoRaid(def.sceneName).
+//   Bottom   WO-1403: the footer is BOUND to vm.Fielded. Zero troops -> ONE wide
+//            primary, TRAIN TROOPS, a door to Manage > Troops (BEGIN ASSAULT is not
+//            drawn). Troops > 0 -> EDIT ARMY (same door) + BEGIN ASSAULT ->
+//            SceneRouter.GoRaid(def.sceneName). ("Army Ready?" / the "Auto Recommend"
+//            stub are retired: a question on a button and a toast-only verb.)
 //
 // Open(SceneConfigDef) / Close() API; RaidSelectionScreen taps a card -> Open(def).
 //
@@ -104,9 +104,27 @@ namespace DeNelle.Village.Hero
         {
             Close();
 
+            // WO-823 Phase E — the screen's ONE window onto readiness, taken ONCE here.
+            // ArmyReadiness.Compute(GameState) is the single readiness formula in the game; this
+            // is the only place that can see the live save (the in-flight Train-channel slots and
+            // GameState.EverCompletedRaid), so the snapshot is taken here and HANDED to the VM,
+            // which derives Fielded / ShowAssault / PrimaryCtaLabel from it. The View fetches; it
+            // decides nothing — no predicate, no re-derived count, and no second opinion on "may
+            // this player raid" (RaidEntryGate / RaidSelectionScreen stay that authority).
+            // No GameState (headless / AutoPilot) -> Compute returns the WO-813/WO-820
+            // never-false-block snapshot with zero slots, and never throws.
+            var st = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            var readiness = DeNelle.Village.ArmyReadiness.Compute(st);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy readiness snapshot: deployableSlots=" + readiness.DeployableSlots +
+                " queued=" + readiness.QueuedSlots + " required=" + readiness.RequiredSlots +
+                " cap=" + readiness.CapSlots + " ready=" + readiness.Ready +
+                " firstRaidSoftGate=" + readiness.FirstRaidSoftGate);
+
             // VM FIRST — it resolves the army roster + party + troop facts from GameState/
             // TroopCatalog, so this View never touches either.
-            _vm = RaidDeployVM.CreateDefault(def, Close);
+            _vm = RaidDeployVM.CreateDefault(def, readiness, Close);
 
             // 31050: one band above RaidSelectionScreen (31000) so deploy sits over the grid.
             _ui = ElarionUiKit.BuildModalCanvas("RaidDeployScreenUI", 31050);
@@ -415,21 +433,41 @@ namespace DeNelle.Village.Hero
         //  elements the owner saw sharing one band. The fix is a real pixel
         //  budget, top to bottom, with every single-line row >= 36 px so the
         //  30 px FontFloor seats WITHOUT the runtime relax guard (which does not
-        //  run in a headless capture):
-        //     ENEMY BASE  0.785-0.960  (72 px: 2 rows of 36)
-        //     gap         0.775-0.785  ( 4 px)
-        //     ECHO GUIDE  0.390-0.775  (158 px: hdr 36 / name 40 / quote 76 -- 2 lines)
-        //     gap         0.380-0.390  ( 4 px)
-        //     SCOUT       0.000-0.380  (156 px: hdr 37 / 3 lines in 109)
-        //  Pinned by RaidDeployUiRegression [deploy-bands-disjoint]. These are body
-        //  fractions; the left column is untouched except the party row (see
-        //  BuildPartyRow).
+        //  run in a headless capture).
+        //
+        //  WO-1403 RE-BUDGET (2026-09-05): the SCOUT REPORT gains a FOURTH line
+        //  ("Spoils: ..." - it read "Spoils if you win: ..." until the capture that
+        //  evening showed the words eating the gold amount off the right edge; the
+        //  vertical budget below was always right, the LINE was too long)
+        //  and every camp on disk already emits three
+        //  (walls / garrison / boss - scene-configs.json, all four Enemy rows carry a
+        //  boss), so the scout well must seat hdr 36 + 4 x 36 = 180 px. The 411 px
+        //  body cannot ALSO hold a 3-row enemy well (108) and the guide (144 +
+        //  gaps): 180 + 108 + 144 + 8 = 440 > 411. What gives, and why:
+        //   * ENEMY BASE stays TWO rows (72 px) and moves UP to the body top: its
+        //     two stats are one-per-line on the RIGHT (Recon / Power) while the
+        //     header and copy own the LEFT. "Troops N" leaves this well - it is
+        //     already said twice on this screen ("Army: N / M slots", left column,
+        //     and "Garrison: X defenders - you field N", scout report), and a third
+        //     copy is the duplicated-state smell, not information.
+        //   * ECHO GUIDE trims its padding, not its rows: 158 -> 148 px
+        //     (hdr 36 / name 36 / quote 72 = two 30 px lines; CHANGE 130 px > 112).
+        //   * SCOUT takes the 4th line at the floor with no relax.
+        //     ENEMY BASE  0.820-0.995  (72 px: 2 rows of 36)
+        //     gap         0.810-0.820  ( 4 px)
+        //     ECHO GUIDE  0.450-0.810  (148 px: hdr 36 / name 36 / quote 72 -- 2 lines)
+        //     gap         0.440-0.450  ( 4 px)
+        //     SCOUT       0.000-0.440  (181 px: hdr 35 / 4 lines in 145)
+        //  Pinned by RaidDeployUiRegression [deploy-bands-disjoint] (the oracle reads
+        //  these literals, so the geometry rule - disjoint, gapped, inside 0..1 - is
+        //  unchanged and stays green on the new values). These are body fractions;
+        //  the left column is untouched except the party row (see BuildPartyRow).
         private const float ScoutBandY0 = 0.000f;
-        private const float ScoutBandY1 = 0.380f;
-        private const float GuideBandY0 = 0.390f;
-        private const float GuideBandY1 = 0.775f;
-        private const float EnemyBandY0 = 0.785f;
-        private const float EnemyBandY1 = 0.960f;
+        private const float ScoutBandY1 = 0.440f;
+        private const float GuideBandY0 = 0.450f;
+        private const float GuideBandY1 = 0.810f;
+        private const float EnemyBandY0 = 0.820f;
+        private const float EnemyBandY1 = 0.995f;
 
         private void BuildCenterColumn(Transform body, bool hasSubHeader)
         {
@@ -441,9 +479,13 @@ namespace DeNelle.Village.Hero
             // WO-1385: this used to be a tall preview well with a large crest above a
             // three-line rich-text block; on the 411 px body the third line (Est / Troops /
             // Power) was truncated clean off and the second ran under the guide band. It is
-            // now TWO single-line rows: crest + "ENEMY BASE" + the stats readout, then the
-            // copy line. Each row is FitSingleLine (shrinks to the floor, then ellipsis --
-            // never a silent cut).
+            // now TWO single-line rows. Each row is FitSingleLine (shrinks to the floor, then
+            // ellipsis -- never a silent cut).
+            // WO-1403: the 07:02 capture still read "Est. ~2:30 | Troops 0 | Pow..." - three
+            // stats piped into ONE FontMicro label at x 0.44-0.97 have no shrink room (32 ->
+            // 30 px floor) so the tail was ellipsised. The stats are now ONE PER LINE on the
+            // right half (row 1 "Recon ~2:30", row 2 "Power N"); the header and the copy own
+            // the left half. See the band budget above for why the well stays two rows.
             // (#29) A dark recessed Well, not a Niche -- with BlinkChrome off the Niche painted
             // an opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
             float enemyTop = hasSubHeader ? EnemyBandY1 : 0.845f;
@@ -472,18 +514,23 @@ namespace DeNelle.Village.Hero
             ElarionUiKit.FitSingleLine(pvHdr);
             pvHdr.raycastTarget = false;
 
-            // The WORD carries the meaning (no colour-only rich text any more).
+            // The WORD carries the meaning (no colour-only rich text any more). One stat per
+            // row; each is FitSingleLine in its own rect, so neither can push the other off.
             string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
-            int totalTroops = _vm != null ? _vm.DeployableCount : 0;
             int power = _vm != null ? _vm.PowerRating : 0;
-            var pvStats = ElarionUiKit.Label(preview.transform,
-                "Est. ~" + est + " | Troops " + totalTroops + " | Power " + power, 0.50f, 1.00f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.44f, 0.97f);
-            ElarionUiKit.FitSingleLine(pvStats);
-            pvStats.raycastTarget = false;
+            var pvRecon = ElarionUiKit.Label(preview.transform, "Recon ~" + est, 0.50f, 1.00f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.46f, 0.97f);
+            ElarionUiKit.FitSingleLine(pvRecon);
+            pvRecon.raycastTarget = false;
+            var pvPower = ElarionUiKit.Label(preview.transform, "Power " + power, 0.00f, 0.50f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.46f, 0.97f);
+            ElarionUiKit.FitSingleLine(pvPower);
+            pvPower.raycastTarget = false;
 
-            var pvCopy = ElarionUiKit.Label(preview.transform, "Assault to recon - deploy troops on the field",
-                0.00f, 0.50f, ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.97f);
+            // WO-1403: "Assault to recon - deploy troops on the field" was jargon (merged review
+            // row 2). Plain words, left half of row 2, beside the Power stat.
+            var pvCopy = ElarionUiKit.Label(preview.transform, "Scout the camp",
+                0.00f, 0.50f, ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.44f);
             ElarionUiKit.FitSingleLine(pvCopy);
             pvCopy.raycastTarget = false;
 
@@ -494,19 +541,31 @@ namespace DeNelle.Village.Hero
             // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
             // facts only (walls / gates / garrison / boss; never the cosmetic reward
             // fields the loot math ignores).
-            // WO-1385: content untouched; the well's top drops 0.44 -> ScoutBandY1 so the
-            // guide block above gets a band the CHANGE button actually fits in.
+            // WO-1385: the well's top moved to ScoutBandY1 so the guide block above gets a
+            // band the CHANGE button actually fits in.
+            // WO-1403: four lines now (spoils is line 4). Header 0.805-1.00 of the 181 px well
+            // = 35 px; the report block 0.00-0.80 = 145 px seats 4 x 36 px at the 30 px floor.
             var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, ScoutBandY0), new Vector2(1.00f, ScoutBandY1));
             intel.GetComponent<Image>().raycastTarget = false;
-            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.75f, 0.99f,
+            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.805f, 1.00f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             ElarionUiKit.FitSingleLine(intelHdr);
             intelHdr.raycastTarget = false;
             var report = _vm != null ? _vm.ScoutReport : null;
             string intelText = report != null && report.Count > 0
                 ? string.Join("\n", report) : "No scout intel available.";
-            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.03f, 0.73f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
+            // 2026-09-05 - THE BLOCK IS 0.05-0.96 OF THE WELL, NOT 0.08-0.92, and the 13% is
+            // load-bearing. On the fresh capture the 4th line read "Spoils if you win: ~1800
+            // wood, ~1100 iron," at 1920x1080 and "...~1100 iron, ~22" at 2670x1200 - the gold
+            // amount CLIPPED, on the one screen that answers "is this raid worth it". The well
+            // is budgeted for four lines (no wrapping into a fifth), so the two levers are the
+            // prefix (RaidDeployVM.SpoilsPrefix lost "if you win", eleven characters) and this
+            // width. Together they turn a 0-character overrun into ~4 characters of slack on
+            // the longest live line, "Spoils: ~4000 wood, ~2400 iron, ~6500 gold". The kit's
+            // Well draws an inner rim, so 0.05/0.96 is as wide as the block can sit without
+            // touching it.
+            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.00f, 0.80f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.05f, 0.96f);
             ElarionUiKit.FitBlock(intelLbl);
             intelLbl.raycastTarget = false;
         }
@@ -532,10 +591,11 @@ namespace DeNelle.Village.Hero
         // actually speaks this line aloud (EchoWorldPresence.SpeakGuideMemory).
         //
         // WO-1385 layout (fractions OF THE BAND, band = GuideBandY0..GuideBandY1 of the
-        // body = ~158 px on the phone body): a TEXT COLUMN on the left (x 0.04-0.63) of
-        // three rows -- header 0.76-0.99 (36 px), name 0.51-0.76 (40 px), quote 0.02-0.50
-        // (76 px = two 30 px lines) -- and the CHANGE button on the RIGHT (x 0.66-0.97,
-        // y 0.06-0.94 = 232 x 139 px), beside the name line and clear of every row. The
+        // body; WO-1403 trimmed it 158 -> ~148 px on the phone body to seat the scout
+        // report's 4th line): a TEXT COLUMN on the left (x 0.04-0.63) of three rows --
+        // header 0.755-1.00 (36 px), name 0.51-0.755 (36 px), quote 0.01-0.50 (72 px =
+        // two 30 px lines) -- and the CHANGE button on the RIGHT (x 0.66-0.97,
+        // y 0.06-0.94 = 232 x 130 px), beside the name line and clear of every row. The
         // button is taller than the name line ON PURPOSE: MinTouchPx is 112 and the band
         // cannot give a single row that height, so the button owns the column's height
         // instead of ClampMinTouch growing it over the neighbours (the shipped collision).
@@ -555,7 +615,7 @@ namespace DeNelle.Village.Hero
             var bandImg = band.GetComponent<Image>();
             if (bandImg != null) bandImg.raycastTarget = false;
 
-            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.76f, 0.99f,
+            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.755f, 1.00f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
             ElarionUiKit.FitSingleLine(hdr);
             hdr.raycastTarget = false;
@@ -576,17 +636,17 @@ namespace DeNelle.Village.Hero
                 // supplies the height afterwards; this button has no such seat, so it carries
                 // its own band. UiKitMinTouchGuard is a net, not a layout — it does not run in
                 // an edit-mode headless capture (ElarionUiKit.cs:1075-1077).
-                // WO-1385: the band spans y 0.06-0.94 of a ~158 px band = 139 px, above
+                // WO-1385/1403: the band spans y 0.06-0.94 of a ~148 px band = 130 px, above
                 // the 112 px floor by construction, so the clamp never has to grow it.
                 ElarionUiKit.Button(band.transform, "Change", ElarionUiKit.ButtonKind.Quiet,
                     new Vector2(0.66f, 0.06f), new Vector2(0.97f, 0.94f), OnCycleGuide);
             }
 
-            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.51f, 0.76f,
+            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.51f, 0.755f,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
             _guideNameLabel.raycastTarget = false;
 
-            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.02f, 0.50f,
+            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.01f, 0.50f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, GuideTextX0, GuideTextX1);
             _guideMemoryLabel.raycastTarget = false;
 
@@ -662,75 +722,95 @@ namespace DeNelle.Village.Hero
             RefreshGuideBand();
         }
 
-        // WO-839 #6 flag (OWNER CONFIRM pending): false = DEPLOY stays enabled at 0 troops
-        // so the player can enter to SCOUT (deliberate feature — the spec's default);
-        // true = grey it out + toast a reason ("don't offer what you can't do", WO-833).
-        // static readonly (not const) so the dead branch never trips CS0162.
-        private static readonly bool GateDeployAtZeroTroops = false;
-
-        /// <summary>
-        /// WO-823 Phase E - the screen's ONE window onto readiness. Returns the SLOT-weighted
-        /// deployable count from <see cref="DeNelle.Village.ArmyReadiness"/>, the single
-        /// readiness formula, instead of the raw headcount this screen used to gate on.
-        ///
-        /// This is deliberately NOT a readiness predicate: it exposes a number the snapshot
-        /// already computed and decides nothing. Phase E REMOVED an opinion from this file;
-        /// it must never grow a new one. Anything that needs "may this player raid" reads
-        /// Snapshot.Ready upstream (RaidEntryGate / RaidSelectionScreen), never here.
-        ///
-        /// No GameState (headless / AutoPilot) -> Compute returns the never-false-block
-        /// snapshot with zero slots, and GateDeployAtZeroTroops is OFF by default, so the
-        /// deploy path stays open exactly as it does today.
-        /// </summary>
-        private static int ReadinessSlots()
-        {
-            var st = DeNelle.Core.State.GameStateService.Instance != null
-                ? DeNelle.Core.State.GameStateService.Instance.State : null;
-            return DeNelle.Village.ArmyReadiness.Compute(st).DeployableSlots;
-        }
-
-        // FOOTER action strip — Auto Recommend (stub) + the big DEPLOY CTA.
-        // WO-839 #5: FrameCore's footer is now an explicit RAISED band tall enough for
-        // MinTouchPx buttons (root cause: the inherited thin default band forced
-        // ClampMinTouch to grow both buttons past the band into the shared Close below).
-        // Auto Recommend and DEPLOY share the band with a real gap; Close keeps its own
-        // band underneath.
+        // =====================================================================
+        //  WO-1403 (owner ruling 2026-09-05, merged UI review section 2 #2 - "Zero-army-
+        //  assault? Default NO"): the footer is BOUND to vm.Fielded.
+        // ---------------------------------------------------------------------
+        //  RETIRED HERE: the WO-839 #6 `GateDeployAtZeroTroops` flag ("OWNER CONFIRM
+        //  pending" since 2026-08-09 - default false = scouting with 0 troops) and the
+        //  `ReadinessSlots()` HELPER that read the snapshot at paint time. The SNAPSHOT
+        //  ITSELF IS NOT RETIRED and did not move out of this file's flow: WO-823 Phase E's
+        //  ArmyReadiness.Compute(GameState) is now taken ONCE in OpenInternal and handed to
+        //  the VM, which is what vm.Fielded / vm.ShowAssault below are derived from. What
+        //  went away is a View-side predicate, not the readiness input. The ruling the flag
+        //  waited on has landed
+        //  the OTHER way: a new player's first deploy screen must send them to TRAIN,
+        //  not let them lose ("creating reason to raid is big"). The 07:02 capture had
+        //  a full-size live BEGIN ASSAULT under "No troops trained yet. Visit the
+        //  Barracks." - the loudest button said attack, the sentence said go elsewhere,
+        //  and neither was a door.
+        //
+        //  Phase E's concern (a headcount disagreeing with slot-weighted readiness) cannot
+        //  reopen here: vm.Fielded IS the snapshot's DeployableSlots, so there is no second
+        //  number to disagree with. The ONLY question this footer asks of it is "zero or
+        //  not" - never Snapshot.Ready, which would be a second raid gate. Above zero the
+        //  screen still decides nothing about readiness - RaidEntryGate / the selection
+        //  grid remain the one authority on "may this player raid".
+        //
+        //  Words carry the state (vm.PrimaryCtaLabel), one mechanism per door:
+        //    Fielded == 0 -> ONE wide primary TRAIN TROOPS -> Manage > Troops. BEGIN
+        //                    ASSAULT is NOT DRAWN (not greyed, not "SCOUT ONLY": the
+        //                    Heartfire charge is spent at raid entry, and a second
+        //                    button on a ~113 px footer only splits the one tap the
+        //                    player should make).
+        //    Fielded  > 0 -> EDIT ARMY (Quiet, the same Manage > Troops door) + BEGIN
+        //                    ASSAULT (BuildObsidianButton Yellow, WO-1385 #4).
+        //  Both branches seat every CTA at the canonical height (WO-1075). Pinned by
+        //  RaidDeployUiRegression [deploy-bar-kit-button] and by the WO-1403 suite
+        //  RaidDeployZeroArmyRegression [zero-army-footer].
+        // =====================================================================
         private void BuildDeployBar(Transform footer)
         {
-            // Honesty pass 2026-08-09: removed the "Auto Recommend" stub (toast-only, no
-            // loadout AI). Full-width BEGIN ASSAULT — the army is always the full deployable
-            // roster on the battleground tray. Quiet "Army ready" peek stays as optional info.
-            var readyBtn = ElarionUiKit.Button(footer, "Army Ready?", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.00f, 0.50f), new Vector2(0.28f, 0.50f), OnAutoRecommend);
-            SeatFooterCtaAtCanonicalHeight(readyBtn);
+            int fielded = _vm != null ? _vm.Fielded : 0;
+            bool showAssault = _vm != null && _vm.ShowAssault;
+            // The WO-1403 decision line, emitted ONCE before the branch so a capture records
+            // what the footer decided and on what number - the two branch traces below say
+            // what was then drawn. The label comes from the VM (PrimaryCtaLabel), never from
+            // a literal re-derived here: the trace and the button can never disagree. The
+            // required/ready tail is the readiness snapshot the number CAME FROM, so a capture
+            // can tell "0 slots" apart from "not Ready yet" without a second run.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy footer fielded=" + fielded + " primary=" +
+                (_vm != null ? _vm.PrimaryCtaLabel : RaidDeployVM.PrimaryTrainLabel) +
+                " required=" + (_vm != null ? _vm.Readiness.RequiredSlots : 0) +
+                " ready=" + (_vm != null && _vm.Readiness.Ready));
 
-            // DEPLOY -- the primary CTA. WO-1385 #4 (owner 2026-09-04, Seeker screenshot:
-            // "yuck"): the WO-839 DeployGlow halo -- a flat gilt image slab behind the
-            // button, x 0.30-1.00 / y 0.00-1.00 of the footer -- is GONE. On the phone the
-            // footer is ~113 px and the seated button 132 px, so the "halo" read as a raw
-            // yellow rectangle sticking out behind a framed button, next to ARMY READY?'s
-            // kit frame: two visual languages on one row. The primary emphasis now comes
-            // from the kit's own primary face -- BuildObsidianButton Yellow -- on the SAME
-            // row geometry as ARMY READY? (y 0.50/0.50 + SeatFooterCtaAtCanonicalHeight).
-            // No second image, no second style. Pinned by RaidDeployUiRegression
-            // [deploy-bar-kit-button].
-            // WO-932: "BEGIN ASSAULT" -- distinct from in-raid ground DROP of troops.
-            var deployBtn = ElarionUiKit.BuildObsidianButton(footer, "BEGIN ASSAULT",
+            if (showAssault)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "deploy primary='" + RaidDeployVM.PrimaryAssaultLabel + "' fielded=" + fielded +
+                    " secondary='EDIT ARMY'");
+
+                // EDIT ARMY (was "Army Ready?" - a question on a button, and a toast). A verb
+                // that does what it says: the Troops tab is where the army is trained/upgraded.
+                var editBtn = ElarionUiKit.Button(footer, "EDIT ARMY", ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(0.00f, 0.50f), new Vector2(0.28f, 0.50f), OnEditArmy);
+                SeatFooterCtaAtCanonicalHeight(editBtn);
+
+                // DEPLOY -- the primary CTA. WO-1385 #4 (owner 2026-09-04, Seeker screenshot:
+                // "yuck"): the WO-839 DeployGlow halo -- a flat gilt image slab behind the
+                // button -- is GONE. The primary emphasis comes from the kit's own primary face
+                // -- BuildObsidianButton Yellow -- on the SAME row geometry as the Quiet button
+                // (y 0.50/0.50 + SeatFooterCtaAtCanonicalHeight). No second image, no second
+                // style. WO-932: "BEGIN ASSAULT" -- distinct from in-raid ground DROP of troops.
+                var deployBtn = ElarionUiKit.BuildObsidianButton(footer, "BEGIN ASSAULT",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(0.32f, 0.50f), new Vector2(0.985f, 0.50f), OnDeploy);
+                SeatFooterCtaAtCanonicalHeight(deployBtn);
+                if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy;
+                return;
+            }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy primary='" + RaidDeployVM.PrimaryTrainLabel + "' reason=zero-army (BEGIN ASSAULT not drawn; " +
+                "the empty-army sentence in the troop list is the explanation)");
+            // ONE wide primary - the full row the two buttons would have shared, same face,
+            // same seat. The troop list's "No troops trained yet. Visit the Barracks." stays
+            // as the explanation; this is the door that sentence never was.
+            var trainBtn = ElarionUiKit.BuildObsidianButton(footer, "TRAIN TROOPS",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.32f, 0.50f), new Vector2(0.985f, 0.50f), OnDeploy);
-            SeatFooterCtaAtCanonicalHeight(deployBtn);
-            // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either
-            // way the WO-820 readiness gate upstream (RaidEntryGate / ArmyReadiness.Compute
-            // at the HUD button + selection grid) stays the ONE authority - this screen
-            // never re-derives or bypasses readiness.
-            //
-            // WO-823 Phase E: this line USED TO READ _vm.DeployableCount, a raw HEADCOUNT,
-            // while ArmyReadiness is SLOT-WEIGHTED. That was the grey-button-versus-open-gate
-            // bug in its original form - the button and the door disagreed about what "enough
-            // army" means, and neither was lying. It now reads the ONE snapshot, so the two
-            // agree by construction rather than by coincidence.
-            bool troopsOk = !GateDeployAtZeroTroops || ReadinessSlots() > 0;
-            if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy && troopsOk;
+                new Vector2(0.00f, 0.50f), new Vector2(0.985f, 0.50f), OnTrainTroops);
+            SeatFooterCtaAtCanonicalHeight(trainBtn);
         }
 
         // WO-1075: footer height changes with aspect, so a vertical fraction can fall below
@@ -745,26 +825,31 @@ namespace DeNelle.Village.Hero
             rt.offsetMax = new Vector2(rt.offsetMax.x, half);
         }
 
-        private void OnAutoRecommend()
+        // WO-1403: the ONE door from this screen to the Barracks - Manage on the Troops tab
+        // (the WO-1389 context open, ManageScreenPanel.Open(string) "Troops"). Close FIRST,
+        // then open, exactly as BuildCollectionBrowser's Defense door does (BuildCollection-
+        // Browser.cs:173-176, read 2026-09-05): the close-to-nothing ARMS the WO-1400 return
+        // door the Journey deck set when it handed off to Raids, and the Manage open that
+        // follows KEEPS it - PanelManager.cs:374 emits
+        //   "return door '<name>' KEPT - '<name>' opened before it fired"
+        // - so closing Manage later lands back on the deck, not on the bare HUD.
+        private void OpenTroopsDoor(string from)
         {
-            // WO-932: no longer a silent stub. Pre-deploy does not pick a subset — the full
-            // deployable army is available on the battleground tray. This CTA confirms that
-            // and surfaces power/count so the tap is never a dead button.
-            int n = _vm != null ? _vm.DeployableCount : 0;
-            int power = _vm != null ? _vm.PowerRating : 0;
-            if (n <= 0)
+            string raidId = _vm != null ? _vm.RaidId : "(none)";
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy " + from + " -> Manage tab 'Troops' (raid='" + raidId + "'; deploy screen closed first, " +
+                "the deck's WO-1400 return door is kept by the arbiter)");
+            Close();
+            if (!PanelRouter.Open(PanelId.Manage, "Troops"))
             {
-                ElarionUiKit.ShowToast(
-                    "No deployable troops yet. Train at the Barracks, then return.",
-                    ElarionUiKit.ToastTone.Info);
-                return;
+                // PanelRouter has already FlowTrace.Fail'd the why; the player still needs a word.
+                ElarionUiKit.ShowToast("The Barracks could not be opened.", ElarionUiKit.ToastTone.Danger);
             }
-            ElarionUiKit.ShowToast(
-                "Full army ready: " + n + " troop(s), power " + power +
-                ". Begin Assault — drop them on the field.",
-                ElarionUiKit.ToastTone.Info);
-            Debug.Log($"[RaidDeployScreen] Auto Recommend — full army n={n} power={power}.");
         }
+
+        private void OnTrainTroops() => OpenTroopsDoor("TRAIN TROOPS");
+
+        private void OnEditArmy() => OpenTroopsDoor("EDIT ARMY");
 
         private void OnDeploy()
         {
@@ -789,13 +874,15 @@ namespace DeNelle.Village.Hero
                     $"BEGIN ASSAULT refused: scene '{_vm.SceneName}' not in Build Settings.");
                 return;
             }
-            // WO-839 #6 (flag OFF by default - scouting with 0 troops is deliberate).
-            // WO-823 Phase E: the second copy of the same bypass, routed through the ONE
-            // ArmyReadiness snapshot for the same reason as the button state above.
-            if (GateDeployAtZeroTroops && ReadinessSlots() <= 0)
+            // WO-1403: BEGIN ASSAULT is not drawn at zero, so this is the belt behind the
+            // braces (a stale handle, a re-entrant tap). The VM's Deploy() refuses too; this
+            // copy exists only to give the player a word instead of a dead tap.
+            if (_vm.Fielded <= 0)
             {
                 ElarionUiKit.ShowToast("No troops trained yet. Visit the Barracks.", ElarionUiKit.ToastTone.Danger);
-                Debug.Log("[RaidDeployScreen] DEPLOY blocked: 0 deployable troops (GateDeployAtZeroTroops).");
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "BEGIN ASSAULT tapped with fielded=0 - refused (WO-1403 ruling); the button should not " +
+                    "have been drawn.");
                 return;
             }
             // WO-1380: remember WHERE the Guide is being taken, so the Echo has something to

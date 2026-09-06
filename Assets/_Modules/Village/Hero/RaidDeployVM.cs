@@ -52,6 +52,9 @@ namespace DeNelle.Village.Hero
         private readonly List<string> _partyClasses = new List<string>();
         private readonly Func<string, TroopInfo> _troopInfo;
         private readonly Action _onClose;
+        /// <summary>The View's live-GameState snapshot, when it supplied one (see
+        /// <see cref="Readiness"/>). Null on the pure path.</summary>
+        private readonly ArmyReadiness.Snapshot? _injectedReadiness;
 
         private readonly List<ItemVM> _troops = new List<ItemVM>();
         private readonly Dictionary<string, bool> _rangedById = new Dictionary<string, bool>();
@@ -138,13 +141,66 @@ namespace DeNelle.Village.Hero
         public int DeployableCount { get; private set; }
         public int PowerRating { get; private set; }
 
+        /// <summary>
+        /// WO-823 Phase E's ONE readiness snapshot, resolved for THIS screen -
+        /// <see cref="DeNelle.Village.ArmyReadiness"/> is the single formula and this VM never
+        /// re-rolls it. Injected by the View at Open (the live GameState read, which is the only
+        /// place the in-flight Train-queue slots and EverCompletedRaid are knowable); on the pure
+        /// path (tests, headless, no GameState) it is computed from the roster this VM was handed.
+        /// Presentation may WORD copy from <see cref="ArmyReadiness.Snapshot.RequiredSlots"/> /
+        /// <see cref="ArmyReadiness.Snapshot.Ready"/>; it must never re-decide the raid door -
+        /// RaidEntryGate / RaidSelectionScreen remain the one authority on "may this player raid".
+        /// </summary>
+        public ArmyReadiness.Snapshot Readiness { get; private set; }
+
+        /// <summary>
+        /// WO-1403: the number the footer is BOUND to, read straight off the ONE readiness
+        /// snapshot (<see cref="Readiness"/>.DeployableSlots). It is SLOT-WEIGHTED, like every
+        /// other readiness surface in the game - deliberately NOT the raw headcount
+        /// <see cref="DeployableCount"/>, whose divergence from ArmyReadiness was the WO-823
+        /// Phase E grey-button-versus-open-gate defect. The two agree for 1-slot troops and at
+        /// zero (no deployable troop means no deployable slot), which is the only comparison the
+        /// footer makes. The WO-1389 compare line ("you field N") keeps DeployableCount on
+        /// purpose: it is measured against a garrison HEADCOUNT.
+        /// </summary>
+        public int Fielded => Readiness.DeployableSlots;
+
+        /// <summary>The primary CTA word when the player has troops to field.</summary>
+        public const string PrimaryAssaultLabel = "BEGIN ASSAULT";
+        /// <summary>The primary CTA word when the player has NO troops: a door to the Barracks
+        /// (Manage > Troops), never an assault the screen invited them to lose.</summary>
+        public const string PrimaryTrainLabel = "TRAIN TROOPS";
+
+        /// <summary>
+        /// WO-1403 (owner ruling 2026-09-05, merged review section 2 #2, default NO: no assault
+        /// with zero troops). Words carry the state: <see cref="Fielded"/> == 0 -> TRAIN TROOPS,
+        /// otherwise BEGIN ASSAULT. Pure; pinned by RaidDeployZeroArmyRegression [zero-army-vm].
+        /// </summary>
+        public string PrimaryCtaLabel => Fielded > 0 ? PrimaryAssaultLabel : PrimaryTrainLabel;
+
+        /// <summary>True when the footer draws BEGIN ASSAULT at all (Fielded &gt; 0). At zero the
+        /// assault button is NOT drawn - not greyed, not renamed SCOUT ONLY - because BEGIN ASSAULT
+        /// loads the raid scene and the Heartfire charge is SPENT once inside it
+        /// (RaidDeployController.TryInstall -> HeartfireService.TrySpend, cited at
+        /// RaidSelectionScreen.cs:553-556; the selection door only READS HasCharge). A zero-army
+        /// assault therefore burns a charge on a guaranteed loss.
+        ///
+        /// (!) DELIBERATELY NOT bound to <see cref="ArmyReadiness.Snapshot.Ready"/>. The only
+        /// question this footer asks is ZERO OR NOT; Ready would put a SECOND raid gate on the
+        /// deploy screen (a first-raid player with 2 of the required 3 slots would lose the
+        /// button entirely), which is exactly the second opinion WO-823 Phase E removed from
+        /// this file. Ready/RequiredSlots reach the footer as TRACE only.</summary>
+        public bool ShowAssault => Fielded > 0;
+
         private readonly List<string> _scoutReport = new List<string>();
 
         /// <summary>WO-839 #3: scout-report intel lines for the deploy screen's intel band —
         /// honest facts the scouting party could see, from the raid's SceneConfigDef only
-        /// (wall tier + gates, garrison headcount, boss). Reward mult is shown on the
-        /// selection card and paid by <see cref="RaidScoring.ComputeLoot"/> — not repeated
-        /// here as intel. Never null; always at least one line.</summary>
+        /// (wall tier + gates, garrison headcount, boss), then WO-1403's line 4, the spoils
+        /// estimate - which is NOT the cosmetic rewardMultiplier repeated as intel: it is what a
+        /// win PAYS, from WO-1402's producer (RaidScoring.EstimateSpoils -&gt; ProjectLoot -&gt;
+        /// ComputeLoot at RaidScoring.EstimateStars), the same chain the settle screen credits
+        /// through. See <see cref="SpoilsLine"/>. Never null; always at least one line.</summary>
         public IReadOnlyList<string> ScoutReport => _scoutReport;
 
         /// <summary>"Army: N / M slots" (or "Army: -" with no roster).</summary>
@@ -190,6 +246,17 @@ namespace DeNelle.Village.Hero
                     $"(missing name or not in Build Settings).");
                 return;
             }
+            // WO-1403: the ruling is enforced at the ONE command, not only at the button that is
+            // no longer drawn. Zero fielded -> no scene load, and the trace says why. Fielded is
+            // the WO-823 slot-weighted ArmyReadiness snapshot's own DeployableSlots, so this
+            // refusal and the readiness gate upstream cannot disagree about "no army".
+            if (Fielded <= 0)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    $"Deploy refused: raid='{RaidId}' fielded=0 - WO-1403 ruling, no assault with zero " +
+                    "troops; the deploy screen offers TRAIN TROOPS instead.");
+                return;
+            }
             DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                 $"Deploy BEGIN ASSAULT raid='{RaidId}' -> scene '{_def.sceneName}' " +
                 $"(deployableTroops={DeployableCount} power={PowerRating}).");
@@ -201,6 +268,17 @@ namespace DeNelle.Village.Hero
         /// <summary>The ONLY resolution site: pulls the army + party from GameState and the
         /// troop facts from TroopCatalog so the View never touches either.</summary>
         public static RaidDeployVM CreateDefault(SceneConfigDef def, Action onClose = null)
+            => CreateDefault(def, null, onClose);
+
+        /// <summary>
+        /// WO-823 Phase E / WO-1403: same resolution, with the readiness snapshot the View
+        /// already took from the live GameState (RaidDeployScreen.OpenInternal ->
+        /// <see cref="ArmyReadiness.Compute(GameState)"/>). Passing it in - rather than the VM
+        /// taking a second Compute of its own - is what keeps ONE snapshot behind the footer,
+        /// the trace and the command. Null falls back to the pure roster computation.
+        /// </summary>
+        public static RaidDeployVM CreateDefault(SceneConfigDef def, ArmyReadiness.Snapshot? readiness,
+                                                 Action onClose = null)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             var army = state != null ? state.Army : null;
@@ -214,16 +292,18 @@ namespace DeNelle.Village.Hero
                 return new TroopInfo(d.DisplayName, d.AttackDamage, ranged, d.Slots > 0 ? d.Slots : 1);
             };
 
-            return new RaidDeployVM(def, army, party, resolver, onClose);
+            return new RaidDeployVM(def, army, party, resolver, onClose, readiness);
         }
 
         public RaidDeployVM(SceneConfigDef def, ArmyStorage army, IReadOnlyList<string> partyClasses,
-                            Func<string, TroopInfo> troopInfo, Action onClose)
+                            Func<string, TroopInfo> troopInfo, Action onClose,
+                            ArmyReadiness.Snapshot? readiness = null)
         {
             _def = def;
             _army = army;
             _troopInfo = troopInfo ?? (id => new TroopInfo(null, 10f, false, 1));
             _onClose = onClose;
+            _injectedReadiness = readiness;
 
             if (partyClasses != null) _partyClasses.AddRange(partyClasses);
             if (_partyClasses.Count == 0) _partyClasses.Add("Knight");
@@ -265,8 +345,75 @@ namespace DeNelle.Village.Hero
                     if (!string.IsNullOrEmpty(g.boss))
                         _scoutReport.Add("Boss: " + TitleCaseId(g.boss));
                 }
+                // WO-1403 line 4 (merged review section 2 #1, default YES: show expected loot, a
+                // range never exact): "Spoils: ~1800 wood, ~1100 iron, ~2200 gold" -
+                // WO-1402's estimate, WO-1402's formatter, this screen's prefix (see the producer
+                // banner below). The player is told what a raid PAYS on the screen where they
+                // decide to raid.
+                string spoils = SpoilsLine(_def);
+                if (!string.IsNullOrEmpty(spoils)) _scoutReport.Add(spoils);
             }
             if (_scoutReport.Count == 0) _scoutReport.Add("No scout intel available.");
+        }
+
+        // =====================================================================
+        //  WO-1403 line 4: ONE PRODUCER, and it is WO-1402's
+        // ---------------------------------------------------------------------
+        //  The WO says the spoils line comes "from the same producer as WO-1402", and it
+        //  does - literally the same two statics, not a parallel copy of the arithmetic:
+        //    RaidSelectionVM.EstimateSpoils(def)  -> RaidScoring.EstimateSpoils(id, mult)
+        //                                         -> ProjectLoot(EstimateStars=3, ...)
+        //                                         -> ComputeLoot  (the settle payout's own
+        //                                            chain, via RaidScoring.LootFor)
+        //    RaidSelectionVM.FormatSpoils(est)    -> "Spoils: ~1800 wood, ~1100 iron, ~2200 gold"
+        //  The line is now byte-identical to the row the player just tapped, PREFIX INCLUDED -
+        //  pinned by RaidDeployZeroArmyRegression [zero-army-spoils]. It used to differ ("Spoils
+        //  if you win: "), and that longer prefix overflowed the four-line SCOUT REPORT well and
+        //  ATE THE GOLD AMOUNT on both capture resolutions (see SpoilsPrefix below for the
+        //  measurement). The prefix indirection stays in the code so a future lane can give the
+        //  deploy screen its own words the moment they fit - it is a no-op today, not a mistake.
+        //
+        //  (!) THIS FILE MUST NEVER CALL RaidScoring.ComputeLoot / ProjectLoot DIRECTLY.
+        //  An earlier draft of this lane did exactly that - a 2-star, round-to-50, wood+iron
+        //  estimate - and it would have quoted the SAME camp differently on two adjacent
+        //  screens (3-star, Approx, wood+iron+gold on the row). A second loot formula is the
+        //  drift seed; the oracle reds on a direct ComputeLoot call from here.
+        // =====================================================================
+
+        /// <summary>
+        /// The deploy screen's prefix — "Spoils: ", the SAME word the selection row uses.
+        ///
+        /// ⛔ IT WAS "Spoils if you win: " AND THAT CLIPPED, measured 2026-09-05 on the fresh
+        /// capture: RaidDeploy_1920x1080.png reads "Spoils if you win: ~1800 wood, ~1100 iron,"
+        /// and stops — the gold amount is simply gone, on the screen where the player decides
+        /// whether the raid is worth it. The SCOUT REPORT well is budgeted for FOUR lines
+        /// (WO-1403), so the line cannot wrap into a fifth; the only lever is length, and the
+        /// eleven characters of "if you win" were the whole overflow. At 1920x1080 the well
+        /// seated 42 characters of that line before the cut; the longest live line is now
+        /// "Spoils: ~4000 wood, ~2400 iron, ~6500 gold" (42), and RaidDeployScreen widens the
+        /// report block from x 0.08-0.92 to 0.05-0.96 (+13%) so it lands with ~4 characters of
+        /// slack instead of none.
+        ///
+        /// The word still carries the meaning (the owner is red/green colourblind — never a
+        /// colour), and it now matches the block's own grammar: Walls: / Garrison: / Boss: /
+        /// Spoils:. The conditional lives in the header the line sits under, SCOUT REPORT, and
+        /// in the deploy screen's whole purpose.
+        /// </summary>
+        public const string SpoilsPrefix = RaidSelectionVM.SpoilsPrefix;
+
+        /// <summary>
+        /// "Spoils: ~1800 wood, ~1100 iron, ~2200 gold", or null when the estimate
+        /// is all zero (no def, or a tunable-rail fault - RaidScoring.EstimateSpoils never
+        /// throws, it answers an empty basket and traces why). No line beats "~0 wood".
+        /// </summary>
+        public static string SpoilsLine(SceneConfigDef def)
+        {
+            if (def == null) return null;
+            string row = RaidSelectionVM.FormatSpoils(RaidSelectionVM.EstimateSpoils(def));
+            if (string.IsNullOrEmpty(row)) return null;
+            return row.StartsWith(RaidSelectionVM.SpoilsPrefix, StringComparison.Ordinal)
+                ? SpoilsPrefix + row.Substring(RaidSelectionVM.SpoilsPrefix.Length)
+                : row;
         }
 
         /// <summary>"ReinforcedSteel" -> "Reinforced Steel" (pure, no Unity/regex).</summary>
@@ -314,6 +461,7 @@ namespace DeNelle.Village.Hero
             var order = new List<string>();
             float power = 0f;
             int deployable = 0;
+            int deployableSlots = 0;
 
             if (_army != null)
             {
@@ -325,6 +473,11 @@ namespace DeNelle.Village.Hero
                     counts[t.TroopDefId]++;
                     var info = _troopInfo(t.TroopDefId);
                     power += info.Attack * t.DamageMultiplier;
+                    // NOT a second slot formula: CreateDefault's resolver reads the same
+                    // `d.Slots > 0 ? d.Slots : 1` off the same TroopCatalog entry that
+                    // TroopDialogueCommands.SlotOf reads, so this sum equals the one
+                    // ArmyReadiness.Compute(GameState) would produce for the same roster.
+                    deployableSlots += info.Slots > 0 ? info.Slots : 1;
                 }
             }
 
@@ -344,6 +497,21 @@ namespace DeNelle.Village.Hero
             DeployableCount = deployable;
             PowerRating = (int)System.Math.Round(power);
             ArmyCapText = ComputeArmyCapText();
+
+            // ── The ONE readiness snapshot behind Fielded / ShowAssault / PrimaryCtaLabel ──
+            // Order of preference, and why:
+            //  1. The View's injected snapshot - ArmyReadiness.Compute(GameState) taken at
+            //     RaidDeployScreen.OpenInternal. Only that read can see the in-flight Train
+            //     queue (BarracksService.CommittedTrainingSlots) and GameState.EverCompletedRaid.
+            //  2. No GameState (tests / headless / a VM built straight from a roster): the seam
+            //     overload with queued=0 and the STRICT default for everCompletedRaid, so the
+            //     fallback can never silently soften a gate.
+            //  3. No army at all ("Army: -", RaidDeployUiRegression's null-def case): the
+            //     WO-813/WO-820 never-false-block snapshot. Compute(ArmyStorage,...) would NRE
+            //     on army.MaxArmySize here, and a missing roster must never throw a screen.
+            Readiness = _injectedReadiness ?? (_army != null
+                ? ArmyReadiness.Compute(_army, deployableSlots, 0)
+                : new ArmyReadiness.Snapshot { Ready = true });
         }
 
         private string ComputeArmyCapText()
