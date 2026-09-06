@@ -187,7 +187,10 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, eightieth pass): main line next free = **1429**.
+> ## RECONCILED 2026-09-06 (CLI, eighty-first pass): main line next free = **1430**.
+> *(CLI minted **1429** - an out-of-mana Mage has NO attack at all and can only run; the primary falls back to the staff melee and returns to magic at 50% mana. Owner playtest 2026-09-06. Bumped 1429 -> 1430 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, eightieth pass): main line next free = **1429**.
 > *(CLI minted **1428** - the Manage card grows to the owner's mockup: large building art, a before/after STATS table, a REQUIREMENTS checklist that ticks each resource against the player's balance, and a NEXT LEVEL art preview. Her mockup pasted 2026-09-06; it ABSORBS WO-1427 because the requirements block answers "why can't I?" visually. Bumped 1428 -> 1429 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, seventy-ninth pass): main line next free = **1428**.
