@@ -813,6 +813,43 @@ in-house after landing.
 Accepted: HelpMenu danger confirm via `ElarionUiKit.BuildConfirmModal`; `EchoBonusCalculator` numeric identity (verified);
 Settings slider kept; DailyChest CTA hide with the reward path untouched; all ASCII.
 
+### 8.11 COMMITTED 23:1x - new base for the dev lane
+- **WO-1418** -> `3c677027e` (lanes A-D + rework, lead re-point of the launcher toast pin, suite registered).
+- **WO-1410** -> `ecf647b53` (+ three lead-review fixes: popup word, Wisdom plate width, OPEN SKILLS door at the
+  112 px floor - the secondary capture caught the door at 67-77 px).
+- **WO-1419** -> `11dfea3c1` (+ sprite cache and a missing-sprite FlowTrace.Once).
+- **The 8.10 polish rebases onto `ecf647b53`.** `ManageScreenPanel.cs` / `ManageScreenVM.cs` / `UICaptureLaunch.cs` /
+  `HeroSkillTreePanelMvvm.cs` / `HeroLoadoutPanelMvvm.cs` all moved - re-read at that hash before editing.
+- **WO-1404** -> `5661d71e4`; **WO-1413 part 1** -> `458baf57f` (both gated COMPILE_GATE_OK + REGRESSION_OK 389/389 +
+  UI_CAPTURE_OK; Journey and Help frames opened). **WO-1413's blocked halves (UICaptureLaunch fixtures,
+  HudKitController faces, dialogue twins, CopyHygieneRegression) are UNLOCKED at `458baf57f`** - take them as a
+  1413 part 2 AFTER the 8.10 polish (the polish is what gates tonight's device build).
+- Current HEAD for any new worktree: `458baf57f`.
+
+### 8.10 WO-1418 POLISH REWORK - from the first opened frames (`ManageBuildings_2670x1200.png` / `_1920x1080.png`, 22:45)
+The shape is the mockup - rail, selected card, BUILDING NOW, chips as doors - and it is being COMMITTED as gated so the
+base advances. These are measured defects on the frames; fix on top of the committed base (the lead posts the hash):
+1. **Chip copy overflows at 1920x1080:** `Builders 2/2 busy - 3/5 qu...` (all three chips ellipsize). Shorten the busy
+   form (e.g. `Builders 2/2 . 3 queued`) and `FitSingleLine` the chip label; the idle form stays `<Name> idle - N free`.
+2. **BUILDING NOW rows paint the raw job id:** row 2 reads `Barracks:2:0 -> L4` (a `QueueRowVM.Label` for Builder jobs)
+   and its medallion is a blank disc. Rows must read the building's display name (`BuildingTierCatalog.Find(id).DisplayName`)
+   + `-> L<n>` and resolve the same portrait the rail uses. Row 2 also renders OUTSIDE the band's dark plate at 1920
+   (the extra `BuildingNowRow_n` hosts sit below the band host) - either widen the band to hold N rows or cap at the
+   rows that fit and say `+N more`; never paint a row outside the plate.
+3. **Locked card CTA face reads `LEVEL 1 . T5`:** jargon. The disabled face must say what unlocks it in words:
+   `UNLOCKS AT VILLAGE LEVEL 5` (from `RequiresVillageTier`); the rail row may keep the short `Level 1 . T5`.
+4. **Rail scroll starts mid-list:** the first row is clipped at the top (`Level 3 . Building` half visible). On open the
+   rail must start at the top, or scroll so the SELECTED row is fully visible - never a half row at the top.
+5. **Portraits are NPC faces for Forge / Lumber Mill** (the `Portraits/<slug>` route lands on the vendor NPC art that
+   shares the building's name). Prefer `BuildPaletteUI.ResolveEntryArtPublic(entry)` (the palette's building art) and
+   take a `Portraits/<slug>-<level>` tier sheet only when that file is a STRUCTURE sheet (arcane-spire-N, archer-tower-N,
+   ballista-N exist; report which ids have none). Lead flag for the owner: some buildings have no building portrait at
+   all today - art drop, not code.
+6. **Description and "After upgrade" lines ellipsize** (`...Mage spell p...`). Owner's ruling is LESS text: cap each at
+   one line with `FitSingleLine` at the kit floor, and prefer the SHORT tier `Effect` (first clause up to the first
+   period) over the full sentence. Report the longest authored line per building so she can cut copy if she wants.
+Cost chips: wood/stone still word-fallback where the currency sprite is missing - expected, not a defect.
+
 ### 8.5 Prep findings from the dev lane (relayed by the owner) - lead rulings, all three ACCEPTED
 1. **WO-1406 chips:** yes - all three channel chips activate their tab (Builders -> Buildings, Training -> Troops,
    Research -> Research). Only the separate QUEUE control (`ManageQueueDrawerToggle`) opens the drawer; chip 1's old

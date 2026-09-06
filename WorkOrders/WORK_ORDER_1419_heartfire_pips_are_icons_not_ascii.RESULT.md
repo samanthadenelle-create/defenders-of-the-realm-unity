@@ -20,7 +20,10 @@
 ## Evidence
 - Codex hand-back (`batch_results_state.md:700`), applied three-way onto `9d1e7fb2a` clean; braces 23/23, 359/359,
   48/48, 188/188, 9/9; NUL 0; guid `946b14ed753f4378ad03edd331835b0c` unique.
-- `COMPILE_GATE_OK` (`Builds/c5`, 22:22, 0 `error CS`); `REGRESSION_OK 386/386` (`Builds/r5`, 22:25) incl.
+- Lead review nits fixed before commit: the sprite is cached in a static field (no `Resources.Load` per repaint) and a
+  missing sprite now fires one `FlowTrace.Once("HudKit", "heartfire-flame-sprite-missing", ...)` instead of hiding the
+  slots silently. `COMPILE_GATE_OK` (`Builds/c6`, 22:37); `REGRESSION_OK 386/386` (`Builds/r6`, 22:39). First gate:
+  `COMPILE_GATE_OK` (`Builds/c5`, 22:22, 0 `error CS`); `REGRESSION_OK 386/386` (`Builds/r5`, 22:25) incl.
   `[heartfire-pips] HEARTFIRE_PIPS_OK`, `[heartfire]`, `[hud-label-fit]` green.
 - `ADAPTIVE_HUD_CAPTURE_OK 9/9` (`Builds/caphud`, 22:27); `AdaptiveHudPeaceful_2670x1200.png` OPENED: three ember
   medallions + "Heartfire 3/3 (raids)" on the plate, the WO-1407 objective line above it, "Next wave in 14m 9s".
