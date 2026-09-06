@@ -369,3 +369,39 @@ set TOGETHER with this ruling**, or the loss meant to be minor is total.
   number tweak.
 - Collector looting was REMOVED on 2026-08-27 and must be REINSTATED for the collector half - but only the collector's
   pending stash, and only on DESTRUCTION, not on a mere raid win.
+
+**28. A PREREQUISITE JUMP RETURNS TO ITS ORIGIN. Back from the thing you were sent to fix lands on the thing you were
+trying to unlock - not on the grid.**
+
+Owner ruling 2026-09-06, verbatim: *"once you go back to the item you need to resolve, you learn how much resources it
+needs and the back flow should take you back there to see if you want to look at another locked type."*
+
+**The navigation is a TREE with CROSS-EDGES.** Ordinary back walks the tree - detail returns to its grid, grid returns
+to the Manage hub. But a **prerequisite jump** (ruling 18 / WO-2013) crosses branches: a locked Outrider sends the
+player to the Barracks BUILDING detail, which lives under BUILD, not ARMY. **Back from that jump returns to the
+Outrider**, the screen that sent them.
+
+*Why, in the owner's own reasoning:* the locked item's screen is where the player **shops for goals**. They go there,
+learn the price, go pay it, and land back where they can consider the next locked thing. Returning them to the Build
+grid would drop them in a different branch with no memory of what they were doing.
+
+**Consequence worth building for:** if the player STARTED the upgrade while they were away, the origin screen now shows
+the item still locked but with the work in flight - *"Outrider - Requires Barracks Tier 4 - Barracks upgrading, 18m."*
+They see their own decision reflected back. That requires the locked state to carry the in-progress prerequisite, which
+the Wave 0 state model already separates (`ManageActionAvailability.InProgress` on the prerequisite's own action).
+
+*Implementation notes:*
+- **The back stack must remember WHY, not just WHERE.** A plain screen history returns to the Build grid, because that
+  is where the player literally came from. The jump has to push an ORIGIN, not a breadcrumb.
+- `ManageRoute` (Wave 0, `Assets/_Modules/Core/Manage/ManageStateModel.cs`) already carries `RouteKind` + `TargetId` +
+  its own CTA words. **The origin belongs on that same record** - it is the piece that makes the jump a round trip.
+  Do NOT let the View track it; the View does not decide destinations (canon section 9) and must not decide returns either.
+- ⚠ Nesting: a jump can chain (a locked perk sends you to a building, whose upgrade is Heart-gated, which sends you to
+  the Heart). Decide whether back unwinds one hop or returns to the ORIGINAL origin. **Recommend one hop**, so each
+  screen's back means the same thing everywhere, and the player is never teleported two branches away.
+- ⚠ The ordinary case must not regress: reaching the Barracks detail by BROWSING (hub -> BUILD -> grid -> Barracks) must
+  still return to the grid. The special return applies only when the screen was ENTERED BY A JUMP.
+
+*Oracle:* `[jump-returns-to-origin]` - entering a detail via a prerequisite route and pressing back lands on the origin;
+entering the same detail by browsing and pressing back lands on the grid. **Both directions**, or the case passes
+vacuously by always returning to the origin.
