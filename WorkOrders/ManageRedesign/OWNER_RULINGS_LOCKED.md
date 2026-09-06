@@ -324,3 +324,48 @@ Yield per tick: Quarry `13 + 4*(lvl-1)`, Lumber Mill `10 + 3*(lvl-1)`, Iron Mine
 **So what is actually left to build for ruling 26:** the automatic overflow (26b's second half), the cheap self-funding
 early storage costs (26d), and the tap-bonus decision. Everything else already works and merely needs explaining to the
 player - which is the WO-1427/2013 job.
+
+**27. ASYMMETRIC RAID LOSS. Destroying a collector costs the defender its LOCAL STASH; taking from storage costs the
+defender NOTHING and rewards the attacker. This REVISES 26a and 26c.**
+
+Owner ruling 2026-09-06, verbatim: *"Iron should be stealable because the only protected resource is crystals... you can
+destroy the collector or the upgraders, in this case the building, whether it's Weaponsmith or the Armorer or the Lumber
+Mill - if you destroy those then you lose your local stash, just your local tiny portion that's in your collector. If
+they damage and start taking from your storage they get to claim that as a spoil of war, but you don't physically feel
+the impact of losing from storage. Yours is safe. It's just a benefit for the attacker."*
+
+| Target | Defender | Attacker |
+|---|---|---|
+| **Collector destroyed** | **LOSES the stash held in it** - real, small, local | gains it |
+| **Storage raided** | **LOSES NOTHING** - the bank is untouched | **gains a spoil of war** |
+| **Crystals** | never touched at all | never |
+
+*Supersedes:* 26a's "collectors are safe" (they are now the ONLY real loss) and 26c's "loss falls on storage only"
+(storage loss is now PHANTOM for the defender). 26c's *intent* - do not punish the defender for being away - survives
+and is in fact strengthened.
+
+**⚠ THE CONSEQUENCE THAT CHANGES THE DESIGN QUESTION.** The owner asked *"what percentage of your storage is completely
+immutable and safe"*. Under this ruling the answer is **100% for the defender**, and the percentage stops being a
+PROTECTION dial and becomes an **ATTACKER REWARD dial**. There is no balance tension left in it - you can be generous
+without it costing anyone. Tune it for how good a raid should feel, not for how much a loss should hurt.
+
+**⚠ OPEN, AND IT NEEDS DECIDING: what is DEFENSE for?** If storage cannot truly be taken, walls and towers protect a
+collector's partial contents and nothing else. That may be enough. If it is not, the stake needs a second axis -
+a trophy/ranking loss, or a raided base producing less for a period. **Do not discover after shipping that nobody
+builds walls.**
+
+**⚠ AND THE NUMBERS FIGHT THE INTENT TODAY.** The ruling calls the collector stash "your local tiny portion". Measured
+2026-09-06: the Quarry holds **7,500** against a level-1 bank of **3,000** - the collector is **2.5x the entire early
+storage**. Early on the "tiny local portion" IS the player's whole economy, and destroying one collector would be the
+single most damaging thing that can happen to them. **The collector cap (26b) and the early storage costs (26d) must be
+set TOGETHER with this ruling**, or the loss meant to be minor is total.
+
+*Implementation notes:*
+- `StakeRules.IsLootable()` (`:155-161`) already makes wood/iron/stone/coins lootable and crystals untouchable - the
+  RESOURCE side of this ruling is already correct and needs no change.
+- What does NOT exist: a defender-loses-nothing path. Today the defender genuinely loses from storage via
+  `StakeRules.ProtectedFloor()` / `PerAttackCap()` (WO-1026). **Making storage loss phantom means the attacker's grant
+  and the defender's debit stop being the same transaction** - that is a real change to the raid settlement, not a
+  number tweak.
+- Collector looting was REMOVED on 2026-08-27 and must be REINSTATED for the collector half - but only the collector's
+  pending stash, and only on DESTRUCTION, not on a mere raid win.
