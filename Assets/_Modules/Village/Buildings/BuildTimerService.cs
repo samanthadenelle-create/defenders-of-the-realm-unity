@@ -136,7 +136,15 @@ namespace DeNelle.Village
             Instance = this;
         }
 
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        private void OnDestroy()
+        {
+            if (_journeyRaidProjection != null)
+            {
+                _journeyRaidProjection.Dispose();
+                _journeyRaidProjection = null;
+            }
+            if (Instance == this) Instance = null;
+        }
 
         private void Start()
         {
@@ -155,6 +163,13 @@ namespace DeNelle.Village
         // waiting for the next load. Cheap: a handful of jobs across channels, checked ~1/s.
         private float _nextTick;
         private bool _statusSeeded;   // first-frame flash fix (review 2026-08-01), see below
+        private DeNelle.Village.Hero.RaidSelectionVM _journeyRaidProjection;
+        private static readonly Func<string, bool> JourneyRaidSceneProbeFallback =
+            DeNelle.Core.SceneRouter.IsSceneInBuild;
+        private int _journeyRaidVictoryInput = int.MinValue;
+        private int _journeyRaidCatalogInput = int.MinValue;
+        private int _journeyRaidDeployableInput = int.MinValue;
+        private Func<string, bool> _journeyRaidSceneProbeInput;
         private void Update()
         {
             // FIRST-FRAME FLASH FIX (review 2026-08-01): RaidEntryGate.ArmyStatus defaults
@@ -2213,10 +2228,101 @@ namespace DeNelle.Village
             // RosterSlots counts every roster body incl. wounded (the "3" a player sees in
             // Manage), CapSlots is the army cap. PostureSignals.SetArmyFill is change-only, so
             // the 1 Hz republish is repaint-free. Null State/Army -> Compute's headless READY
-            // snapshot carries (0, 0), which the card reads as "unpublished" and keeps its plain
-            // purpose line - never a fake count on a headless surface.
+            // snapshot carries (0, 0); the Journey capture publishes its explicit 0/10 fixture
+            // so visual evidence never mistakes the pre-producer sentinel for a real cap.
             DeNelle.Core.Diagnostics.Guard.Try("HudKit", "publish army fill", () =>
                 DeNelle.Core.HudModel.PostureSignals.SetArmyFill(s.RosterSlots, s.CapSlots));
+
+            // WO-1404 - project the SAME raid-card set as RaidSelectionVM. This stays in Village
+            // because HUD may only read Core seams; the Journey card consumes the change-only
+            // count beside ArmyFill. The open-camp <= predicate itself is newly authored below:
+            // at this base RaidSelectionVM exposes GarrisonCount and IsLocked, but no open-count.
+            DeNelle.Core.Diagnostics.Guard.Try("HudKit", "publish open raid camps", () =>
+                PublishJourneyOpenCamps(State));
+        }
+
+        /// <summary>
+        /// Rebuilds the traced raid projection only when its victory/catalog/scene-probe inputs
+        /// change, and recounts only when that projection or the deployable-body count changes.
+        /// The one-second heartbeat therefore performs cheap scalar comparisons without creating
+        /// a RaidSelectionVM (whose constructor intentionally traces its projection) every tick.
+        /// </summary>
+        private void PublishJourneyOpenCamps(GameState state)
+        {
+            int deployableBodies = 0;
+            if (state != null && state.Army != null)
+                foreach (var troop in state.Army.GetDeployable())
+                    if (troop != null) deployableBodies++;
+
+            int victories = state != null ? Math.Max(0, state.RaidVictories) : 0;
+            int catalogInput = JourneyRaidCatalogInput();
+            var sceneProbe = DeNelle.Village.Hero.RaidSelectionVM.SceneAvailableProvider ??
+                JourneyRaidSceneProbeFallback;
+            bool projectionChanged = _journeyRaidProjection == null ||
+                _journeyRaidVictoryInput != victories ||
+                _journeyRaidCatalogInput != catalogInput ||
+                !ReferenceEquals(_journeyRaidSceneProbeInput, sceneProbe);
+
+            if (projectionChanged)
+            {
+                if (_journeyRaidProjection != null) _journeyRaidProjection.Dispose();
+
+                // CreateDefault is the sole flagship/fallback catalog resolver. Its temporary
+                // projection is used only to recover that exact def set; the retained projection
+                // receives the authoritative persisted victory count explicitly.
+                var defs = new List<SceneConfigDef>();
+                using (var resolved = DeNelle.Village.Hero.RaidSelectionVM.CreateDefault())
+                {
+                    for (int i = 0; i < resolved.Raids.Count; i++)
+                    {
+                        var def = resolved.DefFor(resolved.Raids[i].Id);
+                        if (def != null) defs.Add(def);
+                    }
+                }
+                _journeyRaidProjection = new DeNelle.Village.Hero.RaidSelectionVM(
+                    defs, null, victories, sceneProbe);
+                _journeyRaidVictoryInput = victories;
+                _journeyRaidCatalogInput = catalogInput;
+                _journeyRaidSceneProbeInput = sceneProbe;
+            }
+
+            if (!projectionChanged && _journeyRaidDeployableInput == deployableBodies) return;
+            _journeyRaidDeployableInput = deployableBodies;
+
+            int openCamps = 0;
+            for (int i = 0; i < _journeyRaidProjection.Raids.Count; i++)
+            {
+                string id = _journeyRaidProjection.Raids[i].Id;
+                if (_journeyRaidProjection.IsLocked(id)) continue;
+                var def = _journeyRaidProjection.DefFor(id);
+                // WO-1404: NEW open predicate at this base; do not attribute it to RaidSelectionVM.
+                if (def != null && DeNelle.Village.Hero.RaidSelectionVM.GarrisonCount(def) <= deployableBodies)
+                    openCamps++;
+            }
+            DeNelle.Core.HudModel.PostureSignals.SetRaidOpenCampCount(openCamps);
+        }
+
+        /// <summary>Stable fingerprint of every catalog field that can change the resolved raid
+        /// set, its escalation lock, its scene lock, or its garrison threshold.</summary>
+        private static int JourneyRaidCatalogInput()
+        {
+            unchecked
+            {
+                int hash = 17;
+                var all = SceneConfigCatalog.All;
+                hash = hash * 31 + all.Count;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    var def = all[i];
+                    if (def == null) { hash *= 31; continue; }
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(def.id ?? "");
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(def.sceneName ?? "");
+                    hash = hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(def.ownership ?? "");
+                    hash = hash * 31 + def.unlockVictories;
+                    hash = hash * 31 + DeNelle.Village.Hero.RaidSelectionVM.GarrisonCount(def);
+                }
+                return hash;
+            }
         }
 
         // Player-facing label for a queue row: strip the placement suffix ("@15_7"), then

@@ -329,5 +329,22 @@ namespace DeNelle.Core.HudModel
                            (cap > 0 && used >= cap ? " (full)" : ""));
             ArmyFillChanged?.Invoke();
         }
+
+        // -- WO-1404: RAID CAMPS OPEN on the Journey deck -----------------------
+        // Village owns the raid catalog and garrison arithmetic; HUD may reference Core only.
+        // Publish the already-projected count here beside army fill rather than making the
+        // Journey card reach across the assembly boundary or duplicate the camp predicate.
+        public static int RaidOpenCampCount { get; private set; }
+        public static event Action RaidOpenCampCountChanged;
+
+        /// <summary>Producer-only (Village BuildTimerService.PublishArmyStatus). Change-only.</summary>
+        public static void SetRaidOpenCampCount(int count)
+        {
+            if (count < 0) count = 0;
+            if (RaidOpenCampCount == count) return;
+            RaidOpenCampCount = count;
+            FlowTrace.Step("HudKit", "raid camps open -> " + count);
+            RaidOpenCampCountChanged?.Invoke();
+        }
     }
 }

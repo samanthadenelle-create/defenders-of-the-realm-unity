@@ -6742,6 +6742,7 @@ namespace DeNelle.Editor
             GameObject host = null;
             GameObject canvas = null;
             Action captureDoor = () => { };
+            bool journeyFixture = string.Equals(shotName, "JourneyWorkspace", StringComparison.Ordinal);
             // Every deck card's Available is PanelRouter.IsRegistered(target), and no real panel
             // registers in this edit-mode fixture, so each destination gets a stand-in door here or
             // its card captures LOCKED. WO-1397: CosmeticShop joins the list for the Hero deck's
@@ -6771,6 +6772,13 @@ namespace DeNelle.Editor
                 PanelManager.CloseAll();
                 foreach (var id in fixtureDoors) PanelRouter.Register(id, captureDoor);
                 DeNelle.Core.World.DungeonStatusCatalog.ApplyPayload(dungeonFixture, "capture-fixture");
+                if (journeyFixture)
+                {
+                    // WO-1404: publish a real cap so the zero-army proof reads "Army 0 / 10",
+                    // never the pre-producer sentinel "Army 0 / 0".
+                    DeNelle.Core.HudModel.PostureSignals.SetArmyFill(0, 10);
+                    DeNelle.Core.HudModel.PostureSignals.SetRaidOpenCampCount(0);
+                }
                 Type type = ResolveType("DeNelle.HUD.PlayerDeckWorkspace");
                 if (type == null)
                 {
@@ -6802,6 +6810,11 @@ namespace DeNelle.Editor
                 if (host != null) UnityEngine.Object.DestroyImmediate(host);
                 foreach (var id in fixtureDoors) PanelRouter.Unregister(id, captureDoor);
                 DeNelle.Core.World.DungeonStatusCatalog.Clear();
+                if (journeyFixture)
+                {
+                    DeNelle.Core.HudModel.PostureSignals.SetArmyFill(0, 0);
+                    DeNelle.Core.HudModel.PostureSignals.SetRaidOpenCampCount(0);
+                }
                 PanelManager.CloseAll();
             }
         }

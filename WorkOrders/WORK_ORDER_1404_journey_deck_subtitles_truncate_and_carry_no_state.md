@@ -1,6 +1,6 @@
 # WO-1404: Journey deck subtitles truncate and carry no state - the two cards never say what is waiting
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-05 23:16 - Codex lane + s8.9 rework landed (Core VM, change-only publisher, locked camps excluded), JourneyDeckSubtitleRegression green, COMPILE_GATE_OK + REGRESSION_OK 389/389 + UI_CAPTURE_OK, Journey frame opened (RESULT file); device build after the owner's reboot; felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 ## Evidence
 - `Builds/ui-capture/JourneyWorkspace_2670x1200.png` (09-05 07:02) - SEEN (`REVIEW_MERGED.md` row 3). Two cards:

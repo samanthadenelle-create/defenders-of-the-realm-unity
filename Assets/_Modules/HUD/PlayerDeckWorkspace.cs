@@ -670,9 +670,11 @@ namespace DeNelle.HUD
                         Route("Wardrobe", "Looks for your hero, Echo, and town", "wardrobe", PanelId.CosmeticShop)
                     };
                 case PlayerDeckKind.Journey:
+                {
+                    var journey = JourneyDeckSubtitleVM.FromCurrentState();
                     return new List<Card>
                     {
-                        new Card { Title = "Quests", Purpose = "Read active quests and realm rumors",
+                        new Card { Title = "Quests", Purpose = TraceJourneySubtitle("Quests", journey.QuestsSubtitle),
                             Concept = "quest", ArtKey = "quests",
                             Available = () => PanelRouter.IsRegistered(PanelId.RumorBoard),
                             Open = () => PanelRouter.Open(PanelId.RumorBoard) },
@@ -697,7 +699,7 @@ namespace DeNelle.HUD
                         // ArmyReadiness snapshot the raid gate judges). Unpublished (0 cap) or
                         // full = the ordinary purpose line. Cards are rebuilt per page render, so
                         // the count refreshes every time the deck opens.
-                        new Card { Title = "Raids", Purpose = RaidsCardPurpose(), Concept = "raid",
+                        new Card { Title = "Raids", Purpose = TraceJourneySubtitle("Raids", journey.RaidsSubtitle), Concept = "raid",
                             ArtKey = "raids",
                             // Owner art delivery 2026-09-03. cards/raids-locked.png is the war
                             // camp gone dark behind a stone-and-steel padlock, with the right
@@ -759,6 +761,7 @@ namespace DeNelle.HUD
                         // [wired]), so the card is the reason to tap the next raid.
                         Route("Season", HudStrings.Get(HudStrings.KeyJourneySeason), "season", PanelId.BattlePass)
                     };
+                }
                 default:
                     return new List<Card>
                     {
@@ -806,32 +809,12 @@ namespace DeNelle.HUD
             return "open " + open + "/" + total + ", provenance=" + provenance;
         }
 
-        /// <summary>WO-1389 - the Raids card subtitle: "Army 3 / 10 - train to fill your ranks"
-        /// while the roster is under its cap, else the ordinary purpose line. Guarded read of
-        /// the posture rail; a fault falls back to the purpose line and says so.</summary>
-        private static string RaidsCardPurpose()
+        /// <summary>WO-1404: one trace per built state-bearing Journey card.</summary>
+        private static string TraceJourneySubtitle(string card, string subtitle)
         {
-            const string purpose = "Choose a camp and deploy your army";
-            int used = 0, cap = 0;
-            bool ok = Guard.Try("HUD", "read army fill for the Raids card", () =>
-            {
-                used = PostureSignals.ArmyFillUsed;
-                cap = PostureSignals.ArmyFillCap;
-            });
-            if (!ok || cap <= 0)
-            {
-                FlowTrace.Step("Navigation", "Raids card subtitle: army fill unpublished (cap=" + cap +
-                    ") - purpose line kept.");
-                return purpose;
-            }
-            if (used >= cap)
-            {
-                FlowTrace.Step("Navigation", "Raids card subtitle: army full (" + used + "/" + cap + ") - purpose line kept.");
-                return purpose;
-            }
-            string line = "Army " + used + " / " + cap + " - train to fill your ranks";
-            FlowTrace.Step("Navigation", "Raids card subtitle: \"" + line + "\".");
-            return line;
+            subtitle = subtitle ?? "";
+            FlowTrace.Step("Journey", "deck card=" + card + " subtitle='" + subtitle + "'");
+            return subtitle;
         }
 
         protected override void OnDestroy()
