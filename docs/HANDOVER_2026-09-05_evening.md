@@ -34,7 +34,14 @@ Frozen point-in-time ledger. Written 23:2x before the owner's reboot, so the res
 | `97918f627` | `CLI_SESSION_PLAYBOOK.md` - the executed per-session script with a receipt per step (owner directive) |
 | `73a31b67a` | WO-1418 POLISH - the six defects from the first frames (Codex s8.10; tier-sheet route deviation accepted) |
 | `9ec35ed52` | WO-1413 part 2 - fixture verbs, live combat skill faces, CopyHygieneRegression (lead corrected its retired-pet scan) |
-| `b9a9e3166` | board + courier files (s8.12) - **HEAD at the reboot call** |
+| `b9a9e3166` | board + courier files (s8.12) |
+| `05cfd4d97` | this handover (second cut) |
+| `85866703e` | WO-1418 ART DROP - 26 building portraits for all six Manage ladders (owner archive via Codex); resolver + coverage oracle |
+| `27855e4b3` | board + courier files (s8.13: two duplicated-state nits for the dev lane) - **HEAD at the reboot call** |
+
+Art-drop gate: `COMPILE_GATE_OK` (`c14` 00:19), `REGRESSION_OK 390/390` (`r15` 00:21), `MANAGE_OPERATIONAL_CAPTURE_OK
+12/12` (`capman3` 00:22); Cathedral / Forge medallions paint their sheets. Resume step 2 in section 3 is now MOOT (no
+s8.10 hand-back pending) - go straight to the APK chain.
 
 Final gate on that HEAD: `COMPILE_GATE_OK` (`Builds/c13` 23:51), `REGRESSION_OK 390/390` (`Builds/r14` 23:54),
 `MANAGE_OPERATIONAL_CAPTURE_OK 12/12` (`capman2` 23:49), `UI_CAPTURE_OK 91` (`cap7` 23:56),
