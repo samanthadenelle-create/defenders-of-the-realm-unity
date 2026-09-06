@@ -25,6 +25,16 @@ namespace DeNelle.Editor
         {
             "Assets/Resources/Portraits",
             "Assets/Resources/PetPortraits",
+            // WO-2015 (2026-09-06) — the Manage redesign's UI chrome: the five status medallions and
+            // the four tile frames the owner delivered. They live under RpgUi like every other icon in
+            // the game and the redesign will Resources.Load<Sprite> them, so they need the same Sprite
+            // import the rest of RpgUi already carries (measured: currency_wood.png is textureType 8 /
+            // spriteMode 1, while a freshly dropped PNG lands as textureType 0 and returns NULL from
+            // Resources.Load<Sprite>).
+            // ⚠ SCOPED TO THE SUBFOLDER ON PURPOSE. Do NOT widen this to "Assets/Resources/RpgUi":
+            // the loop below forces spriteImportMode = Single on anything that is not already
+            // Sprite+Single, which would silently flatten any MULTIPLE (sliced) sheet in that tree.
+            "Assets/Resources/RpgUi/manage",
         };
 
         [MenuItem("Defenders/Art/Fix Portrait Sprite Import")]
