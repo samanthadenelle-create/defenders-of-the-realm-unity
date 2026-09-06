@@ -282,3 +282,45 @@ before anything asks them to exceed it.
 three collectors; the catalog's three collector rows are `collector_lumbermill` (Lumber Mill), `collector_farm` (Quarry)
 and `collector_forge` (Iron Mine), while Weaponsmith (`forge`) and Armorer (`armorer`) are separate buildings with their
 own ladders. Those are two different sets of three and the difference is load-bearing for 26b.
+
+### Ruling 26 — MEASURED 2026-09-06. Read this before tuning anything.
+
+The loop was designed against unmeasured numbers. They are now measured, at source, and **one of them refutes a premise
+the design rested on.**
+
+**⛔ IRON CAN BE STOLEN. Only CRYSTALS are raid-safe.** `StakeRules.IsLootable()` (`:155-161`) makes
+**Wood, Iron, Stone(Food) and Coins lootable**; Crystals, SKR and purchased goods are untouchable, pinned by
+`SiegeUntouchableRegression:71`. The reasoning that "the crystal mine and iron mine could route through the Smith since
+they can't be stolen" holds for crystals ONLY.
+
+**Two thirds of the loop is ALREADY BUILT:**
+- **26a (collectors are safe) — ALREADY TRUE.** Collector looting was REMOVED 2026-08-27.
+- **26c (loss falls on storage) — ALREADY TRUE.** The defender loses from STORAGE via `StakeRules.ProtectedFloor()`
+  and `PerAttackCap()` (WO-1026).
+- **26b (cap and stall) — HALF TRUE.** The cap and the stall are real: `ResourceCollector.Accrue` clamps at
+  `Math.Min(cap, ...)` (`:387`) and accrual stops at cap. **The AUTOMATIC OVERFLOW TO STORAGE IS NOT IMPLEMENTED.**
+  The only deposit path is the manual `Collect()` tap (`:440-514`), which never burns - the remainder stays pending
+  when the bank is full (WO-1392).
+
+**The numbers, and the one that matters most:**
+
+| Collector | Capacity | vs L1 bank (3,000) | vs L6 bank (34,000) |
+|---|---|---|---|
+| Quarry (`collector_farm`) | **7,500** | **2.5x** | 0.22x |
+| Lumber Mill | **5,760** | **1.92x** | 0.17x |
+| Iron Mine | **3,456** | **1.15x** | 0.10x |
+
+⛔ **A FULL COLLECTOR IS BIGGER THAN AN EARLY BANK.** A full Quarry (7,500) cannot fit in a level-1 bank (3,000) - not
+"is tight", *cannot fit*. This is the strongest possible argument for **ruling 26d** (cheap, self-funding early storage):
+the early bank is not merely small, it is smaller than one collector. The relationship inverts by L6, where the bank is
+34,000 against a 7,500 collector, so the SAFE pool becomes the small one.
+
+**Time-to-full is EIGHT HOURS at every level, by design** - `ResourceCollector.ComputeCapacity` scales capacity by
+throughput, so upgrading earns more without demanding you check in more often. That is a deliberate idle cadence and it
+is worth preserving; do not "fix" it.
+Yield per tick: Quarry `13 + 4*(lvl-1)`, Lumber Mill `10 + 3*(lvl-1)`, Iron Mine `6 + 2*(lvl-1)`
+(`ResourceBuildingProgression.MakeBuilding`). Harvest interval by level: 50s / 42.5s / 35s / 27.5s / 20s (`:189`).
+
+**So what is actually left to build for ruling 26:** the automatic overflow (26b's second half), the cheap self-funding
+early storage costs (26d), and the tap-bonus decision. Everything else already works and merely needs explaining to the
+player - which is the WO-1427/2013 job.

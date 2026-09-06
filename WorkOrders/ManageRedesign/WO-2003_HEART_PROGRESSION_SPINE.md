@@ -1,5 +1,7 @@
 # WO-2003 — Make the Heart the Realm Progression Spine
 
+**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) *(was: READY)*
+
 **Priority:** P0  
 **Depends on:** model/save architecture review  
 **Blocks:** Heart-gated content, prerequisite navigation

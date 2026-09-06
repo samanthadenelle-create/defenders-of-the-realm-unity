@@ -1,5 +1,7 @@
 # WO-2017 — Add a Heart Management Surface
 
+**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) *(was: READY)*
+
 **Priority:** P0  
 **Depends on:** WO-2003, WO-2004, WO-2013
 

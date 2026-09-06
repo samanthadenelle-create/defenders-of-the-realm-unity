@@ -1,5 +1,7 @@
 # WO-2005 — Reconcile Live BUILD Inventory and Add Complete Filters
 
+**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) *(was: READY)*
+
 **Priority:** P0  
 **Depends on:** WO-2002
 
