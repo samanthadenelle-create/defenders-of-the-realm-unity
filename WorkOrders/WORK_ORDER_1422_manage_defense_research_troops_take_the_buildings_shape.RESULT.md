@@ -71,6 +71,25 @@ pass.
 6. **`[research-locked-visible]` is now pinned in two suites** (the disclosure suite and the new Research suite). The WO
    asked for both; it is duplicated state and may be collapsed to the new suite.
 
+## ⚠ UPDATE 02:59 - three of the gaps below were CLOSED after this file was first written
+Kept as written above the line, corrected here rather than rewritten (CLAUDE.md section 15).
+1. **The Defense queue band is FIXED** (`5920ea35c`). The cause was not the resolver: `SeedManageCaptureQueue`
+   enqueued `tower_ground_archer:7:0`, a COLON shape the live game never produces. `PlacedUpgradeKey.Compose` is the
+   only composer in the tree and emits `<itemId>@<cellX>_<cellZ>`; `TryParse` requires that `@` and rejected the colon
+   form outright. **That one bad fixture string was hiding THREE correct behaviours**: the band could not resolve a name
+   or art, the Archer Tower card read `Upgradable` while its own job ran (`HasPlacedBuilderJob` matches the key exactly),
+   and the rail never showed its Building state. All three are right now. There is an unconditional
+   `[Flow:Manage] BUILDING NOW band:` trace so the next capture proves it.
+2. **The locked Research card is RESHAPED** (`6d0861e41`). On the real device both its half-width faces ellipsized. A
+   `CanResearch` reason is an authored SENTENCE and never fits a button, so it now paints as a body text line in
+   Parchment and the card carries ONE full-width door. Ruling 3.7's "dead face beside the live door" wording above is
+   therefore **STALE** - the ruling's intent (reason verbatim, prerequisite one tap away) is better served, not dropped.
+3. **Rail sub-lines lead with the discriminator** (`Locked . Lumber Mill`, not `Lumber Mill . Locked`), so the ellipsis
+   eats the shared half.
+
+**STILL OPEN:** the BUILDINGS tab's own queue band resolves `<none>` when its first Builder job is a placed structure -
+the new trace says so out loud; and the longest Research names still ellipsize at the 26px floor, which Buildings shares.
+
 ## Known gaps, recorded rather than hidden
 - **The Defense `BUILDING NOW` band still reads `Tower Ground Archer...` beside an empty medallion** in `capman6`. The
   polish lane added a resolver for it; the frame shows it did not take. Root cause is known and written down:
