@@ -222,3 +222,63 @@ The card goes **straight to the town in select-a-placed-structure mode**, with n
 **Edit** affordance pinned at the FOOT OF THE RAIL. It was logged at the time as an open question (*"the Edit
 affordance at the rail's foot - what does it open? Reorder the list, or enter build mode?"*, WO-1428 section 7 item 1).
 This ruling is the answer: **Edit opens the raw map in manage-placed mode.** Build to the mockup's placement.
+
+**26. THE ECONOMY LOOP: collectors are SAFE, storage is EXPOSED, and early storage is CHEAP AND SELF-FUNDING.**
+
+A design conversation on 2026-09-06 settled the shape of the resource economy. Recorded together because the parts only
+make sense as one loop.
+
+**26a. Collectors hold; storage is what can be taken.** Owner: *"there's a storage capacity in the storage items so
+anything that's in their collectors is safe. Anything it's in storage has a liability to be taken from."* This inverts
+the usual model deliberately - the collector is a SAFE HOLDING PEN, not a raid target. The risk begins when value moves
+to storage.
+
+**26b. Collectors CAP and then STALL; overflow goes to the matching storage automatically.** Owner: *"the collectors
+had a cap as the collectors hit their cap. They couldn't produce anymore unless they had a storage to put it in the
+overflow by default would automatically go to their matching storage."*
+**Consequence that makes storage legible:** a storage upgrade is not "hold more" in the abstract, it is **UPTIME**.
+Without storage, or with storage full, the collectors stop and the player stops earning. That is the strongest reason
+you can give someone to upgrade a building.
+⚠ **The collector's own cap is the dial that tunes the entire economy** - it decides how often value is forced from the
+safe pool into the exposed one. Measure what it is today before tuning anything.
+
+**26c. Raid loss falls on STORAGE ONLY. The attacker is rewarded without the defender losing collector contents.**
+Owner offered three options; the ruling is the friendliest: *"you could just use it as a simple reward for the attacker
+with no loss to the defender, which might be friendlier, make the loss only on the storage."*
+Rationale, and it is the retention lens again: the main reason players quit this genre is opening the app to find
+earned progress gone. Storage still bleeds, so 26a's risk/reward decision survives intact; the collector simply stops
+being a second punishment. **It also gives defense a specific job** - walls and towers protect the STORAGE, which is
+the thing worth taking.
+⚠ **Guard rail:** a reward the defender does not pay for is free money. It needs a per-base cooldown or a diminishing
+return, or farming one undefended target forever becomes optimal and raiding stops meaning anything.
+
+**26d. Early storage levels are CHEAP and SELF-FUNDING; the curve scales hard later.** Owner: *"level one and level two
+should be relatively cheap small caps... if it's for the wood storage it should only take a little bit of wood, if it's
+stone storage only a little bit of stone, iron only a little bit of iron. Just make it easy in the beginning, it can
+scale up incredibly hard the higher it goes, but in the beginning I think it makes sense to keep it simple to try to
+get people hooked."*
+
+*Measured, and it shows the current authoring works against this:* **all three storages cost wood AND iron today** -
+lumberyard 800 wood + 320 iron, foundry 960 + 480, silo 960 + 240 - while a new town starts with **0 wood, 0 iron** and
+80 stone (`GameStateService.cs:1184-1185`, `NestedTypes.cs:55`). So on day one every storage demands two resources the
+player does not have, and the IRON storage demands iron, which the player cannot bank much of until the iron storage
+exists. A cold start with a cross-dependency baked in.
+**The rule: each storage's early rungs are paid in ITS OWN resource.** The thing already being produced pays for the
+thing that lets you produce more of it. It also pre-empts the WO-1425 trap class - a player outgrows the early ceiling
+before anything asks them to exceed it.
+
+*Still to verify before any of this is tuned - do NOT assume:*
+1. What a collector's cap is today, and how fast it fills relative to storage. `ResourceCollector`,
+   `ResourceBuildingHarvester`, `OfflineHarvestService` and a `BankOverflowToastPresenter` all exist - some of this loop
+   may already be built.
+2. Whether raid loot genuinely spares iron and crystals today (`RaidScoring.ComputeLoot`). 26a and 26c rest on it.
+3. Whether the tap-to-harvest gesture exists, and whether overflow is automatic. **Open design question:** CoC's tap is
+   a RETENTION HOOK, not a chore - it is the reason to open the app. Automatic overflow is friendlier but removes the
+   daily pull, which cuts against the owner's own "we can't get people to play" concern. A middle path was proposed and
+   not yet ruled on: **overflow flows automatically so nothing is ever lost, but tapping pays a bonus** - reward showing
+   up rather than punishing absence, the same shape as 26c.
+
+⚠ **NAMING TO SETTLE BEFORE ANY OF THIS IS WIRED.** The owner referred to "Lumber Mill, Weaponsmith and Armorer" as the
+three collectors; the catalog's three collector rows are `collector_lumbermill` (Lumber Mill), `collector_farm` (Quarry)
+and `collector_forge` (Iron Mine), while Weaponsmith (`forge`) and Armorer (`armorer`) are separate buildings with their
+own ladders. Those are two different sets of three and the difference is load-bearing for 26b.
