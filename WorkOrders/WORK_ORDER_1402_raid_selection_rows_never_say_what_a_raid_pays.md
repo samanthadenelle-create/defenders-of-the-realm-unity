@@ -1,6 +1,6 @@
 # WO-1402: Raid Selection rows say how hard a camp is and never what a raid PAYS
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-05 21:45 - spoils line landed (RaidScoring.EstimateSpoils, ONE producer shared with WO-1403), RaidSelectionSpoilsRegression green, COMPILE_GATE_OK + REGRESSION_OK 385/385; device build tonight, owner felt-test closes. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
 
 Sprint framing, one line: the owner said "creating reason to raid is big" - this screen is where that reason must first appear.
 

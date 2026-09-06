@@ -17,6 +17,16 @@
 // against an INJECTED victory count, and refuses a target whose scene this build cannot
 // load. Names/copy: docs/CREATIVE_CANON_ELARION_2026-09-04.md §3.
 //
+// 2026-09-05 - WO-1402: THE ROWS SAY WHAT A RAID PAYS. Every row exposes a spoils
+// ESTIMATE ("Spoils: ~1800 wood, ~1100 iron, ~2200 gold") produced by the settle
+// payout's OWN formula (RaidScoring.EstimateSpoils -> ProjectLoot -> ComputeLoot, the
+// chain RaidScoring.LootFor pays through) - there is no second loot table and no
+// literal. The three identical gold pips are hidden until per-camp star ratings VARY
+// (no producer records them today, so they stay hidden by data). A camp whose
+// garrison exceeds the fieldable army carries the WORD "LOCKED - needs Army N"
+// (WO-1389 compare rule: garrison bodies vs deployable bodies). VM owns every string;
+// RaidSelectionScreen only renders them. Pinned by RaidSelectionSpoilsRegression.
+//
 // SEPARATE from RaidDeployVM by design (different domain: this is the browse grid,
 // that is the pre-raid deploy math). They only share the SceneConfigDef formatting.
 // PURE C#: no UnityEngine UI types; unit-testable over a fake def list (§2c).
@@ -91,13 +101,55 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static Func<string, bool> SceneAvailableProvider;
 
+        /// <summary>
+        /// WO-1402 - THE ARMY INPUT for the row's <c>LOCKED - needs Army N</c> word: how many
+        /// troop BODIES the player can field right now. Compared against each camp's garrison
+        /// headcount (<see cref="GarrisonCount"/>) - the SAME two numbers RaidDeployVM's scout
+        /// report puts side by side ("Garrison: 9 defenders - you field 3", WO-1389 pressure
+        /// point 2), so the row and the report can never disagree about which camp is above
+        /// the army. Injected so the VM stays pure C#; RaidSelectionScreen.OpenInternal wires
+        /// it to <c>GameState.Army.GetDeployable()</c> and that is the ONLY wiring site.
+        /// Unwired / null / throwing = UNKNOWN (-1): no row carries the word, because a
+        /// headless or pre-state frame must never print a lock it cannot prove.
+        /// </summary>
+        public static Func<int> DeployableTroopsProvider;
+
+        /// <summary>
+        /// WO-1402 - per-camp BEST STAR RATING, or -1 when unknown. The three gold pips on
+        /// every row were identical on every camp on every frame (merged UI review row 1) and
+        /// therefore carried nothing; they are drawn only once ratings actually VARY across
+        /// the rows (<see cref="ShowStarPips"/>). MEASURED AT SOURCE 2026-09-05: no producer
+        /// persists a per-camp star record (grepped BestStars / bestStars / StarsFor across
+        /// Assets/_Modules: DungeonRunGrade and BattleStarRating only, neither per camp), so
+        /// this stays null in the shipping wiring and the pips stay hidden - by data, not by
+        /// deletion. The first lane that records stars per camp wires this and the pips return.
+        /// </summary>
+        public static Func<string, int> BestStarsProvider;
+
+        /// <summary>Sentinel for "not known" on the army and star inputs.</summary>
+        public const int Unknown = -1;
+
+        /// <summary>The word a row carries when the camp's garrison exceeds the fieldable army.
+        /// ASCII; the number is the garrison headcount the player must be able to field.</summary>
+        public const string ArmyLockPrefix = "LOCKED - needs Army ";
+
+        /// <summary>Prefix of every spoils line; the oracle asserts on it.</summary>
+        public const string SpoilsPrefix = "Spoils: ";
+
         private readonly List<SceneConfigDef> _defs = new List<SceneConfigDef>();
         private readonly List<ItemVM> _raids = new List<ItemVM>();
         private readonly Dictionary<string, SceneConfigDef> _byId =
             new Dictionary<string, SceneConfigDef>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _spoilsById =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _starsById =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private readonly Action _onClose;
         private readonly int _victories;
+        private readonly int _deployableTroops;
         private readonly Func<string, bool> _sceneAvailable;
+        private readonly Func<string, int> _bestStars;
+        private bool _showStarPips;
         private bool _disposed;
 
         // ── IPanelViewModel ───────────────────────────────────────────────────
@@ -136,6 +188,90 @@ namespace DeNelle.Village.Hero
         public string DescriptionFor(string id) { var d = DefFor(id); return d != null ? d.description : null; }
         /// <summary>Authored victory threshold for this target (0 = always available).</summary>
         public int UnlockVictoriesFor(string id) { var d = DefFor(id); return d != null ? d.unlockVictories : 0; }
+
+        // -- WO-1402: what a raid PAYS, and whether the army can take it ----------
+
+        /// <summary>
+        /// The row's spoils line - <c>Spoils: ~1800 wood, ~1100 iron, ~2200 gold</c> - or null
+        /// when the estimate is all zero (the View then paints no line and the trace says why).
+        /// Computed ONCE per row in <see cref="Rebuild"/> from <see cref="EstimateSpoils"/>;
+        /// the View only renders the string.
+        /// </summary>
+        public string SpoilsLineFor(string id) =>
+            id != null && _spoilsById.TryGetValue(id, out var s) ? s : null;
+
+        /// <summary>
+        /// The ESTIMATE behind the spoils line - the settle payout's own formula
+        /// (<c>RaidScoring.EstimateSpoils</c> -> <c>ProjectLoot</c> -> <c>ComputeLoot</c>, the
+        /// same chain <c>RaidScoring.LootFor</c> pays through at settle), quoted at a clean
+        /// 3-star clear. There is deliberately NO second loot table and NO literal here: the
+        /// camp authors a <c>rewardMultiplier</c>, the tunable rail authors the bases, and the
+        /// scorer owns the arithmetic. Static so the oracle can call it beside the VM.
+        /// </summary>
+        public static DeNelle.Village.ResourceCost EstimateSpoils(SceneConfigDef d)
+        {
+            if (d == null) return default(DeNelle.Village.ResourceCost);
+            return RaidScoring.EstimateSpoils(d.id, d.rewardMultiplier);
+        }
+
+        /// <summary>
+        /// Formats an estimate as the row's line. A RANGE-FEEL "~" on every number (owner
+        /// ruling WO-1402: a range or estimate, never exact); zero currencies are dropped;
+        /// all-zero returns null. Wood, iron, gold in the economy map's order. Pure, static,
+        /// ASCII - the oracle asserts on this exact grammar.
+        /// </summary>
+        public static string FormatSpoils(DeNelle.Village.ResourceCost est)
+        {
+            var parts = new List<string>(3);
+            if (est.Wood > 0) parts.Add("~" + Approx(est.Wood) + " wood");
+            if (est.Iron > 0) parts.Add("~" + Approx(est.Iron) + " iron");
+            if (est.Coins > 0) parts.Add("~" + Approx(est.Coins) + " gold");
+            return parts.Count == 0 ? null : SpoilsPrefix + string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Rounds an estimate to a number that READS as an estimate: to the nearest 50 below
+        /// 1000, the nearest 100 at or above. 1980 -> 2000, 1650 -> 1700, 275 -> 300. Never 0
+        /// for a positive input.
+        /// </summary>
+        public static int Approx(int amount)
+        {
+            if (amount <= 0) return 0;
+            int step = amount < 1000 ? 50 : 100;
+            int rounded = (int)(Math.Round(amount / (double)step) * step);
+            return rounded < step ? step : rounded;
+        }
+
+        /// <summary>Fieldable troop bodies this projection was built against; <see cref="Unknown"/> when unwired.</summary>
+        public int DeployableTroops => _deployableTroops;
+
+        /// <summary>
+        /// <c>LOCKED - needs Army N</c> when this camp's garrison headcount exceeds the army
+        /// the player can field (WO-1389 compare rule: garrison bodies vs deployable bodies);
+        /// null when the army covers it OR when the army is <see cref="Unknown"/>. The colour
+        /// edge bar may keep painting the tier; this WORD is what carries the state, because
+        /// the owner is red/green colourblind and a hue is not a sentence.
+        /// </summary>
+        public string ArmyLockWordFor(string id) => ArmyLockWord(DefFor(id), _deployableTroops);
+
+        /// <summary>Static form so the oracle and the VM produce the identical word.</summary>
+        public static string ArmyLockWord(SceneConfigDef d, int deployableTroops)
+        {
+            if (d == null || deployableTroops < 0) return null;
+            int garrison = GarrisonCount(d);
+            return garrison > deployableTroops ? ArmyLockPrefix + garrison : null;
+        }
+
+        /// <summary>Best star rating recorded for this camp, or <see cref="Unknown"/>.</summary>
+        public int BestStarsFor(string id) =>
+            id != null && _starsById.TryGetValue(id, out var s) ? s : Unknown;
+
+        /// <summary>
+        /// True only when at least two rows carry a KNOWN rating and those ratings DIFFER.
+        /// Identical pips on every row say nothing (merged UI review row 1), so uniform or
+        /// unknown ratings hide the row of pips entirely; the View reads this once per build.
+        /// </summary>
+        public bool ShowStarPips => _showStarPips;
 
         /// <summary>
         /// WO-1389 pressure point 4 - what the wins BUY, before the player can enter: the scout
@@ -251,15 +387,42 @@ namespace DeNelle.Village.Hero
                     "RaidSelectionVM.VictoryCountProvider = () => theirCounter.");
             }
 
-            return new RaidSelectionVM(list, onClose, victories, SceneAvailableProvider);
+            // WO-1402 - the army input. Unknown (-1) when unwired or faulting, never 0: a 0
+            // would print "LOCKED - needs Army N" on every camp of a headless frame, which is
+            // a lock the frame cannot prove.
+            int deployable = Unknown;
+            var armyProvider = DeployableTroopsProvider;
+            if (armyProvider != null)
+            {
+                try { deployable = armyProvider(); }
+                catch (Exception ex)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                        "RaidSelectionVM: DeployableTroopsProvider threw (" + ex.GetType().Name + ": " +
+                        ex.Message + ") - army UNKNOWN, so no row carries the army lock word.");
+                    deployable = Unknown;
+                }
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "RaidSelectionVM: no DeployableTroopsProvider wired - army UNKNOWN, no row " +
+                    "carries 'LOCKED - needs Army N' (expected headless / EditMode).");
+            }
+
+            return new RaidSelectionVM(list, onClose, victories, SceneAvailableProvider,
+                                       deployable, BestStarsProvider);
         }
 
         public RaidSelectionVM(IReadOnlyList<SceneConfigDef> defs, Action onClose,
-                               int victories = 0, Func<string, bool> sceneAvailable = null)
+                               int victories = 0, Func<string, bool> sceneAvailable = null,
+                               int deployableTroops = Unknown, Func<string, int> bestStars = null)
         {
             _onClose = onClose;
             _victories = victories < 0 ? 0 : victories;
             _sceneAvailable = sceneAvailable;
+            _deployableTroops = deployableTroops < 0 ? Unknown : deployableTroops;
+            _bestStars = bestStars;
             if (defs != null)
                 foreach (var d in defs)
                 {
@@ -344,6 +507,38 @@ namespace DeNelle.Village.Hero
         private void Rebuild()
         {
             _raids.Clear();
+            _spoilsById.Clear();
+            _starsById.Clear();
+
+            // WO-1402 - star ratings first, because ShowStarPips is a property of the WHOLE
+            // grid (do they vary?), not of one row.
+            int knownStars = 0, minStars = int.MaxValue, maxStars = int.MinValue;
+            foreach (var d in _defs)
+            {
+                if (d == null || string.IsNullOrEmpty(d.id)) continue;
+                int stars = Unknown;
+                if (_bestStars != null)
+                {
+                    try { stars = _bestStars(d.id); }
+                    catch (Exception ex)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                            "RaidSelectionVM: BestStarsProvider threw for '" + d.id + "' (" +
+                            ex.GetType().Name + ": " + ex.Message + ") - rating UNKNOWN for that row.");
+                        stars = Unknown;
+                    }
+                }
+                if (stars > 3) stars = 3;
+                _starsById[d.id] = stars < 0 ? Unknown : stars;
+                if (stars >= 0)
+                {
+                    knownStars++;
+                    if (stars < minStars) minStars = stars;
+                    if (stars > maxStars) maxStars = stars;
+                }
+            }
+            _showStarPips = knownStars >= 2 && minStars != maxStars;
+
             foreach (var d in _defs)
             {
                 if (d == null) continue;
@@ -357,11 +552,29 @@ namespace DeNelle.Village.Hero
                 _raids.Add(new ItemVM(d.id, name, IconRoleRaid, d.id, 0, "", true,
                                       rarity: null, equipped: false,
                                       locked: lockReason != null, lockReason: lockReason));
+
+                // WO-1402 - the spoils ESTIMATE, once per row, from the settle payout's own
+                // formula. A null line is not silent: the trace below names the row.
+                var est = EstimateSpoils(d);
+                string spoils = FormatSpoils(est);
+                if (!string.IsNullOrEmpty(d.id)) _spoilsById[d.id] = spoils;
+                string armyWord = ArmyLockWord(d, _deployableTroops);
+
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "row '" + d.id + "' spoils est=" + est.Wood + "w/" + est.Iron + "i/" + est.Coins +
+                    "g x" + d.rewardMultiplier.ToString("0.##") + " text=" +
+                    (spoils != null ? "\"" + spoils + "\"" : "<none - estimate all zero>") +
+                    " pips=" + (_showStarPips ? "shown" : "hidden") +
+                    " lock=" + (lockReason != null ? "escalation" : armyWord != null ? "\"" + armyWord + "\"" : "none") +
+                    " (garrison " + GarrisonCount(d) + ", army " +
+                    (_deployableTroops < 0 ? "unknown" : _deployableTroops.ToString()) + ")");
             }
 
             DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                 "RaidSelectionVM projected " + _raids.Count + " raid card(s) at " + _victories +
-                " victories; locked=" + CountLocked() + ".");
+                " victories; locked=" + CountLocked() + "; pips=" + (_showStarPips ? "shown" : "hidden") +
+                " (" + knownStars + " rated); army=" +
+                (_deployableTroops < 0 ? "unknown" : _deployableTroops.ToString()) + ".");
         }
 
         private int CountLocked()

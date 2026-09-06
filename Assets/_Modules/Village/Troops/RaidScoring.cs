@@ -481,6 +481,74 @@ namespace DeNelle.Village
             return new ResourceCost(wood: wood, food: food, iron: iron, crystals: crystals, coins: coins);
         }
 
+        /// <summary>
+        /// WO-1402 - THE ONE PLACE THE LIVE KNOBS MEET <see cref="ComputeLoot"/>. Reads the
+        /// wood / iron / per-camp gold / crystal bases off <see cref="RaidLootTunables"/> and
+        /// applies them to a (stars, destruction, multiplier) triple. <see cref="LootFor"/>
+        /// (the settle-time PAYOUT) and <see cref="EstimateSpoils"/> (the selection-row
+        /// PREVIEW) both call this and nothing else, so the card can never promise a number
+        /// the settle screen computes differently. Static and scene-free so a regression can
+        /// call it with no raid loaded.
+        /// </summary>
+        /// <param name="foodBase">Food at 100% destruction, before stars. Food is the one
+        /// axis still authored on the scorer INSTANCE (serialized fields), so the preview
+        /// passes 0 and simply does not estimate food.</param>
+        public static ResourceCost ProjectLoot(int stars, float destructionPct, float rewardMultiplier,
+            string campId, int foodBase, int foodPerStar)
+        {
+            // WO-1374 - the wood/iron bases come off the REMOTE TUNABLE rail, not off a
+            // serialized field, because the owner sets this curve by feel and a serialized
+            // field is a 30-minute rebuild per opinion. No row / no network / no parse
+            // resolves to the shipping defaults (1800 / 1100), so an offline player is paid
+            // exactly what this build hardcodes.
+            int woodBase = RaidLootTunables.WoodBase;
+            int ironBase = RaidLootTunables.IronBase;
+            // THE ARROW (map's "troops -> raids -> gold"). The GOLD base is PER CAMP, so it
+            // is resolved from the raid's config id rather than from one global number -
+            // the map publishes a designed target per tier, sized at 125-140% of that
+            // tier's expected army replacement cost.
+            int coinsBase = RaidLootTunables.CoinsBaseFor(campId);
+            int crystalsBase = RaidLootTunables.CrystalsBase;
+            int crystalsPerStar = RaidLootTunables.CrystalsPerStar;
+            return ComputeLoot(stars, destructionPct,
+                crystalsBase, foodBase, crystalsPerStar, foodPerStar, rewardMultiplier,
+                woodBase, ironBase, coinsBase);
+        }
+
+        /// <summary>
+        /// The star rung the selection-row ESTIMATE is quoted at: a clean 3-star clear (the
+        /// ladder's 100% rung, NOT the 110% total-razing rung), so the "~" number is what a
+        /// competent win pays and a perfect win reads as a bonus rather than a shortfall.
+        /// </summary>
+        public const int EstimateStars = 3;
+
+        /// <summary>
+        /// WO-1402 - what a raid on <paramref name="campId"/> is expected to PAY, before the
+        /// player ever taps the row. Same ladder, same bases, same multiplier as the settle
+        /// payout (<see cref="ProjectLoot"/> is the one formula); quoted at
+        /// <see cref="EstimateStars"/> with no destruction bonus, so it is an ESTIMATE the
+        /// settle screen can only match or beat. Food is not estimated (instance-authored,
+        /// see <see cref="ProjectLoot"/>). Never throws: a tunable-rail fault logs and
+        /// answers an all-zero basket, which the caller reads as "no line".
+        /// </summary>
+        public static ResourceCost EstimateSpoils(string campId, float rewardMultiplier)
+        {
+            try
+            {
+                return ProjectLoot(EstimateStars, 0f, rewardMultiplier, campId, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                // Never swallowed silently (CLAUDE.md section 12): a row with no spoils line
+                // must be explainable from the capture.
+                FlowTrace.Warn("Raid",
+                    "spoils ESTIMATE threw for camp '" + (campId ?? "(none)") + "' (" +
+                    ex.GetType().Name + ": " + ex.Message + ") - the selection row will carry " +
+                    "no spoils line.");
+                return default(ResourceCost);
+            }
+        }
+
         // =====================================================================
         //  Self-install — one scorer per RaidBase_* scene
         // =====================================================================
@@ -699,24 +767,17 @@ namespace DeNelle.Village
         {
             if (result == null) return default(ResourceCost);
             float mult = ResolveRewardMultiplier();
-            // WO-1374 — the wood/iron bases come off the REMOTE TUNABLE rail, not off a
-            // serialized field, because the owner sets this curve by feel and a serialized
-            // field is a 30-minute rebuild per opinion. No row / no network / no parse
-            // resolves to the shipping defaults (1800 / 1100), so an offline player is paid
-            // exactly what this build hardcodes.
+            string campId = ResolveCampConfigId();
+            // WO-1402 - the bases are read INSIDE ProjectLoot, the one formula this payout
+            // shares with the selection-row estimate (RaidScoring.EstimateSpoils). The reads
+            // below are for the trace line only and are the same properties ProjectLoot reads.
+            var loot = ProjectLoot(result.Stars, result.DestructionPct, mult, campId,
+                _lootFoodBase, _lootFoodPerStar);
             int woodBase = RaidLootTunables.WoodBase;
             int ironBase = RaidLootTunables.IronBase;
-            // THE ARROW (map's "troops -> raids -> gold"). The GOLD base is PER CAMP, so it
-            // is resolved from this raid's config id rather than from one global number -
-            // the map publishes a designed target per tier, sized at 125-140% of that
-            // tier's expected army replacement cost.
-            string campId = ResolveCampConfigId();
             int coinsBase = RaidLootTunables.CoinsBaseFor(campId);
             int crystalsBase = RaidLootTunables.CrystalsBase;
             int crystalsPerStar = RaidLootTunables.CrystalsPerStar;
-            var loot = ComputeLoot(result.Stars, result.DestructionPct,
-                crystalsBase, _lootFoodBase, crystalsPerStar, _lootFoodPerStar, mult,
-                woodBase, ironBase, coinsBase);
             FlowTrace.Step("Raid",
                 "loot settled: stars=" + result.Stars + " destruction=" +
                 result.DestructionPct.ToString("P0") + " ladder=" +

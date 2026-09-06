@@ -568,6 +568,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-map suite", () => { if (!RealmMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-map] " + r); });
             // --- WO-839 raid deploy screen: FrameCore footer/subHeader zones + F8 harness dev-guard + ScoutReport honesty ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-ui suite", () => { if (!RaidDeployUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-ui] " + r); });
+            // --- WO-1403 raid deploy at zero troops: TRAIN TROOPS primary, one Manage door, spoils line shares WO-1402's producer ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-zero-army suite", () => { if (!RaidDeployZeroArmyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-zero-army] " + r); });
             // --- WO-766 wallet provider: Android-only SOLANA_SDK define + real-provider selection + transfer confinement ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
             // WO-1255: a Play AAB is impossible to emit until source isolation is proven, then
@@ -1330,6 +1332,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-gold-arrow suite", () => { if (!DeNelle.Editor.Regression.RaidGoldArrowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-gold-arrow] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-payout-visibility suite", () => { if (!DeNelle.Editor.Regression.RaidPayoutVisibilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-payout-visibility] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-escalation suite", () => { if (!DeNelle.Editor.RaidEscalationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-escalation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-selection-spoils suite", () => { if (!DeNelle.Editor.Regression.RaidSelectionSpoilsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-selection-spoils] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-season-xp suite", () => { if (!DeNelle.Editor.Regression.RaidSeasonXpRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-season-xp] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-funnel suite", () => { if (!DeNelle.Editor.Regression.RaidFunnelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-funnel] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-army-grant suite", () => { if (!DeNelle.Editor.Regression.StarterArmyGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-army-grant] " + r); });

@@ -19,6 +19,21 @@
 // shardDropChance (resource icon + an Echo-Shard hint). Tapping a card opens
 // RaidDeployScreen.Open(def).
 //
+// 2026-09-05 (evening) - THE CARD IS FIVE ROWS AND IT IS 178 px, not 142. The WO-1402
+// spoils line shipped INVISIBLE - built, traced, and culled by TMP because its band was
+// 22.7 px and a 22 pt line needs ~29. So did the clock, the lock sentence and the canon
+// flavour line. The band table + the have/need arithmetic live beside CardHeightPx; read
+// that comment before moving any fraction on this card.
+//
+// 2026-09-05 - WO-1402: every row now reads WHAT THE RAID PAYS
+// (its own row, right-aligned: vm.SpoilsLineFor - "Spoils: ~1800 wood, ~1100 iron, ~2200 gold", an
+// estimate from the settle payout's own formula; the VM owns the string, this View
+// paints it). The three gold pips are drawn only when vm.ShowStarPips (ratings vary
+// across camps - none are recorded today, so they are hidden). A camp whose garrison
+// exceeds the fieldable army carries vm.ArmyLockWordFor - "LOCKED - needs Army N" -
+// in the bottom-left band; the colour edge bar keeps the tier, the WORD carries the
+// state. The deployable-troop count is wired in OpenInternal (the one wiring site).
+//
 // ENTRY: static RaidSelectionScreen.Open() self-heals a host GameObject and opens
 // the screen — call it from a Raids-tab button / dev panel. (No town button is
 // wired here to avoid colliding with the other lane; see Open() docs.)
@@ -64,11 +79,91 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static bool IsScreenOpen { get; private set; }
 
-        // Card pixel height in the scroll list (tall plaque — banner + badge + time + reward).
-        // Four flagship camps must fit in the first fold at the shortest supported
-        // landscape height. Scrolling remains available for future catalog growth.
-        private const float CardHeightPx = 142f;
+        // Card pixel height in the scroll list (tall plaque — banner + badge + clock + scout +
+        // lock/reward + spoils + canon line).
+        //
+        // ⚠ "Four flagship camps must fit in the first fold" WAS THE OLD RULE HERE AND IT WAS
+        // ALREADY FALSE AT 142 px — RaidSelection_2670x1200.png shows card 4 cut off by the
+        // viewport with only its title visible. Height was never what made the fold; the
+        // fold shows ~3 cards either way, and the list scrolls. At 178 px roughly 2.9 cards
+        // sit above the fold instead of 3.4 — a DELIBERATE trade, taken because the alternative
+        // was four rows of words the player cannot read on any card at all. Density is a
+        // preference; an invisible lock sentence is a defect.
+        //
+        // ⛔ 178, NOT 142 — AND THE BAND TABLE BELOW IS WHY (measured 2026-09-05, Builds/cap2 +
+        // Builds/ui-capture/RaidSelection_2670x1200.png). At 142 px the card carried FIVE text
+        // rows in bands as thin as 0.14 (19.9 px) and the kit CULLED them: ElarionUiKit
+        // .FitSingleLine clamps fontSizeMin up to the label's own fontSize (there is no shrink
+        // room below the authored size), and TMP's Ellipsis overflow drops the WHOLE line when
+        // the line box cannot seat in the rect. The capture proves it end to end — the VM
+        // produced the string (cap2:13574 `text="Spoils: ~1800 wood, ~1100 iron, ~2200 gold"`),
+        // the View painted it (cap2:13909 `painted: spoils="..."`), and the pixels are simply
+        // not there (row scan of the card: ink only at y 324-343 and 373-392, nothing below).
+        // Four of the five rows were invisible in the shipped screenshot: the clock, the lock
+        // sentence, the spoils line and the canon flavour line. The one row that DID render
+        // (the 22 pt scout line in a 31.2 px band) is what bounds the font's line factor to
+        // ~1.11-1.18, which is where NeedPx's 1.18 comes from.
+        //
+        // ⛔ THE LAW: every text band must satisfy (Y1 - Y0) * CardHeightPx >= (fontPt + 1) *
+        // 1.18 + 2. Never author a band as a bare fraction again — add it to the table below
+        // and let RaidSelectionSpoilsRegression case F do the arithmetic. A band that fails it
+        // does not "look tight"; it renders NOTHING, silently, and only a screenshot finds it.
+        private const float CardHeightPx = 178f;
         private const float CardGapPx    = 12f;
+
+        // ── The card's text bands (fractions of CardHeightPx, bottom-up) ──────────────
+        // Five rows: title+badge / clock+scout / lock-or-reward / spoils / canon flavour.
+        // Case F of RaidSelectionSpoilsRegression iterates the CardBands table below — the LIVE
+        // values, not a copy of them — and reds if any band cannot seat its row's font.
+        private const float TitleBandY0   = 0.750f, TitleBandY1   = 0.980f;   // 40.9 px, needs 38.6 @ 30 pt
+        private const float ScoutBandY0   = 0.570f, ScoutBandY1   = 0.745f;   // 31.2 px, needs 29.1 @ 22 pt
+        private const float LockBandY0    = 0.380f, LockBandY1    = 0.555f;   // 31.2 px, needs 29.1 @ 22 pt
+        private const float SpoilsBandY0  = 0.190f, SpoilsBandY1  = 0.365f;   // 31.2 px, needs 29.1 @ 22 pt
+        private const float FlavourBandY0 = 0.010f, FlavourBandY1 = 0.185f;   // 31.2 px, needs 24.4 @ 18 pt
+
+        // Row fonts, named so the band oracle can pair each band with the size it must seat.
+        private const int TitleFontPt   = 30;
+        private const int RowFontPt     = 22;
+        private const int FlavourFontPt = 18;
+
+        /// <summary>Pixel height a band gives its row, at the live <c>CardHeightPx</c>.</summary>
+        public static float BandPx(float y0, float y1) => (y1 - y0) * CardHeightPx;
+
+        /// <summary>
+        /// Pixel height a single line at <paramref name="fontPt"/> NEEDS, or TMP's Ellipsis
+        /// overflow culls the whole line. The 1.18 factor is MEASURED, not guessed: in
+        /// Builds/ui-capture/RaidSelection_2670x1200.png the 22 pt scout line rendered in a
+        /// 31.2 px band while the 28 pt clock beside it in the same band did not, and the 30 pt
+        /// title rendered in 35.5 px — which brackets the font's line factor to (1.11, 1.18).
+        /// Take the pessimistic end and keep the kit's own +2 px slack.
+        /// </summary>
+        public static float NeedPx(int fontPt) => (fontPt + 1f) * 1.18f + 2f;
+
+        /// <summary>One authored text band: the row's name, its fractions, and the font it must seat.</summary>
+        public readonly struct CardBand
+        {
+            public readonly string Name; public readonly float Y0, Y1; public readonly int FontPt;
+            public CardBand(string name, float y0, float y1, int fontPt) { Name = name; Y0 = y0; Y1 = y1; FontPt = fontPt; }
+            /// <summary>Height this band actually gives the row.</summary>
+            public float HavePx => BandPx(Y0, Y1);
+            /// <summary>Height the row's font demands before TMP culls it.</summary>
+            public float NeedsPx => NeedPx(FontPt);
+        }
+
+        /// <summary>
+        /// THE CARD'S BAND TABLE, live (not a copy) — RaidSelectionSpoilsRegression case F
+        /// iterates it and reds when any band is thinner than its font needs. Exposed because a
+        /// source-text lint on band literals goes stale the moment someone renames a constant;
+        /// this cannot.
+        /// </summary>
+        public static readonly CardBand[] CardBands =
+        {
+            new CardBand("title",   TitleBandY0,   TitleBandY1,   TitleFontPt),
+            new CardBand("scout",   ScoutBandY0,   ScoutBandY1,   RowFontPt),
+            new CardBand("lock",    LockBandY0,    LockBandY1,    RowFontPt),
+            new CardBand("spoils",  SpoilsBandY0,  SpoilsBandY1,  RowFontPt),
+            new CardBand("flavour", FlavourBandY0, FlavourBandY1, FlavourFontPt),
+        };
 
         // ── Entry hook ───────────────────────────────────────────────────────
 
@@ -210,6 +305,23 @@ namespace DeNelle.Village.Hero
             if (_instance == null) _instance = this;
         }
 
+        /// <summary>
+        /// WO-1402 - the ONE read of the fieldable army for the selection rows: troop BODIES
+        /// from <c>GameState.Army.GetDeployable()</c> (the exact enumeration RaidDeployVM.Rebuild
+        /// counts into "you field N"). <see cref="RaidSelectionVM.Unknown"/> when there is no
+        /// state or no army, so a headless frame prints no lock word.
+        /// </summary>
+        private static int CountDeployableTroops()
+        {
+            var st = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            if (st == null || st.Army == null) return RaidSelectionVM.Unknown;
+            int n = 0;
+            foreach (var t in st.Army.GetDeployable())
+                if (t != null && !string.IsNullOrEmpty(t.TroopDefId)) n++;
+            return n;
+        }
+
         // ── Build ─────────────────────────────────────────────────────────────
 
         private void OpenInternal()
@@ -234,6 +346,16 @@ namespace DeNelle.Village.Hero
             RaidSelectionVM.VictoryCountProvider =
                 () => DeNelle.Core.State.GameStateService.Instance?.State?.RaidVictories ?? 0;
             RaidSelectionVM.SceneAvailableProvider = DeNelle.Core.SceneRouter.IsSceneInBuild;
+            // (c) WO-1402 - THE ARMY. Fieldable troop BODIES off the same GameState.Army the
+            //     deploy screen lists (ArmyStorage.GetDeployable(), the source RaidDeployVM's
+            //     "you field N" counts), so the row's "LOCKED - needs Army N" and the scout
+            //     report's compare can never disagree. No state / no army -> Unknown (-1),
+            //     and the VM prints no lock word it cannot prove (headless never false-locks).
+            RaidSelectionVM.DeployableTroopsProvider = CountDeployableTroops;
+            // (d) WO-1402 - BEST STARS PER CAMP: deliberately left NULL. No producer records a
+            //     per-camp star rating in this tree (measured 2026-09-05, see the VM's doc), so
+            //     the pips stay hidden by data. Wire it here, and only here, when one lands.
+            RaidSelectionVM.BestStarsProvider = null;
             _vm = RaidSelectionVM.CreateDefault(Close);
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin
@@ -429,15 +551,15 @@ namespace DeNelle.Village.Hero
             // player-visible — missing displayName routes through the ONE kit formatter.
             string name = string.IsNullOrEmpty(item.Name)
                 ? ElarionUiKit.SpacedDisplayName(id) : item.Name;
-            var nameLabel = ElarionUiKit.Label(card.transform, name, 0.66f, 0.91f, ElarionUi.Gilt,
-                30, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
+            var nameLabel = ElarionUiKit.Label(card.transform, name, TitleBandY0, TitleBandY1, ElarionUi.Gilt,
+                TitleFontPt, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
             nameLabel.raycastTarget = false;
             // §1.14 fit-never-truncate: a long fortress name shrinks, never clips, at phone aspect.
             ElarionUiKit.FitSingleLine(nameLabel);
 
             // Difficulty badge — colour-tinted chip, top-right.
             var badge = ElarionUiKit.AddImage(card.transform, "DiffBadge",
-                new Vector2(0.72f, 0.68f), new Vector2(0.96f, 0.92f),
+                new Vector2(0.72f, TitleBandY0), new Vector2(0.96f, TitleBandY1),
                 Color.white);
             var badgeImage = badge.GetComponent<Image>();
             var badgeFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/status-panel-icon-socket");
@@ -454,22 +576,40 @@ namespace DeNelle.Village.Hero
             // ★ (U+2605) is in NO project SDF font (scanned — zero m_Unicode:9733
             // hits), so the old "★★★" text rendered as boxes in builds. Procedural
             // gold diamonds instead (EndStateView's pattern via StarRatingRow).
-            StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
+            // WO-1402 - THE PIPS ARE DATA-GATED. Three filled gold pips sat on every row and
+            // varied on none (merged UI review 2026-09-05 row 1), so they said nothing. The VM
+            // answers ShowStarPips = true only when per-camp ratings are KNOWN and DIFFER; no
+            // producer records them today, so this branch is dormant by data, not deleted. When
+            // it wakes, the row paints the camp's OWN best rating, never a flat 3 of 3.
+            bool showPips = _vm.ShowStarPips;
+            if (showPips)
+            {
+                int best = _vm.BestStarsFor(id);
+                // x0,y0,x1,y1 — the pips sit in the clock row's left gutter, so waking them
+                // shifts the clock right (below) instead of overlapping the lock/spoils rows.
+                StarRatingRow.Build(card.transform, best < 0 ? 0 : best, 3,
+                                    0.05f, ScoutBandY0, 0.20f, ScoutBandY1, sizePx: 11f);
+            }
             // WO-1389 pressure point 4: the SCOUT LINE ("Iron walls . 15 defenders") shares the
             // clock band, right half, so a LOCKED card already says what the wins buy - and an
             // open card says what it is walking into. The clock label gives up its right half
             // (0.95 -> 0.54); both fit-never-clip. Absent on a def that authors neither fact.
+            // WO-1402: with the pips hidden the clock reclaims the left edge (0.22 -> 0.05).
             string scoutLine = _vm.ScoutLineFor(id);
             bool hasScout = !string.IsNullOrEmpty(scoutLine);
+            // 2026-09-05: the clock was 28 pt in a band that seated 22 — measured CULLED (no
+            // "Clock:" ink anywhere in RaidSelection_2670x1200.png while the 22 pt scout line
+            // beside it rendered). Every row on this card is RowFontPt now; the title is the
+            // only larger one and it gets the only taller band.
             var timeLabel = ElarionUiKit.Label(card.transform,
-                "Clock: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
-                ElarionUi.Parchment, 28, TMPro.TextAlignmentOptions.Left, 0.22f, hasScout ? 0.54f : 0.95f);
+                "Clock: " + FormatTime(_vm.TargetTimeFor(id)), ScoutBandY0, ScoutBandY1,
+                ElarionUi.Parchment, RowFontPt, TMPro.TextAlignmentOptions.Left, showPips ? 0.22f : 0.05f, hasScout ? 0.54f : 0.95f);
             timeLabel.raycastTarget = false;
             ElarionUiKit.FitSingleLine(timeLabel);
             if (hasScout)
             {
-                var scoutLabel = ElarionUiKit.Label(card.transform, scoutLine, 0.38f, 0.60f,
-                    dimmed ? ElarionUi.ParchmentDim : ElarionUi.Parchment, 22,
+                var scoutLabel = ElarionUiKit.Label(card.transform, scoutLine, ScoutBandY0, ScoutBandY1,
+                    dimmed ? ElarionUi.ParchmentDim : ElarionUi.Parchment, RowFontPt,
                     TMPro.TextAlignmentOptions.Right, 0.56f, 0.95f);
                 scoutLabel.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(scoutLabel);
@@ -495,16 +635,67 @@ namespace DeNelle.Village.Hero
             // (WO-1379: the "Recovering - raidable in {0}" branch that used to sit here is
             // retired with the per-camp wall; an empty Heartfire pool is answered at the door,
             // in the Heart's words, by OnCardTapped.)
+            //
+            // WO-1402 - THE BAND NOW HAS TWO COLUMNS, AND BOTH ARE WORDS THE VM OWNS.
+            //   LOCK ROW (full width, left): the escalation lock sentence when locked; otherwise the army
+            //         word "LOCKED - needs Army N" when the camp's garrison exceeds what the
+            //         player can field (vm.ArmyLockWordFor); otherwise the loot-multiplier hint.
+            //         Precedence is deliberate: the door refuses on escalation first
+            //         (OnCardTapped), so the row says the same thing the door will.
+            //   BELOW (its own SpoilsBand, right-aligned): the SPOILS line (vm.SpoilsLineFor) on
+            //         EVERY row, locked included - "creating reason to raid is big", and a locked
+            //         camp that names its pay is the reason to go earn it. Absent only when the
+            //         estimate is all zero, which the VM has already traced by row.
+            //
+            // 2026-09-05 - THE SPOILS LINE GOT ITS OWN ROW, and the reason is width, measured.
+            // It used to share this band at x 0.64-0.95 = 0.31 of the card. The longest live
+            // line is "Spoils: ~4000 wood, ~2400 iron, ~6500 gold" (42 chars); the card's own
+            // ink measures ~10.25 px per char at 22 pt (the 24-char scout line spans 246 px in
+            // RaidSelection_2670x1200.png), so the line needs ~450 px and 0.31 of the card is
+            // ~393 px at 2670x1200 and ~350 px at 1920x1080. FitSingleLine has NO shrink room
+            // here (min clamps up to the authored 22), so the overflow is Ellipsis: the fix for
+            // the culled band would have shipped "Spoils: ~4000 wood, ~2400 iro..." instead.
+            // Full width right-aligned gives it ~1020 px at 1920x1080 - it cannot clip.
+            string spoilsLine = _vm.SpoilsLineFor(id);
+            bool hasSpoils = !string.IsNullOrEmpty(spoilsLine);
+            string armyWord = _vm.ArmyLockWordFor(id);
             string bottomLine = locked
                 ? lockCopy
-                : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
+                : !string.IsNullOrEmpty(armyWord)
+                    ? armyWord
+                    : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
+            bool armyLocked = !locked && !string.IsNullOrEmpty(armyWord);
             var rewardLabel = ElarionUiKit.Label(card.transform,
-                bottomLine, 0.18f, 0.34f,
-                dimmed ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
-                22, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
+                bottomLine, LockBandY0, LockBandY1,
+                dimmed ? ElarionUi.ParchmentDim : armyLocked ? ElarionUi.Parchment : ElarionUi.Affordable,
+                RowFontPt, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
             // Kit 1.14 fit-never-truncate: the longest lock sentence must never clip.
             ElarionUiKit.FitSingleLine(rewardLabel);
+            if (hasSpoils)
+            {
+                var spoilsLabel = ElarionUiKit.Label(card.transform, spoilsLine, SpoilsBandY0, SpoilsBandY1,
+                    dimmed ? ElarionUi.ParchmentDim : ElarionUi.Affordable, RowFontPt,
+                    TMPro.TextAlignmentOptions.Right, 0.05f, 0.95f, bold: true);
+                spoilsLabel.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(spoilsLabel);
+            }
+            // ⚠ "painted" MEANS BUILT, NOT RENDERED. This line fired for every row in the
+            // 2026-09-05 capture while the pixels were absent - a label is constructed before
+            // layout, and TMP culls it afterwards. So the trace now carries the GEOMETRY that
+            // decides whether it survives: band px vs the line the font needs. A future
+            // "painted but invisible" report is answerable from this one line.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "row '" + id + "' built: spoils=" + (hasSpoils ? "\"" + spoilsLine + "\"" : "<none>") +
+                " pips=" + (showPips ? "shown" : "hidden") +
+                " lock=" + (locked ? "escalation" : armyLocked ? "\"" + armyWord + "\"" : "none") +
+                " | bands px (card " + CardHeightPx.ToString("0") + "): title " +
+                BandPx(TitleBandY0, TitleBandY1).ToString("0") + "/" + NeedPx(TitleFontPt).ToString("0") +
+                ", scout " + BandPx(ScoutBandY0, ScoutBandY1).ToString("0") + "/" + NeedPx(RowFontPt).ToString("0") +
+                ", lock " + BandPx(LockBandY0, LockBandY1).ToString("0") + "/" + NeedPx(RowFontPt).ToString("0") +
+                ", spoils " + BandPx(SpoilsBandY0, SpoilsBandY1).ToString("0") + "/" + NeedPx(RowFontPt).ToString("0") +
+                ", flavour " + BandPx(FlavourBandY0, FlavourBandY1).ToString("0") + "/" + NeedPx(FlavourFontPt).ToString("0") +
+                " (have/need - a band under its need renders NOTHING)");
 
             // THE CANON LINE — one sentence of target copy under the reward/lock band
             // (docs/CREATIVE_CANON_ELARION_2026-09-04.md §3 "Line on the target card"). It is
@@ -514,8 +705,8 @@ namespace DeNelle.Village.Hero
             if (!string.IsNullOrEmpty(flavour))
             {
                 var flavourLabel = ElarionUiKit.Label(card.transform,
-                    flavour, 0.03f, 0.17f, ElarionUi.ParchmentDim,
-                    18, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f);
+                    flavour, FlavourBandY0, FlavourBandY1, ElarionUi.ParchmentDim,
+                    FlavourFontPt, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f);
                 flavourLabel.raycastTarget = false;
                 // §1.14 fit-never-truncate: the longest authored line (The Broken Garrison,
                 // 92 chars) must shrink, not clip, at phone aspect.
