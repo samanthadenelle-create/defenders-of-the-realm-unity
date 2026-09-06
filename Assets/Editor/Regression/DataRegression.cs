@@ -1062,6 +1062,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "primary-fallback suite", () => { if (!DeNelle.Editor.Regression.PrimaryFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[primary-fallback] " + r); });
             // --- WO-2002: the common Manage renderer is DUMB - 16 banned shapes, each with a planted-fixture proof ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-dumb-view suite", () => { if (!DeNelle.Editor.ManageDumbViewRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-dumb-view] " + r); });
+            // --- WO-1443 panel 8: the queue OVERLAY has three channel tabs (counts from the live ChannelSummary, never literal), numbered rows, and SPEED UP on the ONE existing TryInstantFinish path ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-queue-panel8 suite", () => { if (!DeNelle.Editor.Regression.ManageQueuePanel8Regression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-queue-panel8] " + r); });
             // --- WO-1443: ONE heading per Manage screen (the host title binds the model breadcrumb; the shared renderer paints no copy on BUILD/ARMY/RESEARCH), and the selection band COLLAPSES when nothing is selected ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-one-heading suite", () => { if (!DeNelle.Editor.Regression.ManageOneHeadingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-one-heading] " + r); });
             // --- OWNER RULING 26b: a full collector spills into its matching storage; nothing is ever burned ---

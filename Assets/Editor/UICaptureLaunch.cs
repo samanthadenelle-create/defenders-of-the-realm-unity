@@ -7696,14 +7696,30 @@ namespace DeNelle.Editor
             if (!_flowMeasureGrid) return;
             _flowMeasureGrid = false;
 
-            // Count the RENDERED tiles the way the renderer names them: "ManageTile"
-            // (ManageWorkspacePanel.cs:546). There is no tail spacer in the grid path.
+            // Count the RENDERED children the way the renderer names them. There is no tail spacer
+            // in the grid path.
+            //
+            // ⛔ TWO NAMES, BECAUSE THE RENDERER HAS TWO SHAPES. "ManageTile" is a grid card;
+            // "ManageListRow" is a LIST ROW, which ManageWorkspacePanel.BuildListRow draws whenever
+            // the model asks for a single column (mockup panel 7, the research tree).
+            // ⚠ THIS COUNTER READ ONLY "ManageTile" AND REPORTED A FALSE EMPTY SCREEN:
+            //   MANAGE_FLOW_INVENTORY RESEARCH/school: tiles=4 (vm=4 rendered=0) columns=1 rows=0
+            //   ** VM/RENDERED MISMATCH **  ...with content=586px
+            // The rows were on screen the whole time. The proof is in the auditor's own numbers:
+            // four rows at the 139px cell the model's 4x1 shape yields, plus three 10px gaps, is
+            // 4*139 + 30 = 586px - exactly the content height it measured. A genuinely dead subtree
+            // reports content=0px, which is what the round-5 bug actually looked like.
+            // So a mismatch here now means one of TWO things, and they are not the same defect:
+            // nothing was drawn, or something was drawn under a name this counter does not know.
+            // Whenever the renderer grows a third shape, add its name HERE - a counter that silently
+            // ignores what it cannot name will keep reporting healthy screens as broken.
             int rendered = 0;
             for (int i = 0; i < scroll.content.childCount; i++)
             {
                 var child = scroll.content.GetChild(i) as RectTransform;
                 if (child == null || !child.gameObject.activeSelf) continue;
-                if (!string.Equals(child.name, "ManageTile", StringComparison.Ordinal)) continue;
+                if (!string.Equals(child.name, "ManageTile", StringComparison.Ordinal) &&
+                    !string.Equals(child.name, "ManageListRow", StringComparison.Ordinal)) continue;
                 rendered++;
             }
 

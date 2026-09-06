@@ -101,12 +101,29 @@ namespace DeNelle.Village.UI
         // The BACK / HEART / QUEUE chrome row, and the body's ceiling. It sits between the body and
         // the frame's own header zone (which starts at 0.900), so raising the body to meet it costs
         // nothing and hands the grid the strip that used to hold nothing. WO-1443, 2026-09-06.
-        // 0.845-0.975 = 0.130 of the panel. At the measured reference (canvas ~921px, panel 96% =
-        // ~884px) that is ~115px, clear of ElarionUiKit.MinTouchPx (112). AUTHORED to the floor,
-        // not left to ClampMinTouch - the capture auditor caught the whole old chrome row at
-        // 110.4px, 1.6px short, precisely because a nominal band was inset until it fell under.
-        private const float WorkspaceHeaderY0 = 0.845f;
-        private const float WorkspaceHeaderY1 = 0.975f;
+        // ⛔ THE TOP EDGE IS SET BY THE FRAME ART, MEASURED - NOT BY EYE, AND NOT BY A ROUND NUMBER.
+        // The QUEUE pill's red badge was sitting ON the frame's ornate top border. Rather than nudge
+        // it, the frame was sampled: an alpha walk down frame_core.png (1230x1833) at the pill's own
+        // x range finds the interior beginning at y 62-63px, i.e. the border owns everything above
+        //   v = 0.966   (x 0.75 -> 0.9662, x 0.85 -> 0.9662, x 0.90 -> 0.9656)
+        // The row ran to 0.975, so its top 0.9% was over the border art, and the badge - authored at
+        // 0.94 of the row's height - resolved to 0.845 + 0.94*0.130 = 0.9672, just past the edge.
+        // 0.962 clears it with margin. Y0 drops to 0.838 in the same breath so the row keeps its
+        // touch height: 0.124 x ~923px = ~114px, still clear of MinTouchPx (112). AUTHORED to the
+        // floor, not left to ClampMinTouch - the auditor caught this whole row at 110.4px once
+        // already, because a nominal band was inset until it fell under.
+        // ⚠ The body's ceiling follows Y0 (see BuildChrome), so this also hands the grid 0.007 of
+        // the panel back. Move BOTH numbers together or the row loses its floor.
+        // Panel 8's tab row inside the queue overlay. 120px so each face clears MinTouchPx (112)
+        // at full band height - authored to the floor, not left to ClampMinTouch.
+        private const float QueueTabsBandPx = 120f;
+
+        /// <summary>The count badge's square size inside the QUEUE pill, in reference px. Read by
+        /// SizeQueuePillToLabel so the badge's room is reserved rather than stolen from the word.</summary>
+        private const float QueueBadgePx = 56f;
+
+        private const float WorkspaceHeaderY0 = 0.838f;
+        private const float WorkspaceHeaderY1 = 0.962f;
 
         private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
         private const float CloseGapY = 0.020f;     // body floor clears the Close box by this much
@@ -302,6 +319,172 @@ namespace DeNelle.Village.UI
         // of ApplyDrawerPlacement still finds them. Rename them when panel 8's rows are built.
         private GameObject _drawerHeading;
         private GameObject _drawerHide;
+        /// <summary>Panel 8's tab row zone - fixed chrome above the list, never a scroll row.</summary>
+        private RectTransform _drawerTabs;
+        /// <summary>Panel 8's title band. The X is a CHILD of this, so it cannot leave the overlay.</summary>
+        private RectTransform _drawerHeader;
+
+        // ⛔ THE QUEUE OVERLAY'S BAND TABLE. ONE SOURCE, READ BY BOTH WRITERS.
+        // These were `const float` LOCALS inside BuildQueueDrawer, and that is precisely how the
+        // last fault happened: ApplyDrawerPlacement could not see them, so it re-seated the list to
+        // its own literal 0.02-0.86 AFTER the render and wiped the band table AND the whole-row
+        // trim with it. MEASURED by MANAGE_QUEUE_LAYOUT: the list's top resolved to 0.859 of the
+        // drawer instead of the authored 0.665, which put its ceiling 0.19 into the tab band and
+        // produced the 688..791 overlap. Two writers, one piece of state - the same shape as the
+        // dead subtree and the title rect, and the third time this file has paid for it.
+        // Anything that seats a child of the drawer reads THESE. Do not re-type a fraction.
+        // ⛔ THE BANDS ARE PIXELS. THE FRACTIONS ARE DERIVED FROM THEM, NEVER TYPED.
+        // The fractions were authored directly and the audit caught what a fraction cannot promise:
+        //   'ManageQueueTab_Builder' resolves 369.1x95.1 -- 16.9px UNDER MinTouchPx (112)
+        //   'ManageQueueOverlayClose' (120px, fixed) overflowed a 0.09 header band worth 42.8px
+        //     and spilled DOWN into the tab row, covering "RESEARCH 2/2" by 110x31px
+        // Both are the same mistake: a control whose size is a PX FLOOR seated inside a zone whose
+        // size is a FRACTION of a drawer whose height varies. 0.20 of 475px is 95px, and no amount
+        // of nudging that fraction makes it a promise about pixels.
+        // This is the band law ManageWorkspacePanel's header already states, applied here: heights
+        // are fixed px constants, they are SUMMED, and the list takes the remainder.
+        // ⛔ THE TITLE CONSUMES NO BAND. DO NOT GIVE IT ONE BACK.
+        // It had 132px, and the capture showed that band EMPTY: the word QUEUE renders above the
+        // drawer's visible top edge, because the drawer's sliced content-panel art does not reach
+        // its own rect. So 132px of the overlay was reserved for something that was not drawn in it,
+        // and it was the difference between one visible row and two:
+        //   list 175px (1 row)  ->  reclaiming 132px  ->  307px (2 rows)
+        // The title is now an OVERLAY label pinned at the drawer's top - legible exactly where it
+        // already is, costing the rows nothing. A band is for a control that sits IN it.
+        private const float DrawerTitlePx = 0f;
+        /// <summary>The title's own height, drawn ABOVE the drawer's ceiling (SeatDrawerTitleOverlay).
+        /// 56px clears the ~24px TMP cull floor with room; it is NOT part of the band sum.</summary>
+        private const float DrawerTitleOverlayPx = 56f;
+
+        // 132, not 120: this band now holds the overlay's X (a 120px square) in the column the tab
+        // row leaves free at TabsRightStop. A band that holds a control must be LARGER than it, not
+        // equal to it - at exactly 120 the arithmetic came out 119.99 and the X spilled by a hair.
+        // Its tab faces fill the band, so they are 132px >= MinTouchPx (112), authored not clamped.
+        private const float DrawerTabsPx = 132f;
+        private const float DrawerBandGapPx = 12f;
+
+        // The resolved seats, computed once from the MEASURED drawer height (SetDrawerBands) and
+        // read by BOTH writers - BuildQueueDrawer and ApplyDrawerPlacement. Fields, not consts,
+        // because the drawer's height is a measurement; the PX above are the authored part.
+        private float _drawerTitleY0 = 0.90f, _drawerTitleY1 = 0.99f;
+        private float _drawerTabsY0 = 0.685f, _drawerTabsY1 = 0.885f;
+        private float _drawerListY0 = 0.02f, _drawerListY1 = 0.665f;
+
+        /// <summary>
+        /// Turn the px band table into this drawer's fractions. Called once, from BuildQueueDrawer,
+        /// with the drawer's own height in reference px.
+        /// <para>⚠ It REPORTS a shortfall rather than silently squeezing a band under its floor: a
+        /// tab row that is 95px instead of 112px is a control the player misses, and the only honest
+        /// answers are a taller overlay or fewer bands - never a quieter number.</para>
+        /// </summary>
+        /// <summary>
+        /// ⭐ RE-RESOLVE THE BANDS AGAINST THE DRAWER'S MEASURED HEIGHT, then re-seat the three
+        /// zones. Called after a layout pass, from ApplyDrawerPlacement.
+        ///
+        /// <para>⛔ THIS IS WHY IT EXISTS: BuildQueueDrawer can only ESTIMATE the drawer's height
+        /// (its rect is zero on the creation frame), and the estimate was out by 1.5x - 719px
+        /// guessed against 476px real. Every fraction derived from it inherited the error, so an
+        /// authored 120px tab band rendered 79.4px. Measuring the container and re-deriving is the
+        /// only thing that makes a px band table mean pixels.</para>
+        ///
+        /// <para>⚠ The same discipline that settled the QUEUE pill: read the rendered control back
+        /// rather than authoring a number at it.</para>
+        /// </summary>
+        private void ResolveDrawerBands()
+        {
+            if (_queueDrawer == null) return;
+            var drawer = _queueDrawer.transform as RectTransform;
+            if (drawer == null) return;
+            Canvas.ForceUpdateCanvases();
+            float drawerPx = drawer.rect.height;
+            if (drawerPx < 1f) return;                    // no layout yet: keep the estimate
+
+            SetDrawerBands(drawerPx);
+
+            SeatDrawerTitleOverlay();
+            if (_drawerTabs != null)
+            {
+                _drawerTabs.anchorMin = new Vector2(0.02f, _drawerTabsY0);
+                _drawerTabs.anchorMax = new Vector2(0.98f, _drawerTabsY1);
+                _drawerTabs.offsetMin = _drawerTabs.offsetMax = Vector2.zero;
+            }
+        }
+
+        /// <summary>
+        /// ⭐ THE TITLE SITS ABOVE THE DRAWER'S CEILING AND CONSUMES NO BAND.
+        ///
+        /// <para>⛔ AND IT CANNOT BE A ZERO-HEIGHT ZONE, which is the trap this method exists to
+        /// avoid. TMP CULLS AN ENTIRE LINE whose fontSizeMin cannot seat in its rect - a band under
+        /// about 24px renders BLANK, not small, and 0px renders nothing at all. Reclaiming the
+        /// title's 132px by collapsing its zone would have deleted the word QUEUE rather than
+        /// freeing space.</para>
+        ///
+        /// <para>So the zone is anchored to the drawer's TOP EDGE with pivot 0 and a fixed px
+        /// height, which places it ABOVE that edge: it has a real rect to typeset in, and it takes
+        /// nothing from the bands below. That is not a trick - it is where the title ALREADY
+        /// rendered. The drawer's sliced content-panel art does not reach its own rect, so the word
+        /// has been sitting in that margin every round; the band reserved for it inside the drawer
+        /// was empty, and it was the difference between one visible row and two.</para>
+        /// </summary>
+        private void SeatDrawerTitleOverlay()
+        {
+            if (_drawerHeader == null) return;
+            _drawerHeader.anchorMin = new Vector2(0.03f, 1f);
+            _drawerHeader.anchorMax = new Vector2(0.97f, 1f);
+            _drawerHeader.pivot = new Vector2(0.5f, 0f);      // grow UPWARD out of the drawer
+            _drawerHeader.sizeDelta = new Vector2(0f, DrawerTitleOverlayPx);
+            _drawerHeader.anchoredPosition = Vector2.zero;
+        }
+
+        /// <summary>
+        /// Print the tab BAND's rect beside one tab FACE's        /// <summary>
+        /// Print the tab BAND's rect beside one tab FACE's, on one line, so the chrome between them
+        /// is a number rather than a theory. If they differ, the difference IS the prefab's inset -
+        /// the same gap that made the QUEUE pill look clipped for nine rounds.
+        /// </summary>
+        private void TraceQueueTabFit()
+        {
+            if (_drawerTabs == null) return;
+            Canvas.ForceUpdateCanvases();
+            RectTransform face = null;
+            for (int i = 0; i < _drawerTabs.childCount; i++)
+            {
+                var c = _drawerTabs.GetChild(i) as RectTransform;
+                if (c == null || !c.gameObject.activeSelf) continue;
+                face = c;
+                break;
+            }
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_TABFIT authored=" + DrawerTabsPx.ToString("0") +
+                "px" + RectLine("band", _drawerTabs) + RectLine("face", face) +
+                " floor=" + ElarionUiKit.MinTouchPx.ToString("0"));
+        }
+
+        private void SetDrawerBands(float drawerPx)
+        {
+            if (drawerPx < 1f) return;
+            float need = DrawerTitlePx + DrawerTabsPx + 2f * DrawerBandGapPx;
+            if (need + RowHeightPx > drawerPx)
+                FlowTrace.Warn("Manage", "the queue overlay is " + drawerPx.ToString("0") +
+                    "px and its chrome alone needs " + need.ToString("0") +
+                    "px (title " + DrawerTitlePx + " + tabs " + DrawerTabsPx + " + gaps " +
+                    (2f * DrawerBandGapPx) + ") - fewer than one " + RowHeightPx +
+                    "px row is left. The overlay needs to be taller");
+
+            float gap = DrawerBandGapPx / drawerPx;
+            // The title's zone is a hairline at the very top: it PAINTS there (the label overflows
+            // it upward into the frame's own margin, which is where the capture already showed it)
+            // but it RESERVES nothing, so the tab row starts at the drawer's ceiling.
+            _drawerTitleY1 = 1f;
+            _drawerTitleY0 = 1f - DrawerTitlePx / drawerPx;
+            _drawerTabsY1 = _drawerTitleY0 - gap;
+            _drawerTabsY0 = _drawerTabsY1 - DrawerTabsPx / drawerPx;
+            _drawerListY1 = _drawerTabsY0 - gap;
+            _drawerListY0 = gap;
+
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_BANDS drawer=" + drawerPx.ToString("0") +
+                "px title=" + DrawerTitlePx + " tabs=" + DrawerTabsPx + " list=" +
+                ((_drawerListY1 - _drawerListY0) * drawerPx).ToString("0") + "px");
+        }
         private bool _drawerBandMode;             // true while the drawer is seated as a band
         private RectTransform _tabsHost;
         private readonly TextMeshProUGUI[] _stripCells = new TextMeshProUGUI[3];
@@ -1605,8 +1788,32 @@ namespace DeNelle.Village.UI
             // Expanded is a genuine workspace state, not a translucent fly-over. It owns the
             // full body beneath the persistent channel strip so the queue cards have mobile-safe
             // width and the browse list cannot remain visually/actionably alive underneath it.
-            drawer.anchorMin = new Vector2(0.02f, 0.02f);
-            drawer.anchorMax = new Vector2(0.998f, 0.84f);
+            // ⛔ THE OVERLAY TAKES THE WHOLE WELL. Do not shrink it back to 0.84.
+            // Mockup panel 8 is a full modal, and the capture showed why the old rect could not
+            // hold one: at 0.02-0.84 the drawer had ~82% of a ~583px well, and once a tab row was
+            // added everything below row 1 fell off the bottom - "1. Militia x1" rendered, the next
+            // line was sliced mid-glyph and CANCEL was cut in half. The container never grew.
+            // Treating the overlay's TOTAL HEIGHT as the thing to solve is what the band table
+            // below does; the seats are derived from it rather than each being nudged.
+            // ⛔ THE OVERLAY EXTENDS BELOW THE WELL, OVER THE SHARED CLOSE BAND. That is deliberate.
+            // MEASURED: the drawer was 475px and its chrome alone needs 372px (title 120 + tabs 120
+            // + three 12px gaps), leaving 103px - less than ONE 132px row. Every band cannot clear
+            // its floor inside a 475px overlay; the arithmetic simply does not close.
+            // A modal that carries its own X does not need the panel's CLOSE visible underneath it,
+            // and -0.25 of the well is ~121px against the ~202px of panel that sits below the well -
+            // so it covers the Close band and still stops well inside the frame.
+            drawer.anchorMin = new Vector2(0.01f, -0.25f);
+            drawer.anchorMax = new Vector2(0.99f, 0.99f);
+
+            // A FIRST GUESS ONLY. ResolveDrawerBands re-runs this against the drawer's MEASURED
+            // height once a layout pass has happened, and that pass is the authoritative one.
+            // ⚠ THIS ESTIMATE WAS WRONG AND THE AUDIT CAUGHT IT: 1.24 * _wellPx came out at 719px
+            // while the drawer actually renders 476px, so every band was scaled to a drawer 1.5x
+            // too tall and the 120px tab row resolved to 79.4px - WORSE than the fraction it
+            // replaced. The arithmetic is exact: 476 * (120/719) = 79.3.
+            // The lesson is the QUEUE pill's, again: a size derived from a number I did not measure
+            // is a guess wearing a px suffix.
+            SetDrawerBands(1.24f * _wellPx);
             drawer.offsetMin = drawer.offsetMax = Vector2.zero;
             var drawerImage = _queueDrawer.GetComponent<Image>();
             drawerImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
@@ -1630,11 +1837,32 @@ namespace DeNelle.Village.UI
             // The mockup's panel 8 settles the shape rather than the coordinate: title QUEUE centred,
             // an X at the top-right, and nothing else in the header. The X is seated ABOVE the list
             // zone's 0.86 ceiling with a gutter, so it cannot reach a card at any drawer height.
-            var heading = ElarionUiKit.Label(drawer, "QUEUE", 0.88f, 0.99f,
+            // ⭐ THE BAND TABLE, top-down, as fractions of the drawer. Mockup panel 8's reading
+            // order is TITLE -> TABS -> ROWS, and the capture had it title -> cards -> tabs -> rows
+            // because the tab row was appended as a SCROLL ROW (MakeRowHost writes into the list),
+            // so it landed after the rail instead of above the rows. The tabs now own a FIXED zone
+            // in the drawer's chrome, which is the only way a header can be a header.
+            //   title  0.90-0.99   (~53px at a 583px well)
+            //   tabs   0.685-0.885 (0.20 => ~117px, clear of MinTouchPx 112)
+            //   list   0.02-0.665
+            // ⛔ THE TITLE AND THE X LIVE IN A REAL ZONE, not on fractions of the drawer.
+            // Anchoring the X to a fraction of the drawer put it OUTSIDE the overlay twice - the
+            // drawer's sliced frame art does not reach its own rect edge, so its (1,1) corner is not
+            // where the overlay visibly ends. A child of a zone cannot leave that zone, which is a
+            // guarantee no fraction of a parent gives.
+            _drawerHeader = MakeZone(drawer, "Drawer_Header",
+                new Vector2(0.03f, 1f), new Vector2(0.97f, 1f));
+            SeatDrawerTitleOverlay();
+
+            var heading = ElarionUiKit.Label(_drawerHeader, "QUEUE", 0f, 1f,
                 ElarionUi.Gold, (int)ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.20f, 0.80f, bold: true);
             ElarionUiKit.FitSingleLine(heading, 28f, 44f);
             _drawerHeading = heading != null ? heading.gameObject : null;
+
+            // The tab row's own zone - built once, refilled by RenderQueueDrawer.
+            _drawerTabs = MakeZone(drawer, "Drawer_QueueTabs",
+                new Vector2(0.02f, _drawerTabsY0), new Vector2(0.98f, _drawerTabsY1));
 
             // A SQUARE X in the corner, as drawn. ASCII "X", never a glyph character - this
             // project's fonts render non-ASCII as tofu (the same rule that made BACK a "<-").
@@ -1653,16 +1881,28 @@ namespace DeNelle.Village.UI
             // sizeDelta gives exactly MinTouchPx + 8 on both axes at every drawer size, with no
             // measurement needed and nothing for ClampMinTouch to rescue.
             const float ClosePx = 120f;   // ElarionUiKit.MinTouchPx (112) + 8px margin
-            var close = ElarionUiKit.BuildObsidianButton(drawer, "X",
+            // ⛔ THE X LIVES IN THE TAB BAND, in the column BuildQueueTabs leaves free at
+            // TabsRightStop (0.86). The title no longer has a band to hold it, and this one is
+            // 132px - larger than the 120px X - so the control that needed a home has the only band
+            // that was ever really there. The reserved column exists precisely because the X and the
+            // RESEARCH tab collided once; now it is the X's seat rather than dead space.
+            var close = ElarionUiKit.BuildObsidianButton(_drawerTabs, "X",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.9f, 0.9f), new Vector2(0.99f, 0.99f), ToggleQueueDrawer);
             if (close != null)
             {
                 var closeRt = (RectTransform)close.transform;
-                closeRt.anchorMin = closeRt.anchorMax = new Vector2(1f, 1f);
-                closeRt.pivot = new Vector2(1f, 1f);
+                // ⚠ PULLED INSIDE. The capture showed the X floating over the PANEL's border,
+                // outside the overlay's own frame: pinned to the drawer's (1,1) with a -14/-10
+                // nudge, it sat on the corner of a rect whose sliced frame art does not reach its
+                // own edge. Anchoring to the TITLE BAND's right end instead puts it where panel 8
+                // draws it - inside the overlay, level with the word QUEUE.
+                // Pinned to the HEADER ZONE's right edge, vertically centred in it. A fixed px
+                // square so it always clears MinTouchPx; the zone bounds it on every side.
+                closeRt.anchorMin = closeRt.anchorMax = new Vector2(0.99f, 0.5f);
+                closeRt.pivot = new Vector2(1f, 0.5f);
                 closeRt.sizeDelta = new Vector2(ClosePx, ClosePx);
-                closeRt.anchoredPosition = new Vector2(-14f, -10f);
+                closeRt.anchoredPosition = Vector2.zero;
             }
             ElarionUiKit.ClampMinTouch(close);
             if (close != null) close.gameObject.name = "ManageQueueOverlayClose";
@@ -1677,7 +1917,7 @@ namespace DeNelle.Village.UI
             // slot offer is no longer a fixed zone under it but the list's LAST ROW (see
             // RenderQueueDrawer), which is what gives the rail + header + first row room at rest.
             var drawerList = MakeZone(drawer, "Drawer_QueueList",
-                new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));
+                new Vector2(0.02f, _drawerListY0), new Vector2(0.98f, _drawerListY1));
             _drawerList = drawerList;
             var drawerScroll = ElarionUiKit.MakeScrollZone(drawerList, spacing: 8f, padding: 10);
             _drawerContent = drawerScroll != null ? drawerScroll.content : null;
@@ -1751,11 +1991,31 @@ namespace DeNelle.Village.UI
 
             if (_drawerHeading != null) _drawerHeading.SetActive(!band);
             if (_drawerHide != null) _drawerHide.SetActive(!band);
+            // ⛔ THE TAB ROW STANDS DOWN IN BAND MODE, with the title and the X.
+            // Band mode is the SHORT drawer that sits under the Troops workspace card (~235px), and
+            // a 114px tab row would eat half of it - the rows it exists to reach would be the thing
+            // it displaced. The overlay keeps whichever channel it was on; only the full-body
+            // overlay (mockup panel 8) offers the switch.
+            if (_drawerTabs != null) _drawerTabs.gameObject.SetActive(!band);
+            // ⭐ MEASURE, THEN DERIVE. This runs after a layout pass, so the band table finally
+            // resolves against the drawer's real height rather than BuildQueueDrawer's estimate.
+            // ⚠ ONLY the band resolve here. TraceQueueTabFit moved to the END of
+            // RenderQueueDrawer: ApplyDrawerPlacement can run BEFORE the tabs are built, and the
+            // capture proved it - the line printed face[NULL] and therefore proved nothing. Same
+            // fault as the content trace two rounds ago. A measurement's timing is part of it.
+            if (!band) ResolveDrawerBands();
             if (_drawerList != null)
             {
-                _drawerList.anchorMin = new Vector2(0.02f, band ? 0.0f : 0.02f);
-                _drawerList.anchorMax = new Vector2(0.98f, band ? 1.0f : 0.86f);
+                // ⛔ THE BAND TABLE, NOT A LITERAL. This line used to read `band ? 1.0f : 0.86f`,
+                // and because it runs AFTER RenderQueueDrawer it silently replaced the authored
+                // 0.665 ceiling and zeroed the whole-row trim on every paint.
+                _drawerList.anchorMin = new Vector2(0.02f, band ? 0.0f : _drawerListY0);
+                _drawerList.anchorMax = new Vector2(0.98f, band ? 1.0f : _drawerListY1);
                 _drawerList.offsetMin = _drawerList.offsetMax = Vector2.zero;
+                // ...and the trim is RE-APPLIED here rather than only at render, so it survives
+                // whichever of the two writers runs last. An invariant that depends on call order
+                // is not an invariant.
+                SeatQueueListToWholeRows();
             }
 
             var image = _queueDrawer.GetComponent<Image>();
@@ -1818,10 +2078,17 @@ namespace DeNelle.Village.UI
             // condition on it is a condition on the door - the WO-1430 defect class exactly.
             // The mockup also draws the pill on all eight numbered panels with no empty state.
             _queueDrawerToggle.gameObject.SetActive(true);
+            // ⛔ THE PILL ALWAYS READS "QUEUE". It must not become "HIDE QUEUE".
+            // WO-1393 made this face read as the CLOSE because it was the only way to shut the
+            // drawer. Panel 8 gives the overlay its OWN X (BuildQueueDrawer), so that reason is
+            // gone - and the relabel actively broke the pill: SizeQueuePillToLabel measures the word
+            // at BUILD time and sizes the button to it, so swapping in a longer word afterwards
+            // truncated it. The capture read "HIDE QU..." in the top-right chrome slot.
+            // The drawer is closed by its X, by BACK (OnBackPressed), or by tapping this pill again.
             var label = _queueDrawerToggle.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
             {
-                label.text = _queueDrawerOpen ? "HIDE QUEUE" : "QUEUE";
+                label.text = "QUEUE";
                 ElarionUiKit.FitSingleLine(label);
             }
         }
@@ -1962,6 +2229,27 @@ namespace DeNelle.Village.UI
                 ElarionUiKit.ClampMinTouch(_queueDrawerToggle);
                 BuildQueueCountBadge(_queueDrawerToggle.transform);
 
+                // ⛔⛔ THE PILL IS SIZED TO ITS LABEL, MEASURED. DO NOT MOVE AN ANCHOR HERE AGAIN.
+                //
+                // Nine rounds and four coordinate fixes went into this one control, every one of
+                // them a theory about what was clipping it from OUTSIDE. The instrumentation had
+                // already answered it and we did not act on the answer:
+                //   MANAGE_QUEUE_PILL_RECT ... size 281x120px | anchors 0.72..0.95 | row 1223x120px
+                // Nothing clips the pill. THE LABEL DOES NOT FIT INSIDE IT. A wider anchor guesses
+                // at how much room a word needs; measuring the word does not.
+                //
+                // ⚠ WHY A FRACTION COULD NEVER HAVE WORKED: BuildObsidianButton has two modes. The
+                // PREFAB mode (ElarionUiKitObsidian.cs:622-651) takes the label's rect from the
+                // authored prefab, whose ornate caps eat an inset this file cannot see; only the
+                // constructed fallback (:680-682) uses the 0.04-0.96 the code states. So the usable
+                // text width is not a knowable fraction of the button - it has to be read back.
+                //
+                // Canvas.ForceUpdateCanvases resolves the rects that are ZERO on the creation frame
+                // (the same reason the overlay X takes a px size instead of a fraction), then the
+                // pill is widened to whatever its own word needs, plus the badge's reserved room.
+                // The word can change - a count, a translation - and this still holds.
+                SizeQueuePillToLabel();
+
                 // ⛔ INSTRUMENT, DO NOT INFER. THIS LINE EXISTS BECAUSE I GUESSED THREE TIMES.
                 // The pill has been reported clipped mid-word with its badge outside the frame in
                 // three consecutive captures, and each of my three fixes was a coordinate reasoned
@@ -1990,6 +2278,77 @@ namespace DeNelle.Village.UI
                         _tabsHost.rect.height.ToString("0") + "px");
                 }
             }
+        }
+
+        /// <summary>
+        /// ⭐ MEASURE THE WORD, THEN SIZE THE PILL TO IT. The end of nine rounds of anchor-nudging.
+        ///
+        /// <para>The pill keeps its RIGHT edge where the chrome row wants it and grows LEFTWARDS by
+        /// whatever its own label needs, so the word can change - a longer count, a translation -
+        /// without anyone re-deriving a fraction. Its right edge stays inside the frame's measured
+        /// body zone, which is the one number that was ever correct
+        /// (frame_core.png interior ends at x 0.950; see WorkspaceHeaderY0's note for the same
+        /// treatment on the vertical axis).</para>
+        ///
+        /// <para>⚠ RECTS ARE ZERO ON THE CREATION FRAME, which is why every fraction this file
+        /// computed before a layout pass was a guess. Canvas.ForceUpdateCanvases resolves them
+        /// first; only then is <c>GetPreferredValues</c> meaningful.</para>
+        ///
+        /// <para>Both numbers are printed on MANAGE_QUEUE_PILL_RECT so a capture shows the word's
+        /// requirement AND the pill's answer side by side. If they ever disagree again, the trace
+        /// says so without anyone theorising.</para>
+        /// </summary>
+        private void SizeQueuePillToLabel()
+        {
+            if (_queueDrawerToggle == null || _tabsHost == null) return;
+            var pillRt = _queueDrawerToggle.transform as RectTransform;
+            if (pillRt == null) return;
+            var label = _queueDrawerToggle.GetComponentInChildren<TMP_Text>(true);
+            if (label == null) return;
+
+            Canvas.ForceUpdateCanvases();
+
+            float rowW = _tabsHost.rect.width;
+            if (rowW < 1f) return;                       // no layout yet: leave the authored seat
+
+            // What the word actually needs at the size it is being rendered at.
+            float wordPx = label.GetPreferredValues(label.text).x;
+            // The chrome the label sits inside: whatever the pill is now, minus what its label rect
+            // actually got. That difference IS the prefab's ornate inset, read rather than assumed.
+            float labelW = label.rectTransform.rect.width;
+            float chromePx = Mathf.Max(0f, pillRt.rect.width - labelW);
+
+            // The badge lives inside the pill and must not eat the word's room.
+            float badgePx = _queueDrawerToggle.transform.Find("ManageQueueCountBadge") != null
+                ? QueueBadgePx + 12f : 0f;
+
+            float wantPx = wordPx + chromePx + badgePx + 24f;   // +24 so the word never touches the art
+            float maxPx = rowW * 0.60f;                          // never let it swallow the row
+            float finalPx = Mathf.Clamp(wantPx, 160f, maxPx);
+
+            // Right edge pinned at 0.95 of the row - inside the frame's measured interior - and the
+            // pill grows leftwards from there.
+            pillRt.anchorMin = new Vector2(0.95f, 0f);
+            pillRt.anchorMax = new Vector2(0.95f, 1f);
+            pillRt.pivot = new Vector2(1f, 0.5f);
+            pillRt.sizeDelta = new Vector2(finalPx, 0f);
+            pillRt.anchoredPosition = Vector2.zero;
+
+            // The word yields the badge's corner rather than being centred under it. Done on the
+            // LABEL's own rect so the button art is untouched - the kit centres the label across the
+            // whole face, which is right when there is no badge and wrong when there is.
+            if (badgePx > 0f && finalPx > 1f)
+            {
+                var lrt = label.rectTransform;
+                float reserve = badgePx / finalPx;
+                lrt.anchorMax = new Vector2(Mathf.Clamp01(lrt.anchorMax.x - reserve), lrt.anchorMax.y);
+            }
+
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_PILL_FIT word='" + label.text + "' needs " +
+                wordPx.ToString("0") + "px | chrome " + chromePx.ToString("0") +
+                "px | badge " + badgePx.ToString("0") + "px | pill set to " +
+                finalPx.ToString("0") + "px (was " + pillRt.rect.width.ToString("0") +
+                ", row " + rowW.ToString("0") + "px)");
         }
 
         /// <summary>
@@ -2027,6 +2386,18 @@ namespace DeNelle.Village.UI
             var disc = ElarionUiKit.AddImage(pill, "ManageQueueCountBadge",
                 new Vector2(0.74f, 0.50f), new Vector2(0.95f, 0.94f),
                 new Color(0.72f, 0.10f, 0.10f, 1f), rounded: true);
+            // ⚠ A FIXED PX SQUARE PINNED TO THE PILL'S TOP-RIGHT, not a fraction. The pill's width is
+            // now MEASURED from its label (SizeQueuePillToLabel), so a fractional badge would change
+            // size every time the word did - and QueueBadgePx, which that method subtracts to
+            // reserve the badge's room, would stop being true. One number, honoured in both places.
+            if (disc != null)
+            {
+                var discRt = (RectTransform)disc.transform;
+                discRt.anchorMin = discRt.anchorMax = new Vector2(1f, 1f);
+                discRt.pivot = new Vector2(1f, 1f);
+                discRt.sizeDelta = new Vector2(QueueBadgePx, QueueBadgePx);
+                discRt.anchoredPosition = new Vector2(-10f, -6f);
+            }
             var discImage = disc != null ? disc.GetComponent<Image>() : null;
             if (discImage != null) discImage.raycastTarget = false;
             if (disc == null) return;
@@ -2394,16 +2765,37 @@ namespace DeNelle.Village.UI
             _rowParent = _drawerContent;
             try
             {
-                var channel = ManageScreenVM.ChannelOf(_vm.Tab);
+                // ⭐ THE OVERLAY'S OWN CHANNEL, not the browse tab's. Until WO-1443 this read
+                // ChannelOf(_vm.Tab), so the drawer rendered whichever line the browse tab happened
+                // to be on and a player could not reach another channel's queue from inside the
+                // overlay at all. The model owns the selection (ManageScreenVM.QueueOverlayChannel)
+                // and it still DEFAULTS to the browse tab's line, so opening is unchanged.
+                var channel = _vm.QueueOverlayChannel;
 
                 // The rail leads as the FIRST ROW: a status glance (ruling §7, display-only) above
                 // the rows that carry every action. WO-1393: NOT in band mode - the Troops
                 // workspace rail and the strip's counts are already on screen, and a 200px rail
                 // in a ~235px band is exactly what clipped the header under it.
-                if (!_drawerBandMode)
-                    MountRail(MakeRowHost("Drawer_QueueRail", _railBandPx), forceRebuild: true);
+                // ⛔ NO CARD RAIL IN THE OVERLAY. Do not mount it here again.
+                // The capture showed five TRAIN cards - Militia / Archer / Militia / Spearman /
+                // Archer - filling the top of panel 8, where the mockup has numbered rows and
+                // nothing else. The rail is a STATUS GLANCE and it says what the rows below it
+                // already say, twice over, in the space the rows need. It stays alive on the
+                // workspace (MountRail's other callers); it is only the overlay that drops it.
+                // ⚠ _railBandPx and MountRail are untouched - this is a caller removed, not a
+                // capability deleted.
 
-                AddSectionHeader("IN QUEUE - " + BuildTimerService.ChannelWord(channel).ToUpperInvariant());
+                // ⭐ THE TAB ROW REPLACES THE SINGLE-CHANNEL HEADER.
+                // "IN QUEUE - BUILDERS" named the one line the drawer could show; panel 8 draws
+                // THREE tabs - BUILDERS (2/2) / TRAINING (2/2) / RESEARCH (2/2) - and the active
+                // one is the header. A header AND a tab row would tell the same fact twice, which is
+                // the duplicated-state defect this screen keeps paying for.
+                // ⛔ INTO ITS OWN FIXED ZONE, NEVER MakeRowHost. MakeRowHost appends to the
+                // SCROLL LIST, so the first version of this line made the tabs a scrolling row that
+                // rendered AFTER the rail - the capture's backwards reading order, title -> cards ->
+                // tabs -> rows. A header that scrolls is not a header.
+                BuildQueueTabs(_drawerTabs);
+                SeatQueueListToWholeRows();
                 if (_vm.QueueRows.Count == 0)
                     AddNoteRow("Nothing is queued on this line. Start an upgrade to see it here.");
                 else
@@ -2422,6 +2814,16 @@ namespace DeNelle.Village.UI
                 }
 
                 MakeRowHost("DrawerTailSpacer", ListTailPx);
+
+                // ⛔ TRACED LAST, AFTER THE ROWS EXIST. The first version of this call sat up beside
+                // BuildQueueTabs and measured the content BEFORE a single row had been added, which
+                // is why the capture reported listContent as 1139x20 - "barely taller than a line of
+                // text". That was not a layout failure; it was a measurement taken too early, and it
+                // very nearly sent us hunting a row-height bug that does not exist.
+                // ⚠ A measurement's TIMING is part of the measurement. Read this line only from the
+                // end of a render.
+                TraceQueueOverlayLayout();
+                TraceQueueTabFit();
             }
             finally
             {
@@ -4487,6 +4889,178 @@ namespace DeNelle.Village.UI
             ElarionUiKit.ClampMinTouch(b);
         }
 
+        /// <summary>
+        /// ⭐ Panel 8's tab row: BUILDERS (2/2) / TRAINING (2/2) / RESEARCH (2/2), the active one
+        /// gold. It replaces the single "IN QUEUE - BUILDERS" header, which named the ONE line the
+        /// drawer could show - a player could not reach another channel's queue from inside the
+        /// overlay at all.
+        /// <para>⛔ THE LABEL AND THE COUNT ARE BOTH THE MODEL'S. This paints
+        /// <c>tab.Label</c> and <c>tab.CountText</c> and joins them; it never counts jobs, never
+        /// spells a channel name, and never decides which tab is active
+        /// (<c>ManageScreenVM.ComposeQueueTabs</c> reads ChannelSummary.Busy / .Slots - the same
+        /// source the three-line status strip reads, so the two can never disagree).</para>
+        /// <para>Active reads as GOLD **and** as the only underlined face - shape as well as hue,
+        /// because the owner is red/green colourblind.</para>
+        /// </summary>
+        private void BuildQueueTabs(RectTransform host)
+        {
+            if (host == null || _vm == null) return;
+            // ⚠ THE ROW STOPS SHORT OF THE X'S COLUMN. The audit found
+            //   'ManageQueueOverlayClose' (x 453..573) covers 'ManageQueueTab_Research/Label'
+            //   ("RESEARCH 2/2") (x 224..563) by 110x31px
+            // The two zones are disjoint in Y once the title band is tall enough to hold the X
+            // (see SetDrawerBands), but the X is a 120px square in the top-RIGHT and the tab row
+            // spans the full width - so the last tab sat under its corner. The band table fixes the
+            // vertical half; this fixes the horizontal one, and it costs the tabs almost nothing.
+            // ⚠ IT ONLY FIRED ON BUILD_queue: the ARMY drawer runs in BAND mode, where the title,
+            // the X and now the tabs all stand down (ApplyDrawerPlacement). A fault that appears on
+            // one tab of three is worth understanding before fixing - here it confirmed the X was
+            // the collider rather than the tabs being mis-seated.
+            const float TabsRightStop = 0.86f;
+            var tabs = _vm.QueueTabs;
+            if (tabs == null || tabs.Count == 0)
+            {
+                FlowTrace.Warn("Manage", "the queue overlay has no tabs - ComposeQueueTabs returned " +
+                    "nothing, so the player can reach only the line the drawer opened on");
+                return;
+            }
+            for (int i = 0; i < tabs.Count; i++)
+            {
+                var t = tabs[i];
+                if (t == null) continue;
+                float w = TabsRightStop / tabs.Count;
+                float tx0 = i * w;
+                string face = string.IsNullOrEmpty(t.CountText)
+                    ? (t.Label ?? string.Empty)
+                    : (t.Label ?? string.Empty) + " " + t.CountText;
+                var captured = t;
+                // Full band height so each face is QueueTabsBandPx (120) >= MinTouchPx (112).
+                var btn = ElarionUiKit.BuildObsidianButton(host, face,
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    t.IsActive ? ElarionUiKit.ObsidianButtonColor.Yellow
+                               : ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(tx0 + 0.006f, 0f), new Vector2(tx0 + w - 0.006f, 1f),
+                    () => captured.Activate?.Invoke());
+                if (btn == null) continue;
+                btn.gameObject.name = "ManageQueueTab_" + t.Channel;
+                MedievalUiSkin.ApplyButton(btn, t.IsActive);
+                ElarionUiKit.ClampMinTouch(btn);
+            }
+        }
+
+        /// <summary>
+        /// ⭐ PRINT THE OVERLAY'S RESOLVED RECTS. The tab row was reported drawn ON TOP of row 1
+        /// while its authored zone (0.685-0.885) and the list's (0.02-0.665) do not overlap at all -
+        /// so one of them is not landing where this file thinks. That is not a fraction to adjust;
+        /// it is a measurement to take, and this project has now twice ended a multi-round
+        /// coordinate hunt by printing a rectangle instead of theorising about one
+        /// (MANAGE_QUEUE_PILL_RECT, MANAGE_TITLE_RECT).
+        /// <para>Every rect is printed in the SAME space - world corners - so they can be compared
+        /// directly. Read this line before touching any drawer fraction.</para>
+        /// </summary>
+        private void TraceQueueOverlayLayout()
+        {
+            if (_queueDrawer == null) return;
+            Canvas.ForceUpdateCanvases();
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_LAYOUT " +
+                RectLine("drawer", _queueDrawer.transform as RectTransform) +
+                RectLine("header", _drawerHeader) +
+                RectLine("tabs", _drawerTabs) +
+                RectLine("listView", _drawerList) +
+                RectLine("listContent", _drawerContent));
+        }
+
+        /// <summary>
+        /// One rect as "name[x0..x1 y0..y1 | local WxH]" in WORLD space, with the LOCAL size beside
+        /// it. Null-safe and loud.
+        /// <para>⚠ THE TWO ARE DIFFERENT UNITS AND MUST NOT BE SUBTRACTED FROM EACH OTHER. The
+        /// world corners carry the canvas scale; <c>rect.width/height</c> do not. In the 2026-09-06
+        /// capture listView printed world y 299..791 (a 492-unit span) beside a local height of
+        /// 396px, and reading those as one number makes a healthy rect look 96px wrong. Compare
+        /// WORLD to WORLD when you are looking for an overlap - which is what the tabs-over-rows
+        /// finding correctly did - and LOCAL to LOCAL when you are checking a size against a px
+        /// constant like RowHeightPx.</para>
+        /// </summary>
+        private static string RectLine(string name, RectTransform rt)
+        {
+            if (rt == null) return " " + name + "[NULL]";
+            var c = new Vector3[4];
+            rt.GetWorldCorners(c);
+            return " " + name + "[x " + c[0].x.ToString("0") + ".." + c[2].x.ToString("0") +
+                   " y " + c[0].y.ToString("0") + ".." + c[2].y.ToString("0") +
+                   " | local " + rt.rect.width.ToString("0") + "x" + rt.rect.height.ToString("0") + "]";
+        }
+
+        /// <summary>
+        /// ⭐ THE LIST SEATS WHOLE ROWS. Its viewport is trimmed DOWN to a whole multiple of
+        /// RowHeightPx so its bottom edge lands BETWEEN rows, never through one.
+        /// <para>The capture showed "Refund: nothing" sliced mid-glyph at 2.8 rows. A part-row is
+        /// not a scroll hint - it is a row whose text has been cut, the same defect the grid had
+        /// before whole-row seating, and the same reason a text band under the cull floor is worse
+        /// than an omitted one: a sliced line looks like a rendering fault, not like more content.</para>
+        /// </summary>
+        private void SeatQueueListToWholeRows()
+        {
+            if (_drawerList == null) return;
+            Canvas.ForceUpdateCanvases();
+            float have = _drawerList.rect.height;
+
+            // ⛔ A ROW IS NOT RowHeightPx TALL ON SCREEN. IT IS RowHeightPx PLUS THE LAYOUT'S OWN
+            // SPACING, INSIDE THE LAYOUT'S OWN PADDING - AND BOTH ARE READ BACK, NEVER ASSUMED.
+            //
+            // The first version trimmed to a multiple of RowHeightPx and the capture still showed
+            // row 2 sliced mid-glyph with its progress bar gone. The trim was seating a whole
+            // number of THE WRONG UNIT: MakeScrollZone gives the content a VerticalLayoutGroup with
+            // spacing 8 and padding 10 on every side (ElarionUiKitObsidian.cs:3327-3331), so two
+            // 132px rows actually need 10 + 132 + 8 + 132 + 10 = 292px, not 264px. The 28px
+            // difference is exactly the refund line and the bar that were cut.
+            //
+            // ⚠ READ FROM THE LIVE COMPONENT, not from those numbers. They are MakeScrollZone's
+            // defaults and this caller passes its own (spacing: 8f, padding: 10); copying either
+            // into this file would be the duplicated state that has now cost this screen three
+            // separate faults - the drawer's 0.86 literal, the band table locals, and this.
+            float spacing = 0f, padTop = 0f, padBottom = 0f;
+            var vlg = _drawerContent != null
+                ? _drawerContent.GetComponent<UnityEngine.UI.VerticalLayoutGroup>() : null;
+            if (vlg != null)
+            {
+                spacing = vlg.spacing;
+                padTop = vlg.padding.top;
+                padBottom = vlg.padding.bottom;
+            }
+            else
+            {
+                FlowTrace.Warn("Manage", "the queue list has no VerticalLayoutGroup to read its " +
+                    "spacing and padding from - the whole-row trim falls back to bare row heights " +
+                    "and the last row may clip");
+            }
+
+            float pitch = RowHeightPx + spacing;           // what each row after the first costs
+            float chrome = padTop + padBottom;
+            if (have < chrome + RowHeightPx) return;       // less than one row: nothing to trim to
+
+            int whole = Mathf.FloorToInt((have - chrome + spacing) / pitch);
+            if (whole < 1) return;
+            float want = chrome + whole * RowHeightPx + (whole - 1) * spacing;
+            if (have - want < 1f) return;                 // already whole
+
+            // ⛔ TRIM THE BOTTOM EDGE UP. DO NOT TOUCH THE ANCHORS.
+            // The first version collapsed anchorMin.y onto anchorMax.y and set a sizeDelta, which
+            // re-hung the rect from its TOP and grew it UPWARD into the tab band. MEASURED by
+            // MANAGE_QUEUE_LAYOUT: tabs [y 688..806] against listView [y 299..791] - a 103px
+            // overlap between two authored zones (tabs 0.685-0.885, list 0.02-0.665) that CANNOT
+            // overlap. The zones were right; the trim moved the wrong edge.
+            // offsetMin.y is the bottom edge's offset from the BOTTOM anchor, so a positive value
+            // raises the floor and leaves the ceiling exactly where the band table put it. No anchor
+            // is written, so the authored fractions stay the single source of the seat.
+            _drawerList.offsetMin = new Vector2(_drawerList.offsetMin.x,
+                                                _drawerList.offsetMin.y + (have - want));
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_LIST seats " + whole + " whole rows: " +
+                want.ToString("0") + "px of " + have.ToString("0") + "px (row " +
+                RowHeightPx.ToString("0") + " + spacing " + spacing.ToString("0") +
+                ", padding " + chrome.ToString("0") + ") - the bottom edge lands between rows");
+        }
+
         private void AddQueueRow(QueueRowVM r)
         {
             var row = MakeRowHost("QueueRow", RowHeightPx);
@@ -4496,6 +5070,20 @@ namespace DeNelle.Village.UI
             // by colour — the expanded items visibly belong to the xN header above them.
             float x0 = r.IsStackChild ? 0.06f : 0.02f;
             string label = (r.IsStackChild ? "- " : "") + ManageScreenVM.Ascii(r.Label ?? "");
+
+            // ⭐ THE ROW NUMBER, mockup panel 8's "1. 2. 3." - painted in its own gutter so it can
+            // never push the label. MODEL-SUPPLIED (QueueRowVM.OrdinalText): the view must not count
+            // its own children, because expanding a stack changes how many ROWS exist without
+            // changing the queue, and a view-side count would disagree with the engine on the spot.
+            // A stack CHILD carries no number by design - the header holds the position.
+            if (!string.IsNullOrEmpty(r.OrdinalText))
+            {
+                var ord = ElarionUiKit.Label(row, r.OrdinalText + ".", QRowNameY0, QRowNameY1,
+                    ElarionUi.Gold, (int)QueueNameFontPx, TextAlignmentOptions.Right,
+                    x0, x0 + 0.035f, bold: true);
+                ElarionUiKit.FitSingleLine(ord, 0f, QueueNameFontPx);
+                x0 += 0.045f;
+            }
 
             // THE ROW IS TWO COLUMNS, and they do not share pixels: TEXT left of x=0.44, CONTROLS
             // right of x=0.455. The left column is three stacked text lines (name / state / refund)
@@ -4657,10 +5245,25 @@ namespace DeNelle.Village.UI
                 ElarionUiKit.ClampMinTouch(cancel);
 
                 // Third line of the TEXT column (never under the buttons — see the two-column note).
-                var refund = ElarionUiKit.Label(row, "Refund: " + ManageScreenVM.Ascii(r.RefundText ?? "nothing"),
-                                                QRowRefundY0, QRowRefundY1, ElarionUi.ParchmentDim,
-                                                (int)QueueLineFontPx, TextAlignmentOptions.Left, x0, 0.44f);
-                ElarionUiKit.FitSingleLine(refund, 0f, QueueLineFontPx);
+                //
+                // ⛔ ONLY WHEN THERE IS SOMETHING TO REFUND. "Refund: nothing" on every row is a
+                // sentence that tells the player nothing, on the line where the mockup puts nothing
+                // at all: panel 8's rows carry the item, its target level and the timer.
+                // ⚠ IT IS NOT DELETED, and the distinction matters. A cancel's consequence belongs
+                // beside the CANCEL button that causes it, so when a refund is REAL the line stays
+                // exactly where it was - it is the empty case that leaves. A player who would get
+                // something back still reads it before they tap; a player who would get nothing is
+                // no longer told so on every row of every queue.
+                string refundText = ManageScreenVM.Ascii(r.RefundText ?? "");
+                bool hasRefund = !string.IsNullOrEmpty(refundText) &&
+                                 !string.Equals(refundText, "nothing", StringComparison.OrdinalIgnoreCase);
+                if (hasRefund)
+                {
+                    var refund = ElarionUiKit.Label(row, "Refund: " + refundText,
+                                                    QRowRefundY0, QRowRefundY1, ElarionUi.ParchmentDim,
+                                                    (int)QueueLineFontPx, TextAlignmentOptions.Left, x0, 0.44f);
+                    ElarionUiKit.FitSingleLine(refund, 0f, QueueLineFontPx);
+                }
             }
 
             if (r.CanBumpUp)
@@ -4743,7 +5346,31 @@ namespace DeNelle.Village.UI
             prt.offsetMin = new Vector2(prt.offsetMin.x, 0f);
             prt.offsetMax = new Vector2(prt.offsetMax.x, 0f);
             primary.fontSize = CtaVerbPx;
+            // ⭐ GIVE THE VERB THE BUTTON'S FULL WIDTH BEFORE FITTING IT. Same finding as the QUEUE
+            // pill: BuildObsidianButton's PREFAB path seats the label from the authored prefab, and
+            // its ornate caps eat an inset this file cannot see, so a long verb hits the font floor
+            // and ellipsises while the face still looks half empty. The capture read "HIRE REIN...".
+            // Widening the LABEL inside the button costs its neighbours nothing - CANCEL sits in its
+            // own box - and recovers the caps' inset for the word.
+            prt.anchorMin = new Vector2(0.02f, prt.anchorMin.y);
+            prt.anchorMax = new Vector2(0.98f, prt.anchorMax.y);
+            prt.offsetMin = new Vector2(0f, prt.offsetMin.y);
+            prt.offsetMax = new Vector2(0f, prt.offsetMax.y);
             ElarionUiKit.FitSingleLine(primary, ElarionUiKit.FontFloor, CtaVerbPx);
+
+            // ⚠ AND IF IT STILL DOES NOT FIT, SAY SO IN PX RATHER THAN ELLIPSISING IN SILENCE.
+            // "HIRE REINFORCEMENTS" is CANON (creative canon 6, BuildTimerService.HireReinforcementsVerb)
+            // and the font floor is a floor, so if the word cannot seat at ElarionUiKit.FontFloor in
+            // this box the answer is a ruling - a shorter canon verb, or a wider primary slot at
+            // CANCEL's expense - not a quieter failure. Neither is this file's call to make.
+            Canvas.ForceUpdateCanvases();
+            float haveW = prt.rect.width;
+            float needW = primary.GetPreferredValues(primary.text).x;
+            if (haveW > 1f && needW > haveW)
+                FlowTrace.Warn("Manage", "CTA verb '" + primary.text + "' needs " + needW.ToString("0") +
+                    "px and its box gives " + haveW.ToString("0") + "px at the " +
+                    ElarionUiKit.FontFloor + "px font floor - it will ELLIPSISE. The word is canon; " +
+                    "this needs a ruling (shorter verb, or a wider primary slot), not a smaller font");
 
             var cost = ElarionUiKit.Label(btn.transform, sub, CtaSubY0, CtaSubY1,
                                           primary.color, (int)CtaSubPx,

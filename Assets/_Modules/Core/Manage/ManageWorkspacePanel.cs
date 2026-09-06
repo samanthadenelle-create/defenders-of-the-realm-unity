@@ -180,8 +180,14 @@ namespace DeNelle.Core.Manage
         // Dropping the second band is not a cosmetic simplification; it is the arithmetic.
         private const float TileProgY0 = 0.005f, TileProgY1 = 0.02f;  // a BAR, no text - exempt
         private const float TileTitleY0 = 0.02f, TileTitleY1 = 0.26f; // 24.0% -> 29px at the 120px floor
-        private const float TilePortY0 = 0.28f, TilePortY1 = 0.99f;   // the art, square, above the name
-        private const float TilePortX0 = 0.14f, TilePortX1 = 0.86f;
+        // ⭐ THE ART FILLS THE CARD. Mockup panel 2's tiles are square-ish cards whose illustration
+        // reaches the edges, with only the name strip below it - not a small medallion floating in a
+        // plate. The art is painted preserveAspect, so on BUILD's near-square 236x220 cell it now
+        // fills almost the whole card, while on ARMY's wide 399x188 cell it stays a centred square
+        // (as panel 4 draws it). One zone, both shapes, because preserveAspect does the work.
+        // Was x 0.14-0.86 / y 0.28-0.99, which threw away 28% of the width on every tile.
+        private const float TilePortY0 = 0.26f, TilePortY1 = 0.985f;
+        private const float TilePortX0 = 0.04f, TilePortX1 = 0.96f;
         private const float TileMedX0 = 0.63f, TileMedX1 = 0.98f;     // status medallion, top-right
         private const float TileMedY0 = 0.60f, TileMedY1 = 0.95f;
         // ⛔ NO TileSelBarX1. The selected tile's cue is a GOLD BORDER around the whole tile
@@ -586,7 +592,17 @@ namespace DeNelle.Core.Manage
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 40f;
 
-            for (int i = 0; i < tiles.Count; i++) BuildTile(contentRt, tiles[i], cellH);
+            // ⭐ ONE COLUMN MEANS A LIST, NOT A COLUMN OF CARDS. Mockup panel 7 (the research tree)
+            // is a vertical list of upgrade ROWS - icon, name, one-line effect, and the state on the
+            // right - not a stack of square cards with names under them. The MODEL says which by
+            // asking for a single column (ManageScreenVM sets GridColumns 1 for
+            // ManageScreenKind.ResearchPerks); the View never infers a layout from an id or a tab.
+            bool asRows = columns == 1;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (asRows) BuildListRow(contentRt, tiles[i], cellH);
+                else BuildTile(contentRt, tiles[i], cellH);
+            }
 
             // The honest overflow line. It exists ONLY while the well is too short to seat the
             // capacity the mockup asks for; once the well grows it never renders, which is the
@@ -599,6 +615,115 @@ namespace DeNelle.Core.Manage
                     0.05f, 0.95f);
                 ElarionUiKit.FitSingleLine(more, 20f, 28f);
             }
+        }
+
+        /// <summary>
+        /// ⭐ ONE LIST ROW - mockup panel 7, the research tree. Icon, name, one-line effect, and the
+        /// STATE on the right: a tick word for done, the state word for available, a padlock and the
+        /// requirement for locked.
+        ///
+        /// <para>⛔ THE THREE STATES ARE THE DETAIL CARD'S OWN VOCABULARY, NOT A SECOND ONE.
+        /// The medallion comes from <c>StateIconKey</c> (ManageArt.StatusFor) and the word from
+        /// <c>StateText</c> - the same two channels the tiles and the detail card already speak, so
+        /// "Researched" / "RESEARCH" / "Requires Cathedral Tier 3" read identically wherever the
+        /// player meets them. Inventing a parallel set of research words here is exactly the
+        /// duplicated state this file keeps paying for.</para>
+        ///
+        /// <para>⚠ WHAT THIS ROW CANNOT DO YET, AND IT IS A CONTRACT GAP, NOT A LAYOUT CHOICE:
+        /// the mockup puts a GOLD "RESEARCH" BUTTON WITH ITS COST inside the row. <see cref="ManageTileVM"/>
+        /// carries no action and no cost - only <c>Activate</c>, which selects. So the row IS the
+        /// tap target and it opens the detail card, where the CTA and the cost basket already live
+        /// and are already correct. That is honest and it works; it is not the drawing.
+        /// Closing it needs a per-row action + cost on ManageTileVM, in ManageViewContract.cs -
+        /// the file the panel-8 lane is editing. FLAGGED FOR SEQUENCING rather than edited, so two
+        /// lanes do not write the same contract in the same hour.</para>
+        /// </summary>
+        private void BuildListRow(RectTransform parent, ManageTileVM tile, float rowH)
+        {
+            if (tile == null) return;
+
+            var rowGo = new GameObject("ManageListRow", typeof(RectTransform), typeof(Image), typeof(Button));
+            rowGo.transform.SetParent(parent, false);
+            var row = rowGo.GetComponent<RectTransform>();
+
+            var plate = rowGo.GetComponent<Image>();
+            plate.color = new Color(0.05f, 0.04f, 0.03f, 0.72f);
+
+            var press = rowGo.GetComponent<Button>();
+            press.transition = Selectable.Transition.None;
+            press.onClick.AddListener(MakeUnityInvoker(tile.Activate));
+
+            // Selected reads as a GOLD BORDER, the same cue the grid tiles use (3.0b) - shape, not
+            // hue alone, because the owner is red/green colourblind.
+            if (tile.IsSelected) ElarionUiKit.GoldPerimeter(row);
+
+            // ICON, left, square inside the row's height.
+            var iconZone = Zone(row, "RowIcon", new Vector2(0.012f, 0.10f), new Vector2(0.10f, 0.90f));
+            ElarionUiKit.Portrait(iconZone, ManageArt.LoadSprite(tile.PortraitKey), active: false);
+
+            // NAME on top, EFFECT under it. Both bands are stated in px against the row height so
+            // neither can fall under the MinTextBandPx cull floor without saying so.
+            float namePx = rowH * 0.42f, effectPx = rowH * 0.34f;
+            if (namePx < MinTextBandPx || effectPx < MinTextBandPx)
+                FlowTrace.Warn("Manage", "list row is " + rowH.ToString("0") + "px - its name band (" +
+                    namePx.ToString("0") + "px) or effect band (" + effectPx.ToString("0") +
+                    "px) is under the " + MinTextBandPx + "px TMP cull floor and would render BLANK");
+
+            var name = ElarionUiKit.Label(row, tile.Title ?? string.Empty, 0.50f, 0.92f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                0.12f, 0.60f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 22f, 30f);
+
+            var effect = ElarionUiKit.Label(row, tile.Subtitle ?? string.Empty, 0.10f, 0.46f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                0.12f, 0.60f);
+            ElarionUiKit.FitSingleLine(effect, 18f, 26f);
+
+            // ⭐ THE INLINE ACTION, mockup panel 7's gold RESEARCH button with its price beneath.
+            // Present ONLY on an AVAILABLE row (ManageVmProjection.ProjectRowAction): a locked row
+            // shows the padlock and the requirement instead, which is what the mockup draws, and a
+            // researched one needs no control at all.
+            var rowAction = tile.RowAction;
+            bool hasRowAction = rowAction != null && rowAction.Visible && !string.IsNullOrEmpty(rowAction.Label);
+            float stateX0 = hasRowAction ? 0.62f : 0.63f;
+            float stateX1 = hasRowAction ? 0.74f : 0.985f;
+
+            if (hasRowAction)
+            {
+                bool hasCost = !string.IsNullOrEmpty(rowAction.CostText);
+                // The button owns the row's full height when there is no price under it, and the
+                // upper two thirds when there is - so the cost line always has a real band rather
+                // than being squeezed under a control (a sentence with nowhere to sit is a sentence
+                // TMP culls).
+                var cta = ElarionUiKit.Button(row, rowAction.Label,
+                    rowAction.Enabled ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(0.76f, hasCost ? 0.38f : 0.10f), new Vector2(0.985f, 0.90f),
+                    MakeInvoker(rowAction.Activate));
+                Track(cta);
+                if (cta != null) cta.gameObject.name = "ManageRowAction";
+                if (hasCost)
+                {
+                    var price = ElarionUiKit.Label(row, rowAction.CostText, 0.06f, 0.34f,
+                        ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                        0.76f, 0.985f);
+                    ElarionUiKit.FitSingleLine(price, 16f, 24f);
+                }
+            }
+
+            // STATE: the medallion and the model's own word, side by side. It NARROWS when the row
+            // carries an inline action so the two never overprint - the same fact told once.
+            PaintSprite(row, "RowStatus", new Vector2(stateX0, 0.22f),
+                new Vector2(stateX0 + 0.07f, 0.78f), tile.StateIconKey);
+            var state = ElarionUiKit.Label(row, tile.StateText ?? string.Empty, 0.22f, 0.78f,
+                tile.IsSelected ? ElarionUi.Gold : ElarionUi.Parchment,
+                ElarionUi.FontLabel, TextAlignmentOptions.Left, stateX0 + 0.08f, stateX1);
+            ElarionUiKit.FitSingleLine(state, 18f, 26f);
+
+            // A running row keeps its bar, same as a tile.
+            if (tile.Progress01.HasValue)
+                ProgressBar(row, tile.Progress01.Value, 0.02f, 0.07f, 0.12f, 0.60f);
+
+            ElarionUiKit.ClampMinTouch(press);
         }
 
         /// <summary>

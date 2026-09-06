@@ -219,6 +219,21 @@ namespace DeNelle.Core.Manage
 
         /// <summary>Selects this tile. Invoked as <c>Activate?.Invoke()</c>.</summary>
         public Action Activate;
+
+        /// <summary>
+        /// ⭐ The INLINE action a LIST ROW offers, with its cost already on the VM
+        /// (<see cref="ManageActionVM.CostText"/>). Mockup panel 7 puts a gold <c>RESEARCH</c>
+        /// button and its price inside each available row, so the player can act without opening
+        /// anything.
+        /// <para><see cref="ManageActionVM.Hidden"/> on a grid CARD (panel 2/4/6 tiles carry no
+        /// inline button - the tile is the tap target) and on any row whose action is not
+        /// AVAILABLE. A locked row shows the padlock and the requirement in the state column
+        /// instead, which is what panel 7 draws - not a greyed button.</para>
+        /// <para>⚠ Projected WITHOUT a route handler on purpose: a blocked action's door belongs on
+        /// the DETAIL card, where there is room for the sentence that explains it. Routing from a
+        /// list row would put a navigate button where the mockup draws a padlock.</para>
+        /// </summary>
+        public ManageActionVM RowAction = ManageActionVM.Hidden;
     }
 
     // ── The selected-item region ──────────────────────────────────────────────
@@ -332,6 +347,33 @@ namespace DeNelle.Core.Manage
         // stray vertical bar outside the button art, so the pip went - and the flag went with it
         // rather than sitting here unread. One channel, and it is words.
         public Action Open;
+    }
+
+    // ── One tab of the QUEUE OVERLAY (mockup panel 8) ─────────────────────────
+
+    /// <summary>
+    /// One tab of the queue overlay: <c>BUILDERS (2/2)</c> / <c>TRAINING (2/2)</c> /
+    /// <c>RESEARCH (2/2)</c>.
+    ///
+    /// <para>⛔ <see cref="CountText"/> IS MODEL-COMPOSED FROM THE LIVE CHANNEL SUMMARY
+    /// (<c>Busy</c>/<c>Slots</c>) - the same source the three-line status strip reads, so a tab can
+    /// never drift from the strip beside it. The mockup's "2/2" is TODAY'S STATE, not the spec:
+    /// a literal would start lying the moment the player buys a builder.</para>
+    ///
+    /// <para>⚠ These are DESTINATION tabs inside an overlay, not the retired workspace tab row -
+    /// they switch which channel's queue is listed and nothing else.</para>
+    /// </summary>
+    public sealed class ManageQueueTabVM
+    {
+        /// <summary>The line this tab lists. Carried so the View never parses the label.</summary>
+        public DeNelle.Core.Jobs.ChannelId Channel;
+        /// <summary>ASCII word ("BUILDERS"), model-supplied - never derived from the enum name.</summary>
+        public string Label;
+        /// <summary>"2/2" - busy over slots, model-counted.</summary>
+        public string CountText;
+        public bool IsActive;
+        /// <summary>Selects this tab. Invoked as <c>Activate?.Invoke()</c>.</summary>
+        public Action Activate;
     }
 
     // ── One filter chip ───────────────────────────────────────────────────────

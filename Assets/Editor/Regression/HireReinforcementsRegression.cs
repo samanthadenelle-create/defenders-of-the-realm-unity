@@ -432,8 +432,30 @@ namespace DeNelle.Editor
                 if (code.IndexOf("BuildTimerService.FinishPaysGold", StringComparison.Ordinal) < 0)
                     failures.Add("[case 5c] ManageScreenVM does not ask BuildTimerService.FinishPaysGold - the row " +
                                  "would print a currency it inferred locally, which can disagree with the debit.");
-                if (code.IndexOf("HireReinforcementsVerb", StringComparison.Ordinal) < 0)
-                    failures.Add("[case 5c] ManageScreenVM does not use HireReinforcementsVerb for the training CTA.");
+                // ⚠ THE VERB PIN IS RETIRED FOR THE QUEUE ROW, BY OWNER RULING, ON A MEASUREMENT.
+                // WO-1443 panel 8: the queue row's CTA verb was instrumented and reported
+                //   'HIRE REINFORCEMENTS' needs 598px and its box gives 236px at the font floor
+                // - two and a half times over. No slot on that row can seat it at any size this
+                // project considers legible, so it ellipsised to "HIRE REIN...". The owner's mockup
+                // draws ONE gold SPEED UP on every tab and prices it on the line beneath, and she
+                // has ruled the mockup absolute. The row now reads SPEED UP on all three channels.
+                //
+                // ⛔ WHAT THIS CASE ACTUALLY DEFENDS IS UNTOUCHED AND IS ASSERTED ABOVE AND BELOW:
+                // the CURRENCY is still the service's decision (FinishPaysGold, checked above) and
+                // the row still SAYS which currency in words - "349 gold" on a training job,
+                // "33 crystals" elsewhere - via FinishCostText. Nothing about what the player spends
+                // has changed; only a verb that could not render has gone.
+                // Pinning a word that cannot fit its box is pinning a defect, so the pin moves to
+                // the cost line - the thing that carries the meaning and CAN be shown.
+                if (code.IndexOf("FinishCostText", StringComparison.Ordinal) < 0)
+                    failures.Add("[case 5c] ManageScreenVM no longer composes FinishCostText. With the " +
+                                 "HIRE REINFORCEMENTS verb retired (it measured 598px into a 236px slot), the " +
+                                 "COST LINE is the only thing telling a player the training rush is priced in " +
+                                 "GOLD rather than crystals - losing it hides the currency entirely.");
+                if (code.IndexOf("DescribeFinishCost(price, balance, paysGold)", StringComparison.Ordinal) < 0)
+                    failures.Add("[case 5c] the queue row's cost line no longer carries the service's paysGold " +
+                                 "verdict into its words - it would print a currency it inferred locally, which " +
+                                 "is the same defect the FinishPaysGold check above exists to stop.");
             }
 
             // 5d. the retired words, anywhere under Assets. Creative canon §6: flavour wins.

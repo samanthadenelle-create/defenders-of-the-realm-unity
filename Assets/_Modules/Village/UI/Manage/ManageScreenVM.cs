@@ -158,6 +158,15 @@ namespace DeNelle.Village.UI
         /// ITSELF IS UNTOUCHED - this is presentation only.
         /// </summary>
         public string FinishCostText;
+        /// <summary>
+        /// ⭐ The row's POSITION NUMBER as the player reads it - "1", "2", "3" - for mockup panel
+        /// 8's numbered rows.
+        /// <para>⛔ MODEL-SUPPLIED, and the View must never count its own children to get it. A
+        /// stack header stands for several jobs (<see cref="StackCount"/>) and expanding one changes
+        /// how many ROWS exist without changing the queue, so a view-side count would disagree with
+        /// the engine the moment a stack opens. This is the queue's own ordering, published once.</para>
+        /// </summary>
+        public string OrdinalText;
         /// <summary>True when a rewarded-ad skip is offered (running jobs only).</summary>
         public bool AdAvailable;
         /// <summary>True when this row may be cancelled (never on a collapsed stack header).</summary>
@@ -588,8 +597,17 @@ namespace DeNelle.Village.UI
                     Tab = VisibleTabs[0];
 
                 BuildChannelSummaries();
-                BuildQueueRows(ChannelOf(Tab));
-                BuildSlotOffer(ChannelOf(Tab));
+                // ⭐ THE OVERLAY CHOOSES ITS OWN CHANNEL. Panel 8 has three TABS - BUILDERS /
+                // TRAINING / RESEARCH - and until now the drawer rendered exactly ONE channel,
+                // taken from whichever browse tab happened to be open (ManageScreenPanel.cs:2406,
+                // ChannelOf(_vm.Tab)). A player could not reach another line's queue from inside
+                // the overlay AT ALL. The selection is model state so the view never decides it.
+                // ⚠ It DEFAULTS to the browse tab's channel, so opening the drawer is unchanged -
+                // BUILD still lands on Builders. Only switching is new.
+                if (!_queueOverlayChannelPinned) QueueOverlayChannel = ChannelOf(Tab);
+                BuildQueueRows(QueueOverlayChannel);
+                _queueTabs = ComposeQueueTabs();
+                BuildSlotOffer(QueueOverlayChannel);
                 BuildRepairOffer();
                 BuildBrowseRows();
                 BuildBuildingChoices();
@@ -756,6 +774,23 @@ namespace DeNelle.Village.UI
                                                  pendingIndex: idx + k, crystals: crystals, isChild: true));
                 idx += run;
             }
+
+            // ⭐ NUMBER THE ROWS ONCE, HERE, IN QUEUE ORDER - mockup panel 8's "1. 2. 3.".
+            // Numbered AFTER the whole list is assembled because the order is the list's, not any
+            // one branch's: active jobs lead, then the pending FIFO, then a cross-channel troop
+            // upgrade if this tab shows one. A per-branch counter would restart.
+            // ⛔ A STACK CHILD TAKES NO NUMBER. It is one of several identical jobs revealed by
+            // expanding a header (ruling Q12), and numbering them would renumber the queue in front
+            // of the player every time they opened a stack. The header carries the position; the
+            // children carry the detail.
+            int ordinal = 0;
+            for (int i = 0; i < QueueRows.Count; i++)
+            {
+                var r = QueueRows[i];
+                if (r == null || r.IsStackChild) continue;
+                ordinal++;
+                r.OrdinalText = ordinal.ToString();
+            }
         }
 
         private QueueRowVM MakeJobRow(BuildTimerService svc, ChannelId channel, BuildJobData job,
@@ -805,7 +840,25 @@ namespace DeNelle.Village.UI
                 FinishPrice = price,
                 CanAffordFinish = price > 0 && balance >= price,
                 FinishCostText = DescribeFinishCost(price, balance, paysGold),
-                FinishVerbText = paysGold ? BuildTimerService.HireReinforcementsVerb : string.Empty,
+                // ⭐ "SPEED UP" - the mockup's own word on panel 8's active row, and a ONE-FIELD
+                // change: ManageScreenPanel.cs:4604 already reads FinishVerbText (falling back to
+                // "Finish Now") and :4608 already calls _vm.FinishNow(channel, jobId). No new button,
+                // no second rush path.
+                // ⛔ "SPEED UP" ON EVERY TAB. DO NOT RESTORE "HIRE REINFORCEMENTS" HERE.
+                // Owner ruling relayed 2026-09-06, on a MEASUREMENT this file produced: the CTA verb
+                // warn reported HIRE REINFORCEMENTS needing 598px in a box that gives 236px at
+                // ElarionUiKit.FontFloor - two and a half times over. No slot on a queue row can hold
+                // it, at any font this project considers legible, so it ellipsised to "HIRE REIN...".
+                // Panel 8 draws ONE gold SPEED UP and prices it on the line underneath, and the
+                // owner has ruled the mockup absolute.
+                // ⚠ NOTHING IS LOST, and this is deliberately NOT a currency change: FinishPaysGold
+                // still decides what the player spends and FinishCostText still says it in words -
+                // "349 gold" on a training job, "33 crystals" elsewhere. Only the VERB is now
+                // uniform. The service's answer is untouched, which is what this suite's
+                // [price-from-service] wall exists to protect.
+                // BuildTimerService.HireReinforcementsVerb survives for its other callers; it is
+                // this ROW that cannot seat it.
+                FinishVerbText = "SPEED UP",
                 // RELEASE BLOCKER GATE (2026-08-07): no ad SDK is wired, so the ad affordance is
                 // ABSENT on every row of every channel until FeatureFlags.RewardedAdSkip's two
                 // prerequisites land (real SDK + WO-912 server-side ad-window validation). The
@@ -3215,8 +3268,20 @@ namespace DeNelle.Village.UI
                     //   screen 6 RESEARCH - four research buildings in one row => 4 x 1
                     // BUILD was 4 columns and its row count fell out of whatever band was left,
                     // which is how the capture showed FOUR tiles of seventeen under the ALL chip.
-                    GridColumns = id == ManageTabId.Build ? 5 : id == ManageTabId.Research ? 4 : 3,
-                    GridRows = id == ManageTabId.Build ? 2 : id == ManageTabId.Research ? 1 : 3
+                    // ⛔ RESEARCH HAS TWO SCREENS AND THEY ARE DIFFERENT SHAPES. The tab alone does
+                    // not decide this; the nav KIND does.
+                    //   panel 6, the PICKER  - four research BUILDINGS in ONE row, art large
+                    //   panel 7, the TREE    - a vertical LIST of that building's upgrades
+                    // One column is what makes the renderer lay rows instead of cards, and it is the
+                    // MODEL saying so - the View never decides a layout from an id.
+                    GridColumns = id == ManageTabId.Build ? 5
+                                : id == ManageTabId.Research
+                                    ? (isActive && nav != null && nav.Kind == ManageScreenKind.ResearchPerks ? 1 : 4)
+                                    : 3,
+                    GridRows = id == ManageTabId.Build ? 2
+                             : id == ManageTabId.Research
+                                 ? (isActive && nav != null && nav.Kind == ManageScreenKind.ResearchPerks ? 4 : 1)
+                                 : 3
                 };
                 if (isActive) FillActiveTab(tab, nav);
                 tabs.Add(tab);
@@ -3253,6 +3318,26 @@ namespace DeNelle.Village.UI
                     // headings (OUTRIDER / LUMBER MILL / ARCHER). The capture read "Outrider".
                     headerTitle = activeSel.Title.ToUpperInvariant();
             }
+            // ⭐ THE RESEARCH TREE IS TITLED WITH ITS BUILDING - mockup panel 7 heads it
+            // "CATHEDRAL OF MAGIC", not a breadcrumb. Same fix, same reason as the detail card: the
+            // capture showed "MANAGE / RESEARCH / ..." truncated, and the building whose tree the
+            // player is reading was named nowhere on the screen.
+            // ⚠ A perks screen is a GRID, so its Selection is not visible and the branch above never
+            // fires for it - this is the second case, not a duplicate of the first.
+            // The name comes from the model's own ResearchChoiceVM.BuildingName ("Lumber Mill"),
+            // never assembled from the school id.
+            if (navPaintable && nav.Kind == ManageScreenKind.ResearchPerks && !string.IsNullOrEmpty(nav.SchoolId))
+            {
+                for (int i = 0; i < ResearchChoices.Count; i++)
+                {
+                    var rc = ResearchChoices[i];
+                    if (rc == null || !string.Equals(rc.BuildingId, nav.SchoolId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (string.IsNullOrEmpty(rc.BuildingName)) break;
+                    headerTitle = Ascii(rc.BuildingName).ToUpperInvariant();
+                    break;
+                }
+            }
 
             return new ManageWorkspaceVM
             {
@@ -3283,6 +3368,71 @@ namespace DeNelle.Village.UI
         //   Research      -> "Pick a school, then a perk."            (the tiles say this)
         // Every line restated something already on screen, which is the owner's whole objection.
         // The one line with real state - the Build filter - is carried by the chips.
+
+        /// <summary>
+        /// The channel the QUEUE OVERLAY is showing (mockup panel 8's selected tab). Defaults to
+        /// the browse tab's channel on every Rebuild until the player picks a tab, after which the
+        /// pick sticks for the life of the screen.
+        /// </summary>
+        public ChannelId QueueOverlayChannel { get; private set; } = ChannelId.Builder;
+        private bool _queueOverlayChannelPinned;
+
+        /// <summary>
+        /// The player picked an overlay tab. Pins <see cref="QueueOverlayChannel"/> so the next
+        /// Rebuild does not snap it back to the browse tab's line, then rebuilds so the rows follow.
+        /// </summary>
+        public void SelectQueueOverlayChannel(ChannelId channel)
+        {
+            _queueOverlayChannelPinned = true;
+            QueueOverlayChannel = channel;
+            FlowTrace.Step("Manage", "queue overlay -> " + BuildTimerService.ChannelWord(channel));
+            Rebuild();
+        }
+
+        /// <summary>
+        /// Panel 8's three tabs: BUILDERS (n/n) / TRAINING (n/n) / RESEARCH (n/n).
+        ///
+        /// <para>⛔ THE COUNTS ARE THE CHANNEL SUMMARIES' OWN, never recomputed and never
+        /// literal. <c>ChannelSummary.Busy</c> / <c>.Slots</c> are already filled for all three
+        /// channels by BuildChannelSummaries, which is the same source the three-line status strip
+        /// reads - so a tab cannot drift from the strip beside it. The mockup's "2/2" is TODAY'S
+        /// STATE, not the spec: hardcoding it would make the tab lie the moment the player buys a
+        /// builder and the crew grows.</para>
+        /// <para>⚠ THE SERVICE METHOD THAT DOES THAT IS DELIBERATELY NOT NAMED HERE.
+        /// BuilderSkuRegression [manage] does a RAW Contains for its token on this file's text, with
+        /// no comment stripping, to prove Manage never spends crystals on a slot itself - so writing
+        /// the name in PROSE reds a monetization suite that this code has not actually violated.
+        /// It cost a round; the rule it guards is real and intact (BuySlot routes to the store via
+        /// StoreFocusRequest.RequestFocusSku(PackCatalog.PermanentBuilderSku), :2508).
+        /// This is the SECOND time in two days a comment has tripped a source oracle here - the
+        /// other was HudLabelFitRegression, caught at the gate. If a third appears, the fix is to
+        /// make those suites strip comments, not to keep censoring prose.</para>
+        /// </summary>
+        private List<ManageQueueTabVM> ComposeQueueTabs()
+        {
+            var tabs = new List<ManageQueueTabVM>(Channels.Count);
+            for (int i = 0; i < Channels.Count; i++)
+            {
+                // NO NULL GUARD: ChannelSummary is a STRUCT (:70), so a list entry can never be
+                // null and `summary == null` does not compile (CS0019, caught at the gate
+                // 2026-09-06). AddSummary fills all three channels, so every entry is real.
+                var summary = Channels[i];
+                ChannelId captured = summary.Channel;
+                tabs.Add(new ManageQueueTabVM
+                {
+                    Channel = captured,
+                    Label = Ascii(BuildTimerService.ChannelWord(captured)).ToUpperInvariant(),
+                    CountText = summary.Busy + "/" + summary.Slots,
+                    IsActive = captured == QueueOverlayChannel,
+                    Activate = () => SelectQueueOverlayChannel(captured)
+                });
+            }
+            return tabs;
+        }
+
+        /// <summary>Panel 8's tab list, rebuilt with the rows. The View binds it and picks nothing.</summary>
+        public IReadOnlyList<ManageQueueTabVM> QueueTabs => _queueTabs;
+        private List<ManageQueueTabVM> _queueTabs = new List<ManageQueueTabVM>(3);
 
         private ManageQueueVM ComposeQueueDoor()
         {
@@ -3955,7 +4105,11 @@ namespace DeNelle.Village.UI
                 IconId = string.IsNullOrEmpty(c.IconName) ? null : "HudIcons/BuildingUpgrades/" + c.IconName,
                 Ownership = c.Locked ? ManageOwnership.NotUnlocked : ManageOwnership.Owned,
                 UpgradeTrack = ManageUpgradeTrack.NotApplicable,
-                NextRungLine = Ascii(c.TierText)
+                // ⭐ THE PERK'S AUTHORED EFFECT SENTENCE, which the tile projection uses as the row's
+                // second line (mockup panel 7: "Arcane Basics" / "Mage spell power +5%"). It was
+                // TierText ("TIER 2") - a fact the STATE column and the lock sentence already carry
+                // twice over, while the one line the player actually decides on was nowhere.
+                NextRungLine = Ascii(string.IsNullOrEmpty(c.Description) ? c.TierText : c.Description)
             };
 
             bool researching = string.Equals(c.StateWord, "Researching", StringComparison.OrdinalIgnoreCase);

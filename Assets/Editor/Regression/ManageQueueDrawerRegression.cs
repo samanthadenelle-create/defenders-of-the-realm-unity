@@ -198,12 +198,29 @@ namespace DeNelle.Editor.Regression
             // on every Manage screen. A door behind a condition is the WO-1430 defect class, so the
             // case now FORBIDS the condition it used to demand. The other half - the face reading as
             // the close while the drawer is open - is unchanged and still pinned.
+            // ⚠ PIN MOVED AGAIN 2026-09-06, WITH THE RULING, AND THE REASON IS A REAL DEFECT.
+            // It required the pill to relabel itself "HIDE QUEUE" while the drawer was open - the
+            // WO-1393 fix, correct when this face was the ONLY way to shut the drawer. Mockup panel
+            // 8 gives the overlay its own X (BuildQueueDrawer), so that reason is gone; and the
+            // relabel actively BROKE the pill, because SizeQueuePillToLabel measures the word at
+            // build time and sizes the button to it - swapping in a longer word afterwards
+            // truncated it, which the capture showed as "HIDE QU..." in the chrome slot.
+            // ⛔ WHAT THIS CASE DEFENDS IS UNCHANGED: the drawer must always be CLOSEABLE, and the
+            // pill must never be gated away. It now pins the three closers that exist - the pill
+            // stays visible and toggles, the overlay has its own X, and BACK closes the drawer
+            // first - instead of pinning one particular word on one of them.
             string sync = Body(panel, "private void SyncQueueToggleFace()", "private void ToggleQueueDrawer()");
-            if (sync == null || !sync.Contains("_queueDrawerToggle.gameObject.SetActive(true);") ||
-                !sync.Contains("\"HIDE QUEUE\""))
+            if (sync == null || !sync.Contains("_queueDrawerToggle.gameObject.SetActive(true);"))
                 failures.Add("[queue-toggle-closes] SyncQueueToggleFace does not keep the QUEUE pill " +
-                             "unconditionally visible (and reading as the close) while the drawer is open. " +
-                             "It is the one door to the queue; gating it strands the surface");
+                             "unconditionally visible. It is the one door to the queue; gating it strands " +
+                             "the surface");
+            if (!panel.Contains("ManageQueueOverlayClose"))
+                failures.Add("[queue-toggle-closes] the queue overlay has no X of its own. Panel 8 draws one, " +
+                             "and it is what replaced the pill's HIDE QUEUE relabel - without it the only way " +
+                             "out is the pill the overlay is covering");
+            if (!panel.Contains("if (_queueDrawerOpen) { ToggleQueueDrawer(); return; }"))
+                failures.Add("[queue-toggle-closes] BACK no longer closes an open queue drawer first - the " +
+                             "overlay would swallow the back gesture");
             if (toggle != null && !toggle.Contains("SyncQueueToggleFace()"))
                 failures.Add("[queue-toggle-closes] ToggleQueueDrawer does not re-sync the QUEUE face");
 
@@ -278,17 +295,107 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[drawer-clear-of-card] the TRAINING NOW row names no longer match the collapse prefix");
             if (drawerRender != null)
             {
-                if (!drawerRender.Contains("if (!_drawerBandMode)\n                    MountRail(MakeRowHost(\"Drawer_QueueRail\"") &&
-                    !drawerRender.Contains("if (!_drawerBandMode)\r\n                    MountRail(MakeRowHost(\"Drawer_QueueRail\""))
-                    failures.Add("[drawer-clear-of-card] the drawer mounts its 200px rail in band mode - that is " +
-                                 "what clipped the IN QUEUE header under it");
+                // ⚠ PIN INVERTED 2026-09-06 (WO-1443 panel 8), WITH THE RULING, AND IT IS STRICTER.
+                // It required the GUARD `if (!_drawerBandMode) MountRail(MakeRowHost("Drawer_QueueRail"...`
+                // so the 200px card rail could not clip the IN QUEUE header in band mode. The rail
+                // is now gone from the overlay ENTIRELY - mockup panel 8 has numbered rows and no
+                // rail, and a status glance that repeats what the rows below it say, in the space
+                // they need, is not worth a band in any mode.
+                // ⛔ SO THE GUARD'S ABSENCE IS NO LONGER THE DEFECT - THE CALL'S PRESENCE IS.
+                // Requiring the guard made this case fail on the fix: it reported "the drawer mounts
+                // its rail in band mode" when the truth was that the guarded call had been deleted.
+                // VERIFIED AT SOURCE: MountRail has exactly two remaining call sites, neither in the
+                // drawer - ManageScreenPanel.cs:2731 (the legacy pinned path, inert because
+                // BuildQueueDrawer sets _railBand = null at :1915) and :2950 (the browse list's own
+                // RailRow). The invariant this case defends is now satisfied more strongly than the
+                // guard ever satisfied it: there is no rail in the overlay, in any mode.
+                // ⚠ THE TOKEN IS THE RAIL'S HOST NAME, NOT THE METHOD'S. `drawerRender` is
+                // Body(panel, "private void RenderQueueDrawer()", "private void RenderList()"), and
+                // MEASURED this round that span is ~9.7k chars and swallows the `private void
+                // MountRail(...)` DECLARATION itself - so a bare `MountRail(` check fires on the
+                // method's own signature and reports a rail that is not mounted. `Drawer_QueueRail`
+                // is the drawer's own rail host and appears nowhere in the file (verified 0),
+                // so it names the thing being forbidden without matching a declaration.
+                if (drawerRender.Contains("Drawer_QueueRail") ||
+                    drawerRender.Contains("MountRail(MakeRowHost("))
+                    failures.Add("[drawer-clear-of-card] the queue overlay mounts a card rail again. Panel 8 " +
+                                 "has numbered rows and no rail; a 200px strip of card art repeats what those " +
+                                 "rows already say and, in band mode, clipped the header under it");
                 if (!drawerRender.Contains("MakeRowHost(\"Drawer_SlotOfferRow\""))
                     failures.Add("[drawer-clear-of-card] the Buy-Builder offer is not the drawer list's last row - " +
                                  "a fixed offer zone starves the verb rows of height");
             }
-            if (!panel.Contains("new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));"))
-                failures.Add("[drawer-clear-of-card] the full-body drawer list zone is not 0.02-0.86 - the header " +
-                             "clips under the rail again");
+            // ⚠ PIN MOVED 2026-09-06 (WO-1443 panel 8), WITH THE RULING, AND IT IS STRICTER NOW.
+            // It required the literal `new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.86f));` so
+            // the full-body list would clear the 200px card RAIL and the IN QUEUE header. Both of
+            // those are gone: mockup panel 8 has no rail (a status glance saying what the rows below
+            // it already say, in the space they need) and no single-channel header (three tabs
+            // replace it). The list zone is now the band table's DrawerListY0/Y1.
+            // ⛔ WHAT IT DEFENDS IS THE SAME AND IS NOW CHECKED DIRECTLY: the list must not run into
+            // the band above it. That is exactly the fault the pin's old form could not see -
+            // MANAGE_QUEUE_LAYOUT measured tabs [y 688..806] against listView [y 299..791], a 103px
+            // overlap, because ApplyDrawerPlacement re-seated the list to its own 0.86 literal AFTER
+            // the render and wiped the authored 0.665. Two writers, one piece of state.
+            // So this case now pins the ONE SOURCE and the ORDERING INVARIANT between the bands.
+            // ⚠ RE-POINTED AGAIN 2026-09-06, FROM FRACTIONS TO PIXELS, AND IT GOT STRICTER.
+            // The band table WAS fractions of the drawer, and the audit proved a fraction cannot
+            // carry a px promise: the tab row resolved 95.1px against MinTouchPx(112), and the
+            // fixed-120px X overflowed a 42.8px title band into the tabs beneath it. Heights are
+            // now PX constants and the fractions are derived from the measured drawer
+            // (ManageScreenPanel.SetDrawerBands), which is the band law ManageWorkspacePanel's own
+            // header states. So the pin moves to the numbers that are now authored.
+            if (!panel.Contains("private const float DrawerTitlePx") ||
+                !panel.Contains("private const float DrawerTabsPx") ||
+                !panel.Contains("private void SetDrawerBands("))
+                failures.Add("[drawer-clear-of-card] the queue overlay's px band table is gone. Its seats were " +
+                             "fractions once, which is how the tab row shipped 17px under the touch floor and " +
+                             "the X spilled out of its own band");
+            else
+            {
+                float tabsPx = ConstOf(panel, "DrawerTabsPx");
+                float titlePx = ConstOf(panel, "DrawerTitlePx");
+                if (tabsPx < 0f || titlePx < 0f)
+                    failures.Add("[drawer-clear-of-card] could not read DrawerTabsPx / DrawerTitlePx off the " +
+                                 "source - a scoped assertion that cannot find its scope FAILS, never passes");
+                else
+                {
+                    if (tabsPx < 112f)
+                        failures.Add("[drawer-clear-of-card] the queue tab band is " + tabsPx +
+                                     "px, under ElarionUiKit.MinTouchPx (112). Author the band AT the floor - " +
+                                     "ClampMinTouch grows a control symmetrically and spills it into its " +
+                                     "neighbours, which on this row is the queue list");
+                    // ⚠ RE-POINTED: the TAB band now holds the overlay's X, not the title band.
+                    // The title band was 132px and the capture showed it EMPTY - the word QUEUE
+                    // renders above the drawer's visible top edge, because the drawer's sliced
+                    // content-panel art does not reach its own rect. 132px was reserved for
+                    // something drawn outside it, and it was the difference between ONE visible row
+                    // and TWO. The title is now an overlay above the ceiling (consuming no band,
+                    // DrawerTitlePx = 0) and the X moved into the column the tab row already leaves
+                    // free at TabsRightStop.
+                    if (titlePx > 0f)
+                        failures.Add("[drawer-clear-of-card] the queue title has taken a band again (" +
+                                     titlePx + "px). It renders ABOVE the drawer's ceiling, so a band " +
+                                     "reserved for it inside the overlay holds nothing and costs the list a " +
+                                     "whole row. Keep DrawerTitlePx at 0 and seat it with " +
+                                     "SeatDrawerTitleOverlay");
+                    if (tabsPx <= 120f)
+                        failures.Add("[drawer-clear-of-card] the queue TAB band is " + tabsPx +
+                                     "px and must be LARGER than the 120px X it now contains. A band exactly " +
+                                     "its control's size leaves no margin and the X spills into its " +
+                                     "neighbours - measured once at 110x31px over 'RESEARCH 2/2'");
+                    if (!panel.Contains("private void SeatDrawerTitleOverlay()"))
+                        failures.Add("[drawer-clear-of-card] SeatDrawerTitleOverlay is gone. A zero-height " +
+                                     "title zone does not free space, it DELETES the word: TMP culls a line " +
+                                     "whose rect cannot seat its font floor. The overlay seat is what makes " +
+                                     "DrawerTitlePx = 0 legal");
+                }
+            }
+            // ...and the SECOND writer must read the table rather than re-typing a fraction.
+            if (!panel.Contains("band ? 1.0f : _drawerListY1"))
+                failures.Add("[drawer-clear-of-card] ApplyDrawerPlacement re-seats the drawer list from its own " +
+                             "literal again instead of the band table. It runs AFTER RenderQueueDrawer, so its " +
+                             "value is the one that survives - and a fraction typed twice is a fraction that " +
+                             "will disagree with itself");
             if (!panel.Contains("ApplyDrawerPlacement();\n                // WO-1368") &&
                 !panel.Contains("ApplyDrawerPlacement();\r\n                // WO-1368"))
                 failures.Add("[drawer-clear-of-card] Render() does not re-seat the drawer after RenderList rebuilt " +
@@ -383,6 +490,19 @@ namespace DeNelle.Editor.Regression
         /// <summary>WO-1393: read a `private const float NAME = 123f;` off the source, or -1.
         /// The arithmetic is replayed from the LIVE constants, never from a copy in this file.</summary>
         private static float Const(string src, string name)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(src,
+                @"\b" + name + @"\s*=\s*([0-9]+(?:\.[0-9]+)?)f");
+            return m.Success && float.TryParse(m.Groups[1].Value,
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
+                out float v) ? v : -1f;
+        }
+
+        /// <summary>Reads a `private const float NAME = 0.123f;` off the source, or -1. The
+        /// arithmetic is replayed from the LIVE constants, never from a copy in this file - the same
+        /// stance Const() takes for the band px, and the reason this suite can compare two seats
+        /// without knowing either number.</summary>
+        private static float ConstOf(string src, string name)
         {
             var m = System.Text.RegularExpressions.Regex.Match(src,
                 @"\b" + name + @"\s*=\s*([0-9]+(?:\.[0-9]+)?)f");

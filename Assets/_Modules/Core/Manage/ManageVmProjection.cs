@@ -198,7 +198,18 @@ namespace DeNelle.Core.Manage
             {
                 Id = item.ItemId,
                 Title = item.DisplayName,
-                Subtitle = item.MaxLevel > 0 && item.Level > 0 ? "LEVEL " + item.Level : null,
+                // ⭐ THE SECOND LINE FALLS BACK TO THE ITEM'S OWN EFFECT SENTENCE.
+                // Mockup panel 7 gives every research row a name AND a one-line effect beneath it -
+                // "Arcane Basics" / "Mage spell power +5%" - and that sentence is the entire point
+                // of the panel: it is how a player decides what to research. The rows rendered
+                // half-empty because this expression emitted a subtitle only for LADDERED items, and
+                // research has no level at all (ruling 3.7 - never paint "LEVEL 0").
+                // NextRungLine is already "an ASCII one-line summary of what changes at the next
+                // rung", which is exactly what an effect sentence is, so the fallback reuses the
+                // field rather than adding a second one that would say the same thing.
+                Subtitle = item.MaxLevel > 0 && item.Level > 0
+                    ? "LEVEL " + item.Level
+                    : (string.IsNullOrEmpty(item.NextRungLine) ? null : item.NextRungLine),
                 PortraitKey = item.IconId,
                 IsSelected = isSelected,
                 VisualState = state,
@@ -207,7 +218,39 @@ namespace DeNelle.Core.Manage
                 FrameKey = ManageArt.FrameFor(state),
                 Progress01 = running != null ? (float?)running.Progress01 : null,
                 TimerText = running != null ? FormatDuration(running.RemainingSeconds) : null,
-                Activate = onSelect
+                Activate = onSelect,
+                // `item.PrimaryAction` read inline, not via a local: the sibling
+                // ProjectSelection declares `ManageAction primary` and this method never did, so a
+                // bare `primary` here was a compile error (CS0103, caught at the gate 2026-09-06).
+                RowAction = ProjectRowAction(item.PrimaryAction)
+            };
+        }
+
+        /// <summary>
+        /// The inline action a LIST ROW may offer (mockup panel 7's gold RESEARCH button and its
+        /// price). AVAILABLE only.
+        /// <para>⛔ A blocked action returns <see cref="ManageActionVM.Hidden"/> rather than a
+        /// disabled face or a route. Panel 7 draws a PADLOCK and the requirement on a locked row,
+        /// and the state column already carries both; a greyed button beside them would be a third
+        /// telling of the same fact. The door for a blocker lives on the DETAIL card, which has room
+        /// for the sentence that explains it - and ProjectAction's route branch needs a navigate
+        /// handler this projection deliberately does not take.</para>
+        /// </summary>
+        private static ManageActionVM ProjectRowAction(ManageAction action)
+        {
+            if (action == null) return ManageActionVM.Hidden;
+            if (action.Availability != ManageActionAvailability.Available) return ManageActionVM.Hidden;
+            if (string.IsNullOrEmpty(action.Cta)) return ManageActionVM.Hidden;
+
+            ManageAction captured = action;
+            return new ManageActionVM
+            {
+                Visible = true,
+                Enabled = true,
+                Label = action.Cta,
+                CostText = action.CostLine,
+                StyleRole = ManageActionStyleRole.Primary,
+                Activate = () => captured.Invoke?.Invoke()
             };
         }
 
