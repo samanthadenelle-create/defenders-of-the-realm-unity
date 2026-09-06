@@ -327,6 +327,12 @@ namespace DeNelle.Wallet
         private BalanceState _balanceState = BalanceState.NoWallet;
         private double _balanceSkr;
 
+        // WO-1409: browsing the catalogue is public, but a Solana purchase still needs a
+        // signing wallet. This is a presentation predicate only; PurchaseGate remains the
+        // authority for whether a particular pack may be bought.
+        private bool WalletlessBrowsing =>
+            !PiDisplay && (_wallet == null || !_wallet.IsRealSigningWallet);
+
         // ⛔ WO-1334 — THE `~$12.40` FIAT TAIL AND ITS JUPITER QUOTE ARE REMOVED FROM THIS CHIP.
         // The owner ruled the connected chip is `SKR: <balance>` and *"that is the whole chip"*.
         // The fields (_fiatUsd/_hasFiat/_fiatAtRealtime), the FiatStaleSeconds window and
@@ -418,6 +424,7 @@ namespace DeNelle.Wallet
             TrackStoreOpened();
 
             Render();
+            TraceShelfStateOnOpen();
             // WO-1386 - AFTER the first Render, because the connect door writes the commerce banner
             // and the banner must exist; the spotlight it lands beside was resolved by that Render.
             RouteGuestShortfallToWalletConnect();
@@ -1293,9 +1300,31 @@ namespace DeNelle.Wallet
         /// </summary>
         private void CloseStore()
         {
+            // WO-1412: the sending Manage surface owns the return door. Closing this panel through
+            // its established lifecycle reaches OnDisable -> PanelManager.NotifyClosed, which arms
+            // and consumes that SAME WO-1400 arbiter after the close-grace frame. Do not open a
+            // second, store-owned return route here.
+            string returnDoor = PanelManager.ReturnDoorName;
+            FlowTrace.Step("Store", "close -> return opener=" +
+                                    (string.IsNullOrEmpty(returnDoor) ? "HUD" : returnDoor));
             if (_vm == null) _vm = PackStoreVM.CreateDefault();
             if (!_vm.CloseViaInteractor())
                 gameObject.SetActive(false);
+        }
+
+        /// <summary>WO-1409's once-per-open proof: one wallet explanation and USD anchors.</summary>
+        private void TraceShelfStateOnOpen()
+        {
+            bool walletless = WalletlessBrowsing;
+            int anchors = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !PackCatalog.IsOnBrowsableShelf(pack)) continue;
+                string price = StorePriceMajor(pack);
+                if (!string.IsNullOrEmpty(price) && price.IndexOf('$') >= 0) anchors++;
+            }
+            FlowTrace.Step("Store", "shelf wallet=" + (!walletless).ToString().ToLowerInvariant() +
+                                    " anchors=" + anchors + " banner=" + walletless.ToString().ToLowerInvariant());
         }
 
         // =====================================================================
@@ -1727,7 +1756,9 @@ namespace DeNelle.Wallet
         private void BuildLandscapeActions(string entryLabel)
         {
             if (_utilityContent == null) return;
-            BuildUtilityHeading(_utilityContent, "ACTIONS", NightMarketPalette.For(StoreBand.Free));
+            // WO-1409: the two doors already name themselves. Removing their redundant heading
+            // returns 70 px to this masked column, exactly the measured deficit that clipped
+            // MONTHLY LEDGER into the CLOSE THE GAP heading below it.
             BuildUtilityRow(_utilityContent, entryLabel, "gift-icon", OpenRedeemPanel, true);
             BuildUtilityRow(_utilityContent, "MONTHLY LEDGER", "calendar-icon",
                 () => PanelRouter.Open(PanelId.MonthlyLedger), false);
@@ -2003,7 +2034,7 @@ namespace DeNelle.Wallet
                 // store that obscures real-money cost reads as a store with something to hide.
                 PriceMajor   = StorePriceMajor(pack),
                 PriceMinor   = StorePriceMinor(pack),
-                Badge        = pack.StoreBadge,
+                Badge        = OneWordBadge(pack.StoreBadge),
                 StateWord    = CardStateWord(pack),
                 // ⛔ RESOLVED HERE, RENDERED THERE. The card is handed a finished string; it never
                 // asks a commerce question of its own (UI-002). Empty on every buyable pack, so a
@@ -2031,6 +2062,15 @@ namespace DeNelle.Wallet
                 FlowTrace.Fail("Store", $"BuildPackCard '{sku}': the card template returned no root - " +
                                         "this row is missing from the shelf entirely.");
                 return null;
+            }
+
+            // WO-1409: keep the single-word badge off the art's focal/right edge. StorePackCard
+            // returns the rendered label handle, so this remains a caller-owned presentation
+            // adjustment rather than a second card implementation.
+            if (handle.StateLabel != null && handle.StateLabel.transform.parent is RectTransform badgeRect)
+            {
+                badgeRect.anchorMin = new Vector2(0.04f, 1f);
+                badgeRect.anchorMax = new Vector2(0.44f, 1f);
             }
 
             _cardHandles[sku] = handle;
@@ -2277,9 +2317,10 @@ namespace DeNelle.Wallet
             if (!AddArt(_spotlightHost, spotlightArt, new Vector2(0.05f, 0.71f), new Vector2(0.95f, 0.98f)))
                 Orb(_spotlightHost, orbTint, new Vector2(0.08f, 0.79f), new Vector2(0.30f, 0.95f));
 
-            if (!string.IsNullOrEmpty(pack.StoreBadge))
-                MakeText(_spotlightHost, pack.StoreBadge, 30, ElarionUi.Gold, FontStyles.Bold,
-                    TextAlignmentOptions.TopRight, new Vector2(0.40f, 0.90f), new Vector2(0.94f, 0.97f));
+            string spotlightBadge = OneWordBadge(pack.StoreBadge);
+            if (!string.IsNullOrEmpty(spotlightBadge))
+                MakeText(_spotlightHost, spotlightBadge, 30, ElarionUi.Gold, FontStyles.Bold,
+                    TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.90f), new Vector2(0.34f, 0.97f));
 
             // ⛔ EVERY SIZE BELOW IS AT OR ABOVE ElarionUi.FontFloorMobile(30). UI-001 §0.6 measured
             // the old 12-17 pt store strings at ~10 PHYSICAL px on the device — defects #4 and #8 were
@@ -2416,7 +2457,10 @@ namespace DeNelle.Wallet
         {
             if (pack == null || string.IsNullOrEmpty(pack.CompareTo)) return string.Empty;
             var other = PackCatalog.Find(pack.CompareTo);
-            if (other == null || ReferenceEquals(other, pack)) return string.Empty;
+            // WO-1409: never compare against merchandise absent from this shelf. A player cannot
+            // evaluate "2.7x" against a pack they cannot see, so that sentence is omitted.
+            if (other == null || ReferenceEquals(other, pack) || !PackCatalog.IsOnBrowsableShelf(other))
+                return string.Empty;
 
             // The shared key with the largest amount in THIS pack — the good the comparison is most
             // honestly about.
@@ -2869,6 +2913,11 @@ namespace DeNelle.Wallet
                 return pack != null ? pack.UsdReference : string.Empty;
             }
 
+            // WO-1409: without a signing wallet the authored USD anchor is still known. It is the
+            // honest browse price; the unavailable SKR quote is not repeated on every card.
+            if (WalletlessBrowsing)
+                return pack != null ? pack.UsdReference : string.Empty;
+
             return pack != null ? pack.AmountLabel(_defaultCurrency) : string.Empty;
         }
 
@@ -2890,6 +2939,9 @@ namespace DeNelle.Wallet
                     ? StoreStrings.Get(StoreStrings.KeyPiPriceAtCheckout)
                     : StoreStrings.Get(StoreStrings.KeyPiNotOnSale);
             }
+
+
+            if (WalletlessBrowsing) return string.Empty;
 
             return pack != null ? pack.UsdApprox() : string.Empty;
         }
@@ -3062,7 +3114,9 @@ namespace DeNelle.Wallet
                     // to the clump. The BRANCH stays, because "a live account is attached" and
                     // "only a durable identity exists" remain two different facts and each still
                     // gets its own SENTENCE.
-                    if (_wallet != null && _wallet.Account.IsValid)
+                    if (WalletlessBrowsing)
+                        _balanceLabel.text = "Connect a wallet to buy - prices shown in USD";
+                    else if (_wallet != null && _wallet.Account.IsValid)
                         _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundAddress);
                     else if (PurchaseGate.HasDurableIdentity)
                         _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundIdentity);
@@ -3117,12 +3171,13 @@ namespace DeNelle.Wallet
 
         private static string DescribeContents(PackDef pack)
         {
-            var sb = new StringBuilder();
-            var c = pack.Contents;
+            const int visibleItems = 2;
+            var items = new List<string>();
+            var c = pack != null ? pack.Contents : null;
             if (c != null)
             {
                 if (c.Cosmetics != null && c.Cosmetics.Count > 0)
-                    sb.Append(c.Cosmetics.Count).Append(c.Cosmetics.Count == 1 ? " cosmetic" : " cosmetics");
+                    items.Add(c.Cosmetics.Count + (c.Cosmetics.Count == 1 ? " cosmetic" : " cosmetics"));
 
                 var econ = c.Economy;
                 if (econ != null)
@@ -3131,11 +3186,11 @@ namespace DeNelle.Wallet
                     // has granted them since ECON-01. Describe every key the grant seam actually pays
                     // out, in grant order — the same rule PackCatalog.LedgerEconomyKeys encodes for
                     // the spotlight bars.
-                    AppendAmount(sb, econ.Wood, "wood");
-                    AppendAmount(sb, econ.Iron, "iron");
-                    AppendAmount(sb, econ.Crystals, "crystals");
-                    AppendAmount(sb, econ.Food, "stone");
-                    AppendAmount(sb, econ.Coins, "coins");
+                    AddContentAmount(items, econ.Wood, "wood");
+                    AddContentAmount(items, econ.Iron, "iron");
+                    AddContentAmount(items, econ.Crystals, "crystals");
+                    AddContentAmount(items, econ.Food, "stone");
+                    AddContentAmount(items, econ.Coins, "coins");
                 }
 
                 // WO-1118 §2.3 — a card may only list convenience the player can actually SPEND.
@@ -3148,18 +3203,38 @@ namespace DeNelle.Wallet
                     {
                         if (item == null || item.Count <= 0 || string.IsNullOrEmpty(item.Kind)) continue;
                         if (!PackCatalog.IsRedeemableConvenience(item.Kind)) continue;
-                        if (sb.Length > 0) sb.Append(", ");
                         if (PackCatalog.IsPermanentBuilderKind(item.Kind))
-                            sb.Append("Permanent builder (+1 crew)");
+                            items.Add("Permanent builder (+1 crew)");
                         else if (item.Kind.IndexOf("lantern", StringComparison.OrdinalIgnoreCase) >= 0)
-                            sb.Append(item.Kind.Contains("3x") ? "3x" : "2x")
-                              .Append(" lantern x").Append(item.Count).Append(" runs");
+                            items.Add((item.Kind.Contains("3x") ? "3x" : "2x") +
+                                      " lantern x" + item.Count + " runs");
                         else
-                            sb.Append(item.Count).Append("x ").Append(item.Kind.Replace('-', ' ').Replace('_', ' '));
+                            items.Add(item.Count + "x " + item.Kind.Replace('-', ' ').Replace('_', ' '));
                     }
                 }
             }
-            return sb.Length > 0 ? sb.ToString() : "-";
+
+            if (items.Count == 0) return "-";
+            int shown = Mathf.Min(visibleItems, items.Count);
+            string summary = string.Join(", ", items.GetRange(0, shown));
+            int remaining = items.Count - shown;
+            return remaining > 0 ? summary + " +" + remaining + " more" : summary;
+        }
+
+        private static void AddContentAmount(List<string> items, int amount, string label)
+        {
+            if (items == null || amount <= 0) return;
+            items.Add(amount.ToString("N0") + " " + label);
+        }
+
+        /// <summary>WO-1409: merchandising badges are one readable word, never art-covering copy.</summary>
+        private static string OneWordBadge(string badge)
+        {
+            if (string.IsNullOrWhiteSpace(badge)) return string.Empty;
+            if (badge.IndexOf("BEST", StringComparison.OrdinalIgnoreCase) >= 0) return "BEST";
+            if (badge.IndexOf("FIRST", StringComparison.OrdinalIgnoreCase) >= 0) return "FIRST";
+            int split = badge.IndexOfAny(new[] { ' ', '\t', '\r', '\n' });
+            return split > 0 ? badge.Substring(0, split) : badge;
         }
 
         /// <summary>Exact receipt inventory, including grants intentionally omitted from shelf copy.</summary>

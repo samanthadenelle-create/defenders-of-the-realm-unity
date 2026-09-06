@@ -86,9 +86,12 @@ namespace DeNelle.Village.UI
         /// State is TEXT because the owner is red/green colourblind.
         /// </summary>
         public string Describe()
-            => DepthCap > 0
+        {
+            if (Busy == 0) return $"{Name} idle - {Slots} free";
+            return DepthCap > 0
                 ? $"{Name} {Busy}/{Slots} busy - {Depth}/{DepthCap} queued"
                 : $"{Name} {Busy}/{Slots} busy - {Depth} queued";
+        }
     }
 
     /// <summary>
@@ -264,6 +267,27 @@ namespace DeNelle.Village.UI
         public string NextUnlockText = "";
     }
 
+    /// <summary>One authoritative selector/card entry for Manage -&gt; Buildings.</summary>
+    public sealed class BuildingChoiceVM
+    {
+        public string Id;
+        public string Name;
+        public int Level;
+        public int MaxLevel;
+        public string IconKey;
+        public bool Locked;
+        public string LockText;
+        public string StateWord;
+        public string Description;
+        public IReadOnlyList<CostPart> UpgradeCostParts;
+        public string UpgradeTimeText;
+        public bool UpgradeReady;
+        public string AfterUpgradeText;
+        public int NextTier;
+        public Action Activate;
+        public Action ViewDetails;
+    }
+
     /// <summary>
     /// ViewModel for the unified Manage / Queues screen. Rebuilt on demand; holds no Unity objects.
     /// </summary>
@@ -286,6 +310,12 @@ namespace DeNelle.Village.UI
 
         /// <summary>All authored troops, including locked entries, for explicit selector disclosure.</summary>
         public readonly List<TroopChoiceVM> TroopChoices = new List<TroopChoiceVM>(12);
+
+        /// <summary>Every placed building with an authored tier ladder, including maxed entries.</summary>
+        public readonly List<BuildingChoiceVM> BuildingChoices = new List<BuildingChoiceVM>(16);
+
+        /// <summary>WO-1406 Troops header copy, projected here so the View never reads game state.</summary>
+        public string TroopArmySummaryText { get; private set; }
 
         /// <summary>Categories earned by structures standing in the current town. Defense is the
         /// one intentional empty-state exception: it remains visible before the first placement
@@ -313,6 +343,12 @@ namespace DeNelle.Village.UI
 
         /// <summary>ASCII sentence describing the permanent-builder store offer.</summary>
         public string SlotOfferText { get; private set; } = "";
+
+        /// <summary>True only when every Builder slot is occupied and the permanent crew is not owned.</summary>
+        public bool BuilderUpsellVisible { get; private set; }
+
+        /// <summary>Commerce-priced permanent-builder CTA; empty while the upsell is hidden.</summary>
+        public string BuilderUpsellButtonText { get; private set; } = "";
 
         /// <summary>WO-911 (Q2) — crystal-free instant repair cost, or null when nothing is damaged.</summary>
         public string RepairOfferText { get; private set; }
@@ -384,6 +420,8 @@ namespace DeNelle.Village.UI
                 QueueRows.Clear();
                 BrowseRows.Clear();
                 TroopChoices.Clear();
+                BuildingChoices.Clear();
+                TroopArmySummaryText = null;
 
                 BuildVisibleTabs();
                 if (VisibleTabs.Count > 0 && !VisibleTabs.Contains(Tab))
@@ -394,6 +432,8 @@ namespace DeNelle.Village.UI
                 BuildSlotOffer(ChannelOf(Tab));
                 BuildRepairOffer();
                 BuildBrowseRows();
+                BuildBuildingChoices();
+                BuildTroopArmySummary();
             });
             Changed?.Invoke();
         }
@@ -459,7 +499,7 @@ namespace DeNelle.Village.UI
 
         private void AddSummary(BuildTimerService svc, ChannelId id)
         {
-            Channels.Add(new ChannelSummary
+            var summary = new ChannelSummary
             {
                 Channel = id,
                 Name = BuildTimerService.ChannelWord(id),
@@ -467,7 +507,10 @@ namespace DeNelle.Village.UI
                 Slots = svc.SlotCount(id),
                 Depth = svc.QueueDepth(id),
                 DepthCap = svc.QueueDepthLimit(id),
-            });
+            };
+            Channels.Add(summary);
+            FlowTrace.Step("Manage", "launcher chip=" + summary.Name + " idle=" + (summary.Busy == 0) +
+                " free=" + Mathf.Max(0, summary.Slots - summary.Busy));
         }
 
         // ── Queue rows ────────────────────────────────────────────────────────
@@ -641,13 +684,41 @@ namespace DeNelle.Village.UI
             // Crystal extra-queue DEPTH is KEEP BOTH and still lives on the upgrade-queue-full
             // surface and ObsidianQueueHud. Channel is the visible tab's line; the SKU is always
             // the Builder crew.
-            _ = channel;
             SlotPrice = 0;
+            BuilderUpsellVisible = false;
+            BuilderUpsellButtonText = "";
             var ownedIds = GameStateService.Instance != null
                 ? GameStateService.Instance.State?.OwnedItemIds
                 : null;
             bool owned = PackCatalog.OwnsPermanentBuilder(ownedIds);
-            SlotOfferText = owned ? BuyBuilderOwnedLabelCopy : BuyBuilderLabelCopy;
+            if (owned)
+            {
+                SlotOfferText = BuyBuilderOwnedLabelCopy;
+                FlowTrace.Step("Manage", "builder upsell shown=false reason=owned");
+                return;
+            }
+
+            var svc = BuildTimerService.Instance;
+            int busy = svc != null ? svc.ActiveJobsOf(ChannelId.Builder).Count : 0;
+            int slots = svc != null ? svc.SlotCount(ChannelId.Builder) : 0;
+            BuilderUpsellVisible = svc != null && slots > 0 && busy >= slots;
+            if (BuilderUpsellVisible)
+            {
+                var pack = PackCatalog.Find(PackCatalog.PermanentBuilderSku);
+                // Commerce owns the authored USD anchor. Wallet-specific SKR conversion and
+                // approximation extensions are intentionally unavailable to the Village assembly.
+                string price = pack != null ? pack.UsdReference : "Price unavailable";
+                BuilderUpsellButtonText = BuyBuilderButtonCopy + " - " + price;
+                SlotOfferText = BuyBuilderLabelCopy;
+            }
+            else
+            {
+                int free = Mathf.Max(0, slots - busy);
+                SlotOfferText = free + (free == 1 ? " slot free - tap TRAIN to fill it" :
+                    " slots free - tap TRAIN to fill them");
+            }
+            FlowTrace.Step("Manage", "builder upsell shown=" + BuilderUpsellVisible + " busy=" + busy + "/" + slots +
+                " price='" + (BuilderUpsellVisible ? BuilderUpsellButtonText : "<hidden>") + "'");
         }
 
         private void BuildRepairOffer()
@@ -909,7 +980,7 @@ namespace DeNelle.Village.UI
                 // progression identity as the detailed building-management view.
                 string rowId = ladderId;                                 // captured by the CTA closure
                 int targetTier = next.Tier;
-                AddGoldBrowseRow(Ascii(name) + " -> T" + targetTier, cost, next.CostGold, "Upgrade",
+                AddGoldBrowseRow(Ascii(name), cost, next.CostGold, "Upgrade",
                     () => UpgradeBuilding(rowId, targetTier));
                 rows++;
             }
@@ -918,6 +989,170 @@ namespace DeNelle.Village.UI
                 "buildings browse (this town): " + placed.Count + " placed type(s) -> " + rows +
                 " upgrade row(s); " + maxed + " at max tier, " + onDefenseTab +
                 " on the level ladder (Defense tab), " + noLadder + " with no authored ladder.");
+        }
+
+        /// <summary>
+        /// WO-1418 selected-building rail/card projection. Unlike the legacy browse rows this keeps
+        /// topped-out buildings visible and carries every sentence and decision the View paints.
+        /// </summary>
+        private void BuildBuildingChoices()
+        {
+            var placed = CountPlacedThisTown();
+            var queue = BuildTimerService.Instance;
+            int villageTier = Buildings.Progression.VillageTierService.Current;
+            int maxed = 0, locked = 0, building = 0;
+
+            foreach (var kv in placed)
+            {
+                string id = kv.Key;
+                if (!BuildingTierCatalog.IsUpgradable(id)) continue;
+
+                int level = ModifierService.TierOf(id);
+                int maxLevel = BuildingTierCatalog.MaxTier(id);
+                var current = BuildingTierCatalog.TierOf(id, level);
+                var next = BuildingTierCatalog.TierOf(id, level + 1);
+                bool isMax = next == null;
+                bool isBuilding = !isMax && HasBuilderJob(queue, id);
+                bool isLocked = !isMax && next.RequiresVillageTier > villageTier;
+                var def = BuildingTierCatalog.Find(id);
+                var entry = kv.Value.SourceIds.Count > 0 ? CatalogRegistry.Get(kv.Value.SourceIds[0]) : null;
+                string description = entry != null ? StructureCardVM.DescriptionFor(entry) : null;   // DeNelle.Village.StructureCardVM (BuildMode is a folder, not a namespace)
+                if (string.IsNullOrWhiteSpace(description) && current != null) description = current.Effect;
+                if (string.IsNullOrWhiteSpace(description)) description = "A village structure.";
+
+                var cost = BuildingTierBasket(next);
+                bool ready = !isMax && !isLocked && !isBuilding && CanAfford(cost) && GoldBalance() >= next.CostGold;
+                string stateWord = isBuilding ? "Building" : isLocked ? "Locked" : isMax ? "Max" : "Upgradable";
+                int nextTier = isMax ? 0 : next.Tier;
+                string rowId = id;
+                int targetTier = nextTier;
+
+                string time = null;
+                if (!isMax && queue != null && queue.Config != null)
+                {
+                    int seconds = Mathf.CeilToInt(queue.Config.DurationSecondsForTier(
+                        Mathf.Max(0, targetTier - 2), BuildJobKind.Upgrade));
+                    time = QueueRailView.FormatTime(seconds);
+                }
+
+                var choice = new BuildingChoiceVM
+                {
+                    Id = id,
+                    Name = Ascii(def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id),
+                    Level = level,
+                    MaxLevel = maxLevel,
+                    IconKey = ResolveBuildingPortraitKey(entry, id, level),
+                    Locked = isLocked,
+                    LockText = isLocked ? "Level " + level + " . T" + next.RequiresVillageTier : "",
+                    StateWord = stateWord,
+                    Description = Ascii(description),
+                    UpgradeCostParts = isMax ? Array.Empty<CostPart>() : BuildingUpgradeCostParts(next),
+                    UpgradeTimeText = time,
+                    UpgradeReady = ready,
+                    AfterUpgradeText = isMax ? "" : Ascii(next.Effect),
+                    NextTier = nextTier,
+                    Activate = isMax ? null : (Action)(() => UpgradeBuilding(rowId, targetTier)),
+                    ViewDetails = () => OpenUpgradePanel(rowId),
+                };
+                BuildingChoices.Add(choice);
+                if (isMax) maxed++;
+                else if (isBuilding) building++;
+                else if (isLocked) locked++;
+                FlowTrace.Step("Manage", "building choice id=" + id + " level=" + level + "/" + maxLevel +
+                    " state=" + stateWord + " next=" + nextTier + " ready=" + ready +
+                    " icon='" + (choice.IconKey ?? "<fallback>") + "'");
+            }
+
+            FlowTrace.Step("Manage", "building choices projected=" + BuildingChoices.Count + " max=" + maxed +
+                " locked=" + locked + " building=" + building);
+        }
+
+        private static bool HasBuilderJob(BuildTimerService svc, string id)
+        {
+            if (svc == null || string.IsNullOrEmpty(id)) return false;
+            foreach (var job in svc.ActiveJobsOf(ChannelId.Builder))
+                if (BuildingJobMatches(job.StructureId, id)) return true;
+            foreach (var job in svc.PendingJobsOf(ChannelId.Builder))
+                if (BuildingJobMatches(job.StructureId, id)) return true;
+            return false;
+        }
+
+        private static bool BuildingJobMatches(string jobId, string buildingId) =>
+            string.Equals(jobId, buildingId, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(jobId) && jobId.StartsWith(buildingId + ":", StringComparison.OrdinalIgnoreCase));
+
+        private static IReadOnlyList<CostPart> BuildingUpgradeCostParts(BuildingTierDef tier)
+        {
+            var cost = BuildingTierBasket(tier);
+            return CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", cost.wood), ("stone", "Stone", cost.food),
+                ("iron", "Iron", cost.iron), ("crystal", "Crystals", cost.crystals),
+                ("gold", "Gold", tier != null ? tier.CostGold : 0)
+            });
+        }
+
+        /// <summary>
+        /// Deterministic Resources-relative preferred portrait key. For level 2+ this names
+        /// <c>Portraits/&lt;ladder-id&gt;-&lt;level&gt;</c>; level 1 names the unsuffixed portrait.
+        /// The View owns existence checks and must fall back from a missing tier key to the
+        /// unsuffixed ladder portrait, then to its shared generic resolver.
+        /// </summary>
+        private static string ResolveBuildingPortraitKey(CatalogEntry entry, string ladderId, int level)
+        {
+            string raw = !string.IsNullOrEmpty(ladderId) ? ladderId.Trim().ToLowerInvariant().Replace('_', '-') : null;
+            string source = entry != null && !string.IsNullOrEmpty(entry.id)
+                ? entry.id.Trim().ToLowerInvariant().Replace('_', '-') : null;
+            string slug = entry != null ? PortraitSlug(entry.displayName) : null;
+            string key = !string.IsNullOrEmpty(raw) ? raw : !string.IsNullOrEmpty(source) ? source : slug;
+            if (string.IsNullOrEmpty(key)) return null;
+            return "Portraits/" + key + (level >= 2 ? "-" + level : "");
+        }
+
+        private static string PortraitSlug(string value) =>
+            string.IsNullOrEmpty(value) ? null : value.Trim().ToLowerInvariant().Replace(' ', '-');
+
+        /// <summary>WO-1406 army/camp line, composed once in the VM for the Troops header.</summary>
+        private void BuildTroopArmySummary()
+        {
+            int used = DeNelle.Core.HudModel.PostureSignals.ArmyFillUsed;
+            int cap = DeNelle.Core.HudModel.PostureSignals.ArmyFillCap;
+            if (cap <= 0)
+            {
+                TroopArmySummaryText = null;
+                FlowTrace.Step("Manage", "troops army summary omitted: army fill has not been published");
+                return;
+            }
+
+            var defs = new List<SceneConfigDef>();
+            foreach (var def in SceneConfigCatalog.All)
+                if (def != null && def.IsEnemy) defs.Add(def);
+
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            int victories = state != null ? Mathf.Max(0, state.RaidVictories) : 0;
+            SceneConfigDef camp = null;
+            using (var raids = new Hero.RaidSelectionVM(defs, null, victories,
+                       Hero.RaidSelectionVM.SceneAvailableProvider))
+            {
+                for (int i = 0; i < raids.Raids.Count; i++)
+                {
+                    var row = raids.Raids[i];
+                    if (row.Locked) continue;
+                    var candidate = raids.DefFor(row.Id);
+                    if (candidate == null) continue;
+                    if (camp == null || candidate.unlockVictories < camp.unlockVictories) camp = candidate;
+                }
+            }
+
+            string army = "Army " + used + " / " + cap;
+            if (camp != null)
+            {
+                string campName = !string.IsNullOrEmpty(camp.displayName) ? camp.displayName : camp.id;
+                int fields = Hero.RaidSelectionVM.GarrisonCount(camp);
+                if (fields > 0) army += " - " + Ascii(campName) + " fields " + fields;
+            }
+            TroopArmySummaryText = army;
+            FlowTrace.Step("Manage", "troops army summary='" + army + "'");
         }
 
         /// <summary>
@@ -1022,6 +1257,8 @@ namespace DeNelle.Village.UI
                     string id = def.Id;
                     string name = NameOfTroop(def);
                     int level = BarracksService.TroopLevel(id);
+                    var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                    int owned = state != null && state.Army != null ? state.Army.CountOfDef(id) : 0;
                     var choice = new TroopChoiceVM
                     {
                         Id = id,
@@ -1031,11 +1268,13 @@ namespace DeNelle.Village.UI
                         Level = Mathf.Max(1, level),
                         Unlocked = unlocked && trainable,
                         Requirement = unlocked && trainable
-                            ? "Available"
+                            ? owned + " in your army"
                             : "Requires Barracks Tier " + Mathf.Max(1, def.UnlockBarracksTier),
                         LockTier = Mathf.Max(1, def.UnlockBarracksTier),
                     };
                     TroopChoices.Add(choice);
+                    FlowTrace.Step("Manage", "troop choice id=" + id + " unlocked=" + choice.Unlocked +
+                        " armyOwned=" + owned);
                     if (!unlocked || !trainable)
                     {
                         locked++;
@@ -1158,8 +1397,9 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// WO-1382 ruling #1 — the Training chip's copy with the line's DEPTH in it:
-        /// "Training 1/2 . 1/5 queued" (or "Training 1/2 . 1 queued" on an uncapped line).
+        /// WO-1382 ruling #1 — the Training chip uses the channel's colour-independent
+        /// description, including queue depth while busy and the explicit idle/free wording
+        /// while idle.
         /// Null when the Train line is not summarised (no BuildTimerService) - the View then
         /// keeps its occupancy-only fallback.
         /// </summary>
@@ -1171,9 +1411,7 @@ namespace DeNelle.Village.UI
                 {
                     var c = Channels[i];
                     if (c.Channel != ChannelId.Train) continue;
-                    return c.DepthCap > 0
-                        ? c.Name + " " + c.Busy + "/" + c.Slots + " . " + c.Depth + "/" + c.DepthCap + " queued"
-                        : c.Name + " " + c.Busy + "/" + c.Slots + " . " + c.Depth + " queued";
+                    return c.Describe();
                 }
                 return null;
             }
@@ -1497,7 +1735,7 @@ namespace DeNelle.Village.UI
         public void BuySlot(ChannelId channel)
         {
             StoreFocusRequest.RequestFocusSku(PackCatalog.PermanentBuilderSku);
-            if (!PanelRouter.Open(PanelId.RealmStore))
+            if (!OpenRealmStoreFromManage("builder offer"))
             {
                 Notice = "Store is not open right now.";
                 FlowTrace.Warn("Manage", "RealmStore opener not registered - builder SKU route dead-ends.");
@@ -1530,8 +1768,24 @@ namespace DeNelle.Village.UI
         /// <summary>The broke-case route the owner's rule requires: a way to GET crystals.</summary>
         public void OpenCrystalStore()
         {
-            if (!PanelRouter.Open(PanelId.RealmStore))
+            if (!OpenRealmStoreFromManage("crystal shortfall"))
                 FlowTrace.Warn("Manage", "RealmStore opener not registered — the broke-case route dead-ends.");
+        }
+
+        /// <summary>Use the existing PanelManager return-door arbiter for every Manage-to-store handoff.</summary>
+        private bool OpenRealmStoreFromManage(string source)
+        {
+            ManageTab sendingTab = Tab;
+            string tab = sendingTab.ToString();
+            PanelManager.SetReturnDoor("Manage tab=" + tab,
+                () => PanelRouter.Open(PanelId.Manage, tab));
+            FlowTrace.Step("Manage", "store handoff source=" + source + " returnTab=" + tab);
+            if (PanelRouter.Open(PanelId.RealmStore, "manage")) return true;
+
+            PanelManager.ClearReturnDoor("manage-store-open-failed");
+            FlowTrace.Warn("Manage", "store handoff failed source=" + source + " returnTab=" + tab +
+                " - return door cleared");
+            return false;
         }
 
         // =====================================================================

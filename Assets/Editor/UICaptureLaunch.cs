@@ -7048,6 +7048,8 @@ namespace DeNelle.Editor
                 GameState fixture = null;
                 GameObject panelHost = null;
                 GameObject canvas = null;
+                BuildingTierDef gatedTier = null;
+                int priorGate = 0;
                 try
                 {
                     PanelManager.CloseAll();
@@ -7059,6 +7061,8 @@ namespace DeNelle.Editor
                         new PlacedStructureData("tower_ground_archer", 3, 7, 0, 1),
                         new PlacedStructureData("barracks", 2, 2, 0, 4),
                         new PlacedStructureData("arcane-tower", 6, 3, 0, 4),
+                        new PlacedStructureData("forge", 8, 3, 0, 4),
+                        new PlacedStructureData("lumbermill", 10, 3, 0, 4),
                     };
                     fixture.Wood = 100000;
                     fixture.Iron = 100000;
@@ -7070,7 +7074,18 @@ namespace DeNelle.Editor
                     fixture.ObsidianQueue = ObsidianQueueState.Empty();
                     fixture.BuildingTiers["barracks"] = 3;
                     fixture.BuildingTiers["arcane-tower"] = 3;
+                    fixture.BuildingTiers["forge"] = BuildingTierCatalog.MaxTier("forge");
+                    fixture.BuildingTiers["lumbermill"] = 1;
                     fixture.VillageTier = 4;
+
+                    // Capture-only presentation fixtures: production canon currently tops out at
+                    // Village Tier 3 requirements, so temporarily raise one real next-tier gate.
+                    // The finally block restores the shared definition after every frame.
+                    gatedTier = BuildingTierCatalog.TierOf("lumbermill", 2);
+                    if (gatedTier == null)
+                        throw new InvalidOperationException("Manage Buildings capture requires lumbermill tier 2");
+                    priorGate = gatedTier.RequiresVillageTier;
+                    gatedTier.RequiresVillageTier = 5;
 
                     stateHost = new GameObject("~UICapManageState");
                     var stateService = stateHost.AddComponent<GameStateService>();
@@ -7094,6 +7109,15 @@ namespace DeNelle.Editor
                     InvokePrivate(panel, "Awake");
                     panel.Open();
                     InvokePrivate(panel, "ShowOperational", tab);
+                    if (tab == ManageTab.Buildings)
+                    {
+                        // Across the three canonical frames, prove the complete card grammar:
+                        // an upgradable choice with costs/CTAs, a maxed choice, and a gated choice.
+                        string selectedId = target.W >= 2600 ? "arcane-tower" :
+                                            target.W >= 2200 ? "forge" : "lumbermill";
+                        SetPrivateField(panel, "_selectedBuildingId", selectedId);
+                        InvokePrivate(panel, "Render");
+                    }
                     Canvas.ForceUpdateCanvases();
                     canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
                     return canvas != null && RenderCanvasToPng(canvas,
@@ -7113,6 +7137,7 @@ namespace DeNelle.Editor
                     RestoreCaptureState(prior);
                     if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
                     if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                    if (gatedTier != null) gatedTier.RequiresVillageTier = priorGate;
                     PanelManager.CloseAll();
                 }
             });

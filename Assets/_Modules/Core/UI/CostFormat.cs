@@ -93,7 +93,7 @@ namespace DeNelle.Core.UI
     public static partial class ElarionUiKit
     {
         public static RectTransform CostRow(Transform parent, IReadOnlyList<CostPart> parts,
-            Vector2 anchorMin, Vector2 anchorMax, Color color, string prefix = null)
+            Vector2 anchorMin, Vector2 anchorMax, Color color, string prefix = null, float fontPx = 13f)
         {
             var root = new GameObject("CostRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             root.transform.SetParent(parent, false);
@@ -110,13 +110,13 @@ namespace DeNelle.Core.UI
             layout.childControlWidth = true; layout.childControlHeight = true;
             layout.childForceExpandWidth = false; layout.childForceExpandHeight = false;
             layout.spacing = 4;
-            if (!string.IsNullOrEmpty(prefix)) AddCostText(root.transform, prefix, color);
+            if (!string.IsNullOrEmpty(prefix)) AddCostText(root.transform, prefix, color, fontPx);
             if (parts == null) return rt;
             for (int i = 0; i < parts.Count; i++)
             {
                 var part = parts[i];
                 var icon = CostFormat.IconOrWarn(part);
-                if (icon == null) AddCostText(root.transform, part.Word + " " + part.AmountText, color);
+                if (icon == null) AddCostText(root.transform, part.Word + " " + part.AmountText, color, fontPx);
                 else
                 {
                     var iconGo = new GameObject("Icon_" + part.ConceptId, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(LayoutElement));
@@ -124,21 +124,23 @@ namespace DeNelle.Core.UI
                     var image = iconGo.GetComponent<UnityEngine.UI.Image>();
                     image.sprite = icon; image.preserveAspect = true; image.raycastTarget = false;
                     var size = iconGo.GetComponent<LayoutElement>(); size.preferredWidth = 22; size.preferredHeight = 22;
-                    AddCostText(root.transform, part.AmountText, color);
+                    AddCostText(root.transform, part.AmountText, color, fontPx);
                 }
             }
             return rt;
         }
 
-        private static void AddCostText(Transform parent, string value, Color color)
+        private static void AddCostText(Transform parent, string value, Color color, float fontPx)
         {
             var go = new GameObject("CostText", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
             var text = go.GetComponent<TextMeshProUGUI>();
-            text.text = value; text.fontSize = 13; text.fontStyle = FontStyles.Bold;
+            text.text = value; text.fontSize = fontPx; text.fontStyle = FontStyles.Bold;
             text.color = color; text.alignment = TextAlignmentOptions.Center; text.raycastTarget = false;
             var layout = go.GetComponent<LayoutElement>();
-            layout.preferredWidth = Math.Max(28, value.Length * 8); layout.preferredHeight = 24;
+            float metricScale = fontPx / 13f;
+            layout.preferredWidth = Math.Max(28f, value.Length * 8f) * metricScale;
+            layout.preferredHeight = Math.Max(24f, fontPx + 4f);
         }
     }
 }

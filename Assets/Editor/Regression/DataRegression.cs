@@ -442,6 +442,8 @@ namespace DeNelle.Editor
             // screen"). Both sit beside the train-door suite deliberately: all three exist because a
             // whole feature became unreachable while every LAYER suite over it kept passing.
             if (!HeroSkillTreeDoorRegression.Run(out var skillTreeDoorReason)) failures.Add(skillTreeDoorReason); else log.AppendLine("[skill-tree-door] " + skillTreeDoorReason);
+            // --- WO-1410 Hero screens: ONE source for BAG / SKILLS / LOADOUT (canon-strings twins via HudStrings), Wisdom copy, Loadout-only socket ownership (Codex dev lane) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-name-single-source suite", () => { if (!DeNelle.Editor.Regression.HeroNameSingleSourceRegression.Run(out var rHns)) failures.Add(rHns); else log.AppendLine("[hero-name-single-source] " + rHns); });
             if (!ManageDefenseUpgradeDoorRegression.Run(out var manageDefenseDoorReason)) failures.Add(manageDefenseDoorReason); else log.AppendLine("[manage-defense-door] " + manageDefenseDoorReason);
             // --- 2026-08-07: two fixes that shipped WITHOUT a pin, both "must never come back":
             //     the rewarded-ad stub that GRANTED THE REWARD with no SDK (a free timer skip on
@@ -1012,6 +1014,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "camera-wall-occlusion suite", () => { if (!DeNelle.Editor.Regression.CameraWallOcclusionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[camera-wall-occlusion] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-queue-drawer suite", () => { if (!DeNelle.Editor.Regression.ManageQueueDrawerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-queue-drawer] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-approved-launcher suite", () => { if (!DeNelle.Editor.Regression.ManageApprovedLauncherRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-approved-launcher] " + r); });
+            // --- WO-1418 Manage - Buildings re-layout: rail + selected card + BUILDING NOW; ten RED-first cases (Codex dev lane) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-buildings-card suite", () => { if (!DeNelle.Editor.ManageBuildingsCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-buildings-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pause-medieval-skin suite", () => { if (!DeNelle.Editor.Regression.PauseMedievalSkinRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pause-medieval-skin] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "combat-item-picker suite", () => { if (!DeNelle.Editor.Regression.CombatItemPickerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[combat-item-picker] " + r); });

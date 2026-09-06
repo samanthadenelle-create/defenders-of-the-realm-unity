@@ -29,10 +29,17 @@ namespace DeNelle.Editor.Regression
                 failures.Add("Troops lock is not worded + visual + source-authoritative");
             foreach (string card in new[] { "cards/defense", "cards/buildings", "cards/troops-locked", "cards/research" })
                 if (!panel.Contains(card)) failures.Add("approved layered card art missing: " + card);
-            if (!panel.Contains("Build a Barracks to unlock Troops."))
-                failures.Add("locked-card tap has no feedback");
+            // WO-1406 / WO-1418 (owner ruling 2026-09-05, BATCH_STATE PART 8): the locked Troops card is a DOOR,
+            // not a toast - its face reads BUILD A BARRACKS and the tap enters Town build mode. The retired toast
+            // literal "Build a Barracks to unlock Troops." must NOT return; the purpose line keeps the sentence.
+            if (panel.Contains("Build a Barracks to unlock Troops."))
+                failures.Add("locked-card tap shows the retired toast instead of the BUILD A BARRACKS door (WO-1406)");
+            if (!panel.Contains("BUILD A BARRACKS") || !panel.Contains("BarracksUnlock.IsUnlocked"))
+                failures.Add("locked-card tap has no door: BUILD A BARRACKS face + BarracksUnlock.IsUnlocked refusal expected (WO-1406)");
+            // WO-1418: the strip chips reuse the launcher door with commitLauncherNavigation:false, so the one-shot
+            // latch guards CARD taps only; the guard is now conditional on that flag.
             if (!panel.Contains("_categoryNavigationCommitted") ||
-                !panel.Contains("if (_categoryNavigationCommitted) return"))
+                !panel.Contains("if (commitLauncherNavigation && _categoryNavigationCommitted) return"))
                 failures.Add("rapid category taps are not guarded");
             if (!panel.Contains("card.transition = Selectable.Transition.ColorTint"))
                 failures.Add("pressed/focused visual state is absent");

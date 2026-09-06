@@ -213,10 +213,12 @@ namespace DeNelle.Village.UI
         /// <summary>The least the drawer band may be given: header + one row + scroll padding.</summary>
         private const float DrawerModeMinPx = SectionHeaderPx + RowHeightPx + 20f;
         private const string TrainingNowPrefix = "TroopTrainingNow";   // band + its extra rows
+        private const string BuildingNowPrefix = "BuildingNow";       // building band + its extra rows
 
         private ManageScreenVM _vm;
         private int _browsePage;
         private string _selectedTroopId;
+        private string _selectedBuildingId;
         private GameObject _ui;
         private RectTransform _listContent;
         private GameObject _operationalListBand;
@@ -270,6 +272,8 @@ namespace DeNelle.Village.UI
         // the queue-row tick writes the drawer's "Building - 2m 10s left (63% done)" grammar and
         // the band's cell is the short form the owner's mockup shows. Same 1 Hz tick, strings only.
         private readonly List<TrainingNowCell> _trainingNowCells = new List<TrainingNowCell>(8);
+        private static readonly Dictionary<string, Sprite> BuildingSpriteCache =
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
 
         private struct TrainingNowCell
         {
@@ -369,6 +373,18 @@ namespace DeNelle.Village.UI
             {
                 ShowOperational(ManageTab.Defense);
                 FlowTrace.Step("Manage", "context open -> UPGRADABLE TOWERS (Defense tab).");
+                return;
+            }
+            if (string.Equals(requestedTab, "Buildings", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowOperational(ManageTab.Buildings);
+                FlowTrace.Step("Manage", "context open -> Buildings tab.");
+                return;
+            }
+            if (string.Equals(requestedTab, "Research", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowOperational(ManageTab.Research);
+                FlowTrace.Step("Manage", "context open -> Research tab.");
                 return;
             }
             // WO-1389: the post-first-raid beat's doors land on TROOPS, optionally with a troop
@@ -720,7 +736,9 @@ namespace DeNelle.Village.UI
                 string title = ManageScreenVM.TabLabels[(int)captured];
                 string purpose = captured == ManageTab.Troops && !available
                     ? "Build a Barracks to unlock" : PurposeFor(captured);
-                var card = ElarionUiKit.BuildObsidianButton(_launcherGrid, title.ToUpperInvariant(),
+                string faceText = captured == ManageTab.Troops && !available
+                    ? "BUILD A BARRACKS" : title.ToUpperInvariant();
+                var card = ElarionUiKit.BuildObsidianButton(_launcherGrid, faceText,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     !available ? ElarionUiKit.ObsidianButtonColor.Gray : captured == ManageTab.Defense
                         ? ElarionUiKit.ObsidianButtonColor.Red
@@ -849,16 +867,18 @@ namespace DeNelle.Village.UI
             image.raycastTarget = false;
         }
 
-        private void ActivateLauncherCard(ManageTab tab)
+        private void ActivateLauncherCard(ManageTab tab, bool commitLauncherNavigation = true)
         {
-            if (_categoryNavigationCommitted) return;
+            if (commitLauncherNavigation && _categoryNavigationCommitted) return;
             if (tab == ManageTab.Troops && !BarracksUnlock.IsUnlocked)
             {
-                ElarionUiKit.ShowToast("Build a Barracks to unlock Troops.", ElarionUiKit.ToastTone.Info);
-                FlowTrace.Step("Manage", "Troops card blocked - BarracksUnlock.IsUnlocked=false");
+                Close();
+                var controller = BuildModeController.Instance ?? BuildModeController.EnsureExists();
+                controller?.EnterBuildMode(DeNelle.Core.Catalog.BuildType.Town);
+                FlowTrace.Step("Manage", "troops locked door -> build mode barracks");
                 return;
             }
-            _categoryNavigationCommitted = true;
+            if (commitLauncherNavigation) _categoryNavigationCommitted = true;
             ShowOperational(tab);
         }
 
@@ -1029,29 +1049,25 @@ namespace DeNelle.Village.UI
                 var t = ElarionUiKit.Label(panelRt, "", 0.08f, 0.92f, ElarionUi.Parchment,
                                            (int)ElarionUi.FontMicro, TextAlignmentOptions.Center,
                                            0.27f, 0.97f, bold: true);
-                // Builders / Research carry line occupancy only. The TRAINING chip is the one
-                // exception (WO-1382 ruling #1): it shows the line's depth and is TAPPABLE - the
-                // longer copy is why the fit floor is 24 here rather than the old 28.
+                // WO-1406: all three status chips are destination doors. Training still carries
+                // the longer queue-depth copy, so the shared fit floor remains 24.
                 ElarionUiKit.FitSingleLine(t, 24f, 34f);
                 _stripCells[i] = t;
 
-                if (i == 1)
-                {
-                    // WO-1382 ruling #1: "Training becomes tappable and opens the existing queue
-                    // drawer." A transparent kit plate carrying the Button, over the chip - the
-                    // same door as the title-row QUEUE face (ToggleQueueDrawer), never a second
-                    // queue surface. Named ManageLineStatus_* so the bulk medieval-skin pass skips
-                    // it (it has no label of its own and would otherwise be painted as a gold CTA).
-                    var tapGo = ElarionUiKit.AddImage(panelRt, "ManageLineStatus_TrainTap",
-                        Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0f), rounded: false);
-                    var tapImage = tapGo.GetComponent<Image>();
-                    tapImage.raycastTarget = true;
-                    var tap = tapGo.AddComponent<Button>();
-                    tap.targetGraphic = tapImage;
-                    tap.transition = Selectable.Transition.None;
-                    tap.onClick.AddListener(ToggleQueueDrawer);
-                    ElarionUiKit.ClampMinTouch(tap);
-                }
+                // WO-1406: these are destination chips, not alternate queue doors. QUEUE in the
+                // title row remains the single drawer control.
+                ManageTab destination = i == 0 ? ManageTab.Buildings : i == 1 ? ManageTab.Troops : ManageTab.Research;
+                var tapGo = ElarionUiKit.AddImage(panelRt, "ManageLineStatus_TabTap_" + destination,
+                    Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0f), rounded: false);
+                var tapImage = tapGo.GetComponent<Image>();
+                tapImage.raycastTarget = true;
+                var tap = tapGo.AddComponent<Button>();
+                tap.targetGraphic = tapImage;
+                tap.transition = Selectable.Transition.None;
+                // Reuse the launcher's guarded destination door. In particular, a locked Training
+                // chip opens the BUILD A BARRACKS route instead of bypassing it into Troops.
+                tap.onClick.AddListener(() => ActivateLauncherCard(destination, commitLauncherNavigation: false));
+                ElarionUiKit.ClampMinTouch(tap);
             }
         }
 
@@ -1153,9 +1169,9 @@ namespace DeNelle.Village.UI
             _queueDrawer.SetActive(false);
         }
 
-        /// <summary>WO-1393: the drawer is a BAND (sibling of the list, below the kept workspace
-        /// viewport) on the Troops tab, and the WO-1368 full-body workspace on every other tab.</summary>
-        private bool DrawerInBandMode => _vm != null && _vm.Tab == ManageTab.Troops;
+        /// <summary>WO-1393/1418: the drawer is a BAND below either selected-card workspace;
+        /// Defense and Research retain the WO-1368 full-body drawer.</summary>
+        private bool DrawerInBandMode => _vm != null && (_vm.Tab == ManageTab.Troops || _vm.Tab == ManageTab.Buildings);
 
         /// <summary>
         /// ⛔ WO-1393 - THE ONE PLACE THE DRAWER, THE LIST BAND AND THE TRAINING NOW BAND ARE
@@ -1177,7 +1193,8 @@ namespace DeNelle.Village.UI
                 for (int i = 0; i < _listContent.childCount; i++)
                 {
                     var child = _listContent.GetChild(i);
-                    if (child.name.StartsWith(TrainingNowPrefix, StringComparison.Ordinal))
+                    if (child.name.StartsWith(TrainingNowPrefix, StringComparison.Ordinal) ||
+                        child.name.StartsWith(BuildingNowPrefix, StringComparison.Ordinal))
                         child.gameObject.SetActive(!band);
                 }
 
@@ -1379,11 +1396,13 @@ namespace DeNelle.Village.UI
                     string.Equals(objectName, "CloseButton", StringComparison.Ordinal) ||
                     objectName.StartsWith("ManageCard_", StringComparison.Ordinal) ||
                     objectName.StartsWith("TroopChoice_", StringComparison.Ordinal) ||
+                    objectName.StartsWith("BuildingChoice_", StringComparison.Ordinal) ||
                     // WO-1382: the two card CTAs are skinned by their builder (TRAIN primary,
                     // UPGRADE secondary) - the copy-keyed pass below would promote "UPGRADE TO L2"
                     // to primary and erase the one-primary hierarchy the owner asked for. The
                     // Training-chip tap plate has no label and must never be painted as a CTA.
                     objectName.StartsWith("TroopCta_", StringComparison.Ordinal) ||
+                    objectName.StartsWith("BuildingCta_", StringComparison.Ordinal) ||
                     objectName.StartsWith("ManageLineStatus_", StringComparison.Ordinal)) continue;
 
                 var label = button.GetComponentInChildren<TMP_Text>(true);
@@ -1459,7 +1478,7 @@ namespace DeNelle.Village.UI
                 var cell = _stripCells[i];
                 if (cell == null) continue;
                 string text = i < _vm.Channels.Count
-                    ? _vm.Channels[i].Name + " " + _vm.Channels[i].Busy + "/" + _vm.Channels[i].Slots
+                    ? _vm.Channels[i].Describe()
                     : (i == 0 ? "Builders 0/0" : i == 1 ? "Training 0/0" : "Research 0/0");
                 // WO-1382 ruling #1: the Training chip carries the line's DEPTH ("Training 1/2 .
                 // 1/5 queued") - the VM composes it; this only paints it.
@@ -1473,7 +1492,7 @@ namespace DeNelle.Village.UI
                 if (i < _vm.Channels.Count)
                 {
                     ChannelSummary s = _vm.Channels[i];
-                    cell.text = s.Name + " " + s.Busy + "/" + s.Slots;
+                    cell.text = s.Describe();
                 }
                 else
                 {
@@ -1492,14 +1511,15 @@ namespace DeNelle.Village.UI
             }
             if (_slotButton != null)
             {
-                // Always the store SKU, never a crystal price. Button stays VISIBLE so the
-                // route is reachable even after the SKU is owned (store shows Owned).
+                _slotButton.gameObject.SetActive(_vm.BuilderUpsellVisible);
                 var label = _slotButton.GetComponentInChildren<TMP_Text>();
                 if (label != null)
                 {
-                    label.text = ManageScreenVM.BuyBuilderButtonCopy;
+                    label.text = ManageScreenVM.Ascii(_vm.BuilderUpsellButtonText ?? "");
                     ElarionUiKit.FitSingleLine(label);
                 }
+                FlowTrace.Step("Manage", "builder upsell shown=" + _vm.BuilderUpsellVisible +
+                    " price='" + (_vm.BuilderUpsellButtonText ?? "") + "'");
             }
         }
 
@@ -1656,6 +1676,12 @@ namespace DeNelle.Village.UI
 
             var channel = ManageScreenVM.ChannelOf(_vm.Tab);
 
+            if (_vm.Tab == ManageTab.Buildings)
+            {
+                RenderBuildingsDestination(channel);
+                return;
+            }
+
             if (_vm.Tab == ManageTab.Troops)
             {
                 RenderTroopsDestination(channel);
@@ -1692,8 +1718,6 @@ namespace DeNelle.Village.UI
 
             if (_vm.Tab == ManageTab.Defense)
                 AddActionNoteRow("Need another tower?", "Build defense", OpenDefenseBuilder);
-            else if (_vm.Tab == ManageTab.Buildings)
-                AddActionNoteRow("Need another town structure?", "Open build", OpenTownBuilder);
 
             // ⛔ NO QUEUE ROWS HERE, AND THE VERBS ARE NOT MISSING — THEY ARE IN THE DRAWER.
             // Queue inspection and queue actions live in the explicit header Queue drawer
@@ -1731,6 +1755,303 @@ namespace DeNelle.Village.UI
             for (int i = 0; i < _vm.Channels.Count; i++)
                 if (_vm.Channels[i].Channel == channel) return _vm.Channels[i].Describe();
             return BuildTimerService.ChannelWord(channel);
+        }
+
+        private void RenderBuildingsDestination(ChannelId channel)
+        {
+            if (_vm == null) return;
+            if (_vm.BuildingChoices.Count == 0)
+            {
+                AddNoteRow("No placed buildings are available.");
+                AddActionNoteRow("Need another town structure?", "Open build", OpenTownBuilder);
+                MakeRowHost("ListTailSpacer", ListTailPx);
+                FlowTrace.Warn("Manage", "buildings destination has no placed building choices");
+                return;
+            }
+
+            BuildingChoiceVM selected = null;
+            for (int i = 0; i < _vm.BuildingChoices.Count; i++)
+                if (string.Equals(_vm.BuildingChoices[i].Id, _selectedBuildingId, StringComparison.OrdinalIgnoreCase))
+                { selected = _vm.BuildingChoices[i]; break; }
+            if (selected == null)
+            {
+                for (int i = 0; i < _vm.BuildingChoices.Count; i++)
+                    if (!_vm.BuildingChoices[i].Locked) { selected = _vm.BuildingChoices[i]; break; }
+                if (selected == null) selected = _vm.BuildingChoices[0];
+                _selectedBuildingId = selected.Id;
+            }
+
+            AddBuildingWorkspaceRow(selected);
+            AddBuildingNowBand();
+            AddActionNoteRow("Need another town structure?", "Open build", OpenTownBuilder);
+            MakeRowHost("ListTailSpacer", ListTailPx);
+            FlowTrace.Step("Manage", "buildings destination: rail=" + _vm.BuildingChoices.Count +
+                " selected=" + selected.Id + " jobs=" + _vm.QueueRows.Count);
+        }
+
+        private void AddBuildingWorkspaceRow(BuildingChoiceVM selected)
+        {
+            var workspace = MakeRowHost("BuildingSplitWorkspace", TroopWorkspacePx);
+            var railZone = MakeZone(workspace, "BuildingSelectorRail", new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+            var railPlate = ElarionUiKit.AddImage(railZone, "RailPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            railPlate.GetComponent<Image>().raycastTarget = false;
+            var railScroll = ElarionUiKit.MakeScrollZone(railZone, spacing: 6f, padding: 8);
+            if (railScroll == null || railScroll.content == null)
+                FlowTrace.Fail("Manage", "building rail MakeScrollZone returned no content - the rail has no build site.");
+            else
+            {
+                int selectedIndex = 0;
+                _rowParent = railScroll.content;
+                try
+                {
+                    for (int i = 0; i < _vm.BuildingChoices.Count; i++)
+                    {
+                        var choice = _vm.BuildingChoices[i];
+                        if (choice == null) continue;
+                        bool isSelected = string.Equals(choice.Id, selected.Id, StringComparison.OrdinalIgnoreCase);
+                        if (isSelected) selectedIndex = i;
+                        Guard.Try("Manage", "building rail row " + choice.Id, () => BuildBuildingRailRow(choice, isSelected));
+                    }
+                }
+                finally { _rowParent = null; }
+
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(railScroll.content);
+                int count = _vm.BuildingChoices.Count;
+                if (railScroll.scroll != null)
+                    railScroll.scroll.verticalNormalizedPosition = count > 1 ? 1f - selectedIndex / (float)(count - 1) : 1f;
+            }
+
+            var card = MakeZone(workspace, "BuildingSelectedCard", new Vector2(0.275f, 0f), new Vector2(1f, 1f));
+            BuildBuildingCard(card, selected);
+        }
+
+        private void BuildBuildingRailRow(BuildingChoiceVM choice, bool isSelected)
+        {
+            var row = MakeRowHost("BuildingChoiceRow_" + choice.Id, TroopRailRowPx);
+            var faceGo = ElarionUiKit.AddImage(row, "BuildingChoice_" + choice.Id, Vector2.zero, Vector2.one,
+                isSelected ? new Color(0.24f, 0.18f, 0.08f, 0.90f) : new Color(0f, 0f, 0f, 0.28f), rounded: false);
+            var face = faceGo.GetComponent<Image>();
+            face.raycastTarget = true;
+            var button = faceGo.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.onClick.AddListener(() =>
+            {
+                _selectedBuildingId = choice.Id;
+                _browsePage = 0;
+                FlowTrace.Step("Manage", "building rail selected=" + choice.Id);
+                Render();
+            });
+            if (isSelected)
+            {
+                var outline = faceGo.AddComponent<Outline>();
+                outline.effectColor = ElarionUi.Gold;
+                outline.effectDistance = new Vector2(4f, -4f);
+                outline.useGraphicAlpha = false;
+            }
+
+            var medallion = MakeZone(faceGo.transform, "Medallion", new Vector2(0.03f, 0.08f), new Vector2(0.27f, 0.92f));
+            var portrait = ElarionUiKit.Portrait(medallion, BuildingSprite(choice), active: isSelected);
+            if (choice.Locked && portrait?.image != null) portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);
+            if (choice.Locked) BuildLockBadge(medallion);
+
+            var name = ElarionUiKit.Label(faceGo.transform, ManageScreenVM.Ascii(choice.Name ?? ""), 0.52f, 0.96f,
+                choice.Locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.30f, 0.84f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 26f, 38f);
+            string railState = choice.Locked
+                ? ManageScreenVM.Ascii(choice.LockText ?? "Locked")
+                : "Level " + choice.Level +
+                  (string.Equals(choice.StateWord, "Max", StringComparison.Ordinal) ? " . Max" :
+                   string.Equals(choice.StateWord, "Building", StringComparison.Ordinal) ? " . Building" : "");
+            var sub = ElarionUiKit.Label(faceGo.transform, railState,
+                0.06f, 0.48f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.30f, 0.84f);
+            ElarionUiKit.FitSingleLine(sub, 22f, 30f);
+            var chevron = ElarionUiKit.Label(faceGo.transform, ">", 0.10f, 0.90f,
+                isSelected ? ElarionUi.Gold : ElarionUi.ParchmentDim,
+                (int)ElarionUi.FontBody, TextAlignmentOptions.Center, 0.84f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(chevron, 30f, 50f);
+            ElarionUiKit.ClampMinTouch(button);
+        }
+
+        private static Sprite BuildingSprite(BuildingChoiceVM choice)
+        {
+            string iconKey = choice != null ? choice.IconKey : null;
+            if (string.IsNullOrEmpty(iconKey))
+                return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+            Sprite art = LoadBuildingSprite(iconKey);
+            if (art == null && choice.Level >= 2)
+            {
+                string suffix = "-" + choice.Level;
+                if (iconKey.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    art = LoadBuildingSprite(iconKey.Substring(0, iconKey.Length - suffix.Length));
+            }
+            if (art == null)
+            {
+                var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(choice.Id);
+                if (entry != null) art = DeNelle.Village.BuildPaletteUI.ResolveEntryArtPublic(entry);
+            }
+            return art ?? RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, "hammer");
+        }
+
+        private static Sprite LoadBuildingSprite(string resourceKey)
+        {
+            if (string.IsNullOrEmpty(resourceKey)) return null;
+            if (BuildingSpriteCache.TryGetValue(resourceKey, out Sprite cached) && cached != null) return cached;
+            Sprite art = Resources.Load<Sprite>(resourceKey);
+            if (art == null)
+            {
+                var texture = Resources.Load<Texture2D>(resourceKey);
+                if (texture != null)
+                {
+                    art = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f);
+                    art.name = texture.name + "_manage";
+                }
+            }
+            if (art != null) BuildingSpriteCache[resourceKey] = art;
+            return art;
+        }
+
+        private void BuildBuildingCard(RectTransform card, BuildingChoiceVM selected)
+        {
+            var plate = ElarionUiKit.AddImage(card, "CardPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            plate.GetComponent<Image>().raycastTarget = false;
+            ElarionUiKit.GoldPerimeter(card);
+
+            var medallion = MakeZone(card, "BuildingPortrait", new Vector2(0.02f, 0.59f), new Vector2(0.16f, 0.99f));
+            var portrait = ElarionUiKit.Portrait(medallion, BuildingSprite(selected), active: true);
+            if (selected.Locked && portrait?.image != null) portrait.image.color = new Color(0.42f, 0.42f, 0.42f, 1f);
+            if (selected.Locked) BuildLockBadge(medallion);
+
+            var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
+                0.835f, 1f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                TextAlignmentOptions.Left, 0.19f, 0.74f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 30f, 48f);
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.835f, 1f, ElarionUi.Parchment,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.75f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(level, 26f, 36f);
+
+            var desc = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Description ?? ""), 0.70f, 0.83f,
+                ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.19f, 0.72f);
+            ElarionUiKit.FitSingleLine(desc, 20f, 30f);
+            var badge = ElarionUiKit.AddImage(card, "BuildingStateBadge", new Vector2(0.74f, 0.70f),
+                new Vector2(0.98f, 0.83f), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
+            badge.GetComponent<Image>().raycastTarget = false;
+            var state = ElarionUiKit.Label(badge.transform, ManageScreenVM.Ascii(selected.StateWord ?? ""), 0f, 1f,
+                ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(state, 20f, 28f);
+
+            if (string.Equals(selected.StateWord, "Max", StringComparison.Ordinal)) return;
+
+            ElarionUiKit.CostRow(card, selected.UpgradeCostParts, new Vector2(0.02f, 0.54f),
+                new Vector2(0.72f, 0.695f), ElarionUi.Parchment, prefix: "Upgrade:",
+                fontPx: (int)ElarionUi.FontMicro);
+            string readiness = selected.UpgradeReady ? "Ready" : "Short";
+            string factText = string.IsNullOrEmpty(selected.UpgradeTimeText)
+                ? readiness : selected.UpgradeTimeText + " . " + readiness;
+            var fact = ElarionUiKit.Label(card, factText, 0.54f, 0.695f, ElarionUi.Parchment,
+                (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.73f, 0.98f, bold: true);
+            ElarionUiKit.FitSingleLine(fact, 20f, 28f);
+
+            var benefit = ElarionUiKit.Label(card,
+                string.IsNullOrEmpty(selected.AfterUpgradeText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.AfterUpgradeText),
+                0.445f, 0.535f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.02f, 0.98f);
+            ElarionUiKit.FitSingleLine(benefit, 18f, 26f);
+
+            // Locked and in-progress choices still explain what the next tier costs and buys.
+            // Only their CTA face changes; Max is the sole state without a next-tier fact row.
+            if (selected.Locked)
+            {
+                BuildDisabledBuildingFace(card, "BuildingCta_Locked", ManageScreenVM.Ascii(selected.LockText ?? "Locked"));
+                return;
+            }
+            if (string.Equals(selected.StateWord, "Building", StringComparison.Ordinal))
+            {
+                BuildDisabledBuildingFace(card, "BuildingCta_Building", "BUILDING");
+                return;
+            }
+
+            var upgrade = ElarionUiKit.BuildObsidianButton(card, "UPGRADE TO L" + selected.NextTier,
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                selected.UpgradeReady ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1),
+                () => Guard.Try("Manage", "upgrade building", () => selected.Activate?.Invoke()));
+            if (upgrade != null)
+            {
+                upgrade.gameObject.name = "BuildingCta_Upgrade";
+                upgrade.interactable = selected.UpgradeReady;
+                MedievalUiSkin.ApplyButton(upgrade, true);
+            }
+            ElarionUiKit.ClampMinTouch(upgrade);
+
+            var details = ElarionUiKit.BuildObsidianButton(card, "VIEW DETAILS",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                () => Guard.Try("Manage", "view building details", () => selected.ViewDetails?.Invoke()));
+            if (details != null) details.gameObject.name = "BuildingCta_Details";
+            ElarionUiKit.ClampMinTouch(details);
+        }
+
+        private static void BuildDisabledBuildingFace(RectTransform card, string objectName, string text)
+        {
+            var face = ElarionUiKit.BuildObsidianButton(card, text,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1), null);
+            if (face == null) return;
+            face.gameObject.name = objectName;
+            face.interactable = false;
+            MedievalUiSkin.ApplyButton(face, false);
+            ElarionUiKit.ClampMinTouch(face);
+        }
+
+        private void AddBuildingNowBand()
+        {
+            var band = MakeRowHost("BuildingNowBand", TrainingNowBandPx);
+            var bandPlate = ElarionUiKit.AddImage(band, "BandPlate", Vector2.zero, Vector2.one,
+                new Color(0.05f, 0.04f, 0.03f, 0.70f));
+            bandPlate.GetComponent<Image>().raycastTarget = false;
+            var title = ElarionUiKit.Label(band, "BUILDING NOW", 0.15f, 0.85f, ElarionUi.Gold,
+                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.01f, 0.165f, bold: true);
+            ElarionUiKit.FitSingleLine(title, 22f, 32f);
+            var open = ElarionUiKit.BuildObsidianButton(band, "OPEN QUEUE",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(PrimaryX0, BandCtrlY0), new Vector2(PrimaryX1, BandCtrlY1), ToggleQueueDrawer);
+            if (open != null) open.gameObject.name = "BuildingOpenQueue";
+            ElarionUiKit.ClampMinTouch(open);
+
+            if (_vm.QueueRows.Count == 0)
+            {
+                var empty = ElarionUiKit.Label(band, "No builder at work", 0.15f, 0.85f,
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    0.18f, ClusterX1 + 0.01f);
+                ElarionUiKit.FitSingleLine(empty, 24f, 34f);
+                return;
+            }
+
+            var first = _vm.QueueRows[0];
+            if (first != null)
+                Guard.Try("Manage", "building now job 1", () => BuildTroopTrainingNowJob(band, 1, first,
+                    0.175f, 0.205f, 0.21f, 0.27f, 0.28f, 0.45f, 0.46f, 0.60f, 0.61f, ClusterX1 + 0.01f));
+            for (int i = 1; i < _vm.QueueRows.Count; i++)
+            {
+                var job = _vm.QueueRows[i];
+                if (job == null) continue;
+                int ordinal = i + 1;
+                Guard.Try("Manage", "building now row " + ordinal, () =>
+                {
+                    var row = MakeRowHost("BuildingNowRow_" + ordinal, TrainingNowRowPx);
+                    var rowPlate = ElarionUiKit.AddImage(row, "RowPlate", Vector2.zero, Vector2.one,
+                        new Color(0f, 0f, 0f, 0.28f));
+                    rowPlate.GetComponent<Image>().raycastTarget = false;
+                    BuildTroopTrainingNowJob(row, ordinal, job,
+                        0.005f, 0.05f, 0.055f, 0.115f, 0.13f, 0.46f, 0.48f, 0.78f, 0.80f, 0.99f);
+                });
+            }
         }
 
         private void RenderTroopsDestination(ChannelId channel)
@@ -1952,12 +2273,16 @@ namespace DeNelle.Village.UI
             // NAME band at title size + LEVEL n right-aligned, always on screen (it is the first
             // band of a row that starts at scroll 0 - the name can no longer scroll off the top).
             var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
-                0.745f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                0.82f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
                 TextAlignmentOptions.Left, 0.19f, 0.74f, bold: true);
             ElarionUiKit.FitSingleLine(name, 30f, 48f);
-            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.745f, 1.0f, ElarionUi.Parchment,
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.82f, 1.0f, ElarionUi.Parchment,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.75f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(level, 26f, 36f);
+            var army = ElarionUiKit.Label(card, ManageScreenVM.Ascii(_vm.TroopArmySummaryText ?? ""),
+                0.745f, 0.815f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                TextAlignmentOptions.Left, 0.19f, 0.98f);
+            ElarionUiKit.FitSingleLine(army, 18f, 26f);
 
             // Description left, status WORD ("Available" / "Requires Barracks Tier 2") right, one
             // band - words carry the state; the old green/red tint pair was the same colour to a
