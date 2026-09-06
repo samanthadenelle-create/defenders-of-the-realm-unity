@@ -139,8 +139,14 @@ const { logAuthReject, logApiEvent, hashIp } = require('../_lib/audit');
 // acquisitions — the exact failure the reversal exists to prevent — and buys little,
 // because anyone willing to farm can rent addresses.
 //
-// It is counted on GRANTS, not attempts: a typo, an expired code, or the same guest
-// double-tapping never spends a household's budget.
+// ⚠ PRECISELY WHAT IS COUNTED, because "grants, not attempts" is a near-miss and a
+// near-miss in a rate limiter is how you punish the wrong people: the unit is spent by
+// any attempt that has ALREADY CLEARED every other gate and is about to be paid. A bad
+// code, an expired code, a code this guest already redeemed, or a zero-reward code
+// never reaches step 5b and therefore never costs a household anything. An attempt that
+// is itself over the limit DOES still increment (the UPSERT reserves, then judges), so
+// a caller who is being refused stays refused rather than being let back in by trying
+// less often — deliberate, and it only ever affects someone already past the line.
 //
 // FIXED window, not sliding: the budget refills in one step 24h after the CURRENT
 // window's first grant. Said plainly because the two differ at the boundary.
@@ -509,6 +515,13 @@ async function handler(req, res) {
         // redeemed, per-player, zero reward) and immediately before the grant — so a
         // refusal or a typo can never spend a real household's budget. Only an attempt
         // that was actually about to be paid costs a unit.
+        //
+        // ⚠ KNOWN, ACCEPTED, AND SMALL: the unit is reserved here but the ledger insert
+        // below can still lose a UNIQUE(code, player_id) race and answer ALREADY_REDEEMED,
+        // in which case one unit was spent for no grant. That needs the same guest id to
+        // arrive twice simultaneously, and it costs a household 1 of 20. Refunding it
+        // would mean a compensating write on a failure path, which is a worse trade than
+        // the error it corrects.
         const ipHash = hashIp(req);
         if (auth.unproven === true) {
             const budget = await reserveIpBudget(sql, ipHash, code);
