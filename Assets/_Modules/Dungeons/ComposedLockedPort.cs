@@ -28,39 +28,79 @@ namespace DeNelle.Dungeons
     [DisallowMultipleComponent]
     public sealed class ComposedLockedPort : MonoBehaviour
     {
+        // =====================================================================
+        // WO-1588 - THIS CLASS OWNS ITS PLAYER COPY. THERE IS NO SECOND PRODUCER.
+        // ---------------------------------------------------------------------
+        // The string the owner photographed on 2026-09-07 (F8 seq 4699) read
+        // "Locked <em dash> need key" while the only string in this file was an
+        // ASCII hyphen. The producer was DungeonBaker.PlaceComposeLocks, which
+        // passed its OWN literal into Configure at BAKE time; the scene was then
+        // saved, so the em dash lives in the serialized _promptLocked of every
+        // baked dg_*.unity (proven: dg_sunken_vault.unity carries the bytes
+        // "Locked \xe2\x80\x94 need key"). WO-1333 retired em dashes from player
+        // copy - a second producer is exactly how one comes back.
+        //
+        // The scenes on disk CANNOT be re-baked (shared-tree corruption rule), so
+        // the fix has to be a runtime one: the consts below are what reaches the
+        // screen, the baked field is read ONLY to warn that a stale copy is still
+        // sitting in the scene. Never re-add a copy parameter to Configure.
+        // =====================================================================
+        /// <summary>The ONE locked-port prompt. ASCII hyphen, by WO-1333.</summary>
+        public const string PromptLocked = "Locked - need key";
+        /// <summary>The ONE unlock prompt.</summary>
+        public const string PromptOpen = "Unlock & pass";
+
         // [SerializeField] IS LOAD-BEARING: DungeonBaker.PlaceComposeLocks configures these at
         // BAKE time and the scene is then saved. As plain privates every value was discarded and
         // Update() bailed on `_hero == null` forever.
         [SerializeField] private string _keyId = "crypt-key";
-        [SerializeField] private string _promptLocked = "Locked";
-        [SerializeField] private string _promptOpen = "Unlock";
         [SerializeField] private Vector3 _target;
         [SerializeField] private float _faceY;
         [SerializeField] private Transform _hero;
         [SerializeField] private float _radius = 2.2f;
+
+        // LEGACY BAKED COPY - EVIDENCE ONLY, NEVER SHOWN. Kept serialized so the trace can say
+        // "a baked scene still carries the retired string", which is the only way to see the
+        // second producer from a device log. Deleting it would make that silent.
+        [SerializeField] private string _promptLocked = PromptLocked;
+        [SerializeField] private string _promptOpen = PromptOpen;
 
         private bool _inRange;
         private bool _porting;
         private bool _heroRebindTried;
 
         public void Configure(string keyId, Vector3 target, float faceY, Transform hero,
-            string promptLocked = "Locked - need key", string promptOpen = "Unlock & pass",
             float radius = 2.2f)
         {
             _keyId = string.IsNullOrEmpty(keyId) ? "key" : keyId;
             _target = target;
             _faceY = faceY;
             _hero = hero;
-            _promptLocked = promptLocked;
-            _promptOpen = promptOpen;
             _radius = Mathf.Max(0.5f, radius);
         }
 
         // WO-1112: same defect as ComposedKeyPickup — DungeonBaker.PlaceComposeLocks bakes this
         // as a bare GameObject with no Renderer, so the barrier the player is meant to READ as
         // "you need a key" was invisible; all they got was a floating prompt with no object.
-        // The plate is yawed to the serialized _faceY so it stands across the way it leads.
-        private void Start() => ComposedPropVisuals.BuildLock(gameObject, _faceY);
+        // WO-1588: that body used to be a flat cube plate - a white slab in the owner's frame,
+        // and the "moving wall" silhouette WO-1568 exists to retire. BuildLock now routes to the
+        // ONE door seam (CommonDungeonDoor.BuildDoorVisual) and hangs the keyhole on it.
+        // The door is yawed to the serialized _faceY so it stands across the way it leads.
+        private void Start()
+        {
+            ComposedPropVisuals.BuildLock(gameObject, _faceY);
+            FlowTrace.Step("DungeonDoor",
+                $"LockedPort '{name}' visual=ComposedPropVisuals.BuildLock->CommonDungeonDoor.BuildDoorVisual " +
+                $"yaw={_faceY:F0} promptProducer=ComposedLockedPort.PromptLocked='{PromptLocked}'");
+
+            // The baked copy is DEAD but still on disk. Say so, once, with both strings, so a
+            // device log names the stale scene instead of leaving the em dash unexplained.
+            if (!string.IsNullOrEmpty(_promptLocked) && _promptLocked != PromptLocked)
+                FlowTrace.Warn("DungeonDoor",
+                    $"LockedPort '{name}': baked _promptLocked='{_promptLocked}' differs from the owned copy " +
+                    $"'{PromptLocked}' - the baked string is IGNORED (WO-1588). The scene still carries the " +
+                    "retired text; it clears on the next bake, not at runtime.");
+        }
 
         /// <summary>Rebind ONCE off the Player tag if the serialized hero is missing, and say so.</summary>
         private bool TryRebindHero()
@@ -94,7 +134,8 @@ namespace DeNelle.Dungeons
             if (!_inRange || MobileInteractButton.Suppressed) return;
 
             bool hasKey = ComposedKeyBag.Has(_keyId);
-            string prompt = hasKey ? _promptOpen : _promptLocked;
+            // ONE producer (WO-1588): the consts this class owns, never the baked fields.
+            string prompt = hasKey ? PromptOpen : PromptLocked;
             MobileInteractButton.Request(this, prompt, () => TryPort(hasKey));
 
             var kb = Keyboard.current;
@@ -120,7 +161,7 @@ namespace DeNelle.Dungeons
             // Reuse the DungeonPortLink warp path (fade -> teleport -> face onward).
             var link = gameObject.GetComponent<DungeonPortLink>();
             if (link == null) link = gameObject.AddComponent<DungeonPortLink>();
-            link.Configure(_promptOpen, _target, _faceY, _hero, null, "locked", "unlocked", _radius);
+            link.Configure(PromptOpen, _target, _faceY, _hero, null, "locked", "unlocked", _radius);
             link.Port();
             _porting = false;
             FlowTrace.Step("ComposedKey", $"UNLOCKED port with '{_keyId}' -> {_target}");

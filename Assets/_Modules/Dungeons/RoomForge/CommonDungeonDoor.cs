@@ -394,8 +394,20 @@ namespace DeNelle.Dungeons.RoomForge
                 FlowTrace.Warn(Sys, $"URP/Lit shader unresolved - '{name}' keeps the default material.");
                 return null;
             }
+            // WO-1588: set _BaseColor BY NAME as well as through Material.color. The owner's
+            // locked-port frame showed an unpainted WHITE body with its emission intact, which is
+            // what `Material.color` looks like when it does not reach URP/Lit's _BaseColor on the
+            // resolved variant. That cause is UNPROVEN from this machine - the trace below is how
+            // the device settles it; the SetColor is correct either way and costs nothing.
             var mat = new Material(shader) { name = name };
             mat.color = c;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
+            // supported= splits "the property never applied" from "URP/Lit resolved by name but
+            // every variant was stripped from the Android build", which renders the fallback.
+            FlowTrace.Once(Sys, "makelit-material",
+                           $"MakeLit shader='{shader.name}' supported={shader.isSupported} " +
+                           $"hasBaseColor={mat.HasProperty("_BaseColor")} " +
+                           $"hasColor={mat.HasProperty("_Color")} want={c} readback={mat.color}");
             return mat;
         }
 

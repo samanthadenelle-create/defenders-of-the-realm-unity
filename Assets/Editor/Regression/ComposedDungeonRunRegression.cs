@@ -256,16 +256,42 @@ namespace DeNelle.Editor
             {
                 int parts = CountOccurrences(lockBody, "Prim(body");
                 if (parts < 2)
-                    failures.Add($"[prop-renderers] the lock body is down to {parts} part(s) - the plate plus a keyhole is what makes a lock read as 'this needs the key you are carrying' rather than as scenery");
+                    failures.Add($"[prop-renderers] the lock body is down to {parts} part(s) - the keyhole plus its bar is what makes a lock read as 'this needs the key you are carrying' rather than as a door someone shut");
                 else
-                    log.AppendLine($"OK: the lock body is built from {parts} parts (plate + keyhole)");
+                    log.AppendLine($"OK: the lock body adds {parts} lock parts (keyhole + bar) on top of the door");
+
+                // WO-1588: ONE DOOR BUILDER. The locked port used to hang its OWN flat cube -
+                // 1.6 x 2.1 x 0.16, the exact "moving wall" silhouette WO-1568 removed from
+                // CommonDungeonDoor - and the owner photographed it as a white slab with a
+                // floating yellow blob (F8 seq 4699). A second door builder is the defect, so
+                // pin the seam, not the shape.
+                if (lockBody.IndexOf("CommonDungeonDoor.BuildDoorVisual", StringComparison.Ordinal) < 0)
+                    failures.Add("[prop-renderers] BuildLock no longer routes through CommonDungeonDoor.BuildDoorVisual - the locked port is building a SECOND door, which is how it ended up as a flat slab while every other door in the dungeon had a frame, a lintel and a real leaf (WO-1588)");
+                else
+                    log.AppendLine("OK: the locked port is built by the ONE door seam (CommonDungeonDoor.BuildDoorVisual)");
+
+                if (lockBody.IndexOf("\"Plate\"", StringComparison.Ordinal) >= 0)
+                    failures.Add("[prop-renderers] the retired flat 'Plate' cube is back in BuildLock - that primitive IS the white slab of WO-1588");
+
+                // A teleport port seated in open floor must not leave a collider behind: the leaf
+                // blocker BuildDoorVisual attaches is right for a wall gap and wrong here, and no
+                // NavMesh knows about it.
+                if (lockBody.IndexOf("door.Blocker", StringComparison.Ordinal) < 0)
+                    failures.Add("[prop-renderers] BuildLock no longer strips the door leaf's blocker collider - the locked port is a teleport at a room seat, not a wall gap, so that collider is an unbaked solid box standing in open floor");
+                else
+                    log.AppendLine("OK: BuildLock strips the door leaf blocker (a port never blocks the floor)");
             }
             else
             {
                 failures.Add("[prop-renderers] ComposedPropVisuals.BuildLock is GONE - the invisible lock has no fix");
             }
 
-            if (vis.IndexOf("Destroy(col)", StringComparison.Ordinal) < 0)
+            // WO-1588: the strip moved into a DestroyNow(col) helper, because DungeonSceneCapture
+            // now drives BuildLock in EDIT mode and a plain Object.Destroy there logs an error and
+            // leaves the collider alive. Accept either spelling - the assertion is "the collider is
+            // stripped", never "one particular API is called".
+            if (vis.IndexOf("Destroy(col)", StringComparison.Ordinal) < 0 &&
+                vis.IndexOf("DestroyNow(col)", StringComparison.Ordinal) < 0)
                 failures.Add("[prop-renderers] ComposedPropVisuals no longer strips the primitive colliders. CreatePrimitive attaches one by default: on the lock plate it would physically block the hero, and on the key it would shadow the SphereCollider the pickup fires from - a visible key that can no longer be picked up is strictly worse than an invisible one");
             else
                 log.AppendLine("OK: ComposedPropVisuals strips every primitive collider (decoration never blocks or shadows a trigger)");

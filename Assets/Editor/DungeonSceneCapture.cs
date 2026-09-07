@@ -48,6 +48,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Dungeons;
 using DeNelle.Dungeons.RoomForge;
 
 namespace DeNelle.Editor
@@ -203,12 +204,20 @@ namespace DeNelle.Editor
         // INVOKE:
         //   powershell -File .\run-unity-method.ps1 `
         //     -Method DeNelle.Editor.DungeonSceneCapture.CaptureDoor -LogName dungeon-door-capture.log
-        // OUTPUT: Builds/dungeon-capture/door_closed.png, door_open.png
-        // MARKER: DUNGEON_DOOR_CAPTURE_OK <n>
+        // WO-1588 adds a THIRD frame: door_locked.png, the composed dungeon's LOCKED PORT, built
+        // through ComposedPropVisuals.BuildLock - which now routes to this same BuildDoorVisual
+        // seam instead of hanging its own flat cube. The locked port is the thing the owner
+        // photographed as a white slab, so the capture set must contain it or the next seat is
+        // back to judging it off a device frame.
+        //
+        // OUTPUT: Builds/dungeon-capture/door_closed.png, door_open.png, door_locked.png
+        // MARKER: DUNGEON_DOOR_CAPTURE_OK <n>   (3 after WO-1588; judge the marker, not a count
+        //         copied out of a doc - the number is printed from what was actually written)
         public static void CaptureDoor()
         {
             var log = new StringBuilder();
-            log.AppendLine("=== DungeonSceneCapture.CaptureDoor: WO-1568 framed doorway, closed + open ===");
+            log.AppendLine("=== DungeonSceneCapture.CaptureDoor: WO-1568 framed doorway (closed + open) " +
+                           "+ WO-1588 locked port ===");
             Directory.CreateDirectory(OutFolder);
 
             var blanks = new List<string>();
@@ -245,6 +254,30 @@ namespace DeNelle.Editor
 
                     UnityEngine.Object.DestroyImmediate(socket);
                 }
+
+                // -- WO-1588: the LOCKED PORT, through the builder the game runs ---------
+                // Driven by ComposedPropVisuals.BuildLock, not by BuildDoorVisual directly:
+                // the point of the frame is to prove the PORT reaches the door seam, and a
+                // capture that called the seam itself would photograph a door the port might
+                // no longer build. The host is a bare GameObject with no Renderer - exactly
+                // what DungeonBaker.PlaceComposeLocks bakes - so BuildLock's HasBody guard
+                // lets the body through, same as at runtime.
+                var lockHost = new GameObject("~LockedPort");
+                lockHost.transform.SetParent(stage.transform, false);
+                ComposedPropVisuals.BuildLock(lockHost, 0f);
+                log.AppendLine($"  [locked] body children={lockHost.transform.childCount} " +
+                               $"renderers={lockHost.GetComponentsInChildren<Renderer>(true).Length} " +
+                               $"colliders={lockHost.GetComponentsInChildren<Collider>(true).Length} " +
+                               "(colliders must be 0 - a teleport port never blocks the floor)");
+
+                string lockedPath = Path.Combine(OutFolder, "door_locked.png");
+                if (!RenderTo(lockedPath, camPos, camRot, 52f, out string lockedVerdict))
+                    blanks.Add($"{Path.GetFileName(lockedPath)} ({lockedVerdict})");
+                else
+                    written++;
+                log.AppendLine($"    -> door_locked.png  {lockedVerdict}");
+
+                UnityEngine.Object.DestroyImmediate(lockHost);
 
                 UnityEngine.Object.DestroyImmediate(stage);
             }

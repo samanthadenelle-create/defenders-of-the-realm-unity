@@ -1782,10 +1782,16 @@ namespace DeNelle.Editor.RoomForge
                 go.transform.SetParent(lockRoot.transform, false);
                 go.transform.position = from;
                 var comp = go.AddComponent(lockType);
+                // WO-1588: the baker NO LONGER AUTHORS THE PROMPT. It used to pass its own
+                // "Locked <em dash> need key" literal here, which Unity then SERIALIZED into
+                // every dg_*.unity - so the string the player read came from this file while
+                // ComposedLockedPort owned an ASCII-hyphen one nobody ever saw. Two producers,
+                // and the em dash WO-1333 retired came back through the one nobody was reading.
+                // ComposedLockedPort.PromptLocked / PromptOpen are now the only producers.
+                // Do not re-add a copy argument here; Configure takes five.
                 lockType.GetMethod("Configure")?.Invoke(comp, new object[]
                 {
-                    L.keyId ?? "key", to, face, hero,
-                    "Locked — need key", "Unlock & pass", 2.2f
+                    L.keyId ?? "key", to, face, hero, 2.2f
                 });
                 n++;
                 FlowTrace.Step(Sys, $"LOCK '{L.id}' key='{L.keyId}' {from} -> {to}");

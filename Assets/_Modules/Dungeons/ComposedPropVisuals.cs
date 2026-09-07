@@ -31,7 +31,8 @@
 // emissive so it reads inside an unlit dungeon even at low lantern oil.
 //
 // COLOURBLIND LAW: each prop is identified by its SHAPE and its MOTION -- a spinning
-// bobbing key silhouette, a flat door plate with a keyhole, a floor pad, a squat
+// bobbing key silhouette, a framed CLOSED DOOR wearing a keyhole (WO-1588; it was a
+// flat plate until the owner photographed it reading as a wall), a floor pad, a squat
 // pedestal. The tints reinforce; they never carry the meaning alone.
 //
 // Every primitive's own collider is STRIPPED. These are decoration hung under a live
@@ -40,12 +41,16 @@
 // =============================================================================
 
 using DeNelle.Core.Diagnostics;
+using DeNelle.Dungeons.RoomForge;
 using UnityEngine;
 
 namespace DeNelle.Dungeons
 {
     /// <summary>Builds the runtime visual body for composed-dungeon pillars.</summary>
-    internal static class ComposedPropVisuals
+    // WO-1588: PUBLIC (was internal) so DungeonSceneCapture can photograph the locked port
+    // through the same builder the game runs. Visibility only - same precedent as
+    // CommonDungeonDoor.OpenAngle in WO-1568. No member behaviour changed by this line.
+    public static class ComposedPropVisuals
     {
         private const string Sys = "ComposedProp";
 
@@ -111,9 +116,32 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
-        /// A LOCKED PORT plate: a dark iron slab standing in the doorway with a gold keyhole,
-        /// yawed to face the way the port leads. Static (a lock is furniture, not a pickup).
+        /// A LOCKED PORT: the SAME door the rest of the dungeon uses, closed, with a gold keyhole
+        /// hung on its face. Yawed to face the way the port leads. Static (a lock is furniture,
+        /// not a pickup).
         /// </summary>
+        // =====================================================================================
+        // WO-1588 - THIS USED TO BUILD ITS OWN FLAT CUBE, AND THAT WAS THE DEFECT.
+        // -------------------------------------------------------------------------------------
+        // The body was one `PrimitiveType.Cube` 1.6 x 2.1 x 0.16 - the identical "moving wall"
+        // silhouette WO-1568 removed from CommonDungeonDoor, still standing here because the
+        // locked port was a SECOND door builder. In the owner's frame (F8 seq 4699,
+        // logs/f8-inbox/device/SM02G4061955851/flag_20260907-143255_00.png) it reads as a plain
+        // WHITE slab with a floating yellow blob: no frame, no lintel, no relief, nothing that
+        // says "door", let alone "locked door".
+        //
+        // There is now ONE door builder in this module. This method composes:
+        //   CommonDungeonDoor.BuildDoorVisual(body, DoorGap/2, open:false)  <- the seam
+        //   + a keyhole and a bar, which are the only parts a LOCK adds to a door.
+        // The glow stays: the keyhole is emissive, and it is still the affordance that says
+        // "the key you are carrying goes here" - shape first, tint reinforcing (colourblind law).
+        //
+        // THE BLOCKER IS STRIPPED ON PURPOSE. BuildDoorVisual's leaf carries one BoxCollider,
+        // which is right for a door filling a wall gap. This port is a TELEPORT seated at a room
+        // seat, not a gap: the old plate deliberately had no collider, and adding one here would
+        // put a solid box in open floor that no NavMesh knows about. Same reasoning as the frame
+        // pieces, which BuildDoorVisual already strips.
+        // =====================================================================================
         public static void BuildLock(GameObject host, float faceYaw)
         {
             if (HasBody(host)) return;
@@ -122,22 +150,42 @@ namespace DeNelle.Dungeons
                 var body = NewBody(host);
                 body.transform.localRotation = Quaternion.Euler(0f, faceYaw, 0f);
 
-                var plate = Prim(body, "Plate", PrimitiveType.Cube, Hex(IronHex), emissiveMul: 0.25f);
-                plate.transform.localPosition = new Vector3(0f, 1.05f, 0f);
-                plate.transform.localScale = new Vector3(1.6f, 2.1f, 0.16f);
+                // THE ONE DOOR SEAM. Never build a second door here.
+                var door = CommonDungeonDoor.BuildDoorVisual(
+                    body.transform, RoomForgeCanon.DoorGap * 0.5f, open: false);
+
+                // A teleport port is not a wall gap - see the header. Strip the leaf's blocker.
+                // Read the flag BEFORE the strip: DestroyNow is DestroyImmediate in edit mode, so
+                // testing door.Blocker afterwards would report "there was none" in the very run
+                // (the capture) where it did the work.
+                bool hadBlocker = door.Blocker != null;
+                if (hadBlocker) DestroyNow(door.Blocker);
 
                 // Gold keyhole — reads at a glance as "this needs the key you are looking for",
-                // and deliberately matches the key's brass so the two are visibly a pair.
+                // and deliberately matches the key's brass so the two are visibly a pair. Seated
+                // on the closed leaf's face, in BODY space, so it does not depend on the leaf art's
+                // bounds (which differ between the KayKit leaf and the primitive fallback).
+                // Depth is DERIVED, never typed: BuildArtLeaf clamps the leaf's collider depth to
+                // RoomForgeCanon.WallThickness and seats the leaf centred, so the art leaf's front
+                // face sits at most half a wall thickness toward the viewer. Sit just proud of it.
+                // NOT PROVEN: the primitive fallback leaf is thinner (FallbackLeafThickness), so
+                // on that path the keyhole stands a little further off the face. door_locked.png
+                // is what settles it - do not re-tune this number without looking at that frame.
+                float faceZ = -((RoomForgeCanon.WallThickness * 0.5f) + 0.03f);
                 var hole = Prim(body, "Keyhole", PrimitiveType.Cylinder, Hex(GoldHex));
-                hole.transform.localPosition = new Vector3(0f, 1.05f, -0.12f);
+                hole.transform.localPosition = new Vector3(0f, 1.05f, faceZ);
                 hole.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
                 hole.transform.localScale = new Vector3(0.22f, 0.06f, 0.22f);
 
                 var bar = Prim(body, "Bar", PrimitiveType.Cube, Hex(GoldHex));
-                bar.transform.localPosition = new Vector3(0f, 0.80f, -0.12f);
+                bar.transform.localPosition = new Vector3(0f, 0.80f, faceZ);
                 bar.transform.localScale = new Vector3(0.10f, 0.34f, 0.06f);
 
-                FlowTrace.Step(Sys, $"LOCK body built on '{host.name}' @ {host.transform.position} yaw={faceYaw:F0} (was invisible before WO-1112)");
+                FlowTrace.Step(Sys, $"LOCK body built on '{host.name}' @ {host.transform.position} " +
+                                    $"yaw={faceYaw:F0} builder=CommonDungeonDoor.BuildDoorVisual " +
+                                    $"leaf='{door.LeafSource}' leafTop={door.LeafTop:0.##}m " +
+                                    $"blockerStripped={hadBlocker} " +
+                                    "(was a flat cube plate before WO-1588)");
             });
         }
 
@@ -214,10 +262,25 @@ namespace DeNelle.Dungeons
             // volume. Left on, the cube plate would block the hero and the key's own primitives
             // would shadow the SphereCollider the pickup fires from.
             var col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            if (col != null) DestroyNow(col);
             go.transform.SetParent(parent.transform, false);
             Paint(go, tint, emissiveMul);
             return go;
+        }
+
+        /// <summary>
+        /// Destroy that works in BOTH play mode and edit mode (CommonDungeonDoor.DestroyNow shape,
+        /// reused rather than invented twice). WO-1588: DungeonSceneCapture drives BuildLock in
+        /// EDIT mode to photograph the locked port, and a plain Object.Destroy there logs an error
+        /// and leaves the collider alive until the next frame that never comes.
+        /// </summary>
+        private static void DestroyNow(Object o)
+        {
+            if (o == null) return;
+#if UNITY_EDITOR
+            if (!Application.isPlaying) { Object.DestroyImmediate(o); return; }
+#endif
+            Object.Destroy(o);
         }
 
         private static void Paint(GameObject go, Color tint, float emissiveMul)
@@ -232,10 +295,27 @@ namespace DeNelle.Dungeons
                 FlowTrace.Warn(Sys, $"no URP/Lit or Standard shader for '{go.name}' - prop keeps the default material.");
                 return;
             }
+            // WO-1588 - WHY THIS SETS _BaseColor EXPLICITLY, AND WHY IT TRACES.
+            // The owner's frame shows a WHITE slab carrying a GOLD glow: the emission landed and
+            // the base colour did not, which is the signature of `Material.color` failing to
+            // reach URP/Lit's _BaseColor (Material.color only routes there when the shader
+            // variant that resolved actually declares a [MainColor]). That cause is NOT PROVEN -
+            // it cannot be, from this machine - so this does both: sets the property by name when
+            // it exists, and prints what the device actually resolved. Look for
+            // [Flow:ComposedProp] "paint" in a device log to settle it.
             var mat = new Material(shader) { color = tint };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
             mat.EnableKeyword("_EMISSION");
             mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             mat.SetColor("_EmissionColor", tint * emissiveMul);
+            // isSupported is the field that splits the two candidate causes: a property that never
+            // applied, versus URP/Lit found by name but with every variant STRIPPED from the
+            // Android build, so the renderer falls back to magenta/white. Without it a device log
+            // can read all-green and the slab is still white.
+            FlowTrace.Once(Sys, "paint-material",
+                                $"paint shader='{shader.name}' supported={shader.isSupported} " +
+                                $"hasBaseColor={mat.HasProperty("_BaseColor")} " +
+                                $"hasColor={mat.HasProperty("_Color")} want={tint} readback={mat.color}");
             r.sharedMaterial = mat;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
