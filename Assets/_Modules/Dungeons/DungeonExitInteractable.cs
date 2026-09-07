@@ -1034,13 +1034,31 @@ namespace DeNelle.Dungeons
             // (the rich ExitToVillage and the direct Castle load) pass through here, so the
             // stamp covers both. If the hero comes up nowhere near a portal the stamp simply
             // lapses - a missed flourish, never a stuck flag.
-            DeNelle.Village.PortalVFXController.NotifyReturnedThroughPortal();
+            //
+            // ⚠ WO-1596 MOVED THE STAMP OFF THIS LINE for the composed route. The window is
+            // ReturnWindowSeconds = 12s (PortalVFXController.cs:149, read at source 2026-09-07),
+            // and the rough-stone fanfare now sits between here and the load waiting for a human
+            // tap - so stamping HERE would let the window lapse while the player reads, and the
+            // materialise beat would silently stop playing. It is stamped inside RouteHomeNow
+            // instead, i.e. at the moment the fade actually starts, which is what the window was
+            // always measuring from. The RICH route below keeps the stamp on this path because it
+            // loads immediately.
+            //
             // WO-770.1: a RICH dungeon supplies ExitToVillage (banks the run's crafting scatter to
             // the larder + ends the run), so prefer it. A composed scene has no DungeonRuntimeState /
             // crafting inventory to bank, so it falls through to the direct Castle route below.
             if (_onLeave != null)
             {
-                FlowTrace.Step(Sys, "taking RETURN exit -> DungeonController.ExitToVillage (rich scene)");
+                DeNelle.Village.PortalVFXController.NotifyReturnedThroughPortal();
+                // ⚠ THE RICH COTTAGE ROUTE DOES NOT WAIT FOR THE FANFARE, and that is a KNOWN GAP,
+                // not an oversight: ExitToVillage grants and starts LoadSceneWithFade in the same
+                // synchronous body (DungeonController.cs:461-493), so a panel opened from the
+                // event would be destroyed with the scene. Making it wait means restructuring that
+                // UniTask around the dismiss, which is outside WO-1596's stated file region and
+                // needs a lead ruling. The device evidence (2026-09-07 09:44) is the COMPOSED exit,
+                // which is the route that ships.
+                FlowTrace.Step(Sys, "taking RETURN exit -> DungeonController.ExitToVillage (rich scene) " +
+                                    "- NOTE: the rough-stone fanfare does not gate this route (WO-1596 open gap)");
                 _onLeave.Invoke();
                 return;
             }
@@ -1059,6 +1077,7 @@ namespace DeNelle.Dungeons
             // scene has no DungeonRuntimeState") was TRUE ONLY BY ACCIDENT: the bootstrap did
             // create one, then dropped it on the floor in a local variable.
             var host = ComposedDungeonHost.Current;
+            RoughStoneFanfareVM fanfare = null;
             if (host == null)
             {
                 FlowTrace.Warn(Sys, "composed exit: no ComposedDungeonHost - this run CANNOT be paid out " +
@@ -1066,9 +1085,61 @@ namespace DeNelle.Dungeons
             }
             else
             {
-                DungeonController.GrantRunPayout(host.RunState, "composed exit");
+                // ── WO-1596: LISTEN WHILE THE ONE AUTHORITY PAYS ────────────────────────────
+                // The subscription is scoped to this single call and removed in a finally, so the
+                // exit can never accumulate handlers across runs and a payout raised by some other
+                // exit can never be mistaken for ours. We compose the VM here and RENDER after
+                // EndRun, because the panel must not be alive while the run record is torn down.
+                Action<string, int, bool> onGranted = (stoneId, score, firstEver) =>
+                {
+                    fanfare = RoughStoneFanfareVM.For(stoneId, score, firstEver);
+                };
+                DungeonController.RoughStoneGranted += onGranted;
+                try { DungeonController.GrantRunPayout(host.RunState, "composed exit"); }
+                finally { DungeonController.RoughStoneGranted -= onGranted; }
                 host.EndRun();
             }
+
+            // ── WO-1596: THE EXIT WAITS FOR THE MOMENT ──────────────────────────────────
+            // Owner, 2026-09-07: "that scren need to be a big moment fanfare full screen, the
+            // user needs to know that this is a BIG deal". The stone is ALREADY banked at this
+            // point - the panel owns nothing but the continuation, so the worst case is a missed
+            // flourish, never a lost reward.
+            //
+            // GUARDED, BECAUSE A DEAD EXIT IS WORSE THAN A MISSING BEAT. Show returns false when
+            // it refuses to open (arbiter rejection, unusable chrome) and Guard.Try returns false
+            // when it THROWS - both fall through to the immediate route below, which is exactly
+            // the pre-WO-1596 behaviour. There is no branch here that leaves the player in the
+            // dungeon with no way home.
+            if (fanfare != null)
+            {
+                bool owned = Guard.Try(Sys, "show rough stone fanfare",
+                    () => RoughStoneFanfarePanel.Show(fanfare, RouteHomeNow), false);
+                if (owned)
+                {
+                    FlowTrace.Step(Sys, "RETURN exit HELD for the rough-stone fanfare (" +
+                                        fanfare.TraceSummary + ") - the route runs on dismiss.");
+                    return;
+                }
+                FlowTrace.Warn(Sys, "rough-stone fanfare did not take the screen (" + fanfare.TraceSummary +
+                                    ") - routing home immediately so the exit is never dead. " +
+                                    "The stone is already banked either way.");
+            }
+
+            RouteHomeNow();
+        }
+
+        /// <summary>
+        /// The composed route home, extracted (WO-1596) so it can be handed to the fanfare as its
+        /// continuation. Called EXACTLY ONCE per leave: either directly, or by the panel's
+        /// consume-first dismiss - which nulls its pending action before invoking, so a re-entrant
+        /// close cannot start a second scene load.
+        /// </summary>
+        private void RouteHomeNow()
+        {
+            // WO-893 stamp lives HERE, not at the top of ExecuteLeave: its 12s window measures
+            // from the fade, and the fanfare may have held the exit for longer than that.
+            DeNelle.Village.PortalVFXController.NotifyReturnedThroughPortal();
 
             // Route HOME exactly like DungeonController.ExitToVillage - the merged
             // overworld hub (SceneRouter.Castle). A composed scene has no crafting

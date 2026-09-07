@@ -593,7 +593,34 @@ namespace DeNelle.Dungeons
                     $"run payout ({via}): 1x '{stoneId}' granted (polish score {score}; boss={st.BossDefeated}, " +
                     $"encounters={st.RandomEncounterCount}, chests={chests}, secrets={secrets}). " +
                     "Take it to the Jeweler.");
+
+                // WO-1596: TELL SOMEBODY. The grant above is still the ONE producer - this raises
+                // no reward and changes no state; it only announces that one was paid, so a
+                // presentation layer can put a full-screen moment in front of it. The listeners
+                // run in their OWN Guard on purpose: a throwing subscriber must not be reported
+                // as "grant dungeon run payout FAILED" when the stone is already banked.
+                RaiseRoughStoneGranted(stoneId, score, firstDungeonStone);
             });
+        }
+
+        /// <summary>
+        /// Raised immediately AFTER a rough stone has been banked and its polish score recorded -
+        /// never before, and never on a withheld/missed payout (WO-1596).
+        /// <para>Arguments: <c>(stoneId, polishScore, firstEver)</c>. <c>firstEver</c> is the flag
+        /// measured BEFORE the add, so it is true exactly once per player - the guaranteed
+        /// introduction the Jeweler and the Rings of Power hang off.</para>
+        /// <para>⛔ SUBSCRIBERS ARE PRESENTATION ONLY. This is an announcement, not a seam for a
+        /// second payout: a listener that grants anything re-creates the duplicate-authority bug
+        /// WO-1112 spent a day undoing. Subscribe, render, unsubscribe.</para>
+        /// </summary>
+        public static event System.Action<string, int, bool> RoughStoneGranted;
+
+        private static void RaiseRoughStoneGranted(string stoneId, int score, bool firstEver)
+        {
+            var handler = RoughStoneGranted;
+            if (handler == null) return;
+            DeNelle.Core.Diagnostics.Guard.Try("JewelPolish", "rough stone granted listeners",
+                () => handler(stoneId, score, firstEver));
         }
 
         /// <summary>Owner fallback tuning for subsequent completed eligible dungeons. The first
