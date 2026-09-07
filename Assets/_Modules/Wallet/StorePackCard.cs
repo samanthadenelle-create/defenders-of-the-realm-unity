@@ -340,8 +340,12 @@ namespace DeNelle.Wallet
         //  shortening, not an invisible label.
         // =====================================================================
 
-        /// <summary>Horizontal breathing room inside the pill, per side.</summary>
-        private const float PillPadXPx = 14f;
+        /// <summary>Horizontal breathing room inside the pill, per side.
+        /// <para>PUBLIC for the same reason <see cref="PillTextBoxPx"/> is: the pill's WIDTH budget
+        /// is arithmetic over this number, and WO-1409 shipped a truncated badge precisely because a
+        /// caller narrowed the pill without it. An oracle that re-typed 14 here could not fail when
+        /// this changed; one that reads it can (NightMarketNoWalletRegression).</para></summary>
+        public const float PillPadXPx = 14f;
         /// <summary>Vertical breathing room inside the pill, per side.</summary>
         private const float PillPadYPx = 5f;
         /// <summary>Letter-spacing on the pill face, in TMP's 1/100 em. Halved from 4 as part of

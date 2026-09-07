@@ -231,8 +231,15 @@ namespace DeNelle.Village
                     continue;
                 }
 
+                // WO-1438 (adjacent to WO-1439): this filtered on null + IsAlive ONLY, with no
+                // faction test — the same missing CONCEPT that had the raid garrison destroying
+                // the RaidSpire it exists to guard (10,687 captured
+                // `ProbeForStructure hit 'RaidSpire'` lines). Here it meant a raid guard's
+                // NearestStructure could be its OWN spire or wall, so the guard read as
+                // permanently "committed" beside friendly masonry and never went to meet the
+                // player's warband. One predicate, called — never re-implemented at the site.
                 var structure = col.GetComponentInParent<IDamageableStructure>();
-                if (structure != null && structure.IsAlive)
+                if (_enemy != null && CombatFactionRules.MayAttack(_enemy.SelfFaction, structure))
                 {
                     float sqr = (col.transform.position - pos).sqrMagnitude;
                     if (sqr < nearestStructSqr) { nearestStructSqr = sqr; _snapshot.NearestStructure = col.transform; }

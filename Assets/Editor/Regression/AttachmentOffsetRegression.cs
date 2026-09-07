@@ -373,6 +373,17 @@ namespace DeNelle.Editor.Regression
                 "the scene-load registry probe is gone - candidate A can no longer be discriminated");
             Require(failures, src, "Quaternion.Euler(fo.eulerRot)",
                 "the fullOverride seat no longer applies the authored Offset Forge rotation");
+            // WO-1215 (reopened 2026-09-03). The owner's bounce could not be RCA'd because no
+            // capture in the repo names the hero class wearing the shield, nor the values of the
+            // row the LIVE starter shield actually uses. Both facets are now emitted; pin them so
+            // the next bounce is diagnosable from the log alone.
+            Require(failures, src, "class='{wearerClassForTrace}'",
+                "the off-hand MEASURED line no longer names the WEARER's class - a shield bounce " +
+                "again cannot be tied to a hero, which is why WO-1215 sat UNPROVABLE");
+            Require(failures, src, "ShieldWithItemLogic[",
+                "the registry probe no longer prints the LIVE starter shield's row " +
+                "(knight_shield_starter -> ShieldWithItemLogic) - only the tripo shield_A row, " +
+                "which the default hero never wears");
         }
 
         // ⭐ RE-POINTED 2026-08-26 BY OWNER RULING — this case used to pin _staffGripEuler to

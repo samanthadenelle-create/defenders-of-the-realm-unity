@@ -1,6 +1,6 @@
 # WORK ORDER 1327 - The fireball bounces off every layer with zero energy loss, so it returns to the caster and never dies
 
-**Status:** READY TO IMPLEMENT - owner felt-test 2026-09-04 Fail (marked 2026-09-04T14:36:09, build 2026.09.04.354315) - "red glowing orb stayed at me". Bounced from Fixed. PRIOR STATUS: FIXED — clamped at the ONE spawn owner (`VFXManager`) and put on the tunables rail, because the offending prefab lives in a GITIGNORED pack; lights 25 → 4 per cast. Needs the owner's eyes to close: a spell's feel is invisible to every headless gate.
+**Status:** IMPLEMENTED - root cause PROVEN 2026-09-06: the VFX catalog was two ordinals off since an enum deletion (Cast_MuzzleFlash resolved to Env_SteamVent, 20.30 s on the caster); catalog regenerated + IsCastBeat derived from the enum; gated; awaiting Seeker capture `PlayOneshot(Cast_MuzzleFlash) lifetime<=1.25s`
 **Silo / Lane:** VFX / combat feel
 **Type:** EXISTING (shipped, misconfigured)
 **Minted:** 2026-09-02 (CLI) from a WO-1305 side-finding, corroborated by TWO owner captures.

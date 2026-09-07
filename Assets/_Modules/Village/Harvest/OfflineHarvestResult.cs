@@ -229,6 +229,42 @@ namespace DeNelle.Village
         /// <summary>True when at least one queue job finished inside this window.</summary>
         public bool HasJobNews => CompletedJobs.Count > 0;
 
+        // =====================================================================
+        //  WO-1408 -- WAS THE TOWN ATTACKED WHILE I WAS GONE?
+        // ---------------------------------------------------------------------
+        //  REPORT fields on the same terms as the collector/silo fields above:
+        //  OfflineHarvestService.AttachAttacks READS DefenseReportLedger for records
+        //  whose timestamp falls inside THIS window. It never appends, never marks
+        //  read, never scores -- the DEFENCE REPORT owns all of that, and the row
+        //  here is a DOOR onto it (PanelId.DefenseReport), never a second account.
+        //
+        //  (!) THESE ARE DELIBERATELY NOT TERMS OF HasSummaryContent. The reveal gate
+        //  is pinned at five axes by AwaySummaryReportRegression cases 1-4; an attack
+        //  row rides an ALREADY-revealed screen. A window whose only news is an attack
+        //  is a separate product question (the Defence Report has its own unread badge),
+        //  and widening the gate here would silently re-point four oracle cases.
+        //
+        //  ! AWAY ATTACKS ARE NOT PRODUCED TODAY. DefenseResolution's own doc says away
+        //  time becomes PRESSURE, not a simulated battle, and DefenseResolution.Live is
+        //  the only value any producer writes. So this is live-empty except for a fight
+        //  that ended inside the window edge -- built data-driven so it reports the day
+        //  in-absentia resolution lands, rather than needing a second pass then.
+        // =====================================================================
+
+        /// <summary>How many defence reports were written inside THIS away window.</summary>
+        public int AttackCount;
+
+        /// <summary>The newest breached crossing's display name ("North Gate"), or empty when
+        /// the defence held or the crossing was open ground rather than a named gate.</summary>
+        public string AttackBreachName = string.Empty;
+
+        /// <summary>The newest attack's one-word verdict ("HELD" / "BREACHED" / "OVERRUN"),
+        /// or empty when nothing attacked. ASCII, upper case -- it reaches a mobile font atlas.</summary>
+        public string AttackOutcomeWord = string.Empty;
+
+        /// <summary>True when the town was attacked inside this window.</summary>
+        public bool HasAttackNews => AttackCount > 0;
+
         /// <summary>True when a collector is holding something the player could collect.</summary>
         public bool HasCollectorNews => PendingCollectorTotal > 0;
 

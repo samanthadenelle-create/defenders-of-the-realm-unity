@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.HudModel;   // WO-1408 -- PostureSignals: the raid gate, army fill and Heartfire
 using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
@@ -35,6 +36,14 @@ namespace DeNelle.Village.UI
         private PanelHandle _panelHandle;
         private bool _open;
 
+        /// <summary>WO-1408 -- the optional rows and the ready line, decided by the pure VM.
+        /// Built once in <see cref="BuildUi"/>; the View never re-decides a destination.</summary>
+        private WelcomeBackDoorsVM _doors;
+
+        /// <summary>True once the FINISHED WHILE AWAY door row has been drawn, so
+        /// <see cref="AddCompletedJobRows"/> does not say the same thing a second time.</summary>
+        private bool _finishedRowDrawn;
+
         // -- Row geometry, shared by every row builder below --------------------
         /// <summary>Height of one data row in body-normalized units.</summary>
         private const float RowH = 0.095f;
@@ -55,7 +64,19 @@ namespace DeNelle.Village.UI
         /// the body also has to hold the haul + job rows), the rest collapse into one "+N MORE" line.</summary>
         private const int MaxCollectorRows = 4;
 
+        /// <summary>WO-1408 -- a DOOR row is more than twice a data row's height, and the number
+        /// is a measurement, not taste. The body band is 0.22..0.82 of a modal that is 0.84 of the
+        /// screen, so body height = 0.60 x 0.84 x screenH. At 1200px that is ~605px, and a
+        /// <see cref="RowH"/> row is ~57px -- under HALF the project's MinTouchPx (112). At 0.21
+        /// the plate is ~127px (at a 1080-tall screen, ~114px), and the door face fills it
+        /// EXACTLY (anchors 0..1), so the face clears the floor on both. A door the player cannot
+        /// reliably hit is the same cul-de-sac this ticket exists to close, one layer down.</summary>
+        private const float DoorRowH = 0.21f;
+
         private static bool HasRoom(float y) => y - RowH >= MinRowY;
+
+        /// <summary>Room for a DOOR row (taller than a data row -- see <see cref="DoorRowH"/>).</summary>
+        private static bool HasDoorRoom(float y) => y - DoorRowH >= MinRowY;
 
         public static void Show(OfflineHarvestResult result)
         {
@@ -128,6 +149,19 @@ namespace DeNelle.Village.UI
                 0.05f, 0.95f, bold: false);
             ElarionUiKit.FitSingleLine(summary);
 
+            // WO-1408 -- decide the doors BEFORE anything is drawn. The four live signals are read
+            // HERE, not at claim time, and deliberately: the reveal is deferred until a hub scene is
+            // active (OfflineHarvestService.TryShowPopup), so the posture rail's values at claim time
+            // can be a boot-default from a scene the player never saw. What the screen says about
+            // readiness must be true at the moment it is on screen.
+            Guard.Try("WelcomeBack", "decide the return-screen doors", () =>
+                _doors = WelcomeBackDoorsVM.Build(_result,
+                    PostureSignals.RaidCapable,
+                    PostureSignals.ArmyFillUsed, PostureSignals.ArmyFillCap,
+                    PostureSignals.HeartfireLit, PostureSignals.HeartfireMax));
+            if (_doors == null) _doors = new WelcomeBackDoorsVM();
+            FlowTrace.Step("WelcomeBack", _doors.TraceLine);
+
             float y = 0.82f;
             // WO-1434 -- the BANKED haul first (what already landed in the wallet during the
             // claim), then the one waiting-table. These are different facts and they are never
@@ -139,6 +173,11 @@ namespace DeNelle.Village.UI
             AddResourceRow(body, ref y, _result.Food, "STONE");
             AddResourceRow(body, ref y, _result.Iron, "IRON");
             AddResourceRow(body, ref y, _result.Wood, "WOOD");
+            // WO-1408 -- THE DOORS COME BEFORE THE INFORMATIONAL LINES, and that ordering is the
+            // fix, not a preference. The mend / collector / capped lines TELL; a door row LETS THE
+            // PLAYER GO SOMEWHERE. When the body runs out, the thing that must survive is the one
+            // that turns the return moment into a next move.
+            AddDoorRows(body, ref y);
             AddMendRows(body, ref y);
             AddCompletedJobRows(body, ref y);
             AddCollectorRow(body, ref y);
@@ -175,6 +214,11 @@ namespace DeNelle.Village.UI
             MedievalUiSkin.ApplyButton(collect, primary: true);
             var face = collect != null ? collect.targetGraphic as Image : null;
             if (face != null) face.type = Image.Type.Simple;
+
+            // WO-1408 -- the readiness line and its SMALL second door, beside COLLECT. Guarded:
+            // a failure here must cost the player the RAID shortcut, never the whole report.
+            Guard.Try("WelcomeBack", "seat the ready line and its door",
+                () => AddReadyBand(_modal.chrome.content.transform));
 
             _open = true;
             _panelHandle = PanelManager.Register("Welcome Back", Dismiss, () => _open);
@@ -233,6 +277,18 @@ namespace DeNelle.Village.UI
         {
             var jobs = _result != null ? _result.CompletedJobs : null;
             if (jobs == null || jobs.Count == 0) return;
+            // WO-1408 -- the FINISHED WHILE AWAY door row already named these jobs AND gave them
+            // somewhere to go. Drawing the per-job plates underneath it would print the same fact
+            // twice, which is exactly the six-lines-for-three-facts defect WO-1434 measured on the
+            // owner's device one screen up. The door row supersedes; this stays as the path for a
+            // window whose door row could not be seated.
+            if (_finishedRowDrawn)
+            {
+                FlowTrace.Step("WelcomeBack",
+                    $"per-job rows skipped: the FINISHED WHILE AWAY door row already names {jobs.Count} job(s) " +
+                    "and carries the Manage door.");
+                return;
+            }
 
             int rendered = 0;
             for (int i = 0; i < jobs.Count && rendered < MaxJobRows; i++)
@@ -375,6 +431,161 @@ namespace DeNelle.Village.UI
             AddMendLine(body, ref y, footer, ElarionUi.Gold);
         }
 
+        // =====================================================================
+        //  WO-1408 -- THE NEXT DOOR
+        // =====================================================================
+
+        /// <summary>
+        /// Draw the optional door rows the VM produced. Each is a plate carrying WHAT happened
+        /// and ONE button that goes there.
+        /// <para>⛔ ZERO ROWS IS THE NORMAL CASE and it must stay silent: no "nothing finished"
+        /// line, no greyed door. A row exists only when it is true (see WelcomeBackDoorsVM).</para>
+        /// </summary>
+        private void AddDoorRows(Transform body, ref float y)
+        {
+            if (_doors == null || _doors.Rows.Count == 0) return;
+            for (int i = 0; i < _doors.Rows.Count; i++)
+            {
+                var row = _doors.Rows[i];
+                if (row == null) continue;
+                if (!HasDoorRoom(y))
+                {
+                    FlowTrace.Warn("WelcomeBack",
+                        $"the '{row.Label}' door row had no room left in the report body -- the player is " +
+                        "returned to the HUD with no route to it, which is the WO-1408 defect recurring; " +
+                        "the fact itself is not lost (the panel it points at still holds it).");
+                    continue;
+                }
+                float rowTop = y;
+                var captured = row;
+                if (Guard.Try("WelcomeBack", "build the '" + row.Label + "' door row",
+                        () => BuildDoorRow(body, rowTop, captured))
+                    && captured.TraceKind == "finished")
+                    _finishedRowDrawn = true;
+                y -= DoorRowH + RowGap;
+            }
+        }
+
+        /// <summary>One door row: label + detail stacked on the left, the door on the right.</summary>
+        private void BuildDoorRow(Transform body, float top, WelcomeBackDoorRow row)
+        {
+            var plate = ElarionUiKit.AddImage(body, "Door_" + row.Label,
+                new Vector2(0.08f, top - DoorRowH), new Vector2(0.92f, top),
+                new Color(0.05f, 0.045f, 0.04f, 0.96f), rounded: false);
+
+            var label = ElarionUiKit.Label(plate.transform, row.Label, 0.52f, 0.94f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Left,
+                0.04f, 0.64f, bold: true);
+            ElarionUiKit.FitSingleLine(label);
+
+            if (!string.IsNullOrEmpty(row.Detail))
+            {
+                var detail = ElarionUiKit.Label(plate.transform, row.Detail, 0.06f, 0.48f,
+                    ElarionUi.Gold, ElarionUi.FontMicro, TextAlignmentOptions.Left,
+                    0.04f, 0.64f, bold: false);
+                ElarionUiKit.FitSingleLine(detail);
+            }
+
+            // The door fills the plate's FULL height (0..1) ON PURPOSE: DoorRowH was sized so that
+            // a full-height face clears MinTouchPx, and insetting it inside the plate gives the
+            // measurement straight back (0.88 of a 127px plate is 112px at 1200 and 100px at 1080
+            // -- the exact miss this constant exists to avoid).
+            var door = ElarionUiKit.BuildObsidianButton(plate.transform, row.DoorText,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.66f, 0f), new Vector2(0.97f, 1f),
+                () => CollectThenRoute(row));
+            MedievalUiSkin.ApplyButton(door, primary: false);
+            var doorFace = door != null ? door.targetGraphic as Image : null;
+            if (doorFace != null) doorFace.type = Image.Type.Simple;
+        }
+
+        /// <summary>
+        /// The one line above COLLECT plus the SMALL second door beside it. Seated in the shell's
+        /// bottom band (content space), NOT in the body: the body can already be full of rows and
+        /// the readiness line is chrome for the action, not another data row.
+        /// </summary>
+        private void AddReadyBand(Transform content)
+        {
+            if (_doors == null || !_doors.HasReadyDoor) return;
+
+            var line = ElarionUiKit.Label(content, _doors.ReadyLine, 0.168f, 0.215f,
+                ElarionUi.Gold, ElarionUi.FontMicro, TextAlignmentOptions.Center,
+                0.06f, 0.94f, bold: true);
+            ElarionUiKit.FitSingleLine(line);
+
+            // SAME y band as COLLECT (0.045..0.155), to its right. COLLECT keeps its exact
+            // geometry -- it is pinned by AwaySummaryReportRegression case 5 as the literal
+            // `new Vector2(0.63f, 0.155f), CollectAndDismiss`, and it stays the PRIMARY.
+            var raid = ElarionUiKit.BuildObsidianButton(content, _doors.ReadyDoorText,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.68f, 0.045f), new Vector2(0.90f, 0.155f),
+                CollectThenRouteReady);
+            MedievalUiSkin.ApplyButton(raid, primary: false);
+            var raidFace = raid != null ? raid.targetGraphic as Image : null;
+            if (raidFace != null) raidFace.type = Image.Type.Simple;
+        }
+
+        /// <summary>The ready door's tap: same one path as a row door, on the VM's ready target.</summary>
+        private void CollectThenRouteReady()
+        {
+            if (_doors == null) { Dismiss(); return; }
+            CollectThenRoute(new WelcomeBackDoorRow
+            {
+                Label = "READY",
+                DoorText = _doors.ReadyDoorText,
+                Door = _doors.ReadyDoor,
+                TraceKind = _doors.ReadyKind,
+            });
+        }
+
+        /// <summary>
+        /// ⭐ THE ONE PATH: collect first, then route. Never a second collect command and never a
+        /// second navigation mechanism.
+        ///
+        /// <para>⚠ THE ORDER LOOKS BACKWARDS AND IS NOT. The route is ARMED on
+        /// <see cref="PanelManager.SetReturnDoor"/> BEFORE the collect runs, because the collect
+        /// is not silent: ResourceCollectorService.CollectAll opens a HarvestOverflowModal batch
+        /// (ResourceCollectorService.cs:152/164), which registers with the SAME exclusive arbiter.
+        /// A synchronous PanelRouter.Open here would therefore swap that result modal off the
+        /// screen the instant it appeared -- the player would tap COLLECT-and-go and never see
+        /// what they collected.
+        ///
+        /// The return-door arbiter (WO-1400) already solves exactly this: a SWAP keeps the door,
+        /// and it FIRES on the first close-to-nothing after the WO-1393 grace. So the destination
+        /// opens when the harvest result is dismissed, and immediately when there was no result
+        /// modal to show. One mechanism, the existing one -- no coroutine, no "open next frame"
+        /// timer, no second navigation path to keep in sync.</para>
+        /// </summary>
+        private void CollectThenRoute(WelcomeBackDoorRow row)
+        {
+            if (row == null) { Dismiss(); return; }
+            var door = row.Door;
+            string context = row.DoorContext;
+            string what = row.DoorText;
+
+            PanelManager.SetReturnDoor("Welcome Back door: " + what, () =>
+            {
+                bool opened = string.IsNullOrEmpty(context)
+                    ? PanelRouter.Open(door)
+                    : PanelRouter.Open(door, context);
+                if (opened)
+                    FlowTrace.Step("WelcomeBack",
+                        $"door '{what}' routed to {door}" +
+                        (string.IsNullOrEmpty(context) ? "" : " tab '" + context + "'") + ".");
+                else
+                    FlowTrace.Fail("WelcomeBack",
+                        $"door '{what}' could NOT open {door} -- nothing is registered for that id, or the " +
+                        "open was refused; the player is left on the HUD, which is the WO-1408 defect.");
+            });
+
+            FlowTrace.Step("WelcomeBack",
+                $"door '{what}' tapped (kind={row.TraceKind}) -> collect first, then {door}" +
+                (string.IsNullOrEmpty(context) ? "" : " tab '" + context + "'") + ".");
+
+            Dismiss();        // arms the return door (close-to-nothing)
+            PerformCollect(); // may open the harvest-result modal, which KEEPS the armed door
+        }
+
         /// <summary>The shared two-column plate row: label left, value right. Extracted so a
         /// job row and a collector row cannot drift from a haul row.
         /// <para>WO-1434 - <paramref name="valueSplit"/> is where the value column starts (0..1
@@ -418,6 +629,18 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void CollectAndDismiss()
         {
+            PerformCollect();
+            Dismiss();
+        }
+
+        /// <summary>
+        /// WO-1408 -- the collect VERB on its own, extracted so the door faces perform the SAME
+        /// one command before they route. Deliberately NOT a second collect path: this is the
+        /// original body of <see cref="CollectAndDismiss"/>, which still calls it, so there is one
+        /// implementation and the button and the doors cannot drift.
+        /// </summary>
+        private void PerformCollect()
+        {
             // WO-1434 - THE SILO IS A REASON TO COLLECT TOO. This gate read HasCollectorNews
             // alone, so a town whose collectors were empty but whose Echo silo was FULL got a
             // COLLECT button that only dismissed -- and ResourceCollectorService.CollectAll is
@@ -445,9 +668,10 @@ namespace DeNelle.Village.UI
             }
             else
             {
-                FlowTrace.Step("Offline", "welcome-back COLLECT tapped with nothing pending -- dismiss only.");
+                FlowTrace.Step("Offline",
+                    "welcome-back COLLECT tapped with nothing pending -- no collect command raised. " +
+                    "(The CLOSE is the caller's: CollectAndDismiss dismisses, a door routes.)");
             }
-            Dismiss();
         }
 
         private string AwayText() => AwayTextFor(_result.AwaySeconds, _result.WasCapped);

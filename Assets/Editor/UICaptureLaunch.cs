@@ -1796,9 +1796,14 @@ namespace DeNelle.Editor
         public static void RunWelcomeBackCaptureHeadless()
         {
             Directory.CreateDirectory(OutDir);
-            int count = ForEachTarget("WelcomeBack", CaptureWelcomeBackOnce);
-            if (count == 3) Debug.Log("WELCOME_BACK_CAPTURE_OK 3/3");
-            else Debug.LogError("WELCOME_BACK_CAPTURE_FAIL " + count + "/3");
+            // WO-1408 -- TWO fixtures, because the ticket's acceptance is about a row that is only
+            // there when it is true. The first is the long-standing worst-case haul with NO doors
+            // (the "COLLECT alone, no empty rows" half); the second carries a finished job, a
+            // recorded attack and a ready army, so the doors and the ready band are on screen.
+            int count = ForEachTarget("WelcomeBack", CaptureWelcomeBackOnce) +
+                        ForEachTarget("WelcomeBackDoors", CaptureWelcomeBackDoorsOnce);
+            if (count == 6) Debug.Log("WELCOME_BACK_CAPTURE_OK 6/6");
+            else Debug.LogError("WELCOME_BACK_CAPTURE_FAIL " + count + "/6");
         }
 
         /// <summary>
@@ -1927,6 +1932,67 @@ namespace DeNelle.Editor
             {
                 if (popup != null) InvokePrivate(popup, "Dismiss");
                 else if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+            }
+        }
+
+        /// <summary>
+        /// WO-1408 -- the away report WITH its next doors: a finished job (Manage), a recorded
+        /// attack (Defence Report) and a ready army (RAID beside COLLECT).
+        /// <para>The posture rail is driven directly because the doors read LIVE signals at build
+        /// time, not claim time -- the reveal is deferred until a hub scene is active, so a claim
+        /// -time snapshot would be a boot default. Driving the real setters is what makes this a
+        /// capture of the production decision rather than of a replica.</para>
+        /// </summary>
+        private static int CaptureWelcomeBackDoorsOnce(CaptureTarget target)
+        {
+            WelcomeBackPopup popup = null;
+            GameObject canvas = null;
+            // The posture rail is STATIC and every later capture in this batchmode run reads it.
+            // Snapshot before, restore in the finally -- an un-restored "army 3/10, Heartfire 3/3"
+            // would silently re-pose every screen captured after this one.
+            bool wasRaidCapable = DeNelle.Core.HudModel.PostureSignals.RaidCapable;
+            var wasRaidLock = DeNelle.Core.HudModel.PostureSignals.RaidLock;
+            int wasArmyUsed = DeNelle.Core.HudModel.PostureSignals.ArmyFillUsed;
+            int wasArmyCap = DeNelle.Core.HudModel.PostureSignals.ArmyFillCap;
+            int wasHfLit = DeNelle.Core.HudModel.PostureSignals.HeartfireLit;
+            int wasHfMax = DeNelle.Core.HudModel.PostureSignals.HeartfireMax;
+            double wasHfNext = DeNelle.Core.HudModel.PostureSignals.HeartfireSecondsToNext;
+            try
+            {
+                DeNelle.Core.HudModel.PostureSignals.SetRaidCapable(true);
+                DeNelle.Core.HudModel.PostureSignals.SetArmyFill(3, 10);
+                DeNelle.Core.HudModel.PostureSignals.SetHeartfire(3, 3, 0.0);
+
+                var result = new OfflineHarvestResult
+                {
+                    AwaySeconds = 6.0 * 3600.0 + 12.0 * 60.0,
+                    Wood = 1200,
+                    Iron = 340,
+                    AetherCrystals = 12,
+                    AttackCount = 1,
+                    AttackBreachName = "North Gate",
+                    AttackOutcomeWord = "BREACHED",
+                };
+                result.CompletedJobs.Add(new OfflineHarvestResult.OfflineJobLine
+                { Verb = "TRAIN", Label = "Footman x1", FinishedUnixMs = 1_000.0 });
+                result.CompletedJobs.Add(new OfflineHarvestResult.OfflineJobLine
+                { Verb = "UPGRADE", Label = "Arcane Spire L2", FinishedUnixMs = 2_000.0 });
+
+                WelcomeBackPopup.Show(result);
+                popup = UnityEngine.Object.FindAnyObjectByType<WelcomeBackPopup>();
+                var modal = popup != null
+                    ? GetPrivateFieldValue(popup, "_modal") as ElarionUiKit.ObsidianModal : null;
+                canvas = modal != null ? modal.canvas : null;
+                return canvas != null && RenderCanvasToPng(canvas,
+                    OutDir + "WelcomeBackDoors_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            finally
+            {
+                if (popup != null) InvokePrivate(popup, "Dismiss");
+                else if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                DeNelle.Core.HudModel.PostureSignals.SetRaidCapable(wasRaidCapable, wasRaidLock);
+                DeNelle.Core.HudModel.PostureSignals.SetArmyFill(wasArmyUsed, wasArmyCap);
+                DeNelle.Core.HudModel.PostureSignals.SetHeartfire(wasHfLit, wasHfMax, wasHfNext);
             }
         }
 
@@ -4619,12 +4685,18 @@ namespace DeNelle.Editor
             if (label == null)
                 Debug.LogWarning("[UICap-HL] " + tag + ": 'OkChip' has neither a ChipIcon nor a label -- the " +
                                  "confirm verb renders nothing at all. REAL gap, not noise.");
-            else if (!string.Equals(label.text, "No", StringComparison.Ordinal))
-                Debug.LogWarning("[UICap-HL] " + tag + ": ASCII fallback path -- 'OkChip' label reads '" +
-                                 label.text + "', expected 'No' for the invalid verdict. The refusal would " +
+            // WO-1411 RE-POINTED 2026-09-06: the expected word was 'No', from the retired D17
+            // ASCII fallback. The rail's verbs are now kit WORD buttons (PLACE / ROTATE /
+            // CANCEL) and the confirm's blocked state flips its word to BLOCKED — so this is
+            // the same measurement (the refusal must be readable WITHOUT hue), pointed at the
+            // word the screen actually carries. The ChipIcon branch above is now unreachable on
+            // a built rail; it is left standing so a future glyph experiment is still measured.
+            else if (!string.Equals(label.text, "BLOCKED", StringComparison.Ordinal))
+                Debug.LogWarning("[UICap-HL] " + tag + ": worded-verb path -- 'OkChip' label reads '" +
+                                 label.text + "', expected 'BLOCKED' for the invalid verdict. The refusal would " +
                                  "rest on COLOUR ALONE, which the owner cannot see. REAL gap, not noise.");
             else
-                Debug.Log("[UICap-HL] " + tag + ": D17 invalid verdict OK (ASCII path: label 'No', " +
+                Debug.Log("[UICap-HL] " + tag + ": invalid verdict OK (worded path: label 'BLOCKED', " +
                           "confirm non-interactable).");
         }
 

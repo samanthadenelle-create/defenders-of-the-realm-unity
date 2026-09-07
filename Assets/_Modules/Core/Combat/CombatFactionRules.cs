@@ -53,8 +53,45 @@ namespace DeNelle.Core.Combat
         public static bool MayAttack(CombatFaction attacker, IDamageableStructure target)
         {
             if (target == null) return false;
-            if (!target.IsAlive) return false;
-            return target.Faction != attacker;
+            return Decide(attacker, target.Faction, target.IsAlive);
+        }
+
+        /// <summary>
+        /// WO-1438 — the same rule for the BODY contract. <see cref="IDamageable"/> and
+        /// <see cref="IDamageableStructure"/> are SEPARATE interfaces (neither extends the
+        /// other), so the attacker-side selectors that talk in <see cref="IDamageable"/> could
+        /// not reach the structure-shaped overload above and were re-implementing
+        /// <c>Faction != CombatFaction.Hostile</c> inline. <c>TroopController.NearestHostile</c>
+        /// stopped copying it today; <c>DeNelle.Pets.Pet</c>'s hunt loop is the REMAINING copy
+        /// and was deliberately not touched by WO-1438's lane — it is the next call site to
+        /// convert, not a claim that it already is.
+        ///
+        /// ⚠ OVERLOAD TRAP, stated so nobody has to rediscover it: passing a CONCRETE type that
+        /// implements BOTH interfaces makes this call ambiguous and will not compile. That is
+        /// deliberate and it is safe — a loud compile error, never a silent wrong answer. Call
+        /// it through an <see cref="IDamageable"/>- or <see cref="IDamageableStructure"/>-typed
+        /// reference, which is what every selection loop already holds.
+        ///
+        /// The dual implementers today are <c>WallSegment</c> and the other raid/village
+        /// structures that also carry a body contract; <c>Tower</c> is NOT one (it implements
+        /// only <see cref="IDamageableStructure"/>). Checked at the time of writing: every
+        /// existing call site — Enemy.cs:2090/2468/2545, EnemyBrain.cs:1607/1623/1630/1743/1774,
+        /// DragonBoss.cs:1602/1604, AwarenessSensor.cs:242 — passes an interface-typed variable
+        /// or a Tower, so none of them became ambiguous when this overload was added.
+        /// </summary>
+        public static bool MayAttack(CombatFaction attacker, IDamageable target)
+        {
+            if (target == null) return false;
+            return Decide(attacker, target.Faction, target.IsAlive);
+        }
+
+        /// <summary>
+        /// The ONE comparison, in one place, so the two overloads above can never drift apart.
+        /// </summary>
+        private static bool Decide(CombatFaction attacker, CombatFaction targetFaction, bool alive)
+        {
+            if (!alive) return false;
+            return targetFaction != attacker;
         }
 
         /// <summary>
@@ -65,6 +102,18 @@ namespace DeNelle.Core.Combat
         /// asserts on exactly this without caring about liveness.
         /// </summary>
         public static bool IsFriendlyFire(CombatFaction attacker, IDamageableStructure target)
+        {
+            return target != null && target.Faction == attacker;
+        }
+
+        /// <summary>
+        /// WO-1438 — the body-contract twin of <see cref="IsFriendlyFire(CombatFaction,IDamageableStructure)"/>.
+        /// Deliberately liveness-blind, exactly like it: a CLASSIFICATION question ("is this
+        /// thing on my side?") is not the same question as an ATTACKABILITY question, and a
+        /// selector that conflates them silently re-classifies a corpse. See the overload trap
+        /// noted on <see cref="MayAttack(CombatFaction,IDamageable)"/>.
+        /// </summary>
+        public static bool IsFriendlyFire(CombatFaction attacker, IDamageable target)
         {
             return target != null && target.Faction == attacker;
         }

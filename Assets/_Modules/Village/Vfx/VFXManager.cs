@@ -1733,17 +1733,78 @@ namespace DeNelle.Village
         /// </summary>
         private const float CAST_BEAT_MAX_SECONDS = 1.25f;
 
-        /// <summary>True when <paramref name="type"/> is a Cast_* wind-up beat (see the
-        /// VFXType naming convention: Category_Descriptor).</summary>
-        private static bool IsCastBeat(VFXType type)
-            => type == VFXType.Cast_MageCharge
-            || type == VFXType.Cast_FireCharge
-            || type == VFXType.Cast_KnightSlam
-            || type == VFXType.Cast_RangerDraw
-            || type == VFXType.Cast_Heal
-            || type == VFXType.Cast_FrostNova
-            || type == VFXType.Cast_NecromancerSummon
-            || type == VFXType.Cast_EnemyCaster;
+        // ─────────────────────────────────────────────────────────────────────
+        // ── WO-1327 REOPEN — THE BEAT THAT STAYED AT THE CASTER ──────────────
+        //
+        // ⛔ THIS SET IS DERIVED FROM THE ENUM NAMES. DO NOT REPLACE IT WITH A
+        //    HAND-WRITTEN LIST AGAIN — the hand-written list is the defect.
+        //
+        // WHAT THE DEVICE CAPTURE PROVED (Logs/device/endstate-window-20260904.log,
+        // owner's own 2026-09-04 session, ONE mage.fireball cast at 09:35:43.89):
+        //
+        //   [Flow:VFXManager] PlayOneshot('Cast_FireCharge')  at (5000.19, 1.28, 4994.75)
+        //                     parent='<none, world-space>' lifetime=1.25s.
+        //   [Flow:VFXManager] PlayOneshot('Cast_MuzzleFlash') at (5000.19, 1.18, 4994.75)
+        //                     parent='<none, world-space>' lifetime=20.30s.
+        //   [Flow:HeroMana]   cast CHARGED slot=Q 'Fireball' ... cd=0.60s
+        //
+        // Two beats, the SAME cast, the SAME caster position (the FireSpellOrb origin),
+        // both unparented in world space. One was clamped to CAST_BEAT_MAX_SECONDS; the
+        // other stood at the caster for 20.30 s while the cooldown that re-spawns it is
+        // 0.60 s — and it is fired again by EVERY tower shot (TowerCombat.cs:376) and
+        // every ranged release (RangedAttackVFX.PlayReleaseFlash). The same capture shows
+        // live systems climbing 12 → 56 (particles~1006).
+        //
+        // ⛔ THE ROOT IS NOT IN THIS FILE — IT IS A STALE VFXCatalog.asset, AND THE CLAMP
+        //    BELOW IS ONLY THE BLAST DOOR. Proven from tree bytes, arithmetic exact:
+        //      • 0b18cccc5 (2026-08-20) DELETED two VFXType members (Aura_PetLevel1/3 with
+        //        the pet-aura system). VFXCatalog.asset was last regenerated e65b549ff
+        //        (2026-08-16), four days EARLIER, and stores rows by ORDINAL.
+        //      • So every ordinal past the deletion point is off by two. VFXType.
+        //        Cast_MuzzleFlash == 81, and catalog row 81 holds Env_SteamVent.prefab.
+        //      • Env_SteamVent.prefab measures lengthInSec 10.0 + startLifetime 10.0 =
+        //        20.0 s; DetectDuration + 0.3 = 20.30 s — the log's number, to the digit.
+        //    The muzzle flash was never playing a muzzle flash. It was planting a TWENTY-
+        //    SECOND STEAM COLUMN on the caster, several times a second. Nothing in code
+        //    could catch that: the reference resolves, the prefab loads, particles play.
+        //    FIX AT SOURCE: Defenders/VFX/Generate VFX Catalog (Unity, out of this silo).
+        //    PINNED so it cannot silently return: VfxLoopFlagRegression's enum-alignment
+        //    case, which fails today on this exact row.
+        //
+        // ⚠ WHAT IS *NOT* PROVEN, stated plainly (CLAUDE.md §11B): that this is the exact
+        //    "red glowing orb stayed at me" the owner felt on build 2026.09.04.354315.
+        //    Only her eyes close that. The 09-04 log's own build string was not captured;
+        //    what IS provable about her build is that IsCastBeat has not changed since
+        //    ba5b7fad0 (09-02) and the catalog since e65b549ff (08-16), so ANY 09-04 build
+        //    carries both. Also proven: the WO-1327 bounce clamp is not even in evidence on
+        //    the path she plays — the capture reads "[Flow:Ranged] FireSpellOrb -> ...
+        //    prefab=<pooled-vfx> hovl=<none>" and "[Flow:Projectile] Launch dist=9.5
+        //    speed=24.0 ... timeout=2.2s", a pooled mover that self-terminates, with no
+        //    collision-clamp / marquee line anywhere in the session.
+        //
+        /// <summary>
+        /// True when <paramref name="type"/> is a <c>Cast_*</c> wind-up beat. Membership is
+        /// DERIVED from the <see cref="VFXType"/> naming convention (Category_Descriptor,
+        /// VFXType.cs:12), computed once, so a newly added <c>Cast_*</c> member is bounded
+        /// from its first cast instead of waiting for someone to remember this file.
+        /// </summary>
+        public static bool IsCastBeatType(VFXType type) => _castBeatTypes.Contains(type);
+
+        private static bool IsCastBeat(VFXType type) => IsCastBeatType(type);
+
+        private static readonly HashSet<VFXType> _castBeatTypes = BuildCastBeatSet();
+
+        private static HashSet<VFXType> BuildCastBeatSet()
+        {
+            var set = new HashSet<VFXType>();
+            foreach (VFXType t in System.Enum.GetValues(typeof(VFXType)))
+            {
+                // Ordinal, culture-invariant: this is an identifier prefix, never display text.
+                if (t.ToString().StartsWith("Cast_", System.StringComparison.Ordinal))
+                    set.Add(t);
+            }
+            return set;
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         // ── PROCEDURAL FALLBACK ───────────────────────────────────────────────

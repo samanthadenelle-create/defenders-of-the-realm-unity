@@ -1323,8 +1323,21 @@ namespace DeNelle.Wallet
                 string price = StorePriceMajor(pack);
                 if (!string.IsNullOrEmpty(price) && price.IndexOf('$') >= 0) anchors++;
             }
+            // ⛔ WO-1409 — `banner=` READS THE LABEL, IT DOES NOT RESTATE THE PREDICATE. It used to
+            // print `walletless` a second time, so the line said "a banner is owed" and was read as
+            // "a banner is on screen" — and those were NOT the same fact: the 09-05 23:56 capture
+            // is walletless with no banner drawn. A trace that can only agree with itself proves
+            // nothing (§11B), so this asks the rendered TMP_Text what it actually says.
+            bool bannerDrawn = _balanceLabel != null && _balanceLabel.text != null &&
+                               _balanceLabel.text.IndexOf(StoreStrings.WalletlessBrowsingBannerProbe,
+                                                          StringComparison.OrdinalIgnoreCase) >= 0;
             FlowTrace.Step("Store", "shelf wallet=" + (!walletless).ToString().ToLowerInvariant() +
-                                    " anchors=" + anchors + " banner=" + walletless.ToString().ToLowerInvariant());
+                                    " anchors=" + anchors + " banner=" + bannerDrawn.ToString().ToLowerInvariant());
+            if (walletless && !bannerDrawn)
+                FlowTrace.Warn("Store", "shelf: browsing WITHOUT a signing wallet and the header line does " +
+                                        "not carry the connect sentence - the player is shown nine USD anchors " +
+                                        "and never told why they cannot buy (WO-1409). Header reads: '" +
+                                        (_balanceLabel == null ? "<no label>" : _balanceLabel.text) + "'.");
         }
 
         // =====================================================================
@@ -1441,6 +1454,26 @@ namespace DeNelle.Wallet
                 FlowTrace.Step("Store", $"Render: built {built} pack card(s) across the four bands.");
 
             BuildPiShelfNoticeIfNothingIsBuyable();
+
+            // ⛔ WO-1409 — THE HEADER LINE IS A REPAINT, NOT A LIFECYCLE SIDE EFFECT, and that is
+            // the whole defect. `_balanceLabel` is born EMPTY (BuildHeader below) and its ONLY
+            // writer was RenderBalanceLabel, reached exclusively through RefreshWalletMirror() in
+            // OnEnable. So every path that draws this store WITHOUT OnEnable drew a store whose
+            // top-left line was the empty string — and the walletless banner
+            // ("Connect a wallet to buy - prices shown in USD") is one of that method's branches.
+            // Measured on Builds/ui-capture/NightMarket_2670x1200.png (09-05 23:56, i.e. AFTER the
+            // copy landed): nine USD anchors, no banner. The headless capture harness composes the
+            // panel by Awake -> EnsureBuilt -> Render (UICaptureLaunch.cs:3688-3730) and never
+            // enables the object, which is exactly such a path — and so is any future host that
+            // re-renders a store that is already enabled.
+            //
+            // The call is idempotent and costs nothing: RenderBalanceLabel returns on its first
+            // line when the label is absent (see its null guard) and only assigns a string
+            // otherwise. It does NOT read the wallet — the async mirror still owns that — so this
+            // cannot slow the render or reach the network. It simply makes "what the header says"
+            // a function of state that every draw evaluates, instead of a value one hook happened
+            // to leave behind.
+            RenderBalanceLabel();
 
             FocusPack(ResolveFocusSku(), scale, animate: false);
         }
@@ -2069,8 +2102,8 @@ namespace DeNelle.Wallet
             // adjustment rather than a second card implementation.
             if (handle.StateLabel != null && handle.StateLabel.transform.parent is RectTransform badgeRect)
             {
-                badgeRect.anchorMin = new Vector2(0.04f, 1f);
-                badgeRect.anchorMax = new Vector2(0.44f, 1f);
+                badgeRect.anchorMin = new Vector2(OneWordBadgeX0, 1f);
+                badgeRect.anchorMax = new Vector2(OneWordBadgeX1, 1f);
             }
 
             _cardHandles[sku] = handle;
@@ -3115,7 +3148,9 @@ namespace DeNelle.Wallet
                     // "only a durable identity exists" remain two different facts and each still
                     // gets its own SENTENCE.
                     if (WalletlessBrowsing)
-                        _balanceLabel.text = "Connect a wallet to buy - prices shown in USD";
+                        // WO-1409: ONE source for this sentence (StoreStrings), because the trace
+                        // and the oracle both probe for it. See WalletlessBrowsingBanner's header.
+                        _balanceLabel.text = StoreStrings.WalletlessBrowsingBanner;
                     else if (_wallet != null && _wallet.Account.IsValid)
                         _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundAddress);
                     else if (PurchaseGate.HasDurableIdentity)
@@ -3227,8 +3262,59 @@ namespace DeNelle.Wallet
             items.Add(amount.ToString("N0") + " " + label);
         }
 
-        /// <summary>WO-1409: merchandising badges are one readable word, never art-covering copy.</summary>
-        private static string OneWordBadge(string badge)
+        // =====================================================================
+        //  ⭐ WO-1409 — THE ONE-WORD BADGE'S x BAND, DERIVED, NOT PICKED.
+        // ---------------------------------------------------------------------
+        //  ⛔ 0.04..0.44 WAS WRONG AND IT SHIPPED A TRUNCATED BADGE. The first
+        //  WO-1409 pass moved the pill left (right, and kept) but SHRANK it from
+        //  the authored 0.70 to 0.40 without re-deriving the fit budget, and
+        //  Builds/ui-capture/NightMarket_2670x1200.png (09-05 23:56) shows the
+        //  result: builders-hour's badge reads "FIR..." while starters-hand's
+        //  "BEST" fits. That is not a font that shrank -- FontBadge is 30 and
+        //  ElarionUi.FontFloorMobile is ALSO 30, so FitSingleLine has nowhere to
+        //  go and ellipsises instead. Width is the only free variable here.
+        //
+        //  THE ARITHMETIC, in StorePackCard's own units so the two files agree:
+        //    * packs.json authors exactly three storeBadge values today --
+        //      "BEST VALUE", "BEST START", "FIRST BUY" -- so OneWordBadge below
+        //      can only ever emit BEST (4) or FIRST (5). FIVE GLYPHS is the case
+        //      to size for; a longer one-word badge would need this redone.
+        //    * StorePackCard's measured budget: "BEST VALUE" (10 glyphs) is 213 px
+        //      bold at FontBadge 30 with PillLetterSpacing 2 => ~21.3 px/glyph, so
+        //      "FIRST" measures ~107 px.
+        //    * The pill's text box is the pill less PillPadXPx (14) per side, i.e.
+        //      width - 28. (Check it against the authored numbers: 0.70 of a 375 px
+        //      card = 262 px pill -> a 234 px box, which is the figure written in
+        //      StorePackCard's own header.)
+        //    * Carry the same 10% margin that budget carries: a 118 px box, so a
+        //      146 px pill.
+        //    * Worst case is the NARROWEST card the shelf permits -- not the
+        //      narrowest one shipped today -- which is StorePackCard.MinCardWidthPx
+        //      (300). 146 / 300 = 0.487, rounded up to 0.50.
+        //  Hence 0.04 .. 0.54: still hard left, still clear of the art's focal and
+        //  right edge (46% of the card top is untouched), and 14% of margin at the
+        //  floor instead of a guaranteed ellipsis.
+        //
+        //  ⚠ THE PILL SITS OVER THE ART WELL BY CONSTRUCTION and that is NOT what
+        //  this band fixes. StorePackCard.BuildPill anchors to the CARD top and the
+        //  well occupies it, so "badge vs art" cannot be driven to zero from here --
+        //  only bounded. NightMarketNoWalletRegression asserts the bound (left half
+        //  of the well) rather than an overlap-free card the shared template cannot
+        //  produce; a card redesign is the only thing that would, and it is not this
+        //  work order's lane.
+        // =====================================================================
+
+        /// <summary>Left edge of the one-word badge, as a fraction of the card. See the block above.
+        /// <para>PUBLIC so the oracle asserts THE SHIPPED NUMBER rather than a copy of it.</para></summary>
+        public const float OneWordBadgeX0 = 0.04f;
+        /// <summary>Right edge of the one-word badge. DERIVED (see the block above), never picked.</summary>
+        public const float OneWordBadgeX1 = 0.54f;
+
+        /// <summary>WO-1409: merchandising badges are one readable word, never art-covering copy.
+        /// <para>PUBLIC so NightMarketNoWalletRegression measures THE WORD THIS METHOD EMITS at the
+        /// real font, instead of re-implementing the rule and proving only that its own copy agrees
+        /// with itself.</para></summary>
+        public static string OneWordBadge(string badge)
         {
             if (string.IsNullOrWhiteSpace(badge)) return string.Empty;
             if (badge.IndexOf("BEST", StringComparison.OrdinalIgnoreCase) >= 0) return "BEST";

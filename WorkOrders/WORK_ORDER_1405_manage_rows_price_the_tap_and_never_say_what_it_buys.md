@@ -1,6 +1,6 @@
 # WO-1405: every Manage row prices the tap and never says what it buys; `grid 5, 16` is a developer coordinate on a player screen
 
-**Status:** READY TO IMPLEMENT - PARTIAL: the Buildings benefit line is folded into WO-1418 (Codex batch, BATCH_STATE PART 8); what stays here is the DEFENSE half (`grid x, y` -> display name + compass side; `"grid " + placed.cellX` is pinned by BuildCollectionPlayerRegression.cs:124). Do not dispatch the Buildings half twice. *(was: minted 2026-09-05 from the merged UI review)*
+**Status:** IMPLEMENTED - Defense half landed 2026-09-06 (CompassSideOf, ManageRowBenefitRegression); gated; capture + Seeker still owed; Buildings/Troops half landed earlier in 3c677027e/949e848a0
 
 ## Evidence
 - Device frames (build 355952) - SEEN (`REVIEW_MERGED.md` row 4): `docs/qa/UI_REVIEW_2026-09-05/04-manage-defense.png`

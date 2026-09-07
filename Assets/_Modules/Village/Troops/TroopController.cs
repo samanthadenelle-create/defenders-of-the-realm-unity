@@ -133,6 +133,28 @@ namespace DeNelle.Village
         // Reused by TraceBreachProbe so the once-per-structure-kill path query allocates once.
         private NavMeshPath _breachPath;
 
+        // ── WO-1438 route gate (the FIX, not the trace) ──────────────────────
+        // How often a troop may ask the NavMesh whether the defender it can SEE is a defender it
+        // can REACH. NearestHostile runs 5x/s per troop; this is the only non-free query in it.
+        private const float RouteCheckInterval = 0.5f;
+        // A PathComplete longer than this multiple of the straight line is a detour round the
+        // wall ring, not a route through the breach — and a detour is precisely the case the
+        // gate exists to refuse, because steering is straight-line Move(displacement): a route
+        // that has to go round is a route this troop cannot walk. Calibrated on the 09-06
+        // capture, whose worst real route measured 8.1/7.1 = 1.14x (the rest within 1.01x), so
+        // 1.5 leaves headroom over every measured route and still rejects a lap of the ring.
+        private const float RouteDetourFactor = 1.5f;
+        private NavMeshPath _routePath;
+        private float _routeCheckAt;
+        private bool _routeToUnitOpen;
+        private string _routeStatus = "not-asked";
+        private bool _lastPreferUnit;
+        // Sample radii for the repaired BREACH probe. Tight where the wall stood (roughly the
+        // agent radius — a hit at 1.5 m is not "the breach is walkable"), loose at the target,
+        // whose WorldPosition is a body/structure centre rather than a foot position.
+        private const float BreachSampleRadius = 0.6f;
+        private const float ReplacementSampleRadius = 2.5f;
+
         // Reusable overlap buffer — avoids per-frame GC (OverlapSphereNonAlloc).
         // WO-853 raised this from 48: the hunt mask now includes the Structure layer, so a
         // sweep inside a raid base returns every wall panel in the 14 m scan radius as well as
@@ -346,7 +368,17 @@ namespace DeNelle.Village
         /// than left as a comment, which is what lets a Hostile garrison tell the player's
         /// troops apart from its own structures at the one shared predicate.
         /// </summary>
-        CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;
+        CombatFaction IDamageableStructure.Faction => SelfFaction;
+
+        /// <summary>
+        /// WO-1438 — this troop's own side, declared ONCE. Every faction question in this file
+        /// (the explicit interface member above, the selection filter in
+        /// <see cref="NearestHostile"/>, the struct/unit classifier) reads THIS and hands it to
+        /// <see cref="CombatFactionRules"/>. Before today two of those sites compared against a
+        /// hardcoded <c>CombatFaction.Hostile</c> inline — the copied-predicate shape
+        /// CombatFactionRules' own header forbids.
+        /// </summary>
+        private const CombatFaction SelfFaction = CombatFaction.Friendly;
 
         /// <summary>
         /// Wires this troop from a <see cref="TroopDef"/> + spawn position. Called by
@@ -569,7 +601,11 @@ namespace DeNelle.Village
                         $"dist={wonDist:F1}m | runnerUpOtherKind='{DescribeTarget(_lastRunnerUp)}' " +
                         $"dist={_lastRunnerUpDist:F1}m | sweep colliders={_lastOverlapCount} " +
                         $"accepted[unit={_lastAcceptedUnits},struct={_lastAcceptedStructs}] rejected={_lastRejected} " +
-                        $"radius={_huntScanRadius:F1}m preferStruct={_preferStructures}");
+                        $"radius={_huntScanRadius:F1}m preferStruct={_preferStructures} " +
+                        // WO-1438 THE GATE'S OWN VERDICT. preferUnit=False with route=PathPartial
+                        // beside a struct win is the wall still standing; preferUnit=True the tick
+                        // after a segment dies is the breach being taken. Both are one read.
+                        $"| preferUnit={_lastPreferUnit} route={_routeStatus}");
 
                     // WO-1438 THE BREACH LINE. When the thing that just died was a STRUCTURE,
                     // the player expects a hole to have opened and the warband to pour through
@@ -726,17 +762,12 @@ namespace DeNelle.Village
         {
             int count = Physics.OverlapSphereNonAlloc(
                 transform.position, _huntScanRadius, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
-            IDamageable bestUnit = null;
-            IDamageable bestStruct = null;
-            float bestUnitSqr = float.MaxValue;
-            float bestStructSqr = float.MaxValue;
-
-            // WO-1438 trace accounting. NOTE the shape of the loop below, because it is the
-            // whole ticket: when _preferStructures is FALSE (every role except "siege"), a
-            // hostile STRUCTURE falls through to the `else` and competes in the SAME
-            // nearest-wins bucket as a live defender. A wall panel 3 m away therefore beats a
-            // garrison orc 11 m away, and when that panel dies the next-nearest thing is the
-            // panel beside it. These counters make that visible instead of inferable.
+            // WO-1438 trace accounting. THE SHAPE OF THIS LOOP WAS THE TICKET: when
+            // _preferStructures was FALSE (every role except "siege") a hostile STRUCTURE fell
+            // through to the same nearest-wins `else` as a live defender, so a wall panel 3 m
+            // away beat a garrison orc 11 m away and, when it died, the next-nearest thing was
+            // the panel beside it. The loop now only MEASURES; the pick happens once, below,
+            // against separated buckets.
             _lastOverlapCount = count;
             _lastAcceptedUnits = 0;
             _lastAcceptedStructs = 0;
@@ -751,7 +782,9 @@ namespace DeNelle.Village
                 var col = _overlap[i];
                 if (col == null) { _lastRejected++; continue; }
                 var dmg = col.GetComponentInParent<IDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) { _lastRejected++; continue; }
+                // WO-1439's ONE predicate, not a fourth hand-copy of `Faction != Hostile`.
+                // MayAttack folds in the null + alive + different-faction checks.
+                if (dmg == null || !CombatFactionRules.MayAttack(SelfFaction, dmg)) { _lastRejected++; continue; }
                 float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
 
                 if (IsHostileStructure(dmg))
@@ -764,27 +797,72 @@ namespace DeNelle.Village
                     _lastAcceptedUnits++;
                     if (sqr < nearestUnitAnySqr) { nearestUnitAnySqr = sqr; nearestUnitAny = dmg; }
                 }
-
-                if (_preferStructures && IsHostileStructure(dmg))
-                {
-                    if (sqr < bestStructSqr)
-                    {
-                        bestStructSqr = sqr;
-                        bestStruct = dmg;
-                    }
-                }
-                else if (sqr < bestUnitSqr)
-                {
-                    bestUnitSqr = sqr;
-                    bestUnit = dmg;
-                }
             }
 
-            // Record the runner-up of the OTHER kind from whatever is about to win, plus the
-            // nearest hostile of any kind (for the idle/rally line).
-            bool structWins = _preferStructures && bestStruct != null;
-            IDamageable runnerUp = structWins ? nearestUnitAny : nearestStructAny;
-            float runnerUpSqr = structWins ? nearestUnitAnySqr : nearestStructAnySqr;
+            // ── THE PICK (WO-1438) ───────────────────────────────────────────────────────
+            // PROVEN from logs/debug/troop-ai-blind-2026-09-06.log, 14:36 on build
+            // 2026.09.06.358161:
+            //   id=troop-archer RETARGET#1 ... won='Wall_Outer_SS_11(WallSegment)' kind=struct
+            //   dist=4.2m ... accepted[unit=1,struct=17] ... radius=23.9m preferStruct=False
+            // A LIVE defender was inside the sweep and the wall won anyway; the same archer then
+            // walked SS_11 -> Watchtower -> SS_12 -> SS_7 -> SS_13 -> SS_6 -> SS_14, outward
+            // along the ring, which is the owner's sentence in data.
+            //
+            // THE RULE, and why it is gated rather than absolute. Steering here is
+            // _agent.Move(displacement) with NoObstacleAvoidance and no SetDestination, and the
+            // sweep sees a guard THROUGH an intact baked wall. An unconditional "always prefer
+            // the unit" would therefore push a footman into a navmesh edge and freeze it —
+            // strictly worse than chewing the wall. So a unit wins only when it is REACHABLE:
+            // either already inside attack range, or a complete, non-detouring NavMesh route to
+            // it exists. THAT is "a breach is a route" expressed in the selector: while the wall
+            // still stands there is no route and the wall stays the target; the moment the hole
+            // opens the route completes and the defender wins. No pathing rewrite — the route is
+            // read as a FILTER, never steered by.
+            bool hasUnit = nearestUnitAny != null;
+            bool hasStruct = nearestStructAny != null;
+            bool unitInAttackRange = hasUnit && nearestUnitAnySqr <= _attackRange * _attackRange;
+
+            if (!_preferStructures && hasUnit && hasStruct && !unitInAttackRange)
+            {
+                RefreshRouteToUnit(nearestUnitAny, Mathf.Sqrt(nearestUnitAnySqr));
+            }
+            else if (unitInAttackRange)
+            {
+                // ⚠ DO NOT CLEAR THE CACHED VERDICT HERE. A defender inside attack range needs no
+                // route query, but clearing the flag would make the boundary FLICKER: the instant
+                // that orc steps 0.1 m back out of range, the refresh branch runs, the 0.5 s
+                // throttle returns early, and the troop reads the just-cleared False — so it
+                // swings at the wall for half a second, then flips back, on every step-back in a
+                // brawl. That reads to the player as exactly "they didn't really fight". Zero the
+                // throttle instead, so the first out-of-range tick asks for a fresh answer.
+                _routeCheckAt = 0f;
+                _routeStatus = "in-range";
+            }
+            else
+            {
+                _routeToUnitOpen = false;
+                _routeStatus = "not-asked";
+            }
+
+            _lastPreferUnit = PrefersUnitOverStructure(
+                _preferStructures, hasUnit, hasStruct, unitInAttackRange, _routeToUnitOpen);
+
+            IDamageable winner;
+            if (_lastPreferUnit)                       winner = nearestUnitAny;
+            else if (_preferStructures && hasStruct)   winner = nearestStructAny;   // WO-933 siege, unchanged
+            else if (hasUnit && hasStruct)             winner = nearestUnitAnySqr <= nearestStructAnySqr
+                                                                    ? nearestUnitAny : nearestStructAny;
+            else                                       winner = hasUnit ? nearestUnitAny : nearestStructAny;
+
+            // Runner-up is decided against the WINNER, not against the flag. The old line read
+            // `structWins = _preferStructures && bestStruct != null`, so with preferStruct=False
+            // — every non-siege troop — it reported nearestStructAny, i.e. THE WINNER ITSELF.
+            // The 09-06 capture shows that exactly: `won='Wall_Outer_SS_11' ...
+            // runnerUpOtherKind='Wall_Outer_SS_11'`. A falsifiable field that echoes the answer
+            // back cannot embarrass the selector, which is the one job it had (§1.4b).
+            bool winnerIsStruct = winner != null && IsHostileStructure(winner);
+            IDamageable runnerUp = winnerIsStruct ? nearestUnitAny : nearestStructAny;
+            float runnerUpSqr = winnerIsStruct ? nearestUnitAnySqr : nearestStructAnySqr;
             _lastRunnerUp = runnerUp;
             _lastRunnerUpDist = runnerUp != null ? Mathf.Sqrt(runnerUpSqr) : -1f;
 
@@ -803,15 +881,79 @@ namespace DeNelle.Village
                 _lastNearestAny = null;
                 _lastNearestAnyDist = -1f;
             }
-            if (_preferStructures && bestStruct != null)
+            if (_preferStructures && winnerIsStruct && winner != null)
             {
-                if (_cachedFoe != bestStruct)
+                if (!ReferenceEquals(_cachedFoe, winner))
                     FlowTrace.Step("TroopSiege",
-                        $"id={_troopId}: prefer structure '{DescribeTarget(bestStruct)}' " +
-                        $"(unit-fallback={(bestUnit != null ? DescribeTarget(bestUnit) : "none")}).");
-                return bestStruct;
+                        $"id={_troopId}: prefer structure '{DescribeTarget(winner)}' " +
+                        $"(unit-fallback={(nearestUnitAny != null ? DescribeTarget(nearestUnitAny) : "none")}).");
             }
-            return bestUnit;
+            return winner;
+        }
+
+        /// <summary>
+        /// WO-1438 — THE PICK RULE, extracted pure so a regression can assert it with no scene,
+        /// no navmesh and no Unity play session. Returns true when a live hostile UNIT should be
+        /// taken over a hostile STRUCTURE.
+        ///
+        /// The three refusals are each load-bearing:
+        ///   * <paramref name="preferStructures"/> — the siege role (WO-933) keeps masonry
+        ///     priority; a catapult that chases orcs is a different defect.
+        ///   * no unit, or no structure — nothing to arbitrate, the caller takes what exists.
+        ///   * a unit that is neither in reach nor routable — taking it would command a
+        ///     straight-line push into an intact wall (steering is Move(displacement) with
+        ///     NoObstacleAvoidance), which pins the troop against geometry and is WORSE than
+        ///     letting it hit the wall. Reachability is the whole gate.
+        /// </summary>
+        public static bool PrefersUnitOverStructure(
+            bool preferStructures, bool hasUnit, bool hasStruct, bool unitInAttackRange, bool routeToUnitOpen)
+        {
+            if (preferStructures) return false;
+            if (!hasUnit) return false;
+            if (!hasStruct) return true;
+            return unitInAttackRange || routeToUnitOpen;
+        }
+
+        /// <summary>
+        /// WO-1438 — asks the NavMesh, at most once per <see cref="RouteCheckInterval"/>, whether
+        /// a complete and non-detouring route to <paramref name="unit"/> exists. Read-only: the
+        /// answer is a SELECTION filter; nothing steers by this path (steering stays
+        /// <c>_agent.Move(displacement)</c>, per the SELECTOR trace line).
+        ///
+        /// Throttled because <see cref="NearestHostile"/> runs 5x/second per troop and this is
+        /// the only query in the loop that is not free. The verdict is CACHED between refreshes
+        /// on purpose — a target held for half a second longer is invisible; a path query per
+        /// troop per scan is not.
+        /// </summary>
+        private void RefreshRouteToUnit(IDamageable unit, float straightLine)
+        {
+            if (Time.time < _routeCheckAt) return;      // keep the cached verdict
+            _routeCheckAt = Time.time + RouteCheckInterval;
+            _routeToUnitOpen = false;
+            _routeStatus = "no-unit";
+            if (unit == null) return;
+
+            Guard.Try("TroopAI", $"route-probe id={_troopId}", () =>
+            {
+                if (_routePath == null) _routePath = new NavMeshPath();
+                if (!NavMesh.CalculatePath(transform.position, unit.WorldPosition, NavMesh.AllAreas, _routePath))
+                {
+                    _routeStatus = "CalculatePath-FAILED";
+                    return;
+                }
+                _routeStatus = _routePath.status.ToString();
+                if (_routePath.status != NavMeshPathStatus.PathComplete) return;
+
+                float len = PathLength(_routePath);
+                // A PathComplete far longer than the straight line is the squad walking the
+                // whole way round the wall ring — not "through the breach". The factor is
+                // measured, not assumed: every PathComplete in
+                // logs/debug/troop-ai-blind-2026-09-06.log came back within ~1.05x of its
+                // straightLine (20.7/20.7, 20.3/20.4, 7.1/8.1), so this rejects detours without
+                // rejecting anything that capture showed as a real route.
+                _routeToUnitOpen = len > 0f && straightLine > 0.01f && len <= straightLine * RouteDetourFactor;
+                if (!_routeToUnitOpen) _routeStatus += "-detour";
+            });
         }
 
         /// <summary>
@@ -821,7 +963,12 @@ namespace DeNelle.Village
         /// </summary>
         private static bool IsHostileStructure(IDamageable dmg)
         {
-            if (dmg == null || dmg.Faction != CombatFaction.Hostile) return false;
+            // WO-1438: routed through CombatFactionRules instead of an inline
+            // `Faction != Hostile`. IsFriendlyFire is used rather than MayAttack because this
+            // is a CLASSIFICATION question, not an attackability one — it must keep answering
+            // "that was a structure" about a wall that has just collapsed, which is exactly
+            // what the BREACH line asks it after a foe dies.
+            if (dmg == null || CombatFactionRules.IsFriendlyFire(SelfFaction, dmg)) return false;
             return dmg is IDamageableStructure;
         }
 
@@ -840,20 +987,6 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-1438: fired once, on the retarget that follows a hostile STRUCTURE dying to this
-        /// troop's hunt. Asks the NavMesh whether the kill actually opened a route to the new
-        /// target and prints the <see cref="NavMeshPathStatus"/>.
-        ///
-        /// This is the line that separates the two competing explanations for "they don't push
-        /// in through the breach":
-        ///   * status=PathComplete  -> a route DOES exist and the selector simply never
-        ///                             preferred it (a target-selection defect).
-        ///   * status=PathPartial / PathInvalid -> the hole in the geometry is not a hole in the
-        ///                             navmesh, so there was never a route to prefer (a bake
-        ///                             defect, and no selector change alone can fix it).
-        /// Read-only: it computes a path, it never steers by it.
-        /// </summary>
-        /// <summary>
         /// Summed corner-to-corner length of a computed path, or -1 when there is none.
         /// Paired with the straight-line distance it is the falsifiable pair: a pathLength far
         /// longer than straightLine means the route detours around the wall ring instead of
@@ -868,6 +1001,26 @@ namespace DeNelle.Village
             return total;
         }
 
+        /// <summary>
+        /// WO-1438: fired once, on the retarget that follows a hostile STRUCTURE dying to this
+        /// troop's hunt. Read-only — it computes a path, it never steers by one.
+        ///
+        /// ⚠ ITS ORIGINAL PROMISE WAS WRONG AND IS CORRECTED HERE, because a stale promise on a
+        /// trace is worse than no promise. It claimed <c>routeStatus</c> alone separated
+        /// "a route exists and the selector ignored it" from "no route ever existed". The
+        /// 2026-09-06 capture killed that: routeStatus tracked the TARGET'S KIND
+        /// (133/133 struct probes CalculatePath-FAILED, 7/7 unit probes PathComplete), because a
+        /// structure's WorldPosition is inside solid geometry and CalculatePath refuses an
+        /// unmappable destination. The field that answers the question is now
+        /// <c>holeNavmesh=</c>: a tight NavMesh sample WHERE THE WALL STOOD.
+        ///   * holeNavmesh=WALKABLE  -> the collapse really did open the navmesh; the route half
+        ///                              of this ticket is solved and selection is the whole fix.
+        ///   * holeNavmesh=NOT-WALKABLE -> the hole in the geometry is not a hole in the navmesh
+        ///                              (raid scenes carry zero NavMeshObstacle and every collapse
+        ///                              logs "0 carving obstacle(s) dropped"), so a carve is
+        ///                              required before anyone can walk through a breach.
+        /// Neither answer has been measured yet — this line is what will measure it.
+        /// </summary>
         private void TraceBreachProbe(IDamageable destroyed, IDamageable replacement)
         {
             if (!FlowTrace.Enabled) return;
@@ -882,7 +1035,52 @@ namespace DeNelle.Village
                     ? replacement.WorldPosition
                     : (destroyed != null ? destroyed.WorldPosition : transform.position);
 
-                bool computed = NavMesh.CalculatePath(transform.position, probeTo, NavMesh.AllAreas, _breachPath);
+                // ⚠ THE 2026-09-06 CAPTURE PROVED THIS PROBE WAS MEASURING THE WRONG THING, and
+                // the repair is why the WO's "read one field" gate could not be answered off it:
+                //   133 of 133 STRUCT reacquires -> routeStatus=CalculatePath-FAILED
+                //     7 of   7 UNIT   reacquires -> routeStatus=PathComplete
+                // routeStatus was a function of the TARGET'S KIND, not of the breach — a wall or
+                // tower's WorldPosition sits inside solid geometry, off the navmesh, so
+                // CalculatePath refuses the destination outright. Sample first, then path to the
+                // sampled point, and the field starts answering the question it is named for.
+                Vector3 pathTo = probeTo;
+                string endSample = "n/a";
+                if (NavMesh.SamplePosition(probeTo, out var endHit, ReplacementSampleRadius, NavMesh.AllAreas))
+                {
+                    pathTo = endHit.position;
+                    endSample = $"hit@{Vector3.Distance(probeTo, endHit.position):F1}m";
+                }
+                else endSample = $"MISS>{ReplacementSampleRadius:F1}m";
+
+                // THE DIRECT TEST of "does the hole in the geometry become a hole in the
+                // navmesh?" — sample where the wall STOOD, with a tight radius. Raid scenes carry
+                // zero NavMeshObstacle components and every collapse logs "0 carving obstacle(s)
+                // dropped", so the expectation is a MISS; a HIT would mean the ground under a
+                // felled wall really is walkable and the route half of this ticket is already
+                // solved. Neither answer has been measured before this line existed.
+                string breachSample = "n/a";
+                if (destroyed != null)
+                {
+                    // Sampled at OUR foot height, not the structure's own Y. WallSegment's
+                    // WorldPosition is transform.position (WallSegment.cs:223), but a tower's or
+                    // spire's may be a mid-height pivot, and a 0.6 m radius would then MISS on
+                    // elevation and print NOT-WALKABLE over ground that is perfectly walkable —
+                    // the identical measured-the-wrong-thing failure this probe was just repaired
+                    // for. The troop stands on the navmesh, so its Y is the right plane to ask on.
+                    Vector3 hole = destroyed.WorldPosition;
+                    hole.y = transform.position.y;
+                    breachSample = NavMesh.SamplePosition(hole, out var holeHit, BreachSampleRadius, NavMesh.AllAreas)
+                        ? $"WALKABLE@{Vector3.Distance(hole, holeHit.position):F2}m"
+                        : $"NOT-WALKABLE>{BreachSampleRadius:F2}m";
+                }
+
+                // Sample our own feet too: an OFF-navmesh troop fails every path query for a
+                // reason that has nothing to do with the wall, and that must not read as a bake
+                // defect at the far end.
+                string selfSample = NavMesh.SamplePosition(transform.position, out _, BreachSampleRadius, NavMesh.AllAreas)
+                    ? "on" : "OFF";
+
+                bool computed = NavMesh.CalculatePath(transform.position, pathTo, NavMesh.AllAreas, _breachPath);
                 string status = computed ? _breachPath.status.ToString() : "CalculatePath-FAILED";
                 int corners = computed && _breachPath.corners != null ? _breachPath.corners.Length : 0;
 
@@ -890,6 +1088,7 @@ namespace DeNelle.Village
                     $"id={_troopId} role={_troopRole} BREACH: structure '{DescribeTarget(destroyed)}' " +
                     $"died -> reacquired '{DescribeTarget(replacement)}' " +
                     $"kind={(replacement == null ? "none" : IsHostileStructure(replacement) ? "struct" : "unit")} " +
+                    $"holeNavmesh={breachSample} selfNavmesh={selfSample} endSample={endSample} " +
                     $"routeStatus={status} corners={corners} " +
                     $"straightLine={(replacement != null ? Vector3.Distance(transform.position, probeTo) : -1f):F1}m " +
                     $"pathLength={PathLength(computed ? _breachPath : null):F1}m");

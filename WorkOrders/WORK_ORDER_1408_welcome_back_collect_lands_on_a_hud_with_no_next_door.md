@@ -1,6 +1,6 @@
 # WO-1408: Welcome-back reports resources, then COLLECT lands on a HUD with no next door
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** IMPLEMENTED - doors, ATTACKED row, ready line landed 2026-09-06 (WelcomeBackDoorsVM + WelcomeBackDoorsRegression); gated; WELCOME_BACK_CAPTURE 6/6 + Seeker still owed; one ruling open (a Heartfire wave-start door does not exist in canon)
 
 ## Evidence
 - `Builds/ui-capture/WelcomeBack_2670x1200.png` (09-05 00:26) - SEEN (`REVIEW_MERGED.md` row 7): per-resource rows,

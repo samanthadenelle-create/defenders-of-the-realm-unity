@@ -179,55 +179,76 @@ namespace DeNelle.Village
                 explicitTitle.fontSizeMin = 20f;
                 explicitTitle.overflowMode = TextOverflowModes.Overflow;
                 explicitTitle.transform.SetAsLastSibling();
-                var subtitle = Label(card.transform, c.Subtitle, 21, TextAlignmentOptions.Top,
-                    new Vector2(.08f, .05f), new Vector2(.92f, .21f));
+                // WO-1411 — THE SUBTITLE IS STATE, NOT A SLOGAN. The authored subtitles
+                // ("Build towers and walls.", "Strengthen walls.") restate the title in a
+                // verb phrase and leave the player to open every door to find out which one
+                // has anything they can afford. The count comes from the VM
+                // (StructureCardVM.AffordableCount), which folds the SAME visibility +
+                // affordability authorities the item cards behind this door render from, so
+                // the promise on the card and the cards inside it cannot disagree.
+                int affordable = StructureCardVM.AffordableCount(c);
+                var subtitle = Label(card.transform, StructureCardVM.AffordabilityWords(affordable), 21,
+                    TextAlignmentOptions.Top, new Vector2(.08f, .05f), new Vector2(.92f, .21f));
                 subtitle.color = ElarionUi.Parchment;
                 subtitle.raycastTarget = false;
                 ElarionUiKit.FitBlock(subtitle, 18f, 21f);
+                FlowTrace.Step("Build", "collection=" + c.CollectionId + " affordable=" + affordable +
+                    " subtitle='" + subtitle.text + "'");
             }
 
-            // Building new defenses and managing existing defenses are different player
-            // intents. The old behavior silently changed the Defenses category into an upgrade
-            // shortcut after FTUE, which made the build catalog disappear precisely when an
-            // experienced player expected it. Keep Defenses stable and add one explicit card
-            // that routes to the authoritative Manage -> Defense destination.
-            CardCollectionDefinition defenseCollection = visible.Find(c =>
-                string.Equals(c.CollectionId, "build-defenses", StringComparison.OrdinalIgnoreCase));
-            var upgradeCard = BuildCategoryCard(grid, () =>
-            {
-                Close();
-                PanelRouter.Open(PanelId.Manage, "Defense");
-            });
-            upgradeCard.name = "DefenseUpgradeCard";
-            var upgradeArt = ElarionUiKit.AddImage(upgradeCard.transform, "CategoryArtwork",
-                new Vector2(.10f, .38f), new Vector2(.90f, .91f), Color.white, false);
-            var upgradeImage = upgradeArt.GetComponent<Image>();
-            upgradeImage.preserveAspect = true;
-            upgradeImage.raycastTarget = false;
-            Sprite defenseIcon = defenseCollection != null
-                ? Resources.Load<Sprite>(defenseCollection.IconKey)
-                : Resources.Load<Sprite>("UI/ElarionMedieval/cards/defense");
-            SetArtworkOrFallback(upgradeArt.transform, upgradeImage, defenseIcon);
-            var upgradeDivider = ElarionUiKit.AddImage(upgradeCard.transform, "CardDivider",
-                new Vector2(.08f, .35f), new Vector2(.92f, .355f), ElarionUi.Gold, false);
-            upgradeDivider.GetComponent<Image>().raycastTarget = false;
-            var upgradeTitle = Label(upgradeCard.transform, "Upgrade Defenses", 30,
-                TextAlignmentOptions.Center, new Vector2(.07f, .22f), new Vector2(.93f, .34f));
-            upgradeTitle.color = ElarionUi.Gold;
-            upgradeTitle.fontStyle = FontStyles.Bold;
-            upgradeTitle.enableWordWrapping = false;
-            upgradeTitle.enableAutoSizing = true;
-            upgradeTitle.fontSizeMin = 15f;
-            upgradeTitle.fontSizeMax = 26f;
-            upgradeTitle.transform.SetAsLastSibling();
-            var upgradeSubtitle = Label(upgradeCard.transform,
-                "Manage every defense.", 21, TextAlignmentOptions.Top,
-                new Vector2(.08f, .05f), new Vector2(.92f, .21f));
-            upgradeSubtitle.color = ElarionUi.Parchment;
-            upgradeSubtitle.raycastTarget = false;
-            ElarionUiKit.FitBlock(upgradeSubtitle, 18f, 21f);
-
             BuildManagePlacedCard(grid);
+            BuildManageDefensesFooterLink();
+        }
+
+        // =====================================================================
+        //  WO-1411 / REVIEW_MERGED row 10, owner ruling section 2 #13 (written to the
+        //  default: rename YES, keep the 8th card NO).
+        //
+        //  ⛔ THE DOOR SURVIVES; ONLY ITS DRESS CHANGES. Building new defenses and
+        //  managing existing ones are still different player intents, and the route is
+        //  still the authoritative Manage -> Defense destination — the SAME
+        //  PanelRouter.Open(PanelId.Manage, "Defense") call the card carried. What is
+        //  retired is the DISGUISE: an eighth CATEGORY CARD, sitting in a grid of
+        //  build categories, whose title had to shrink (fontSizeMin 15 against the
+        //  categories' 20) to fit two words the other seven do not need. Both reviewers
+        //  read it as "a Manage door dressed as a category", and the capture shows the
+        //  smaller title. A card in a build grid promises something to build.
+        //
+        //  A footer TEXT LINK says what it is: a way out of the build catalog to the
+        //  screen that manages what is already standing. It sits in the root band below
+        //  the card row (the grid ends at y .18), so it takes nothing from the seven
+        //  categories and cannot be mistaken for one of them.
+        // =====================================================================
+        private void BuildManageDefensesFooterLink()
+        {
+            Guard.Try("BuildCollections", "manage-defenses footer link", () =>
+            {
+                var link = ButtonBox(_panel, "Already built? Manage defenses >", () =>
+                {
+                    FlowTrace.Step("Build",
+                        "footer link TAPPED -- leaving the build catalog for Manage > Defense " +
+                        "(same route the retired Upgrade Defenses card carried).");
+                    Close();
+                    PanelRouter.Open(PanelId.Manage, "Defense");
+                });
+                var rt = link.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(.28f, .05f);
+                rt.anchorMax = new Vector2(.72f, .155f);
+                rt.offsetMin = rt.offsetMax = Vector2.zero;
+                link.name = "ManageDefensesFooterLink";
+                var label = link.GetComponentInChildren<TextMeshProUGUI>();
+                if (label != null)
+                {
+                    label.enableWordWrapping = false;
+                    label.enableAutoSizing = true;
+                    label.fontSizeMin = 16f;
+                    label.fontSizeMax = 24f;
+                    label.overflowMode = TextOverflowModes.Overflow;
+                }
+                FlowTrace.Step("Build",
+                    "WO-1411: the 8th 'Upgrade Defenses' CARD is retired; the Manage > Defense door " +
+                    "is now the footer text link below the category grid (route unchanged).");
+            });
         }
 
         // =====================================================================

@@ -95,6 +95,33 @@ namespace DeNelle.Wallet
         /// <summary>The Pi card plate for the wallet rule. See <see cref="PiWalletRequiredSentence"/>.</summary>
         public static string PiWalletRequired() => PiWalletRequiredSentence;
 
+        /// <summary>
+        /// WO-1409 — THE ONE SENTENCE A WALLETLESS SHELF OWES THE PLAYER. Without a signing wallet
+        /// the SKR quote cannot be taken, and the store used to answer that by printing
+        /// "Price unavailable" on six cards and "UNAVAILABLE" on three more — nine refusals and not
+        /// one reason. The authored USD anchor is known with or without a wallet, so every card now
+        /// carries it and the REASON is said EXACTLY ONCE, here, under the wordmark.
+        ///
+        /// <para>⛔ ONE SOURCE, TWO READERS. PackStore renders it and both the FlowTrace line and
+        /// NightMarketNoWalletRegression probe for it; a second copy of this sentence anywhere is
+        /// how "exactly one banner" quietly becomes two. Same one-exception rule as
+        /// <see cref="PiWalletRequiredSentence"/>: it is a sentence in code because
+        /// canon-strings.json was outside this lane. MOVE it to canon later — never copy it.</para>
+        ///
+        /// <para>ASCII only: the separator is a HYPHEN, not an en dash. The store's copy oracle
+        /// rejects non-ASCII, and an en dash here would fail the whole shelf's ASCII pass.</para>
+        /// </summary>
+        public const string WalletlessBrowsingBanner =
+            "Connect a wallet to buy - prices shown in USD";
+
+        /// <summary>
+        /// The stable PREFIX of <see cref="WalletlessBrowsingBanner"/>, and the only thing the trace
+        /// and the oracle match on. Probing the whole sentence would make every future re-wording of
+        /// the tail a false red; probing this names the promise ("connect a wallet") that must
+        /// survive any re-wording.
+        /// </summary>
+        public const string WalletlessBrowsingBannerProbe = "Connect a wallet";
+
         /// <summary>Short button face when the wallet rule is the blocker ("Connect Wallet").</summary>
         public const string KeyBuyWalletRequiredCta = "storeBuyWalletRequiredCta";
 

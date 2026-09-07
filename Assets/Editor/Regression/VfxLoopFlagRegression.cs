@@ -602,6 +602,115 @@ namespace DeNelle.Editor.Regression
                 return false;
             }
 
+            // --- WO-1327 REOPEN: every Cast_* type must be bounded by the cast beat cap ----
+            // THE LEAK THIS PINS, from the owner's own device capture
+            // (Logs/device/endstate-window-20260904.log, one mage.fireball cast at 09:35:43.89):
+            //   PlayOneshot('Cast_FireCharge')  ... lifetime=1.25s     <- on the whitelist
+            //   PlayOneshot('Cast_MuzzleFlash') ... lifetime=20.30s    <- NOT on the whitelist
+            // Both spawned unparented at the SAME caster position on the SAME cast, at a 0.60s
+            // cooldown. VFXManager.IsCastBeat was a hand-written 8-member list; Cast_MuzzleFlash
+            // is the NINTH Cast_* member (VFXType.cs:233, committed 0011b8ba4 2026-08-05 -- it
+            // PREDATES the list, which landed ba5b7fad0 2026-09-02) and it sits in the "Combat
+            // release" region rather than the Cast_ block, so the list was born omitting an
+            // existing member. The one beat that anchors to the caster was the one beat nothing
+            // bounded. The fix derives membership from the enum names; this case is what goes red
+            // the day somebody writes the list back by hand.
+            // POSITIVE CONTROL: make VFXManager.BuildCastBeatSet skip one Cast_* member and
+            // re-run -- this must fail naming that member.
+            {
+                int castTypes = 0;
+                foreach (VFXType t in System.Enum.GetValues(typeof(VFXType)))
+                {
+                    if (!t.ToString().StartsWith("Cast_", System.StringComparison.Ordinal)) continue;
+                    castTypes++;
+                    if (!VFXManager.IsCastBeatType(t))
+                        failures.Add("VFXType '" + t + "' is named Cast_* (a caster-anchored wind-up " +
+                                     "beat) but VFXManager.IsCastBeatType says it is NOT a cast beat, so " +
+                                     "CAST_BEAT_MAX_SECONDS never bounds it. That is exactly how " +
+                                     "Cast_MuzzleFlash reached lifetime=20.30s at the caster while its " +
+                                     "sibling on the same cast read 1.25s (owner capture 2026-09-04). " +
+                                     "FIX: keep the set DERIVED from the enum names -- never re-hardcode it.");
+                }
+                if (castTypes == 0)
+                    failures.Add("VfxLoopFlagRegression cast-beat case is VACUOUS: no VFXType is named " +
+                                 "Cast_*, so this check cannot fail. Either the naming convention " +
+                                 "(VFXType.cs:12) changed or the enum did -- re-point this case.");
+                notes.Add("cast-beat coverage=" + castTypes + " Cast_* type(s)");
+            }
+
+            // --- WO-1327 REOPEN: VFXCatalog rows must still line up with the ENUM ----------
+            // ⛔ THE ROOT THE DEVICE CAPTURE LED TO, and it is a data defect, not a code one.
+            // VFXCatalog.asset stores rows keyed by the VFXType ORDINAL. Insert a member into
+            // the middle of the enum without regenerating, and every row from that point on
+            // silently re-points at ANOTHER TYPE'S PREFAB. Measured on this tree 2026-09-06:
+            // ordinals 76-95 are shifted by +2, and rows exist at ordinals 94/95 which the
+            // enum no longer defines at all.
+            //   VFXType.Cast_MuzzleFlash == 81, and row 81 holds Env_SteamVent.prefab.
+            //   Env_SteamVent measures lengthInSec 10.0 + startLifetime 10.0 = 20.0s;
+            //   VFXManager.DetectDuration + 0.3 = 20.30s -- EXACTLY the number in the owner's
+            //   device log (Logs/device/endstate-window-20260904.log):
+            //     PlayOneshot('Cast_MuzzleFlash') at (5000.19, 1.18, 4994.75)
+            //                                     parent='<none, world-space>' lifetime=20.30s.
+            // So every ranged release (RangedAttackVFX.PlayReleaseFlash) and every tower shot
+            // (TowerCombat.cs:376) planted a TWENTY-SECOND STEAM COLUMN, unparented, at the
+            // caster -- at a 0.60s cooldown. Nothing in the code could have caught it: the
+            // reference resolves, the prefab loads, particles play. Only the ordinal is wrong.
+            // FIX when this goes red: Defenders/VFX/Generate VFX Catalog (regenerates the .asset).
+            // POSITIVE CONTROL: edit any correct row's guid in VFXCatalog.asset -- must fail it.
+            if (typed != null)
+            {
+                // Name -> committed prefab under Assets/Resources/VFX. VERIFIED 2026-09-06 against
+                // VFXCatalogGenerator.Map: of the 32 VFXType names that have a same-named prefab
+                // there, the generator picks that exact file for ALL 32 -- zero false positives.
+                // Cross-named picks (Impact_Flame -> BigExplosion.prefab, Cast_FireCharge ->
+                // Casting_Fire.prefab, ...) have no same-named file and are correctly untouched.
+                var mirrorByName = new Dictionary<string, string>();
+                var dupes = new HashSet<string>();
+                foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Resources/VFX" }))
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    string nm = System.IO.Path.GetFileNameWithoutExtension(path);
+                    if (mirrorByName.ContainsKey(nm)) { dupes.Add(nm); continue; }
+                    mirrorByName[nm] = path;
+                }
+                foreach (var d in dupes) mirrorByName.Remove(d);   // ambiguous: never judge it
+
+                int aligned = 0, unjudged = 0;
+                var seenOrdinals = new HashSet<int>();
+                foreach (var e in (typed.Entries ?? new VFXCatalog.Entry[0]))
+                {
+                    int ordinal = (int)e.Type;
+                    if (!System.Enum.IsDefined(typeof(VFXType), e.Type))
+                    {
+                        failures.Add("VFXCatalog carries a row at ordinal " + ordinal + " which the " +
+                                     "VFXType enum no longer defines -- the asset was generated against " +
+                                     "an OLDER enum and every row at or past the insertion point now " +
+                                     "resolves to the wrong prefab. Re-run Defenders/VFX/Generate VFX Catalog.");
+                        continue;
+                    }
+                    if (!seenOrdinals.Add(ordinal))
+                        failures.Add("VFXCatalog has TWO rows at ordinal " + ordinal + " ('" + e.Type +
+                                     "') -- VFXCatalog.BuildLookup keeps one and the other is dead.");
+
+                    string name = e.Type.ToString();
+                    if (!mirrorByName.TryGetValue(name, out string expected)) { unjudged++; continue; }
+                    string actual = e.Prefab != null ? AssetDatabase.GetAssetPath(e.Prefab) : null;
+                    if (string.Equals(actual, expected, System.StringComparison.OrdinalIgnoreCase)) { aligned++; continue; }
+                    failures.Add("VFXCatalog row '" + name + "' (ordinal " + ordinal + ") points at '" +
+                                 (string.IsNullOrEmpty(actual) ? "<null>" : actual) + "' but a committed " +
+                                 "prefab of its own name exists at '" + expected + "'. This is the " +
+                                 "ordinal-shift class: Cast_MuzzleFlash resolved to Env_SteamVent and " +
+                                 "played a 20.30s steam column at the caster on every shot (owner device " +
+                                 "capture 2026-09-04). Re-run Defenders/VFX/Generate VFX Catalog.");
+                }
+                if (aligned + unjudged == 0)
+                    failures.Add("VFXCatalog enum-alignment case is VACUOUS: no row could be judged. " +
+                                 "Either VFXCatalog.asset is empty or Assets/Resources/VFX holds no " +
+                                 "committed prefabs -- re-point this case rather than trusting it.");
+                notes.Add("enum-alignment aligned=" + aligned + " unjudged=" + unjudged +
+                          " (no same-named committed prefab)");
+            }
+
             // Mirror-join summary. Printed on PASS as well as FAIL, and deliberately spelling
             // out how much of the join was live: this suite shipped green for a defect that a
             // vacuous check would also have been green for, so a run that could not have

@@ -28,9 +28,14 @@ namespace DeNelle.Editor.Regression
 
                 BuildFirstUseGuide.GhostMoved();
                 BuildFirstUseGuide.Rotated();
+                // WO-1411 RE-POINTED: this pinned "check mark", which named the D17 confirm
+                // GLYPH. The ghost rail speaks words now (PLACE / ROTATE / CANCEL), so a banner
+                // telling the player to tap a check mark would name a symbol the screen no
+                // longer draws. The pin follows the button's WORD, which is the thing the
+                // sentence has to agree with.
                 if (BuildFirstUseGuide.Current != BuildFirstUseGuide.Step.Confirm ||
-                    BuildFirstUseGuide.Copy.IndexOf("check mark", System.StringComparison.OrdinalIgnoreCase) < 0)
-                    failures.Add("rotate does not advance to the explicit check-mark instruction");
+                    BuildFirstUseGuide.Copy.IndexOf("PLACE", System.StringComparison.Ordinal) < 0)
+                    failures.Add("rotate does not advance to the explicit PLACE instruction");
                 BuildFirstUseGuide.PlacementConfirmed();
                 if (!BuildFirstUseGuide.IsComplete || PlayerPrefs.GetInt(BuildFirstUseGuide.CompletionKey, 0) != 1)
                     failures.Add("successful ordered confirmation did not persist completion");
@@ -54,7 +59,7 @@ namespace DeNelle.Editor.Regression
             }
 
             report = failures.Count == 0
-                ? "BUILD_FIRST_USE_GUIDE_OK: category -> item -> move/pinch -> rotate -> check; completion persists only after confirm"
+                ? "BUILD_FIRST_USE_GUIDE_OK: category -> item -> move/pinch -> rotate -> PLACE; completion persists only after confirm"
                 : "BUILD_FIRST_USE_GUIDE_FAIL: " + string.Join(" | ", failures);
             return failures.Count == 0;
         }

@@ -732,7 +732,13 @@ namespace DeNelle.Village
             FlowTrace.Step("Offset",
                 $"WO-994 registryProbe path=START rows={AttachmentOffsetRegistry.Count} " +
                 $"shield_A[{DescribeOffsetRow("shield_A")}] " +
-                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}]");
+                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}] " +
+                // WO-1215: shield_A is the TRIPO shield. The shield the player actually starts
+                // with is knight_shield_starter -> key 'ShieldWithItemLogic', and its row was
+                // re-dialled on 2026-08-30 (74d9e6546). The probe never printed it, so no capture
+                // has ever proved WHICH values of that row shipped in the build under test.
+                $"ShieldWithItemLogic[{DescribeOffsetRow("ShieldWithItemLogic")}] " +
+                $"ShieldWithItemLogic@sheathed[{DescribeOffsetRow("ShieldWithItemLogic@sheathed")}]");
             EquipBestForHero();
             // WO-994: dungeon→town port breaks shield seat — height cache + hold pose must re-run
             // after the hub body/height settles (owner: seat is perfect until that transition only).
@@ -764,7 +770,11 @@ namespace DeNelle.Village
             FlowTrace.Step("Offset",
                 $"WO-994 registryProbe path=SCENELOAD rows={AttachmentOffsetRegistry.Count} " +
                 $"shield_A[{DescribeOffsetRow("shield_A")}] " +
-                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}]");
+                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}] " +
+                // WO-1215: see the START probe — the live starter shield's key is
+                // 'ShieldWithItemLogic', not 'shield_A'.
+                $"ShieldWithItemLogic[{DescribeOffsetRow("ShieldWithItemLogic")}] " +
+                $"ShieldWithItemLogic@sheathed[{DescribeOffsetRow("ShieldWithItemLogic@sheathed")}]");
             Transform bodyChild = transform.Find("HeroBody");
             FlowTrace.Step("Equip",
                 $"WO-994 reapplyCtx scene='{sceneName}' frame={Time.frameCount} baked={PackageBakedGear} " +
@@ -2692,10 +2702,23 @@ namespace DeNelle.Village
             Bounds wb = rend != null ? rend.bounds : new Bounds(gripRoot.transform.position, Vector3.zero);
             string parentName = gripRoot.transform.parent != null ? gripRoot.transform.parent.name : "<null>";
             bool drawnNow = _combatActive && !(_seatingEditActive && _seatEditSheathed);
+            // WO-1215 (reopened 2026-09-03): the owner's bounce carried no shield id and no hero.
+            // Every capture searched (logs/device/freeze-20260904-095249.log, full-buffer-094110.log,
+            // pull-20260830/boot-logcat.txt) either has ZERO AttachOffHandProp lines or names only
+            // knight_shield_starter — so "which hero was wearing which shield" has never once been
+            // recoverable from a log. This line already carried the POSE; it did not carry the
+            // WEARER or the seat KEY, which is exactly the pair the RCA needed and could not get.
+            // §12: instrument the missing facet rather than re-theorise the seat math.
+            string wearerClassForTrace = _loadout != null ? _loadout.WearerClass : "<no-loadout>";
+            Transform bodyForTrace = transform.Find("HeroBody");
             FlowTrace.Step("Equip",
-                $"AttachOffHandProp MEASURED after hold: id='{id}' parent='{parentName}' " +
+                $"AttachOffHandProp MEASURED after hold: id='{id}' key='{offsetKey}' " +
+                $"class='{wearerClassForTrace}' " +
+                $"body='{(bodyForTrace != null ? bodyForTrace.name : "<none>")}' " +
+                $"hand='{hand.name}' authoredRow={hasOffset} " +
+                $"parent='{parentName}' " +
                 $"state={(drawnNow ? "DRAWN" : "SHEATHED")} fullOverride={fullOverride} " +
-                $"comp={_offHandParentCompensate} " +
+                $"derived={offHandDerivedSeat} comp={_offHandParentCompensate} " +
                 $"GRIP {FormatTrs(gripRoot.transform)} " +
                 $"CHILD {(propChild != null ? FormatTrs(propChild) : "n/a")} " +
                 $"worldBounds=c{wb.center} s{wb.size}");

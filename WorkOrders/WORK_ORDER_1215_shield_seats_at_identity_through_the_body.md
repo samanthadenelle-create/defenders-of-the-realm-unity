@@ -1,6 +1,6 @@
 # WORK ORDER 1215 - A dropped shield attaches at IDENTITY and sits through the hero's body
 
-**Status:** READY TO IMPLEMENT - owner felt-test 2026-09-03 Fail. Bounced from Fixed. PRIOR STATUS: FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** READY TO IMPLEMENT - cause NOT proven 2026-09-06 (the WO-1215 seat path cannot be the live starter shield, fullOverride=True short-circuits); permanent MEASURED facets added to EquipmentController + registryProbe, gated; needs one device capture of a hero holding a shield + screenshot
 **Silo:** Gear seating / attachment orientation
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.
 Owner verbatim: *"and shield sits through the body not seated correctly"*.

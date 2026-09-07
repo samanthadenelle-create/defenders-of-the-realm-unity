@@ -45,12 +45,17 @@
 //         BuildCornerDone for the seat arithmetic; the 2670x1200 saturation it used to warn
 //         about is RESOLVED by COLUMN-FIT 2026-08-16 (923 needed vs 965.4 available), and the clamp there
 //         is now a net for shorter surfaces rather than the normal path.
-//   D17 — the rail speaks ICON language: confirm renders RpgUiCatalog element/check,
-//         rotate element/rotate, cancel element/cross (the check + rotate sprites
-//         landed 2026-08-09, closing the gap this note used to record). MakeVerb is
-//         sprite-or-null, so the ASCII words ("OK" / "Rot" / "X") remain the fallback
-//         whenever a sprite fails to load — a missing pack degrades to words, never
-//         to a typed glyph that would render as tofu on the shipped TMP atlas.
+//   D17 — ⛔ RETIRED 2026-09-06 BY WO-1411. This note used to read: "the rail speaks
+//         ICON language: confirm renders RpgUiCatalog element/check, rotate
+//         element/rotate, cancel element/cross ... MakeVerb is sprite-or-null, so the
+//         two-letter ASCII stubs remain the fallback." Both reviewers of the merged UI
+//         review, independently and off the same frame, read that rail as "three
+//         unlabelled buttons" — which is the owner's names-not-icons ruling, on the one
+//         screen where the player is about to spend. The rail now speaks WORDS as its
+//         PRIMARY (and only) language: PLACE / ROTATE / CANCEL, kit ButtonPack buttons
+//         in the same band, with the confirm flipping to BLOCKED when the placement is
+//         refused. MakeVerb + MakeDisc went with the glyphs; MakeWordVerb replaced them.
+//         The BAND geometry (RailBandW/RailBandH and the COLUMN-FIT seat) is untouched.
 //   D19 — the resource strip moved OFF the top: it is now ONE THIN bottom-centre
 //         obsidian band (fixed pixel height), display-only, seated so the carousel and
 //         the placement hint own the band above it. With the strip gone the old
@@ -211,7 +216,12 @@ namespace DeNelle.Village
         private const float HintLineW = 860f;
         private const float HintLineH = 40f;
         private const float HintGapPx = 8f;     // breathing room above the strip band
-        private const string HintText = "Drag to place the ghost. Pinch in or out to zoom.";
+        // WO-1411: the seed text is READ FROM THE GUIDE, not restated here. This used to be a
+        // literal copy of BuildFirstUseGuide's MoveGhost sentence — two owners of one line, and
+        // the copy would have gone stale the moment the guide's wording changed (the exact
+        // duplicated-state failure CLAUDE.md §15 keeps catching). SetState/RefreshFirstUseGuide
+        // already overwrite this from BuildFirstUseGuide.Copy on every show; this is only the
+        // construction-time value, so it should come from the same place.
         private const string HintSessionsKey   = "build.hint.sessions";
         private const string HintPlacementsKey = "build.hint.placements";
         private const int HintSessionLimit   = 2;
@@ -238,9 +248,16 @@ namespace DeNelle.Village
         private RectTransform _verbRail;     // D14: confirm / rotate / cancel — a FIXED HORIZONTAL
                                              // row in the bottom-right, above the D19 strip (COLUMN-FIT 2026-08-16)
         private Button _okChip;
-        private TextMeshProUGUI _okChipLabel;   // ASCII fallback path (null when the D17 sprite loaded)
-        private Image _okChipRing;
-        private Image _okChipIcon;           // D17 sprite path (null when the ASCII fallback is live)
+        // WO-1411: the confirm verb is a WORD now, always — the D17 sprite/ASCII fork is gone,
+        // so this is never null on a built rail and the verdict has exactly one thing to drive.
+        private TextMeshProUGUI _okChipLabel;
+        /// <summary>WO-1411 — the confirm verb's word while the placement is legal.</summary>
+        private const string PlaceVerbWord = "PLACE";
+        /// <summary>WO-1411 — and while it is refused. A WORD, never a hue or an alpha: the
+        /// owner is red/green colourblind and a dimmed check-mark is exactly the judgement a
+        /// capture (or a player) should never be asked to make. The full sentence stays on the
+        /// block-reason plate; this is the state on the button itself.</summary>
+        private const string BlockedVerbWord = "BLOCKED";
         private GameObject _dpadHost;        // the nudge stick — shown by STATE while Placing (D12), never a toggle
         private GameObject _hintLine;        // WO-1010 P3: the one first-run hint line (PLACE phase, gated)
         private TextMeshProUGUI _hintText;
@@ -653,47 +670,49 @@ namespace DeNelle.Village
             var railFillImg = railFill.GetComponent<Image>();
             if (railFillImg != null) railFillImg.raycastTarget = false;
 
-            // ── D17: the rail's icon language — check / rotate-arrow / cross sprites.
-            // All three glyphs now ship in the pack (element/check + element/rotate landed
-            // 2026-08-09 beside the existing element/cross). RpgUiCatalog's contract is
-            // sprite-or-null and MakeVerb honours it: any sprite that fails to load falls
-            // back to the ASCII word ("OK" / "Rot" / "X") — words degrade gracefully, a
-            // typed glyph would render as a tofu box on the shipped TMP atlas.
-            Sprite confirmIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCheck);
-            Sprite rotateIcon  = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementRotate);
-            Sprite cancelIcon  = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCross);
-            if (confirmIcon == null)
-                FlowTrace.Warn("BuildHud",
-                    "D17: element/check sprite absent -- confirm verb falls back to the ASCII 'OK'.");
-            if (rotateIcon == null)
-                FlowTrace.Warn("BuildHud",
-                    "D17: element/rotate sprite absent -- rotate verb falls back to the ASCII 'Rot'.");
-            if (cancelIcon == null)
-                FlowTrace.Warn("BuildHud",
-                    "D17: element/cross sprite absent -- cancel verb falls back to the ASCII 'X'.");
-            FlowTrace.Step("BuildHud",
-                "D17 rail icons: confirm=" + (confirmIcon != null ? "SPRITE element/check" : "ASCII 'OK'") +
-                ", rotate=" + (rotateIcon != null ? "SPRITE element/rotate" : "ASCII 'Rot'") +
-                ", cancel=" + (cancelIcon != null ? "SPRITE element/cross" : "ASCII 'X'"));
-
-            // COLUMN-FIT 2026-08-16: laid out LEFT -> RIGHT (was top -> bottom): confirm, rotate, cancel.
-            // The reading order [OK][Rot][X] is deliberately unchanged from the vertical rail
-            // so nothing about the wiring or the muscle memory moves with the axis — and the
-            // invariant that mattered survives: cancel sits FURTHEST from confirm, with rotate
-            // between them, so the destructive verb is not the one a slipped thumb finds.
-            // Fit check (inner band = RailBandW 384 - 2*ChipEdgePx = 378): centres at -126/0/+126
-            // with 112px boxes span -182..+182 = 364 <= 378, so no box straddles the trim.
-            float step = ChipHitPx + RailGutterPx;   // 126
+            // ── WO-1411: THE RAIL SPEAKS WORDS. PLACE / ROTATE / CANCEL. ─────────────────
+            // ⛔ THE D17 ICON LANGUAGE IS RETIRED HERE, and the sprites are not "missing" —
+            // element/check, element/rotate and element/cross all load. They were the problem.
+            // The merged UI review (REVIEW_MERGED.md row 10, both reviewers independently, off
+            // BuildGhostChips_blocked_2670x1200.png) read the bottom-right of the placement
+            // screen as "three unlabelled glyphs (check / rotate / X)" — i.e. three symbols to
+            // guess at, on the one screen where the player is about to SPEND. That is the
+            // owner's names-not-icons ruling, and the previous design conceded the point in its
+            // own comment: the ASCII path existed because "words degrade gracefully".
+            //
+            // So the words are now the PRIMARY path, not the fallback. Kit ButtonPack buttons
+            // (the same widget the confirm modal's CONFIRM/CANCEL use) in the SAME rail band —
+            // RailBandW x RailBandH is load-bearing geometry (the COLUMN-FIT note above spells
+            // out what it clears), so nothing about the band, its seat or the reading order
+            // moves. Only the three tenants inside it change from 52px discs to worded boxes.
+            //
+            // FIT, in the band's own numbers: the inner fill is RailBandW - 2*ChipEdgePx = 378
+            // wide by RailBandH - 2*ChipEdgePx = 126 tall. Three columns at x .015-.325 /
+            // .345-.655 / .675-.985 are ~117px wide each with ~7px gutters, and y .02-.98 is
+            // ~123px tall — above the kit's MinTouchPx floor on the tap axis that matters here.
+            // ⚠ The LABEL fit inside an ornate cap cannot be proven from arithmetic (today's
+            // Manage lesson: "a size derived from a number I did not measure is a guess wearing
+            // a px suffix"), so every label below is autosizing + NoWrap + Overflow and the
+            // capture is the judge.
+            //
+            // Reading order is UNCHANGED — confirm, rotate, cancel, left to right — so the
+            // destructive verb still sits furthest from the confirm a slipped thumb finds.
             var railRt = railFill.transform as RectTransform;
-            _okChip = MakeVerb(railRt, "OkChip", "OK", confirmIcon, ElarionUi.Gilt,
-                new Vector2(-step, 0f), ChipVisualPx, 20f,
-                () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing, out _okChipIcon);
-            MakeVerb(railRt, "RotChip", "Rot", rotateIcon, ElarionUi.Parchment,
-                Vector2.zero, ChipVisualPx, 20f,
-                () => _onRotateRight?.Invoke(), out _, out _, out _);
-            MakeVerb(railRt, "CancelChip", "X", cancelIcon, new Color(0.86f, 0.32f, 0.30f),
-                new Vector2(step, 0f), ChipVisualPx, 20f,
-                () => _onCancel?.Invoke(), out _, out _, out _);
+            _okChip = MakeWordVerb(railRt, "OkChip", PlaceVerbWord, ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.015f, 0.02f), new Vector2(0.325f, 0.98f),
+                () => _onPlace?.Invoke(), out _okChipLabel);
+            MakeWordVerb(railRt, "RotChip", "ROTATE", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.345f, 0.02f), new Vector2(0.655f, 0.98f),
+                () => _onRotateRight?.Invoke(), out _);
+            MakeWordVerb(railRt, "CancelChip", "CANCEL", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.675f, 0.02f), new Vector2(0.985f, 0.98f),
+                () => _onCancel?.Invoke(), out _);
+            FlowTrace.Step("BuildHud",
+                "WO-1411 ghost rail: the three verbs are WORDS -- '" + PlaceVerbWord + "' / 'ROTATE' / 'CANCEL' " +
+                "(kit ButtonPack), replacing the D17 check/rotate/cross glyphs the merged review read as " +
+                "unlabelled. Band geometry unchanged: " + RailBandW + "x" + RailBandH + "px, same seat, same " +
+                "left-to-right order. Blocked verdict now flips the confirm WORD to '" + BlockedVerbWord +
+                "' instead of dimming a glyph.");
 
             // Kept as the canonical cancel name so any probe/close convention still resolves
             // it after the word-button retirement.
@@ -775,7 +794,7 @@ namespace DeNelle.Village
             var fillImg = fill.GetComponent<Image>();
             if (fillImg != null) fillImg.raycastTarget = false;
 
-            var t = MakeText(fill.transform, HintText, 18, ElarionUi.Parchment,
+            var t = MakeText(fill.transform, BuildFirstUseGuide.Copy, 18, ElarionUi.Parchment,
                 FontStyles.Normal, TextAlignmentOptions.Center,
                 new Vector2(0.02f, 0f), new Vector2(0.98f, 1f));
             _hintText = t;
@@ -795,118 +814,57 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Swap a plate from the kit's 9-sliced rounded RECTANGLE to a true DISC. The target
-        /// wireframe styles every rail verb and the corner Done `border-radius:50%`, and the
-        /// first capture came back with rounded squares — close enough to pass a marker, not
-        /// close enough to pass the owner's side-by-side ("does not match" was the last verdict).
-        /// The circle sprite is procedural and may be null under WebGL, in which case the plate
-        /// keeps its rounded-rect look rather than losing its background entirely. Image.type
-        /// must go back to Simple: the disc carries no 9-slice borders, and leaving it Sliced
-        /// renders it as a smeared quad.
-        /// </summary>
-        private static void MakeDisc(Image img)
-        {
-            if (img == null) return;
-            var disc = ElarionUiKit.CircleSprite;
-            if (disc == null) return;               // keep the rounded rect; never blank the plate
-            img.sprite = disc;
-            img.type = Image.Type.Simple;
-        }
-
-        /// <summary>
-        /// One rail verb (Done no longer uses this — WO-1035 routed it to the common kit
-        /// button; this is the D14 rail's own path): a MinTouch-sized INVISIBLE hit box with a small
-        /// visible plate inside it. The transparent parent Image is the raycast target, so the
-        /// tappable area is 112px while the art stays ~52px — the WO's invisible-padding rule.
-        /// Growing the visual instead would put slabs down the right edge and undo the point of
-        /// the redesign.
+        /// WO-1411 — ONE RAIL VERB, AS A WORD. Replaces the D14/D17 <c>MakeVerb</c> chip (a
+        /// MinTouch-sized invisible hit box wrapping a 52px disc that carried either a pack
+        /// sprite or a two-letter ASCII stub) and its <c>MakeDisc</c> helper, both of which
+        /// existed only for these three tenants and went with them.
         ///
-        /// D17: pass a SPRITE in <paramref name="icon"/> and the plate renders the glyph art;
-        /// pass null and it renders <paramref name="label"/> as ASCII text. That null path is
-        /// not a stub — it is RpgUiCatalog's sprite-or-null contract, and it is what keeps a
-        /// missing pack from turning a verb into a tofu box.
+        /// ⛔ THIS IS A REPLACEMENT, NOT A SECOND WIDGET. The kit's ButtonPack is the same
+        /// button the confirm modal's CONFIRM/CANCEL and the corner Done already use, so the
+        /// placement screen now speaks the game's one button language instead of a bespoke
+        /// disc grammar invented for this rail.
+        ///
+        /// The GameObject NAME is preserved verbatim for each seat (OkChip / RotChip /
+        /// CancelChip) because the capture harness walks the live hierarchy by those names
+        /// (UICaptureLaunch.AssertConfirmChipInvalid finds "OkChip"). A rename here would turn
+        /// a real measurement into a "verb was renamed or removed" warning and quietly stop
+        /// measuring the blocked verdict.
         /// </summary>
-        private static Button MakeVerb(RectTransform parent, string name, string label,
-            Sprite icon, Color accent, Vector2 offset, float visualPx, float fontPx, Action onClick,
-            out TextMeshProUGUI labelOut, out Image ringOut, out Image iconOut)
+        private static Button MakeWordVerb(RectTransform parent, string name, string label,
+            ElarionUiKit.ButtonKind kind, Vector2 anchorMin, Vector2 anchorMax, Action onClick,
+            out TextMeshProUGUI labelOut)
         {
-            iconOut = null;
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(ChipHitPx, ChipHitPx);
-            rt.anchoredPosition = offset;
-
-            var hit = go.AddComponent<Image>();
-            hit.color = new Color(0f, 0f, 0f, 0f);   // invisible padding, still raycastable
-            hit.raycastTarget = true;
-            var btn = go.AddComponent<Button>();
-            btn.targetGraphic = hit;
-            if (onClick != null) btn.onClick.AddListener(() => onClick());
-
-            // ── The visible plate: an ACCENT-COLOURED EDGE around a near-black fill. ──
-            // The first build used a plain ObsidianFill circle, and the capture showed why
-            // that fails: ObsidianFill is (0.02,0.02,0.025) — effectively black — so the chip
-            // was black-on-black and only the bare label floated over the field. Even inside
-            // the rail band the plate keeps its edge: the band itself is the same near-black,
-            // so without it the verbs would be black-on-black again. The edge also gives each
-            // verb a second, non-textual identity (gold confirm / parchment rotate / red
-            // cancel) WITHOUT meaning ever resting on colour alone, because each verb also
-            // carries a distinct WORD or a distinct SHAPE.
-            var edge = ElarionUiKit.AddImage(go.transform, "ChipEdge",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), accent, rounded: true);
-            var edgeRt = edge.transform as RectTransform;
-            if (edgeRt != null)
+            labelOut = null;
+            var btn = ElarionUiKit.ButtonPack(parent, label, kind, anchorMin, anchorMax, onClick,
+                                              RpgUiCatalog.ButtonFrame);
+            if (btn == null)
             {
-                edgeRt.anchorMin = edgeRt.anchorMax = new Vector2(0.5f, 0.5f);
-                edgeRt.pivot = new Vector2(0.5f, 0.5f);
-                edgeRt.sizeDelta = new Vector2(visualPx, visualPx);
+                FlowTrace.Fail("BuildHud",
+                    "WO-1411: kit ButtonPack returned null for the ghost verb '" + label +
+                    "' -- that seat of the placement rail has NO control at all.");
+                return null;
             }
-            var edgeImg = edge.GetComponent<Image>();
-            if (edgeImg != null) { edgeImg.raycastTarget = false; MakeDisc(edgeImg); }
-
-            var fill = ElarionUiKit.AddImage(edge.transform, "ChipFill",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
-            var fillRt = fill.transform as RectTransform;
-            if (fillRt != null)
+            btn.gameObject.name = name;
+            labelOut = btn.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (labelOut != null)
             {
-                fillRt.anchorMin = fillRt.anchorMax = new Vector2(0.5f, 0.5f);
-                fillRt.pivot = new Vector2(0.5f, 0.5f);
-                fillRt.sizeDelta = new Vector2(visualPx - ChipEdgePx * 2f, visualPx - ChipEdgePx * 2f);
+                // A one-word verb must never ellipsis-cull inside an ornate cap. The usable
+                // width inside a pack frame is not a knowable fraction of the box (the Manage
+                // pass measured that the hard way), so the label shrinks to fit rather than
+                // being authored at a size derived from an unmeasured number.
+                labelOut.raycastTarget = false;
+                labelOut.textWrappingMode = TextWrappingModes.NoWrap;
+                labelOut.enableAutoSizing = true;
+                labelOut.fontSizeMin = 12f;
+                labelOut.fontSizeMax = 22f;
+                labelOut.overflowMode = TextOverflowModes.Overflow;
             }
-            ringOut = fill.GetComponent<Image>();
-            if (ringOut != null) { ringOut.raycastTarget = false; MakeDisc(ringOut); }
-
-            if (icon != null)
+            else
             {
-                // SPRITE glyph (D17). preserveAspect so a non-square source is never squashed;
-                // untinted so the pack art reads as authored — the accent EDGE carries the
-                // redundant colour cue and the SHAPE carries the meaning.
-                var iconGo = new GameObject("ChipIcon", typeof(RectTransform), typeof(Image));
-                iconGo.transform.SetParent(fill.transform, false);
-                var irt = (RectTransform)iconGo.transform;
-                irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 0.5f);
-                irt.pivot = new Vector2(0.5f, 0.5f);
-                irt.sizeDelta = new Vector2(ChipIconPx, ChipIconPx);
-                var iconImg = iconGo.GetComponent<Image>();
-                iconImg.sprite = icon;
-                iconImg.preserveAspect = true;
-                iconImg.raycastTarget = false;
-                iconOut = iconImg;   // callers that state-drive the glyph (OK verdict) hold this
-                labelOut = null;
-                return btn;
+                FlowTrace.Warn("BuildHud",
+                    "WO-1411: ghost verb '" + label + "' built without a readable TMP label -- " +
+                    "the button would render as a bare plate, which is the icon-only defect again.");
             }
-
-            labelOut = MakeText(fill.transform, label, fontPx, accent, FontStyles.Bold,
-                TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
-            labelOut.raycastTarget = false;
-            // A short verb must never ellipsis-cull inside its own plate.
-            labelOut.textWrappingMode = TextWrappingModes.NoWrap;
-            labelOut.enableAutoSizing = true;
-            labelOut.fontSizeMin = fontPx * 0.6f;
-            labelOut.fontSizeMax = fontPx;
             return btn;
         }
 
@@ -1051,6 +1009,13 @@ namespace DeNelle.Village
             if (_intentBar != null && _intentBar.activeSelf != placing)
                 _intentBar.SetActive(placing);
 
+            // WO-1411 — THE BANNER TAKES THE PHASE. Placing means a ghost is armed, so the
+            // pick steps are over no matter which door the player came through. Without this,
+            // arming from the palette carousel (which raises no CategorySelected/ItemSelected)
+            // left the guide on Step.Category and the hint below printed "First build: select a
+            // category." over a ghost the player was already dragging — the 07:02 capture.
+            if (placing) BuildFirstUseGuide.GhostArmed();
+
             // WO-1010 P3: the one hint line rides the PLACE phase, behind the first-run gate.
             // Parented under the intent bar, so hiding the bar hides it too; this only decides
             // whether an ELIGIBLE player sees it when placement starts.
@@ -1161,31 +1126,25 @@ namespace DeNelle.Village
             // to follow, do not make it follow"). TrackGhost still feeds validity + reason;
             // only the VERDICT below remains, which is state, not layout.
 
-            // ── THE VERDICT: state on the chip, full reason IN WORDS on the PILL. ─
+            // ── THE VERDICT: state on the button, full reason IN WORDS on the plate. ─
             // The first capture put the whole reason ON the chip and "Not enough Wood" wrapped
             // to four lines and spilled outside a 52px circle — unreadable, and it covered the
-            // other chips. A sentence needs the WIDE surface; the chip only ever has room for
-            // a verb or a glyph. The pill — already 620px and right above the ghost — carries
-            // the why as TEXT (appended below), so the refusal is never colour-alone whichever
-            // chip path is live:
-            //  - ASCII fallback (_okChipLabel): the chip itself flips OK <-> No (word + colour).
-            //  - D17 sprite (_okChipIcon): a check-mark has no word to flip, so the invalid
-            //    state reads as DIM + DISABLED (an alpha/brightness change, not a hue the
-            //    owner's red/green blindness can lose) — the WORDED verdict stays on the pill.
-            //    Chosen over swapping in the cross sprite, which would put two X glyphs on one
-            //    rail and make confirm-invalid look like a second cancel.
+            // other chips. A sentence needs the WIDE surface; the button only ever has room for
+            // a verb. The block-reason plate carries the why as TEXT, so the refusal is never
+            // colour-alone.
+            //
+            // WO-1411: there is now exactly ONE verdict path, because there is exactly one
+            // confirm rendering. The old fork (ASCII label flips OK<->No / D17 sprite dims to
+            // alpha 0.35) is gone with the glyphs. A dimmed check-mark was always the weaker
+            // half of that fork — it asked a red/green colourblind owner, and a PNG, to judge
+            // an alpha change — so the surviving path is the WORD: PLACE while it is legal,
+            // BLOCKED while it is refused, plus non-interactable either way.
             if (_okChipLabel != null)
             {
-                string want = _ghostValid ? "OK" : "No";
+                string want = _ghostValid ? PlaceVerbWord : BlockedVerbWord;
                 if (_okChipLabel.text != want) _okChipLabel.text = want;
                 _okChipLabel.color = _ghostValid ? ElarionUi.Gilt : new Color(0.86f, 0.32f, 0.30f);
             }
-            else if (_okChipIcon != null)
-            {
-                Color want = _ghostValid ? Color.white : new Color(1f, 1f, 1f, 0.35f);
-                if (_okChipIcon.color != want) _okChipIcon.color = want;
-            }
-            if (_okChipRing != null) { /* fill stays obsidian; the EDGE carries chip identity */ }
             if (_okChip != null) _okChip.interactable = _ghostValid;
 
             if (_placeName != null)

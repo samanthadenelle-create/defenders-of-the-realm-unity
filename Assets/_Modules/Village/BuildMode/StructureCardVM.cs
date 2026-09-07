@@ -174,6 +174,167 @@ namespace DeNelle.Village
         public static StructureCardVM CreateForEntry(CatalogEntry entry)
             => new StructureCardVM(entry, EconomyService.Instance, BuildModeController.FreeBuildAvailable(entry));
 
+        // =====================================================================
+        //  WO-1411 — WHAT CAN I ACTUALLY BUILD BEHIND THIS DOOR?
+        //
+        //  The merged UI review (REVIEW_MERGED.md row 10): eight category cards and
+        //  "no card says what is affordable". The player opens a door, reads five
+        //  prices they cannot pay, and backs out — the whole browse costs them taps
+        //  and tells them nothing.
+        //
+        //  ⛔ NO NEW AFFORDABILITY RULE IS INVENTED HERE. This is a FOLD over the two
+        //  authorities that already decide what one card says:
+        //    • BuildCollectionBrowser.IsCollectionItemVisible — the ONE offer authority
+        //      (its own summary says so), so the count can never include a row the
+        //      browser would not draw;
+        //    • this VM's own Affordable/Locked, i.e. the SAME projection the item card
+        //      renders, so the subtitle's number and the cards behind it are one fact.
+        //  A second predicate here is exactly how a door promises two builds and opens
+        //  onto five "Unaffordable" cards.
+        //
+        //  Built singletons are excluded for the same reason CollectionHasVisibleItems
+        //  excludes them: a structure whose one allowed instance already stands is not
+        //  a build choice, however affordable it is.
+        // =====================================================================
+        // Fully qualified rather than a file-wide `using DeNelle.Core;`: this file already
+        // aliases CoreCost to disambiguate DeNelle.Core.Catalog, and opening a second
+        // namespace for ONE parameter type is how an ambiguous-reference build break arrives
+        // in a file nobody edited.
+        public static int AffordableCount(DeNelle.Core.CardCollectionDefinition collection)
+        {
+            if (collection?.Items == null) return 0;
+            int affordable = 0;
+            foreach (var item in collection.Items)
+            {
+                if (item == null || !BuildCollectionBrowser.IsCollectionItemVisible(item.ItemId)) continue;
+                var entry = CatalogRegistry.Get(item.ItemId);
+                if (entry == null) continue;
+                if (StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry)) continue;
+                bool progressionLocked = !string.IsNullOrEmpty(RewardedProgression.LockReasonFor(item.ItemId)) &&
+                                         !ProgressionUnlocks.IsUnlocked(item.ItemId);
+                var vm = new StructureCardVM(entry, EconomyService.Instance,
+                    BuildModeController.FreeBuildAvailable(entry), progressionLocked,
+                    RewardedProgression.LockReasonFor(item.ItemId));
+                if (vm.Affordable && !vm.Locked) affordable++;
+            }
+            return affordable;
+        }
+
+        // =====================================================================
+        //  WO-1411 — THE PLACEMENT SUMMARY: what this build costs, how long it takes,
+        //  and whether a builder is free. MODEL-SIDE, and that is the RULING, not a
+        //  preference: the UI-MVVM conformance oracle failed BuildPreviewModal for
+        //  reading GameStateService directly (canon 9 — a View never touches game
+        //  state, and derived text is model work). The View now paints ONE string it
+        //  is handed.
+        //
+        //  ⚠ THIS WIDENS THE VM'S STATE READ, deliberately and in one place. The class
+        //  header says "the sole game-state read stays in CreateForEntry" — that is now
+        //  two seams, this one and that one, both HERE in the model. The alternative
+        //  (leaving the read in the modal) is the violation the oracle just caught.
+        //
+        //  ⛔ NOT ONE NUMBER IS INVENTED OR RE-DERIVED. Each term comes from the seam
+        //  that already owns it, so this line can never quote a price or a wait the
+        //  placement then contradicts:
+        //    • COST — FreeBuildAvailable + SoftcappedCostFor (the SOFTCAPPED value: it is
+        //      what the ghost actually charges), spelled by the ONE shared CostFormat.
+        //      While the first-build freebie is live the price slot shows NOTHING —
+        //      owner ruling WO-1010 D20, the same rule the collection card obeys.
+        //    • TIME — tier from CostFor (the INTRINSIC weight: a freebie does not make a
+        //      build instant and the softcap surcharge does not stretch the timer), then
+        //      the config curve, then GraceAdjustedDurationMs under GraceReasonFor — the
+        //      exact three steps BuildModeController runs at commit. Quoting the raw
+        //      curve would print minutes over a build the FTUE finishes in seconds, and a
+        //      hardcoded duration would be a guess wearing a suffix.
+        //    • CREW — free Builder slots = SlotCount(Builder) minus its active jobs.
+        //
+        //  ASCII separator (" . "): a typed middle-dot renders as tofu on the shipped TMP
+        //  atlas — the same landmine the build HUD's ASCII rule records.
+        // =====================================================================
+        public readonly struct PlacementSummary
+        {
+            /// <summary>The paid basket in words; empty while the first-build freebie is live.</summary>
+            public readonly string CostWords;
+            /// <summary>The wait this placement will actually run, grace included; 0 = unknown.</summary>
+            public readonly int Seconds;
+            /// <summary>Crew availability in words (never a bare ratio).</summary>
+            public readonly string CrewWords;
+            /// <summary>The finished line the View paints, terms joined and empties dropped.</summary>
+            public readonly string Line;
+
+            public PlacementSummary(string costWords, int seconds, string crewWords, string line)
+            { CostWords = costWords; Seconds = seconds; CrewWords = crewWords; Line = line; }
+        }
+
+        public static PlacementSummary PlacementSummaryFor(CatalogEntry entry)
+        {
+            string costWords = PlacementCostWords(entry);
+            int seconds = PlacementBuildSeconds(entry);
+            string crewWords = PlacementCrewWords();
+
+            var terms = new List<string>();
+            if (!string.IsNullOrEmpty(costWords)) terms.Add(costWords);
+            if (seconds > 0) terms.Add(DeNelle.Core.UI.ElarionUi.Duration(seconds));
+            if (!string.IsNullOrEmpty(crewWords)) terms.Add(crewWords);
+            return new PlacementSummary(costWords, seconds, crewWords,
+                                        string.Join(" . ", terms.ToArray()));
+        }
+
+        private static string PlacementCostWords(CatalogEntry entry)
+        {
+            if (entry == null) return string.Empty;
+            if (BuildModeController.FreeBuildAvailable(entry)) return string.Empty;
+            var c = BuildModeController.SoftcappedCostFor(entry);
+            return DeNelle.Core.UI.CostFormat.Words(DeNelle.Core.UI.CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", c.wood), ("stone", "Stone", c.food),
+                ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals)
+            }));
+        }
+
+        /// <summary>0 when the timer service is absent — the line then omits the term rather
+        /// than quoting a fiction.</summary>
+        private static int PlacementBuildSeconds(CatalogEntry entry)
+        {
+            var svc = BuildTimerService.Instance;
+            if (entry == null || svc == null || svc.Config == null) return 0;
+            int tier = svc.Config.TierForCost(BuildModeController.CostFor(entry));
+            double ms = svc.Config.DurationSecondsForTier(tier, BuildJobKind.Build) * 1000.0;
+
+            var state = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            bool firstEverBuild = state == null || !state.HasEverBuilt(entry.id);
+            bool notYetOnboarded = state != null && !state.Onboarded;
+            bool isPallet = DeNelle.Core.Economy.TownBankCapacity.IsStorageContainer(entry.repo);
+            var grace = BuildModeController.GraceReasonFor(firstEverBuild, notYetOnboarded, isPallet);
+            ms = BuildTimerService.GraceAdjustedDurationMs(ms, grace, false, svc.Config.firstBuildSeconds);
+            return Mathf.Max(0, Mathf.RoundToInt((float)(ms / 1000.0)));
+        }
+
+        /// <summary>WORDS, not "0 / 2": a bare ratio leaves the player to work out whether that
+        /// is good news. The wait itself is already the term before this one.</summary>
+        private static string PlacementCrewWords()
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null) return string.Empty;
+            int slots = svc.SlotCount(DeNelle.Core.Jobs.ChannelId.Builder);
+            var active = svc.ActiveJobsOf(DeNelle.Core.Jobs.ChannelId.Builder);
+            int free = Mathf.Max(0, slots - (active != null ? active.Count : 0));
+            return free > 0 ? "Builder free" : "Builders busy - joins the queue";
+        }
+
+        /// <summary>
+        /// WO-1411 — the count IN PLAYER ENGLISH, owned by the VM so the browser card and
+        /// any oracle read the same sentence. Never a bare number and never a colour: the
+        /// state is the WORDS (colorblind law), and "nothing affordable yet" says the door
+        /// is still worth remembering rather than reading as an error.
+        /// </summary>
+        public static string AffordabilityWords(int affordable)
+        {
+            if (affordable <= 0) return "nothing affordable yet";
+            return affordable == 1 ? "1 you can build now" : affordable + " you can build now";
+        }
+
         public StructureCardVM(CatalogEntry entry, IEconomy economy, bool freebie,
             bool locked = false, string lockReason = null)
         {

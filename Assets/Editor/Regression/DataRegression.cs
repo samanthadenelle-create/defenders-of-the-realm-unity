@@ -527,6 +527,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "temporary-builder suite", () => { if (!DeNelle.Editor.Regression.TemporaryBuilderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[temporary-builder] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "card-collection-foundation suite", () => { if (!DeNelle.Editor.Regression.CardCollectionFoundationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[card-collection-foundation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-collection-player suite", () => { if (!DeNelle.Editor.Regression.BuildCollectionPlayerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-collection-player] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-affordability-words suite", () => { if (!DeNelle.Editor.Regression.BuildAffordabilityWordsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-affordability-words] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "post-wave-victory-modal suite", () => { if (!DeNelle.Editor.Regression.PostWaveVictoryModalRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[post-wave-victory-modal] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-shared-card suite", () => { if (!DeNelle.Editor.Regression.NightMarketSharedCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-shared-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
@@ -1346,6 +1347,18 @@ namespace DeNelle.Editor
             // that any other modal can destroy.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-terminal-state suite", () => { if (!DeNelle.Editor.Regression.RaidTerminalStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-terminal-state] " + r); });
 
+            // --- TROOP TARGET PREFERENCE (WO-1438, 2026-09-06): the owner's warband spent a raid
+            // chewing wall panels outward from a breach it never walked through. Proven from her
+            // own capture, not inferred - `accepted[unit=1,struct=17] ... won='Wall_Outer_SS_11'
+            // dist=4.2m preferStruct=False`: a live defender was inside the sweep and a wall
+            // 4.2 m away won, because a hostile STRUCTURE competed in the same nearest-wins
+            // bucket as a live body for every non-siege role. Pins the extracted pick rule
+            // itself (TroopController.PrefersUnitOverStructure, the function NearestHostile
+            // calls) so the suite cannot stay green while the selector does something else, and
+            // pins the anti-pinning half: an unreachable defender must NOT be preferred, or the
+            // troop pushes into an intact wall with NoObstacleAvoidance and freezes.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-target-preference suite", () => { if (!DeNelle.Editor.TroopTargetPreferenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[troop-target-preference] " + r); });
+
             // --- COLLECTOR STACK PROPS (2026-08-16): CollectorStackPropCatalog.cs told
             // everyone to "place the asset at Assets/Resources/Collectors/..." and nobody
             // ever did - the folder did not exist and git history shows the asset was
@@ -1441,6 +1454,7 @@ namespace DeNelle.Editor
             // IDamageableStructure, and absent from both dual copies of structures-catalog.json and
             // build-categories.json (a catalog row is the failure the ticket exists to prevent).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-storefront suite", () => { if (!DeNelle.Editor.Regression.RealmStorefrontRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-storefront] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "welcome-back-doors suite", () => { if (!DeNelle.Editor.Regression.WelcomeBackDoorsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[welcome-back-doors] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
@@ -1584,6 +1598,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-strike-vfx suite", () => { if (!DeNelle.Editor.Regression.TroopStrikeVfxRegression.Run(out var troopVfxReason)) failures.Add(troopVfxReason); else log.AppendLine("[troop-strike-vfx] " + troopVfxReason); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-armour suite", () => { if (!DeNelle.Editor.Regression.StarterArmourOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-armour] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armour-catalog-job suite", () => { if (!DeNelle.Editor.Regression.ArmourCatalogJobRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armour-catalog-job] " + r); });
+            // PERF D3 - Log and Warning must not walk a managed stack (ProjectSettings.asset:59
+            // m_StackTraceTypes), while Error/Assert/Exception keep theirs. The editor rewrites that
+            // file wholesale, so a restored ScriptOnly is SILENT: nothing crashes, no marker reddens,
+            // and the build simply pays for a stack walk on every one of ~35 logs/s again. NOT a
+            // FlowTrace strip (sec.12) - every line still prints, only the appended stack is dropped.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "stacktrace-logtype suite", () => { if (!DeNelle.Editor.Regression.StackTraceLogTypeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[stacktrace-logtype] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "early-ladder suite", () => { if (!DeNelle.Editor.WO1217EarlyEconomyLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[early-ladder] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "palette-storage-tail suite", () => { if (!DeNelle.Editor.Regression.PaletteStorageTailRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[palette-storage-tail] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "json-only-source suite", () => { if (!DeNelle.Editor.Regression.JsonMirrorLiteralRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[json-only-source] " + r); });
@@ -1622,6 +1642,13 @@ namespace DeNelle.Editor
             // already-registered PanelId.CosmeticShop; the deck grid derives its rows from the card
             // count (2x3 for five cards) so no card lands under the purpose line.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cosmetic-shop-reach suite", () => { if (!DeNelle.Editor.Regression.CosmeticShopReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cosmetic-shop-reach] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-row-benefit suite", () => { if (!DeNelle.Editor.Regression.ManageRowBenefitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-row-benefit] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-no-wallet suite", () => { if (!DeNelle.Editor.Regression.NightMarketNoWalletRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-no-wallet] " + r); });
+            // WO-1451 (2026-09-06): registered per this file's fencing rule. Pins that the tower
+            // preview's RenderTexture and its camera agree on sample count - HEAD rendered 1 sample
+            // (allowMSAA=false) into a 2-sample RT and threw 260 [BREAK]s in 144 seconds under
+            // TowerPreviewCamera:Begin. The invariant is RT == CAMERA, never RT == the URP asset.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "preview-rt-samples suite", () => { if (!DeNelle.Editor.Regression.PreviewRenderTextureSamplesRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[preview-rt-samples] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

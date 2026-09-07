@@ -134,6 +134,14 @@ namespace DeNelle.Village
             _yawReadout.color = ElarionUi.Parchment;
             ElarionUiKit.FitSingleLine(_yawReadout, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
 
+            // ── WO-1411: THE PRICE AND THE WAIT, ON THE LAST TAP BEFORE SPENDING. ────────
+            // REVIEW_MERGED row 10, both reviewers off BuildPreview_2670x1200.png: this modal
+            // shows "orientation only, no cost, no time". It is the final confirmation before
+            // resources leave the bank and a builder is committed, and it was the one build
+            // surface that named neither. One line, above CONFIRM, in the same reading order
+            // the ticket writes it: cost . duration . crew.
+            BuildCostTimeLine(panel);
+
             CreateButton(panel, "-90 DEG", new Vector2(0.06f, 0.20f), new Vector2(0.34f, 0.31f), () => RotatePreview(-90));
             CreateButton(panel, "+90 DEG", new Vector2(0.36f, 0.20f), new Vector2(0.64f, 0.31f), () => RotatePreview(90));
             CreateButton(panel, "RESET", new Vector2(0.66f, 0.20f), new Vector2(0.94f, 0.31f), ResetToSaved);
@@ -152,6 +160,57 @@ namespace DeNelle.Village
             instr.fontSize = ElarionUi.FontMicro;
             instr.color = ElarionUi.ParchmentDim;
             ElarionUiKit.FitSingleLine(instr, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
+        }
+
+        /// <summary>
+        /// WO-1411 — paints the confirm line: the paid basket, the wait, and the crew word.
+        ///
+        /// ⛔ THIS VIEW COMPOSES NOTHING AND READS NO GAME STATE. Every term, the join and the
+        /// wording live in <see cref="StructureCardVM.PlacementSummaryFor"/>; this method sets
+        /// <c>.text</c> and the type metrics. The first cut of this line derived the duration
+        /// and read <c>GameStateService</c> here, and the UI-MVVM conformance oracle failed it
+        /// by name — correctly: derived text is model work (canon 9), and a View that can reach
+        /// game state can also disagree with the model about what the player is about to pay.
+        ///
+        /// ⚠ NO EXAMPLE BASKET IS QUOTED IN THIS DOC. The one that used to sit here was copied
+        /// from a capture-harness STUB, not from the catalog, and stating it as if it were the
+        /// authored row is exactly the hearsay CLAUDE.md §11B bans. The authored numbers live
+        /// in the structures catalog; read them there.
+        /// </summary>
+        private void BuildCostTimeLine(Transform panel)
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("Build", "confirm cost/time line", () =>
+            {
+                var summary = StructureCardVM.PlacementSummaryFor(_entry);
+                string line = summary.Line;
+
+                var go = new GameObject("CostTimeLine", typeof(RectTransform), typeof(TextMeshProUGUI));
+                go.transform.SetParent(panel, false);
+                var rt = go.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.06f, 0.075f);
+                rt.anchorMax = new Vector2(0.94f, 0.185f);
+                rt.sizeDelta = Vector2.zero;
+                var text = go.GetComponent<TextMeshProUGUI>();
+                text.text = line;
+                text.alignment = TextAlignmentOptions.Center;
+                text.fontSize = ElarionUi.FontBody;
+                text.color = ElarionUi.Gilt;
+                text.fontStyle = FontStyles.Bold;
+                text.raycastTarget = false;
+                // The basket can run to four resources plus a duration plus the crew word, and
+                // this is the number the player is about to pay: it shrinks to fit, never clips.
+                text.textWrappingMode = TextWrappingModes.Normal;
+                text.enableAutoSizing = true;
+                text.fontSizeMin = ElarionUi.FontFloorMobile;
+                text.fontSizeMax = ElarionUi.FontBody;
+                text.overflowMode = TextOverflowModes.Overflow;
+
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Build",
+                    "confirm cost='" + summary.CostWords + "' time=" + summary.Seconds +
+                    "s crew='" + summary.CrewWords + "' line='" + line +
+                    "' (WO-1411: the orientation modal now prices the tap; composed by " +
+                    "StructureCardVM.PlacementSummaryFor, painted here).");
+            });
         }
 
         private void CreateButton(Transform parent, string label, Vector2 anchorMin,

@@ -34,7 +34,51 @@ Connect a wallet to buy - prices shown in USD                [ CONNECT WALLET ]
 ```
 Trace: `FlowTrace.Step("Store", "shelf wallet=<bool> anchors=<n> banner=<bool>")` once per open.
 
+## Implementation log
+
+**2026-09-06 - second pass (the first pass was PARTIAL, and its own capture proves it).**
+Commit `3c677027e` (lane D) landed the copy/anchor half. Verified at source, and against
+`Builds/ui-capture/NightMarket_2670x1200.png` re-taken at 09-05 **23:56**, i.e. 44 minutes AFTER
+that commit:
+- CLOSED - the nine refusals are gone. Every card reads a `$` anchor (`PackStore.cs:2951` returns
+  `pack.UsdReference` when walletless; `:2977` drops the minor). No `Price unavailable`, no `UNAVAILABLE`.
+- CLOSED - the `MONTHLY LEDGER` clip. The redundant `ACTIONS` heading was retired
+  (`PackStore.cs:1792-1794`), returning 70 px; the row now clears `CLOSE THE GAP` on the frame.
+- CLOSED - contents capped at 2 + `+N more` (`DescribeContents`); the off-shelf comparison sentence
+  is dropped (`CompareLine`, `IsOnBrowsableShelf` guard).
+- **STILL OPEN, and fixed here:**
+  - **The banner was never on the screen.** `_balanceLabel` is born empty (`PackStore.cs:1133`) and its
+    only writer was `RenderBalanceLabel`, reached only from `RefreshWalletMirror()` inside `OnEnable`
+    (`PackStore.cs:431`). The capture harness composes by Awake -> EnsureBuilt -> Render
+    (`Assets/Editor/UICaptureLaunch.cs:3688-3730`) and never enables the object, so the header drew `""`
+    beside nine USD prices. `Render()` now repaints it, so the header is a function of state rather than
+    a value one lifecycle hook happened to leave behind.
+  - **The one-word badge shipped truncated.** The same commit moved the pill left AND shrank it from the
+    authored 0.70 of the card to 0.40 (`0.04..0.44`) without re-deriving the fit budget. `FontBadge` is 30
+    and `ElarionUi.FontFloorMobile` is ALSO 30, so `FitSingleLine` has no room and degrades to Ellipsis:
+    `BEST` (4 glyphs) fits, `FIRST` (5) does not - the frame reads `FIR...`. The band is now DERIVED
+    (`PackStore.OneWordBadgeX0/X1`, arithmetic in the block above them) at `0.04..0.54`.
+  - The `banner=` field of the WO's own trace restated the predicate instead of reading the label, so it
+    would have printed `banner=true` over that empty header. It now reads the rendered `TMP_Text` and
+    `FlowTrace.Warn`s when the two disagree.
+
+**Stale in this ticket vs the tree:** the `BS` fragment is NOT a badge. It is
+`StorePackCard.Initials(model.Name)` at 84 pt (`StorePackCard.cs:734`), the ASCII fallback drawn when
+`NightMarketArt.Load` returns null - `builders-hour` authors no `artResource` in `packs.json`, so it is
+`B`+`H` initials, not a clipped badge. Missing pack art is a separate finding.
+
+**Not done here (named, not silently dropped):** the "never required to spend" seal is the owner's
+AUTHORED `covenant-plaque` art with the sentence baked in (`PackStore.cs:1066`), not code-drawn copy.
+Rendering it "at legible size or as a text line" replaces her artwork and is her call, not a code fix.
+
 ## Acceptance
+
+> ⚠ ALL THREE BOXES ARE STILL UNTICKED ON PURPOSE. `NightMarketNoWalletRegression.cs` is WRITTEN and
+> registered (`DataRegression.cs`, `[night-market-no-wallet]`), but this lane holds no Unity lock: it has
+> never been compiled or run, so RED-first is a claim, not a measurement. Nothing here may be ticked
+> until the gate seat runs it - once RED on the pre-fix tree if that is still reachable, then green -
+> re-shoots `NightMarket_2670x1200.png`, and OPENS the frame.
+
 - [ ] RED first: `NightMarketNoWalletRegression` - no-wallet fixture: exactly one banner label containing
       `Connect a wallet`; every pack card carries a `$` anchor; no label reads `Price unavailable`; `AuditGeometry`
       reports no overlap between the LEDGER row and the CLOSE THE GAP header, nor badge vs art. Fails on the current tree.

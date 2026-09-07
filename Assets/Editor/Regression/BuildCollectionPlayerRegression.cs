@@ -127,10 +127,24 @@ namespace DeNelle.Editor.Regression
             if (!palette.Contains("OnManagePlacedRequested?.Invoke()"))
                 return Fail("palette no longer supplies the Manage Placed door callback to the browser " +
                             "(ruling 25) -- the card would not be built at all", out reason);
-            if (!browser.Contains("upgradeCard.name = \"DefenseUpgradeCard\"") ||
-                !browser.Contains("\"Upgrade Defenses\"") ||
+            // WO-1411 RE-POINTED 2026-09-06 (owner ruling section 2 #13, written to the default:
+            // rename YES, keep the 8th card NO). This block used to require
+            //     browser.Contains("upgradeCard.name = \"DefenseUpgradeCard\"")
+            //     browser.Contains("\"Upgrade Defenses\"")
+            // i.e. it pinned the CARD, which the ruling retires. Keeping those two literals would
+            // have made this suite block the ruling and go on asserting a card the review named as
+            // the defect ("a Manage door dressed as a category").
+            //
+            // ⛔ WHAT THIS SUITE IS FOR IS UNCHANGED AND STILL PINNED: the Manage -> Defense DOOR
+            // still exists on this screen and still opens the same destination. Only its dress
+            // moved from an 8th card to a footer text link. The route literal below is the same
+            // one the card carried and must stay green.
+            if (!browser.Contains("link.name = \"ManageDefensesFooterLink\"") ||
+                !browser.Contains("\"Already built? Manage defenses >\"") ||
                 !browser.Contains("PanelRouter.Open(PanelId.Manage, \"Defense\")"))
-                return Fail("separate Upgrade Defenses card no longer opens the placed-defense upgrade destination", out reason);
+                return Fail("the Manage > Defense door left the collection browser: no footer link, or it no longer opens the placed-defense upgrade destination", out reason);
+            if (browser.Contains("\"Upgrade Defenses\""))
+                return Fail("the retired 8th 'Upgrade Defenses' category card is back in the build grid (ruling section 2 #13 says footer link, not card)", out reason);
             string managePanel = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs");
             string manageVm = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs");
             // -- WO-1422 ruling 3.4 --------------------------------------------
@@ -157,9 +171,11 @@ namespace DeNelle.Editor.Regression
                 !managePanel.Contains("Action<string>") ||
                 !manageVm.Contains("PlacedStructureUpgradeService.MaxLevelFor") ||
                 !manageVm.Contains("UpgradeCostFor(entry, level)") ||
-                !manageVm.Contains("grid \" + placed.cellX"))
+                // WO-1405 (2026-09-06): the placed-instance identity is the upgrade-key seam, not the
+                // retired "grid X, Z" copy string (the VM now says a compass side, never a coordinate).
+                !manageVm.Contains("PlacedUpgradeKey.Compose("))
                 return Fail("Defense upgrade screen lost its authority ceiling, authority cost, placed-instance identity, or the secondary Build-defense route", out reason);
-            reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus separate Upgrade Defenses card, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam; WO-1417 kit-card: item card is the kit obsidian plate + gold bezel, cost through the one shared formatter, no bracket glyph and no NO COST in any palette string literal";
+            reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus the WO-1411 Manage-defenses FOOTER LINK (the 8th card is retired), approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam; WO-1417 kit-card: item card is the kit obsidian plate + gold bezel, cost through the one shared formatter, no bracket glyph and no NO COST in any palette string literal";
             return true;
         }
 

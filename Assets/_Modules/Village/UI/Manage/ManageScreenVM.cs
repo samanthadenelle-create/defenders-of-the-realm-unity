@@ -1060,10 +1060,78 @@ namespace DeNelle.Village.UI
                     placed.itemId, placed.cellX, placed.cellZ);
                 FlowTrace.Step("Manage", "defense row '" + placed.itemId + "' L" + level
                     + "/" + ceiling + " -> inline placed key '" + jobKey + "'");
-                string location = "grid " + placed.cellX + ", " + placed.cellZ;
+                // ⛔ WO-1405 — THE DEVELOPER COORDINATE IS RETIRED. This line used to concatenate
+                // the word for a cell with placed.cellX and placed.cellZ, so the row said
+                // "Arcane Spire - grid 5, 16 - L1 -> L2". The retired literal is deliberately NOT
+                // quoted here: ManageRowBenefitRegression bans it in this file, and a tombstone that
+                // spells it out keeps a source-text pin green on a tree that no longer does the
+                // thing the pin is about. A cell index is an
+                // internal address; on a player screen it reads as "this screen was built for
+                // someone else" (owner ruling WO-1405 section 2 #5, written to the default NO).
+                // The cell is still the row's IDENTITY — it is composed into jobKey above, which is
+                // the seam that makes the CTA land on THIS instance — it is simply never SPOKEN.
+                string location = CompassSideOf(placed.cellX, placed.cellZ);
                 AddBrowseRow(NameOf(entry, placed.itemId) + " - " + location + " - L" + level + " -> L" + (level + 1), cost, "Upgrade",
                              () => UpgradePlaced(jobKey));
             }
+        }
+
+        /// <summary>
+        /// WO-1405 — WHERE a placement stands, said in WORDS: "north side" / "east side" /
+        /// "town center". Never a coordinate (owner ruling section 2 #5, written to the default NO).
+        /// (US spelling: there is NO player-facing precedent for this word anywhere in the corpus -
+        /// measured - and the only in-repo spelling of it is US ("Command Center", RemoteTunables).
+        /// Flagged for the owner rather than decided silently.)
+        ///
+        /// ⚠ THE AXES ARE READ OFF <c>PlacementGrid</c>, NOT ASSUMED. +Z is north and +X is east
+        /// because <c>PlacementGrid.CellToWorld</c> maps <c>cell.y</c> to world Z and the grid grows
+        /// NORTH ONLY as gridHeight increases (PlacementGrid.Awake, owner 2026-07-16). A cell index
+        /// alone cannot answer this: the same cell number means a different side on a grid with a
+        /// different origin, which is exactly why the coordinate was meaningless on screen.
+        ///
+        /// HEADLESS-PURE: there is no scene in a regression run, so a missing/uninitialised grid
+        /// falls back to the SHIPPED defaults (cellSize 3 m, south edge fixed at -45, X centred) —
+        /// the same numbers PlacementGrid seeds in Awake. It never returns "" and never throws, so a
+        /// row can never silently lose its location clause.
+        /// </summary>
+        private static string CompassSideOf(int cellX, int cellZ)
+        {
+            // PlacementGrid's shipped configuration, mirrored (cellSize 3, gridWidth 30 -> X
+            // centred at -45, and the SouthEdgeZ constant its Awake anchors the grid to).
+            float cellSize = 3f;
+            float originX = -45f;
+            float originZ = -45f;
+
+            var grid = PlacementGrid.Instance;
+            if (grid != null && grid.cellSize > 0f)
+            {
+                cellSize = grid.cellSize;
+                // Awake seeds origin from gridWidth + SouthEdgeZ. Vector3.zero is the
+                // NOT-YET-INITIALISED sentinel Awake itself tests for, so treat it the same way
+                // rather than reading it as a real origin (that would put the whole grid north-east
+                // of the Heart and call every placement "north").
+                if (grid.origin != Vector3.zero)
+                {
+                    originX = grid.origin.x;
+                    originZ = grid.origin.z;
+                }
+                else
+                {
+                    originX = -grid.gridWidth * cellSize * 0.5f;
+                }
+            }
+
+            // The Heart of Elarion stands at world (0,0,0) — the scene centre this whole town is
+            // laid out around — so the placement's world XZ IS its offset from the Heart.
+            float east = originX + (cellX + 0.5f) * cellSize;
+            float north = originZ + (cellZ + 0.5f) * cellSize;
+            float ax = Mathf.Abs(east);
+            float az = Mathf.Abs(north);
+
+            // Within one cell of the Heart on BOTH axes there is no honest side to name.
+            if (ax < cellSize && az < cellSize) return "town center";
+            if (az >= ax) return north >= 0f ? "north side" : "south side";
+            return east >= 0f ? "east side" : "west side";
         }
 
         /// <summary>How many buildings of ONE ladder id stand in this town, and the placed catalog
@@ -1328,9 +1396,17 @@ namespace DeNelle.Village.UI
                 if (isMax) maxed++;
                 else if (isBuilding) building++;
                 else if (isLocked) locked++;
+                // WO-1405 — the BENEFIT rides the same line as the state, so "the row prices the
+                // tap and never says what it buys" is a log read, not a felt-test.
                 FlowTrace.Step("Manage", "building choice id=" + id + " level=" + level + "/" + maxLevel +
                     " state=" + stateWord + " next=" + nextTier + " ready=" + ready +
-                    " icon='" + (choice.IconKey ?? "<fallback>") + "'");
+                    " icon='" + (choice.IconKey ?? "<fallback>") + "'" +
+                    " benefit='" + choice.AfterUpgradeText + "'");
+                // NEVER A SILENT BLANK (§12): the card paints "After upgrade: " + this string, so an
+                // unauthored tier Effect would render an empty band with no evidence anywhere.
+                if (!isMax && string.IsNullOrWhiteSpace(choice.AfterUpgradeText))
+                    FlowTrace.Warn("Manage", "no benefit string for " + id +
+                        " - building-tiers.json authors no Effect for tier " + nextTier + ".");
             }
 
             FlowTrace.Step("Manage", "building choices projected=" + BuildingChoices.Count + " max=" + maxed +
@@ -1526,9 +1602,23 @@ namespace DeNelle.Village.UI
                     else if (isBuilding) building++;
                     else if (choice.UpgradeReady) ready++;
 
+                    // WO-1405 — the row's BENEFIT and its LOCATION are traced, so "the row never
+                    // says what the tap buys" is answered off a log line instead of a felt-test.
                     FlowTrace.Step("Manage", "defense choice id=" + choice.Id + " placed=" + choice.PlacedCount +
                         " lowest=L" + level + "/" + ceiling + " state=" + stateWord + " ready=" + choice.UpgradeReady +
-                        " key='" + jobKey + "' portrait='" + (choice.PortraitKey ?? "<fallback>") + "'");
+                        " key='" + jobKey + "' portrait='" + (choice.PortraitKey ?? "<fallback>") + "'" +
+                        " benefit='" + choice.AfterUpgradeText + "' location='" +
+                        CompassSideOf(tally.CellX, tally.CellZ) + "'");
+                    // NEVER A SILENT BLANK (CLAUDE.md §12): a row that can still be upgraded and
+                    // carries no benefit sentence is the defect this ticket exists to close, so it
+                    // announces itself rather than painting an empty band.
+                    // ⚠ HONEST ABOUT ITSELF: today `after` is composed unconditionally above, so
+                    // this branch is UNREACHABLE. It is a NET for the day the sentence is re-sourced
+                    // from an authored field (the placed ladders author no per-level Effect yet), not
+                    // a live detector - do not read its silence as evidence of anything.
+                    if (!isMax && string.IsNullOrWhiteSpace(choice.AfterUpgradeText))
+                        FlowTrace.Warn("Manage", "no benefit string for " + choice.Id +
+                            " - the Defense card would price the tap without saying what it buys.");
                 });
             }
 
@@ -1710,7 +1800,15 @@ namespace DeNelle.Village.UI
 
                             string description = FirstClause(perkDef.Effect);
                             if (string.IsNullOrWhiteSpace(description))
+                            {
+                                // WO-1405 — the fallback repeats the perk's NAME, which prices the
+                                // tap and says nothing about what it buys. It is kept (a card with
+                                // no body line is worse) but it is NEVER SILENT (§12): the authored
+                                // gap is named so it can be closed in the catalog, not in the VM.
+                                FlowTrace.Warn("Manage", "no benefit string for " + bId + ":" + pId +
+                                    " - building-tiers.json authors no Effect, so the card falls back to the perk name.");
                                 description = Ascii(string.IsNullOrEmpty(perkDef.Name) ? pId : perkDef.Name);
+                            }
 
                             var choice = new ResearchChoiceVM
                             {
@@ -1750,6 +1848,7 @@ namespace DeNelle.Village.UI
                             FlowTrace.Step("Manage", "research choice " + bId + ":" + pId +
                                 " state=" + stateWord + " tier=" + unlock + " gold=" + price +
                                 " ready=" + choice.Ready + " cta='" + (cta ?? "<none>") + "'" +
+                                " benefit='" + choice.Description + "'" +
                                 (isLocked ? " reason='" + choice.LockReason + "'" : ""));
                         });
                     }

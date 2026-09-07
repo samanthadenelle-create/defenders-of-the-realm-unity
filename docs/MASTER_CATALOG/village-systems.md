@@ -412,7 +412,8 @@ loader degrades to the portrait until the 6 LFS files land under
 
 ### 6.3 Offline accrual + legacy workers
 OfflineHarvestService (335, WO-115 claims-on-resume; `OfflineHarvestBootstrap` DDOL) +
-OfflineHarvestResult (55) + TimeSource (42, the ONE clock seam) + WelcomeBackPopup (205).
+OfflineHarvestResult (55) + TimeSource (42, the ONE clock seam) + WelcomeBackPopup (205) +
+**WelcomeBackDoorsVM** (WO-1408 — the pure destination decider; see the WO-1408 block below).
 WorkerManager (363) + Worker/NodeFillIndicator/WorkerManagerBootstrap — the WO-117 dispatch
 system, **retired for V1**: `UseOfflineCatchUp` off and `ClickToDispatch` disabled by
 EchoWorkforceBootstrap so it never banks the same nodes (EchoService header :32-34);
@@ -457,6 +458,55 @@ a reward's `+` on amounts that banked zero — she tapped COLLECT on 42,782 and 
   (`SiloCapHours x rate`), the town bank (the container ladder). The recommendation — make one
   derive from the other — is recorded in WO-1434 §8 and was **not implemented**; raising the
   ladder alone re-opens the WO-1128 §3.5 clock-forge bound in proportion.
+
+**WO-1408 (2026-09-06) — the return screen has a NEXT DOOR.** The away report told the player
+what they earned and then dropped them on a HUD whose loudest surface is the store card, so a
+returning player's first reason to tap was to spend (`REVIEW_MERGED.md` row 7).
+- **`WelcomeBackDoorsVM`** (`Assets/_Modules/Village/Harvest/UI/WelcomeBackDoorsVM.cs`) is the
+  ONE place a destination is decided. `Build(result, raidCapable, armyUsed, armyCap,
+  heartfireLit, heartfireMax)` is **PURE** (no `UnityEngine` reference — pinned) and returns
+  `Rows` (`WelcomeBackDoorRow { Label, Detail, DoorText, Door, DoorContext, TraceKind }`) plus an
+  optional `ReadyLine` / `ReadyDoorText` / `ReadyDoor`. **The View only draws.**
+- Rows exist ONLY when true: `FINISHED WHILE AWAY` → `PanelId.Manage` on the tab derived from
+  the job's card VERB (`ManageTabFor`: TRAIN→`Troops` wins the mixed case, RESEARCH→`Research`,
+  else `Buildings` — the only strings `ManageScreenPanel.Open(string)` accepts);
+  `ATTACKED` → `PanelId.DefenseReport`. **No empty state, no disabled door.**
+- `OfflineHarvestResult` gained a REPORT-ONLY attack axis (`AttackCount` / `AttackBreachName` /
+  `AttackOutcomeWord` / `HasAttackNews`), filled by `OfflineHarvestService.AttachAttacks`, which
+  **reads `DefenseReportLedger.All()` and never appends or marks-read** (consuming the unread
+  badge would delete the signal the door carries the player to). ⛔ **These are deliberately NOT
+  terms of `HasSummaryContent`** — the five-axis gate stays exactly as WO-1434 left it.
+  ⚠ Live-empty today: `DefenseResolution`'s own doc says away time becomes PRESSURE, not a
+  resolved battle, so only a fight ending on the window edge produces a row.
+- **⛔ THE READY DOOR IS `RAID` → `PanelId.JourneyDeck`, AND THERE IS NO `START WAVE`.** WO-1408's
+  sketch reads "Heartfire is full - a wave is ready"; `HeartfireCharges.cs`' own header states
+  Heartfire has "exactly one sink - marching" and that "RAID ORDERS is dead". Heartfire buys no
+  wave and no wave-start door exists. The ready line needs **all three** of `RaidCapable`, a
+  non-empty army and a lit charge, and the signals are read at **popup build time** (the reveal
+  is deferred to a hub scene, so a claim-time snapshot would be a boot default).
+- **⭐ THE DOOR'S ORDER LOOKS BACKWARDS AND IS NOT.** `WelcomeBackPopup.CollectThenRoute` arms
+  `PanelManager.SetReturnDoor(...)`, then `Dismiss()`, then `PerformCollect()`.
+  `ResourceCollectorService.CollectAll` opens a `HarvestOverflowModal` on the SAME exclusive
+  arbiter, so a synchronous `PanelRouter.Open` would swap the harvest result off screen the
+  instant it appeared. The WO-1400 return-door arbiter already solves it: a SWAP keeps the door,
+  a close-to-nothing fires it. **One mechanism, no coroutine, no second navigation path.**
+- The collect verb is `PerformCollect()`, shared by `CollectAndDismiss` (the COLLECT button,
+  whose geometry literal is still pinned by `AwaySummaryReportRegression` case 5) and every
+  door — one implementation, so the button and the doors cannot drift. `AddCompletedJobRows`
+  early-returns once the door row named the same jobs.
+- Door rows are `DoorRowH = 0.21f` (the body is 0.60 x 0.84 x screenH, so a `RowH` row is ~57px
+  at 1200 — under half `MinTouchPx` 112; 0.21 gives ~127px at 1200 / ~114px at 1080) and the door
+  face fills the plate 0..1, because insetting it gives the measurement back. They are drawn
+  BEFORE the mend/collector lines so the actionable row survives a full body.
+- Copy law: the ready line says **"Heartfire n / n lit"**, never "full" — `PostureSignals`
+  names it `HeartfireLit` precisely so a pool-fullness metaphor cannot creep toward the currency
+  `HeartfireCharges.cs` forbids. (`HeartfireRegression`'s currency-lint is scoped to
+  `HeartfireCharges.cs` + `HeartfireService.cs` + the canonical catalogs — read at source
+  2026-09-06, `HeartfireRegression.cs:340-354`, `:416-445` — so it does not reach these files;
+  the vocabulary is honoured anyway.)
+- Oracles: `WelcomeBackDoorsRegression` (9 cases; registered in `DataRegression.RunAll` as
+  `[welcome-back-doors]`). Capture: `RunWelcomeBackCaptureHeadless` now emits
+  **`WELCOME_BACK_CAPTURE_OK 6/6`** — the original no-doors fixture plus `WelcomeBackDoors_*`.
 
 ---
 

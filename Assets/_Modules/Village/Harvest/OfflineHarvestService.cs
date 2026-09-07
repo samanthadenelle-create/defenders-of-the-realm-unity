@@ -68,6 +68,7 @@
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.Defense;   // WO-1408 — the defence-report ledger, READ for the away summary's "attacked" row
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Economy;   // WO-857 Phase F — the town bank cap (this path writes the wallet directly)
 using DeNelle.Core.State;
@@ -660,6 +661,60 @@ namespace DeNelle.Village
                 (result.SiloAtCap ? " -- AT CAP, the Echoes have stopped gathering until the player collects." : "."));
         }
 
+        /// <summary>
+        /// WO-1408 -- was the town attacked inside THIS window? READ ONLY, and deliberately so:
+        /// the DEFENCE REPORT owns the record (append, unread badge, score). This reads
+        /// <see cref="DefenseReportLedger.All"/> and counts the records whose timestamp falls
+        /// in the window, using the SAME slack the job rows use so the two rows agree about
+        /// where the window's edges are.
+        /// <para>! It never marks a report read. The away row is a DOOR onto the panel, and a
+        /// door that consumed the unread badge before the player walked through it would delete
+        /// the very signal the panel exists to raise.</para>
+        /// <para>Guarded: a headless boot with no GameStateService reports zero attacks rather
+        /// than blanking the whole away summary.</para>
+        /// </summary>
+        private static void AttachAttacks(OfflineHarvestResult result, OfflineClaimWindow window)
+        {
+            result.AttackCount = 0;
+            result.AttackBreachName = string.Empty;
+            result.AttackOutcomeWord = string.Empty;
+
+            double from = window.WindowStartUnixMs - JobWindowSlackMs;
+            double to = window.NowUnixMs + JobWindowSlackMs;
+
+            Guard.Try("Offline", "read the defence ledger for the away summary", () =>
+            {
+                var all = DefenseReportLedger.All();
+                if (all == null) return;
+                DefenseOutcomeRecord newest = null;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    var rec = all[i];
+                    if (rec == null) continue;
+                    if (rec.Timestamp < from || rec.Timestamp > to) continue;
+                    result.AttackCount++;
+                    if (newest == null || rec.Timestamp >= newest.Timestamp) newest = rec;
+                }
+                if (newest == null) return;
+                result.AttackOutcomeWord = newest.Outcome.ToString().ToUpperInvariant();
+                if (newest.Breaches == null) return;
+                for (int i = 0; i < newest.Breaches.Count; i++)
+                {
+                    var b = newest.Breaches[i];
+                    if (b == null || string.IsNullOrEmpty(b.DisplayName)) continue;
+                    result.AttackBreachName = b.DisplayName;   // the FIRST crossing -- "they came from the north first"
+                    break;
+                }
+            });
+
+            FlowTrace.Step("Offline",
+                $"claim #{window.Sequence}: away summary counted {result.AttackCount} defence report(s) in " +
+                $"window {from:0}..{to:0}" +
+                (result.AttackCount > 0
+                    ? $" -- newest outcome={result.AttackOutcomeWord} breach='{result.AttackBreachName}'."
+                    : " -- the town was not attacked (away time becomes PRESSURE today, not a resolved battle)."));
+        }
+
         private static void AddSiloLine(OfflineHarvestResult result, HarvestResource res, int amount)
         {
             if (amount <= 0) return;
@@ -897,6 +952,7 @@ namespace DeNelle.Village
             AttachCompletedJobs(result, window);
             AttachPendingCollectors(result);
             AttachSiloPending(result);   // WO-1434 -- the fifth axis
+            AttachAttacks(result, window);   // WO-1408 -- the row that carries a DOOR, not a sixth gate axis
 
             // THE GATE IS NOW FOUR AXES, and it is read off the RESULT so this method and
             // WelcomeBackPopup.Show cannot disagree about what counts as news. It used to be

@@ -1,6 +1,6 @@
 # WO-1438: raid AI keeps hitting walls after the gate falls, and barely fights
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - gated 2026-09-06 (COMPILE_GATE_OK cg-quiet.log; regression 417/419, both reds in other lanes); not yet on the Seeker; navmesh hole (`holeNavmesh=`) still unmeasured
 **Silo:** raid combat AI / target selection. Disjoint from WO-1436 (HUD) and WO-1437 (session lifecycle).
 **Source:** owner felt-test 2026-09-06 on build **2026.09.06.358161**, two messages:
 > *"when the AI in raid destroys a gate, they should push in not keep attacking adjoining walls"*
