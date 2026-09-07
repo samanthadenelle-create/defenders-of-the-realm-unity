@@ -747,6 +747,26 @@ namespace DeNelle.Core.State
             /// at its next raid victory and never again. Append-only at the END.
             /// </summary>
             [JsonProperty("raidVictoriesBackfilled")] public bool? RaidVictoriesBackfilled;
+
+            // -- WO-1598 -- the NEW GAME reset epoch ---------------------------------
+            /// <summary>
+            /// Monotonic reset counter — see <see cref="GameState.ResetEpoch"/> for the full
+            /// reasoning. It rides the state document so it round-trips through Snapshot /
+            /// ApplyPersisted like every other field; <c>GameStateService.BuildSaveBody</c>
+            /// ALSO stamps it at the TOP level of the POST body, because the server's sanity
+            /// guard reads the body, not the nested state, and <c>api/game/load.js</c> returns
+            /// it top-level so a client can tell it is behind.
+            ///
+            /// <para>⛔ NO VERSION BUMP (the <c>raidVictories</c> precedent): a new nullable
+            /// field, absent -> GameState's 0, which is exactly what a row that never declared
+            /// an epoch stores. Old client + old row = equal epochs = today's behaviour.</para>
+            ///
+            /// <para><c>double?</c> and not <c>int?</c> for the same reason as
+            /// <see cref="RaidVictories"/> and <c>bestWave</c>: the JSON layer must ACCEPT a
+            /// non-integer number and let <see cref="Validate"/> floor it, rather than throw
+            /// during deserialization and lose the whole save. Append-only at the END.</para>
+            /// </summary>
+            [JsonProperty("resetEpoch")] public double? ResetEpoch;
         }
 
         // =====================================================================
@@ -914,6 +934,15 @@ namespace DeNelle.Core.State
                 // otherwise let the ladder run backwards, and NonNegInt also rejects NaN/Inf.
                 if (raw.RaidVictories.HasValue)
                     raw.RaidVictories = NonNegInt(raw.RaidVictories.Value, "raidVictories");
+
+                // -- Reset epoch (WO-1598) -> nonNegInt --------------------------------
+                // Clamped for a reason the other counters do not have: this number decides
+                // whether a SERVER row may overwrite the local town, so a NaN/Inf or a negative
+                // arriving from a hand-edited or hostile payload must be floored to a real
+                // integer BEFORE ApplyBackendState compares it, never compared as-is (every
+                // comparison against NaN is false, which would silently disable the guard).
+                if (raw.ResetEpoch.HasValue)
+                    raw.ResetEpoch = NonNegInt(raw.ResetEpoch.Value, "resetEpoch");
 
                 // ── Population growth (v28) → all counters nonNegInt ─────────────────
                 if (raw.PopulationXP.HasValue)

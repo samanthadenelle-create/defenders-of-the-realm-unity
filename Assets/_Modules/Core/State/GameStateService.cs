@@ -690,6 +690,7 @@ namespace DeNelle.Core.State
                 RaidCooldowns = s.RaidCooldowns != null ? new List<RaidCooldownRecord>(s.RaidCooldowns) : null,   // WO-728 — per-camp raid cooldown windows (additive default-on-read; NO schema bump)
                 RaidVictories = s.RaidVictories,                       // WO-1375 — monotonic raid WIN count; the one input to the PROGRAM_RAID_ECONOMY section-4 unlock ladder (additive default-on-read; NO schema bump)
                 RaidVictoriesBackfilled = s.RaidVictoriesBackfilled,   // WO-1375 — one-shot claim-flag backfill latch (the claim set is PlayerPrefs, so no migrator step can seed the count)
+                ResetEpoch = s.ResetEpoch,                             // WO-1598 — monotonic New Game reset counter; the server's ONE way to tell a legitimate reset from a rollback (additive default-on-read; NO schema bump)
             };
         }
 
@@ -840,7 +841,12 @@ namespace DeNelle.Core.State
             // already floored it through NonNegInt before this runs.
             if (p.RaidVictories.HasValue) s.RaidVictories = (int)p.RaidVictories.Value;
             if (p.RaidVictoriesBackfilled.HasValue) s.RaidVictoriesBackfilled = p.RaidVictoriesBackfilled.Value;
-            EnsureZoneGraph(s);                     // backfill a pre-v17 / empty save's zone graph
+            // WO-1598 - the New Game reset epoch. Absent on an older wire (or on a row written
+            // before this shipped) -> keep GameState's 0, which is exactly what the server
+            // stores for a row that never declared one, so the sanity guard behaves as it does
+            // today. Already floored by SaveSchema.Validate's NonNegInt before this runs.
+            if (p.ResetEpoch.HasValue) s.ResetEpoch = (int)p.ResetEpoch.Value;
+            EnsureZoneGraph(s);                  // backfill a pre-v17 / empty save's zone graph
         }
 
         /// <summary>
@@ -1217,6 +1223,10 @@ namespace DeNelle.Core.State
             // save). Captured before a single assignment lands.
             int priorHeroLevel = s.HeroLevel;
             float priorHeroXp = s.HeroXp;
+            // WO-1598 — captured BEFORE any assignment for the same reason as the hero fields:
+            // the epoch this reset must exceed is the one the save held on entry. Read here, in
+            // the same breath as the other pre-wipe reads, so no later line can shadow it.
+            int priorResetEpoch = s.ResetEpoch;
             FlowTrace.Step("Save",
                 $"ResetToNewGame: ENTER — hero on entry level={priorHeroLevel} xp={priorHeroXp:0.#} " +
                 $"lifetime={s.HeroLifetimeXp:0.#} (about to re-seed every persisted field).");
@@ -1368,7 +1378,33 @@ namespace DeNelle.Core.State
             // the default graph is still authored in exactly one place.
             s.Zones = null;
             EnsureZoneGraph(s);
-            ClearEquipPrefs();                                // WO-860 Part A1 — see below.
+            // WO-1598 — the reset DECLARATION. This is the ONE field a New Game RAISES instead
+            // of clearing, and the only line in the game that writes it. api/game/save.js runs a
+            // sanity guard that reads a new town's honest 36 crystals against the stored 901 as
+            // an "implausible_drop" and REJECTS those fields, so the cloud row keeps the OLD town
+            // and hands it back at the next load (the owner's 2026-09-07 reset: eleven rejects,
+            // 901 -> 36, from 00:39Z to 10:26Z). Declaring a NEWER epoch is what tells the server
+            // the drop is deliberate; it bypasses the guard for exactly that write and stores the
+            // new epoch. Monotonic on purpose - a bare flag would be replayable by an old device,
+            // and an epoch that RESET here could never be told from the reset before it. The
+            // unix-second floor keeps two devices that both reset offline from colliding on
+            // prior+1 while staying inside int32 (until 2038); the +1 arm is what guarantees a
+            // strict increase if the device clock is wrong or standing still.
+            // ⚠ THE CLOCK ARM IS DROPPED, NOT CAST, WHEN IT WOULD OVERFLOW. int32 runs out on
+            // 2038-01-19; a device whose clock is set past it would produce a NEGATIVE epoch, and
+            // api/game/save.js's judgeResetEpoch treats `v < 0` as ABSENT - no bypass, no epoch
+            // written - which silently restores the exact defect this field exists to fix, on the
+            // one device nobody would think to check. prior+1 is always valid, so it is the floor.
+            long nowEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long nextEpoch = (long)priorResetEpoch + 1L;
+            if (nowEpochSeconds > nextEpoch && nowEpochSeconds <= int.MaxValue) nextEpoch = nowEpochSeconds;
+            s.ResetEpoch = nextEpoch > int.MaxValue ? int.MaxValue : (int)nextEpoch;
+            FlowTrace.Step("Sync",
+                $"ResetToNewGame: reset epoch {priorResetEpoch} -> {s.ResetEpoch}. The next cloud save " +
+                "DECLARES this number, which is what lets api/game/save.js accept a new town's lower " +
+                "balances once instead of rejecting them as an implausible drop (WO-1598). A backend row " +
+                "carrying an OLDER epoch is refused by ApplyBackendState from here on.");
+            ClearEquipPrefs();                              // WO-860 Part A1 — see below.
             ClearProgressionPrefs();                          // WO-1220 — see below.
             ClearHarvestPrefs();                              // WO-1371 — see below.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
@@ -2178,7 +2214,7 @@ namespace DeNelle.Core.State
             // WO-1447 / WO-1448 — the ENTIRE apply is one seam, so the cloud path and the
             // local path share ONE apply function. Everything above this line is transport
             // (clock anchor, config absorb); everything below it is state.
-            ApplyBackendState(resp.Data, resp.SchemaVersion, resp.ServerLastSeenMs);
+            ApplyBackendState(resp.Data, resp.SchemaVersion, resp.ServerLastSeenMs, resp.ResetEpoch);
         }
 
         /// <summary>
@@ -2195,6 +2231,12 @@ namespace DeNelle.Core.State
             RejectedIdentity,
             /// <summary>The row could not be migrated to this build's schema (e.g. it is from a NEWER build).</summary>
             RejectedMigration,
+            /// <summary>
+            /// WO-1598 — the row declares an OLDER <c>resetEpoch</c> than this device holds, i.e. it
+            /// pre-dates a New Game that has already happened here. Refused outright, regardless of
+            /// how fresh its timestamp looks.
+            /// </summary>
+            RejectedResetEpoch,
             /// <summary>The migrated row failed <see cref="SaveSchema.Validate"/>.</summary>
             RejectedValidation,
             /// <summary>The row was applied onto the live state in full.</summary>
@@ -2236,8 +2278,13 @@ namespace DeNelle.Core.State
         /// <param name="serverSchemaVersion">The row's <c>schema_version</c> column, as sent by
         /// <c>api/game/load.js</c>. Null on a backend older than that field.</param>
         /// <param name="serverLastSeenMs">The row's <c>updated_at</c> in unix-ms — the recency anchor.</param>
+        /// <param name="serverResetEpoch">WO-1598 — the row's <c>resetEpoch</c> as returned TOP-LEVEL
+        /// by <c>api/game/load.js</c>. Null on an older backend (or an older row), in which case the
+        /// value carried inside the state payload is used, and failing that 0 — which equals a device
+        /// that has never reset, so the guard is a no-op for everyone who has not started a new game.</param>
         public BackendApplyOutcome ApplyBackendState(
-            SaveSchema.PersistedState server, double? serverSchemaVersion, double? serverLastSeenMs)
+            SaveSchema.PersistedState server, double? serverSchemaVersion, double? serverLastSeenMs,
+            double? serverResetEpoch = null)
         {
             if (_state == null || server == null)
             {
@@ -2250,6 +2297,47 @@ namespace DeNelle.Core.State
             // an unobserved task instead of reaching the break-log. §12: no silent failures.
             try
             {
+                // ── WO-1598 RESET-EPOCH GATE — RUNS BEFORE THE RECENCY GATE ──────
+                // ⛔ THE ORDER IS THE WHOLE POINT, so it is stated rather than implied.
+                // A row rejected field-by-field by api/game/save.js's sanity guard is STILL
+                // WRITTEN: its updated_at advances while its balances stay at the OLD town's.
+                // That row is therefore timestamp-NEWER and content-OLDER at the same time,
+                // which is precisely the shape the WO-1448 recency gate cannot see - it would
+                // read "server > local" and hand the player back the 901 crystals a New Game
+                // had just replaced (the owner's 2026-09-07 reset, eleven times). The epoch is
+                // the only fact that separates the two, so it is judged FIRST and independently
+                // of any timestamp.
+                //
+                // The comparison is deliberately one-directional: refuse only when the row is
+                // OLDER. A row with a NEWER epoch is NOT force-applied here - it still has to
+                // win the recency gate below - because a newer epoch means "some device reset",
+                // not "this device's local state is wrong", and overriding recency on it would
+                // re-open the WO-1448 overwrite. See the documented gap in WO-1598's result.
+                //
+                // Source order: the top-level column api/game/load.js returns, then the copy
+                // carried inside the state payload, then 0. A device that has never reset holds
+                // 0 too, so every pre-WO-1598 player compares 0 vs 0 and nothing changes.
+                double serverEpoch = serverResetEpoch.HasValue
+                    ? serverResetEpoch.Value
+                    : (server.ResetEpoch.HasValue ? server.ResetEpoch.Value : 0d);
+                // NaN/Inf never reaches the comparison: every comparison against NaN is FALSE,
+                // which would silently disable this guard for exactly the hand-edited or hostile
+                // payload it is here to refuse. SaveSchema.Validate floors the field the same way,
+                // but that runs LATER (below), so the normalisation is repeated here on purpose.
+                if (double.IsNaN(serverEpoch) || double.IsInfinity(serverEpoch)) serverEpoch = 0d;
+                double localEpoch = _state.ResetEpoch;
+                if (serverEpoch < localEpoch)
+                {
+                    FlowTrace.Warn("Sync",
+                        $"backend load REFUSED on RESET EPOCH - the server row declares resetEpoch=" +
+                        $"{serverEpoch:0} but this device holds {localEpoch:0}, so the row pre-dates a New " +
+                        "Game that has already happened here. NOTHING applied; the new town stands. " +
+                        "(WO-1598: a save the server's sanity guard rejected still bumps updated_at, so " +
+                        "the stale row looks NEWER than the local save and the recency gate alone would " +
+                        "have restored the old town's balances over the reset.)");
+                    return BackendApplyOutcome.RejectedResetEpoch;
+                }
+
                 double localMs = LastLocalSaveUnixMs;
                 double serverMs = serverLastSeenMs.HasValue ? serverLastSeenMs.Value : 0d;
 
@@ -2380,12 +2468,35 @@ namespace DeNelle.Core.State
                 if (!string.IsNullOrEmpty(localWallet)) _state.BoundWallet = localWallet;
                 _state.SchemaVersion = SaveSchema.CurrentVersion;
 
+                // ⛔ WO-1598 - THE APPLIED ROW'S EPOCH IS ADOPTED, AND IT HAS TO BE.
+                // `resetEpoch` is TRANSPORT on the server, not game state: api/game/save.js's
+                // RESERVED_KEYS strips it out of the JSONB blob and stores it in its own
+                // player_data.reset_epoch column, so a LOADED row's `data` carries no epoch at
+                // all and ApplyPersisted has nothing to install. Without this line a REINSTALL
+                // would restore the cloud town while leaving the local epoch at 0, and every save
+                // it then sent would declare 0 against a stored 9000 - refused 409
+                // SAVE_RESET_STALE forever, on a device that had done nothing wrong. Adopting the
+                // row's epoch is what makes the reinstall path (WO-1447's whole reason to exist)
+                // survive the new guard.
+                //
+                // Monotonic, never a downgrade: the gate above already proved
+                // serverEpoch >= localEpoch, and the Max keeps that true even if a future backend
+                // let the top-level column and an embedded copy disagree.
+                // Clamped to int.MaxValue before the cast: serverEpoch arrives from the TOP-LEVEL
+                // response column and so never passed through SaveSchema.Validate's NonNegInt, and
+                // an unchecked (int) of a double past int32 is undefined garbage - which could
+                // land NEGATIVE and turn the monotonic guard into a permanent bypass.
+                double adopted = Math.Min((double)int.MaxValue, Math.Max(localEpoch, serverEpoch));
+                _state.ResetEpoch = (int)adopted;
+
                 FlowTrace.Step("Persist",
                     $"backend load: server={serverMs:0} local={localMs:0} winner=SERVER - APPLIED the full row " +
                     $"through MigrateForImport(v{storeVersion}) + Validate + ApplyPersisted (WO-1447). " +
                     $"baseLayout={(_state.BaseLayout != null ? _state.BaseLayout.Count : 0)} record(s), " +
                     $"army={(_state.Army != null && _state.Army.Owned != null ? _state.Army.Owned.Count : 0)} troop(s), " +
-                    $"resources c/f/g={_state.Resources.Crystals}/{_state.Resources.Food}/{_state.Resources.Coins}.");
+                    $"resources c/f/g={_state.Resources.Crystals}/{_state.Resources.Food}/{_state.Resources.Coins}. " +
+                    $"resetEpoch server={serverEpoch:0} local-before={localEpoch:0} -> now {_state.ResetEpoch} " +
+                    "(WO-1598: the row was at or ahead of this device's New Game, so it was allowed through).");
 
                 // Only the APPLIED branch advances the delta baseline and re-persists. On a
                 // skip these three MUST NOT run: _lastSyncedSnapshot is the delta baseline
@@ -2630,6 +2741,19 @@ namespace DeNelle.Core.State
                 var attempt = await SendCurrentSnapshot();
                 if (attempt.Ok)
                     _lastSyncedSnapshot = Snapshot();
+                else if (attempt.Category == SaveAttemptCategory.ResetStale)
+                {
+                    // WO-1598 - do NOT enqueue a marker for a refusal that is a VERDICT.
+                    // 409 SAVE_RESET_STALE is deterministic: the same snapshot is refused
+                    // identically every time until this device's epoch catches up. Queuing it
+                    // would make every sync enqueue-then-drop-then-enqueue in a loop whose only
+                    // product is log noise and a queue-depth warning that never means anything.
+                    // The local save is untouched; nothing the player did is at risk.
+                    FlowTrace.Warn("Sync",
+                        "cloud sync SKIPPED the offline queue - the server refused this snapshot as STALE " +
+                        "(409 SAVE_RESET_STALE), so there is nothing a retry could change and no marker is " +
+                        "queued. The local save stands; the cloud holds a NEWER game than this device.");
+                }
                 else
                     EnqueueOffline(delta);
             }
@@ -2725,6 +2849,19 @@ namespace DeNelle.Core.State
             HttpClient,
             /// <summary>The server answered and failed (5xx). Retry is the right response.</summary>
             HttpServer,
+            /// <summary>
+            /// WO-1598 — the server answered <c>409 {ok:false, code:'SAVE_RESET_STALE'}</c>: this
+            /// device's <c>resetEpoch</c> is OLDER than the stored one, so the row it is trying to
+            /// push pre-dates a New Game that happened somewhere else.
+            ///
+            /// <para>⛔ THE ONLY NON-RETRYABLE FAILURE ON THIS PATH, and that is the point of
+            /// giving it a category at all. Every other 4xx is a payload the next attempt might
+            /// fix; this one is a verdict about ORDER, and it will be identical on every retry
+            /// until a cloud LOAD moves this device forward. Left in the generic HttpClient
+            /// bucket it would re-queue the marker forever — a permanent, silent retry loop
+            /// against a server that has already given its final answer.</para>
+            /// </summary>
+            ResetStale,
         }
 
         /// <summary>The outcome of ONE POST to /api/game/save: enough to explain itself
@@ -2795,6 +2932,8 @@ namespace DeNelle.Core.State
                     why = "http-4xx"; hint = "the SERVER ANSWERED AND REFUSED THE PAYLOAD. The body head above is the server's own code - fix the payload, not the identity."; break;
                 case SaveAttemptCategory.HttpServer:
                     why = "http-5xx"; hint = "the server errored; the marker is retained and the next attempt retries."; break;
+                case SaveAttemptCategory.ResetStale:
+                    why = "reset-stale"; hint = "409 SAVE_RESET_STALE - this device's resetEpoch is OLDER than the stored one, so it is trying to push a town from BEFORE a New Game that happened elsewhere. NOT RETRYABLE: the answer is identical every time, so the marker is DROPPED rather than looped. The local save is untouched. ⚠ THIS DEVICE DOES NOT SELF-HEAL: saves stay refused until a cloud LOAD both WINS the recency gate and adopts the server's epoch - a device whose local save is timestamp-newer is skipped by that gate and stays stuck (WO-1598 documented gap, owner ruling pending)."; break;
                 default:
                     why = "unknown"; hint = "unclassified failure - add a category rather than leaving this blank."; break;
             }
@@ -2848,6 +2987,19 @@ namespace DeNelle.Core.State
                 jo.Remove(p.Name);
             jo["playerId"]      = playerId;
             jo["schemaVersion"] = SaveSchema.CurrentVersion;
+            // WO-1598 - the RESET DECLARATION, stamped TOP-LEVEL beside schemaVersion and for the
+            // same reason: api/game/save.js reads the body, not the nested state document, and its
+            // sanity guard runs before anything unpacks the state. The value is always present
+            // (0 = "this save has never been reset"), never conditional on a reset having
+            // happened - an intermittently-present field would make the server unable to tell an
+            // old client from a client declining to declare, and the whole point of the epoch is
+            // that it is comparable on EVERY write. Serialized as a long so it is an integer
+            // token on the wire, matching the server's integer contract.
+            // It also rides the nested state (SaveSchema.PersistedState.ResetEpoch) because that
+            // is what makes it survive a cloud LOAD onto a reinstalled device; the top-level copy
+            // is the guard's input, not a second source of truth.
+            jo["resetEpoch"] = (long)(snapshot != null && snapshot.ResetEpoch.HasValue
+                ? snapshot.ResetEpoch.Value : 0d);
             return Encoding.UTF8.GetBytes(jo.ToString(Formatting.None));
         }
 
@@ -2903,10 +3055,16 @@ namespace DeNelle.Core.State
                     ? req.downloadHandler.text
                     : e.Message;
                 var detail  = SquashDetail(raw);
-                var thrown  = ClassifyHttp(req.responseCode);
+                // WO-1598: classified from the status AND the body - a 409 SAVE_RESET_STALE is a
+                // final verdict about ORDER, not a payload to retry, and this is the path a 4xx
+                // actually takes (the awaiter THROWS on a non-2xx, so the throw site is where the
+                // category is decided).
+                var thrown  = ClassifyHttp(req.responseCode, raw);
                 FlowTrace.Warn("Sync",
                     $"cloud save REFUSED - {DescribeSaveFailure(new SaveAttemptResult(thrown, req.responseCode, detail))} " +
-                    "The marker is re-queued; the local save is unaffected.");
+                    (thrown == SaveAttemptCategory.ResetStale
+                        ? "The marker is DROPPED (retrying cannot change this answer); the local save is unaffected."
+                        : "The marker is re-queued; the local save is unaffected."));
                 return new SaveAttemptResult(thrown, req.responseCode, detail);
             }
 
@@ -2926,10 +3084,12 @@ namespace DeNelle.Core.State
                     ? req.downloadHandler.text
                     : req.error;
                 var detail   = SquashDetail(raw);
-                var category = ClassifyHttp(req.responseCode);
+                var category = ClassifyHttp(req.responseCode, raw);   // WO-1598 - body-aware; see the throw site above
                 FlowTrace.Warn("Sync",
                     $"cloud save FAILED - {DescribeSaveFailure(new SaveAttemptResult(category, req.responseCode, detail))} " +
-                    "The marker is re-queued; the local save is unaffected.");
+                    (category == SaveAttemptCategory.ResetStale
+                        ? "The marker is DROPPED (retrying cannot change this answer); the local save is unaffected."
+                        : "The marker is re-queued; the local save is unaffected."));
                 return new SaveAttemptResult(category, req.responseCode, detail);
             }
         }
@@ -2943,6 +3103,30 @@ namespace DeNelle.Core.State
             if (responseCode >= 500L) return SaveAttemptCategory.HttpServer;
             if (responseCode >= 400L) return SaveAttemptCategory.HttpClient;
             return SaveAttemptCategory.Transport;
+        }
+
+        /// <summary>WO-1598 — the server's own refusal code, as it appears in the response body.</summary>
+        public const string ResetStaleCode = "SAVE_RESET_STALE";
+
+        /// <summary>
+        /// WO-1598 — classification that can also read the BODY, because one 4xx on this route
+        /// is not like the others.
+        /// <para>
+        /// ⛔ THE STATUS ALONE IS NOT ENOUGH, and hardcoding "409 = reset stale" would be wrong:
+        /// 409 is this backend's general conflict answer (<c>api/purchases/fulfill.js</c> uses it
+        /// too), so the CODE in the body is what identifies the verdict. Both are required —
+        /// a body that merely mentions the string on some other status is not a refusal.
+        /// </para>
+        /// Pure and public so the regression can assert the mapping without a network.
+        /// </summary>
+        public static SaveAttemptCategory ClassifyHttp(long responseCode, string body)
+        {
+            var baseline = ClassifyHttp(responseCode);
+            if (responseCode == 409L
+                && !string.IsNullOrEmpty(body)
+                && body.IndexOf(ResetStaleCode, StringComparison.Ordinal) >= 0)
+                return SaveAttemptCategory.ResetStale;
+            return baseline;
         }
 
         // ── WO-1128 §3.3 — the server's reconciled figure lands on the client ──────
@@ -2996,6 +3180,37 @@ namespace DeNelle.Core.State
             // The save round trip is the most frequent handshake the client makes, so this
             // is the main way ServerClock stays anchored during a session (WO-912 §7.2).
             if (resp.ServerNowMs != null) ServerClock.Sync(resp.ServerNowMs.Value);
+
+            // WO-1598 - the reset RECEIPT. `resetAccepted:true` is the server confirming it
+            // bypassed its sanity guard once for this write, which is the only positive proof a
+            // New Game reached the cloud; without this line the whole rail would be provable only
+            // by querying the database by hand.
+            //
+            // The echoed epoch is adopted only when it is AHEAD of ours, and that branch is a
+            // DEFENSIVE CLAMP, not a recovery path - do not read it as one. On a 200,
+            // judgeResetEpoch has already decided the echoed value EQUALS what this device
+            // declared (older -> 409, newer -> bypass storing exactly what we sent), so the branch
+            // cannot normally fire. It exists so a future server that advanced the column on its
+            // own could not leave this device declaring a stale number on the next write.
+            if (resp.ResetEpoch.HasValue && _state != null)
+            {
+                double echoed = resp.ResetEpoch.Value;
+                if (!double.IsNaN(echoed) && !double.IsInfinity(echoed) && echoed > _state.ResetEpoch)
+                {
+                    int adoptedEpoch = (int)Math.Min((double)int.MaxValue, echoed);
+                    FlowTrace.Step("Sync",
+                        $"save receipt: the server's resetEpoch {adoptedEpoch} is AHEAD of this device's " +
+                        $"{_state.ResetEpoch}; adopted, so the next save declares it and is not refused " +
+                        "SAVE_RESET_STALE (WO-1598).");
+                    _state.ResetEpoch = adoptedEpoch;
+                }
+            }
+            if (resp.ResetAccepted.HasValue && resp.ResetAccepted.Value)
+                FlowTrace.Step("Sync",
+                    $"save receipt: RESET ACCEPTED - the server took this write as a New Game and bypassed its " +
+                    $"sanity guard once (resetEpoch={(resp.ResetEpoch.HasValue ? resp.ResetEpoch.Value : (double)(_state != null ? _state.ResetEpoch : 0)):0}). " +
+                    "The cloud row now holds the NEW town's balances; the implausible-drop rejects that kept " +
+                    "handing back the old town are over for this player (WO-1598).");
 
             LastAccrualReconcile = resp.Accrual;
             if (resp.Accrual != null) ApplyAccrualClamps(resp.Accrual);
@@ -3388,6 +3603,36 @@ namespace DeNelle.Core.State
                     "upload of the current snapshot (markers are retry flags, not bodies, so a single " +
                     "save covers every one of them).");
             }
+            else if (attempt.Category == SaveAttemptCategory.ResetStale)
+            {
+                // ⛔ WO-1598 - THE ONE FAILURE THAT MUST NOT BE RE-QUEUED.
+                // 409 SAVE_RESET_STALE says this device's resetEpoch is BEHIND the stored one:
+                // it is offering a town from before a New Game that already happened elsewhere.
+                // That answer is deterministic - the same bytes will be refused identically on
+                // every retry, forever - so retaining the markers builds a queue that can never
+                // drain and re-posts on every scene enter for the life of the install. The
+                // markers are RETRY FLAGS, not bodies (see the drain note above), so dropping
+                // them loses NOTHING: the player's progress is entire in the local save, and the
+                // cloud row is not behind, it is AHEAD.
+                //
+                // ⚠ WHAT THIS DOES **NOT** DO - stated because the honest limit is the finding.
+                // Dropping the markers stops the loop; it does NOT recover the device. Saves stay
+                // refused until a cloud LOAD both wins the WO-1448 recency gate AND adopts the
+                // row's epoch, and a device whose LOCAL save is timestamp-newer is skipped by that
+                // gate before the adoption is ever reached - so it can sit refused indefinitely.
+                // Whether a NEWER server epoch should override recency is an owner ruling
+                // (WO-1598 documented gap); it is deliberately not decided here, because forcing
+                // it would re-open the WO-1448 stale-overwrite this file exists to prevent.
+                PlayerPrefs.DeleteKey(SyncQueueKey);
+                _offlineQueueDepthWarned = false;
+                FlowTrace.Warn("Sync",
+                    $"offline queue drain REFUSED as STALE - {mine.Count} marker(s) DROPPED, not re-queued. " +
+                    $"local resetEpoch={(_state != null ? _state.ResetEpoch : 0)} is OLDER than the server's, so " +
+                    "this device is holding a pre-reset town and the server is right to refuse it. Nothing is " +
+                    "lost: the local save is untouched. This device does NOT self-heal - it resumes saving only " +
+                    "once a cloud load WINS the recency gate and adopts the server's epoch (WO-1598 gap). " +
+                    $"{DescribeSaveFailure(attempt)}");
+            }
             else
             {
                 PlayerPrefs.SetString(SyncQueueKey,
@@ -3497,6 +3742,16 @@ namespace DeNelle.Core.State
             /// <see cref="ServerNowMs"/>: an older backend must still load.
             /// </summary>
             [JsonProperty("schemaVersion")] public double?              SchemaVersion { get; set; }
+
+            /// <summary>
+            /// WO-1598 — the row's <c>reset_epoch</c> column, returned top-level by
+            /// <c>api/game/load.js</c> so a client can tell whether the cloud is behind a New Game
+            /// that has already happened on this device. Nullable for the same reason as
+            /// <see cref="ServerNowMs"/>: an older backend (or a row written before the column
+            /// existed) must still load, and absent reads as 0 = "never reset", which is what
+            /// every pre-WO-1598 player holds locally too.
+            /// </summary>
+            [JsonProperty("resetEpoch")] public double?                 ResetEpoch { get; set; }
         }
 
         /// <summary>
@@ -3545,6 +3800,17 @@ namespace DeNelle.Core.State
             [JsonProperty("success")]     public bool                     Success     { get; set; }
             [JsonProperty("serverNowMs")] public double?                  ServerNowMs { get; set; }
             [JsonProperty("accrual")]     public AccrualReconcileReport   Accrual     { get; set; }
+
+            /// <summary>WO-1598 — the epoch the row now stores (present when the client declared one).</summary>
+            [JsonProperty("resetEpoch")]    public double? ResetEpoch     { get; set; }
+            /// <summary>
+            /// WO-1598 — true when THIS write was accepted as a reset, i.e. the server bypassed its
+            /// sanity guard once because the declared epoch was newer than the stored one. It is the
+            /// only positive confirmation the client ever gets that a New Game actually landed in the
+            /// cloud, so it is traced rather than discarded (the acceptance criterion on the ticket is
+            /// literally "the cloud row shows the new balances and save_reset_accepted once").
+            /// </summary>
+            [JsonProperty("resetAccepted")] public bool?   ResetAccepted { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────

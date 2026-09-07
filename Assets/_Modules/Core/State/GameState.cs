@@ -658,6 +658,42 @@ namespace DeNelle.Core.State
         /// </summary>
         public bool RaidVictoriesBackfilled = false;
 
+        // -- WO-1598 -- the NEW GAME reset epoch (the cloud save's reset declaration) -----
+        /// <summary>
+        /// MONOTONIC count of times this save has been reset by <c>ResetToNewGame</c>. It is
+        /// the single fact that lets a server tell a legitimate NEW GAME apart from a rollback
+        /// or a stolen/replayed old device.
+        ///
+        /// <para>⛔ WHY IT EXISTS (WO-1598). <c>api/game/save.js</c> runs a sanity guard that
+        /// REJECTS a save whose balances drop implausibly or whose <c>bestWave</c> goes
+        /// backwards. A new game does exactly that on purpose: the owner's 2026-09-07 reset
+        /// posted 36 crystals against a stored 901 and was refused eleven times, so the cloud
+        /// row kept the OLD town and would have handed it back on the next load. The client
+        /// now DECLARES the reset by sending this number; the server bypasses the guard once
+        /// when the incoming epoch is NEWER than the stored one, applies the guard when they
+        /// are equal, and refuses <c>SAVE_RESET_STALE</c> when it is older. A bare "this is a
+        /// reset" flag would be forgeable and replayable, which is why it is monotonic.</para>
+        ///
+        /// <para>Written in exactly ONE place — <see cref="GameStateService.ResetToNewGame"/>,
+        /// which raises it past its prior value. It is deliberately NOT wiped by that reset
+        /// (a reset that zeroed its own counter could never be distinguished from the reset
+        /// before it), and it is NOT a carve-out either: ResetToNewGame assigns it, so
+        /// ResetToNewGameFullClearRegression Case 1 still sees the field covered.</para>
+        ///
+        /// <para>⛔ NO VERSION BUMP, on the <see cref="RaidVictories"/> precedent directly
+        /// above: a NEW nullable wire field with no old shape to reinterpret and no field to
+        /// rewrite. Absent on an older payload leaves this <c>0</c> initializer, which equals
+        /// what the server stores for a row that never declared one — so an old client and an
+        /// old row read as "equal epochs" and the guard behaves EXACTLY as it does today. A
+        /// migrator step could add nothing: there is no evidence on the wire from which a past
+        /// reset could be derived, and inventing one would forge a guard bypass. A bump on a
+        /// LIVE published game is an owner decision and nothing here requires one.</para>
+        ///
+        /// <para>int, not long: the server contract is an integer, and
+        /// <c>SaveSchema.NonNegInt</c> (which floors this field on read) returns int.</para>
+        /// </summary>
+        public int ResetEpoch = 0;
+
         public bool MarkEverAcquired(string itemId)
         {
             if (string.IsNullOrEmpty(itemId)) return false;
