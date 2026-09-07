@@ -187,14 +187,19 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1525**.
-> *(CLI minted **1446 through 1524** - seventy-nine tickets from the read-only audit fleet's nine batches
+> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1531**.
+> *(CLI minted **1446 through 1530** - eighty-five tickets from the read-only audit fleet's nine batches
 > (backend/auth, persistence, raid, HUD, Manage 2000-block, perf, regression harness, ship chain, architecture,
 > art, canon) plus seven owner rulings/asks taken tonight (the defense-report door 20:05, Manage BUILD
 > unlocked-only 20:07, train/army state words and the troop-detail stats 20:10, research SHORT/LOCKED reasons
 > 20:12 + 20:19, the raid-deploy "make it pop" redesign 20:14 + the Echo Guide removal 20:24, the quest/rumor
 > board contradiction 20:18, the P0 raid STAGING AREA + engagement-started clock 20:26, the flat skills/loadout
-> screen + the wardrobe hide 20:23, and the placed-structure move door recovered from a commit message).
+> screen + the wardrobe hide 20:23, the harvest-result redesign 20:29, and the placed-structure move door
+> recovered from a commit message). **1526-1530 carry her RAID BALANCE rulings of 20:33**
+> (`docs/RAID_BALANCE_AUDIT_2026-09-06.md`): hero death non-terminal capped at 2 stars, the Raid Cache +
+> 60% repeat clear (folded into 1461, retitled), the Barracks army-cap curve (Option C, NOT yet - Option A
+> stands), the four-camp ladder, and measuring enemy level scaling FIRST. Her order of operations is the
+> epilogue of **1520**, whose acceptance now carries the seven-point Easy-camp retest gate that unblocks them.
 > **1503 was RESCOPED the same day, P0 -> P2:** its premise was FALSE - `CastleHubRoot` has no collider and no
 > damageable component, and the trace was printing the hierarchy root, so eleven "hits on the castle" were
 > correct kills. Left IMPLEMENTED (the melee path now routes through `CombatFactionRules`, the trace names the

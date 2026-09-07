@@ -70,3 +70,22 @@ So the player is billed time and taking damage during the seconds they spend try
 - [ ] A captured device raid where `clock started reason=` appears AFTER the first deploy, and the hero is
       alive at t=0 with full HP.
 - [ ] `REGRESSION_OK n/n` on a fresh log.
+
+### Easy-camp acceptance target (owner, 2026-09-06 20:33 - the retest gate)
+
+- [ ] The first hit cannot occur before the player engages.
+- [ ] The 10-slot starter army can reasonably clear it.
+- [ ] No friendly-targeting defects.
+- [ ] Troop AI attacks reachable enemies before walls.
+- [ ] A fresh clear produces the displayed reward.
+- [ ] Hero death does not instantly invalidate the surviving army.
+- [ ] Median new-player clear roughly **90-140 s**, rather than most of the 180 s ceiling.
+
+## 5. EPILOGUE - the owner's order of operations (2026-09-06 20:33)
+
+> "Ship the five mechanical fixes -> retest Easy at 10 slots -> make hero death non-terminal -> make raid
+> overflow recoverable -> move army capacity onto Barracks progression -> then balance Hard and Extreme."
+
+So this ticket is in the FIRST group, and the retest gate above is what unblocks WO-1526 (hero death),
+WO-1461 (Raid Cache), then WO-1527 (Barracks cap curve) and WO-1528 (camp ladder). WO-1530 (measure enemy
+scaling) precedes the balance work at the end.
