@@ -1,6 +1,6 @@
 # WO-1494: six suites claim to MEASURE and are source-text lint; about 40% of the harness is text matching
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in the 2026-09-07 afternoon gate wave (COMPILE_GATE_OK Builds/cg-wave10h.log, REGRESSION_OK 454/454 Builds/reg-wave10d.log 13:05); reaches the Seeker with the next tester build; owner felt-test closes it. PRIOR STATUS: READY TO IMPLEMENT
 **Silo:** Regression harness. Start with the two HUD suites.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1494 -> 1495 in the same edit).

@@ -1,6 +1,6 @@
 # WO-1500: the fresh-save FTUE has had no capture and no log since 2026-09-01
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in the 2026-09-07 afternoon gate wave (COMPILE_GATE_OK Builds/cg-wave10h.log, REGRESSION_OK 454/454 Builds/reg-wave10d.log 13:05); reaches the Seeker with the next tester build; owner felt-test closes it. PRIOR STATUS: READY TO IMPLEMENT
 **Silo:** FTUE / capture. Plus one Bag decision.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1500 -> 1501 in the same edit).
