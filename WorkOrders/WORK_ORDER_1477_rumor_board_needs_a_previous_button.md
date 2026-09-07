@@ -1,6 +1,6 @@
 # WO-1477: the rumor board needs a PREVIOUS button
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE - already landed at HEAD (090be8066, 486cd7b17, suite 086ce14fd): RumorBoardVM.PrevPage + RumorBoardPanel.BuildPreviousButton + RumorBoardLayoutRegression Case5_Previous; verified at source 2026-09-06; owner frame owner-screen-20260906-201850.png shows PREVIOUS on device. Open ruling: PrevPage wraps (approved WO-1192 v3) vs this ticket asking no-wrap.
 **Silo:** the rumor board panel (the WO-1192 redesign surface).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1477 -> 1478 in the same edit).

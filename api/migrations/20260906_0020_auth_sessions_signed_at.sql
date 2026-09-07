@@ -1,0 +1,62 @@
+-- =============================================================================
+-- 20260906_0020_auth_sessions_signed_at.sql   (WO-1446, for WO-1441's renewal cap)
+-- -----------------------------------------------------------------------------
+-- ONE additive column. It is the numbered, applyable copy of the ALTER that has
+-- so far existed ONLY in api/schema.sql (line 245) — which is a description of the
+-- schema, not a thing that runs against production.
+--
+-- ⛔ WHY THIS FILE HAD TO EXIST AT ALL. tools/wo1440-alter-column-sweep.mjs,
+--    run against live Neon on 2026-09-06, said:
+--
+--        checked 29 ALTER-added column(s) across 20 file(s)
+--          MISSING ON LIVE DB: auth_sessions.signed_at <- schema.sql
+--        ALTER_COLUMN_SWEEP_MISSING 1
+--
+--    while _lib/wallet-auth.issueSession INSERTs `signed_at` unconditionally on the
+--    normal mint path (api/_lib/wallet-auth.js:320). Deploying that code without
+--    this column 500s EVERY wallet session mint with 42703 — the identical failure
+--    `identity_kind` caused for a week (WO-1440 RESULT §7c). The column must land
+--    BEFORE the next `vercel --prod`, not with it.
+--
+-- ⛔ DO NOT "APPLY" THIS BY RE-RUNNING api/schema.sql. `CREATE TABLE IF NOT EXISTS`
+--    against an existing auth_sessions reports success and changes NOTHING
+--    (memory: idempotent-ddl-hides-a-stale-table). ADD COLUMN IF NOT EXISTS is the
+--    only statement that can add a column to a table that already exists.
+--
+-- ADDITIVE AND IDEMPOTENT. One column, with a default, on an existing table.
+-- Zero DROP / DELETE / TRUNCATE. No rename, no back-fill, no row touched.
+--
+-- NO INDEX IS ADDED, DELIBERATELY. WO-1446 §2 asks for "the index the renewal cap
+-- reads"; the cap reads this column via `FROM auth_sessions WHERE token = $1`
+-- (api/_lib/wallet-auth.js:369) — a lookup on the PRIMARY KEY, which then inspects
+-- signed_at on the single row it already has. There is no predicate on signed_at,
+-- so an index on it would be dead weight on every INSERT. Said out loud rather than
+-- silently skipped.
+--
+-- Apply (owner, DATABASE_URL in env):
+--     node tools/run-migrations.mjs
+-- =============================================================================
+
+-- SIGNED_AT (2026-09-06, WO-1441 — the renewal cap).
+--
+-- A session may now be exchanged for a fresh one WITHOUT a new wallet signature
+-- (_lib/wallet-auth.renewSession), because a 15-minute TTL with no renewal killed cloud
+-- save mid-session and the save route may not raise a wallet sheet while the player walks.
+-- Renewal ROTATES the token, so `created_at` restarts on every renew and cannot bound the
+-- chain. THIS column is the one that can: it records when the ORIGINAL SIGNATURE happened
+-- and is COPIED FORWARD, unchanged, into every renewed row.
+--
+-- ⛔ IT IS THE ONLY THING STOPPING A SESSION BECOMING A PERMANENT LOGIN. Renewal refuses
+-- past signed_at + SESSION_ABSOLUTE_TTL_SECONDS (12h) and the player signs again. If you
+-- ever find renewal setting this to NOW(), the cap is gone and every leaked-but-renewed
+-- chain lives forever — that is the bug to look for here, not a slow query.
+--
+-- DEFAULT NOW() is correct for pre-existing rows: they were minted by a real signature at
+-- some point at or before now, so treating that as the chain origin can only ever make the
+-- cap STRICTER for them, never looser.
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- Verify (expect one row, data_type 'timestamp with time zone', is_nullable 'NO'):
+--   SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE table_name = 'auth_sessions' AND column_name = 'signed_at';
