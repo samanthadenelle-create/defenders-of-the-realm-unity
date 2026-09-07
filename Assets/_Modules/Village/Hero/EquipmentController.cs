@@ -4041,10 +4041,51 @@ namespace DeNelle.Village
             // §12: the pose must PROVE itself in a capture, not be argued from source. tiltFromVertical
             // is the number that was 28 (by construction) and must now read ~0; longAxisDotUp names the
             // inversion sign so "it looks upside down" is answerable without a rebuild.
-            // Throttled: ApplyHoldPose re-asserts this every frame.
+            //
+            // ⛔ WO-1582: THE 5-SECOND THROTTLE IS RETIRED HERE. THE LINE IS NOT (§12 — never strip).
+            // The retired call read `FlowTrace.Throttle("Equip", $"sheathe-rot-...", 5f, ...)`, and its
+            // own comment named the defect while prescribing a cure that could not work: "Throttled:
+            // ApplyHoldPose re-asserts this every frame." A time throttle on a per-frame site logs
+            // FOREVER at its cadence whether or not anything moved — the owner's device log on
+            // 2026-09-07 08:28-08:29 carried TWELVE identical `sheathed long axis on 'Hero (Blaise)':
+            // tiltFromVertical=0deg longAxisDotUp=1` lines in one minute, with no value changes. At
+            // 256 KiB the Android main ring cannot hold that plus a boot window (memory:
+            // logcat-ring-buffer-destroys-evidence), so the instrument was evicting the evidence it
+            // exists to preserve.
+            //
+            // THE CURE IS A KEYED LATCH, NOT A LONGER INTERVAL: emit once per (hero, prop, socket,
+            // RESULT), and again the moment the result MOVES. A steady pose therefore costs exactly
+            // one line for the whole session, and every transition still prints — which is strictly
+            // MORE evidence than a 5s throttle gave (a change between two ticks used to be invisible).
+            //
+            // ⚠ NOT FlowTrace.Once WITH THE RESULT IN THE KEY. Once is a HashSet, so A -> B -> A never
+            // re-emits A; a pose that goes wrong and comes back would go unrecorded, and a jittering
+            // value would grow the set without bound. A LAST-VALUE dictionary re-fires on any
+            // transition, including a return, and stays bounded at one entry per identity.
+            //
+            // ⚠ THE SIGNATURE IS QUANTIZED AND THE MESSAGE IS NOT, deliberately. If the latch key
+            // carried the full-precision value, float noise on a rounding boundary would flip it every
+            // frame and the latch would become a 60 Hz flood — worse than the throttle it replaces.
+            // The key buckets tilt to WHOLE DEGREES and the dot to 0.1, which is far coarser than any
+            // change this line is read for ("must read ~0; ~90 means it is lying across the body").
+            // The logged text keeps its original precision.
             Vector3 bladeWorld = (socket.rotation * result) * Vector3.up;
             float tiltFromVertical = Vector3.Angle(bladeWorld, vertical);
-            FlowTrace.Throttle("Equip", $"sheathe-rot-{(sideSign < 0f ? "main" : "off")}-{name}", 5f,
+            float longAxisDotUp = Vector3.Dot(bladeWorld, body.up);
+            string slot = sideSign < 0f ? "main" : "off";
+            string propKey = sideSign < 0f
+                ? (!string.IsNullOrEmpty(_currentWeaponMeshKey) ? _currentWeaponMeshKey : (_currentWeaponId ?? "?"))
+                : (!string.IsNullOrEmpty(_currentOffHandMeshKey) ? _currentOffHandMeshKey : (_currentOffHandId ?? "?"));
+            string sheatheTraceIdentity = $"sheathe-rot-{slot}-{name}-{propKey}-{socket.name}";
+            string sheatheTraceSignature = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "tilt={0}|dot={1:0.#}|sign={2:+0;-0}|src={3}|why={4}",
+                Mathf.RoundToInt(tiltFromVertical),
+                Mathf.Round(longAxisDotUp * 10f) / 10f,
+                sign,
+                _sheatheTipSign != 0f ? "PER-MESH derived" : "GLOBAL fallback field",
+                string.IsNullOrEmpty(_sheatheTipWhy) ? "<none measured>" : _sheatheTipWhy);
+            EmitSheatheTraceIfChanged(_sheatheTraceLatch, sheatheTraceIdentity, sheatheTraceSignature,
                 $"sheathed long axis on '{name}': tiltFromVertical={tiltFromVertical:0.#}deg " +
                 $"(must read ~{_sheatheBladeDiagonalDeg:0.#}; ~90 means it is lying across the body) " +
                 $"longAxisDotUp={Vector3.Dot(bladeWorld, body.up):0.##} " +
@@ -4056,6 +4097,43 @@ namespace DeNelle.Village
                 "on a guess shared with every other prop — that is the 08-20/08-21 upside-down defect, " +
                 "and the fix is to make the mesh measurable, NEVER to flip the field.");
             return result;
+        }
+
+        // ── WO-1582: THE SHEATHE-TRACE LATCH ─────────────────────────────────────────────────────
+        // Per-INSTANCE, not static: the latch's lifetime is the hero's. A scene reload or a fresh
+        // hero therefore re-emits its first line, which is the behaviour a reader wants (the same
+        // reason FlowTrace.ResetSession exists) and it keeps no process-wide state that a later
+        // session could inherit and go silent on. Bounded at one entry per
+        // (hero, prop, socket) identity — a handful of rows for a hero's whole session.
+        private readonly Dictionary<string, string> _sheatheTraceLatch = new Dictionary<string, string>();
+
+        /// <summary>
+        /// WO-1582 keyed latch. Emits <paramref name="message"/> at Step severity ONLY when
+        /// <paramref name="signature"/> differs from the last one emitted for
+        /// <paramref name="identity"/> — first hit, and every change thereafter INCLUDING a change
+        /// back to a previous value. Returns true when it emitted.
+        /// <para/>
+        /// The latch is passed IN rather than read off a field so the headless fixture
+        /// (<c>SheatheTraceLatchRegression</c>) can drive the REAL emit path with its own dictionary
+        /// and count the lines that reach <see cref="FlowTrace.Sink"/>. A gate that only tested a
+        /// bool would not prove the trace still reaches the log at all, which is the half of this
+        /// ticket that matters most (§12: never strip instrumentation).
+        /// </summary>
+        public static bool EmitSheatheTraceIfChanged(
+            Dictionary<string, string> latch, string identity, string signature, string message)
+        {
+            // No latch or no identity: emit rather than swallow. A diagnostic whose de-dupe state is
+            // missing must fall back to LOUD, never to silent — a silenced trace is indistinguishable
+            // from a code path that never ran, and that ambiguity is what §12 exists to remove.
+            if (latch == null || string.IsNullOrEmpty(identity))
+            {
+                FlowTrace.Step("Equip", message);
+                return true;
+            }
+            if (latch.TryGetValue(identity, out string previous) && previous == signature) return false;
+            latch[identity] = signature;
+            FlowTrace.Step("Equip", message);
+            return true;
         }
 
         // ── DERIVED SHEATHED OFF-HAND (SHIELD) ROTATION — WO-1123 ────────────────────────────────
