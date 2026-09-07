@@ -148,6 +148,38 @@ namespace DeNelle.Core.World
         public const float EdgeFraction = 0.8f;
 
         /// <summary>
+        /// How much of the walkable room BEYOND the region's own boundary a drop must clear, as a
+        /// FRACTION of that room. WO-1604.
+        /// <para>
+        /// ⛔ THE BOUNDARY IS NOT OWNED HERE AND MUST NEVER BE TYPED HERE. "Where does Ashwood
+        /// start" has exactly one owner -- <see cref="ZoneManager.GetZone"/> -- and this file ASKS it
+        /// (<see cref="TryFindRegionBoundary"/>) rather than copying its box half-extent. A number
+        /// typed here would be a second copy of a live constant, which is the duplicated-state
+        /// failure CLAUDE.md sec.2/sec.5/sec.8 keep having to un-rot; and it would go stale silently,
+        /// because a drop one metre inside the classifier's home box still LOOKS placed in every log
+        /// line while telling the player the wrong biome.
+        /// </para>
+        /// <para>
+        /// A FRACTION OF THE ROOM, not of the boundary, and not a metre count. The room past the
+        /// boundary is `edgeReach - boundary`, so the clearance shrinks with the world instead of
+        /// overshooting it: on a world whose north side barely clears the home box, a boundary-scaled
+        /// margin would demand a point outside the terrain and refuse every drop, while a
+        /// room-scaled one still seats just inside. It is also strictly a FLOOR -- the
+        /// <see cref="EdgeFraction"/> seat wins whenever it is further out, which it is by a wide
+        /// margin on the live 1000m terrain, so this changes nothing about where drops actually sit
+        /// today and only bites on a world that has shrunk.
+        /// </para>
+        /// </summary>
+        public const float BoundaryClearanceFraction = 0.1f;
+
+        /// <summary>
+        /// Bisection steps used to ASK <see cref="ZoneManager.GetZone"/> where a region begins.
+        /// A count, not a distance -- 40 halvings resolve any world extent to far below a
+        /// millimetre, so this number never has to change when the terrain does.
+        /// </summary>
+        private const int BoundaryProbeSteps = 40;
+
+        /// <summary>
         /// The four regions the tunnel drops into, in tunnel-arm order (N, E, S, W). READ from
         /// <see cref="ZoneManager.Regions"/> -- this array carries ids only, never names, tiers or
         /// cardinals, so the authored table stays the one place those live.
@@ -232,6 +264,62 @@ namespace DeNelle.Core.World
         }
 
         /// <summary>
+        /// ASK the region classifier where <paramref name="id"/> begins along <paramref name="dir"/>.
+        /// WO-1604 — the single-owner half of the fix.
+        /// <para>
+        /// This is a BISECTION AGAINST <see cref="ZoneManager.GetZone"/> ITSELF, not a read of its
+        /// constants and not a reimplementation of its split. That matters for a reason that is not
+        /// stylistic: ZoneManager's home box is private, its split is a normalised dominant-axis
+        /// test, and both have already been re-sized once (its own comment records the 42/33 box that
+        /// outlived the scene it was measured from). Anything this file learned by copying would be a
+        /// second copy of that geometry, wrong the next time the classifier moves and wrong SILENTLY.
+        /// Asking the owner cannot go stale, and it stays correct if the split stops being a box.
+        /// </para>
+        /// <para>
+        /// Returns the smallest distance along <paramref name="dir"/> that classifies as
+        /// <paramref name="id"/>, to within <see cref="BoundaryProbeSteps"/> halvings. Returns FALSE
+        /// -- never a guess -- when the far end of the ray does not classify as the region at all,
+        /// which means this world has NO room for that region in that direction and the caller must
+        /// refuse the drop rather than seat one somewhere the prompt would be lying about.
+        /// </para>
+        /// <para>
+        /// Assumes the classification is monotone along a cardinal ray from the origin (home zone
+        /// near the Heart, the region beyond it) -- which is what the far-end check establishes for
+        /// the only shape the classifier has ever had. If that ever stops holding, this returns the
+        /// first crossing rather than a wrong answer, and the caller's own post-classification
+        /// re-check (in ResolveDrops) is the backstop.
+        /// </para>
+        /// </summary>
+        public static bool TryFindRegionBoundary(RegionId id, Vector3 dir, float maxReach, out float boundary)
+        {
+            boundary = 0f;
+            if (dir == Vector3.zero || maxReach <= 0f) return false;
+
+            // The far end must BE the region, or there is nothing to bisect toward.
+            if (ZoneManager.GetZone(dir * maxReach) != id) return false;
+
+            float lo = 0f;             // known NOT to be the region (the origin is the home zone)
+            float hi = maxReach;       // known to BE the region (just checked)
+            if (ZoneManager.GetZone(Vector3.zero) == id)
+            {
+                // The origin itself classifies as this region: it starts at zero, and there is no
+                // boundary to clear. Only possible if a region ever claims the Heart, which the
+                // authored table does not do -- reported as a boundary of 0 rather than guessed at.
+                boundary = 0f;
+                return true;
+            }
+
+            for (int i = 0; i < BoundaryProbeSteps; i++)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (ZoneManager.GetZone(dir * mid) == id) hi = mid; else lo = mid;
+            }
+
+            boundary = hi;
+            return true;
+        }
+
+        /// <summary>
         /// PURE, headless-callable derivation: the four drop points for a MEASURED world bounds.
         /// No scene access, no Terrain reference, no UnityEngine.Random -- which is exactly what
         /// lets the oracle prove "these positions are derived, not typed" without a play session.
@@ -301,7 +389,53 @@ namespace DeNelle.Core.World
                 else if (dir.z > 0.5f)  edgeReach = reachZPos;
                 else                    edgeReach = reachZNeg;
 
-                float reach = edgeReach * EdgeFraction;
+                // WO-1604 — ASK THE BOUNDARY OWNER, THEN CLEAR IT.
+                //
+                // The edge fraction alone answers "how far out does the world go", which is a
+                // different question from "where does this region begin". Those two authorities
+                // disagreed in a way nothing detected: the drop announced a region, the classifier
+                // announced another on arrival, and the player was told something untrue. There is
+                // one owner of the second question -- ZoneManager -- so it is asked here, and its
+                // answer becomes a FLOOR under the edge-fraction seat.
+                if (!TryFindRegionBoundary(id, dir, edgeReach, out float boundary))
+                {
+                    // WARN, not FAIL, for the reason spelled out on the degenerate-bounds branch
+                    // above: this is a PURE function the oracle calls with hostile bounds ON PURPOSE
+                    // to prove the refusal, and an error row from a green suite is what teaches every
+                    // seat to stop reading error rows from this system. The CALLER escalates -- and
+                    // HollowRoadsDropInjector does, loudly and with a player-facing Notify naming the
+                    // road, because it is the one that knows a door is about to be missing.
+                    FlowTrace.Warn(Sys, $"REFUSED the {ZoneName(id)} drop: nothing along {Cardinal(id)} out to " +
+                                        $"the measured edge ({edgeReach:0.#}m) classifies as {id} at all, so no " +
+                                        "point on that axis can honestly be labelled that region. No drop derived " +
+                                        "(a labelled door into the wrong biome is worse than a visible dead end).");
+                    continue;
+                }
+
+                float room = Mathf.Max(0f, edgeReach - boundary);
+                float clearance = room * BoundaryClearanceFraction;
+                float floorReach = boundary + clearance;
+                float reach = Mathf.Max(edgeReach * EdgeFraction, floorReach);
+
+                var point = new Vector3(dir.x * reach, worldBounds.center.y, dir.z * reach);
+
+                // FAIL-CLOSED, BEFORE THE DROP EXISTS. The old code seated the drop, let the player
+                // walk through it, teleported them, and only THEN compared the landing against the
+                // classifier -- so the prompt had already lied by the time anything noticed. The
+                // classification is cheap and pure; there is no reason to learn the answer after the
+                // trip instead of before the door.
+                RegionId classified = ZoneManager.GetZone(point);
+                if (classified != id)
+                {
+                    FlowTrace.Warn(Sys, $"REFUSED the {ZoneName(id)} drop: its derived point {point} classifies as " +
+                                        $"{ZoneName(classified)}, not {ZoneName(id)}. Boundary probed at " +
+                                        $"{boundary:0.#}m along {Cardinal(id)}, room to the measured edge " +
+                                        $"{room:0.#}m, clearance {clearance:0.#}m, seat {reach:0.#}m " +
+                                        $"(edge-fraction seat would be {edgeReach * EdgeFraction:0.#}m). No drop " +
+                                        "derived - the two authorities disagree here, and a drop is not seated on " +
+                                        "a disagreement.");
+                    continue;
+                }
 
                 var drop = new Drop
                 {
@@ -309,20 +443,33 @@ namespace DeNelle.Core.World
                     ArmRoomId = ArmRoomIdFor(id),
                     // Seated from the ORIGIN, on a single cardinal axis, so ZoneManager's
                     // origin-relative dominant-axis split classifies it unambiguously.
-                    Point = new Vector3(dir.x * reach, worldBounds.center.y, dir.z * reach),
+                    Point = point,
                     Derivation = $"{id} ({ZoneName(id)}, tier {DangerTier(id)}) = world origin + " +
-                                 $"{Cardinal(id)} * ({edgeReach:0.#}m origin-to-edge reach * " +
-                                 $"{EdgeFraction:0.##} edge fraction = {reach:0.#}m)",
+                                 $"{Cardinal(id)} * max({edgeReach:0.#}m origin-to-edge reach * " +
+                                 $"{EdgeFraction:0.##} edge fraction, {boundary:0.#}m ZoneManager boundary + " +
+                                 $"{clearance:0.#}m clearance) = {reach:0.#}m; classified {classified}",
                 };
                 drops.Add(drop);
+
+                FlowTrace.Step(Sys, $"drop derived: {ZoneName(id)} -> {point}, boundary {boundary:0.#}m, " +
+                                    $"clearance {clearance:0.#}m, seat {reach:0.#}m, ZoneManager says " +
+                                    $"{ZoneName(classified)}. {drop.Derivation}");
             }
 
             if (drops.Count != DropRegions.Length)
             {
-                FlowTrace.Fail(Sys, $"ResolveDrops derived only {drops.Count} of {DropRegions.Length} drops - " +
-                                    "at least one region has no authored cardinal, so a tunnel arm leads nowhere. " +
-                                    "A tunnel arm with no destination is a door that silently does nothing, which " +
-                                    "is the defect class this whole feature is written to avoid.");
+                // WO-1604 DOWNGRADED THIS FROM Fail TO Warn, AND THAT IS NOT A WEAKENING -- read
+                // the next sentence before "restoring" it. A short count now has a SECOND, entirely
+                // legitimate cause: a region whose derived point does not classify as itself is
+                // REFUSED above, on purpose, and the oracle exercises that refusal with hostile
+                // bounds. A Fail here would put an error row in every green regression run, which is
+                // precisely how a system's error rows stop being read (CLAUDE.md sec.14). The
+                // escalation belongs to the CALLER, which alone knows whether a missing drop matters:
+                // HollowRoadsDropInjector Fails AND Notifies, naming every road that is missing.
+                FlowTrace.Warn(Sys, $"ResolveDrops derived only {drops.Count} of {DropRegions.Length} drops - " +
+                                    "either a region has no authored cardinal, or its derived point was refused " +
+                                    "because ZoneManager does not classify it as that region. Each refusal is " +
+                                    "named above. The caller reports the player-facing consequence.");
             }
             return drops;
         }

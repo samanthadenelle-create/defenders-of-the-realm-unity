@@ -39,6 +39,25 @@
 //     confirms the hero really landed, on navmesh, in the region we promised. A drop
 //     that lands the hero in the wrong biome or off the mesh says so in the capture
 //     instead of reading as a successful trip.
+//
+// WO-1604 (2026-09-07) — TWO CHANGES, AND THE SECOND IS THE ONE THAT MATTERED:
+//   1. FAIL-CLOSED BEFORE THE DOOR. BiomeRoads.ResolveDrops now asks ZoneManager where
+//      each region actually begins and REFUSES any drop whose derived point does not
+//      classify as its own region. A refused road is a visible dead end plus a Fail and
+//      a player-facing Notify naming it here — never a labelled door that teleports the
+//      hero and complains afterwards.
+//   2. THE ARRIVAL FAIL NOW SAYS WHICH HALF BROKE. It used to compute the drift from the
+//      promised point and print it only on SUCCESS, so the failure line named a landing
+//      position and nothing else. F8 seq 4703 ("promised Ashwood, landed (0,0.08,50),
+//      classified Elarion") therefore read as a derivation defect and was ticketed as
+//      one — but the world this system MEASURED for itself, in its own trace line
+//      (Builds/starter-settlement-proof-r4.log:19075, "world bounds MEASURED from 1
+//      terrain(s): centre (0.00, 17.00, 0.00) size (1000.00, 42.00, 1000.00)"), gives
+//      a north reach of 500m and so derives the Ashwood point at z=400. The hero had
+//      never been moved at all. An alarm that
+//      cannot distinguish "the warp did not happen" from "the warp went to the wrong
+//      biome" points the next reader at the wrong system, which is the specific way this
+//      one cost a ticket. Both branches now carry promised point, drift and settle time.
 // =============================================================================
 
 using System;
@@ -239,7 +258,42 @@ namespace DeNelle.Village.World
             if (drops.Count == 0)
             {
                 FlowTrace.Fail(Sys, "BiomeRoads.ResolveDrops derived NO drop points - the tunnel arms dead-end.");
+                // The tunnel's player-facing name is READ from its one authored home, never retyped
+                // here - WO-1044 ruled that word and BiomeRoadsRegression Case 7 pins it.
+                Notify($"The roads out of {BiomeRoads.TunnelDisplayName} are closed.");
                 return;
+            }
+
+            // WO-1604 — THE ESCALATION FOR A REFUSED ROAD LIVES HERE, NOT IN THE RESOLVER.
+            //
+            // ResolveDrops now refuses (at Warn) any drop whose derived point ZoneManager does not
+            // classify as its own region -- fail-closed, before the door exists, instead of the old
+            // shape where the door was built, the player walked through it, the hero was teleported,
+            // and only then did the arrival check discover the prompt had lied. A refusal is a
+            // MISSING ROAD, which is a player-visible consequence, so it is announced here: this is
+            // the layer that knows a tunnel arm is about to dead-end, and it is the layer that can
+            // put a sentence in front of the player instead of only in a log nobody is reading.
+            if (drops.Count < BiomeRoads.DropRegions.Length)
+            {
+                var missing = new List<string>();
+                for (int i = 0; i < BiomeRoads.DropRegions.Length; i++)
+                {
+                    RegionId want = BiomeRoads.DropRegions[i];
+                    bool found = false;
+                    for (int j = 0; j < drops.Count; j++)
+                        if (drops[j].Region == want) { found = true; break; }
+                    if (!found) missing.Add(BiomeRoads.ZoneName(want));
+                }
+
+                string names = string.Join(", ", missing.ToArray());
+                FlowTrace.Fail(Sys, $"{missing.Count} of {BiomeRoads.DropRegions.Length} biome roads have NO drop: " +
+                                    $"{names}. Their derived points were refused because ZoneManager does not " +
+                                    "classify them as their own region (the per-region Warn above carries the " +
+                                    "boundary, the clearance and the classification). Those arms dead-end visibly " +
+                                    "rather than promising a biome they cannot deliver.");
+                Notify(missing.Count == 1
+                    ? $"The road to {names} is closed."
+                    : $"These roads are closed: {names}.");
             }
 
             var holder = new GameObject(HolderName);
@@ -497,8 +551,42 @@ namespace DeNelle.Village.World
                 FlowTrace.Fail(Sys, $"{BiomeRoads.ZoneName(s_pendingRegion)} drop landed the hero at {at}, which is " +
                                     $"NOT within {ArrivalSampleRadius}m of any navmesh - the hero is stranded off " +
                                     "the walkable world. The drop point needs re-deriving or the navmesh does not " +
-                                    "reach that far out.");
+                                    $"reach that far out. Promised {s_promisedPoint}, drift {drift:F1}m, settled in " +
+                                    $"{settleSeconds:F2}s (WO-1604: the numbers ride on EVERY arrival failure now, " +
+                                    "so the capture never again forces the reader to infer which half broke).");
                 Notify($"The road out of {BiomeRoads.ZoneName(s_pendingRegion)} is not walkable yet.");
+                return;
+            }
+
+            // ⚠ WO-1604 — THE DRIFT TEST COMES FIRST, AND THE ORDER IS THE WHOLE FIX HERE.
+            //
+            // Until 2026-09-07 this method computed `drift` and then printed it ONLY on success,
+            // while the mismatch Fail named just the landing position. That single omission cost a
+            // ticket: F8 seq 4703 read "promised Ashwood, landed at (0.00, 0.08, 50.00), classified
+            // Elarion", the only honest reading of which is "the derived point and the split
+            // disagree" -- so WO-1604 was minted against the derivation. It was the wrong suspect.
+            // The live terrain is 1000x1000 seated at (-500,-4,-500) (Main_Castle_Overworld,
+            // ExteriorTerrain), so the Ashwood point derives ~400m out, nowhere near z=50; the hero
+            // had simply never been moved, and the settle loop timed out and judged wherever they
+            // happened to be standing.
+            //
+            // A DROP THAT NEVER MOVED THE HERO AND A DROP THAT MOVED THEM INTO THE WRONG BIOME ARE
+            // DIFFERENT DEFECTS IN DIFFERENT SYSTEMS, and a message that cannot tell them apart
+            // sends the next reader to the wrong file. Both branches now carry the promised point,
+            // the drift and the settle time, so the capture answers the question by itself.
+            if (drift > ArrivalSettleRadius)
+            {
+                FlowTrace.Fail(Sys, $"the {BiomeRoads.ZoneName(s_pendingRegion)} drop NEVER LANDED: after " +
+                                    $"{settleSeconds:F2}s (budget {ArrivalSettleBudget:0.0}s) the hero is at {at}, " +
+                                    $"{drift:F1}m from the promised point {s_promisedPoint} - well outside the " +
+                                    $"{ArrivalSettleRadius:0.#}m settle radius. ZoneManager classifies where they " +
+                                    $"actually are as {BiomeRoads.ZoneName(landed)}, which says nothing about the " +
+                                    "derived point: THE WARP DID NOT HAPPEN. This is a CROSSING failure " +
+                                    "(SceneTransitionTrigger.RepositionPlayerAfterLoad / HeroLocomotion.WarpTo, or " +
+                                    "a spawn placement that overrode it), NOT a disagreement between the drop " +
+                                    "derivation and the region split - the drop point is refused before the door " +
+                                    "is built if it does not classify as its own region.");
+                Notify($"The road to {BiomeRoads.ZoneName(s_pendingRegion)} did not carry you through.");
                 return;
             }
 
@@ -506,8 +594,15 @@ namespace DeNelle.Village.World
             {
                 FlowTrace.Fail(Sys, $"drop promised {BiomeRoads.ZoneName(s_pendingRegion)} but the hero landed at " +
                                     $"{at}, which ZoneManager classifies as {BiomeRoads.ZoneName(landed)}. The " +
-                                    "derived point and the region split disagree - the prompt told the player " +
-                                    "something untrue.");
+                                    $"promised point was {s_promisedPoint} and the hero settled {drift:F1}m from " +
+                                    $"it in {settleSeconds:F2}s - i.e. the warp DID land, so this really is the " +
+                                    "derived point and the region split disagreeing, and the prompt told the " +
+                                    "player something untrue. That should now be unreachable: ResolveDrops " +
+                                    "classifies every point against ZoneManager and refuses the drop before the " +
+                                    "door is seated, so reaching this line means the classification changed " +
+                                    "between injection and arrival, or the hero settled across a region edge.");
+                Notify($"The road promised {BiomeRoads.ZoneName(s_pendingRegion)} but led to " +
+                       $"{BiomeRoads.ZoneName(landed)}.");
                 return;
             }
 
