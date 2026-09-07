@@ -135,7 +135,7 @@ Run from the repo root. **Unity must be closed** (project lock) for any batchmod
 | Full regression | `.\run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.RunAll -LogName r1` | `REGRESSION_OK <n>/<n> suites` |
 | UI capture | `.\run-unity-method.ps1 -Method DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless -LogName cap1 -ExpectMarker UI_CAPTURE_OK` | `UI_CAPTURE_OK <count>` |
 | Schema parity | `node tools/schema-parity.mjs` | `SCHEMA_PARITY_OK <n> table(s)` |
-| JS tests | `node --test "test/*.test.js"` | `pass N / fail 0` |
+| JS tests | `npm test` | `pass N / fail 0` |
 | R2 content | `.\tools\r2-ship.ps1` (Android) / `.\tools\r2-ship.ps1 -Target WebGL` (Pi) | `R2_PUSH_OK`, `R2_PARITY_OK` |
 
 **Never restate the suite count in a doc — read it off the marker.** (It was 308, then 309, within one

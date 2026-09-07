@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "dependencies": {
     "@ardrive/turbo-sdk": "^1.42.0",
     "@msgpack/msgpack": "^2.8.0",

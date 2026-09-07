@@ -1,6 +1,6 @@
 # WO-1501: the client names /api/client-catalogs, which does not exist, behind a flag no code registers
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06: the dormant rail warns HAS NO SERVER HALF when armed; RemoteCatalogSeamRegression case 7 [endpoint-honesty] (unexecuted until the gate)
 **Silo:** `Assets/_Modules/Core/Data/RemoteCatalogService.cs` + `api/`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1501 -> 1502 in the same edit).

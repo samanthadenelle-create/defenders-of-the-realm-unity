@@ -66,6 +66,11 @@
 //   6 [never-blocks]     No blocking idiom in RemoteCatalogService, the boot hook
 //                        still fires and forgets, and CanonicalJson.Source is
 //                        assigned in exactly ONE place in the whole tree.
+//   7 [endpoint-honesty] WO-1501: the endpoint constant is EITHER backed by an
+//                        api/ file OR marked dormant AND warned about on arming -
+//                        never a dead rail that reads as a live seam. Reds both
+//                        ways: an unbacked-and-unmarked endpoint, and a backed
+//                        endpoint still claiming dormancy.
 //
 // Markers: CATALOG_SEAM_OK / CATALOG_SEAM_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.RemoteCatalogSeamRegression.RunAll
@@ -123,6 +128,14 @@ namespace DeNelle.Editor.Regression
         private const string ServiceSrc = "Assets/_Modules/Core/Data/RemoteCatalogService.cs";
         private const string OverridesSrc = "Assets/_Modules/Core/Data/RemoteCatalogOverrides.cs";
 
+        /// <summary>WO-1501: the token the service must carry while its endpoint has no
+        /// server half. Stated here, matched in the source - see Case 7.</summary>
+        private const string DormancyMarker = "WO-1501 DORMANT ENDPOINT";
+
+        /// <summary>WO-1501: the sentence the arming Warn must carry. Matched against the
+        /// CALL, never the file, so a doc comment cannot satisfy it.</summary>
+        private const string WarnPhrase = "HAS NO SERVER HALF";
+
         // =====================================================================
         //  Entry points
         // =====================================================================
@@ -160,6 +173,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "money-boundary", () => Case4_MoneyBoundary(failures, notes));
                 Case(failures, "allowlist-shape", () => Case5_AllowlistShape(failures, notes));
                 Case(failures, "never-blocks", () => Case6_NeverBlocks(failures, notes));
+                Case(failures, "endpoint-honesty", () => Case7_EndpointHonesty(failures, notes));
             }
             catch (Exception ex)
             {
@@ -184,8 +198,10 @@ namespace DeNelle.Editor.Regression
                          "byte for byte. A VALID payload is served (so this is not vacuously green), " +
                          "affects only its own catalog, and Clear() restores the compiled text. The " +
                          "money boundary is enforced in code before the allowlist and rejects wholesale; " +
-                         "the allowlist agrees with this oracle's literals; and the fetch still cannot " +
-                         "block boot" + noteStr;
+                         "the allowlist agrees with this oracle's literals; the fetch still cannot " +
+                         "block boot; and the endpoint constant is either backed by an api/ route or " +
+                         "admitted as dormant in the source AND warned about on arming (WO-1501)" +
+                         noteStr;
                 return true;
             }
             reason = "catalog-seam FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -533,6 +549,95 @@ namespace DeNelle.Editor.Regression
             if (ov != null && !ov.Contains("Guard.Try"))
                 failures.Add("[never-blocks] " + OverridesSrc + " no longer Guards its parses. A parse " +
                              "that can throw outward is a catalog that can blank (CLAUDE.md section 12).");
+        }
+
+        // =====================================================================
+        //  Case 7 - THE ENDPOINT IS EITHER REAL OR ADMITTED (WO-1501)
+        // =====================================================================
+        //  RemoteCatalogService names /api/client-catalogs. No such route exists
+        //  under api/. Because every failure of this seam resolves the COMPILED
+        //  catalog, a 404 is indistinguishable from "no override authored", so the
+        //  mismatch was invisible for the life of the ticket: the client half reads
+        //  as a live seam and is a dead rail.
+        //
+        //  This case does not demand the route exist. It demands the constant be
+        //  ONE of two honest things:
+        //     (a) BACKED - an api/ file answers the path it names, or
+        //     (b) MARKED  - the source carries the dormancy marker AND arming emits
+        //         a FlowTrace.Warn that names the endpoint.
+        //  The day the route lands, (a) becomes true and the marker must go in the
+        //  same commit - this case reds if a backed endpoint still claims dormancy,
+        //  so the note cannot rot into a lie the way CLAUDE.md section 2's WO block did.
+        // =====================================================================
+        private static void Case7_EndpointHonesty(List<string> failures, List<string> notes)
+        {
+            string src = ReadRepoText(ServiceSrc);
+            if (src == null)
+            {
+                failures.Add("[endpoint-honesty] could not read " + ServiceSrc);
+                return;
+            }
+
+            // Read the path out of the SOURCE, not out of a literal here: an oracle that
+            // states the endpoint itself would go green while the code moved on.
+            var m = System.Text.RegularExpressions.Regex.Match(
+                src, @"EndpointPath\s*=\s*""([^""]+)""");
+            if (!m.Success)
+            {
+                failures.Add("[endpoint-honesty] no EndpointPath constant found in " + ServiceSrc +
+                             ". This case reads the endpoint from the code; if the constant was " +
+                             "renamed, re-point the regex in the same commit.");
+                return;
+            }
+
+            string endpointPath = m.Groups[1].Value;          // e.g. "/api/client-catalogs"
+            string rel = endpointPath.TrimStart('/');          // "api/client-catalogs"
+
+            // Vercel resolves both file shapes for a route.
+            bool backed = ReadRepoText(rel + ".js") != null ||
+                          ReadRepoText(rel + "/index.js") != null;
+
+            bool marked = src.Contains(DormancyMarker);
+
+            // ⚠ MATCH THE CALL, NOT THE PHRASE. A Contains() on the sentence alone is
+            // satisfied by the doc comment that explains it, so deleting the Warn would
+            // leave this case green - the exact "a comment is not a signal" failure it
+            // exists to catch.
+            bool warns = System.Text.RegularExpressions.Regex.IsMatch(
+                src, @"FlowTrace\.Warn\([^;]*" + WarnPhrase,
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            if (backed)
+            {
+                if (marked)
+                    failures.Add("[endpoint-honesty] '" + rel + ".js' now EXISTS, but " + ServiceSrc +
+                                 " still carries the '" + DormancyMarker + "' note. The route landed " +
+                                 "and the honesty note became a lie - delete it (and this branch's " +
+                                 "reason) in the commit that shipped the route.");
+                if (warns)
+                    failures.Add("[endpoint-honesty] '" + rel + ".js' now EXISTS, but arming still " +
+                                 "warns '" + WarnPhrase + "'. A live route announcing itself as dead " +
+                                 "is the same lie as a dead one announcing itself as live - remove " +
+                                 "the Warn in the commit that shipped the route.");
+                if (!marked && !warns)
+                    notes.Add("NOTE: the catalog endpoint '" + endpointPath + "' is BACKED by an api/ " +
+                              "file - the WO-1501 dormant rail is closed");
+                return;
+            }
+
+            if (!marked)
+                failures.Add("[endpoint-honesty] " + ServiceSrc + " targets '" + endpointPath +
+                             "' and NO api/ file serves it, yet the source carries no '" +
+                             DormancyMarker + "' marker. A dead rail that reads as a live seam is " +
+                             "WO-1501 itself: every fetch 404s, every catalog silently falls back, " +
+                             "and the next lane plans against a seam that does not exist. Either " +
+                             "write api/" + rel.Substring(4) + ".js or say so in the source.");
+
+            if (!warns)
+                failures.Add("[endpoint-honesty] arming the seam does not WARN that '" + endpointPath +
+                             "' has no server half. A comment is not a signal: an operator who arms " +
+                             "the rail sees the game behave normally and concludes their override " +
+                             "was rejected. The Warn must fire when Enabled is true.");
         }
 
         // =====================================================================

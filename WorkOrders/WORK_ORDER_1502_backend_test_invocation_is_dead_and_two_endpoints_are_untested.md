@@ -1,6 +1,6 @@
 # WO-1502: the documented backend test command does not run, game/load and auth/nonce have no tests, 23 endpoints are untested
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - 2026-09-06: package.json scripts.test = node --test test/*.test.js; test/game.load.test.js (11) + test/auth.nonce.budget.test.js; four env vars documented in ACCESS_AND_SECRETS section 2A (the two Google Play secrets belong in section 2, owner to confirm); still ZERO gates run node --test
 **Silo:** `api/` tests + `package.json` + `docs/ACCESS_AND_SECRETS.md` + the runbooks.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1502 -> 1503 in the same edit).

@@ -64,6 +64,26 @@ POST /api/admin/ops                       # headers: X-Admin-Key AND X-Admin-Ops
 **Also never render or log:** a wallet address, an email, or a real name. A player id is enough for
 any support question.
 
+### 2A. NON-SECRET BACKEND ENV VARS — config knobs, and what an UNSET one does
+
+Not secrets (no value here opens anything), but every one **changes backend behaviour when unset**, and
+until WO-1502 none appeared in any `.md`. Each line is read from the code use cited, not from memory.
+An env var that silently changes behaviour and is written down nowhere is the same duplicated-state
+defect as a stale WO-number block — the code is the authority, this table is the index to it.
+
+| Name | What it does, and what UNSET means | Read at |
+|---|---|---|
+| `COMMUNITY_SHOWCASE_VOTING_ENABLED` | Contest voting is live **only** when the value lower-cases to exactly `true`; anything else (unset included) leaves showcase voting off. | `api/_lib/showcase-contest.js:7-9` |
+| `INSTALL_BRAG_CRYSTALS` | Crystal grant for an install-brag referral claim. Parsed as an int and accepted only when finite and `>= 0`; **unset or junk falls back to 50** — the endpoint always pays something. | `api/referral/install-brag.js:42-44` |
+| `SOLANA_RPC_URL` | The Solana RPC the tower-swap log verifies a signature against, and the **devnet fallback** for purchase verification when `SOLANA_DEVNET_RPC_URL` is unset. Unset (and blank) resolves to `null`, so on-chain verification is skipped rather than attempted. | `api/tower-swap/log.js:70-73`, `api/purchases/verify.js:47-48` |
+| `SOLANA_DEVNET_SKR_MINT` | The SKR mint used by the **devnet** purchase rail only (mainnet uses the hardcoded `MAINNET_SKR_MINT`). Unset/blank makes `purchaseRail('devnet')` return `null`, i.e. no devnet purchases at all. | `api/_lib/purchase-catalog.js:226-228` |
+
+> Two further undocumented vars — `GOOGLE_PLAY_ACCOUNT_BINDING_KEY` and `GOOGLE_PLAY_PACKAGE_NAME`
+> (`api/_lib/google-play-purchases.js:77-79`) — are **still unlisted**; they belong to the Google Play
+> purchase silo and were outside this lane's scope. `GOOGLE_PLAY_ACCOUNT_BINDING_KEY` is **HMAC-SHA256
+> key material** — `crypto.createHmac('sha256', String(key))`, `api/_lib/google-play-purchases.js:198-200`
+> — so it is a **secret** and belongs in the table above, not in this one, when it lands.
+
 ---
 
 ## 3. HOW A SEAT GETS ACCESS — the answer to "I can't reach prod"

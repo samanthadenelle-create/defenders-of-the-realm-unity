@@ -111,6 +111,20 @@ namespace DeNelle.Core
         /// Do NOT refactor the duplicates as part of WO-1331.</summary>
         private const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
 
+        /// <summary>
+        /// ⛔ WO-1501 DORMANT ENDPOINT: <c>/api/client-catalogs</c> HAS NO SERVER HALF.
+        /// There is no <c>api/client-catalogs.js</c> in this repo, so every fetch this
+        /// service makes answers 404 and every catalog falls through to its compiled copy.
+        /// That fall-through is proven and safe (RemoteCatalogSeamRegression), which is
+        /// exactly why the mismatch was invisible: a dormant rail that reads as a live seam.
+        /// <para>
+        /// The client half is deliberately kept - WO-1474 and WO-1331 both plan against this
+        /// seam - but it must FAIL LOUDLY the moment anyone arms it, hence the Warn in
+        /// <see cref="Install"/>. Case 7 of the oracle reds if this constant is neither
+        /// backed by an <c>api/</c> file NOR carrying this marker, so the day the route
+        /// lands the honesty note must be removed in the same commit.
+        /// </para>
+        /// </summary>
         private const string EndpointPath = "/api/client-catalogs";
 
         /// <summary>Without a timeout a captive-portal socket never completes and the
@@ -213,6 +227,19 @@ namespace DeNelle.Core
                                     "has - this is TODAY'S BEHAVIOUR, byte for byte.");
                 return;
             }
+
+            // ⛔ WO-1501 DORMANT ENDPOINT - say it OUT LOUD, at the moment of arming.
+            // Armed, this service polls a route that does not exist. The 404 is silent by
+            // design (every failure resolves the compiled catalog), so without this line an
+            // operator arms the rail, sees the game behave normally, and concludes the seam
+            // is live and their override was rejected - the exact half-built-seam confusion
+            // that produced WO-1501.
+            FlowTrace.Warn(Sys, "remote catalog seam ARMED, but its endpoint " + Endpoint +
+                                " HAS NO SERVER HALF in this repo (no api/client-catalogs "
+                                + "route exists). Every fetch will 404 and EVERY catalog will "
+                                + "resolve its COMPILED copy. Nothing is broken - but no "
+                                + "override can ever land until that route is written "
+                                + "(WO-1501 / WO-1331).");
 
             LoadCache();
 
