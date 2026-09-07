@@ -3,7 +3,7 @@
 
 # WO-1595 — Raid AI: breach → goal, peel aggro, formation roles
 
-**Status:** IMPLEMENTED (attacker half) - merged into the shared tree 2026-09-07 by explicit path from grok/raid-1593-1595 sha 7879bc2e8 after CLI review ACCEPT WITH FIXES (fixes applied in the shared tree before the wave-1 gate); garrison Hold/Hunter (s2.3) still open as a follow-up lane - Q2/Q3 ruled 2026-09-07 (Q2 delegated: Hold + Hunter only; Q3 yes, ~1.5 s delay) and remain a follow-up lane; owner felt-test closes the attacker half. PRIOR STATUS: IMPLEMENTED - awaiting CLI review (branch grok/raid-1593-1595, sha 4e03cf4e1)  
+**Status:** IMPLEMENTED (attacker half) - merged into the shared tree 2026-09-07 by explicit path from grok/raid-1593-1595 sha 7879bc2e8 after CLI review ACCEPT WITH FIXES (fixes applied in the shared tree before the wave-1 gate); garrison Hold/Hunter (s2.3) is a follow-up lane - Q2/Q3 ruled 2026-09-07 (Q2 delegated: Hold + Hunter only; Q3 yes, ~1.5 s delay) and remain a follow-up lane; owner felt-test closes the attacker half. PRIOR STATUS: IMPLEMENTED - awaiting CLI review (branch grok/raid-1593-1595, sha 4e03cf4e1)  
 **Minted:** 2026-09-07 — program WO-1592  
 **Amended:** 2026-09-07 — owner felt: troops start on walls and **stay** on walls; want breach then push to capture goal + formation  
 **Amended:** 2026-09-07 — owner ruled: capture the spire; **if aggro / being attacked, prioritize staying alive**  

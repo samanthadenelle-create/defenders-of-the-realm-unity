@@ -16,11 +16,9 @@
 // (every role but siege) a hostile STRUCTURE competed in the same nearest-wins bucket as a live
 // body, so nothing about the pick could ever change when a segment fell.
 //
-// WHAT THIS SUITE PINS — the pick rule, TroopController.PrefersUnitOverStructure, which was
-// extracted pure precisely so the rule can be asserted with no scene, no navmesh and no play
-// session. It is the live rule: NearestHostile calls THIS function, so the suite cannot pass
-// while the selector does something else (the failure mode of a parallel re-implementation —
-// see TroopReachabilityRegression's header on why the accessor itself must be under test).
+// WHAT THIS SUITE PINS — the Breach-phase pick rule, RaidAssaultAi.PreferUnit (WO-1595
+// retired TroopController.PrefersUnitOverStructure). NearestHostile calls PreferUnit via
+// PickBucket, so the suite cannot pass while the selector does something else.
 //
 // RED PROOF, stated honestly (CLAUDE.md §11B). Case 1 is RED against the build the owner played
 // and the reasoning is structural, not executed: at HEAD~ the function did not exist and
@@ -99,8 +97,9 @@ namespace DeNelle.Editor
             // The captured archer: a live guard in the sweep, seventeen wall panels, the nearest
             // of them 4.2 m away, preferStruct=False. Once a complete route to the guard exists,
             // the guard must win.
-            bool prefer = TroopController.PrefersUnitOverStructure(
-                preferStructures: false, hasUnit: true, hasStruct: true,
+            // WO-1595: live pick rule is RaidAssaultAi.PreferUnit (Breach mirrors WO-1438).
+            bool prefer = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: false, hasUnit: true, hasStruct: true,
                 unitInAttackRange: false, routeToUnitOpen: true);
             if (!prefer)
                 failures.Add("case1: a routable live defender did NOT beat a nearer wall panel " +
@@ -110,8 +109,8 @@ namespace DeNelle.Editor
 
             // Reach alone is sufficient too — a defender already inside attack range needs no
             // route query, and preferring it can have no movement consequence at all.
-            bool inReach = TroopController.PrefersUnitOverStructure(
-                preferStructures: false, hasUnit: true, hasStruct: true,
+            bool inReach = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: false, hasUnit: true, hasStruct: true,
                 unitInAttackRange: true, routeToUnitOpen: false);
             if (!inReach)
                 failures.Add("case1b: a defender ALREADY inside attack range lost to a structure");
@@ -122,8 +121,8 @@ namespace DeNelle.Editor
         // ── Case 2 — WO-933 siege is not collateral damage. ──────────────────────────────────
         private static void Case2_SiegeStillPrefersStructures(List<string> failures, StringBuilder log)
         {
-            bool prefer = TroopController.PrefersUnitOverStructure(
-                preferStructures: true, hasUnit: true, hasStruct: true,
+            bool prefer = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: true, hasUnit: true, hasStruct: true,
                 unitInAttackRange: true, routeToUnitOpen: true);
             if (prefer)
                 failures.Add("case2: a SIEGE troop (troop-catapult) preferred a unit over a " +
@@ -133,8 +132,8 @@ namespace DeNelle.Editor
 
             // …and siege must still fall back to a unit rather than freeze when no structure is
             // in the sweep ("never freezes idle", NearestHostile's own contract).
-            bool fallback = TroopController.PrefersUnitOverStructure(
-                preferStructures: true, hasUnit: true, hasStruct: false,
+            bool fallback = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: true, hasUnit: true, hasStruct: false,
                 unitInAttackRange: true, routeToUnitOpen: true);
             if (fallback)
                 log.AppendLine("[case2b] NOTE siege prefers the unit when no structure exists");
@@ -146,8 +145,8 @@ namespace DeNelle.Editor
         // ── Case 3 — the anti-pinning guard. ─────────────────────────────────────────────────
         private static void Case3_UnreachableUnitDoesNotPinTheTroop(List<string> failures, StringBuilder log)
         {
-            bool prefer = TroopController.PrefersUnitOverStructure(
-                preferStructures: false, hasUnit: true, hasStruct: true,
+            bool prefer = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: false, hasUnit: true, hasStruct: true,
                 unitInAttackRange: false, routeToUnitOpen: false);
             if (prefer)
                 failures.Add("case3: a defender that is neither in reach nor routable was " +
@@ -156,8 +155,8 @@ namespace DeNelle.Editor
             else
                 log.AppendLine("[case3] unreachable defender is NOT preferred OK");
 
-            bool noUnit = TroopController.PrefersUnitOverStructure(
-                preferStructures: false, hasUnit: false, hasStruct: true,
+            bool noUnit = RaidAssaultAi.PreferUnit(
+                RaidAssaultPhase.Breach, preferStructures: false, hasUnit: false, hasStruct: true,
                 unitInAttackRange: false, routeToUnitOpen: true);
             if (noUnit)
                 failures.Add("case3b: preferred a unit when the sweep accepted none");

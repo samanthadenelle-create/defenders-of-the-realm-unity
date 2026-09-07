@@ -12,8 +12,10 @@
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.AI;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;   // FlowTrace - [Flow:TroopVisual]
+using DeNelle.Village.World.Camps; // RaidSpire — WO-1595 march axis
 
 namespace DeNelle.Village
 {
@@ -79,7 +81,9 @@ namespace DeNelle.Village
                 return null;
             }
 
-            Vector3 spawnPos = pos + RingOffset(stackIndex, spread);
+            // WO-1595: deploy into formation along the march axis (tap → RaidSpire), not a
+            // role-blind spiral ring. RingOffset remains as fallback when no spire / unknown role.
+            Vector3 spawnPos = pos + FormationOrRingOffset(t.TroopDefId, stackIndex, pos, spread);
 
             var troop = SpawnTroop(t.TroopDefId, spawnPos);
             if (troop == null) return null;
@@ -94,6 +98,67 @@ namespace DeNelle.Village
             troop.ApplyDamageMultiplier(t.DamageMultiplier * mods.TroopDamageMult);
             troop.ApplyHealthMultiplier(mods.TroopHealthMult);
             return troop;
+        }
+
+        /// <summary>
+        /// WO-1595 formation slot when a RaidSpire exists; otherwise the legacy spiral ring.
+        /// CLI review 2026-09-07: sample onto NavMesh after offset (Support can land ~11 m
+        /// off the tap / off-mesh past the deploy gate); fall back to RingOffset on a miss.
+        /// Stack index is per assault JOB among live Active troops so two melee types do not
+        /// share one lateral lane.
+        /// </summary>
+        private static Vector3 FormationOrRingOffset(string troopDefId, int stackIndex, Vector3 tapPos, float spread)
+        {
+            var def = TroopCatalog.Find(troopDefId);
+            var spire = RaidSpire.Active;
+            if (def == null || spire == null || !spire.IsAlive)
+                return RingOffset(stackIndex, spread);
+
+            Vector3 march = spire.WorldPosition - tapPos;
+            march.y = 0f;
+            if (march.sqrMagnitude < 0.01f) march = Vector3.forward;
+
+            var job = RaidAssaultAi.JobFromRole(def.Role);
+            int roleStack = CountActiveJob(job);
+            Vector3 offset = RaidAssaultAi.FormationWorldOffset(job, roleStack, march);
+            Vector3 candidate = tapPos + offset;
+
+            // Sample the formation slot onto walkable mesh. Max distance covers a Support
+            // back-line (~5 m) plus lateral lanes without accepting a far-off wrong cell.
+            const float sampleRadius = 3.5f;
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, sampleRadius, NavMesh.AllAreas))
+            {
+                Vector3 sampled = hit.position - tapPos;
+                sampled.y = 0f;
+                FlowTrace.Step("RaidAI",
+                    $"formation-deploy id='{troopDefId}' job={job} roleStack={roleStack} " +
+                    $"typeStack={stackIndex} offset={sampled.ToString("F1")} " +
+                    $"march={march.normalized.ToString("F1")} nav=sampled");
+                return sampled;
+            }
+
+            FlowTrace.Warn("RaidAI",
+                $"formation-deploy id='{troopDefId}' job={job} roleStack={roleStack} " +
+                $"nav=MISS@{sampleRadius:F1}m — falling back to RingOffset(typeStack={stackIndex}).");
+            return RingOffset(stackIndex, spread);
+        }
+
+        /// <summary>How many live Active troops already map to this assault job (for lateral lanes).</summary>
+        private static int CountActiveJob(RaidAssaultJob job)
+        {
+            int n = 0;
+            var list = TroopController.ActiveTroops;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var t = list[i];
+                if (t == null || !t.IsAlive) continue;
+                string id = t.TroopId;
+                if (string.IsNullOrEmpty(id)) continue;
+                var d = TroopCatalog.Find(id);
+                if (d == null) continue;
+                if (RaidAssaultAi.JobFromRole(d.Role) == job) n++;
+            }
+            return n;
         }
 
         /// <summary>

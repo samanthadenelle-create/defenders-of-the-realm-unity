@@ -97,6 +97,18 @@ namespace DeNelle.Village.World.Camps
         /// <summary>The live spire for the current raid scene (null when there is none).</summary>
         public static RaidSpire Active { get; private set; }
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// WO-1595 EditMode capture — scene open without Play skips Awake, so Active stays null
+        /// and formation falls back to RingOffset. Batch trace bind only.
+        /// Editor-only: the sole caller is Assets/Editor/Regression/RaidAssaultTraceCapture.cs.
+        /// </summary>
+        public static void BindActiveForEditorCapture(RaidSpire spire)
+        {
+            if (spire != null) Active = spire;
+        }
+#endif
+
         /// <summary>Raised once, on the frame this spire is razed. The raid is won here.</summary>
         public event System.Action<RaidSpire> OnDestroyedEvent;
 

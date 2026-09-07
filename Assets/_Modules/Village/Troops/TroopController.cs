@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;   // FlowTrace - [Flow:TroopVisual]
 using DeNelle.BattleATB.Engine;   // StatusKind (unlocked special-ability vocabulary)
+using DeNelle.Village.World.Camps; // RaidSpire — WO-1595 push objective
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -80,6 +81,13 @@ namespace DeNelle.Village
         private float _structureDamageMult = 1f;
         private float _unitDamageMult = 1f;
         private bool _isSupport;
+        // WO-1595 assault job / phase (formation + breach→spire + peel).
+        private RaidAssaultJob _assaultJob = RaidAssaultJob.Front;
+        private RaidAssaultPhase _assaultPhase = RaidAssaultPhase.Breach;
+        private float _lastHurtAt = -999f;
+        private bool _routeToObjectiveOpen;
+        private string _objectiveRouteStatus = "not-asked";
+        private float _objectiveRouteCheckAt;
 
         // WO-771.9 spawn-wiring: the EFFECTIVE baseline the veterancy/perk multipliers re-base
         // from. Set to the def stats in Configure; overwritten by ApplyUpgradeStats when the
@@ -414,6 +422,8 @@ namespace DeNelle.Village
                 _element        = ParseElement(def.Element);
                 // WO-933: role "siege" → structure-prefer hunt (WC Demolisher / CoC wall-breaker).
                 _preferStructures = string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
+                // WO-1595: map role → formation job (Front / Ranged / Breaker / Support).
+                _assaultJob = RaidAssaultAi.JobFromRole(def.Role);
                 _troopRole = string.IsNullOrEmpty(def.Role) ? "?" : def.Role;
                 _isSupport = string.Equals(def.Role, "support", System.StringComparison.OrdinalIgnoreCase);
                 _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
@@ -680,12 +690,12 @@ namespace DeNelle.Village
                         $"rally={(rallyDbg.HasValue ? rallyDbg.Value.ToString("F1") : "<unset>")} " +
                         $"action={(rallyDbg.HasValue ? "walk-to-rally" : "stand-still")}");
                 }
-                // No foe — RALLY (WO-453 Step 4): if a global rally point is set and we are
-                // farther than the arrival epsilon, walk toward it; otherwise idle in place.
-                // Foe-in-range always wins (this branch only runs when there's no foe), so
-                // rally only fills the idle gap (owner-decided default).
+                // WO-1595 (CLI review 2026-09-07): RALLY wins when the player dropped a flag.
+                // Spire push only fills the idle gap when there is NO rally — never starve the
+                // WO-453 rally branch because RaidSpire.Active is always alive in a raid.
                 Vector3? rally = TroopRally.Point;
-                if (rally.HasValue)
+                bool rallySet = rally.HasValue;
+                if (rallySet)
                 {
                     Vector3 r = rally.Value;
                     float flatDist = Vector2.Distance(
@@ -693,6 +703,18 @@ namespace DeNelle.Village
                         new Vector2(r.x, r.z));
                     if (flatDist > RallyArrivalEpsilon)
                         MoveToward(r, dt);
+                    // No early return: rally-wins is now expressed through the SAME predicate the
+                    // regression pins (IdleShouldPushSpire returns false whenever rallySet), so the
+                    // live branch and the pure helper cannot drift apart.
+                }
+
+                var spire = RaidSpire.Active;
+                if (spire != null && spire.IsAlive
+                    && RaidAssaultAi.IdleShouldPushSpire(rallySet, _assaultPhase))
+                {
+                    Vector3 goal = RaidAssaultAi.BiasMoveDestination(
+                        _assaultJob, transform.position, spire.WorldPosition, _attackRange);
+                    MoveToward(goal, dt);
                 }
                 return;
             }
@@ -732,8 +754,14 @@ namespace DeNelle.Village
 
             if (dist > _attackRange)
             {
-                // hunt — close on the foe
-                MoveToward(foePos, dt);
+                // WO-1595: back-line jobs hold standoff; Front/Breaker close to contact.
+                Vector3 moveTo = RaidAssaultAi.BiasMoveDestination(
+                    _assaultJob, transform.position, foePos, _attackRange);
+                // If Bias says "hold" (returned self), face and wait for range rather than jitter.
+                if ((moveTo - transform.position).sqrMagnitude < 0.01f)
+                    FaceToward(foePos);
+                else
+                    MoveToward(moveTo, dt);
             }
             else
             {
@@ -862,9 +890,49 @@ namespace DeNelle.Village
             // still stands there is no route and the wall stays the target; the moment the hole
             // opens the route completes and the defender wins. No pathing rewrite — the route is
             // read as a FILTER, never steered by.
+            // WO-1595: split the structure bucket into OBJECTIVE (RaidSpire) vs other masonry
+            // so Push/Finish can drive the capture goal instead of walking the wall ring.
+            IDamageable nearestObjective = null;
+            IDamageable nearestOtherStruct = null;
+            float nearestObjectiveSqr = float.MaxValue, nearestOtherStructSqr = float.MaxValue;
+            var activeSpire = RaidSpire.Active;
+            if (nearestStructAny != null)
+            {
+                // Re-scan accepted structs from the overlap we already paid for — cheap second pass
+                // only over the colliders already in _overlap (count known).
+                for (int i = 0; i < _lastOverlapCount; i++)
+                {
+                    var col = _overlap[i];
+                    if (col == null) continue;
+                    var dmg = col.GetComponentInParent<IDamageable>();
+                    if (dmg == null || !IsHostileStructure(dmg)) continue;
+                    if (!CombatFactionRules.MayAttack(SelfFaction, dmg)) continue;
+                    float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
+                    bool isObjective = activeSpire != null
+                        && (ReferenceEquals(dmg, activeSpire) || dmg is RaidSpire);
+                    if (isObjective)
+                    {
+                        if (sqr < nearestObjectiveSqr) { nearestObjectiveSqr = sqr; nearestObjective = dmg; }
+                    }
+                    else if (sqr < nearestOtherStructSqr)
+                    {
+                        nearestOtherStructSqr = sqr;
+                        nearestOtherStruct = dmg;
+                    }
+                }
+            }
+
             bool hasUnit = nearestUnitAny != null;
-            bool hasStruct = nearestStructAny != null;
+            bool hasObjective = nearestObjective != null;
+            bool hasOtherStruct = nearestOtherStruct != null;
+            bool hasStruct = hasObjective || hasOtherStruct;
             bool unitInAttackRange = hasUnit && nearestUnitAnySqr <= _attackRange * _attackRange;
+            bool unitInPeelLeash = hasUnit
+                && nearestUnitAnySqr <= RaidAssaultAi.PeelUnitLeashMeters * RaidAssaultAi.PeelUnitLeashMeters;
+            bool recentlyHurt = (Time.time - _lastHurtAt) <= RaidAssaultAi.PeelHurtWindowSeconds;
+            // Owner: if aggro / being attacked, stay alive. Leash is FIXED (not attackRange) so
+            // archers do not abandon the push for every unit inside bow distance.
+            bool peelThreat = recentlyHurt || unitInPeelLeash;
 
             if (!_preferStructures && hasUnit && hasStruct && !unitInAttackRange)
             {
@@ -888,15 +956,40 @@ namespace DeNelle.Village
                 _routeStatus = "not-asked";
             }
 
-            _lastPreferUnit = PrefersUnitOverStructure(
-                _preferStructures, hasUnit, hasStruct, unitInAttackRange, _routeToUnitOpen);
+            // Route-to-objective: while closed we Breach; once open we Push/Finish and refuse
+            // the wall-ring farm (owner 2026-09-07).
+            RefreshRouteToObjective(activeSpire);
+            bool objectiveInAttackRange = hasObjective
+                && nearestObjectiveSqr <= _attackRange * _attackRange;
+            _assaultPhase = RaidAssaultAi.ResolvePhase(
+                peelThreat, _routeToObjectiveOpen, objectiveInAttackRange);
+
+            _lastPreferUnit = RaidAssaultAi.PreferUnit(
+                _assaultPhase, _preferStructures, hasUnit, hasStruct,
+                unitInAttackRange, _routeToUnitOpen);
+
+            int bucket = RaidAssaultAi.PickBucket(
+                _assaultPhase, _preferStructures, hasUnit, hasObjective, hasOtherStruct,
+                unitInAttackRange, _routeToUnitOpen);
 
             IDamageable winner;
-            if (_lastPreferUnit)                       winner = nearestUnitAny;
-            else if (_preferStructures && hasStruct)   winner = nearestStructAny;   // WO-933 siege, unchanged
-            else if (hasUnit && hasStruct)             winner = nearestUnitAnySqr <= nearestStructAnySqr
-                                                                    ? nearestUnitAny : nearestStructAny;
-            else                                       winner = hasUnit ? nearestUnitAny : nearestStructAny;
+            switch (bucket)
+            {
+                case 0: winner = nearestUnitAny; break;
+                case 1: winner = nearestObjective; break;
+                case 2: winner = nearestOtherStruct; break;
+                default: winner = null; break;
+            }
+
+            // WO-1595: PreferUnit lives on RaidAssaultAi (PrefersUnitOverStructure retired).
+            if (FlowTrace.Enabled)
+            {
+                FlowTrace.Throttle("RaidAI", $"raid-ai-phase-{GetInstanceID()}", 1f,
+                    $"id={_troopId} job={_assaultJob} phase={_assaultPhase} " +
+                    $"peelThreat={peelThreat} routeObj={_objectiveRouteStatus} " +
+                    $"bucket={bucket} preferUnit={_lastPreferUnit} " +
+                    $"has[unit={hasUnit},obj={hasObjective},wall={hasOtherStruct}]");
+            }
 
             // Runner-up is decided against the WINNER, not against the flag. The old line read
             // `structWins = _preferStructures && bestStruct != null`, so with preferStruct=False
@@ -936,26 +1029,39 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-1438 — THE PICK RULE, extracted pure so a regression can assert it with no scene,
-        /// no navmesh and no Unity play session. Returns true when a live hostile UNIT should be
-        /// taken over a hostile STRUCTURE.
-        ///
-        /// The three refusals are each load-bearing:
-        ///   * <paramref name="preferStructures"/> — the siege role (WO-933) keeps masonry
-        ///     priority; a catapult that chases orcs is a different defect.
-        ///   * no unit, or no structure — nothing to arbitrate, the caller takes what exists.
-        ///   * a unit that is neither in reach nor routable — taking it would command a
-        ///     straight-line push into an intact wall (steering is Move(displacement) with
-        ///     NoObstacleAvoidance), which pins the troop against geometry and is WORSE than
-        ///     letting it hit the wall. Reachability is the whole gate.
+        /// WO-1595 — same reachability filter as <see cref="RefreshRouteToUnit"/> but aimed at
+        /// the RaidSpire. When open, phase becomes Push/Finish and non-objective walls are refused.
         /// </summary>
-        public static bool PrefersUnitOverStructure(
-            bool preferStructures, bool hasUnit, bool hasStruct, bool unitInAttackRange, bool routeToUnitOpen)
+        private void RefreshRouteToObjective(RaidSpire spire)
         {
-            if (preferStructures) return false;
-            if (!hasUnit) return false;
-            if (!hasStruct) return true;
-            return unitInAttackRange || routeToUnitOpen;
+            if (spire == null || !spire.IsAlive)
+            {
+                _routeToObjectiveOpen = false;
+                _objectiveRouteStatus = "no-spire";
+                return;
+            }
+            if (Time.time < _objectiveRouteCheckAt) return;
+            _objectiveRouteCheckAt = Time.time + RouteCheckInterval;
+            _routeToObjectiveOpen = false;
+            _objectiveRouteStatus = "query";
+
+            if (_routePath == null) _routePath = new NavMeshPath();
+            Vector3 goal = spire.WorldPosition;
+            float straight = Vector3.Distance(transform.position, goal);
+            bool computed = NavMesh.CalculatePath(transform.position, goal, NavMesh.AllAreas, _routePath);
+            if (!computed || _routePath.status != NavMeshPathStatus.PathComplete)
+            {
+                _objectiveRouteStatus = computed ? _routePath.status.ToString() : "CalculatePath-FAILED";
+                return;
+            }
+            float pathLen = PathLength(_routePath);
+            if (straight > 0.01f && pathLen > straight * RouteDetourFactor)
+            {
+                _objectiveRouteStatus = $"detour:{pathLen:F1}/{straight:F1}";
+                return;
+            }
+            _routeToObjectiveOpen = true;
+            _objectiveRouteStatus = "PathComplete";
         }
 
         /// <summary>
@@ -1045,8 +1151,8 @@ namespace DeNelle.Village
         /// Update, so by the time the probe reads the felled tower the native object is already
         /// gone.
         ///
-        /// Public + static for the same reason as <see cref="PrefersUnitOverStructure"/>: the
-        /// editor regression asserts the LIVE predicate rather than a parallel re-implementation.
+        /// Public + static so the editor regression asserts the LIVE predicate rather than a
+        /// parallel re-implementation (WO-1569).
         /// </summary>
         public static bool IsLiveTarget(IDamageable dmg)
         {
@@ -1347,10 +1453,25 @@ namespace DeNelle.Village
         {
             if (!IsAlive) return;
             _hp = Mathf.Max(0f, _hp - Mathf.Max(0f, amount));
+            // WO-1595: recent hurt latches Peel so survival beats the spire push.
+            if (amount > 0f) _lastHurtAt = Time.time;
 
             if (_animator != null && _hasHit && _hp > 0f) _animator.SetTrigger(AnimHit);
             if (_hp <= 0f) Die();
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// WO-1595 handback — force one hunt scan so a batchmode raid-scene capture can
+        /// emit <c>[Flow:RaidAI]</c> without entering Play Mode (OverlapSphere works in Edit).
+        /// Editor-only: the sole callers are Assets/Editor/Regression/RaidAssaultTraceCapture.cs.
+        /// </summary>
+        public void ForceAssaultRescanForTrace()
+        {
+            _huntTimer = 0f;
+            _cachedFoe = NearestHostile();
+        }
+#endif
 
         /// <summary>Heals the troop, clamped to max HP (for a future support kit).</summary>
         public void Heal(float amount)
