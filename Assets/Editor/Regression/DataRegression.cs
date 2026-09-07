@@ -668,6 +668,17 @@ namespace DeNelle.Editor
             // --- WO-957 egress trim (owner F8 seq 2508: "Should be single entry point in maybe 2 total out"): a CONTENT dungeon authors AT MOST ONE extract - the BACK exit, seated in the room DungeonTreasureCache resolves as deepest - plus the one injected front exit. Nothing asserted the count before, which is how 13 per-stairwell pads accreted and gave dg_ember_deep SIX ways out. Also pins the WO-930 control-group exemption and the Resources/StreamingAssets dual-copy hash. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-egress suite", () => { if (!DeNelle.Editor.Regression.DungeonEgressRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-egress] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "biome-roads suite", () => { if (!DeNelle.Editor.Regression.BiomeRoadsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[biome-roads] " + r); });
+            // --- WO-1604 (F8 seq 4703): a biome drop is EITHER classified as the region its prompt
+            // names, OR it does not exist. Two authorities used to answer "where does Ashwood start"
+            // -- BiomeRoads.EdgeFraction x the measured reach, and ZoneManager.GetZone -- and nothing
+            // made them agree, so the drop seated, the player walked through, the hero teleported,
+            // and only THEN did the arrival check discover the prompt had lied. ZoneManager is now
+            // the owner (probed by bisection, never copied) and the drop is refused before the door
+            // exists. Case 1 is RED on the pre-fix code with the capture's own (0, y, 50). Case 5
+            // pins the instrumentation gap that made this ticket blame the wrong system: drift was
+            // computed and printed only on SUCCESS, so a warp that never landed read as a
+            // region-split disagreement. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "biome-drop-classification suite", () => { if (!DeNelle.Editor.Regression.BiomeRoadDropClassificationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[biome-drop-classification] " + r); });
             // --- WO-1101 ground textures: every terrain layer carries CURATED (tracked) BaseColor + Normal art, measured Rec.709 luminance matches the WO-1044 per-march value targets, ADJACENT marches on the compass cycle separate by ΔL >= 0.15 (the colourblind gate as arithmetic - today's tints are ΔL 0.074 and fail it), Ashwood's ground stays PALE ("ink on ash", not the shipped inverted L=0.176), and the layer-index contract has exactly ONE authority (TerrainLayerSet) that both the bake and the DEF-108 runtime repaint read. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "terrain-layer suite", () => { if (!DeNelle.Editor.Regression.TerrainLayerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[terrain-layer] " + r); });
             // --- WO-850 dungeon treasure cache: fixed-bundle validity against materials.json, deepest-room BFS (undirected + ordinal tie-break), per-dungeon first-clear one-shot, panel single-exit ---
@@ -1748,6 +1759,18 @@ namespace DeNelle.Editor
             // SOURCE LINT and says so in every reason string - the ms numbers come from a
             // headless + device capture, never from this suite.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "frame-budget-measure suite", () => { if (!DeNelle.Editor.Regression.FrameBudgetMeasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[frame-budget-measure] " + r); });
+
+            // WO-1602 (2026-09-07): registered per this file's fencing rule. The THIRD sibling on
+            // that same ring problem, applied to the global atmosphere. Pins that every method
+            // which ASSIGNS a RenderSettings fog/ambient/sky property signs its own body with a
+            // [Flow:Atmos] trace, that the per-frame ones use Throttle/Once rather than a bare
+            // Step, that AtmosphereProbe still samples a BOUNDED ladder out to T+300s and writes
+            // nothing, and that MagentaGuard still emits the [Flow:Terrain] BIND verdict. The
+            // ticket exists because the owner's first-minutes water/haze transient had NO writer
+            // attribution at all - the device break-log for that session held 11421 lines and not
+            // one fog line. It is a SOURCE LINT and says so in every reason string; whether the
+            // town LOOKS right is the fleet run plus the owner's eyes, never this suite.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "atmosphere-trace suite", () => { if (!DeNelle.Editor.Regression.AtmosphereTraceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[atmosphere-trace] " + r); });
 
             // WO-1582 (2026-09-07): registered per this file's fencing rule. The sibling of the
             // suite above, on the OTHER half of the same ring problem. Where frame-budget-measure
