@@ -1,6 +1,6 @@
 # WO-1435: the Harvest chip covers a resource row when the resource window is open
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `5bc5025f5` (see RESULT); the measured-rects criterion is a recorded deviation awaiting the owner's word
 **Silo:** HUD only (`Assets/_Modules/HUD/Kit/HudKitController.cs` + its pinned suites). File-disjoint from
 the Manage 2000-block, from WO-1434 (Village/Harvest + popup) and from WO-1432 (new feedback panel).
 **Source:** owner felt-test 2026-09-06 on build **2026.09.06.358161**, verbatim:
