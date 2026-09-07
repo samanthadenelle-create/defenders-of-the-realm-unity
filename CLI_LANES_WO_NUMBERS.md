@@ -187,7 +187,47 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, hundredth pass): main line next free = **1537**.
+> ## RECONCILED 2026-09-06 22:4x (CLI, hundred-and-third pass): main line next free = **1567**.
+> *(CLI minted **1566** = THE MANAGE CONFORMANCE SPEC - the end-of-session definition of done, so the work
+> matches the documents the owner already handed over (the 8-screen mockup + the UI asset sheets).
+> `CAPTURE_LOOP_GOAL.md` already owns the LOOP and the eight-screen table; 1566 adds the two things it does
+> not have - a per-panel element-by-element acceptance, and an ASSET BINDING table naming which delivered
+> file must render on which element. **The load-bearing measurement:** of the **26** structures the BUILD
+> grid offers, only **5** resolve a portrait - the other 21 fall through to the neutral hammer
+> (`ManageScreenPanel.cs:3421-3425`), which is the empty-ring tile the owner photographed. Art ask written
+> to `docs/ART_ASK_2026-09-06_manage_conformance.md` with exact filenames, 1024x1024 RGBA, transparent.
+> ⛔ **THE FILENAME TRAP:** `ManageArt.BuildingPortraitKey` (`ManageArt.cs:158-161`) uses the catalog id
+> VERBATIM and its own comment says it deliberately does not slug - so the file must be
+> `tower_ground_archer.png`, underscores intact, while the three delivered asset sheets use THREE other
+> schemes (`building_archertower` / `bld_archertower` / `building-archer-tower`) and none of them match.
+> Also measured and recorded so nothing is re-bought: `Elarion_Building_Portraits_All_Tiers.zip` is ALREADY
+> in the tree (26/26 byte-identical by MD5), the nine troop portraits already exist at `RpgUi/troop/`, and
+> the ten individual UI pieces delivered 09-06 are UN-IMPORTED rather than missing - a CLI import job, not
+> an art job. Bumped 1566 -> 1567 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 22:12 (CLI, hundred-and-second pass): main line next free = **1566**.
+> *(COLLISION, the sixth of the day: another seat minted **1535-1543** off the main line at 22:02-22:07 while this row
+> already stood at 1541, and never edited this banner - each of its files claims "main line 1535 -> 1544 in the same
+> edit". First-on-disk kept: this seat's 1535-1540 (21:48-21:56) and that seat's 1541-1543. That seat's six later
+> 1535-1540 files are renumbered to **1560-1565**. **1544-1559 are BURNED**: left unused so the still-writing seat,
+> which believes 1544 is next, cannot land on a number this line hands out. Do not fill the gap.)*
+
+> ### superseded: RECONCILED 2026-09-06 (CLI, hundred-and-first pass): main line next free = **1541**.
+> *(audit fleet minted **1537 through 1540** from the wave-two regression `Builds/reg-wave2.log` (422/435).
+> **All four come from suites WO-1496 REGISTERED TONIGHT FOR THE FIRST TIME** - so these are pre-existing
+> defects becoming visible, not regressions, and the count of newly-red suites is the measure of how much
+> the nine unregistered suites were hiding. **1537 (P1):** a PAID `RepairFull` leaves ELEVEN structure types
+> at `HpFraction 0.00 needsRepair=True` - the player is charged and nothing heals; WO-1352 is marked FIXED
+> and the probe disagrees, so establish what that fix covered before editing. **1538:** the arena projectile
+> TRAIL fire-point is never reached - either the trail never applies or the oracle's fixture never shoots,
+> and those need opposite fixes, so diagnose first. **1539:** three models referenced by `enemies.json` have
+> NO basecolor anywhere and `OgreMage` has NO MESH - the third member of tonight's silent-enemy-art family
+> with **1509** and **1536**; owner art drop, and the three must be ENUMERATED before it starts. **1540:**
+> the blank-start census sees a baked `CastleBarracks` because `ff.barracks` is ON in batchmode against a
+> default of OFF - PlayerPrefs bleeding between suites, which means suite ORDER has been silently changing
+> results for everything downstream, not just this census. Bumped 1537 -> 1541 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, hundredth pass): main line next free = **1537**.
 > *(audit fleet minted **1535** and **1536** - two enemy-data gaps. **1535:** 12 of 13 raid garrison ids
 > hardcode their stats in `GarrisonStatBlocks.BuildTypedDef:116-141` while the town path reads `enemies.json`
 > only, so there are THREE tables per id and they have diverged (raid Berserker 260/13 vs an authored 117/10).
