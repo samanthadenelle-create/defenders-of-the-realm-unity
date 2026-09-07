@@ -1,20 +1,33 @@
 // =============================================================================
-// BuildFilter — the six Manage > BUILD filter chips, as a CLOSED vocabulary.
+// BuildFilter — the Manage > BUILD filter chips, as a CLOSED vocabulary.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Core   Namespace: DeNelle.Core.Catalog   (WO-2005)
 //
-// Owner ruling 5 of OWNER_RULINGS_LOCKED.md, and Manage redesign canon §3:
-//     ALL / ECONOMY / DEFENSE / CRAFT / STORAGE / CIVIC
+// ⛔ DO NOT WRITE THE CHIP COUNT INTO THIS HEADER — COUNT `Chips` BELOW.
+// This block said "the six ... chips" and listed CIVIC as canon while the CIVIC note
+// above `Membership` removed it and `Chips` held FIVE. A file contradicting itself in its
+// own header is the duplicated-state failure CLAUDE.md §2 (stale WO block), §5
+// (retired assembly table) and §7 (MaxVisibleFaces, stale TWICE) each describe — and
+// it is the same rot WO-1534 §B1 found in the tickets and the canon. Corrected
+// 2026-09-07 (WO-1534 §B5 lane) by DELETING the copy, not by fixing the number.
+//
+// Owner ruling 5 of OWNER_RULINGS_LOCKED.md, and Manage redesign canon §3, authored
+// the vocabulary. Both now carry `STALE:` banners (WO-1534 §B1) because the owner's
+// mockup — docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png, screen 2 — superseded
+// them. **THE ARRAYS BELOW ARE THE AUTHORITY**, and the CIVIC note that precedes
+// `Membership` records what was removed and where each of its rows went.
+// (No line numbers into this same file, on purpose - the first draft of this very
+// block cited `:57` twice and its own insertion had already pushed that line down.)
 //
 // ⛔ WHY THIS ONE IS CLOSED WHILE `StructureRole` IS DELIBERATELY OPEN.
 // They answer different questions and the difference is load-bearing:
 //   * A ROLE says WHAT A BUILDING IS. New buildings arrive with new roles, so the
 //     vocabulary must stay fluid (owner 2026-08-23: "if we add a building we do not
 //     want to have to manually code it"). StructureRole is therefore string-open.
-//   * A FILTER is a CHIP ON A SCREEN. There are six of them, the owner named all
-//     six, and a seventh cannot appear without a UI change and a ruling. A typo in
-//     the data ("DEFENCE") must FAIL LOUDLY, not silently create a chip nobody can
-//     see and quietly hide a building from the player.
+//   * A FILTER is a CHIP ON A SCREEN. The owner drew every one of them, and another
+//     cannot appear without a UI change and a ruling. A typo in the data ("DEFENCE")
+//     must FAIL LOUDLY, not silently create a chip nobody can see and quietly hide a
+//     building from the player.
 // So this file names every legal token and `IsLegal` refuses everything else.
 //
 // ⛔ ALL IS NOT A MEMBERSHIP AND IS NEVER AUTHORED ON A ROW. ALL is the unfiltered
@@ -72,8 +85,9 @@ namespace DeNelle.Core.Catalog
         // future seat would look to re-derive it.
 
         /// <summary>
-        /// The four AUTHORABLE tokens, in the owner's chip order. <see cref="All"/> is
-        /// excluded on purpose — see the header.
+        /// The AUTHORABLE tokens, in the owner's chip order. <see cref="All"/> is excluded
+        /// on purpose — see the header. (No count in this sentence: it said "four" while a
+        /// comment one file away said "five" and the header said "six".)
         /// </summary>
         public static readonly string[] Membership =
         {

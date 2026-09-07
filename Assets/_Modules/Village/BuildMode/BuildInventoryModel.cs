@@ -84,7 +84,15 @@ namespace DeNelle.Village
         public string Id;
         /// <summary>The player-facing name, straight off the catalog row.</summary>
         public string DisplayName;
-        /// <summary>The one-sentence authored description, or null.</summary>
+        /// <summary>
+        /// The one-sentence AUTHORED description, straight off the catalog row. Never composed
+        /// here and never defaulted: WO-1565 deleted the per-type fallback prose, so a blank on a
+        /// row carrying <see cref="Filters"/> is a GATE FAILURE
+        /// (BuildEconomyRegression.CheckStructureDescriptions, with its Manage-side coverage
+        /// pinned by BuildInventoryFilterRegression case 7 - WO-1534 §B5), not a case to paper
+        /// over with a sentence composed at this seam. Null only on a
+        /// <see cref="BuildAvailability.NotPlayerContent"/> row, which no chip shows.
+        /// </summary>
         public string Description;
         /// <summary>Authored <see cref="BuildFilter"/> memberships. Never empty for a live row.</summary>
         public string[] Filters = Array.Empty<string>();

@@ -8,7 +8,10 @@
 // ⛔ SO THERE IS NO EXPECTED COUNT IN THIS FILE. Not 28, not 26, not 23. Every case
 // below is an INVARIANT that stays true as the catalog grows: every offered row
 // carries a filter, every filter token is legal, no two rows claim one art tile,
-// the three storage containers are singleton. Pinning a number would make adding a
+// the three storage containers are singleton, and every filtered row sits inside
+// WO-1565's authored-description gate (case 7, WO-1534 §B5 - a COVERAGE pin, not a
+// second copy of that rule; see the case for why the two predicates differ).
+// Pinning a number would make adding a
 // building a two-file edit and would go stale exactly like CLAUDE.md §2's WO block
 // and §7's MaxVisibleFaces line — the very defects this program exists to stop
 // repeating.
@@ -124,8 +127,12 @@ namespace DeNelle.Editor.Regression
                 var tokens = mf?.Select(t => (string)t).Where(t => !string.IsNullOrEmpty(t)).ToList()
                              ?? new List<string>();
 
-                // 1 [legal-token] every authored token is one of the five memberships, and ALL is
+                // 1 [legal-token] every authored token is one of BuildFilter.Membership, and ALL is
                 //   never authored (it is the unfiltered list, not a membership).
+                //   ⛔ NO COUNT IN THIS COMMENT ON PURPOSE. It read "one of the five memberships"
+                //   until 2026-09-07 while BuildFilter.Membership held FOUR - the same stale
+                //   hand-maintained count CLAUDE.md §2/§5/§7 each describe, one file away from the
+                //   array it was counting. The cure is deleting the copy, not correcting it.
                 foreach (var t in tokens)
                 {
                     if (string.Equals(t, BuildFilter.All, StringComparison.OrdinalIgnoreCase))
@@ -136,8 +143,11 @@ namespace DeNelle.Editor.Regression
                     else if (!BuildFilter.IsLegalMembership(t))
                         failures.Add("[build-inventory-filters] '" + id + "' authors manageFilters token \"" + t +
                                      "\", which is not one of " + string.Join("/", BuildFilter.Membership) +
-                                     ". The six chips are an owner ruling (OWNER_RULINGS_LOCKED.md #5); a typo " +
-                                     "here hides a building behind a chip that does not exist.");
+                                     ". The chip row is an owner ruling, superseded in the owner's own " +
+                                     "mockup (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png screen 2 - " +
+                                     "OWNER_RULINGS_LOCKED.md #5 carries a STALE: banner for that reason, " +
+                                     "WO-1534 B1); a typo here hides a building behind a chip that does " +
+                                     "not exist.");
                     else counts[t]++;
                 }
                 if (tokens.Count > 0) filtered.Add(id);
@@ -177,6 +187,41 @@ namespace DeNelle.Editor.Regression
                         failures.Add("[build-inventory-filters] container '" + id + "' is not in the STORAGE " +
                                      "filter (authors: " + string.Join(",", tokens) + ").");
                 }
+
+                // 7 [description-gate-covers-manage] WO-1534 §B5. Every row the MANAGE grid can
+                //   render must fall inside the authored-description gate.
+                //
+                //   ⛔ THIS DOES NOT RE-ASSERT THE DESCRIPTION RULE, AND MUST NEVER BE MADE TO.
+                //   WO-1565 owns that rule and states it exactly once, in
+                //   BuildEconomyRegression.CheckStructureDescriptions: an unauthored row FAILS,
+                //   because StructureCardVM.DescriptionFor's type-level prose is deleted (that
+                //   prose is why the Catapult described itself as "a defensive tower"). A second
+                //   copy of the assertion here would be the duplicated state CLAUDE.md §2/§5/§16
+                //   each describe. What is pinned here is the ONE thing that file cannot see:
+                //   THE TWO PREDICATES COINCIDE.
+                //
+                //   The axes genuinely differ. That gate exempts rows with no `visualPrefabPath`
+                //   as "data rows, never placeable and never shown". Manage renders on a different
+                //   fact entirely - `manageFilters`, via BuildAvailability.NotPlayerContent
+                //   (BuildInventoryModel.Reconcile) -> ManageTiles -> the grid, which paints
+                //   BuildInventoryRow.Description. Today the two sets coincide exactly (measured
+                //   2026-09-07: 26 filtered rows, all with a prefab path; the only prefab-less row
+                //   is repair_default, which carries no filter). Nothing MAKES them coincide - clear
+                //   one prefab path on a filtered row and that row leaves the description gate while
+                //   staying on the player's grid, reading blank with no oracle saying so.
+                if (tokens.Count > 0 && string.IsNullOrWhiteSpace((string)e["visualPrefabPath"]))
+                    failures.Add("[build-inventory-filters] '" + id + "' carries Manage filter(s) " +
+                                 string.Join("/", tokens) + " - so it is Manage content and CAN reach the " +
+                                 "BUILD grid (this pin is deliberately one step wider than ManageTiles, " +
+                                 "which also needs a card collection: a row must be inside the description " +
+                                 "gate BEFORE the day it is added to one) - but it " +
+                                 "authors NO visualPrefabPath, which is exactly the exemption " +
+                                 "BuildEconomyRegression.CheckStructureDescriptions uses to SKIP the " +
+                                 "authored-description gate (WO-1565: \"rows with no visualPrefabPath are " +
+                                 "DATA rows, never placeable and never shown\"). This row is shown. It would " +
+                                 "paint an empty description with no gate objecting. Either author a " +
+                                 "visualPrefabPath, or drop the manageFilters so the row stops being player " +
+                                 "content - never widen the description exemption.");
             }
 
             // 5 [copy-parity] the two canonical copies must stay byte-identical - a parity oracle
@@ -217,7 +262,8 @@ namespace DeNelle.Editor.Regression
                          "; " + offered.Count + " offered row(s) all filtered; " + artKeys.Count +
                          " art tile(s) uniquely claimed; the three storage containers are singleton; both " +
                          "canonical copies byte-identical; " + UnnamedLockIds.Count + " dated unnamed-lock " +
-                         "exemption(s) still accurate. (Counts REPORTED, never asserted - canon section 3.)";
+                         "exemption(s) still accurate; every filtered row is inside WO-1565's " +
+                         "authored-description gate. (Counts REPORTED, never asserted - canon section 3.)";
             else
                 reason = string.Join("\n", failures);
             return failures.Count == 0;

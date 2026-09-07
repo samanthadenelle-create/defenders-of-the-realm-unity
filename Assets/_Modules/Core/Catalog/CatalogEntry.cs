@@ -32,7 +32,21 @@ namespace DeNelle.Core.Catalog
         public string      displayName;
         /// <summary>
         /// WO-1081 - the one player-facing sentence saying what this building does.
-        /// Authored data; absent/blank falls back to the per-type sentence.
+        ///
+        /// <para>⛔ THERE IS NO FALLBACK SENTENCE ANY MORE, AND AN UNAUTHORED ROW IS A GATE
+        /// FAILURE, NOT A DEFAULT. This comment read <i>"absent/blank falls back to the per-type
+        /// sentence"</i> until 2026-09-07 (WO-1534 §B5) — WO-1565 had already DELETED that prose
+        /// from <c>StructureCardVM.DescriptionFor</c>, which now projects authored copy only.
+        /// The per-type sentence is exactly what made all four Tower rows read <i>"A defensive
+        /// tower ... auto-fires on enemies in range"</i>, so the Catapult described itself as a
+        /// tower and the anti-air Sky Ballista read the same as the ground ones — a stub that
+        /// looked authored, which is why it survived for months.</para>
+        ///
+        /// <para>Two oracles hold it. <c>BuildEconomyRegression.CheckStructureDescriptions</c>
+        /// FAILS the build on any row with a <see cref="visualPrefabPath"/> and no description,
+        /// and pins the deletion so the prose cannot come back; case 7 of
+        /// <c>BuildInventoryFilterRegression</c> pins that every row the Manage grid renders
+        /// (i.e. carrying <see cref="manageFilters"/>) is inside that gate's reach.</para>
         /// </summary>
         public string      description;
         public CatalogType type;

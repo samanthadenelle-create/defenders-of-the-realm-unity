@@ -1,6 +1,14 @@
 # WO-1534: the raid loop never closes, and three Manage tickets are DONE against a design that was reversed
 
-**Status:** READY - PARTIAL: Part B1 (documentation only) landed 2026-09-06, see the RESULT file; Parts A, B2-B5 READY behind the wave-two gate. Minted 2026-09-06 from the owner's ask, *"can you review the manage
+**Status:** FIXED - implemented in the 2026-09-07 afternoon gate wave (COMPILE_GATE_OK Builds/cg-wave10h.log, REGRESSION_OK 454/454 Builds/reg-wave10d.log 13:05); reaches the Seeker with the next tester build; owner felt-test closes it. PRIOR STATUS: READY - PARTIAL: one gate run owed, plus the §G4 owner felt checks. **Measured at HEAD
+2026-09-07 (§G): Parts A1-A6 and B2-B5 ALL LANDED** in `d6511b8e5` / `c0c30f715` while this ticket sat;
+B1 landed 2026-09-06 (RESULT file). The only code item left is `BuildInventoryFilterRegression` **case 7**,
+written this lane and **unrun** — flip on `REGRESSION_OK <n>/<n>` from a fresh log. Both status words are
+deliberate and were checked against `tools/board_build.py` at source, not against a doc: the `READY` lead
+returns before the substring pass that would otherwise read the word DONE out of this very sentence, and
+`has_landed_partial` keys on the literal token `PARTIAL`, so dropping it would have cost the row its
+landed sub-badge and rendered nine landed parts as an untouched ticket.
+Minted 2026-09-06 from the owner's ask, *"can you review the manage
 sections and the raid UX screens and make better"* (follow-up: *"read only detailed WO"*, so nothing was
 edited and this file is the deliverable).
 <!-- Status wording note (WO-1534 B1, 2026-09-06): the dispatched wording began "PART B1 DONE". It is
@@ -474,3 +482,97 @@ the seat's own verification pass; **every §A and §B claim was re-read at sourc
 - whether the uncommitted `ManageScreenPanel.cs` / `ManageScreenVM.cs` edits compile, or whether the 18:39
   frames still reproduce at HEAD — §B2, B3, B4, B5 are cited from source and do not depend on the frames;
 - **anything about how the current Manage build LOOKS.** No capture postdates the tree (§1).
+
+---
+
+## G. WAVE-THREE/FOUR RECONCILIATION — measured at HEAD 2026-09-07 (implementation lane)
+
+**Every remaining part of this ticket had already LANDED before this lane opened.** The ticket was minted
+2026-09-06 against a tree that the wave-three and wave-four gates then moved past. Each seam below was
+re-read at HEAD with `git grep <pattern> HEAD -- <path>` (the working tree is dirty with other lanes, so
+HEAD and the working tree were kept separate throughout), and each landing commit found with
+`git log -1 -S<token>`.
+
+| Part | Verdict at HEAD | Proving read | Landed in |
+|---|---|---|---|
+| **A1** named camp + door | LANDED | `ManageScreenVM.cs:2217-2218` reads `PostureSignals.RaidNextCampName` / `RaidNextCampGarrison`; `:532-533` records "never re-derived here" | `d6511b8e5` (WO-1541) |
+| **A2** warning, not a lock | LANDED | `RaidSelectionScreen.cs:1034` `armyOutmatched`, feeding the row word and the card colour at `:1037` and the log at `:1058`; the word is `vm.ArmyWarnWordFor` (`:47`) | `d6511b8e5` |
+| **A3** non-victory result screen | LANDED | `RaidDeployController.cs:875-883` builds `EndStateVM.FromRaidRetreat` and calls `EndStateView.Show`; `:433` / `:784` route timeout and retreat through it with `EndStateVM.TimeoutReason` / `RetreatReason`. The ticket's `grep -c` of 1 is now 12 | `d6511b8e5` |
+| **A4** touch holds the timer | LANDED | `EndStateVM.HoldOnInteraction` (`:135`, set `:443` and `:590`), honoured at `EndStateView.cs:2674`; the guard SURVIVES, lengthened — `RaidVictoryController.cs:69` `_autoReturnSeconds = 30f` | `d6511b8e5` (WO-1543) |
+| **A5** ladder announcement | LANDED | `RaidVictoryController.ResolveUnlockLine` (`:831`) no longer returns null unconditionally — it asks `RaidSelectionVM.UnlockAnnouncementFor`, and still traces BOTH branches, which is the capture property `:810-812` was written to preserve | `d6511b8e5` (WO-1562) |
+| **A6** cleared camp on the grid | LANDED | `RaidSelectionVM.IsClearedFor` (`:413`) / `ClearedWordFor` (`:430`) formatting `RaidClaimService.RepeatClearLootMultiplier` (`:438`); painted at `RaidSelectionScreen.cs:957`. `RaidSelectionVM.cs:134` pins "NEVER A SECOND CLAIM PREDICATE" | `d6511b8e5` |
+| **B2** tile paints `StateText` | LANDED | `ManageWorkspacePanel.cs:1322` and `:1036`; `:1280-1281` records the exact defect this ticket named, and `:1317` says a source oracle now fails if the token leaves the method body | `c0c30f715` (WO-1567) |
+| **B3** derived picker capacity | LANDED | `ManageScreenVM.cs:4845` `tab.GridColumns = columns` — derived; `:4788` names the retired authored `GridColumns = 4, GridRows = 1` | `d6511b8e5` |
+| **B4** queue words, not ids | LANDED | `ManageScreenVM.cs:1022` `label.Replace(" -> L", " - Level ")`; `:948` deliberately leaves `PrettyJobLabel` alone because it has other callers | `d6511b8e5` |
+| **B5** authored descriptions | LANDED (data + prose deletion) | all 26 filtered catalog rows carry an authored description, measured in `structures-catalog.json` 2026-09-07 (`tower_catapult` = *"Lobs stones at long range; ground foes only."*, no longer the tower stub); `BuildEconomyRegression.CheckStructureDescriptions` FAILS an unauthored buildable row and pins the deletion of the type-level prose | `d6511b8e5` (WO-1565) |
+
+⚠ **The ticket's §B5 frame (`ManageFlow_BUILD_max`, 18:39 on 09-06) simply predates the fix**:
+`d6511b8e5` is dated `2026-09-07 00:12:24 -0500`, `c0c30f715` `02:17:16`. §1's own warning — *"NO CAPTURE
+POSTDATES THE TREE"* — is now true by a wider margin, not a narrower one.
+
+### G1 — the ONE gap that was left, and the pin that closes it
+
+WO-1565's gate keys on **`visualPrefabPath`**, exempting prefab-less rows as *"DATA rows, never placeable
+and never shown"*. The Manage grid renders on a **different fact** — `manageFilters`, through
+`BuildAvailability.NotPlayerContent` -> `ManageTiles` -> `BuildInventoryRow.Description`. Measured
+2026-09-07 the two sets coincide **exactly** (26 filtered rows, all with a prefab path; the only
+prefab-less row is `repair_default`, which carries no filter), so nothing is broken today — but **nothing
+makes them coincide.** Clearing one prefab path on a filtered row drops that row out of the description
+gate while it keeps rendering to the player, blank, with no oracle objecting.
+
+**Added: `BuildInventoryFilterRegression` case 7 `[description-gate-covers-manage]`** — a COVERAGE pin,
+deliberately **not** a second copy of WO-1565's rule (the case comment says so at length, because a second
+copy is the duplicated state §B1 of this very ticket is about). It fails any row carrying `manageFilters`
+with no `visualPrefabPath`. Registered already — `DataRegression.cs:1098`, no registration edit needed.
+
+**Proven RED before it was written**, the only way available without Unity: the predicate was replicated
+in Python against a scratch copy of the catalog. Real data -> **0 failures / 26 rows covered**. Mutated
+copy (`tower_catapult` prefab path blanked; `repair_default` given an `ECONOMY` token) -> **both rows
+named**. ⛔ **The C# case itself is UNRUN** — no Unity in this lane. `REGRESSION_OK <n>/<n>` on a fresh log
+is the proof, and it is owed.
+
+### G2 — the same rot, inside this lane's own files (§15, fixed in the same breath)
+
+`BuildFilter.cs` **contradicted itself in its own header**: the title said *"the six Manage > BUILD filter
+chips"* and the canon line listed CIVIC, while `:57` of the same file removes CIVIC and `Chips` holds five.
+`BuildInventoryFilterRegression.cs` said *"one of the five memberships"* over an array of four, and cited
+OWNER_RULINGS #5's *"six chips"* as live after §B1 had bannered it STALE. `CatalogEntry.description`'s doc
+comment still promised *"absent/blank falls back to the per-type sentence"* — the prose WO-1565 deleted,
+i.e. the field's own documentation described the defect as the behaviour.
+
+All four were fixed by **deleting the copy, never by correcting the number** (CLAUDE.md §7's cure). This is
+§B1's finding recurring one layer down: the record disagreeing with the screen, in code comments this time.
+
+### G3 — SPEC for `tools/board_build.py` (NOT implemented here — the lead owns that file)
+
+This ticket needed an HTML comment at `:6-12` to stop a five-part-open ticket rendering green, and its
+RESULT needed a paragraph explaining why acceptance 3 was moot. Both are workarounds for one missing
+capability, and this file is the third multi-part ticket to hit it.
+
+> **Parse per-part status, and derive the ticket's.** Recognise, anywhere in the body, lines of the fixed
+> shape `- PART <id>: <STATUS>[ <commit>]` — e.g. `- PART A: DONE d6511b8e5`, `- PART B2: READY`. Where at
+> least two such lines exist, the row renders `N/M parts landed` as its sub-badge and the ticket's own
+> status is **DERIVED**: `DONE` only when every part is DONE, otherwise the least-advanced part's status.
+> The `**Status:**` line stays the human summary and is no longer the classifier's only input.
+>
+> **Why:** `classify_status` honours only a canonical FIRST WORD (`:158-160`) and otherwise falls to the
+> substring pass at `:183`, where `has_result or "DONE" in s` is true — so *any* partial wording either
+> reads fully Done or hides its landed half behind a `READY` lead. The file's own comment at `:143-145`
+> names this: *"the error only ever ran one way: toward finished."* A per-part parse removes the
+> either/or, and it cannot go stale, because the parts are read from the ticket rather than summarised
+> into a prose line a seat has to remember to update.
+>
+> **Cheap variant** if the above is too much: keep `has_landed_partial` (`:198-206`) but make the
+> substring fallback at `:183` refuse to promote to Done when the status text contains `PARTIAL`, `OPEN`
+> or `READY` anywhere — closing the one-way error without a new grammar.
+
+### G4 — unproven by this lane
+
+- **The regression compiles and passes.** No Unity was run (lane constraint). Case 7 is source-verified
+  and brace-checked only.
+- **Whether the 18:39 `ManageFlow_*` frames still reproduce at HEAD**, and **anything about how the
+  current build LOOKS** — §1's limit is unchanged; §A3's acceptance 4 (a fresh capture of the retreat
+  screen) and §A4's legibility question are FELT tests and belong to the owner (§13), not to this lane.
+- **Whether the other lanes' uncommitted edits to these same files compile together.** The working tree
+  carried 30+ modified files from other lanes throughout; every measurement above was taken at HEAD and
+  labelled as such.
