@@ -555,6 +555,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
             // WO-1568 - dungeon doors read as doors: leaf on the hinge, frame + lintel, no letterbox. Registered by the lead 2026-09-07.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-door-shape suite", () => { if (!DeNelle.Editor.Regression.DungeonDoorShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-door-shape] " + r); });
+            // WO-1596 - earning the first Rough Stone is a full-screen moment, and the exit WAITS for it.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "rough-stone-fanfare suite", () => { if (!DeNelle.Editor.Regression.RoughStoneFanfareRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[rough-stone-fanfare] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-dressing suite", () => { if (!DungeonDressingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-dressing] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-return suite", () => { if (!DungeonReturnSceneRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-return] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-lore suite", () => { if (!DungeonLoreReadableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-lore] " + r); });
@@ -810,6 +812,15 @@ namespace DeNelle.Editor
             // are untouched; and the above-cap state is published on a named axis so the toast stops
             // calling a purchase a loss ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "over-cap-income suite", () => { if (!DeNelle.Editor.Regression.WO1191OverCapIncomeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[over-cap-income] " + r); });
+
+            // --- WO-1590: the kill-grant materials warn must NAME the cause it was handed ---
+            // The owner's 2026-09-07 dungeon session warned on every kill that a material grant
+            // "did not land in full (missing EconomyService/GameState, or the town bank cap
+            // clamped that axis)" while the adjacent [Flow:Bank] line already read "BANK FULL
+            // [Grant] Stone ... (wallet 34000/34000)". The mechanics were correct throughout; the
+            // SENTENCE misdiagnosed itself and cost a debugging session, so the composed sentence
+            // is the oracle here, alongside a measured Stone grant with and without headroom.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "kill-grant-shortfall-reason suite", () => { if (!DeNelle.Editor.Regression.KillGrantShortfallReasonRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[kill-grant-shortfall-reason] " + r); });
 
             // --- ECON-SWEEP 2026-08-16: the four economy-silo defects from the cross-silo sweep ---
             // (1) no spend/grant may move the UNSAVED _wood/_iron pool during play without a hard,
@@ -1716,6 +1727,16 @@ namespace DeNelle.Editor
             // Third arm: a row bound to a different wallet is refused, fail closed.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cloud-load-restore suite", () => { if (!DeNelle.Editor.Regression.CloudLoadRestoreRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cloud-load-restore] " + r); });
 
+            // WO-1587 - the OTHER end of the same rail: a cloud SAVE must DECLARE its schemaVersion,
+            // and a drain failure must NAME ITS OWN CAUSE instead of pointing readers at a
+            // [Flow:Wallet] line that nothing prints (six drains failed behind a 400 on 2026-09-07
+            // while the wallet session minted and renewed fine). ⚠ The 400 itself is HISTORY, not
+            // the pin: api/game/save.js retired SCHEMA_VERSION_MISSING the same day and now accepts
+            // an absent version (200, note SCHEMA_VERSION_ABSENT) - but an accepted omission leaves
+            // the row's stored version frozen, which the LOAD path then trusts, so the client
+            // declaring it is still the fix. The suite pins the client side and the cause mechanic.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "sync-drain-reason suite", () => { if (!DeNelle.Editor.Regression.SyncDrainReasonRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sync-drain-reason] " + r); });
+
             // =====================================================================
             //  WO-1496 (2026-09-06) - SEVEN SUITE FILES THAT EXISTED AND RAN NOWHERE
             // =====================================================================
@@ -1764,6 +1785,12 @@ namespace DeNelle.Editor
             // puts the environment back, so the next suite reads the compiled default. It
             // restores in a finally, so it can never become the bleed it polices.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "flag-snapshot suite", () => { if (!DeNelle.Editor.Regression.FeatureFlagSnapshotRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[flag-snapshot] " + r); });
+            // WO-1589: loot that BANKS is announced once, through the kill path's own
+            // bounded CombatText(Reward) stamp; loot that has only DROPPED says nothing.
+            // Two-sided on purpose - a one-sided suite would go green on a toast fired at
+            // the chest open, which claims loot still lying on the floor.
+            if (!DeNelle.Editor.ChestLootToastRegression.Run(out var chestLootToastReason)) failures.Add(chestLootToastReason); else log.AppendLine("[chest-loot-toast] " + chestLootToastReason);
+
             // LAST LINE ABOVE THE END FENCE, DELIBERATELY: this suite opens
             // Main_Castle_Overworld in Single mode, so any suite registered after it would
             // census a different world than the one it was written against.
@@ -1776,6 +1803,11 @@ namespace DeNelle.Editor
             // content it was written to cover. Four definitional blocks are excluded BY SHAPE and
             // named in the suite, not by an opt-out token anyone could paste over real debt.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "allowlist-expiry suite", () => { if (!DeNelle.Editor.Regression.AllowlistExpiryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[allowlist-expiry] " + r); });
+
+            // WO-1584 — the vendor Store SELL shelf: every row labelled, every material row
+            // carrying the art keys the ONE material seam needs, and SelectedId as the single
+            // truth behind both the lit row and the detail column.
+            if (!DeNelle.Editor.Regression.StoreSellRowIdentityRegression.Run(out var storeSellRowReason)) failures.Add(storeSellRowReason); else log.AppendLine("[store-sell-row] " + storeSellRowReason);
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
