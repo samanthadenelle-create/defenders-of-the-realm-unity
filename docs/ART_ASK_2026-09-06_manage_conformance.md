@@ -1,5 +1,35 @@
 # ART ASK — everything the Manage screens still need to match the mockup
 
+> # ✅ DELIVERED AND IMPORTED — 2026-09-06 22:3x. `Elarion_Manage_Art_Conformance_Pack.zip`.
+> **This ask is CLOSED for §1 and substantially closed for §2.** Kept in full below because §3 (the three
+> things that are NOT art asks) and the measurements are still load-bearing.
+>
+> **Verified before import, not after:**
+> - **57 PNGs**, none overwriting an existing file. 58 `.meta` files generated from
+>   `barracks.png.meta` verbatim (Sprite / Single / `alphaIsTransparency: 1`, `maxTextureSize` matched to
+>   the source). **84 metas, 84 unique GUIDs, 0 duplicates, 0 orphan PNGs.**
+> - **21 building portraits, 1024×1024 RGBA, every corner alpha 0.** The filename set is an **EXACT
+>   MATCH** for the 21 missing catalog ids — underscores intact, `pet-house` hyphenated, and the three
+>   id/name traps honoured (`collector_farm` = Quarry, `collector_forge` = Iron Mine, `silo` = Stoneyard).
+> - **36 UI files** at `Assets/Resources/UI/ElarionMedieval/Manage/` — 25 × 256², 9 × 512², 2 × 512×64.
+> - ⭐ **The frame inconsistency this document raised is FIXED.** All four frames now read centre alpha
+>   **0** (hollow). Previously two were opaque-centred and two hollow, which would have shown the portrait
+>   through some states and not others.
+>
+> **THE MEASUREMENT THAT MATTERS:** of the **26** structures the BUILD grid offers, **26 now resolve a
+> portrait. Zero missing** — up from 5. The six tier ladders are untouched and still complete.
+>
+> ## ⚠ TWO CAVEATS CARRIED FORWARD — neither blocks, both must be checked
+> 1. **The portraits were reconstructed from the contact sheets and UPSCALED to 1024.** This is the
+>    delivery's own note, not an inference: *"suitable for grid/mobile review, but should be visually
+>    checked at large detail-card scale after Unity import."* **Panel 3 (BUILDING DETAIL) shows art large.**
+>    Judge them there before calling the mockup matched.
+> 2. **The four tile frames are NOT drop-in interchangeable at one rect.** Measured alpha bounding boxes
+>    at 512²: `frame-max` reaches **23 px** from the top while `frame-selected` starts at **84 px**, and no
+>    frame is symmetric in its own canvas (`frame-tile` = L72 T64 R53 B83). Swapping state at a fixed rect
+>    will make the border visibly jump or change weight. Either re-centre them to a common inset, or have
+>    the View drive each state's rect from its own bounding box. **Do not assume one rect fits all four.**
+
 **Raised:** 2026-09-06, CLI seat, at the owner's request: *"For anything missing, give me an explicit ask
 with all details and sizes and formats so I can get those created now."*
 **Target:** `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` + the Manage UI asset sheets.
