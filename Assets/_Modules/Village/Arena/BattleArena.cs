@@ -1384,6 +1384,21 @@ namespace DeNelle.Village.Arena
                 _savedFogDensity = RenderSettings.fogDensity;
                 _savedAmbientLight = RenderSettings.ambientLight;
                 _savedAmbientIntensity = RenderSettings.ambientIntensity;
+
+                // WO-1602: PRINT WHAT WAS SAVED, BEFORE THE OVERWRITE. This save/restore
+                // pair is the one place in town that can LEAK a dark, dense cavern fog into
+                // the open world: nothing here checks _moodSaved before saving, so a second
+                // apply without an intervening restore would capture THIS method's own
+                // 0.02-density values as "the open world" and hand them back on Resolve.
+                // Whether that ever actually happens is not inferable from source — it needs
+                // this line and the matching restore line on the same log, in order.
+                FlowTrace.Step("Atmos",
+                    $"BattleArena SAVED open-world atmosphere (moodSavedAlready={_moodSaved}): " +
+                    $"fog={_savedFog} color={_savedFogColor} density={_savedFogDensity:0.00000} " +
+                    $"ambient={_savedAmbientLight} intensity={_savedAmbientIntensity:0.00}. " +
+                    "moodSavedAlready=True here would mean a PREVIOUS apply was never restored and the " +
+                    "cavern values are being saved as if they were the town's.");
+
                 _moodSaved = true;
 
                 RenderSettings.fog = true;
@@ -1393,6 +1408,10 @@ namespace DeNelle.Village.Arena
                 RenderSettings.ambientLight = new Color(0.18f, 0.17f, 0.22f);
                 RenderSettings.ambientIntensity = 0.55f;
                 FlowTrace.Step("BattleArena", "ApplyCavernMood: dim stone-cave fog/ambient set (saved for restore).");
+                FlowTrace.Step("Atmos",
+                    $"BattleArena WROTE fog: mode={RenderSettings.fogMode} density={RenderSettings.fogDensity:0.00000} " +
+                    $"color={RenderSettings.fogColor} ambient={RenderSettings.ambientLight} " +
+                    $"intensity={RenderSettings.ambientIntensity:0.00} (cavern mood).");
             });
         }
 
@@ -1417,6 +1436,11 @@ namespace DeNelle.Village.Arena
                 RenderSettings.ambientLight = _savedAmbientLight;
                 RenderSettings.ambientIntensity = _savedAmbientIntensity;
                 FlowTrace.Step("BattleArena", "RestoreCavernMood: open-world RenderSettings restored.");
+                FlowTrace.Step("Atmos",
+                    $"BattleArena WROTE fog (restore): mode={RenderSettings.fogMode} " +
+                    $"density={RenderSettings.fogDensity:0.00000} color={RenderSettings.fogColor} " +
+                    $"ambient={RenderSettings.ambientLight} intensity={RenderSettings.ambientIntensity:0.00}. " +
+                    "A density here that is NOT the town's thin baseline is the leak this pair can produce.");
             });
             _moodSaved = false;
         }

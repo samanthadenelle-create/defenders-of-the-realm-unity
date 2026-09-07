@@ -381,6 +381,38 @@ namespace DeNelle.Core
                         FlowTrace.Step("FloorDiag",
                             "TERRAIN '" + t.name + "' scene='" + t.gameObject.scene.name + "' pos=" + t.transform.position +
                             " mat='" + (tm != null ? tm.name : "<NULL>") + "' shader='" + sh + "' broken=" + (tm != null && IsBrokenShader(tm.shader)) + " " + layers);
+
+                        // WO-1602: the same measurement, reduced to a ONE-LINE VERDICT under the
+                        // [Flow:Terrain] tag the ticket asks for. The FloorDiag line above already
+                        // carries every layer name and marks a missing texture <NULL-DIFFUSE>, but it
+                        // is a long line a human has to parse, and the question the ticket actually
+                        // asks — "did the terrain layers arrive, or is the ground showing a base
+                        // colour?" — is a yes/no. Making it greppable is the difference between a
+                        // trace that exists and a trace that answers.
+                        //
+                        // TIMING IS THE OTHER HALF, AND IT LIVES ELSEWHERE ON PURPOSE: this block
+                        // runs on the bounded MagentaGuard sweep ladder only (load + 1/3/8 s). The
+                        // owner's bad frames are at ~2 and ~5 MINUTES, far past the last sweep, so
+                        // this line alone can never say whether the state held. AtmosphereProbe
+                        // (Assets/_Modules/Village/World/AtmosphereProbe.cs) re-reads the same
+                        // terrain fields out to T+300s; read the two together.
+                        int terrainLayerCount = 0, terrainLayersMissing = 0;
+                        if (td != null && td.terrainLayers != null)
+                        {
+                            terrainLayerCount = td.terrainLayers.Length;
+                            for (int li = 0; li < td.terrainLayers.Length; li++)
+                            {
+                                var L2 = td.terrainLayers[li];
+                                if (L2 == null || L2.diffuseTexture == null) terrainLayersMissing++;
+                            }
+                        }
+                        FlowTrace.Step("Terrain",
+                            "BIND '" + t.name + "' scene='" + t.gameObject.scene.name + "' mat='" +
+                            (tm != null ? tm.name : "<NULL>") + "' shader='" + sh + "' layers=" + terrainLayerCount +
+                            " layersMissingBaseColor=" + terrainLayersMissing +
+                            (terrainLayersMissing > 0
+                                ? " <-- PLACEHOLDER/UNSTREAMED: the ground is drawing a base colour, not its art."
+                                : " (every layer carries a real base-colour texture at sweep time)."));
                         // PROVEN (RCA 2026-07-15; Player.log 07-14 22:10, the ONE FloorDiag TERRAIN line):
                         //   TERRAIN 'ExteriorTerrain' ... mat='<NULL>' shader='<null-mat-or-shader>' broken=False
                         // The scene references the terrain material by GUID (Main_Castle_Overworld.unity:16016

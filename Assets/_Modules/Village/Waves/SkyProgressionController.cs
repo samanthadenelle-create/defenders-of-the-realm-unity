@@ -105,6 +105,26 @@ namespace DeNelle.Village
             _targetAmbient      = _baseAmbientLight;
             _targetSunIntensity = _baseSunIntensity;
             _targetSunColor     = _baseSunColor;
+
+            // WO-1602: THIS COMPONENT IS THE TICKET'S FIRST-NAMED SUSPECT AND, MEASURED
+            // 2026-09-07, IT IS NOT IN THE GAME. Its script guid
+            // (99fd381dcb0c15a409a88727329ffcde) appears in ZERO .unity and ZERO .prefab in
+            // the tree, and nothing calls AddComponent<SkyProgressionController>() — so no
+            // wave darkening runs and this class cannot be the writer of the owner's fog.
+            // WorldFeelInjector.cs:49 already asserts the same thing in prose.
+            //
+            // A doc claim is not proof, and the cheapest way to stop re-litigating it is to
+            // make the object say so itself: if this line EVER appears in a log, the class is
+            // live after all and every "it is attached nowhere" note in the tree is stale.
+            // Its Update is an UNCONDITIONAL per-frame RenderSettings.fogDensity +
+            // ambientLight write, so a live instance owns both channels and drags any other
+            // writer's value back toward _targetFogDensity within ~2s (_lerpSpeed 0.5).
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("Atmos",
+                $"SkyProgressionController IS LIVE on '{name}' — it was measured as attached to NO scene and " +
+                $"NO prefab (2026-09-07, WO-1602). It now OWNS fogDensity and ambientLight every frame. " +
+                $"Baseline captured at Awake: fogDensity={_baseFogDensity:0.00000} ambient={_baseAmbientLight}. " +
+                "If that baseline is not the town's, this component captured it before WorldFeelInjector applied " +
+                "and will lerp the town back to a pre-injector sky.");
         }
 
         private void OnEnable()
@@ -129,6 +149,14 @@ namespace DeNelle.Village
                     _sun.intensity = _baseSunIntensity;
                     _sun.color     = _baseSunColor;
                 }
+
+                // WO-1602: edge-triggered (OnDisable), so a Step. This restore writes the
+                // baseline captured in Awake — which, if Awake ran before WorldFeelInjector
+                // applied, is a PRE-INJECTOR sky being written back over the town's.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Atmos",
+                    $"SkyProgressionController WROTE fog+ambient (restore on disable): " +
+                    $"density={_baseFogDensity:0.00000} ambient={_baseAmbientLight} " +
+                    "(the values this component captured in its own Awake).");
             }
         }
 
@@ -138,6 +166,12 @@ namespace DeNelle.Village
 
             RenderSettings.fogDensity   = Mathf.Lerp(RenderSettings.fogDensity,   _targetFogDensity, t);
             RenderSettings.ambientLight = Color.Lerp(RenderSettings.ambientLight, _targetAmbient,    t);
+
+            // WO-1602: per-frame write => Throttle, never a Step (CLAUDE.md §12).
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Atmos", "skyprogression-lerp", 15f,
+                $"SkyProgressionController WROTE fog+ambient (per-frame lerp): " +
+                $"density={RenderSettings.fogDensity:0.00000}->target {_targetFogDensity:0.00000} " +
+                $"ambient={RenderSettings.ambientLight}->target {_targetAmbient}.");
 
             if (_sun != null)
             {

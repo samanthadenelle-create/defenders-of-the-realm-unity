@@ -333,6 +333,22 @@ public sealed class NightTorchLightSystem : MonoBehaviour
             // Lift toward a warm grey floor (mood-preserving tint), not pure white.
             Color floorColor = new Color(targetFloor, targetFloor * 0.82f, targetFloor * 0.62f, 1f);
             RenderSettings.ambientLight = floorColor;
+
+            // WO-1602: called from Update, so THROTTLE — never a per-frame Step, and
+            // deliberately NOT a second FlowTrace.Measure beside the WO-1483 frame scope
+            // already at the top of Update() (NightTorchLightSystem.cs:269): that scope
+            // measures COST, this line records a STATE WRITE, and stacking a second
+            // accumulating scope on the same tick would double-count the frame budget.
+            //
+            // This system installs only in TargetScene "Village2", so it should never appear
+            // on a Main_Castle_Overworld timeline. If it does, an ambient owner the town does
+            // not expect is dimming it — which is the "washed out / wrong ground colour"
+            // shape the owner photographed, seen from the ambient side rather than the fog side.
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Atmos", "nighttorch-ambient-floor", 20f,
+                $"NightTorchLightSystem WROTE ambientLight (night floor, per-frame): scene='" +
+                $"{SceneManager.GetActiveScene().name}' ambient={floorColor} nightT={nightT:0.00} " +
+                $"floorTarget={targetFloor:0.000}. Expected only in '{TargetScene}'.");
+
             _floorApplied = true;
         }
 

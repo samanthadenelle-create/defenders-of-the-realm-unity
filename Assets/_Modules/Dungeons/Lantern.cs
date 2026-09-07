@@ -362,6 +362,25 @@ namespace DeNelle.Dungeons
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogStartDistance = Mathf.Lerp(_fogStartBeforeWarning, 0.45f, collapse);
             RenderSettings.fogEndDistance = Mathf.Lerp(_fogEndBeforeWarning, 3.2f, collapse);
+
+            // WO-1602: this is a PER-FRAME RenderSettings write, so it gets a Throttle and
+            // never a plain Step (CLAUDE.md §12; memory logcat-ring-buffer-destroys-evidence —
+            // a per-frame atmosphere line evicts the boot window out of the 256 KiB Android
+            // ring and destroys the evidence it was added to collect).
+            //
+            // WHY A DUNGEON LANTERN IS ON THE TOWN'S FOG TIMELINE AT ALL: this writer FLIPS
+            // fogMode to Linear and re-homes fogStart/fogEnd to the values it captured in its
+            // OWN Awake. RenderSettings is global to the active scene, so if a Lantern is ever
+            // alive while the town is active, the town's exponential haze silently becomes a
+            // 0.45m..3.2m linear wall — which is the "dense pale haze, walls washed out" shape
+            // the owner photographed. Whether that ever happens is not readable from source;
+            // one throttled line naming the scene answers it outright.
+            FlowTrace.Throttle("Atmos", "lantern-darkness-fog", 5f,
+                $"Lantern WROTE fog (final-warning darkness, per-frame): scene='" +
+                $"{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' mode=Linear " +
+                $"start={RenderSettings.fogStartDistance:0.00} end={RenderSettings.fogEndDistance:0.00} " +
+                $"collapse={collapse:0.00}. A scene name here that is NOT a dungeon is the bug.");
+
             _darknessGradeApplied = true;
         }
 
@@ -373,6 +392,15 @@ namespace DeNelle.Dungeons
             RenderSettings.fogStartDistance = _fogStartBeforeWarning;
             RenderSettings.fogEndDistance = _fogEndBeforeWarning;
             _darknessGradeApplied = false;
+
+            // EDGE-TRIGGERED, not per-frame: the guard above means this body runs only on the
+            // transition back. It restores the values captured in Awake, which is only correct
+            // if Awake ran in the scene this restore lands in — so both are printed.
+            FlowTrace.Step("Atmos",
+                $"Lantern WROTE fog (restore): scene='" +
+                $"{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' on={_fogWasEnabled} " +
+                $"mode={_fogModeBeforeWarning} start={_fogStartBeforeWarning:0.00} end={_fogEndBeforeWarning:0.00} " +
+                "(values captured in this Lantern's Awake).");
         }
 
         /// <summary>Keeps the lantern light at the Keeper's chest height.</summary>

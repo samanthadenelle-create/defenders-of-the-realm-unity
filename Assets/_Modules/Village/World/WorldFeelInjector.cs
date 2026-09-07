@@ -296,6 +296,21 @@ namespace DeNelle.Village.World
             RenderSettings.fogColor = FogColor;
             RenderSettings.fogDensity = FogDensity;
 
+            // WO-1602: NAME THE WRITER. This method re-runs on EVERY sceneLoaded and
+            // activeSceneChanged (TryApply above), so it is the highest-frequency fog
+            // writer in town, and until now it announced only "skybox/ambient/post" —
+            // never the fog numbers it had just written. The owner's 2026-09-07 dense-haze
+            // frame cannot be attributed or exonerated without this line: the constants
+            // below are thin (density 0.0012), so a HEAVY reading right after this trace
+            // proves a LATER writer, and a heavy reading with no trace after it proves the
+            // scene was never re-applied. Both are answers; neither was previously loggable.
+            FlowTrace.Step("Atmos",
+                $"WorldFeelInjector WROTE fog: mode={RenderSettings.fogMode} " +
+                $"density={RenderSettings.fogDensity:0.00000} color={RenderSettings.fogColor} " +
+                $"(authored constants FogDensity={FogDensity:0.00000} FogColor={FogColor}); " +
+                $"ambient trilight sky={AmbientSky} eq={AmbientEquator} ground={AmbientGround}; " +
+                $"sun intensity={SunIntensity:0.00} pitch={SunPitchDeg:0} color={SunColor}.");
+
             // Refresh the ambient/reflection probes from the new sky so lit
             // materials pick up the dusk environment (cheap, once per apply).
             DynamicGI.UpdateEnvironment();
@@ -366,6 +381,23 @@ namespace DeNelle.Village.World
                     FlowTrace.Step("WorldFeel", $"camera '{cam.name}' renderPostProcessing -> ON.");
                 }
             }
+
+            // WO-1602: THE CANDIDATE THE TICKET DOES NOT LIST. The owner's two bad frames
+            // are pale, washed-out and low-contrast, and that is ALSO what an over-applied
+            // exposure grade looks like — a screenshot cannot separate it from dense fog.
+            // This grade ships +0.75 EV post-exposure with Bloom intensity 4.5 at threshold
+            // 1.1, and it is a DDOL volume that survives every scene swap. So its live
+            // weight/priority/active state has to be on the same timeline as the fog values,
+            // or the fog will be blamed for a grade that is doing the work.
+            var v = _postVolume != null ? _postVolume.GetComponent<Volume>() : null;
+            FlowTrace.Step("Atmos",
+                "WorldFeelInjector GRADE: " +
+                (v == null
+                    ? "volume component MISSING on the grade GameObject — no post grade is live."
+                    : $"volume '{v.name}' active={_postVolume.activeSelf} global={v.isGlobal} " +
+                      $"prio={v.priority:0.0} weight={v.weight:0.00} " +
+                      $"postExposure={GradePostExposure:0.00}EV bloom={BloomIntensity:0.00}@{BloomThreshold:0.00} " +
+                      $"saturation={GradeSaturation:0} contrast={GradeContrast:0} vignette={VignetteIntensity:0.00}."));
         }
 
         // ---- (7) MOTES: drifting warm dust around the camera (open world only) --
