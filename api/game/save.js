@@ -42,7 +42,13 @@
 // guest rail without a code change; GOOGLE_IDENTITY_ENABLED=true to arm the Play
 // identity rail (default OFF — a play- id cannot authenticate at all until it is).
 //
-// Status codes: 200 | 400 | 401 | 404 | 500 (project constraint — no others).
+// Status codes: 200 | 400 | 401 | 404 | 409 | 500.
+// ⚠ 409 IS NEW (2026-09-07, WO-1598) and this line used to end "(project constraint —
+// no others)". The constraint was already untrue repo-wide — api/pi/complete.js and
+// api/purchases/fulfill.js both answer 409 — and SAVE_RESET_STALE is exactly what 409
+// means: not malformed (400) and not unauthorized (401), but in CONFLICT with the state
+// the server already holds. Written down here in the same edit as the code (CLAUDE.md
+// §15) rather than left for the next reader to discover in the handler.
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
@@ -71,8 +77,13 @@ const MAX_BEST_WAVE  = 100_000;       // implausible-wave ceiling
 const MAX_BALANCE_DROP_FRACTION = 0.95;
 
 // Keys that are transport, not game state — never stored inside game_state.
+// WO-1598: `resetEpoch` is TRANSPORT, not game state. It lives in its own column
+// (player_data.reset_epoch) precisely so it cannot be edited by the shallow JSONB
+// merge that the blob goes through — a reset marker stored inside the thing whose
+// acceptance it governs would be circular.
 const RESERVED_KEYS = new Set([
     'playerId', 'PlayerId', 'schemaVersion', 'SchemaVersion',
+    'resetEpoch', 'ResetEpoch',
     'wallet', 'nonce', 'signature', 'guestId',
 ]);
 
@@ -131,7 +142,92 @@ const SaveCode = {
     SCHEMA_VERSION_MISSING:   'SCHEMA_VERSION_MISSING',
     SCHEMA_VERSION_ABSENT:    'SCHEMA_VERSION_ABSENT',   // absent/unparseable — ACCEPTED, version untouched
     SCHEMA_VERSION_DOWNGRADE: 'SCHEMA_VERSION_DOWNGRADE', // older than what is stored — a stale client
+    // WO-1598 — the incoming save declares an epoch BELOW the stored one: an old
+    // device replaying a town the player has already left behind. 409, not 400: the
+    // payload is well-formed and authorized, it simply conflicts with what is stored.
+    SAVE_RESET_STALE:         'SAVE_RESET_STALE',
 };
+
+// ── A NEW GAME IS NOT A ROLLBACK (WO-1598) ───────────────────────────────────
+// ⛔ THE DEFECT THIS EXISTS TO CLOSE, measured in analytics_events 2026-09-07:
+// 177 `save_sanity_reject` rows in 14 days across 7 ids, every one of them either
+// `rollback:bestWave` (156) or `implausible_drop` on a balance (139 wood / 103 iron /
+// 93 crystals / 89 coins / 85 food). The owner's own wallet row, ELEVEN times between
+// 00:39Z and 10:26Z: `implausible_drop crystals 901 -> 36`. She had started a new game
+// that morning. A new town holds 13-36 crystals and wave 0; the stored row held the OLD
+// town. applyGuards read every field of the legitimate new save as tampering.
+//
+// And the cost is not the rejection — it is what the rejection LEAVES BEHIND. Rejected
+// fields are STRIPPED and the rest of the save lands, so the row ends up holding the old
+// town's balances beside the new town's everything-else, and api/game/load.js hands
+// those old balances straight back on the next load. The new game never exists in the
+// cloud, and 901 crystals reappear over a town that has 36.
+//
+// THE SEAM: a save may DECLARE a reset by carrying a monotonic integer `resetEpoch`,
+// persisted client-side and bumped by ResetToNewGame. Newer than what is stored = this
+// is a reset, so the COMPARATIVE guards stand down for that one write and the epoch
+// advances. Equal = an ordinary save, guarded exactly as before. Older = a stale device,
+// refused by name.
+//
+// ⛔ NEVER A BARE FLAG, and this is the whole reason the field is an epoch. A boolean
+// `isReset:true` is replayable forever: capture one such request and you can wipe any
+// guard on any future save. An epoch can only ever be spent ONCE, because accepting it
+// advances the stored value past it — the same monotonic argument as schema_version
+// above, and the same GREATEST() belt on the upsert.
+//
+// ⚠ AND A RESET IS NOT A BLANK CHEQUE. Only the COMPARATIVE rules (implausible_drop,
+// bestWave rollback) stand down — they are the rules that compare against the prior row,
+// and a reset is precisely the case where the prior row is not a valid comparison. The
+// BOUNDS (non-finite / negative / > MAX_RESOURCE / > MAX_BEST_WAVE) are properties of the
+// value ALONE and still run, so `resetEpoch` can never be used to land an impossible
+// balance. Implemented by handing applyGuards an EMPTY prior rather than by skipping it —
+// the same substitution the prior-read-failure path already makes, so there is one
+// mechanism for "no valid comparison", not two.
+
+/**
+ * Decide what an incoming save's declared reset epoch means.
+ *
+ * Pure and exported so the four cases that matter (absent / newer / equal / older)
+ * are provable without a database — see test/game.save.reset-epoch.test.js.
+ *
+ * ⚠ ABSENT IS TODAY'S BEHAVIOUR, EXACTLY. Every client shipped before this omits the
+ *   field, and WO-1457's absent-version arm is the standing lesson on what happens when
+ *   a new field's absence is treated as a fault: cloud save went down for the whole
+ *   field in four minutes. So absent = no bypass, no epoch written, and deliberately NO
+ *   audit row — an event on every save from every old client is a behaviour change, not
+ *   a diagnosis.
+ * ⚠ OUT-OF-RANGE IS ABSENT, NOT AN ERROR. player_data.reset_epoch is INTEGER, so a
+ *   value past INT32 would raise on the upsert and 500 a save that is otherwise fine —
+ *   the client's save path DoSing itself on a field it made up. Negative and
+ *   non-integer are the same class of nonsense and take the same exit.
+ *
+ * @param {*} incoming  body.ResetEpoch ?? body.resetEpoch
+ * @param {*} stored    reset_epoch on the existing row, or null when never reset/unknown
+ * @returns {{ok:true, epoch:number|null, bypass:boolean, from:number|null}
+ *          | {ok:false, code:string, incoming:number, stored:number}}
+ *          `epoch:null` means WRITE NO EPOCH — the client declared none.
+ */
+function judgeResetEpoch(incoming, stored) {
+    const MAX_EPOCH = 2147483647;                 // INTEGER column ceiling
+    const v = typeof incoming === 'number' ? incoming
+            : (typeof incoming === 'string' && incoming.trim() !== '' ? Number(incoming) : NaN);
+    if (!Number.isInteger(v) || v < 0 || v > MAX_EPOCH) {
+        return { ok: true, epoch: null, bypass: false, from: null };
+    }
+
+    const rawStored = stored == null ? NaN : Number(stored);
+    const s = Number.isInteger(rawStored) && rawStored >= 0 ? rawStored : null;
+
+    if (s == null) {
+        // Nothing stored: the row has never declared an epoch. A positive epoch is a
+        // reset this server has not seen; a 0 is simply "I have never reset", which is
+        // an ordinary save and must NOT bypass anything.
+        return { ok: true, epoch: v, bypass: v > 0, from: null };
+    }
+    if (v > s) return { ok: true, epoch: v, bypass: true,  from: s };
+    if (v === s) return { ok: true, epoch: v, bypass: false, from: s };
+    return { ok: false, code: SaveCode.SAVE_RESET_STALE, incoming: v, stored: s };
+}
 
 /**
  * Decide whether an incoming save may write at the version it declares.
@@ -220,6 +316,8 @@ async function handler(req, res) {
                    : body.playerId != null ? body.playerId
                    : null;
     const schemaVersion = body.SchemaVersion != null ? body.SchemaVersion : body.schemaVersion;
+    // WO-1598 — both spellings, for the same reason playerId accepts both.
+    const resetEpoch = body.ResetEpoch != null ? body.ResetEpoch : body.resetEpoch;
 
     let sql;
     try {
@@ -356,9 +454,15 @@ async function handler(req, res) {
     // endpoint in the game, would be the wrong trade. Stays null when the read
     // fails, which the judgement reads as "nothing to regress from".
     let priorSchemaVersion = null;
+    // WO-1598: read on the SAME statement, for the same reason as the version — it is a
+    // column this query already visits, and the save path is the hottest endpoint in the
+    // game. Stays null when the read fails, which the judgement reads as "never reset",
+    // i.e. a declared epoch is honoured rather than a save being lost to an unreadable
+    // comparison.
+    let priorResetEpoch = null;
     try {
         const priorRows = await sql`
-            SELECT game_state, updated_at, schema_version FROM player_data WHERE player_id = ${playerId} LIMIT 1
+            SELECT game_state, updated_at, schema_version, reset_epoch FROM player_data WHERE player_id = ${playerId} LIMIT 1
         `;
         if (priorRows.length > 0) {
             if (priorRows[0].game_state) prior = priorRows[0].game_state;
@@ -374,6 +478,13 @@ async function handler(req, res) {
             const rawSv = priorRows[0].schema_version;
             const sv = rawSv == null ? NaN : Number(rawSv);
             if (Number.isFinite(sv) && sv > 0) priorSchemaVersion = sv;
+            // Same null discipline as the version above, and it MATTERS MORE here: 0 is a
+            // LEGAL epoch ("never reset"), so `Number(null)` folding to 0 would fabricate a
+            // stored epoch that the judgement then compares against for real — an incoming
+            // 0 would read as "equal" instead of "nothing stored". Explicit null check.
+            const rawEpoch = priorRows[0].reset_epoch;
+            const re = rawEpoch == null ? NaN : Number(rawEpoch);
+            if (Number.isInteger(re) && re >= 0) priorResetEpoch = re;
             // The Neon HTTP driver returns TIMESTAMPTZ as a Date OR an ISO string
             // depending on the column/driver path; handle both, and treat an
             // unparseable value as "no anchor" rather than as the epoch (which would
@@ -416,12 +527,50 @@ async function handler(req, res) {
         });
     }
 
-    const rejects = applyGuards(delta, prior);
+    // ── WO-1598 — a DECLARED RESET, judged before anything is guarded or written ──
+    const resetJudgement = judgeResetEpoch(resetEpoch, priorResetEpoch);
+    if (!resetJudgement.ok) {
+        // A stale device replaying a town the player has already left. Refused BY NAME
+        // and audited, never silently accepted and never silently dropped: this is the
+        // one shape that could overwrite a newer new game with an older one.
+        console.warn('[save] reset epoch refused:', JSON.stringify(resetJudgement));
+        await logApiEvent(sql, playerId, 'save_reset_refused', {
+            ref: ref, mode: auth.mode, code: resetJudgement.code,
+            incoming: resetJudgement.incoming, stored: resetJudgement.stored,
+        });
+        return quietFail(res, 409, resetJudgement.code, ref);
+    }
+    const acceptedResetEpoch = resetJudgement.epoch;   // null => write no epoch at all
+
+    // ⛔ THE BYPASS IS A SUBSTITUTED PRIOR, NOT A SKIPPED GUARD. applyGuards still runs;
+    // it is simply given an empty comparison, which is the literal truth of a reset (the
+    // stored row describes a town that no longer exists). The BOUNDS inside it — negative,
+    // non-finite, > MAX_RESOURCE, > MAX_BEST_WAVE — are properties of the incoming value
+    // alone and therefore still fire. Skipping the call instead would have handed a reset
+    // save an unbounded write, which is a far worse defect than the one being fixed.
+    //
+    // ⚠ ONE CONSEQUENCE, STATED SO IT IS NOT A SURPRISE LATER. applyGuards RESTORES a
+    // rejected NESTED balance to the prior server value (see its own note — deleting it
+    // would let a tamper attempt zero the balance through the guard). With an empty prior
+    // there is nothing to restore to, so the key is dropped, and on the reset arm the write
+    // REPLACES rather than merges — so an out-of-bounds balance on a reset ends up ABSENT
+    // from the row rather than holding the old town's number. That is the correct answer
+    // under "a new game inherits nothing": the old value is not a safer fallback, it is the
+    // dead town. The client re-sends the field on its next ordinary save.
+    const effectivePrior = resetJudgement.bypass ? {} : prior;
+
+    const rejects = applyGuards(delta, effectivePrior);
 
     // ── WO-1128 §RECONCILE — time-derived accrual vs the server's OWN clock ────
     // Runs AFTER applyGuards so it reconciles the values that actually survive to
     // the write, never a number the guards were about to strip anyway.
-    const accrual = reconcileAccrual(delta, prior, priorSeenMs, Date.now());
+    // WO-1598: a reset gets the same substitution here, and `null` for the anchor. The
+    // window this reconciles is "time since the last accepted save of THIS town"; across a
+    // reset there is no such window, and measuring the new town's first claim against the
+    // old town's lastHarvestClaimMs would clamp a legitimate first harvest. reconcileAccrual
+    // already has the honest answer for an absent anchor — `no_prior_last_seen`, reconciled
+    // false — so this reuses that arm rather than inventing a reset-shaped one.
+    const accrual = reconcileAccrual(delta, effectivePrior, resetJudgement.bypass ? null : priorSeenMs, Date.now());
     if (accrual.clamps.length > 0) {
         // Both numbers, always, per WO-1128 §6.2 — a clamp log that shows only the
         // clamped figure cannot be audited after the fact.
@@ -445,6 +594,22 @@ async function handler(req, res) {
             ok: true, success: true, serverNowMs: Date.now(),
             note: 'all fields rejected by guards', rejects, ref,
             schemaVersionNote: schemaVersionNote || undefined,
+        });
+    }
+
+    // WO-1598: a bypass is the loudest thing this endpoint does — it is the one path on
+    // which a balance may legally fall to nothing — so it is never silent.
+    // ⛔ AND IT SITS AFTER THE EMPTY-DELTA RETURN, DELIBERATELY. Above it, a reset whose
+    // every field was stripped by the BOUNDS would write `save_reset_accepted {to:N}`
+    // while nothing was written and the epoch never advanced (GREATEST only runs on the
+    // upsert below) — an audit row asserting something that did not happen, which is the
+    // exact class of claim CLAUDE.md §11B forbids. Still before the upsert, so a write
+    // that then FAILS leaves the trace that the bypass was spent.
+    if (resetJudgement.bypass) {
+        console.warn('[save] reset accepted — comparative guards stood down for this write:',
+                     JSON.stringify({ from: resetJudgement.from, to: acceptedResetEpoch }));
+        await logApiEvent(sql, playerId, 'save_reset_accepted', {
+            from: resetJudgement.from, to: acceptedResetEpoch, ref: ref, mode: auth.mode,
         });
     }
 
@@ -487,27 +652,62 @@ async function handler(req, res) {
         //    NOT BACK-FILLED, DELIBERATELY: rows already stamped 10 by the old default
         //    keep the 10. Blanking them is a guess in the opposite direction and is the
         //    owner's call, on evidence (how many rows, and what shape their blob is).
+        //
+        // ⚠ reset_epoch IS NAMED IN BOTH ARMS, AND THAT IS A DIFFERENT TRADE FROM
+        //   schema_version's — deliberately, so read this before "making them consistent".
+        //   The version column needed the two-statement shape because leaving an existing
+        //   row's version untouched had to be a property of the STATEMENT. reset_epoch does
+        //   not: the column is nullable with no default, so an absent epoch binds NULL on the
+        //   INSERT arm and Postgres's GREATEST() — which IGNORES nulls rather than
+        //   propagating them — leaves the stored value alone on the UPDATE arm. GREATEST is
+        //   also the same monotonic belt WO-1457 chose for the version, so a stale write
+        //   cannot lower the epoch even if some future path reaches this SQL without passing
+        //   judgeResetEpoch. Splitting this into four statements to avoid depending on that
+        //   NULL behaviour would quadruple the copy of a 15-line upsert, which is the failure
+        //   mode this repo has the most scars from.
+        // ⛔ A NEW GAME INHERITS NOTHING (owner's standing rule, relayed 2026-09-07).
+        //    On a RESET-ACCEPTED write the incoming blob is AUTHORITATIVE and the stored
+        //    one is discarded wholesale: `game_state = EXCLUDED.game_state`, no merge.
+        //
+        //    WHY THE GUARD BYPASS ALONE WAS ONLY HALF THE FIX. The client posts a snapshot
+        //    with nulls and empties STRIPPED, so under the shallow merge every old-town key
+        //    the new save does not carry SURVIVES the new game — the obsidian queue, the
+        //    army, the base layout, `everBuiltStructureIds` (which gates the WO-834
+        //    blank-town standdown). The row becomes a chimera of two towns and load.js
+        //    hands it back, which fails "a load returns the new town" with every balance
+        //    correct. The balances were only the visible half.
+        //
+        // ⚠ AND THE MERGE STAYS FOR EVERY ORDINARY SAVE. It is what stops a partial or
+        //    older client blanking a field it never sent (the reason it was chosen). So the
+        //    statement CHOOSES, on the same judgement that stood the guards down — one
+        //    bound boolean rather than a third and fourth copy of a 15-line upsert.
+        const replaceState = resetJudgement.bypass;
         if (acceptedSchemaVersion == null) {
             await sql`
-                INSERT INTO player_data (player_id, game_state, trust, updated_at)
+                INSERT INTO player_data (player_id, reset_epoch, game_state, trust, updated_at)
                 VALUES (
                     ${playerId},
+                    ${acceptedResetEpoch},
                     ${JSON.stringify(delta)}::jsonb,
                     ${auth.mode},
                     NOW()
                 )
                 ON CONFLICT (player_id) DO UPDATE
                 SET
-                    game_state = player_data.game_state || EXCLUDED.game_state,
+                    reset_epoch = GREATEST(player_data.reset_epoch, EXCLUDED.reset_epoch),
+                    game_state = CASE WHEN ${replaceState}::boolean
+                                      THEN EXCLUDED.game_state
+                                      ELSE player_data.game_state || EXCLUDED.game_state END,
                     trust      = EXCLUDED.trust,
                     updated_at = NOW()
             `;
         } else {
             await sql`
-                INSERT INTO player_data (player_id, schema_version, game_state, trust, updated_at)
+                INSERT INTO player_data (player_id, schema_version, reset_epoch, game_state, trust, updated_at)
                 VALUES (
                     ${playerId},
                     ${acceptedSchemaVersion},
+                    ${acceptedResetEpoch},
                     ${JSON.stringify(delta)}::jsonb,
                     ${auth.mode},
                     NOW()
@@ -517,7 +717,14 @@ async function handler(req, res) {
                     -- WO-1457: the belt to judgeSchemaVersion's braces. The row's version
                     -- can only ever climb, whatever reaches this statement.
                     schema_version = GREATEST(player_data.schema_version, EXCLUDED.schema_version),
-                    game_state     = player_data.game_state || EXCLUDED.game_state,
+                    -- WO-1598: same belt, same reason — the epoch a bypass was spent on can
+                    -- never be re-spent, because the stored value can only climb.
+                    reset_epoch    = GREATEST(player_data.reset_epoch, EXCLUDED.reset_epoch),
+                    -- WO-1598: REPLACE on a declared reset, MERGE on every ordinary save.
+                    -- See the note above the branch — a new game inherits nothing.
+                    game_state     = CASE WHEN ${replaceState}::boolean
+                                          THEN EXCLUDED.game_state
+                                          ELSE player_data.game_state || EXCLUDED.game_state END,
                     trust          = EXCLUDED.trust,
                     updated_at     = NOW()
             `;
@@ -534,6 +741,10 @@ async function handler(req, res) {
             // NOT send. Absent when the payload declared one, so a healthy client sees
             // nothing new and a version-less one is never invisible.
             schemaVersionNote: schemaVersionNote || undefined,
+            // WO-1598: the epoch the row now stands at, and whether THIS write spent a
+            // bypass. Absent on an ordinary save, so a healthy client sees nothing new.
+            resetEpoch: acceptedResetEpoch != null ? acceptedResetEpoch : undefined,
+            resetAccepted: resetJudgement.bypass ? true : undefined,
             // WO-1128: what the server refused to accept as honestly-accrued, and the
             // two numbers it judged on. Absent when nothing was clamped.
             accrual: accrual.clamps.length ? accrual : undefined,
@@ -942,6 +1153,8 @@ module.exports.config = { api: { bodyParser: false } };
 module.exports.reconcileAccrual = reconcileAccrual;
 // WO-1457 — exported for test/game.save.schema-version.test.js. Pure, no DB.
 module.exports.judgeSchemaVersion = judgeSchemaVersion;
+// WO-1598 — pure, so the four epoch cases are provable without a database.
+module.exports.judgeResetEpoch = judgeResetEpoch;
 module.exports.SaveCode = SaveCode;
 
 // =============================================================================

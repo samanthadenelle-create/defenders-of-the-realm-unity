@@ -68,6 +68,16 @@ CREATE TABLE IF NOT EXISTS player_data (
     -- the whole v10→current chain over state that was never v10. See migration
     -- 20260907_0022 for the full reading.
     schema_version INTEGER,
+    -- The monotonic generation number of the town in this row (2026-09-07, WO-1598 —
+    -- migration 0023). NULL means "this player has never declared a reset". A save that
+    -- declares an epoch ABOVE the stored one is a NEW GAME: api/game/save.js stands the
+    -- COMPARATIVE sanity guards (implausible_drop / bestWave rollback) down for that one
+    -- write and advances the epoch, because those rules compare against a town that no
+    -- longer exists. Equal = ordinary save. Below = a stale device replaying a dead town,
+    -- refused 409 SAVE_RESET_STALE. NO DEFAULT, deliberately: a 0 default would make every
+    -- existing row claim generation zero on no evidence, which is schema_version's
+    -- `DEFAULT 10` mistake (migration 0022) repeated.
+    reset_epoch    INTEGER,
     game_state     JSONB       NOT NULL DEFAULT '{}',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -80,6 +90,10 @@ CREATE TABLE IF NOT EXISTS player_data (
 -- explicitly. Additive + idempotent (no data touched, no drops):
 ALTER TABLE player_data ADD COLUMN IF NOT EXISTS schema_version INTEGER;
 ALTER TABLE player_data ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW();
+-- 2026-09-07 (WO-1598): the CREATE TABLE above cannot add this to an EXISTING player_data,
+-- and every live database has one. The applyable copy is
+-- api/migrations/20260907_0023_player_data_reset_epoch.sql — this line is a DESCRIPTION.
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS reset_epoch    INTEGER;
 
 -- ⛔ AND THE ALTERs ABOVE CANNOT UNDO THE OLD DEFAULT. `ADD COLUMN IF NOT EXISTS` is a
 -- no-op on a column that already exists, so on any database that already ran the

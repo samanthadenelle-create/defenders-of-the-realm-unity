@@ -1,0 +1,79 @@
+-- =============================================================================
+-- 20260907_0023_player_data_reset_epoch.sql   (WO-1598)
+-- -----------------------------------------------------------------------------
+-- ONE statement, no data touched. player_data gains the column that lets a save
+-- say "this is a NEW GAME, not a rollback".
+--
+-- ⛔ WHAT IS ACTUALLY WRONG WITHOUT IT. api/game/save.js's sanity guard compares
+--    every incoming balance against the STORED row and strips anything that falls
+--    by more than 95% (`implausible_drop`), and refuses any bestWave below the
+--    stored high-water mark (`rollback`). Correct for a tampered or replayed save.
+--    WRONG for a reset — and a reset is exactly the case where the stored row
+--    describes a town that no longer exists.
+--
+--    Measured in analytics_events on 2026-09-07 (read-only): 177 `save_sanity_reject`
+--    rows in 14 days across 7 player ids, every one of them `rollback:bestWave` (156)
+--    or `implausible_drop` on a balance (139 wood / 103 iron / 93 crystals / 89 coins /
+--    85 food). The owner's own wallet row, ELEVEN times between 00:39Z and 10:26Z:
+--    `implausible_drop crystals 901 -> 36`. She had started a new game that morning.
+--
+--    The cost is not the rejection — it is what the rejection LEAVES. Rejected fields
+--    are stripped and the rest of the save lands, so the row keeps the OLD town's
+--    balances beside the new town's everything-else, and api/game/load.js hands those
+--    old balances straight back on the next load. The new game never reaches the cloud.
+--
+-- WHAT THE COLUMN MEANS:
+--
+--     reset_epoch = the monotonic generation number of the town in this row.
+--     NULL        = this player has never declared a reset (every client shipped
+--                   before WO-1598 omits the field; that is not a fault).
+--
+--    A save declaring an epoch ABOVE the stored one is a reset: the COMPARATIVE guards
+--    stand down for that ONE write and the stored epoch advances past it. Equal is an
+--    ordinary save, guarded as before. Below is a stale device replaying a dead town and
+--    is refused 409 SAVE_RESET_STALE. The BOUNDS (negative / non-finite / > MAX_RESOURCE)
+--    never stand down — see api/game/save.js's judgeResetEpoch and the note above
+--    applyGuards.
+--
+-- ⛔ WHY AN EPOCH AND NOT A `reset: true` FLAG. A boolean is replayable forever: capture
+--    one such request and every future guard on that player is defeatable. An epoch can
+--    be spent exactly ONCE, because accepting it advances the stored value past it. The
+--    upsert also clamps with GREATEST(player_data.reset_epoch, EXCLUDED.reset_epoch), so
+--    the stored generation cannot go DOWN even if a future code path reaches that SQL
+--    without passing the judgement — the same two-defence shape migration 0022's sibling
+--    (schema_version) uses, and for the same reason.
+--
+-- ⛔ INTEGER, AND THE HANDLER ENFORCES THE CEILING. judgeResetEpoch treats anything past
+--    2147483647 (or negative, or non-integer) as ABSENT rather than as an error. A value
+--    outside the column's range would otherwise raise on the upsert and 500 an otherwise
+--    healthy save — a client DoSing its own save path with a field it made up.
+--
+-- ADDITIVE. Zero DROP / DELETE / TRUNCATE / rename, no back-fill, NOT ONE ROW READ OR
+-- WRITTEN. Every existing row keeps everything it has and reads NULL for the new column,
+-- which is the honest value: those rows have never declared a reset.
+--
+-- RE-RUNNABLE. `ADD COLUMN IF NOT EXISTS` is a no-op on a column that already exists.
+-- ⚠ AND THAT IS ALSO ITS LIMIT (memory: idempotent-ddl-hides-a-stale-table): if a column
+--    named reset_epoch already existed with a DIFFERENT type, this file would report
+--    success and change nothing. The verify below is a SHAPE QUERY for that reason — a
+--    repair is judged by the shape it leaves behind, never by a statement returning.
+--
+-- ⛔ DO NOT "APPLY" THIS BY RE-RUNNING api/schema.sql. Only files under api/migrations/
+--    are ever applied; schema.sql is a DESCRIPTION of the schema (the matching line was
+--    added there in the same commit, which is a description, not an apply).
+--
+-- Apply (owner, DATABASE_URL in env):
+--     node tools/run-migrations.mjs
+-- =============================================================================
+
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS reset_epoch INTEGER;
+
+-- Verify (expect ONE row: data_type 'integer', is_nullable 'YES', column_default NULL):
+--   SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE table_name = 'player_data' AND column_name = 'reset_epoch';
+--
+-- ⛔ column_default MUST be NULL. A default of 0 would make every pre-existing row claim
+--    generation zero, which is a claim the server has no evidence for — and it is the
+--    exact mistake schema_version's `DEFAULT 10` made (migration 0022). NULL is "unknown",
+--    and the handler is written to that meaning.

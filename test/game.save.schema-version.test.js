@@ -105,12 +105,21 @@ test('the version-less write names schema_version NOWHERE — not a value the se
     // v10. 0022 drops the DEFAULT and the NOT NULL, so the unnamed column now lands
     // NULL = "never declared, do not migrate". The assertions below are unchanged and
     // still the right ones — only the consequence of omitting the column moved.
-    const versionless = saveSrc.match(
-        /INSERT INTO player_data \(player_id, game_state, trust, updated_at\)[\s\S]*?updated_at = NOW\(\)/);
-    assert.ok(versionless,
+    // ⚠ THE COLUMN LIST IS NO LONGER FROZEN (widened 2026-09-07, WO-1598). It read
+    // `(player_id, game_state, trust, updated_at)` verbatim, which pinned the incidental
+    // membership of the list rather than the property under test — and broke the moment
+    // reset_epoch legitimately joined BOTH arms. The version-less arm is now identified by
+    // what makes it the version-less arm: it is the upsert that does NOT name
+    // schema_version. That is the assertion, so it cannot pass for a shape reason again.
+    const upserts = saveSrc.match(
+        /INSERT INTO player_data \([^)]*\)[\s\S]*?updated_at\s*=\s*NOW\(\)/g) || [];
+    assert.equal(upserts.length, 2,
+        `expected exactly two upsert arms (version-less + versioned), saw ${upserts.length}`);
+    const versionless = upserts.filter(u => !/schema_version/.test(u));
+    assert.equal(versionless.length, 1,
         'there is no version-less upsert — an absent version is still writing a schema_version');
     assert.doesNotMatch(versionless[0], /schema_version/,
-        'the version-less upsert still names schema_version; it must touch the column at all');
+        'the version-less upsert still names schema_version; it must not touch the column at all');
 
     // And no arm of the executable source may hand the DB a version literal.
     const executable = saveSrc.replace(/^\s*\/\/.*$/gm, '')
@@ -204,7 +213,15 @@ test('an accepted absence is VISIBLE — a note in the 200 body and its own audi
 test('the stored version is read by the EXISTING prior-state SELECT, not a second query', () => {
     // A second round trip per save on the hottest endpoint in the game, to read a
     // column the query already had to visit, is the wrong trade.
-    assert.match(saveSrc,
-        /SELECT\s+game_state,\s*updated_at,\s*schema_version\s+FROM\s+player_data/,
+    // ⚠ MATCHED AS A MEMBER OF THE ONE SELECT, not as a fixed column list (widened
+    // 2026-09-07, WO-1598, which added reset_epoch to the same statement for the same
+    // reason). A frozen list pins the incidental ORDER of the columns and fails the next
+    // time anything legitimately joins the query — which says nothing about whether a
+    // second round trip was introduced, the property this case actually exists to hold.
+    const priorSelect = saveSrc.match(/SELECT\s+game_state[^`]*?FROM\s+player_data/);
+    assert.ok(priorSelect, 'the prior-state SELECT is gone');
+    assert.match(priorSelect[0], /\bschema_version\b/,
         'schema_version is not being read by the prior-state SELECT');
+    assert.equal((saveSrc.match(/FROM player_data/g) || []).length, 1,
+        'save.js reads player_data more than once — the version must ride the existing SELECT');
 });

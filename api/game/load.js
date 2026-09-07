@@ -73,6 +73,27 @@ function toSchemaVersion(raw) {
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * player_data.reset_epoch -> the wire `resetEpoch`, NULL preserved AS NULL (WO-1598).
+ *
+ * The epoch is how a client can tell it is BEHIND: a device whose local epoch is lower
+ * than the row's is holding a town the player has already replaced, and it must not push
+ * that town back up. Returning it costs one column on a SELECT this route already runs.
+ *
+ * ⛔ NEVER `undefined`. JSON.stringify DROPS an undefined member, so an unknown epoch
+ * would arrive as an ABSENT field — indistinguishable, on the client, from a backend too
+ * old to send one. Same reasoning as toSchemaVersion above, and the same explicit null.
+ *
+ * ⚠ 0 IS A LEGAL EPOCH ("this player has never reset"), so the accept test is `>= 0`,
+ * not the `> 0` toSchemaVersion uses. A `> 0` copied from the neighbour would report a
+ * real, stored 0 as "unknown" and let a first reset be judged against nothing.
+ */
+function toResetEpoch(raw) {
+    if (raw == null) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 module.exports = async (req, res) => {
     if (applyCors(req, res, 'GET, OPTIONS')) return;
 
@@ -114,7 +135,7 @@ module.exports = async (req, res) => {
 
     try {
         const rows = await sql`
-            SELECT game_state, schema_version, updated_at
+            SELECT game_state, schema_version, reset_epoch, updated_at
             FROM player_data
             WHERE player_id = ${playerId}
             LIMIT 1
@@ -156,6 +177,9 @@ module.exports = async (req, res) => {
             mode: auth.mode,
             // NULL stays NULL — "never declared, do not migrate". See toSchemaVersion.
             schemaVersion: toSchemaVersion(row.schema_version),
+            // WO-1598: the reset generation this row stands at. NULL stays NULL — "this
+            // player has never declared a reset" — and the member is ALWAYS present.
+            resetEpoch: toResetEpoch(row.reset_epoch),
             updatedAt: row.updated_at,
             data: data,
         });
