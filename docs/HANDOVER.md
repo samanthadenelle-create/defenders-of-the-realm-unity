@@ -1,3 +1,5 @@
+> **2026-09-07 06:10 (CLI overnight): READ `docs/MORNING_HANDBACK_2026-09-07.md` FIRST.** Four commits landed gated (c0c30f715, 94808e2e2, cd57a1c1e, 0bffcd4d1; regression 441/441), the tester APK 2026.09.07.359076 is on the Seeker, the Windows exe, the Google Play AAB and the WebGL deploy (both production domains, parity green) are done. Every Manage ticket sits in the board's VERIFY bucket until the owner scores a device frame >=95% against its mockup panel (ruling 29).
+
 > ## >> SESSION HANDOVER - 2026-09-06 - START HERE <<
 >
 > **Live anchor: `CANON_GROUND_TRUTH_2026-09-06.md` (repo root).** Branch `feat/synty-art-retheme`.

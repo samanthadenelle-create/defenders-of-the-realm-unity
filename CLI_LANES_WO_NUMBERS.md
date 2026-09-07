@@ -187,7 +187,15 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-eleventh pass): main line next free = **1576**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-fourteenth pass): main line next free = **1579**.
+> *(Web ship chain ordering + alias + legal-pages lane minted **1576, 1577, 1578**. Bumped 1576 -> 1579
+> in this SAME edit. 1576 = R2 parity gate blocks content build when target state is missing (step 2
+> should trigger rebuild on missing built-state, not die). 1577 = web-ship aliases public domain to
+> old deployment, never current one (echoes-of-elarion stayed 33 days stale). 1578 = production WebGL
+> ships without /privacy and /terms (404 until manual redeploy; build-webgl should copy legal pages,
+> parity gate should verify them before promotion).)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-eleventh pass): main line next free = **1576**.
 > *(Edit-only WebGL compile-fix lane minted **1575** = THE COMPILE GATE NEVER COMPILES WEBGL, SO
 > WEBGL-ONLY CODE ROTS SILENTLY. Bumped 1575 -> 1576 in this SAME edit. Found while fixing the one
 > error in `Builds/webgl-build.log`: `WebTrace.cs(325,35) CS1501: No overload for method 'Warn' takes
