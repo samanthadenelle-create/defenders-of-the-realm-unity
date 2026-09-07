@@ -58,7 +58,16 @@
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS player_data (
     player_id      TEXT        PRIMARY KEY,          -- BoundWallet address
-    schema_version INTEGER     NOT NULL DEFAULT 10,  -- SaveSchema.CurrentVersion
+    -- NULLABLE, NO DEFAULT (2026-09-07, WO-1457 — migration 0022). NULL means "this
+    -- row never declared a version — do NOT run a migration chain on load". It used
+    -- to read `INTEGER NOT NULL DEFAULT 10`, and that 10 was SaveSchema.CurrentVersion
+    -- on the day this file was written — a live constant copied into DDL, so it was
+    -- wrong one bump later. A brand-new player on a version-less client INSERTed at 10
+    -- with current-shaped state (save.js's version-less branch names this column
+    -- nowhere, so the DEFAULT stood); load.js returned the 10; ApplyBackendState drove
+    -- the whole v10→current chain over state that was never v10. See migration
+    -- 20260907_0022 for the full reading.
+    schema_version INTEGER,
     game_state     JSONB       NOT NULL DEFAULT '{}',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -69,8 +78,21 @@ CREATE TABLE IF NOT EXISTS player_data (
 -- save.js/load.js read+write, so the live save function FAILED against it. CREATE
 -- ... IF NOT EXISTS above does NOT alter an existing table, so add the columns
 -- explicitly. Additive + idempotent (no data touched, no drops):
-ALTER TABLE player_data ADD COLUMN IF NOT EXISTS schema_version INTEGER     NOT NULL DEFAULT 10;
+ALTER TABLE player_data ADD COLUMN IF NOT EXISTS schema_version INTEGER;
 ALTER TABLE player_data ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- ⛔ AND THE ALTERs ABOVE CANNOT UNDO THE OLD DEFAULT. `ADD COLUMN IF NOT EXISTS` is a
+-- no-op on a column that already exists, so on any database that already ran the
+-- `NOT NULL DEFAULT 10` form, re-running this file changes NOTHING and leaves the 10
+-- in place while reading as success (memory: idempotent-ddl-hides-a-stale-table).
+-- Only `ALTER COLUMN` can relax an existing column, and only a file under
+-- api/migrations/ is ever applied to production — this file is a DESCRIPTION of the
+-- schema, not a thing that runs. The applyable copy is:
+--     api/migrations/20260907_0022_game_saves_schema_version_default.sql
+--         ALTER TABLE player_data ALTER COLUMN schema_version DROP DEFAULT;
+--         ALTER TABLE player_data ALTER COLUMN schema_version DROP NOT NULL;
+--     node tools/run-migrations.mjs
+-- Verify by SHAPE (is_nullable 'YES' AND column_default NULL), never by exit code.
 
 -- TRUST TIER (2026-08-02, the guest rail). Which auth rail last wrote this row:
 --   'wallet' — an ed25519 signature over a single-use nonce proved key ownership.

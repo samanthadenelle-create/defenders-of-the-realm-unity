@@ -44,6 +44,35 @@ function toUnixMs(ts) {
     return Number.isFinite(ms) ? ms : null;
 }
 
+/**
+ * player_data.schema_version -> the wire `schemaVersion`, with NULL preserved AS NULL.
+ *
+ * ⛔ NULL IS A MEANING, NOT A MISSING VALUE. Since migration 20260907_0022 the column
+ * is nullable with NO DEFAULT, and NULL says: THIS ROW NEVER DECLARED A VERSION — the
+ * server does not know what shape the blob is in, so DO NOT RUN A MIGRATION CHAIN ON
+ * LOAD. It used to be `INTEGER NOT NULL DEFAULT 10`, so a brand-new player on a
+ * version-less client landed at 10 (api/game/save.js's version-less branch names the
+ * column nowhere, so the DEFAULT stood) and this route handed that fabricated 10 to
+ * GameStateService.ApplyBackendState, which drove the whole v10→current migration
+ * chain over state that had never been v10 (the WO-1457 corruption).
+ *
+ * The client is already built for the null: ApplyBackendState takes a `double?` and
+ * only trusts it `if (serverSchemaVersion.HasValue && serverSchemaVersion.Value > 0d)`
+ * — otherwise it uses SaveSchema.CurrentVersion and warns that the chain is "skipped
+ * rather than guessed" (Assets/_Modules/Core/State/GameStateService.cs:2305-2317).
+ *
+ * Normalised rather than passed through raw so the wire value cannot become
+ * `undefined` — JSON.stringify DROPS an undefined member, which turns an explicit
+ * "unknown" into a silently absent field. Same decision, but only one of the two
+ * spellings is visible in a capture. A non-finite or non-positive value is also
+ * reported as unknown: those are the shapes that cannot name a real schema.
+ */
+function toSchemaVersion(raw) {
+    if (raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 module.exports = async (req, res) => {
     if (applyCors(req, res, 'GET, OPTIONS')) return;
 
@@ -125,7 +154,8 @@ module.exports = async (req, res) => {
             // last_seen: server-stamped on every accepted save, unwritable by the client.
             serverLastSeenMs: toUnixMs(row.updated_at),
             mode: auth.mode,
-            schemaVersion: row.schema_version,
+            // NULL stays NULL — "never declared, do not migrate". See toSchemaVersion.
+            schemaVersion: toSchemaVersion(row.schema_version),
             updatedAt: row.updated_at,
             data: data,
         });

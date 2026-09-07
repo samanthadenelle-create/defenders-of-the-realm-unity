@@ -133,8 +133,16 @@ test('⛔ EVERY .sql in api/migrations/ is reachable by the one runner - no orph
 // tools/run-*.mjs except the one real runner must be a refusal shim, so a future
 // run-<feature>-migration.mjs that quietly applies its own list goes red here.
 const TOOLS_DIR = path.join(REPO, 'tools');
+// ⛔ THE GLOB IS WIDER THAN `run-*` ON PURPOSE (2026-09-07). The first sweep matched
+// only `run-*.mjs`, and two appliers were spelled differently and walked straight past
+// it: tools/wo1440-apply-migration.mjs (hardcoded 20260906_0019, naive `;` split) and
+// tools/wo1440-apply-0013-repair.mjs (a hand-retyped copy of 0013's ALTER). Both took a
+// connection string from a local env file and fired DDL at live Neon while writing NO
+// ledger row - the exact defect the seven `run-` runners were retired for, surviving
+// because a glob was written against a naming convention instead of against a
+// behaviour. If a future applier is named something else again, add its shape here.
 const RETIRED_RUNNERS = fs.readdirSync(TOOLS_DIR)
-    .filter(f => /^run-.*\.mjs$/.test(f) && f !== 'run-migrations.mjs')
+    .filter(f => /^(run-|wo1440-apply-).*\.mjs$/.test(f) && f !== 'run-migrations.mjs')
     .sort();
 
 function spawnOffline(file) {
@@ -146,8 +154,14 @@ function spawnOffline(file) {
 }
 
 test('⛔ every retired tools/run-*.mjs REFUSES and names the one runner', () => {
-    assert.ok(RETIRED_RUNNERS.length >= 7,
-        `expected the seven retired bespoke runners, saw ${RETIRED_RUNNERS.length}: ${RETIRED_RUNNERS}`);
+    // 7 from the first sweep + the 2 wo1440-apply-* appliers the `run-*` glob missed.
+    assert.ok(RETIRED_RUNNERS.length >= 9,
+        `expected the nine retired bespoke appliers, saw ${RETIRED_RUNNERS.length}: ${RETIRED_RUNNERS}`);
+    for (const expected of ['wo1440-apply-migration.mjs', 'wo1440-apply-0013-repair.mjs']) {
+        assert.ok(RETIRED_RUNNERS.includes(expected),
+            `${expected} must be covered - it applied DDL to live Neon outside the ledger, and the ` +
+            'first sweep\'s `run-*` glob walked past it purely because of its name');
+    }
 
     for (const file of RETIRED_RUNNERS) {
         const { code, out } = spawnOffline(file);

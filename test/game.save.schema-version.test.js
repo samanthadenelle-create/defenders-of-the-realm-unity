@@ -89,13 +89,22 @@ test('a FIRST save with NO version and NO stored row still writes — and invent
 
 test('the version-less write names schema_version NOWHERE — not a value the server picked', () => {
     // ⚠ WHY THIS IS A SOURCE-SHAPE ASSERTION AND NOT "the stored value is NULL":
-    // there is no Postgres in this runner, and the column is INTEGER NOT NULL
-    // DEFAULT 10 (api/schema.sql:61 + the ALTER at :72), so a literal NULL can never
-    // be written — passing one would raise a not-null violation on the INSERT arm and
-    // lose the save of every new player. What IS provable, and what actually matters,
-    // is that the application never chooses a version: the version-less statement
-    // omits the column from the INSERT list and from the SET clause entirely, so an
-    // existing row keeps whatever it had and a new row takes the DATABASE's default.
+    // there is no Postgres in this runner. What IS provable, and what actually
+    // matters, is that the application never chooses a version — the version-less
+    // statement omits the column from the INSERT list and from the SET clause
+    // entirely, so an existing row keeps whatever it had and a new row takes whatever
+    // the DATABASE does with an unnamed column.
+    //
+    // ⚠ AND WHAT THE DATABASE DOES CHANGED TODAY (2026-09-07, migration
+    // api/migrations/20260907_0022_game_saves_schema_version_default.sql). This
+    // comment used to say the column was INTEGER NOT NULL DEFAULT 10 so "a literal
+    // NULL can never be written", and that a new row "takes the DATABASE's default".
+    // That default WAS the WO-1457 corruption: a brand-new player on a version-less
+    // client landed at 10 with current-shaped state, load.js returned the 10, and
+    // ApplyBackendState ran the whole v10→current chain over state that was never
+    // v10. 0022 drops the DEFAULT and the NOT NULL, so the unnamed column now lands
+    // NULL = "never declared, do not migrate". The assertions below are unchanged and
+    // still the right ones — only the consequence of omitting the column moved.
     const versionless = saveSrc.match(
         /INSERT INTO player_data \(player_id, game_state, trust, updated_at\)[\s\S]*?updated_at = NOW\(\)/);
     assert.ok(versionless,
@@ -109,6 +118,34 @@ test('the version-less write names schema_version NOWHERE — not a value the se
                               .replace(/\/\*[\s\S]*?\*\//g, '');
     assert.doesNotMatch(executable, /schema_version\s*(=|,)\s*10\b/,
         'a literal v10 is being written to schema_version again');
+});
+
+test('⛔ a NULL stored version is UNKNOWN, never version ZERO', () => {
+    // Migration 20260907_0022 made player_data.schema_version nullable, so the
+    // prior-state SELECT can now hand this judgement a NULL for the first time. The
+    // trap is that `Number(null)` is 0, NOT NaN — a bare Number()+isFinite records a
+    // fabricated "version 0" as the stored prior, and that number is what an incident
+    // would read in save_schema_version_refused's `stored` field.
+    //
+    // The path that matters end to end: a version-less client saves (row lands NULL),
+    // the player upgrades to a version-declaring client, and saves again. That second
+    // save MUST be accepted at its declared version.
+    const upgraded = save.judgeSchemaVersion(38, null);
+    assert.equal(upgraded.ok, true,
+        'a client that starts declaring a version after a NULL-stored row must still save');
+    assert.equal(upgraded.version, 38, 'and it carries its own declared version forward');
+
+    // Belt: even read as 0, a downgrade check of `v < s` cannot refuse — nothing is
+    // below zero. Pinned so a future stricter judgement cannot start refusing here
+    // without this line going red first.
+    assert.equal(save.judgeSchemaVersion(1, 0).ok, true,
+        'a stored 0 must never become a reason to refuse a save');
+
+    // And the READ side: the null must be filtered before it is coerced.
+    const executable = saveSrc.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.doesNotMatch(executable, /Number\(priorRows\[0\]\.schema_version\)/,
+        'schema_version is being coerced with a bare Number() again — Number(null) is 0, ' +
+        'so a NULL row would be recorded as a real stored version 0');
 });
 
 test('a DOWNGRADE is refused with its own named code', () => {

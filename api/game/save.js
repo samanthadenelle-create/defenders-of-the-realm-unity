@@ -362,8 +362,18 @@ async function handler(req, res) {
         `;
         if (priorRows.length > 0) {
             if (priorRows[0].game_state) prior = priorRows[0].game_state;
-            const sv = Number(priorRows[0].schema_version);
-            if (Number.isFinite(sv)) priorSchemaVersion = sv;
+            // ⛔ NULL MUST NOT BECOME ZERO. Since migration 20260907_0022 the column is
+            // nullable, and NULL means "this row never declared a version" — the same
+            // "unknown" this local is initialised to. `Number(null)` is 0, NOT NaN, so a
+            // bare Number()+isFinite would silently record version ZERO as a real stored
+            // version. That happens to be harmless for today's judgement (the only test
+            // is the downgrade `v < s`, and nothing is below 0), but it is a fabricated
+            // number sitting in a variable named "prior", and it is what
+            // save_schema_version_refused would print as `stored` in an incident. The
+            // null check is explicit so the next reader of this local can trust it.
+            const rawSv = priorRows[0].schema_version;
+            const sv = rawSv == null ? NaN : Number(rawSv);
+            if (Number.isFinite(sv) && sv > 0) priorSchemaVersion = sv;
             // The Neon HTTP driver returns TIMESTAMPTZ as a Date OR an ISO string
             // depending on the column/driver path; handle both, and treat an
             // unparseable value as "no anchor" rather than as the epoch (which would
@@ -451,16 +461,32 @@ async function handler(req, res) {
         // When the payload declared no version, `schema_version` is named NOWHERE —
         // not in the INSERT column list, not in the SET clause — so the stored value
         // is untouched by construction rather than by a clamp we have to trust.
-        // ⛔ IT CANNOT BE ONE STATEMENT WITH A NULL PARAMETER, even though Postgres'
-        //    GREATEST ignores NULLs and the UPDATE arm would be fine: the column is
-        //    `INTEGER NOT NULL DEFAULT 10` (api/schema.sql:61 and the ALTER at :72),
-        //    so a NULL on the INSERT arm raises a not-null violation — a 500 that
-        //    loses the save of every brand-new player. That is today's outage in a
-        //    new shape, so the version-less INSERT omits the column and lets the
-        //    COLUMN'S OWN DEFAULT stand. A first-ever save from a version-less
-        //    client therefore lands at the DB default; that is a fact the database
-        //    owns, not a version this function invented. (Making it nullable is a
-        //    live migration and the owner's call — deliberately not done here.)
+        // ⛔ IT IS STILL TWO STATEMENTS, AND THE REASON HAS CHANGED — read this before
+        //    "simplifying" it back to one with a NULL parameter.
+        //
+        //    The ORIGINAL reason (2026-09-07 morning) was that the column was
+        //    `INTEGER NOT NULL DEFAULT 10`, so a NULL on the INSERT arm raised a
+        //    not-null violation — a 500 that lost the save of every brand-new player.
+        //    That is no longer true: migration
+        //    api/migrations/20260907_0022_game_saves_schema_version_default.sql dropped
+        //    both the DEFAULT and the NOT NULL, so a version-less first save now lands
+        //    NULL, which api/game/load.js returns as `schemaVersion: null` and the
+        //    client reads as "never declared — skip the migration chain"
+        //    (GameStateService.ApplyBackendState). The invented 10 that drove a whole
+        //    v10→current chain over never-was-v10 state (WO-1457) is gone.
+        //
+        //    The REMAINING reason is the stronger one, and it is why the shape stays:
+        //    naming `schema_version` NOWHERE — not in the INSERT column list, not in
+        //    the SET clause — leaves an EXISTING row's version untouched BY
+        //    CONSTRUCTION rather than by a clamp we have to trust. A single statement
+        //    passing NULL would work on the INSERT arm today, but the UPDATE arm would
+        //    then depend on GREATEST()'s NULL handling being right, which is a property
+        //    of an expression instead of a property of the statement. Do not trade a
+        //    structural guarantee for a one-liner.
+        //
+        //    NOT BACK-FILLED, DELIBERATELY: rows already stamped 10 by the old default
+        //    keep the 10. Blanking them is a guess in the opposite direction and is the
+        //    owner's call, on evidence (how many rows, and what shape their blob is).
         if (acceptedSchemaVersion == null) {
             await sql`
                 INSERT INTO player_data (player_id, game_state, trust, updated_at)

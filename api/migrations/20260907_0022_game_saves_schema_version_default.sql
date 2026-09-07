@@ -1,0 +1,94 @@
+-- =============================================================================
+-- 20260907_0022_game_saves_schema_version_default.sql   (WO-1457, the other half)
+-- -----------------------------------------------------------------------------
+-- TWO statements, no data touched. player_data.schema_version stops LYING about
+-- brand-new players.
+--
+-- ⛔ WHAT IS ACTUALLY WRONG. api/game/save.js now accepts a payload that declares
+--    NO schemaVersion and leaves the stored version untouched by construction: the
+--    version-less branch names `schema_version` NOWHERE, so the column's own DEFAULT
+--    stands (api/game/save.js:451-477, and the comment there says exactly this and
+--    calls the migration "the owner's call"). That is correct for an EXISTING row.
+--    It is a fabrication for a NEW one.
+--
+--    The column was declared `INTEGER NOT NULL DEFAULT 10` — in the player_data
+--    CREATE TABLE body in api/schema.sql AND again in that file's 2026-05-31 drift
+--    reconcile ALTER (both now corrected; deliberately cited by name rather than by
+--    line number, which is the copied state this repo has four scars from). So a
+--    BRAND-NEW player on a version-less client
+--    INSERTs at 10 while the blob it carries is current-shaped. api/game/load.js:88
+--    then SELECTs that 10, returns it as `schemaVersion` (:128), and
+--    GameStateService.ApplyBackendState uses it as `storeVersion` to drive
+--    SaveMigrator.MigrateForImport (Assets/_Modules/Core/State/GameStateService.cs
+--    :2305-2320). The client runs the WHOLE v10 -> current migration chain over
+--    state that was never v10. That is the WO-1457 corruption, and the DEFAULT is
+--    the thing that invents the 10.
+--
+--    ⛔ 10 IS NOT EVEN A CURRENT NUMBER. It was SaveSchema.CurrentVersion on the day
+--    the table was authored, hardcoded into the DDL, and the const has moved many
+--    bumps since (read it at Assets/_Modules/Core/State/SaveSchema.cs, never from a
+--    doc). A default that tracks a live constant is duplicated state: it cannot be
+--    right for longer than the next bump. The cure is not a fresher number - it is
+--    having no number at all. (Same failure CLAUDE.md carries four scars from: the
+--    stale WO block, the retired dependency table, the copied repo root, the
+--    face-count line.)
+--
+-- WHAT NULL MEANS, AND IT IS THE POINT OF THIS FILE:
+--
+--     schema_version IS NULL  =  THIS ROW NEVER DECLARED A VERSION.
+--                                DO NOT RUN A MIGRATION CHAIN ON LOAD.
+--
+--    It is the honest reading. The server does not know what shape a version-less
+--    client's blob is in, and inventing a number so the column can stay NOT NULL is
+--    how a guess becomes a migration chain. api/game/load.js returns that NULL
+--    through as JSON `schemaVersion: null`, and the client ALREADY handles it
+--    correctly and says so out loud: ApplyBackendState takes `double?` and only
+--    trusts it `if (serverSchemaVersion.HasValue && serverSchemaVersion.Value > 0d)`
+--    - otherwise it sets storeVersion = SaveSchema.CurrentVersion and FlowTrace.Warns
+--    "the row carried no schemaVersion (older backend) - treating it as vN so the
+--    migration chain is SKIPPED RATHER THAN GUESSED", leaving SaveSchema.Validate to
+--    catch a genuinely old row (GameStateService.cs:2305-2317). No .cs change is
+--    needed; the client was already waiting for this column to be able to say
+--    "unknown".
+--
+-- ⛔ DO NOT "APPLY" THIS BY RE-RUNNING api/schema.sql. `CREATE TABLE IF NOT EXISTS`
+--    against an existing player_data reports success and changes NOTHING, and the
+--    `ADD COLUMN IF NOT EXISTS` at api/schema.sql:72 is likewise a no-op on a column
+--    that already exists - it will NOT drop the default off it
+--    (memory: idempotent-ddl-hides-a-stale-table). `ALTER COLUMN` is the only
+--    statement that can change an existing column's default or nullability, and the
+--    verify below is a SHAPE QUERY for exactly that reason: a repair is judged by the
+--    shape it leaves behind, never by the fact that a statement returned.
+--
+-- ADDITIVE IN THE ONLY sense that matters here: this RELAXES the column. Zero DROP
+-- TABLE / DROP COLUMN / DELETE / TRUNCATE, no rename, no back-fill, NOT ONE ROW
+-- READ OR WRITTEN. Every existing row keeps the integer it already has - including
+-- the rows that were stamped 10 by the old default, which this file deliberately
+-- does NOT touch. Blanking them would be a second guess in the opposite direction,
+-- and those rows are a separate, evidence-first question (how many, and what shape
+-- is their blob) that belongs to the owner, not to a DDL file.
+--
+-- RE-RUNNABLE. `DROP DEFAULT` / `DROP NOT NULL` on a column that already has neither
+-- is a no-op, not an error - so this file survives the ordinary runner and a re-run.
+--
+-- Apply (owner, DATABASE_URL in env):
+--     node tools/run-migrations.mjs
+-- =============================================================================
+
+-- 1. The invented number goes away. A version-less INSERT (api/game/save.js:465-477,
+--    which names no schema_version column at all) now lands NULL instead of 10.
+ALTER TABLE player_data ALTER COLUMN schema_version DROP DEFAULT;
+
+-- 2. And NULL becomes legal, which is what makes step 1 mean "unknown" rather than
+--    "500 on the first save of every new player". Note the ordering is deliberate:
+--    with the default still in place, dropping NOT NULL alone would change nothing.
+ALTER TABLE player_data ALTER COLUMN schema_version DROP NOT NULL;
+
+-- Verify (expect ONE row: data_type 'integer', is_nullable 'YES', column_default NULL):
+--   SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE table_name = 'player_data' AND column_name = 'schema_version';
+--
+-- ⛔ is_nullable 'YES' AND column_default NULL. Either one alone is a HALF-APPLIED
+--    repair: a nullable column that still defaults to 10 keeps inventing the 10, and
+--    a defaultless NOT NULL column 500s the version-less INSERT instead.
