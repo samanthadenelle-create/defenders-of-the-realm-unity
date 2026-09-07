@@ -110,13 +110,24 @@ try {
 
 # Judge by the MARKER on a fresh log, never the exit code - the runners in this repo
 # exit 0 on refusals and FAILs (memory: gates-report-success-without-proving-it).
-if ((Test-Path $parityLog) -and (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
+# WO-1470: the MARKER half was here; the FRESH half was not. If r2-ship.ps1 bails
+# early (missing tools/r2_sync.py, for one), yesterday's R2_PARITY_OK is still on disk
+# and this block read it as today's proof. The proof must POSTDATE the bytes it claims
+# to prove - same assertion shape as google-play-aab-build.ps1.
+$parityFresh = $false
+if (Test-Path $parityLog) {
+    if ((Get-Item $parityLog).LastWriteTime -ge $startedAt) { $parityFresh = $true }
+}
+if (-not $parityFresh) {
+    "R2_PARITY_STALE $(Get-Date -Format o) - $parityLog is missing or predates this run; it cannot prove this build's content." | Out-File -Encoding ascii -Append $status
+}
+if ($parityFresh -and (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
     $line = (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim()
     "R2_PARITY_OK $(Get-Date -Format o) $line" | Out-File -Encoding ascii -Append $status
 } else {
     "R2_PARITY_FAILED $(Get-Date -Format o) - the APK references bundles the bucket does not hold." | Out-File -Encoding ascii -Append $status
     "  DO NOT INSTALL OR DISTRIBUTE THIS BUILD. Players would see no buildings and no enemies," | Out-File -Encoding ascii -Append $status
-    "  with no error on screen. Fix: python tools\r2_sync.py --push ServerData   (the PARENT)." | Out-File -Encoding ascii -Append $status
+    "  with no error on screen. Fix: powershell -File tools\r2-ship.ps1   (the ONE sanctioned path)." | Out-File -Encoding ascii -Append $status
     "  See $parityLog" | Out-File -Encoding ascii -Append $status
 
     # WO-1124 sec.5.3: FAIL CLOSED. Until now this branch only WROTE "DO NOT INSTALL" into a

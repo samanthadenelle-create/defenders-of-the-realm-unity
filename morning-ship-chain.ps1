@@ -155,11 +155,26 @@ if (-not $SkipApk) {
     # target) and the marker-not-exit-code rule now live in ONE place,
     # tools\r2-ship.ps1, because this block and overnight-apk-build.ps1's copy had
     # already drifted into doing different things.
+    $r2StartedAt = Get-Date
     & powershell -NoProfile -File (Join-Path $proj 'tools\r2-ship.ps1')
     if ($LASTEXITCODE -ne 0) {
         Die "R2 content ship FAILED - refusing to distribute a build whose content is not hosted" 16
     }
+    # WO-1470: judge the MARKER on a FRESH log. This step used to read the marker with
+    # no freshness check at all, so an early bail inside r2-ship.ps1 that left
+    # yesterday's R2_PARITY_OK on disk passed as today's proof. The proof must POSTDATE
+    # the bytes it claims to prove - same assertion shape as google-play-aab-build.ps1.
     $parityLog = Join-Path $proj 'Builds\r2-parity.log'
+    $parityFresh = $false
+    if (Test-Path $parityLog) {
+        if ((Get-Item $parityLog).LastWriteTime -ge $r2StartedAt) { $parityFresh = $true }
+    }
+    if (-not $parityFresh) {
+        Die "R2 parity log is missing or STALE (predates this step) - $parityLog cannot prove this build's content. Fix: powershell -File tools\r2-ship.ps1" 16
+    }
+    if (-not (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
+        Die "R2_PARITY_OK absent from $parityLog - this build references bundles the bucket does not hold" 16
+    }
     Say "     OK  $((Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim())"
 } else { Say "2b/4 R2 parity SKIPPED (no APK built)" }
 

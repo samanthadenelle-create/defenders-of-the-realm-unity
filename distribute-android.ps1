@@ -21,6 +21,7 @@ param(
   [switch]$Build
 )
 $ErrorActionPreference = "Stop"
+$startedAt = Get-Date
 
 # WO-1173: this script can distribute an existing APK, so it needs its own gate
 # even when -Build is absent. A green build from yesterday cannot prove today's DB.
@@ -59,6 +60,43 @@ if ($Build) {
 if (-not (Test-Path $Apk)) {
   Write-Error "APK not found: $Apk  (run with -Build, or build it first)"
   exit 1
+}
+
+# --- WO-1469: Content gate. Push, then PROVE it is hosted, BEFORE distributing. ---
+# This script reaches TESTERS, and until now it carried no R2 gate at all - the fourth
+# path to a device that bypassed CLAUDE.md s16. It applies even with -Build:$false: an
+# APK built yesterday still resolves TODAY'S remote catalog, and bundle names are
+# content-hashed, so no previous push can cover this release.
+#
+# Delegated to tools/r2-ship.ps1, the ONE file (owner ruling 2026-08-20). Do NOT
+# re-inline the --push ServerData / --verify-catalog ServerData/Android pair here;
+# that copy-paste is the exact duplicated-state failure s16 was written to close.
+$parityLog = Join-Path $PSScriptRoot 'Builds\r2-parity.log'
+try {
+  & powershell -NoProfile -File (Join-Path $PSScriptRoot 'tools\r2-ship.ps1')
+} catch {
+  Write-Host "[distribute] R2_SHIP_THREW $($_.Exception.Message)"
+}
+
+# Judge by the MARKER on a FRESH log, never the exit code - the runners in this repo
+# exit 0 on refusals and FAILs. The proof must postdate the bytes it claims to prove.
+$parityFresh = $false
+if (Test-Path $parityLog) {
+  if ((Get-Item $parityLog).LastWriteTime -ge $startedAt) { $parityFresh = $true }
+}
+if ($parityFresh -and (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
+  $line = (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim()
+  Write-Host "[distribute] R2_PARITY_OK $line"
+} else {
+  if (-not $parityFresh) {
+    Write-Host "[distribute] R2_PARITY_FAILED - $parityLog is missing or STALE (predates this run)."
+  } else {
+    Write-Host "[distribute] R2_PARITY_FAILED - this APK references bundles the bucket does not hold."
+  }
+  Write-Host "  DO NOT DISTRIBUTE THIS BUILD. Testers would see capsule enemies and placeholder"
+  Write-Host "  buildings, with no error on screen. Fix: powershell -File tools\r2-ship.ps1"
+  Write-Host "  See $parityLog"
+  exit 3
 }
 
 if (-not $Notes) { $Notes = "build $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
