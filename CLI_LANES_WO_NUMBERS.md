@@ -187,14 +187,17 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1518**.
-> *(CLI minted **1446 through 1517** - seventy-two tickets from the read-only audit fleet's eight batches
+> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1520**.
+> *(CLI minted **1446 through 1519** - seventy-four tickets from the read-only audit fleet's nine batches
 > (backend/auth, persistence, raid, HUD, Manage 2000-block, perf, regression harness, ship chain, architecture,
-> art, canon) plus four owner rulings taken tonight (the defense-report door 20:05, Manage BUILD unlocked-only
-> 20:07, train/army state words 20:10, and the placed-structure move door recovered from a commit message).
-> Five are SPEC pending an owner ruling: 1475 loot-vs-harvest burn, 1487 building-portrait art drop, 1504 the
-> Ranger primary, 1509 the orc albedo art drop, 1444's sibling 1516/1517 landing after tonight's VM commit.
-> Minted from the audit fleet; bumped 1446 -> 1518 in this SAME edit.)*
+> art, canon) plus seven owner rulings/asks taken tonight (the defense-report door 20:05, Manage BUILD
+> unlocked-only 20:07, train/army state words and the troop-detail stats 20:10, research SHORT/LOCKED reasons
+> 20:12 + 20:19, the raid-deploy "make it pop" redesign 20:14, and the placed-structure move door recovered
+> from a commit message).
+> Four are SPEC pending an owner ruling or an art drop: 1475 loot-vs-harvest burn, 1487 building portraits,
+> 1504 the Ranger primary, 1509 the orc albedo. The four Manage rulings (1515-1518) land AFTER tonight's
+> `ManageScreenVM.cs` / `HudKitController.cs` commits.
+> Minted from the audit fleet; bumped 1446 -> 1519 in this SAME edit.)*
 >
 > ### superseded: RECONCILED 2026-09-06 (CLI, ninety-fifth pass): main line next free = **1446**.
 > *(CLI minted **1445** - `OfflineHarvestService.Grant` banks the clamped amount and discards the remainder,
