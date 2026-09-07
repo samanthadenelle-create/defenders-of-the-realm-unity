@@ -130,6 +130,9 @@ namespace DeNelle.Editor
                 CheckTowerSoftcap(entries, created, failures, log);
                 CheckBuildTierDerivation(entries, failures, log);
 
+                // -- 11b. WO-1480 -- the NINTH hardcoded structure ceiling (WallSegment) ---
+                CheckWallTierCeiling(failures, log);
+
                 // -- 12. FALLBACK FRESHNESS -- the JSON-load-FAILURE path now EMBEDS the catalog
                 //        (WO-1137 codegen), so the only thing left to prove is that the embedded
                 //        copy is not STALE, and that it still registers every row.
@@ -233,25 +236,51 @@ namespace DeNelle.Editor
             List<string> failures, StringBuilder log)
         {
             int authored = 0;
+            int exempt = 0;
+            var exemptIds = new List<string>();
             CatalogEntry crystalMine = null;
             foreach (var e in entries)
             {
                 if (e == null) continue;
-                bool requiresDescription = e.type == CatalogType.Resource || e.type == CatalogType.Collector;
-                if (!requiresDescription) continue;
+                // WO-1565: EVERY buildable row must carry an authored description. It used to be
+                // Resource/Collector only, and StructureCardVM.DescriptionFor painted type-level
+                // prose for the rest - so all four Tower rows read "A defensive tower ...", the
+                // Catapult called itself a tower and the anti-air Sky Ballista read the same as
+                // the ground ones. The prose is now deleted; the unauthored case FAILS here.
+                // EXEMPT: rows with no visualPrefabPath are DATA rows, never placeable and never
+                // shown (repair_default's own _note states that convention, and
+                // DataRegression.CheckStructures skips them for the same reason).
+                bool buildable = !string.IsNullOrWhiteSpace(e.visualPrefabPath);
+                if (!buildable) { exempt++; exemptIds.Add(e.id); continue; }
                 if (string.IsNullOrWhiteSpace(e.description))
                 {
-                    failures.Add($"[structure-descriptions] '{e.id}' type={e.type} has no authored description");
+                    failures.Add($"[structure-descriptions] '{e.id}' type={e.type} has no authored description " +
+                                 "- author it in BOTH canonical copies of structures-catalog.json " +
+                                 "(there is no fallback prose any more, WO-1565)");
                     continue;
                 }
                 authored++;
-                if (e.description.Length > 48)
+                // The 48-char tile cap stays scoped to Resource/Collector, as WO-1081 set it:
+                // tower_siege_tower ships an owner-voice line well over the cap, and WO-1565 sec.6
+                // forbids touching it, so widening the cap here would red an already-shipped row.
+                // (No length literal here on purpose - a live count in a comment is duplicated state.)
+                bool capped = e.type == CatalogType.Resource || e.type == CatalogType.Collector;
+                if (capped && e.description.Length > 48)
                     failures.Add($"[structure-descriptions] '{e.id}' description is {e.description.Length} characters; max is 48");
                 string projected = StructureCardVM.DescriptionFor(e);
                 if (!string.Equals(projected, e.description, System.StringComparison.Ordinal))
                     failures.Add($"[structure-descriptions] '{e.id}' projection changed authored copy");
                 if (projected.IndexOf("gathers materials over time", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     failures.Add($"[structure-descriptions] '{e.id}' rendered the obsolete generic resource sentence");
+                // WO-1565: the shipping font carries no em-dash, so a non-ASCII character in
+                // player-facing copy renders as a gap (WO-1491 diagnosed one as a "triple space").
+                foreach (char c in e.description)
+                    if (c > 126 || c < 32)
+                    {
+                        failures.Add($"[structure-descriptions] '{e.id}' description carries the non-ASCII " +
+                                     $"character U+{(int)c:X4}; the shipping font does not render it");
+                        break;
+                    }
                 if (e.id == "mine_crystal") crystalMine = e;
             }
 
@@ -269,10 +298,18 @@ namespace DeNelle.Editor
             if (method.Length == 0)
                 failures.Add("[structure-descriptions] DescriptionFor source seam not found");
             else if (method.Contains("e.role") || method.Contains("e.id ==") || method.Contains("e.id !="))
-                failures.Add("[structure-descriptions] DescriptionFor branches on role/id; fallback must stay type-only");
+                failures.Add("[structure-descriptions] DescriptionFor branches on role/id; it must project " +
+                             "authored copy only, never derive per-row prose");
+            // WO-1565: pin the DELETION. If type-level prose is ever re-added, every unauthored row
+            // silently reads plausibly again and this whole defect class comes back invisible.
+            else if (method.Contains("A defensive tower") || method.Contains("A village structure") ||
+                     method.Contains("case CatalogType."))
+                failures.Add("[structure-descriptions] DescriptionFor paints type-level fallback prose again " +
+                             "(WO-1565 deleted it); an unauthored row must fail this gate, not render");
 
-            log.AppendLine($"  [structure-descriptions] authored={authored} resource/collector rows; " +
-                           "48-char cap, mine copy, authored projection, type-only fallback OK");
+            log.AppendLine($"  [structure-descriptions] authored={authored} buildable rows, {exempt} prefab-less " +
+                           $"data row(s) exempt [{string.Join(", ", exemptIds)}]; ASCII-only, 48-char cap on " +
+                           "resource/collector, mine copy, authored projection, no fallback prose OK");
         }
 
         // =====================================================================
@@ -1416,6 +1453,111 @@ namespace DeNelle.Editor
             if (cfg.freeBuildSlots != 2)
                 failures.Add($"[build-tier] freeBuildSlots is {cfg.freeBuildSlots} -- WO-855 sec.4.6 keeps it at 2 (scarcity)");
             log.AppendLine($"  [build-tier] maxDurationSeconds {cfg.maxDurationSeconds / 3600f:0.#}h clamp holds through tier {top + 3} OK");
+        }
+
+        // =====================================================================
+        //  11b. WO-1480 — WallSegment's tier ceiling, widened from the WO-1108b oracle.
+        //
+        //  WO-1108b made RepoProps.MaxStructureLevel the SINGLE structure ceiling by
+        //  replacing eight hardcoded 3s. WallSegment.SetTier was a NINTH that was missed:
+        //  it clamped 1..3, and that clamp fed a per-tier damage divisor table with exactly
+        //  four slots — so this was a GAMEPLAY ceiling, not the documented 1..3 VISUAL tier
+        //  selector (StructureTierVisual / BuildModeController / DefenseTower, deliberately
+        //  left alone). Latent only because wall_wood authors maxLevel 2; the moment a wall
+        //  is authored past 3, a level-4 wall silently takes level-3 damage reduction.
+        //
+        //  RED PROOF — against the pre-WO-1480 tree every one of these fails:
+        //    * WallSegment.MaxTier did not exist (compile-red is the strongest RED there is);
+        //    * SetTier(6) yielded Tier 3, not 6;
+        //    * the source still carried the literal "Mathf.Clamp(tier, 1, 3)".
+        //  It is asserted BEHAVIOURALLY (a real component through the real SetTier) AND by
+        //  source scan, because a future seat can re-introduce the literal without changing
+        //  today's numbers while wall_wood still stops at 2.
+        // =====================================================================
+        private static void CheckWallTierCeiling(List<string> failures, StringBuilder log)
+        {
+            int ceiling = RepoProps.MaxStructureLevel;
+
+            if (WallSegment.MaxTier != ceiling)
+                failures.Add($"[wall-tier-ceiling] WallSegment.MaxTier = {WallSegment.MaxTier} but the single structure " +
+                             $"ceiling RepoProps.MaxStructureLevel = {ceiling} — the wall tier bound is a second, drifting copy");
+
+            // -- A. THE DIVISOR IS DEFINED FOR EVERY ADMISSIBLE LEVEL -------------
+            //    Tier 1 is x1 (no reduction) and every step is strictly tougher, all the way
+            //    to the ceiling. A tabled divisor would return the same value for 4/5/6.
+            float prev = 0f;
+            for (int t = 1; t <= ceiling; t++)
+            {
+                float f = WallSegment.ToughnessFor(t);
+                if (!(f > 0f) || float.IsNaN(f) || float.IsInfinity(f))
+                {
+                    failures.Add($"[wall-tier-ceiling] toughness divisor at tier {t} is {f} — a level the clamp admits has no " +
+                                 "usable divisor, so its contact damage is undefined (divide-by-zero / NaN on the damage track)");
+                    continue;
+                }
+                if (t == 1 && !Mathf.Approximately(f, 1f))
+                    failures.Add($"[wall-tier-ceiling] tier 1 toughness is x{f} — a base wall must take damage unreduced (x1)");
+                if (t > 1 && !(f > prev + 0.0001f))
+                    failures.Add($"[wall-tier-ceiling] toughness at tier {t} (x{f}) is not greater than tier {t - 1} (x{prev}) — " +
+                                 "the upgrade buys the player nothing at that rung (the 1..3 table repeating its top value)");
+                prev = f;
+            }
+
+            // -- B. LEGACY PARITY -- the derived curve must reproduce the old table ---
+            //    { 1f, 1.6f, 2.56f } for tiers 1..3, so this fix re-tunes NOTHING that ships.
+            float[] legacy = { 1f, 1.6f, 2.56f };
+            for (int i = 0; i < legacy.Length && i + 1 <= ceiling; i++)
+            {
+                float got = WallSegment.ToughnessFor(i + 1);
+                if (Mathf.Abs(got - legacy[i]) > 0.01f)
+                    failures.Add($"[wall-tier-ceiling] tier {i + 1} toughness is x{got}, was x{legacy[i]} before WO-1480 — " +
+                                 "deriving the divisor must not re-tune the tiers that already shipped");
+            }
+
+            // -- C. THE REAL CLAMP, THROUGH THE REAL COMPONENT ---------------------
+            var go = new GameObject("WO1480_WallTierProbe");
+            try
+            {
+                var wall = go.AddComponent<WallSegment>();
+                wall.SetTier(ceiling);
+                if (wall.Tier != ceiling)
+                    failures.Add($"[wall-tier-ceiling] SetTier({ceiling}) left Tier at {wall.Tier} — WallSegment clamps below the " +
+                                 "structure ceiling, so an upgraded wall keeps a lower tier's damage reduction and nothing reports it");
+                wall.SetTier(ceiling + 5);
+                if (wall.Tier != ceiling)
+                    failures.Add($"[wall-tier-ceiling] SetTier({ceiling + 5}) left Tier at {wall.Tier} — the clamp must still hold AT " +
+                                 $"the ceiling ({ceiling}); an unbounded tier indexes past every per-tier curve in the game");
+                wall.SetTier(0);
+                if (wall.Tier != 1)
+                    failures.Add($"[wall-tier-ceiling] SetTier(0) left Tier at {wall.Tier} — the floor must stay 1");
+            }
+            finally { Object.DestroyImmediate(go); }
+
+            // -- D. THE LITERAL MUST NOT COME BACK ---------------------------------
+            string wallPath = System.IO.Path.Combine(Application.dataPath,
+                "_Modules", "Village", "Walls", "WallSegment.cs");
+            if (!System.IO.File.Exists(wallPath))
+            {
+                failures.Add("[wall-tier-ceiling] WallSegment.cs not found — the literal-ceiling scan cannot run");
+            }
+            else
+            {
+                string src = null;
+                try { src = System.IO.File.ReadAllText(wallPath); }
+                catch (System.Exception ex) { failures.Add($"[wall-tier-ceiling] WallSegment.cs unreadable ({ex.Message})"); }
+                if (src != null)
+                {
+                    if (src.IndexOf("Mathf.Clamp(tier, 1, 3)", System.StringComparison.Ordinal) >= 0)
+                        failures.Add("[wall-tier-ceiling] WallSegment still clamps the tier with the literal Mathf.Clamp(tier, 1, 3) — " +
+                                     "the ninth hardcoded structure ceiling is back; clamp to RepoProps.MaxStructureLevel, never a literal");
+                    if (src.IndexOf("RepoProps.MaxStructureLevel", System.StringComparison.Ordinal) < 0)
+                        failures.Add("[wall-tier-ceiling] WallSegment.cs no longer names RepoProps.MaxStructureLevel — the wall tier " +
+                                     "bound has stopped reading the single ceiling");
+                }
+            }
+
+            log.AppendLine($"  [wall-tier-ceiling] WallSegment clamps 1..{ceiling} off RepoProps.MaxStructureLevel; divisor derived and " +
+                           $"strictly increasing to x{WallSegment.ToughnessFor(ceiling):0.00} (legacy x1/x1.6/x2.56 preserved) OK");
         }
 
         // =====================================================================

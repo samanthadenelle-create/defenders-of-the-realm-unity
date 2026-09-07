@@ -1,5 +1,42 @@
 # MASTER CATALOG — Project Index
 
+> # DELTA 2026-09-06  -  read this FIRST; it supersedes every dated block below it
+> Scope: the commits `949e848a0..HEAD` plus the working tree at the time of writing. Every entry
+> below was re-verified by opening the `.cs` file, never a comment digest, and each cites the file
+> it was read from. Nothing here restates a number the code already owns.
+>
+> **NEW TYPE  -  the friend-or-foe authority.** `Assets/_Modules/Core/Combat/CombatFactionRules.cs`
+> (WO-1439) is now the ONE answer to "may this attacker hit that?": `MayAttack` /
+> `IsFriendlyFire`, each with an `IDamageableStructure` and an `IDamageable` overload (WO-1438),
+> both funnelling into one private `Decide`. Its own header carries a MEASURED census of the
+> inline `Faction != CombatFaction.Hostile` copies that remain (Pet, ArcaneTower, DefenseTower,
+> TowerCombat, PlayerAttackController's ability lane, HeroAbilities) and tells the reader to RUN
+> THE GREP rather than trust the list. (!) Overload trap, stated in the source: passing a CONCRETE
+> type implementing both interfaces does not compile  -  deliberately, a loud error instead of a
+> silent wrong answer. -> `MASTER_CATALOG/core.md` (Combat/).
+>
+> **CLOUD SAVE STOPPED EATING LOCAL PROGRESS** (`Core/State/GameStateService.cs`): the hand-copied
+> seven-field cloud merge is DELETED and replaced by `ApplyBackendState`  -  the same
+> migrate -> validate -> `ApplyPersisted` path the local `Load()` uses  -  gated on the new
+> `LastLocalSaveUnixMs` recency stamp, returning a `BackendApplyOutcome` enum so an oracle can
+> assert the DECISION. The old doc sentence "server wins on BestWave; local wins on Towers and
+> Pets" is RETIRED  -  there was never a per-field merge. -> `core.md` (GameStateService).
+>
+> **A TRANSIENT 500 NO LONGER DESTROYS THE SESSION** (`Core/Web3/BackendRequestSigner.cs`,
+> WO-1454): renewal failures are now CLASSIFIED  -  only 401/403 clear the token; 5xx, timeouts,
+> unparseable bodies and empty-token 2xx keep it and back off. -> `economy-meta.md`.
+>
+> **SUITE MARKERS ARE MEASURED, NOT TYPED.** `SessionRegression` no longer prints the literal
+> `SESSION_GUARDS_OK 6/6 checks`; the checks are a TABLE and both halves of the marker are derived
+> from it (WO-1493). STOP: Do not write a digit into this catalog for it. -> `editor-tools.md`.
+>
+> **Entries touched this pass:** `core.md` (CombatFactionRules, GameStateService, WorldHold player-
+> owned sites) * `economy-meta.md` (BackendRequestSigner) * `village-enemies-world.md`
+> (TroopController, Enemy probe cadence, RaidDeployController) * `village-systems.md`
+> (WelcomeBackDoorsVM, StructureCardVM, WallSegment, ManageScreenVM) * `resources-art.md`
+> (VFXManager release policy) * `hud.md` (HudKitController) * `editor-tools.md` (SessionRegression
+> + 13 suites).
+
 > # ▶ DELTA 2026-09-02 — read this FIRST; it supersedes every dated block below it
 > **What this pass CORRECTED in this file (each verified by opening the code, never a comment):**
 > - ⛔ **The save-schema version is no longer printed anywhere in the catalog.** It said **v38** while
@@ -186,7 +223,9 @@ under `docs/MASTER_CATALOG/<id>.md`, verified file-by-file (read, not from comme
 
 Section catalogs compiled **2026-08-02** (previously 2026-06-12; the stale-framing banner below is
 retained for history only — the section files no longer carry the pre-pivot framing).
-Current branch = **`wip/village2-and-f8-tickets`**.
+STOP: **Current branch: DO NOT WRITE IT HERE  -  run `git status -sb`.** This line named
+`wip/village2-and-f8-tickets` long after the tree had moved to `feat/synty-art-retheme` (measured
+2026-09-06). A branch name copied into a doc is stale the next time anyone branches.
 
 > ⚠ **HISTORICAL (2026-06-12, pre-pivot — no longer describes the section files):** the old section files
 > described the hero as **"Blaise"

@@ -77,6 +77,16 @@
 //       admissions at runtime - that silence IS the proof the defect class is gone, and
 //       deleting the code deletes the only way to observe it.
 //
+//   8 [hostile-admit-routes-through-faction-rules]  WO-1458, and a HARD FAIL. The reticle's
+//       admit rule must call CombatFactionRules.MayAttack and must carry ZERO inline
+//       `Faction != CombatFaction.Hostile` copies, and TraceAdmission must classify by
+//       faction (IsFriendlyFire), not by "does it carry an Enemy component?". The old
+//       classifier turned every legitimately-hostile raid wall and the RaidSpire crown into
+//       a NON-ENEMY ADMITTED warning - 320 of them in one device session - which is how
+//       WO-1047's guard became noise nobody acted on. The layers are NOT the bug: the crown
+//       is on Enemy because RaidSpire.EnsureHittable puts it there so the hero's masked
+//       sweep can reach the win condition, and the walls are on Structure by design.
+//
 // WHAT THIS SUITE DELIBERATELY DOES NOT ASSERT:
 //   * That an open actually PAYS at runtime. ItemDropSystem rolls against loot-tables.json
 //     and deposits into the larder; ItemDropSystemRegression owns that contract. This
@@ -164,6 +174,7 @@ namespace DeNelle.Editor.Regression
                 cases++; if (Case(failures, "chest-drop-survives", () => Case5_DropSurvives(failures, notes))) passed++;
                 cases++; if (Case(failures, "chest-create-signature", () => Case6_CreateSignature(failures, notes))) passed++;
                 cases++; if (Case(failures, "hostile-admit-instrumentation-intact", () => Case7_InstrumentationIntact(failures, notes))) passed++;
+                cases++; if (Case(failures, "hostile-admit-routes-through-faction-rules", () => Case8_AdmitRoutesThroughFactionRules(failures, notes))) passed++;
             }
             catch (Exception ex)
             {
@@ -180,7 +191,8 @@ namespace DeNelle.Editor.Regression
                          "BattleLock.IsInBattle twice with no competing authority, refuses in real canon words that " +
                          "exist ASCII-clean and identical in BOTH canon-strings.json copies, still rolls and pays " +
                          "through the unchanged loot lane, keeps the reflection-invoked Create(Transform,Vector3," +
-                         "string,string) signature, and WO-1047's [hostile-admit] instrumentation is intact" + noteStr;
+                         "string,string) signature, WO-1047's [hostile-admit] instrumentation is intact, and " +
+                         "WO-1458's admit rule routes through CombatFactionRules with no inline faction copy" + noteStr;
                 return true;
             }
 
@@ -581,6 +593,66 @@ namespace DeNelle.Editor.Regression
             if (total < 2)
                 notes.Add("[hostile-admit] appears only " + total + " time(s) in HeroTargetIndicator.cs - both branches " +
                           "were still detected, but the two-line shape WO-1047 shipped has changed");
+        }
+
+        // =====================================================================
+        //  CASE 8 - WO-1458. The admit rule ROUTES through CombatFactionRules,
+        //  and the hand-copied faction comparison is GONE. HARD FAIL, not a note.
+        // =====================================================================
+        private static void Case8_AdmitRoutesThroughFactionRules(List<string> failures, List<string> notes)
+        {
+            const string CaseName = "hostile-admit-routes-through-faction-rules";
+            string src = ReadSource(ReticleSrcRel, CaseName, failures);
+            if (src == null) return;
+
+            // (a) The one predicate must be CALLED. CombatFactionRules.cs opens by forbidding, in
+            // capitals, the copying of its comparison into a call site; HeroTargetIndicator held
+            // THREE such copies until WO-1458 (RebuildCandidates x2 + PickEnemyAtScreenPoint).
+            if (src.IndexOf("CombatFactionRules.MayAttack", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[" + CaseName + "] HeroTargetIndicator.cs no longer calls " +
+                             "CombatFactionRules.MayAttack. The hostile target set must be gated by the ONE " +
+                             "friend-or-foe predicate (Core/Combat/CombatFactionRules.cs), not by a comparison " +
+                             "re-typed at the reticle. The sweep mask is deliberately WIDE (Enemy|Structure, " +
+                             "HeroTargetIndicator.Awake, WO-853), so faction is the only thing standing between " +
+                             "the player's own perimeter and the reticle.");
+            }
+
+            // (b) The copies must not come BACK. This is the whole failure mode: someone adds a
+            // fourth admit site, hand-types the comparison, and the reticle silently regains a
+            // route that CombatFactionRules never sees. Match the shape, not one spelling.
+            var inlineCopy = new Regex(@"Faction\s*(!=|==)\s*CombatFaction\s*\.\s*(Hostile|Friendly)");
+            var copies = inlineCopy.Matches(src);
+            if (copies.Count > 0)
+            {
+                failures.Add("[" + CaseName + "] HeroTargetIndicator.cs re-introduces the inline faction " +
+                             "comparison " + copies.Count + " time(s) (first: '" + copies[0].Value + "'). Route it " +
+                             "through CombatFactionRules.MayAttack(HeroFaction, d) instead - that call also folds " +
+                             "in the null and IsAlive checks, so it replaces the whole guard. Four hand-copies of " +
+                             "one predicate is the duplicated-state failure this repo has already paid for in " +
+                             "CLAUDE.md sec.2, sec.5, sec.8 and sec.16.");
+            }
+
+            // (c) The classifier that decides WHICH admission is a defect must be faction-based.
+            // Before WO-1458 it asked only "does this carry an Enemy component?", so every raid
+            // wall and the RaidSpire crown - legitimately Hostile, legitimately targetable - fell
+            // into the Warn branch: 320 [hostile-admit] NON-ENEMY ADMITTED lines in ONE device
+            // session, none of them a defect. A guard that cries wolf 320 times is a guard nobody
+            // reads, which is exactly how WO-1047's real finding sat unactioned for two weeks.
+            if (src.IndexOf("CombatFactionRules.IsFriendlyFire", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[" + CaseName + "] TraceAdmission no longer classifies by FACTION " +
+                             "(CombatFactionRules.IsFriendlyFire is absent). The Warn branch must fire ONLY for a " +
+                             "target of the hero's OWN faction - a genuine invariant breach now that every admit " +
+                             "site gates on MayAttack. Classifying on GetComponentInParent<Enemy>() instead makes " +
+                             "every hostile STRUCTURE (raid walls, the RaidSpire objective) read as a defect.");
+            }
+
+            if (src.IndexOf("HOSTILE STRUCTURE", StringComparison.Ordinal) < 0)
+            {
+                notes.Add("the [hostile-admit] HOSTILE STRUCTURE Step branch is gone - a raid session will no " +
+                          "longer PROVE the reticle still acquires walls and the spire, only that it stayed quiet");
+            }
         }
 
         // =====================================================================

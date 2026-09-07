@@ -66,6 +66,19 @@ namespace DeNelle.Core.Combat
         /// and was deliberately not touched by WO-1438's lane — it is the next call site to
         /// convert, not a claim that it already is.
         ///
+        /// ⚠ "THE REMAINING COPY" (singular) WAS WRONG — corrected WO-1503, 2026-09-06, by
+        /// counting them instead of recalling them. <c>PlayerAttackController</c>'s melee sweep
+        /// was another and converted today. Measured at that date,
+        /// <c>grep "Faction != CombatFaction.Hostile"</c> under <c>Assets/_Modules</c> still
+        /// returns LIVE inline copies in: Pets/Pet.cs:556,635 · Buildings/ArcaneTower.cs:386,397 ·
+        /// Buildings/DefenseTower.cs:717,730 · Buildings/TowerCombat.cs:229,243,283,294 ·
+        /// Enemies/PlayerAttackController.cs:585 (the ability/reticle lane, a DIFFERENT selector
+        /// from the converted melee sweep) · Hero/HeroAbilities.cs:3097,3125. None are converted
+        /// by WO-1503 and none should be assumed converted — run the grep, do not read this list
+        /// as current. A hand-maintained call-site census in a comment is itself duplicated state
+        /// (CLAUDE.md §2/§5/§8/§16); it is written here only because the previous singular claim
+        /// actively misled a lane into thinking the conversion was one file from done.
+        ///
         /// ⚠ OVERLOAD TRAP, stated so nobody has to rediscover it: passing a CONCRETE type that
         /// implements BOTH interfaces makes this call ambiguous and will not compile. That is
         /// deliberate and it is safe — a loud compile error, never a silent wrong answer. Call

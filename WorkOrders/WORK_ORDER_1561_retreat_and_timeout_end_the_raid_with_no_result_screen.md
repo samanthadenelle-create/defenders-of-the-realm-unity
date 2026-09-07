@@ -1,6 +1,6 @@
 # WO-1561: retreat and clock-expiry end the raid with NO result screen — the outcome is computed, banked, and discarded unread
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Priority:** **P0** — and it is the exit a new player is most likely to hit.
 **Silo:** `Assets/_Modules/Village/Troops/RaidDeployController.cs` (exit paths only) +
 `Assets/_Modules/Village/UI/EndState/EndStateVM.cs`. **NOT the raid's layout, art or lifecycle.**

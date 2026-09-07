@@ -56,6 +56,12 @@ namespace DeNelle.Editor.Regression
     public static class ArmyMusterLayoutRegression
     {
         private const string PanelSrc = "Assets/_Modules/Village/Troops/ArmyMusterPanel.cs";
+
+        /// <summary>The panel's ViewModel (WO-1512). The muster TRANSACTION moved here when
+        /// presentation was separated from the objects, so the [no-rename] identifier pin reads
+        /// this file - the ruling was that <c>Muster()</c> must not be RENAMED, never that the
+        /// View must call it directly.</summary>
+        private const string VmSrc = "Assets/_Modules/Village/Troops/ArmyMusterVM.cs";
         private const float Eps = 0.5f;
 
         private struct Surface
@@ -98,6 +104,12 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "army-muster-layout FAIL x1: [fixture] MISSING " + PanelSrc +
                          " - the panel this suite measures is not on disk.";
+                return false;
+            }
+            if (!File.Exists(VmSrc))
+            {
+                reason = "army-muster-layout FAIL x1: [fixture] MISSING " + VmSrc +
+                         " - the panel's ViewModel, which now carries the muster transaction, is not on disk.";
                 return false;
             }
 
@@ -365,6 +377,10 @@ namespace DeNelle.Editor.Regression
         private static void CaseWording(List<string> failures, StringBuilder log)
         {
             string src = File.ReadAllText(PanelSrc);
+            // Read SEPARATELY, never concatenated into src: the 4a/4b/4c literal scans below are
+            // written for the View's copy, and the VM authors the archaic word on purpose in its
+            // PlayerWords mapping table. Only the [no-rename] pin at 4d reads this.
+            string vm = File.ReadAllText(VmSrc);
 
             // 4a. no NON-ASCII inside a player-facing string literal.
             foreach (Match m in Regex.Matches(src, "\"([^\"\\\\\\n]|\\\\.)*\""))
@@ -409,14 +425,22 @@ namespace DeNelle.Editor.Regression
             //     benefit, and a regression greps the FlowTrace tag.
             if (src.IndexOf("class ArmyMusterPanel", StringComparison.Ordinal) < 0)
                 failures.Add("[no-rename] ArmyMusterPanel was RENAMED - the ruling was player-facing strings ONLY.");
-            if (src.IndexOf("ArmyMusterService.Muster(", StringComparison.Ordinal) < 0)
-                failures.Add("[no-rename] ArmyMusterService.Muster() is no longer called by the panel - " +
-                             "the ruling forbade renaming it.");
+            // ⚠ THE PIN IS ON THE IDENTIFIER, NOT ON THE CALLER. The 2026-08-26 ruling was
+            //   "player-facing strings ONLY" - it forbade RENAMING ArmyMusterService.Muster(),
+            //   it never said the View must call it. WO-1512 moved the transaction to
+            //   ArmyMusterVM (ARCHITECTURE_PRINCIPLES.md - presentation never touches the
+            //   objects), so the call is asserted THERE. Panel-or-VM would let the identifier
+            //   vanish from both; the VM is where it now lives, so that is where it is pinned.
+            if (vm.IndexOf("ArmyMusterService.Muster(", StringComparison.Ordinal) < 0)
+                failures.Add("[no-rename] ArmyMusterService.Muster() is no longer called by " +
+                             "ArmyMusterVM - the ruling forbade renaming it (player-facing " +
+                             "strings ONLY); WO-1512 moved the call from the panel to the VM.");
             if (src.IndexOf("FlowTrace.Step(\"Muster\"", StringComparison.Ordinal) < 0)
                 failures.Add("[no-rename] the \"Muster\" FlowTrace tag is gone from the panel - a regression " +
                              "greps for it.");
 
-            log.AppendLine("[wording] CTA / tip / ascii / no-rename asserted on " + PanelSrc);
+            log.AppendLine("[wording] CTA / tip / ascii asserted on " + PanelSrc +
+                           "; no-rename identifier pin asserted on " + VmSrc);
         }
 
         // =====================================================================

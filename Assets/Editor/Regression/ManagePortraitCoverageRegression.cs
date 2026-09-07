@@ -124,6 +124,9 @@ namespace DeNelle.Editor.Regression
         /// A key that is MIS-KEYED (the art exists somewhere else) is a CODE defect and must be
         /// fixed, never exempted - that is the whole distinction the 2026-09-06 pass turned on.</para>
         /// </summary>
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-1487) - art keys the owner must close
+        // with art, not code. MEASURED EMPTY on 2026-09-06; the summary above already dates the
+        // mechanism, and this line adds the expiry the WO-1495 ratchet requires.
         private static readonly Dictionary<string, string> ArtExemptions =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -155,14 +158,19 @@ namespace DeNelle.Editor.Regression
         /// art genuinely does not exist. An id that is MIS-KEYED (the art exists elsewhere) is a
         /// CODE defect and must be fixed - that is the distinction the whole 2026-09-06 pass turned
         /// on, and it is what separated the 20 tier keys (fixed) from these 20 ids (art).</para>
+        ///
+        /// <para>⭐ CLOSED 2026-09-06, THE SAME DAY IT OPENED, AND THE MECHANISM IS WHY. All TWENTY
+        /// ids listed here were delivered as 1024x1024 PNGs by commit <c>ad808ecf3</c>, and the very
+        /// next run of this suite FAILED on all twenty at once with [exemption-still-accurate]
+        /// (<c>Builds/reg-wave3b.log:9525-9544</c>) - exactly the forced expiry the paragraph above
+        /// promised. The list is now EMPTY, and the matching rows are gone from section 7b of
+        /// docs/ART_REQUEST_2026-09-06_manage_tab_portraits.md. ⛔ Do NOT delete the array or the
+        /// static ctor with it: the empty list IS the current measurement (zero building portraits
+        /// outstanding), and the mechanism is what makes the NEXT undelivered id fail loudly instead
+        /// of painting a silent blank tile. The history above stands on purpose - it records why the
+        /// list is keyed off the catalog id, which is the only reason it could ever expire.</para>
         /// </summary>
-        private static readonly string[] CatalogIdsWithNoBuildingArt =
-        {
-            "collector_farm", "collector_forge", "collector_lumbermill", "foundry", "gate_stone",
-            "healing_caravan", "jeweler", "lumberyard", "market", "mine_crystal", "pet-house", "silo",
-            "tower_arcane_spire", "tower_ballista", "tower_catapult", "tower_ground_archer",
-            "tower_siege_tower", "wall_stone", "wall_wood", "workshop",
-        };
+        private static readonly string[] CatalogIdsWithNoBuildingArt = { };
 
         static ManagePortraitCoverageRegression()
         {

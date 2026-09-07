@@ -1,6 +1,10 @@
 import io, os
+from pathlib import Path
 
-ROOT = r'D:\eoa'
+# CLAUDE.md sec.0 (owner ruling 2026-08-09): the repo root is MACHINE-DEPENDENT
+# (C:\eoa on one seat, D:\eoa on another) - resolve it from this script's own
+# location, never hardcode a drive letter. dev/tmp/<script>.py -> parents[2].
+ROOT = str(Path(__file__).resolve().parents[2])
 
 BANNER_OLD = '> ## \u26a0 RECONCILED 2026-08-22 (CLI): main line next free = **1142**.'
 BANNER_NEW = (

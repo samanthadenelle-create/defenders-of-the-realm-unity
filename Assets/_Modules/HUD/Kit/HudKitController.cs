@@ -275,6 +275,25 @@ namespace DeNelle.HUD.Kit
         private TMP_Text _collectorsChipLabel;
         private int _collectorStatusVersion = -1;
 
+        // WO-1515 sec.2B (owner ruling 2026-09-06 20:05) - THE ATTACK REPORT CHIP.
+        // "the only way to get to the defense report is buried under settings then realm.
+        //  should be on screen as a button if there is a report that is incoming".
+        // The BAND is what gets toggled, never the registered root: the root belongs to
+        // ApplyPosture / hud-areas.json occupancy, and two owners calling SetActive on one
+        // object is how a widget ends up permanently off in exactly one posture. Posture says
+        // WHERE the chip may live; the unread predicate says WHETHER it is there.
+        private TMP_Text _defenseChipLabel;
+        private RectTransform _defenseChipBand;
+        private int _defenseChipKey = -1;
+        private float _defenseChipPollTimer;
+        /// <summary>How often the unread predicate is evaluated, seconds. The Builders and
+        /// Collectors chips compare a published Version int per frame; the defence ledger
+        /// publishes no version, and DefenseReportChipModel.Current walks the retained ring
+        /// (re-normalising up to MaxRetained records), so this one is THROTTLED instead. A
+        /// report lands at most once per assault - half a second is invisible to the player
+        /// and costs nothing on the frame path.</summary>
+        private const float DefenseChipPollSeconds = 0.5f;
+
         // ── RIGHT RAIL, ONE CHIP STYLE (owner ruling 2026-08-05) ────────────────────
         // "I love the builder screen on the right. However, it should be minimized like
         //  everything else, like echoes until needed. The echoes, the builders, and the
@@ -788,6 +807,12 @@ namespace DeNelle.HUD.Kit
             // today the only answer is the wallet number quietly failing to move.
             BuildCollectorsChip(pool);
 
+            // WO-1515 sec.2B - the ATTACK REPORT chip. Built ALWAYS, shown only while a report is
+            // unread (the band starts inactive). Building it conditionally would mean the HUD
+            // had to be rebuilt when an assault ends, and a chip that only exists after a
+            // rebuild is a chip that does not appear on the frame the report lands.
+            BuildDefenseReportChip(pool);
+
             // ── town action bar (WO-835 APPLICABILITY REPACK): Build / Talk / Bag /
             // Raids / Map / Quests / Upgrade ──
             // The bar is no longer a fixed-divisor row. The Core HudActionBarModel computes
@@ -1136,8 +1161,22 @@ namespace DeNelle.HUD.Kit
         private const float NightMarketAuraAlpha = 0.55f;
         /// <summary>WO-1384: the label plate's left edge as a fraction of the card (was 0.36).
         /// realm-store.png is illustration-left with an EMPTY text plate right, so widening the
-        /// plate leftward costs a sliver of illustration and buys the whole word one line.</summary>
-        private const float NightMarketLabelPlateX0 = 0.30f;
+        /// plate leftward costs a sliver of illustration and buys the whole word one line.
+        /// <para>⚠ WO-1466 (2026-09-06) — 0.30 -> 0.20, and the REASON is the one the oracle was
+        /// blind to. `Builds/ui-capture/AdaptiveHudGearOpen_2670x1200.png` renders the caption
+        /// **"THE NIGHT MA..."** in CAPITALS, while canon-strings authors `storeWordmark` as the
+        /// mixed-case *"The Night Market"*. The same frame proves the transform is not this
+        /// card's: <see cref="AddDockTab"/> passes "Leaderboard"/"Music"/"Settings"/"Realm"/
+        /// "Pause" and the capture paints MUSIC / SETTINGS / REALM / PAUSE - every obsidian
+        /// button face in this HUD renders upper-case. HudLabelFitRegression [night-market-
+        /// standout] 11c measured the MIXED-CASE string and reported the upper-case width as a
+        /// NOTE, so the oracle could be green while the player saw a cut word. Both 11c and 12e
+        /// now measure the upper-case form (the glyphs actually drawn), and the plate is widened
+        /// to carry it: (0.97 - 0.20) * 320 * 0.92 = 226.7 ref px against 197.2 before.
+        /// ⛔ The CARD is NOT widened (WO-1466 §3) and the authored copy is NOT retyped -
+        /// canon-strings is the owner's call and a second copy of the name is forbidden
+        /// (StoreNameSingleSourceRegression). Only the plate inside the card moves.</para></summary>
+        private const float NightMarketLabelPlateX0 = 0.20f;
 
         private void BuildNightMarketCard(Transform pool)
         {
@@ -1932,6 +1971,133 @@ namespace DeNelle.HUD.Kit
             CollectorStatusGate.RequestCollectAll();
         }
 
+        // =====================================================================
+        //  WO-1515 sec.2B/2D - THE ATTACK REPORT CHIP (owner ruling 2026-09-06 20:05)
+        // =====================================================================
+        // "the only way to get to the defense report is buried under settings then realm.
+        //  should be on screen as a button if there is a report that is incoming"
+        //
+        // It is the SAME BuildRailChip the Builders and Collectors chips use, so it inherits
+        // the 220x112 face, the MinTouchPx floor and the shared rail gutter rather than
+        // authoring a fourth geometry. What is different is that it is CONDITIONAL: the band
+        // is inactive whenever DefenseReportChipModel says Visible is false, because WO-1515
+        // sec.3 forbids a permanent chip ("a fifth status glance competing with the four that
+        // earn their place"). Not greyed, not empty-stated - absent.
+        //
+        // STOP: THE VIEW DECIDES NOTHING. Visibility and the words both come from
+        // DeNelle.Core.HudModel.DefenseReportChipModel; this method wires a face and a tap.
+        // Settings -> Realm stays the ARCHIVE door (SettingsController.cs:748) - this is a
+        // second CALLER of PanelId.DefenseReport, never a second screen.
+        private void BuildDefenseReportChip(Transform pool)
+        {
+            var root = new GameObject("DefenseReportChip", typeof(RectTransform));
+            root.transform.SetParent(pool, false);
+            var rrt = (RectTransform)root.transform;
+            rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
+            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+
+            // NOTE WO-1435 applies here too: the 0f is a RESTING BASE, not a position. This chip
+            // shares the QueueStatus band with the Collectors chip, which itself sits under the
+            // variable-height resource panel - so its y is DERIVED by HudRailClearance from the
+            // rects above it. A literal that happens to clear today's four resource rows is the
+            // same bug one resource later.
+            RectTransform band;
+            var chip = BuildRailChip(rrt, "DefenseReportChip",
+                                     DefenseReportChipModel.TitleLine, 0f,
+                                     OnDefenseReportChipTapped, out band);
+            _defenseChipBand = band;
+
+            if (band != null)
+            {
+                var clearance = band.gameObject.AddComponent<HudRailClearance>();
+                clearance.BaseYFromTopPx = 0f;
+                if (_resGoldOnly != null && _resGoldOnly.root != null)
+                    clearance.AddSource((RectTransform)_resGoldOnly.root.transform);
+                // Stack under the Collectors chip that already holds this band, and under the
+                // Builders chip if it is ever un-retired. Registering with whichever of the pair
+                // exists keeps the three build orders independent (the same mirror the other two
+                // chips keep with each other).
+                if (_collectorsClearance != null) clearance.AddSource((RectTransform)_collectorsClearance.transform);
+                if (_buildersClearance != null) clearance.AddSource((RectTransform)_buildersClearance.transform);
+                band.gameObject.SetActive(false);   // conditional: the poll turns it on
+            }
+            else
+            {
+                FlowTrace.Warn("HudKit", "WO-1515: the attack report chip built with NO band - the " +
+                                         "unread-report door cannot be shown or hidden, so the defence " +
+                                         "report is back to Settings -> Realm only.");
+            }
+
+            _defenseChipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>(true) : null;
+            if (_defenseChipLabel != null)
+            {
+                // TWO LINES, and the fit has to change with them. BuildRailChip arms
+                // FitSingleLine (NoWrap + Ellipsis), which is a WIDTH fit: a hard "\n" survives
+                // NoWrap and the label never shrinks to make its second line fit - that is
+                // verbatim the RCA of this same WO's list-row overlap. "ATTACK REPORT BREACHED"
+                // cannot seat on one ~202px line above the kit's legibility floor either, and
+                // the half that would ellipsize away is the OUTCOME WORD, which is the only part
+                // that survives greyscale. So: FitBlock (wrap + bounded auto-size + truncate) in
+                // the 112px-tall face the chip already reserves.
+                ElarionUiKit.FitBlock(_defenseChipLabel, 22f, 30f);
+            }
+            else
+            {
+                FlowTrace.Warn("HudKit", "WO-1515: the attack report chip built without a label - " +
+                                         "the outcome word cannot be painted (the kit returned no button/text).");
+            }
+
+            // Reset the repaint key with the widgets. Without this a HUD rebuild would leave the
+            // band inactive while the key still matched the live model, and the tick would early
+            // out forever - an unread report with no door, which is the whole defect.
+            _defenseChipKey = -1;
+            _defenseChipPollTimer = DefenseChipPollSeconds;   // evaluate on the first tick, not in 0.5s
+
+            Register("defenseReportChip", WrapAsWidget("defenseReportChip", root));
+        }
+
+        /// <summary>The door. PanelRouter.Open returns FALSE when nothing registered the panel,
+        /// and an unchecked call would leave the player tapping a chip that does nothing - say
+        /// so in the trace rather than swallowing it (the Night Market card precedent).</summary>
+        private void OnDefenseReportChipTapped()
+        {
+            if (SwallowedByCloseGrace("Attack report chip")) return;   // WO-1393
+            if (!PanelRouter.Open(PanelId.DefenseReport))
+            {
+                FlowTrace.Warn("HudKit", "WO-1515: attack report chip tapped but PanelId.DefenseReport " +
+                                         "has no opener registered - DefenseReportPanel is not in this " +
+                                         "scene, so the only remaining door is Settings -> Realm.");
+                return;
+            }
+            FlowTrace.Step("HudKit", "attack report chip tapped -> PanelRouter.Open(DefenseReport).");
+        }
+
+        /// <summary>
+        /// The conditional repaint. THROTTLED (see DefenseChipPollSeconds) and change-detected
+        /// on the model's own Key, so a town frame costs one float compare in the common case.
+        /// PURE PRESENTATION: every branch below reads a field of the snapshot.
+        /// </summary>
+        private void TickDefenseReportChip()
+        {
+            if (_defenseChipBand == null && _defenseChipLabel == null) return;
+
+            _defenseChipPollTimer += Time.unscaledDeltaTime;
+            if (_defenseChipPollTimer < DefenseChipPollSeconds) return;
+            _defenseChipPollTimer = 0f;
+
+            var snap = DefenseReportChipModel.Current;
+            if (snap.Key == _defenseChipKey) return;
+            _defenseChipKey = snap.Key;
+
+            if (_defenseChipLabel != null && snap.Visible) _defenseChipLabel.text = snap.Caption;
+            if (_defenseChipBand != null && _defenseChipBand.gameObject.activeSelf != snap.Visible)
+                _defenseChipBand.gameObject.SetActive(snap.Visible);
+
+            FlowTrace.Step("HudKit", "WO-1515 attack report chip: visible=" + snap.Visible +
+                                     " unread=" + snap.UnreadCount +
+                                     " face='" + (snap.Caption ?? string.Empty).Replace("\n", " / ") + "'.");
+        }
+
         /// <summary>
         /// "Collectors 2/3 full" + the action line. TEXT-ENCODED STATE ONLY — the owner is
         /// red/green colourblind, so the chip never leans on a tint to say "full"; the count and
@@ -2401,10 +2567,87 @@ namespace DeNelle.HUD.Kit
             {
                 _adaptiveCombatSlots[5].showZero = true;
                 ElarionUiKit.StyleAsStackBadge(_adaptiveCombatSlots[5]);
+                SeatStackBadgeInMedallion(_adaptiveCombatSlots[5]);
             }
 
             Register("combatDock", WrapAsWidget("combatDock", _combatDockRoot));
         }
+
+        // ═══ WO-1468 — THE CHARGE BADGE SITS ON THE MEDALLION, NOT ON THE CELL ═════
+        //
+        // EVIDENCE: Builds/ui-capture/AdaptiveHudCombat_2670x1200.png shows the ITEM charge "0"
+        // outside the bar's frame, up and to the RIGHT of the round ITEM face; the owner's device
+        // build 358574 shows the same escape with a "7". Two aspects, one defect.
+        //
+        // PROVEN CAUSE, from the kit source (read, not inferred):
+        //  * ElarionUiKit.StyleAsStackBadge anchors the plate to the SLOT ROOT at pivot (1,1)
+        //    with a 3 px inset - i.e. the top-right corner of the CELL;
+        //  * ElarionUiKit.StyleAsRoundMedallion puts the visible art in a child called
+        //    "MedallionBounds", anchored (0, 0.20)..(1, 1) with an AspectRatioFitter in
+        //    FitInParent at ratio 1 - a SQUARE inscribed in the top 80% of the cell, centred.
+        // The cell is WIDER than it is tall (six faces across the ActionBar mount), so the
+        // square is narrower than the cell and the cell's top-right corner is well outside it.
+        // The badge was never "mis-offset": it was anchored to the right rect.
+        //
+        // ⚠ AND THIS IS WHY THE OBVIOUS TEST WOULD HAVE PASSED. "The badge is inside the slot
+        // rect" is TRUE today, and so is "inside the ActionBarHousing rect" - the housing
+        // stretches the whole mount. A containment case written against either rect is green
+        // while the player sees the digit outside the frame. The rect that matches what the eye
+        // calls "the frame" is the MEDALLION, so that is the rect the badge is seated in and the
+        // rect the regression measures.
+        //
+        // THE SEAT: anchor the plate's top-right corner at the 45-degree point of the inscribed
+        // circle - 0.5 + 0.5/sqrt(2) on both axes of the medallion square - and let the fixed
+        // 52x40 plate extend inward toward the centre. Corner-anchored inside the face, exactly
+        // as WO-1468 asks, and a FRACTION rather than a pixel offset because the medallion's side
+        // is resolved by the AspectRatioFitter at runtime and differs per aspect (WO-1468 §3
+        // forbids a one-resolution offset). The plate keeps its fixed 52x40 px size, so the
+        // digit's legibility is unchanged.
+        // PUBLIC + STATIC deliberately: HudUiRegression [stack-badge-inside-medallion] builds a
+        // real slot and calls THIS method, so the oracle measures the shipping seat rather than a
+        // re-typed copy of it. DeNelle.EditorRegression.asmdef does reference DeNelle.HUD.
+        public static void SeatStackBadgeInMedallion(ElarionUiKit.ActionSlotHandle slot)
+        {
+            if (slot == null || slot.root == null) return;
+            var plate = slot.root.transform.Find(StackBadgeObjectName) as RectTransform;
+            if (plate == null)
+            {
+                FlowTrace.Warn("HudKit", "WO-1468: no '" + StackBadgeObjectName + "' under '" +
+                                         slot.root.name + "' - StyleAsStackBadge did not run, so there " +
+                                         "is no badge to seat. The charge count is NOT being drawn.");
+                return;
+            }
+            var bounds = slot.root.transform.Find(MedallionBoundsObjectName) as RectTransform;
+            if (bounds == null)
+            {
+                // No round face on this slot: the cell IS the face, and the kit's corner seat is
+                // already inside it. Named, never silent - a future restyle that drops the
+                // medallion should read this line rather than wonder why the seat moved.
+                FlowTrace.Once("HudKit", "stackbadge-no-medallion:" + slot.root.name,
+                               "WO-1468: '" + slot.root.name + "' has no " + MedallionBoundsObjectName +
+                               " (square cell, not a medallion) - the kit's corner seat is kept.");
+                return;
+            }
+            plate.SetParent(bounds, false);
+            plate.anchorMin = new Vector2(StackBadgeMedallionAnchor, StackBadgeMedallionAnchor);
+            plate.anchorMax = plate.anchorMin;
+            plate.pivot = new Vector2(1f, 1f);
+            plate.anchoredPosition = Vector2.zero;
+            FlowTrace.Step("HudKit", "WO-1468: charge badge re-seated inside the medallion of '" +
+                                     slot.root.name + "' at anchor " + StackBadgeMedallionAnchor);
+        }
+
+        /// <summary>ElarionUiKit.StyleAsStackBadge's plate object name - matched here, never
+        /// re-typed as a literal at a call site.</summary>
+        private const string StackBadgeObjectName = "StackBadge";
+        /// <summary>ElarionUiKit.StyleAsRoundMedallion's square art container.</summary>
+        private const string MedallionBoundsObjectName = "MedallionBounds";
+        /// <summary>WO-1468: where the badge's top-right CORNER sits inside the medallion square.
+        /// 0.5 + 0.5 / sqrt(2) = 0.8536 is the 45-degree point of the circle inscribed in that
+        /// square, so the corner lands ON the rim and the plate extends inward. Derived, not
+        /// tuned - and a fraction, because the square's side is resolved per aspect by the
+        /// AspectRatioFitter.</summary>
+        public const float StackBadgeMedallionAnchor = 0.85355339f;
 
         // WO-1319 — the combat dock's vertical band + live solver, exactly as the peaceful one.
         private const float CombatDockSlotY0 = 0.06f;
@@ -2572,6 +2815,7 @@ namespace DeNelle.HUD.Kit
             _itemSlot.showZero = true;
             if (FeatureFlags.CombatHud611) ElarionUiKit.StyleAsRoundMedallion(_itemSlot);
             ElarionUiKit.StyleAsStackBadge(_itemSlot);
+            SeatStackBadgeInMedallion(_itemSlot);   // WO-1468
             Register("itemSlot", WrapAsWidget("itemSlot", _itemSlot.root));
         }
 
@@ -4072,10 +4316,37 @@ namespace DeNelle.HUD.Kit
             // and created an unrelated two-control island over the world.
             const float dockColumnPx = dockTabPx;
             var dockPanelRt = _slideDock.panel;
-            dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
-            dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
+            // ── WO-1465 — THE OPEN DRAWER SEATS CLEAR OF THE MOVEMENT STICK ────────
+            //
+            // EVIDENCE (Builds/ui-capture/AdaptiveHudGearOpen_2670x1200.png): the PAUSE face
+            // lands ON the analog-stick ring, so "pause" and "move" share a rect. That is not a
+            // tuning slip - it is arithmetic. The panel was seated at x = edge + 112 + 12 ref px
+            // and centred on the Dock mount, which at the owner's aspect (canvas 2147.9 x 965.4)
+            // puts it at screen x 0.058..0.393, y 0.182..0.648. HudAreasHost seats MoveCluster at
+            // x 0.010..0.270, y 0.030..0.330 - so the drawer's bottom-left cell, which is exactly
+            // where AddDockTab's 2x3 grid puts row index 4 (PAUSE), lies inside the stick's band.
+            //
+            // ⛔ WHY THE PANEL MOVES SIDEWAYS AND NOT UPWARD, AND WHY THE GRID IS NOT RESHAPED:
+            //  * UPWARD is impossible. The clear vertical between the stick's top (0.330) and the
+            //    Heart objective's bottom (HudLayoutBands.HeartMount.yMin, 0.655) is 0.325 of
+            //    screen = 313.8 ref units at this aspect, and a 2x3 drawer whose rows must each
+            //    clear ElarionUiKit.MinTouchPx needs 112 / ((0.82/3) - 0.02) = 442 units. Raising
+            //    the existing panel instead parks it over the Heart card.
+            //  * RESHAPING to 3x2 would fit (112 / ((0.82/2) - 0.02) = 287 units), but
+            //    DockSettingsRouteRegression [six-cells] PINS `const int columns = 2;` and
+            //    `const int rows = 3;` inside AddDockTab. Changing the grid fails a suite this
+            //    lane may not edit. The grid is untouched.
+            //  * SIDEWAYS is free and it is DERIVED, not tuned: the panel's left edge is seated on
+            //    HudAreasHost.ActionBarMinX - the constant that IS the MoveCluster's right edge,
+            //    named once for exactly this reason ("the dock may never grow past it, or the bar
+            //    sits under the movement stick"). Expressed as an anchor fraction of the Dock
+            //    mount so it holds at EVERY aspect without reading Screen. No new magic offset.
+            // It also clears the Night Market card (xMax ~0.160) by construction, so the two
+            // fixes in WO-1465 are belt AND braces rather than one standing in for the other.
+            dockPanelRt.anchorMin = new Vector2(DockPanelSeatAnchorX, 0.5f);
+            dockPanelRt.anchorMax = new Vector2(DockPanelSeatAnchorX, 0.5f);
             dockPanelRt.pivot = new Vector2(0f, 0.5f);
-            dockPanelRt.anchoredPosition = new Vector2(safeLeftPx + dockColumnPx + dockGapPx, 0f);
+            dockPanelRt.anchoredPosition = Vector2.zero;
             // Height carries FIVE tabs now (Pause folded in — cosmetic flag A) at ~112px
             // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx. Do NOT shrink 700:
             // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
@@ -4083,7 +4354,7 @@ namespace DeNelle.HUD.Kit
             // other — the documented WO-852/865/868 overlap trap.
             // Six full-height rows obscured the objective and analog stick when expanded.
             // A 2 x 3 drawer preserves six mobile-safe targets in a compact footprint.
-            dockPanelRt.sizeDelta = new Vector2(720f, DockPanelHeightPx);
+            dockPanelRt.sizeDelta = new Vector2(DockPanelWidthPx, DockPanelHeightPx);
             // BuildSlideTab's legacy "Rim" is a full-centre rounded Image, not a hollow
             // border. With gold trim tint it paints over the obsidian panel and produces the
             // flat mustard slab seen on device. Retire that fill and draw four structural gold
@@ -4151,8 +4422,118 @@ namespace DeNelle.HUD.Kit
             // re-pointed at the Realm deck, which is where its label now comes from (WO-1398).
             // It lives here rather than on the bottom action bar deliberately: the bottom bar
             // remains reserved for immediate play verbs.
+            RaiseDockAboveNeighbourMounts();
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
+
+        // ── WO-1465 — THE OPENED MENU IS NEVER OCCLUDED BY A NEIGHBOURING MOUNT ────
+        //
+        // PROVEN CAUSE, from source and the capture, not inferred:
+        //  * the capture reads "...ERBOARD" - LEADERBOARD's first four glyphs are under the
+        //    Night Market card (Builds/ui-capture/AdaptiveHudGearOpen_2670x1200.png);
+        //  * hud-areas.json puts the two widgets in DIFFERENT area mounts - "chatDock" in
+        //    `dock`, "nightMarketCard" in `minimap` (Assets/Resources/Data/Canonical/
+        //    hud-areas.json lines 20 + 68/138);
+        //  * HudAreasHost.Build adds Dock (line 155) BEFORE Minimap (line 170), so the Minimap
+        //    mount is the later sibling and uGUI paints it last - on top.
+        // So no sibling shuffle INSIDE the dock can fix this: the occluder is in another mount.
+        // A sibling shuffle of the MOUNTS would fix it for one pair and re-break the next, and
+        // it would fight the occupancy table that owns mount order.
+        //
+        // THE FIX: the dock root carries its own sorting Canvas, one step above the host canvas.
+        // Derived from HudAreasHost's own order (never a second literal), so it stays under the
+        // battle overlays (5000) and far under the modal band (30000+) that the close-frame grace
+        // at the top of this file describes. A nested Canvas registers its graphics to ITSELF, so
+        // the host's GraphicRaycaster would no longer see the dock's rows - it gets its own, or
+        // every menu row goes dead. That is why the raycaster is not optional here.
+        private void RaiseDockAboveNeighbourMounts()
+        {
+            if (_slideDock == null || _slideDock.root == null) return;
+            var go = _slideDock.root;
+            var canvas = go.GetComponent<Canvas>();
+            if (canvas == null) canvas = go.AddComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = (_host != null && _host.Canvas != null ? _host.Canvas.sortingOrder : 4000)
+                                  + DockSortingStep;
+            if (go.GetComponent<GraphicRaycaster>() == null) go.AddComponent<GraphicRaycaster>();
+            FlowTrace.Step("HudKit", "WO-1465: gear dock raised to sortingOrder " + canvas.sortingOrder +
+                                     " (host " + (_host != null && _host.Canvas != null
+                                                  ? _host.Canvas.sortingOrder.ToString() : "n/a") +
+                                     ") - the Night Market card's mount can no longer occlude an opened menu");
+        }
+
+        /// <summary>WO-1465: how far above the HUD host canvas the gear dock sorts. ONE step -
+        /// enough to clear every sibling AREA MOUNT, small enough that the battle overlay band
+        /// (5000) and the modal band (30000+) still win, which is the order the close-frame grace
+        /// assumes.</summary>
+        private const int DockSortingStep = 1;
+
+        /// <summary>
+        /// WO-1465: the open drawer's LEFT EDGE, as an anchor fraction of the Dock area mount.
+        /// <para>DERIVED, so the oracle and the layout cannot disagree: the panel's left edge is
+        /// <see cref="HudAreasHost.ActionBarMinX"/> - the constant HudAreasHost already names as
+        /// "also the MoveCluster's RIGHT edge" - re-expressed in the parent mount's fraction
+        /// space (<see cref="HudLayoutBands.DockMount"/>). At the authored bands this is
+        /// (0.270 - 0.000) / 0.230 = 1.174, i.e. the panel hangs to the RIGHT of its own mount.
+        /// An anchor rather than a pixel offset, so it holds at every aspect without reading
+        /// Screen at build time.</para>
+        /// </summary>
+        public static float DockPanelSeatAnchorX
+        {
+            get
+            {
+                float w = HudLayoutBands.DockMount.width;
+                if (w <= 0f) return 0f;
+                return (HudAreasHost.ActionBarMinX - HudLayoutBands.DockMount.xMin) / w;
+            }
+        }
+
+        /// <summary>
+        /// WO-1465: the OPEN gear drawer's band in screen fractions, from the same numbers
+        /// <see cref="BuildSlideDock"/> builds it with - the seat anchor above, the fixed
+        /// <see cref="DockPanelWidthPx"/> x <see cref="DockPanelHeightPx"/> size, and the Dock
+        /// mount's vertical centre. Public so the regression measures the SHIPPING geometry
+        /// instead of numbers it made up.
+        /// </summary>
+        public static Rect ResolveDockPanel(float screenW, float screenH)
+        {
+            var refSize = HudLayoutBands.CanvasReferenceSize(screenW, screenH);
+            float ux = refSize.x > 0f ? 1f / refSize.x : 0f;
+            float uy = refSize.y > 0f ? 1f / refSize.y : 0f;
+            var mount = HudLayoutBands.DockMount;
+            float x0 = mount.xMin + DockPanelSeatAnchorX * mount.width;
+            float midY = (mount.yMin + mount.yMax) * 0.5f;
+            float half = DockPanelHeightPx * uy * 0.5f;
+            return Rect.MinMaxRect(x0, midY - half, x0 + DockPanelWidthPx * ux, midY + half);
+        }
+
+        /// <summary>
+        /// WO-1465: one drawer CELL's band in screen fractions, using the SAME grid arithmetic
+        /// <see cref="AddDockTab"/> lays the rows out with. The 2x3 shape is passed in rather
+        /// than re-typed here so the two cannot drift; AddDockTab keeps its own
+        /// <c>const int columns/rows</c> lines because DockSettingsRouteRegression [six-cells]
+        /// pins them by source.
+        /// </summary>
+        public static Rect ResolveDockCell(Rect panel, int index, int columns, int rows)
+        {
+            if (columns <= 0 || rows <= 0) return default;
+            int column = index % columns;
+            int row = index / columns;
+            float cellW = (DockInnerX1 - DockInnerX0) / columns;
+            float cellH = (DockInnerY1 - DockInnerY0) / rows;
+            float fx0 = DockInnerX0 + column * cellW + DockRowGapFrac;
+            float fx1 = DockInnerX0 + (column + 1) * cellW - DockRowGapFrac;
+            float fy1 = DockInnerY1 - row * cellH - DockRowGapFrac;
+            float fy0 = DockInnerY1 - (row + 1) * cellH + DockRowGapFrac;
+            return Rect.MinMaxRect(panel.xMin + fx0 * panel.width, panel.yMin + fy0 * panel.height,
+                                   panel.xMin + fx1 * panel.width, panel.yMin + fy1 * panel.height);
+        }
+
+        /// <summary>WO-1465: the drawer row PAUSE occupies - Chat is gated off in the shipping
+        /// build (ClanFeatureGate), so the rows are Leaderboard/Music/Settings/Realm/Pause and
+        /// PAUSE is index 4: the bottom-LEFT cell of the 2x3 grid, the one that sat on the
+        /// stick.</summary>
+        public const int DockPauseCellIndex = 4;
 
         // One labelled tab inside the slide-out (stacked vertically, top-to-bottom).
         //
@@ -4186,8 +4567,23 @@ namespace DeNelle.HUD.Kit
         private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Realm/Pause
         private const float DockRowGapFrac = 0.01f;
 
+        /// <summary>WO-1465: the drawer's inner cell field, named ONCE. AddDockTab lays the rows
+        /// out with these and <see cref="ResolveDockCell"/> measures them with the same four, so
+        /// the oracle cannot measure a grid the HUD does not draw.</summary>
+        public const float DockInnerX0 = 0.08f;
+        /// <summary>See <see cref="DockInnerX0"/>.</summary>
+        public const float DockInnerX1 = 0.92f;
+        /// <summary>See <see cref="DockInnerX0"/>.</summary>
+        public const float DockInnerY0 = 0.09f;
+        /// <summary>See <see cref="DockInnerX0"/>.</summary>
+        public const float DockInnerY1 = 0.91f;
+
+        /// <summary>WO-1465: the drawer's fixed reference width (was a bare 720f literal at the
+        /// one call site). Named so <see cref="ResolveDockPanel"/> measures the shipping box.</summary>
+        public const float DockPanelWidthPx = 720f;
+
         // Three physical rows with breathing room around the 112px touch floor.
-        private static float DockPanelHeightPx => 450f;
+        public static float DockPanelHeightPx => 450f;
 
         private void AddDockTab(RectTransform panel, int i, string label, Action onTap)
         {
@@ -4195,10 +4591,10 @@ namespace DeNelle.HUD.Kit
             const int rows = 3;
             int column = i % columns;
             int row = i / columns;
-            const float innerX0 = 0.08f;
-            const float innerX1 = 0.92f;
-            const float innerY0 = 0.09f;
-            const float innerY1 = 0.91f;
+            const float innerX0 = DockInnerX0;
+            const float innerX1 = DockInnerX1;
+            const float innerY0 = DockInnerY0;
+            const float innerY1 = DockInnerY1;
             float cellW = (innerX1 - innerX0) / columns;
             float cellH = (innerY1 - innerY0) / rows;
             float x0 = innerX0 + column * cellW + DockRowGapFrac;
@@ -4689,6 +5085,10 @@ namespace DeNelle.HUD.Kit
                     _collectorsChipLabel.text = FormatCollectorChip(cs);
                 }
             }
+
+            // WO-1515 sec.2B: the ATTACK REPORT chip appears the moment a report lands unread and
+            // is gone the moment it is read. Throttled + change-detected inside.
+            TickDefenseReportChip();
 
             // One post-expand re-sync, once the newly-shown fixed-px band has been laid out.
             if (_queueRailSyncFrames > 0 && --_queueRailSyncFrames == 0 && _queueRail != null)

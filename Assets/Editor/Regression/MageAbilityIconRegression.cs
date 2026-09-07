@@ -54,6 +54,9 @@ namespace DeNelle.Editor.Regression
         /// pending an OWNER icon tag. id -> why. Delete an entry the moment its row is
         /// authored; the suite tells you when that has happened.
         /// </summary>
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - mage ability ids parked pending an OWNER icon
+        // tag (memory rule `vfx-map-owner-tags-no-creative-pick`). MEASURED EMPTY on 2026-09-06, so
+        // nothing is exempt today; the remove-by is what forces a re-read if entries return.
         private static readonly Dictionary<string, string> KnownGaps =
             new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
 

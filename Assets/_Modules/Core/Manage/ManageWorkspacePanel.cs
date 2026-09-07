@@ -190,6 +190,10 @@ namespace DeNelle.Core.Manage
         private const float TilePortX0 = 0.04f, TilePortX1 = 0.96f;
         private const float TileMedX0 = 0.63f, TileMedX1 = 0.98f;     // status medallion, top-right
         private const float TileMedY0 = 0.60f, TileMedY1 = 0.95f;
+        // WO-1563: the state WORD, top-LEFT, on the medallion's own band. It ends at TileMedX0 so
+        // the word and the glyph can never overprint. 0.35 of the cell = 42px at the
+        // MinTileHeightPx(120) floor, clear of MinTextBandPx(28) - it takes no existing text band.
+        private const float TileStateX0 = 0.02f, TileStateX1 = 0.61f;
         // ⛔ NO TileSelBarX1. The selected tile's cue is a GOLD BORDER around the whole tile
         // (CAPTURE_LOOP_GOAL 3.0b, and the mockup draws it that way on screens 2/4/6), not the
         // left-edge bar this constant used to seat. The constant went with the bar rather than
@@ -598,10 +602,29 @@ namespace DeNelle.Core.Manage
             // asking for a single column (ManageScreenVM sets GridColumns 1 for
             // ManageScreenKind.ResearchPerks); the View never infers a layout from an id or a tab.
             bool asRows = columns == 1;
+            // ⭐ WO-1563 FOLLOW-UP - THE STATE WORD IS SIZED FOR THE LONGEST WORD ON THIS GRID.
+            // MEASURED in Builds/ui-capture/ManageFlow_BUILD_gridtop_2670x1200.png: Ballista,
+            // Wooden Palisade, Crystal Mine and Cathedral of Magic all read "QUEUE FU..." - the
+            // word painted, then TMP ellipsised it. An ellipsis on a STATE word is the same defect
+            // class as no word at all: "QUEUE FU..." and "QUEUE FULL" are the same to a reader, but
+            // "UPGRADE AVAILABLE" and "UPGRADING" both truncate to "UPGRADI...".
+            // ⛔ The longest word is taken from THE MODEL'S OWN TILES, never from a vocabulary list
+            // copied into this View - a copy would be duplicated state and would go stale the first
+            // time a composer authors a new word (the failure this repo keeps paying for).
+            // Every tile then paints at the SAME size, which is also why the grid reads as one row
+            // of peers instead of nine independently-fitted labels.
+            string widestState = "";
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                var t = tiles[i];
+                if (t == null || string.IsNullOrEmpty(t.StateText)) continue;
+                if (t.StateText.Length > widestState.Length) widestState = t.StateText;
+            }
+            float stateFontPx = ResolveStateWordFont(widestState, cellW);
             for (int i = 0; i < tiles.Count; i++)
             {
                 if (asRows) BuildListRow(contentRt, tiles[i], cellH);
-                else BuildTile(contentRt, tiles[i], cellH);
+                else BuildTile(contentRt, tiles[i], cellH, stateFontPx);
             }
 
             // The honest overflow line. It exists ONLY while the well is too short to seat the
@@ -751,7 +774,76 @@ namespace DeNelle.Core.Manage
         /// failed to load - which is why ManageArt logged no art-miss line for any troop.
         /// The same defect hit every OWNED building tile on the BUILD tab; one order fixes both.</para>
         /// </summary>
-        private void BuildTile(RectTransform parent, ManageTileVM tile, float cellH)
+        /// <summary>
+        /// The one font size every state word on this grid is painted at: the largest that seats
+        /// <paramref name="widest"/> inside the state plate without an ellipsis.
+        ///
+        /// <para>⛔ MEASURED WITH TMP, NOT ESTIMATED. <c>GetPreferredValues</c> returns the width
+        /// this exact font, weight and string would occupy at the label's CURRENT size, so the
+        /// scale-down is arithmetic rather than a guessed character-advance ratio - and it needs no
+        /// layout pass, which is what makes it usable at build time and in a headless capture.
+        /// A ratio would have been a guess, and CLAUDE.md section 12 forbids shipping one.</para>
+        ///
+        /// <para>Returns the ceiling; the caller still passes it through FitSingleLine, so a word
+        /// SHORTER than the widest is never blown up past it.</para>
+        /// </summary>
+        private float ResolveStateWordFont(string widest, float cellW)
+        {
+            const float Ceiling = 26f;                 // the band's authored maximum
+            if (string.IsNullOrEmpty(widest) || cellW <= 1f) return Ceiling;
+
+            // The label's own usable width, matching the rect BuildTile gives it exactly.
+            float availablePx = ((TileStateX1 - 0.01f) - (TileStateX0 + 0.01f)) * cellW;
+            if (availablePx <= 1f) return Ceiling;
+
+            var probe = new GameObject("StateWordProbe", typeof(RectTransform), typeof(TextMeshProUGUI));
+            try
+            {
+                var text = probe.GetComponent<TextMeshProUGUI>();
+                // The kit's own resolver, so the probe measures the SHIPPED face - measuring a
+                // different font would produce a confidently wrong number.
+                var face = ElarionUiKit.ResolveDefaultFont();
+                if (face != null) text.font = face;
+                text.fontSize = Ceiling;
+                text.fontStyle = FontStyles.Bold;
+                text.enableAutoSizing = false;
+                float wantPx = text.GetPreferredValues(widest, 0f, 0f).x;
+                if (wantPx <= 1f) return Ceiling;
+                if (wantPx <= availablePx) return Ceiling;      // already fits, nothing to do
+
+                float scaled = Ceiling * (availablePx / wantPx);
+                if (scaled < ElarionUiKit.FontHardFloor)
+                {
+                    // ⛔ REPORTED, NEVER ELLIPSISED. Below the hard floor TMP culls the line
+                    // outright (the "bare plate" class), so shrinking further would delete the word
+                    // rather than fit it. The honest outcome is the floor plus a named shortfall.
+                    FlowTrace.Warn("Manage", "the state word '" + widest + "' needs " +
+                        wantPx.ToString("0") + "px at " + Ceiling.ToString("0") + "px type but the tile " +
+                        "plate offers " + availablePx.ToString("0") + "px, so it would have to drop to " +
+                        scaled.ToString("0.#") + "px - under the " + ElarionUiKit.FontHardFloor.ToString("0") +
+                        "px floor. Painting at the floor: the TILE must get wider, and nothing here " +
+                        "will ellipsise a state word to hide that");
+                    return ElarionUiKit.FontHardFloor;
+                }
+                FlowTrace.Step("Manage", "state word type resolved to " + scaled.ToString("0.#") +
+                    "px for the widest word on this grid ('" + widest + "', " + wantPx.ToString("0") +
+                    "px at " + Ceiling.ToString("0") + "px in a " + availablePx.ToString("0") + "px plate)");
+                return scaled;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Manage", "could not measure the state word '" + widest + "' (" +
+                    ex.GetType().Name + ") - falling back to the authored ceiling, which may ellipsise");
+                return Ceiling;
+            }
+            finally
+            {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(probe);
+                else UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        private void BuildTile(RectTransform parent, ManageTileVM tile, float cellH, float stateFontPx = 26f)
         {
             if (tile == null) return;
 
@@ -818,11 +910,67 @@ namespace DeNelle.Core.Manage
             // changes the tile's silhouette and reads in greyscale.
             if (tile.IsSelected) ElarionUiKit.GoldPerimeter(cell);
 
-            // LAYER 6 - the status medallion (canon 8: mandatory, model-supplied). This is the
-            // channel that carries state on a grid tile now that the state TEXT band is gone; the
-            // words themselves live on the detail screen, which is where the mockup puts them.
+            // LAYER 6 - the status medallion (canon 8: mandatory, model-supplied).
             PaintSprite(cell, "TileStatus", new Vector2(TileMedX0, TileMedY0),
                 new Vector2(TileMedX1, TileMedY1), tile.StateIconKey);
+
+            // ⭐ LAYER 7 - WO-1563: THE STATE, IN WORDS. THE ACCESSIBILITY ONE.
+            //
+            // This method used to reference tile.StateText EXACTLY ZERO times while the model was
+            // composing it on every tile (ManageVmProjection sets StateText = item.BadgeText), and
+            // the sibling renderer BuildListRow painted it. Same screen family, two opposite
+            // answers to "what can I act on?": the RESEARCH rows read RESEARCHED / QUEUE FULL /
+            // RESEARCHING in words while the BUILD and ARMY grids said nothing.
+            //
+            // ⛔ WHY WORDS AND NOT A BETTER GLYPH. The owner is red/green colourblind (memory
+            // owner-colorblind-delegate-visual-creative). With no word the grid's ONLY state
+            // channel is the medallion, and ManageArt.StatusFor collapses five distinct states
+            // onto five small badges that differ partly by a red dot. WO-1516 then correctly
+            // WITHHELD the medallion for the Available catch-all (a green up-arrow that meant
+            // nothing) - which left those tiles carrying NEITHER glyph NOR text. Removing a
+            // meaningless signal without adding a meaningful one leaves the tile mute; this is the
+            // meaningful one.
+            //
+            // ⛔ THE VIEW DOES NOT DERIVE, MAP OR INFER THE STATE. It paints the string the model
+            // supplies, exactly as BuildListRow does. There is no switch on VisualState here and
+            // there must never be one (canon 9 / the WO-2002 oracle).
+            //
+            // GEOMETRY, AND WHY IT COSTS NO EXISTING BAND (WO-1563 acceptance 4):
+            //   * It takes the medallion's OWN band (TileMedY0..TileMedY1) on the LEFT, mirroring
+            //     the medallion on the right - so the two state channels sit on one line and
+            //     neither can overprint the other (x ends at TileMedX0).
+            //   * That band is 0.35 of the cell = 42px at the MinTileHeightPx(120) floor, clear of
+            //     the MinTextBandPx(28) TMP cull threshold. ⛔ The NAME band (0.02-0.26) and the
+            //     progress bar are UNTOUCHED - ManageScreenPanel's own "never re-shrink a text
+            //     band below ~24px" note is honoured by taking nothing from them.
+            //   * The plate is drawn ONLY when there is a word. A plate with no word is the "bare
+            //     plate" defect class this file already pays for; an empty state paints nothing.
+            //
+            // ⛔ NOT COLOUR. The channel is a WORD on a dark plate in the tile's corner - a shape
+            // and a string, legible in greyscale, on the same precedent as LAYER 5's gold BORDER.
+            if (!string.IsNullOrEmpty(tile.StateText))
+            {
+                var statePlate = ElarionUiKit.AddImage(cell, "TileStatePlate",
+                    new Vector2(TileStateX0, TileMedY0), new Vector2(TileStateX1, TileMedY1),
+                    new Color(0.03f, 0.03f, 0.03f, 0.86f));
+                var statePlateImage = statePlate != null ? statePlate.GetComponent<Image>() : null;
+                if (statePlateImage != null) statePlateImage.raycastTarget = false;
+
+                var stateWord = ElarionUiKit.Label(cell, tile.StateText, TileMedY0, TileMedY1,
+                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Center,
+                    TileStateX0 + 0.01f, TileStateX1 - 0.01f, bold: true);
+                // ⛔ THE CEILING IS THE GRID'S, NOT THIS TILE'S. stateFontPx was resolved once from
+                // the LONGEST word on this grid (ResolveStateWordFont), so "MAX" and "QUEUE FULL"
+                // paint at the same size and neither ellipsises. Fitting each label independently
+                // is what produced "QUEUE FU..." beside a full-size "MAX" on the measured frame.
+                ElarionUiKit.FitSingleLine(stateWord, ElarionUiKit.FontHardFloor, stateFontPx);
+
+                float statePx = (TileMedY1 - TileMedY0) * cellH;
+                if (statePx < MinTextBandPx)
+                    FlowTrace.Warn("Manage", "tile state word band is " + statePx.ToString("0") +
+                        "px, under the " + MinTextBandPx + "px TMP cull floor - the plate would " +
+                        "paint and the WORD would not, which is the bare-plate defect class");
+            }
 
             // THE NAME STRIP - one band, and the only text on the tile. A dark plate behind it so
             // the name reads against whatever the art happens to be, exactly as the mockup draws.

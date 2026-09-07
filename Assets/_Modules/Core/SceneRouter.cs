@@ -461,34 +461,39 @@ namespace DeNelle.Core
                 try { hero = GameObject.FindWithTag("Player"); }
                 catch (Exception e) { FlowTrace.Warn("SceneRouter", $"RestoreReturnPoint FindWithTag('Player') threw (tag may be undefined): {e.GetType().Name}: {e.Message}"); hero = null; }
 
-                var loco = (hero != null) ? FindHeroLocomotionOn(hero) : FindHeroLocomotion();
-                if (loco == null)
+                // WO-1510: the Village seam is CoreServices.VillageBridge, not reflection.
+                var bridge = CoreServices.VillageBridge;
+                if (bridge == null)
                 {
-                    FlowTrace.Fail("SceneRouter", $"Return-point restore: no HeroLocomotion in '{scene.name}' — warp SKIPPED, hero not repositioned to launch pose {rp.Position}.");
-                    Debug.LogWarning("[SceneRouter] Return-point restore: no HeroLocomotion found — warp skipped.");
+                    FlowTrace.Fail("SceneRouter", $"Return-point restore: no IVillageBridge registered while loading '{scene.name}' — warp SKIPPED, hero not repositioned to launch pose {rp.Position}. (Expected only in a Core-only/headless context; in a Village build it means VillageBridgeService never installed.)");
+                    Debug.LogWarning("[SceneRouter] Return-point restore: no IVillageBridge registered — warp skipped.");
+                    return;
+                }
+
+                GameObject heroGo = (hero != null && bridge.HasHero(hero)) ? hero : bridge.FindHeroObject();
+                if (heroGo == null)
+                {
+                    FlowTrace.Fail("SceneRouter", $"Return-point restore: no hero locomotion in '{scene.name}' — warp SKIPPED, hero not repositioned to launch pose {rp.Position}.");
+                    Debug.LogWarning("[SceneRouter] Return-point restore: no hero locomotion found — warp skipped.");
                     return;
                 }
 
                 Quaternion rot = Quaternion.Euler(0f, rp.Yaw, 0f);
 
-                // Reuse HeroLocomotion.WarpTo(Vector3, Quaternion?) via reflection (no
-                // Core→Village reference). Signature verified: it disables the agent, moves,
-                // re-warps onto the NavMesh and raises OnTeleported for the camera.
-                var warp = loco.GetType().GetMethod(
-                    "WarpTo",
-                    new[] { typeof(Vector3), typeof(Quaternion?) });
-                if (warp != null)
+                // The bridge's warp disables the agent, moves, re-warps onto the NavMesh and
+                // raises OnTeleported for the camera. It returns false only if the object we
+                // just resolved has lost its locomotion component between the two calls.
+                if (bridge.WarpHero(heroGo, rp.Position, rot))
                 {
-                    warp.Invoke(loco, new object[] { rp.Position, (Quaternion?)rot });
-                    FlowTrace.Step("SceneRouter", $"Return-point restored hero via WarpTo to {rp.Position} yaw={rp.Yaw:F0} in '{scene.name}'.");
+                    FlowTrace.Step("SceneRouter", $"Return-point restored hero via IVillageBridge.WarpHero to {rp.Position} yaw={rp.Yaw:F0} in '{scene.name}'.");
                     Debug.Log($"[SceneRouter] Return-point restored hero to {rp.Position} in '{scene.name}'.");
                 }
                 else
                 {
                     // Last-ditch fallback: plain transform move so the player at least lands home.
-                    FlowTrace.Warn("SceneRouter", $"Return-point: HeroLocomotion.WarpTo(Vector3,Quaternion?) not found via reflection — using transform fallback (no NavMesh re-warp/camera event) to {rp.Position}.");
-                    loco.transform.SetPositionAndRotation(rp.Position, rot);
-                    Debug.LogWarning("[SceneRouter] Return-point: WarpTo not found — used transform fallback.");
+                    FlowTrace.Warn("SceneRouter", $"Return-point: IVillageBridge.WarpHero refused (hero object carries no locomotion) — using transform fallback (no NavMesh re-warp/camera event) to {rp.Position}.");
+                    heroGo.transform.SetPositionAndRotation(rp.Position, rot);
+                    Debug.LogWarning("[SceneRouter] Return-point: WarpHero refused — used transform fallback.");
                 }
             }
             catch (System.Exception e)
@@ -499,32 +504,22 @@ namespace DeNelle.Core
         }
 
         /// <summary>
-        /// RETURN-POINT helper: finds the active <c>HeroLocomotion</c> by type name via
-        /// reflection so DeNelle.Core never references DeNelle.Village. Returns the component
-        /// as a <see cref="MonoBehaviour"/>, or null if none is present.
+        /// RETURN-POINT helper: the GameObject hosting the active hero locomotion, or null.
+        /// WO-1510: resolved through <see cref="CoreServices.VillageBridge"/> — the sanctioned
+        /// seam — instead of the old <c>Type.GetType</c> reflection into DeNelle.Village. A null
+        /// bridge is legitimate (Core-only/headless) but is TRACED, never swallowed (§12).
         /// </summary>
-        private static MonoBehaviour FindHeroLocomotion()
+        private static GameObject FindHeroObject()
         {
-            try
+            var bridge = CoreServices.VillageBridge;
+            if (bridge == null)
             {
-                var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
-                if (t == null) return null;
-                var found = UnityEngine.Object.FindAnyObjectByType(t);
-                return found as MonoBehaviour;
+                FlowTrace.Warn("SceneRouter", "FindHeroObject: no IVillageBridge registered — hero lookup returns null (expected only in a Core-only/headless context).");
+                return null;
             }
-            catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroLocomotion reflected lookup threw: {e.GetType().Name}: {e.Message}"); return null; }
-        }
 
-        /// <summary>RETURN-POINT helper: the HeroLocomotion on a specific hero GameObject (or null).</summary>
-        private static MonoBehaviour FindHeroLocomotionOn(GameObject go)
-        {
-            try
-            {
-                var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
-                if (t == null) return null;
-                return go.GetComponent(t) as MonoBehaviour;
-            }
-            catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroLocomotionOn reflected GetComponent threw: {e.GetType().Name}: {e.Message}"); return null; }
+            try { return bridge.FindHeroObject(); }
+            catch (Exception e) { FlowTrace.Warn("SceneRouter", $"FindHeroObject: IVillageBridge.FindHeroObject threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
         // =====================================================================
@@ -638,17 +633,15 @@ namespace DeNelle.Core
         /// hard way; this carry uses the same shape deliberately.
         /// </para>
         /// <para>
-        /// Resolution order is HeroLocomotion-first (reflected — Core must never reference
-        /// DeNelle.Village), then the 'Player' tag, because HeroLocomotion is the exact
-        /// component the receiving ensurer keys on.
+        /// Resolution order is hero-locomotion-first (through
+        /// <see cref="CoreServices.VillageBridge"/> — Core must never reference DeNelle.Village),
+        /// then the 'Player' tag, because the locomotion component is the exact thing the
+        /// receiving ensurer keys on.
         /// </para>
         /// </summary>
         private static bool CarryHeroAcrossSingleLoad(string via, string targetScene)
         {
-            GameObject heroGo = null;
-
-            var loco = FindHeroLocomotion();
-            if (loco != null) heroGo = loco.gameObject;
+            GameObject heroGo = FindHeroObject();
             if (heroGo == null)
             {
                 try { heroGo = GameObject.FindWithTag("Player"); }
@@ -871,7 +864,8 @@ namespace DeNelle.Core
         /// never win on the far side. Fully null-guarded — if no hero is found the position is
         /// skipped but the scene is still recorded. SceneRouter lives in DeNelle.Core, which
         /// must not reference DeNelle.Village, so the hero is reached by the "Player" tag and
-        /// (fallback) by reflection — never a direct HeroLocomotion type reference.
+        /// (fallback) through <see cref="CoreServices.VillageBridge"/> — never a direct
+        /// HeroLocomotion type reference, and (since WO-1510) never by reflection either.
         /// </summary>
         private static void StashReturnPoint(BattleParams p)
         {
@@ -887,11 +881,10 @@ namespace DeNelle.Core
 
                 if (hero == null)
                 {
-                    // Fallback: locate the HeroLocomotion host by type name (reflection — no
-                    // Core→Village asmdef reference).
-                    FlowTrace.Warn("SceneRouter", "StashReturnPoint: no 'Player'-tagged hero — falling back to reflected HeroLocomotion lookup.");
-                    var loco = FindHeroLocomotion();
-                    if (loco != null) hero = loco.gameObject;
+                    // Fallback: locate the hero-locomotion host through the Village bridge
+                    // (CoreServices seam — no Core→Village asmdef reference, no reflection).
+                    FlowTrace.Warn("SceneRouter", "StashReturnPoint: no 'Player'-tagged hero — falling back to IVillageBridge hero lookup.");
+                    hero = FindHeroObject();
                 }
 
                 if (hero != null)

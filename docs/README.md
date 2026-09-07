@@ -1,8 +1,11 @@
 > **STALE banner corrected 2026-08-09:** the live anchor is the NEWEST `../CANON_GROUND_TRUTH_<date>.md`
 > **sorted by date** (never a name copied here — this line previously hardcoded 08-02 and went stale);
 > **the board is `../BOARD.html`, derived from `WorkOrders/*.md`** (`python tools/board_build.py`) —
-> **Notion is RETIRED (owner ruling 2026-08-08)**, as are Linear and the task list. Branch =
-> `wip/village2-and-f8-tickets`. Start at **`../HOME.html`** (`python tools/home_build.py`) for
+> **Notion is RETIRED (owner ruling 2026-08-08)**, as are Linear and the task list.
+> **RETIRED 2026-09-06: the branch name that used to sit on this line
+> (`wip/village2-and-f8-tickets`) went stale, as every copied branch name does.** A branch is never
+> stated from a doc - read it off `git status`. No replacement name is written here on purpose.
+> Start at **`../HOME.html`** (`python tools/home_build.py`) for
 > one-click navigation. If any doc below reads as pre-pivot, the newest anchor wins.
 
 # docs/ — Index
@@ -103,11 +106,29 @@ separately in `../PROJECT_INDEX.md`.
 
 ## Process / QA / audits (mostly dated — newest wins)
 
+- **2026-09-06 planning + RCA set (added to the index 2026-09-06; read from the files themselves):**
+  `GET_WELL_PLAN_2026-09-06.md` - LIVE PLAN. Sequences what the two RCAs below found, from the
+  read-only audit fleet plus the owner's two felt-test batches; every line cites the audit that
+  measured it, with the evidence in the minted WOs (WO-1446 onward).
+  `READY_RCA_2026-09-06.md` - every ticket that was READY TO IMPLEMENT or REOPENED at HEAD
+  `c9efbe0a5`, root-caused from captured logs, PNGs and `file:line`; unproven causes say so and
+  name what would prove them.
+  `GROWTH_RCA_2026-09-06.md` - answers the owner's verbatim question *"determine why I can not
+  gain any exposure and grow a base"*; every claim read from the tree, a live tool call or a
+  fetched page, or marked UNPROVEN.
+  `RAID_BALANCE_AUDIT_2026-09-06.md` - the raid economy measured for an OUTSIDE reader (designers,
+  testers, partners with no repo context): every payout, cost and cooldown read from the data files
+  or the owner's own device logs that day, ticket references pushed to an appendix. Read it with
+  the north-star map `PROGRAM_RAID_ECONOMY_2026-09-04.md`, which is the ruling; this is the
+  measurement underneath it.
+
 - **Manage redesign (WO-1418+) flow & prerequisites:** `manage-flow-map/MAP.md` — the redesign's dataflow lanes and mock-up mapping; `PREREQUISITE_REGISTRY_2026-09-06.md` — the audit of every gate and cost in the system, with the container singletons ruling (Ruling 23) and barracks/Heart Level unification (Ruling 21) reflected; `ART_DELIVERY_2026-09-06_manage_assets.md` — Synty building portraits checklist; `ART_REQUEST_2026-09-06_manage_tab_portraits.md` — owner art request for the redesigned tabs
-- `BACKLOG_TRIAGE_2026-06-04.md`, `ARCHIVED_ISSUES_2026_06_04.md`, `WO_ROI_TRIAGE.md`,
-  `ROI_PLAN_2026-06-03.md`, `REUSABILITY_AUDIT_2026-06-03.md`
-- `QA_player_sanity_pass_2026-05-30.md`, `acceptance_verification_2026-05-30.md`,
-  `VISION_GAP_ANALYSIS_2026-05-30.md`, `bug-triage.md`, `diagnosis-report.md`,
+- **ARCHIVED (path fixed 2026-09-06 - these seven moved under `_archive/docs/` and the index still
+  pointed at `docs/` top level):** `_archive/docs/BACKLOG_TRIAGE_2026-06-04.md`,
+  `_archive/docs/ARCHIVED_ISSUES_2026_06_04.md`, `_archive/docs/ROI_PLAN_2026-06-03.md`,
+  `_archive/docs/REUSABILITY_AUDIT_2026-06-03.md`, `_archive/docs/QA_player_sanity_pass_2026-05-30.md`,
+  `_archive/docs/acceptance_verification_2026-05-30.md`, `_archive/docs/VISION_GAP_ANALYSIS_2026-05-30.md`
+- Still at `docs/` top level: `WO_ROI_TRIAGE.md`, `bug-triage.md`, `diagnosis-report.md`,
   `village-review-suggestions.md`, `recovery-work-orders.md`, `claude-code-work-order.md`
 - `_archive/docs/UI_BLINK_CONFORMANCE_AUDIT_2026-07-02.md` — screen-by-screen UI audit against the Blink template canon (+ owner addenda; source of the extended UI canon rules). **Archived.**
 - `_archive/docs/PUBLISHER_CRITIQUE_2026-07-03.md` — publisher-lens critique (pass-with-revisit; ranks the seam un-stack #1). **Archived.**
@@ -123,7 +144,16 @@ separately in `../PROJECT_INDEX.md`.
     Ranger / Knight / Mage / Shared / Cleric / Unassigned and cited. Records the authored-first resolution
     order, the authored-vs-fallback health ratio, orphans, missing rows and collisions. Pairs with
     `reference/WEAPON_CATALOG.md` (which is the authority on the gear curation pipeline).
-  - `reference/REGRESSION_COVERAGE_MATRIX.md` — ⚠ **counts are stale; use its proposed assertions only**
+  - `reference/REGRESSION_ORACLE_INVENTORY.md` - **NEW 2026-09-06.** Every one of the 414 `[tag]`
+    oracles registered between the fences in `Assets/Editor/Regression/DataRegression.cs`, with its
+    suite file, its registration line and one line on what it locks; plus the measured known-red
+    baseline and the 7 suites that exist but are NOT counted by the marker.
+ - `reference/REGRESSION_COVERAGE_MATRIX.md` - **RE-MEASURED 2026-09-06 (Sunday sweep step 4);
+    the "counts are stale, use its proposed assertions only" caveat that sat on this row is
+    RETIRED.** Every row was opened at source that night; the two older censuses (2026-08-16 and
+    the frozen 2026-07-19 ledger) are preserved, not carried forward, at
+    `git show bd798ad73:docs/reference/REGRESSION_COVERAGE_MATRIX.md`. Pairs with the oracle
+    inventory above: the inventory is the per-oracle roll, this is the coverage view over it.
   - `reference/HERO_ANIMATION_DICTIONARY.md` · `reference/DOTWEEN_SME.md` ·
     `reference/MASTER_BACKLOG_2026-07-19.md`
 - `vfx/` — VFX direction + inventory: `VFX_CREATIVE_PICKS_REGISTRY.md` (owner-ratified elemental wheel x

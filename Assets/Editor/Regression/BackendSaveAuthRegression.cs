@@ -75,6 +75,45 @@ namespace DeNelle.Editor.Regression
                     "the deleted no-op warm-up is back on a connect path - it does not mint, so the " +
                     "path that adopts it silently loses cloud save (WO-1441)");
 
+                // ⛔ WO-1454 — A TRANSIENT 5xx MUST NOT DESTROY A STILL-VALID SESSION. The renewal
+                // used to call ClearSession() on ANY non-Success result, so one 500/503/timeout
+                // permanently darkened cloud save (save passes allowMint:false; nothing re-mints).
+                // RED PROOF: against the pre-fix body this Reject regex matches
+                // `Result.Success) { ... ClearSession` directly and the Require for the classifier
+                // is absent, so both fire.
+                string renew = Method(signer, "TryRenewSessionAsync");
+                Require(failures, renew, "IsCredentialRefusal",
+                    "session renewal no longer classifies the status before clearing - a transient 5xx " +
+                    "destroys a still-valid token and cloud save goes dark permanently (WO-1454)");
+                if (Regex.IsMatch(renew, @"Result\.Success\s*\)\s*\{[^{}]*?ClearSession", RegexOptions.Singleline))
+                    failures.Add("session renewal clears the session on a bare non-Success result again - " +
+                                 "only 401/403 may clear (WO-1454)");
+                string refusal = Method(signer, "IsCredentialRefusal");
+                Require(failures, refusal, "401", "the credential-refusal classifier no longer treats 401 as a refusal (WO-1454)");
+                Require(failures, refusal, "403", "the credential-refusal classifier no longer treats 403 as a refusal (WO-1454)");
+                if (Regex.IsMatch(refusal, @"\b5\d\d\b"))
+                    failures.Add("the credential-refusal classifier admits a 5xx - api/auth/session.js returns 500 " +
+                                 "when the renewal query throws (a deployment state, not a verdict on the player) " +
+                                 "and clearing on it is the WO-1454 outage");
+
+                // ⛔ WO-1455 — THE DEPTH WARNING MUST LATCH ON THE CROSSING, AND THE QUEUE MUST BE
+                // BOUNDED. The old `Count % OfflineQueueDepthWarn == 0` test fires only when an
+                // enqueue lands on an exact multiple; a live session reached depth 112 in silence.
+                // RED PROOF: the pre-fix body contains the modulo and neither the latch nor the
+                // coalescer, so all three checks fire.
+                string enqueue = Method(state, "EnqueueOffline");
+                if (Regex.IsMatch(enqueue, @"%\s*OfflineQueueDepthWarn"))
+                    failures.Add("the offline-queue depth warning is back on an exact-multiple test - it is " +
+                                 "structurally skippable and missed a depth of 112 in a live session (WO-1455)");
+                Require(failures, enqueue, "_offlineQueueDepthWarned",
+                    "the offline-queue depth warning no longer latches per crossing (WO-1455)");
+                Require(failures, enqueue, "CoalesceOfflineQueue",
+                    "the offline queue is unbounded again - it must coalesce to OfflineQueueMaxDepth, keeping " +
+                    "the NEWEST marker per identity (WO-1455)");
+                string coalesce = Method(state, "CoalesceOfflineQueue");
+                Require(failures, coalesce, "OfflineQueueMaxDepth", "the coalescer enforces no cap (WO-1455)");
+                Require(failures, coalesce, "FlowTrace.Warn", "an offline-queue drop is silent again (WO-1455)");
+
                 Require(failures, cached, "X-Guest-Id", "guest proof was dropped from cached-only reads");
                 Require(failures, cached, "SessionUsable", "wallet cached proof does not validate expiry/wallet");
                 Require(failures, cached, "X-Session", "cached wallet session header is missing");

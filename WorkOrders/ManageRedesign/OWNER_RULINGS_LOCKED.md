@@ -5,8 +5,10 @@
 3. **Top-level Manage:** BUILD / ARMY / RESEARCH.
 4. **Defense + Buildings:** merged into BUILD because they share the Builder queue.
 5. **BUILD filters:** ALL / ECONOMY / DEFENSE / CRAFT / STORAGE / CIVIC.
+   > **STALE 2026-09-06 (WO-1534 B1): CIVIC is retired.** `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` screen 2 draws FIVE chips; implemented in `32659c0f6`. Authority: `Assets/_Modules/Core/Catalog/BuildFilter.cs:57` and `:87-89`; the five CIVIC rows were re-homed at `:59-73`.
 6. **ALL scrolling:** allowed.
 7. **BUILD density target:** ≥12 visible tiles when the dataset/filter contains ≥12.
+   > **STALE 2026-09-06 (WO-1534 B1): superseded by `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png`,** implemented in `32659c0f6`. The shipped BUILD grid is 5 x 2 = **10** tiles, authored at `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs:3500-3507`.
 8. **ARMY:** all 9 troops visible in one 3×3 grid.
 9. **RESEARCH:** school-first, not a flat 17-row list.
 10. **Heart:** becomes the realm-progression spine.
@@ -27,7 +29,9 @@
 ## Provenance and reconciliation (added by the CLI seat, 2026-09-06)
 
 Authored outside this repo and delivered by the owner as `Elarion_Manage_Redesign_Detailed_WorkOrders.zip`
-on 2026-09-06. Filed verbatim; **the body above is the author's and has not been edited.** Everything the CLI
+on 2026-09-06. Filed verbatim; **the body above is the author's and has not been edited**, except two dated
+`STALE:` banners added under rulings 5 and 7 on 2026-09-06 (WO-1534 Part B1) - the ruling text itself is
+untouched, per CLAUDE.md section 15. Everything the CLI
 seat adds appears under a heading like this one.
 
 **Numbering:** this set uses a **2000-block**, a THIRD namespace alongside the CLI main line and the UI seat's

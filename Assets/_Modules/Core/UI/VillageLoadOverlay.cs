@@ -59,10 +59,15 @@ namespace DeNelle.Core.UI
         private const float LoreRotateSeconds = 3.2f;
 
         // Rotating lore tidbits — short, on-brand, set the tone during the wait.
+        // ⛔ RETIRED CANON MUST NOT RE-ENTER THIS ARRAY (2026-09-06). The line
+        // "Hold the last light." shipped here for months after the 2026-07-24
+        // Pets→Echoes rebrand retired it; the canonical tagline is
+        // "Echoes of a Forgotten Civilization" (canon-strings.json "tagline").
+        // GlossaryRegression case [ui-source-copy] now lints this array's
+        // literals, so a re-add fails the suite instead of reaching a player.
         private static readonly string[] Lore =
         {
             "Elarion holds because we hold the line.",
-            "Hold the last light.",
             "The Echoes rest in the Hollow, waiting to be called.",
             "Every tower is a promise the gate will not fall.",
             "The enemy comes by night. We rebuild by day.",

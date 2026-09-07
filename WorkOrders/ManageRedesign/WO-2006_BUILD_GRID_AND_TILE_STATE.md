@@ -1,5 +1,16 @@
 # WO-2006 — Replace BUILD Rail With Stateful Grid Tiles
 
+> **PARTLY SUPERSEDED 2026-09-06 (WO-1534 Part B1). Body frozen per CLAUDE.md section 15 - do not rewrite it.**
+> The density criterion at line 64 (">=12 tiles visible when inventory/filter size allows") is no longer
+> what the shipped screen owes. `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` is the spec and commit
+> `32659c0f6` implemented it: `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs:3500-3507` authors the
+> BUILD grid as `GridColumns = 5` and `GridRows = 2` - **10 tiles**, deliberately, with the tab row's
+> reclaimed 120px band going to tile height (`ManageWorkspacePanel.cs:412-418`). **The grid itself, the
+> deleted rail and the tile state model all stand**; only the number is superseded. The colourblind
+> criterion on the same list is separately unmet and is ticketed as WO-1534 section B2.
+
+**Status:** DONE - landed in bb51b8b9c; the >=12-tile density acceptance at :64 is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6, 5x2=10 tiles); the colourblind-legibility acceptance on the same list is OPEN (WO-1534 section B2), not superseded. See banner. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*
+
 **Priority:** P0  
 **Depends on:** WO-2002, WO-2005
 

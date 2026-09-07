@@ -1,6 +1,6 @@
 # WO-1493: SessionRegression has NEVER run, and its SESSION_GUARDS_OK 6/6 is a hardcoded label
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** `Assets/Editor/Regression/SessionRegression.cs` + `tools/regression/checkin_gate.ps1`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1493 -> 1494 in the same edit).

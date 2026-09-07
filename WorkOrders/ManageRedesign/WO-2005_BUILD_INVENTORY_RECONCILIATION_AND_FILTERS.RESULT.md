@@ -1,6 +1,16 @@
 # WO-2005 RESULT — Reconcile Live BUILD Inventory and Add Complete Filters
 
-**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK [Builds/c26, 2026-09-06 11:18], REGRESSION_OK 400/400 suites [Builds/r24, 11:19], CATALOG_FALLBACK_GEN_OK [Builds/catgen2]) *(was: READY)*
+> **PARTLY SUPERSEDED 2026-09-06 (WO-1534 Part B1). Body frozen per CLAUDE.md section 15 - do not rewrite it.**
+> Line 16 below ("6 filters implemented: ALL, ECONOMY, DEFENSE, CRAFT, STORAGE, CIVIC") and the CIVIC row
+> of the membership table at line 26 are no longer what ships. `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png`
+> screen 2 draws FIVE chips and commit `32659c0f6` implemented it:
+> `Assets/_Modules/Core/Catalog/BuildFilter.cs:57` ("THERE IS NO CIVIC CHIP. Do not add one back") and
+> `:87-89` `Chips = { All, Economy, Defense, Craft, Storage }`. **This RESULT was TRUE when it was
+> written** - `git show a6bbc523d:.../BuildFilter.cs` has `Civic` and six `Chips` entries - so this is an
+> unrecorded reversal, not a false claim. The rest of the RESULT stands, including the data-driven
+> membership rule; CIVIC's five rows were re-homed, not dropped (`BuildFilter.cs:59-73`).
+
+**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK [Builds/c26, 2026-09-06 11:18], REGRESSION_OK 400/400 suites [Builds/r24, 11:19], CATALOG_FALLBACK_GEN_OK [Builds/catgen2]) - the CIVIC/six-filter claim at :16 and :26 is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6); see banner. *(was: READY)*
 
 **Date:** 2026-09-06
 

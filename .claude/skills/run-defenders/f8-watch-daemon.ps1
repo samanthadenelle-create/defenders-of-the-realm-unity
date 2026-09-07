@@ -152,6 +152,25 @@ $seenKeys = @{}
 # severity that survived to device - so every hero death raised an F8 error capture.
 $kindSkip = 'session_start|scene_loaded|note|idle'
 
+# WO-1460 liveness. The loop below used to be a bare while($true) with no heartbeat and no
+# try/catch: a terminating error inside it (a locked log, a bad cast) killed the daemon SILENTLY,
+# and a healthy-but-quiet daemon was indistinguishable from a dead one. Both are now visible -
+# the loop survives a failing pass and logs why, and every ~30s it stamps HEARTBEAT.json.
+$hbEvery = 30
+$hbLast = [datetime]::MinValue
+$passFails = 0
+function Beat([string]$detail) {
+    $script:hbLast = Get-Date
+    Write-F8Heartbeat $Inbox 'desktop' @{
+        detail    = $detail
+        breakLog  = $BreakLog
+        breakOffset = $breakBase
+        pollSeconds = $PollSeconds
+        passFails = $passFails
+    }
+}
+Beat 'armed'
+
 Write-Host ('[f8-daemon] armed pid={0} poll={1}s' -f $myPid, $PollSeconds)
 Write-Host ('[f8-daemon] break-log: {0}' -f $BreakLog)
 Write-Host ('[f8-daemon] inbox: {0}' -f $Inbox)
@@ -161,6 +180,7 @@ Write-Host ''
 while ($true) {
     Start-Sleep -Seconds $PollSeconds
 
+  try {
     if (Test-Path $BreakLog) {
         $lines = @(Get-Content $BreakLog -ErrorAction SilentlyContinue)
         $cur = $lines.Count
@@ -218,4 +238,16 @@ while ($true) {
             Emit-Capture -kind $capKind -body $line -triggerLine $line
         }
     }
+  }
+  catch {
+      # SURVIVE, do not exit. A pass that throws (log locked by Unity, a bad cast, a transient IO
+      # error) used to terminate the daemon with no trace anywhere. Log it and keep watching.
+      $passFails++
+      Write-F8Event $Inbox 'warn' ("desktop daemon pass failed (#{0}), continuing: {1}" -f $passFails, $_.Exception.Message)
+      Beat ('pass-failed: ' + $_.Exception.Message)
+  }
+
+  # heartbeat on its own cadence, whether or not anything was captured: silence must be
+  # distinguishable from death (WO-1460).
+  if (((Get-Date) - $hbLast).TotalSeconds -ge $hbEvery) { Beat 'watching' }
 }

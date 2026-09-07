@@ -260,6 +260,11 @@ namespace DeNelle.Pets
 
         private void Update()
         {
+            // WO-1483 frame budget — the EchoWorldPresence tick (this leash is the Echo's
+            // one per-frame owner). FIRST line so every early-return path is still timed.
+            // Accumulating 4-arg overload — no per-frame log; PerfReporter rolls it up 1/s.
+            using var _perf = FlowTrace.Measure("Perf", "PetHeroLeash.Update", 4f, 1f);
+
             if (_heroT == null)
             {
                 _noHeroTime += Time.deltaTime;

@@ -102,7 +102,15 @@ namespace DeNelle.Core.UI
 
         private void Open(IReadOnlyList<BankOverflowStatus> results)
         {
-            _hold = WorldHold.Acquire("harvest-overflow-result");
+            // WO-1471: PLAYER-OWNED, not the bounded default. The player dismisses this modal at
+            // their own pace, so elapsed time is not evidence of a leak - the 180s ceiling fired
+            // under an open modal (device 12:51:25 -> 12:53:06, 101s of WORLD CLOCK FROZEN in
+            // Main_Castle_Overworld). The probe reuses the SAME liveness expression this Open
+            // passes to PanelManager.Register below: "does its owner still exist", never "is this
+            // old". The Acquire precedes the modal build, but Open is synchronous inside Present,
+            // so no watchdog tick can observe _modal null (the probe is polled, not evaluated here).
+            _hold = WorldHold.AcquirePlayerOwned("harvest-overflow-result",
+                () => this != null && _modal != null && _modal.canvas != null);
             _modal = ElarionUiKit.BuildObsidianModal("HarvestOverflowUI", "HARVEST RESULT",
                 new Vector2(0.16f, 0.08f), new Vector2(0.84f, 0.92f), Close,
                 sortingOrder: 31020);
@@ -112,10 +120,11 @@ namespace DeNelle.Core.UI
             if (!PanelManager.NotifyOpened(_panel)) { Close(); return; }
 
             var content = _modal.chrome.content.transform;
-            string body = BuildBody(results);
-            var label = ElarionUiKit.Label(content, body, 0.27f, 0.84f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TextAlignmentOptions.TopLeft, 0.09f, 0.91f, bold: false);
-            ElarionUiKit.FitBlock(label, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+            // WO-1525 - ROWS, NOT PROSE. The VM decides every number, word and door
+            // (HarvestResultVM); this modal only draws them. The old single-Label body is gone:
+            // it was eleven lines of paragraph for three resources, which is the defect.
+            var vm = HarvestResultVM.Build(results, BuiltContainers);
+            BuildRows(content, vm);
             var close = ElarionUiKit.Button(content, "Close", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.34f, 0.09f), new Vector2(0.66f, 0.22f), Close);
             MedievalUiSkin.ApplyButton(close, primary: false);
@@ -132,6 +141,189 @@ namespace DeNelle.Core.UI
             }
             FlowTrace.Step("Bank",
                 $"harvest-result modal OPEN with {results.Count} aggregated resource row(s): {trace}");
+            // WO-1525 - ONE extra line, the VM's own shape summary. Deliberately NOT the long-form
+            // BuildBody copy: a multi-line Step floods the F8 inbox harvester, which greps per line.
+            FlowTrace.Step("Bank", $"harvest-result rows: {vm.TraceLine}");
+        }
+
+        // -- WO-1525: the row renderer --------------------------------------------
+        // Geometry lives HERE and nowhere else. The VM has no opinion about anchors, and the
+        // fractions below are the sister screen's proven shape (WelcomeBackPopup's door rows):
+        // a plate per resource, the door drawn at the plate's FULL height rather than inset - that
+        // inset is what WelcomeBackPopup's own DoorRowH comment records as giving the touch
+        // measurement straight back. HarvestResultVM.MaxRows (3) is DERIVED from the four constants
+        // below; change one and re-derive it there. The pixel heights are owed to a capture.
+
+        /// <summary>Top of the row band, in modal-content fractions.</summary>
+        private const float RowsTop = 0.86f;
+        /// <summary>Floor of the row band when only the footer sits below it.</summary>
+        private const float RowsFloor = 0.30f;
+        /// <summary>Floor of the row band when a "+N more" line sits below it too.</summary>
+        private const float RowsFloorWithOverflow = 0.36f;
+        /// <summary>Gap between plates.</summary>
+        private const float RowGap = 0.02f;
+        /// <summary>A plate never grows past this, however few rows there are - a two-line row
+        /// stretched over half the modal reads as an error state, not as emphasis.</summary>
+        private const float RowHeightMax = 0.20f;
+
+        private void BuildRows(Transform content, HarvestResultVM vm)
+        {
+            if (vm == null || vm.Rows.Count == 0) return;
+
+            float floor = string.IsNullOrEmpty(vm.OverflowLine) ? RowsFloor : RowsFloorWithOverflow;
+            int n = vm.Rows.Count;
+            float band = RowsTop - floor;
+            float h = Mathf.Min(RowHeightMax, (band - RowGap * n) / n);
+            float y = RowsTop;
+
+            for (int i = 0; i < n; i++)
+            {
+                var row = vm.Rows[i];
+                if (row == null) continue;
+                float top = y;
+                Guard.Try("Bank", "draw the '" + row.ResourceName + "' harvest row",
+                    () => BuildRow(content, top, h, row));
+                y -= h + RowGap;
+            }
+
+            if (!string.IsNullOrEmpty(vm.OverflowLine))
+            {
+                var more = ElarionUiKit.Label(content, vm.OverflowLine, floor - 0.055f, floor - 0.01f,
+                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Left,
+                    0.08f, 0.92f, bold: false);
+                ElarionUiKit.FitSingleLine(more, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
+            }
+
+            if (!string.IsNullOrEmpty(vm.FooterLine))
+            {
+                // ONCE, for the whole screen. The old body said this sentence per resource.
+                //
+                // (!) THE VARIABLE IS NAMED `label` ON PURPOSE, AND THE FIT IS A REAL ONE.
+                // TownBankCapRegression [clamped-grant-warns] (TownBankCapRegression.cs:461-463)
+                // does a SOURCE-TEXT scan of this file for the literal
+                // "FitBlock(label, ElarionUi.FontFloorMobile" and for the ABSENCE of any direct
+                // ellipsis overflow-mode assignment in this file (the exact token is deliberately
+                // NOT spelled out here - writing it even inside a comment trips the scan, which is
+                // itself evidence of what a source-text lint can and cannot see). It is the
+                // readable-floor guarantee for the one WRAPPING block on this screen, which after
+                // WO-1525 is this footer sentence (the
+                // rows are single-line fields and take FitSingleLine, which the kit gives the same
+                // 30px floor). FitBlock is the correct helper here regardless of the oracle: it
+                // wraps and TRUNCATES rather than ellipsizing, so the reassurance can never be
+                // shortened into a lie. Do not rename this variable to satisfy a linter's opposite
+                // - and do not weaken the oracle; that it pins a variable NAME rather than the
+                // behaviour is flagged in WORK_ORDER_1525's RESULT for the lead.
+                var label = ElarionUiKit.Label(content, vm.FooterLine, 0.225f, 0.29f,
+                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.TopLeft,
+                    0.08f, 0.92f, bold: false);
+                ElarionUiKit.FitBlock(label, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
+            }
+        }
+
+        /// <summary>One resource plate: name + banked on top, the store bar under it, the waiting
+        /// figure beneath, and the single action chip on the right at full plate height.</summary>
+        private void BuildRow(Transform content, float top, float h, HarvestResultRow row)
+        {
+            var plate = ElarionUiKit.AddImage(content, "HarvestRow_" + row.ResourceName,
+                new Vector2(0.06f, top - h), new Vector2(0.94f, top),
+                new Color(0.05f, 0.045f, 0.04f, 0.96f), rounded: false);
+
+            float leftEnd = row.HasAction ? 0.62f : 0.96f;
+
+            // THE NAME - the row's identity, upper case, top-left. Position + weight carry the
+            // hierarchy here; nothing is distinguished by hue (the owner is colourblind).
+            var name = ElarionUiKit.Label(plate.transform, row.ResourceName.ToUpperInvariant(),
+                0.56f, 0.98f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TextAlignmentOptions.Left, 0.04f, leftEnd * 0.62f, bold: true);
+            // Every label on this plate carries the DOCUMENTED mobile floor explicitly
+            // (ElarionUi.FontFloorMobile = 30): the kit's default is the same number today, and
+            // writing it out is what stops a later default change from silently making the harvest
+            // screen sub-legible. Past the floor these single-line fields ellipsize INSIDE the kit
+            // (FitSingleLine's own contract) rather than shrinking into unreadable text.
+            ElarionUiKit.FitSingleLine(name, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+
+            // THE BIG NUMBER - what BANKED. The largest glyph on the plate on purpose: it is the
+            // one figure the player came to read.
+            var banked = ElarionUiKit.Label(plate.transform, row.BankedText, 0.52f, 1f,
+                ElarionUi.Gold, ElarionUi.FontBody, TextAlignmentOptions.Right,
+                leftEnd * 0.62f, leftEnd, bold: true);
+            ElarionUiKit.FitSingleLine(banked, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+
+            // THE STORE - a bar whose value label carries BOTH figures AND the state WORD.
+            var bar = ElarionUiKit.Bar(plate.transform, ElarionUiKit.BarKind.Castle,
+                new Vector2(0.04f, 0.30f), new Vector2(leftEnd, 0.50f), withValue: true);
+            if (bar != null)
+            {
+                if (bar.fill != null) bar.fill.fillAmount = row.Fill01;
+                if (bar.valueLabel != null)
+                {
+                    bar.valueLabel.text = row.StorageText;
+                    ElarionUiKit.FitSingleLine(bar.valueLabel, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+                }
+            }
+
+            // THE SECOND NUMBER - what waits (or, on the burn path, what was lost).
+            if (!string.IsNullOrEmpty(row.WaitingText))
+            {
+                var waiting = ElarionUiKit.Label(plate.transform, row.WaitingText, 0.03f, 0.27f,
+                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Left,
+                    0.04f, leftEnd, bold: false);
+                ElarionUiKit.FitSingleLine(waiting, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
+            }
+
+            if (!row.HasAction) return;
+
+            // THE DOOR. Full plate height ON PURPOSE - see the MinTouchPx note on
+            // HarvestResultVM.MaxRows; insetting it gives the measurement straight back.
+            var captured = row;
+            var chip = ElarionUiKit.BuildObsidianButton(plate.transform, row.ActionText,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.65f, 0f), new Vector2(0.97f, 1f),
+                () => Route(captured));
+            MedievalUiSkin.ApplyButton(chip, primary: false);
+            var face = chip != null ? chip.targetGraphic as UnityEngine.UI.Image : null;
+            if (face != null) face.type = UnityEngine.UI.Image.Type.Simple;
+            var chipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>() : null;
+            if (chipLabel != null) ElarionUiKit.FitSingleLine(chipLabel, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+        }
+
+        /// <summary>
+        /// Open the row's door. Close is NOT called first: PanelRouter's own post-open verify
+        /// reads the modal arbiter, and destroying this host before it runs would make a good
+        /// open report as the WO-465 invisible-scrim failure. The arbiter closes this card when
+        /// the destination registers as open.
+        /// </summary>
+        private void Route(HarvestResultRow row)
+        {
+            if (row == null || !row.HasAction) return;
+            bool opened = PanelRouter.Open(row.ActionDoor, row.ActionContext);
+            if (!opened)
+            {
+                FlowTrace.Warn("Bank",
+                    $"harvest-result: the '{row.ActionText}' door onto '{row.ActionDoor}' did not open " +
+                    "- the player is left on the result card with no route to the fix (WO-1525).");
+                return;
+            }
+            Close();
+        }
+
+        /// <summary>
+        /// How many storage containers of <paramref name="r"/> are already BUILT - the one live
+        /// signal the VM needs, and the only thing that decides BUILD versus UPGRADE. Derived from
+        /// the single reader (TownBankCapacity.Apportion), never a second count: the base store
+        /// slot is always present and is not a container.
+        /// </summary>
+        private static int BuiltContainers(BankResource r)
+        {
+            int built = 0;
+            Guard.Try("Bank", "count built storage containers for " + r, () =>
+            {
+                var ap = TownBankCapacity.Apportion(r);
+                if (ap.Slots == null) return;
+                for (int i = 0; i < ap.Slots.Length; i++)
+                    if (!ap.Slots[i].IsBaseStore) built++;
+            });
+            return built;
         }
 
         /// <summary>
@@ -155,10 +347,21 @@ namespace DeNelle.Core.UI
         /// (5) ASCII ONLY - a non-ASCII dash or bullet renders as tofu on the device;
         /// (6) no meaning is carried by colour anywhere (the owner is red/green colourblind).</para>
         ///
-        /// <para>The literals <c>Collected: {s.Granted} of {s.Requested}</c>,
-        /// <c>Uncollected: {s.Lost}</c> and <c>was not added to storage</c> are PINNED by
-        /// <c>TownBankCapRegression</c> [clamped-grant-warns] as the authoritative
-        /// collected/uncollected truth - they are preserved verbatim, only re-seated.</para>
+        /// <para>(!) WO-1525 - THIS IS NO LONGER WHAT THE SCREEN DRAWS. The modal now renders
+        /// <see cref="HarvestResultVM"/> rows (name + banked figure + storage bar + one door);
+        /// this composer is retained because <c>HarvestResultCopyRegression</c> calls it directly
+        /// and its WO-1370/1392/1434 law words are the record of what the prose had to say. Whether
+        /// that suite is retired or rewritten against the VM is a LEAD RULING, not this lane's call
+        /// - flagged in WORK_ORDER_1525's RESULT.</para>
+        ///
+        /// <para>(!) CORRECTED 2026-09-06 (WO-1525, CLAUDE.md section 11B): the paragraph here previously
+        /// claimed the literals <c>Collected: ... of ...</c> and <c>Uncollected: ...</c> were
+        /// "PINNED by TownBankCapRegression [clamped-grant-warns]". Read at source this session,
+        /// that case (<c>TownBankCapRegression.cs:384-399</c>) asserts the load-bearing WARN FIRES
+        /// on a clamped grant and that a full wallet banks 0 of 500 - it never inspects this copy.
+        /// The strings that ARE pinned are pinned by <c>HarvestResultCopyRegression</c>, which calls
+        /// <see cref="BuildBody"/> directly. A copied claim about which suite guards what is exactly
+        /// the duplicated state sections 2/5/16 each describe.</para>
         /// </summary>
         public static string BuildBody(IReadOnlyList<BankOverflowStatus> results)
         {
@@ -253,21 +456,39 @@ namespace DeNelle.Core.UI
             return string.Join("\n\n", blocks);
         }
 
-        private void Update() { if (_hold != null) WorldHold.Renew(_hold); }
+        // WO-1471: the per-frame renew Update is DELETED. Renewing every frame was the
+        // workaround for the bounded ceiling; a player-owned hold has no ceiling, so there is
+        // nothing to renew. WorldHold.Renew itself stays - it is still the seam a bounded beat
+        // uses to legitimately extend.
 
+        // WO-1471: Close is now IDEMPOTENT, because the new OnDisable step-out means the normal
+        // dismissal path runs it TWICE - the tap calls Close (which defers Destroy(gameObject)),
+        // and the host's death at end of frame calls it again through OnDisable. It clears its own
+        // fields so the second pass is a no-op rather than a second NotifyClosed/Destroy against
+        // the modal arbiter that WelcomeBack shares.
         private void Close()
         {
+            if (_panel == null && _hold == null && _modal == null) return;
             if (_panel != null) PanelManager.NotifyClosed(_panel);
+            _panel = null;
             _hold?.Dispose();
             _hold = null;
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
+            _modal = null;
             if (_active == this) _active = null;
             Destroy(gameObject);
         }
 
+        // WO-1360/WO-1471: with no ceiling the host's OWN lifecycle is the net. A merely-DISABLED
+        // component never receives OnDestroy and can neither be dismissed nor release, so the hold
+        // and the panel step out TOGETHER here - releasing the hold alone would leave an orphaned
+        // HARVEST RESULT card over a running world (the WO-1016 shape from the other direction).
+        private void OnDisable() => Close();
+
         private void OnDestroy()
         {
             _hold?.Dispose();
+            _hold = null;
             if (_active == this) _active = null;
         }
     }

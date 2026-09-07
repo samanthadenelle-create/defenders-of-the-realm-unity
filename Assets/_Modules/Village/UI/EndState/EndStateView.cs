@@ -2625,10 +2625,110 @@ namespace DeNelle.Village.UI
             FirePrimary();   // dismiss after the action; latched, fires exactly once
         }
 
+        // =====================================================================
+        //  WO-1543 - THE ANTI-SOFTLOCK GUARD LEARNS TO SEE THE PLAYER
+        // =====================================================================
+        //  Owner ruling 2026-09-06: "Hold on touch, longer guard."
+        //
+        //  THE DEFECT WAS NEVER "THERE IS A TIMER". RaidVictoryController calls
+        //  AutoDismissSeconds "the anti-soft-lock guard" and it is correct - an end
+        //  state that never dismisses can strand a player with no route home. The
+        //  defect is that the timer could not tell a READING player from an ABSENT
+        //  one: in 12 seconds the player had to read the star result, up to five
+        //  spoils rows, a companion-join line and, at a capped bank, "Some of the
+        //  reward could not be paid out" - and no tap, drag or scroll stopped it.
+        //
+        //  RESTART, NOT CANCEL, AND THE CHOICE IS DELIBERATE. A cancel means one
+        //  stray tap pins the screen open forever, which re-opens the exact softlock
+        //  the guard exists to prevent. Restart keeps the backstop alive while giving
+        //  a reading player unlimited time - the safer reading of "hold on touch".
+        //
+        //  OPT-IN, so no other end state's timing moves silently: only a VM that sets
+        //  EndStateVM.HoldOnInteraction takes this path, and today that is the two RAID
+        //  templates alone (FromRaidVictory, FromRaidRetreat). FromBattleDefeat (2.5s),
+        //  FromHeroDeath (6s), FromGameOver (0s), FromOutpostVictory (4s) and the
+        //  wave-clear banner all keep the plain countdown below, byte for byte.
+        //
+        //  THE TEARDOWN PATHS ARE UNTOUCHED. OnSceneLoaded / CloseFromArbiter / OnDestroy
+        //  still destroy this object without firing the primary, and still say so through
+        //  AbandonedPrimaryWarn - a HELD screen whose world moves underneath it dies
+        //  exactly as an unheld one does, because this coroutine dies with the GameObject.
+        // =====================================================================
+
+        /// <summary>How often the hold re-arm may speak, in seconds - a held screen is touched
+        /// every frame while a finger rests on it, and an unthrottled line would flood the log
+        /// and evict the boot window out of the device logcat ring (memory
+        /// logcat-ring-buffer-destroys-evidence).</summary>
+        private const float HoldTraceEverySeconds = 2f;
+
+        /// <summary>
+        /// The guard. When <see cref="EndStateVM.HoldOnInteraction"/> is false this is the
+        /// original two-line countdown. When it is true the countdown RE-ARMS on every player
+        /// interaction, and every re-arm is traced (throttled) so a capture can show whether the
+        /// player was holding the screen or the guard simply fired.
+        /// </summary>
         private IEnumerator AutoDismissAfter(float seconds)
         {
-            yield return new WaitForSecondsRealtime(Mathf.Max(0.5f, seconds));
+            float window = Mathf.Max(0.5f, seconds);
+
+            if (_vm == null || !_vm.HoldOnInteraction)
+            {
+                yield return new WaitForSecondsRealtime(window);
+                FirePrimary();
+                yield break;
+            }
+
+            FlowTrace.Step("EndState",
+                $"'{(_vm.Title ?? "?")}' auto-dismiss armed at {window:0}s WITH HOLD-ON-TOUCH " +
+                "(WO-1543): any interaction re-arms the full window; the guard still fires for a " +
+                "player who does nothing.");
+
+            float waited = 0f;
+            int rearms = 0;
+            while (waited < window)
+            {
+                yield return null;
+                // UNSCALED throughout - a hold left at timeScale 0 by any other system must never
+                // become a new way to strand the player (the same law the raid watchdog lives by).
+                waited += Time.unscaledDeltaTime;
+
+                if (!InteractedThisFrame()) continue;
+
+                waited = 0f;
+                rearms++;
+                FlowTrace.Throttle("EndState", "endstate-hold-rearm", HoldTraceEverySeconds,
+                    $"'{(_vm.Title ?? "?")}' HELD by interaction - auto-return re-armed to the full " +
+                    $"{window:0}s (re-arms so far: {rearms}). The player who is reading is the player " +
+                    "who is touching.");
+            }
+
+            FlowTrace.Step("EndState",
+                $"'{(_vm.Title ?? "?")}' auto-dismiss FIRING after {window:0}s with no interaction " +
+                $"(re-arms this session: {rearms}) - the anti-softlock guard doing its job.");
             FirePrimary();
+        }
+
+        /// <summary>
+        /// Did the player touch the screen THIS frame? New Input System only (no legacy
+        /// <c>Input.*</c> - this project's rule), mouse OR touchscreen, and deliberately NOT
+        /// raycast-filtered: a tap anywhere on a full-screen end state is the player reading it,
+        /// and a tap that happens to land on the one primary button already fires the route home
+        /// through the Button itself. Null-safe on a platform with neither device.
+        /// </summary>
+        private static bool InteractedThisFrame()
+        {
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse != null && (mouse.leftButton.wasPressedThisFrame ||
+                                  mouse.leftButton.isPressed ||
+                                  mouse.scroll.ReadValue().sqrMagnitude > 0.01f))
+                return true;
+
+            var touch = UnityEngine.InputSystem.Touchscreen.current;
+            if (touch != null && touch.primaryTouch != null &&
+                touch.primaryTouch.press.isPressed)
+                return true;
+
+            return false;
         }
 
         private void OnSceneLoaded(Scene s, LoadSceneMode m)

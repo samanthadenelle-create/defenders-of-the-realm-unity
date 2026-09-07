@@ -1,6 +1,6 @@
 # WO-1447: cloud LOAD restores currencies only - a reinstall or a new device loses the entire town
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** `Assets/_Modules/Core/State/GameStateService.cs` (LoadFromBackend) + `api/game/load.js` (read-only
 confirmation). Disjoint from the raid, HUD and Manage lanes.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

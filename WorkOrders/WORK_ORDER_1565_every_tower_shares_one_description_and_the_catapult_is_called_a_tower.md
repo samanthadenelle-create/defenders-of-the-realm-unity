@@ -1,6 +1,6 @@
 # WO-1565: every tower shares one description, the Catapult is called a tower, and an unauthored description paints prose instead of failing
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Priority:** P2 — small code change, real content task. **Read §4 before scheduling: part of this is copy,
 and copy has a voice.**
 **Silo:** `Assets/_Modules/Village/.../StructureCardVM.cs` (the fallback + the gate) and

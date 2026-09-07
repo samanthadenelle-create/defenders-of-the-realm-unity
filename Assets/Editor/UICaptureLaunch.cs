@@ -4012,12 +4012,13 @@ namespace DeNelle.Editor
                         40, 20, 0, null));
                 }
 
-                // ONE quest already underway. It must NOT appear on the board: the v3 board
-                // only OFFERS, and In-Progress is the HUD tracker's job (owner ruling). This
-                // fixture is what makes that exclusion visible in the capture.
+                // WO-1521: ONE quest already underway. It IS on the board now, as an ACTIVE row
+                // carrying its current objective and a GO TO door - the exclusion this fixture
+                // used to prove is retired (owner report 2026-09-06: an accepted quest that
+                // vanishes from every surface is why "no idea how or what to do to complete it").
                 const string activeId = "uicap_rumor_underway";
-                _defs.Add(MakeRumor(activeId, "Already Underway - must not be posted", "story",
-                    "This one is accepted and belongs to the HUD tracker, not to Brom's board.",
+                _defs.Add(MakeRumor(activeId, "Already Underway - the active row", "story",
+                    "Carry the sealed ledger to the archivist waiting at the western gate.",
                     10, 0, 0, null));
                 _activeIds.Add(activeId);
 
@@ -4072,6 +4073,28 @@ namespace DeNelle.Editor
             // PlayerPrefs (which is what the live backend reads).
             public bool HasSeen(string id) => false;
             public void MarkSeen(string id) { }
+
+            // -- WO-1521 seams: the capture fixture carries ONE claimable daily, so every
+            //    RumorBoard shot proves the three row kinds (Claim / Go To / Accept) at once.
+            private readonly List<DailyQuestInstance> _dailies = new List<DailyQuestInstance>
+            {
+                new DailyQuestInstance
+                {
+                    Id = "uicap_daily_claimable", TemplateId = "combat.clear-waves", Slot = "combat",
+                    Target = 3, Progress = 3, Completed = true, ClaimedAtUnix = 0,
+                    Label = "Clear {target} waves at the western gate",
+                },
+            };
+
+            public IReadOnlyList<DailyQuestInstance> Dailies => _dailies;
+            public DailyQuestSlotReward DailyReward(string slot) => new DailyQuestSlotReward
+            { Slot = slot, RewardCrystals = 120, RewardWisdom = 15, RewardRandomItem = true };
+            public bool ClaimDaily(string dailyQuestId) => false;   // a capture never mutates state
+            public string ActiveObjective(string questId) =>
+                "Carry the sealed ledger past the flooded stair before the lantern eels wake.";
+            public bool GoTo(string questId) => false;
+            public void Track(string questId) { }
+
             public event Action Changed { add { } remove { } }
         }
 
@@ -4553,7 +4576,47 @@ namespace DeNelle.Editor
 
                     hud.Show();
                     hud.SetState(DeNelle.Village.BuildHudState.Placing);
-                    hud.SetPlacingLabel("Arcane Spire", "88 wood, 88 iron, 187 crystals");
+
+                    // =========================================================
+                    //  WO-1478 -- THE PILL READS THE LIVE CATALOG, NEVER A LITERAL.
+                    //  This line used to hand SetPlacingLabel a hand-written cost string
+                    //  mixing wood + iron + crystals. The authored Arcane Spire row has
+                    //  never held that basket (it is iron only), and the SHAPE itself --
+                    //  all three resources in one basket -- is what WO-947 /
+                    //  CostBasketSeparationRegression forbids outright. So the harness
+                    //  photographed a price the game cannot charge, and BOTH independent
+                    //  UI reviewers then quoted the fiction back as evidence.
+                    //  A capture that paints numbers the game does not use is not a
+                    //  capture of the game.
+                    //  The label now comes from the SAME seam the ghost paints with in
+                    //  play: the hydrated catalog row -> StructureCardVM.PlacementSummaryFor
+                    //  -> the one shared CostFormat. Retune the row and the capture moves
+                    //  with it; no literal is left here to rot. The only string that
+                    //  remains is the catalog ID being photographed.
+                    // =========================================================
+                    const string ghostEntryId = "tower_arcane_spire";
+                    HydrateCatalogForCapture();
+                    var ghostEntry = DeNelle.Core.Catalog.CatalogRegistry.Get(ghostEntryId);
+                    if (ghostEntry == null)
+                    {
+                        Debug.LogError("[UICap-HL] catalog row '" + ghostEntryId + "' absent after hydration -- " +
+                                       "the ghost pill would have to INVENT a cost, so the case is skipped rather " +
+                                       "than photographing a fiction (WO-1478).");
+                        return 0;
+                    }
+                    string ghostCostWords = DeNelle.Village.StructureCardVM
+                        .PlacementSummaryFor(ghostEntry).CostWords;
+                    if (string.IsNullOrEmpty(ghostCostWords))
+                    {
+                        // Not a fallback to a literal -- an EMPTY price slot is the authored
+                        // behaviour while a first-build freebie is live (WO-1010 D20). Logged so
+                        // a costless pill in the PNG reads as the rule, not as a broken capture.
+                        Debug.LogWarning("[UICap-HL] '" + ghostEntryId + "' priced EMPTY -- the first-build " +
+                                         "freebie is live for this row, so the pill shows no cost by design.");
+                    }
+                    hud.SetPlacingLabel(ghostEntry.displayName, ghostCostWords);
+                    Debug.Log("[UICap-HL] ghost pill from the LIVE catalog row '" + ghostEntryId + "': name='" +
+                              ghostEntry.displayName + "' cost='" + ghostCostWords + "'");
 
                     // (1) VALID — chips near the middle of the field, OK chip affirmative.
                     hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), true, null);
@@ -7248,7 +7311,11 @@ namespace DeNelle.Editor
             // an invented id would silently fail.
             queue.Enqueue(JobKind.BuildingResearch, ChannelId.Research,
                 "building-research:arcane-tower:arcane-warding-runes", 540d);
-            queue.Enqueue(JobKind.TroopUpgrade, ChannelId.Research, "troop-upgrade:militia", 720d, 2);
+            // ⚠ THE TROOP ID WAS NOT REAL EITHER — the same defect as the perk id above, one line
+            // later. troops.json authors no 'militia' (ids run troop-footman ... troop-echo-
+            // legionnaire), so the queue row could never resolve a display name and printed
+            // "Troop Upgrade:militia - Level 2" (Builds/cap-manage-wave3.log:3739). WO-1564.
+            queue.Enqueue(JobKind.TroopUpgrade, ChannelId.Research, "troop-upgrade:troop-footman", 720d, 2);
             queue.Enqueue(JobKind.LearnMagic, ChannelId.Research, "magic:frost-nova", 480d);
         }
 
@@ -7617,7 +7684,23 @@ namespace DeNelle.Editor
             var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 1);
             for (int t = 0; t < tabs.Length; t++)
                 for (int f = 0; f < frames.Length; f++)
+                {
+                    // ⛔ WO-1516 (owner ruling 2026-09-06 20:07): THE BUILD GRID CAN NO LONGER
+                    // PRODUCE A LOCKED TILE TO PHOTOGRAPH, so asking for one is a guaranteed
+                    // MANAGE_FLOW_MAP_FAIL. That lane re-pointed InventoryTiles() at
+                    // BuildInventoryModel.Tiles(chip) - the accessor that matches the BUILD
+                    // palette's own BuildAvailability.Offered - so the BUILD grid is unlocked-only
+                    // by construction, and its own oracle
+                    // (ManageProgressiveDisclosureRegression [build-grid-is-unlocked-only]) FAILS
+                    // if a Locked tile ever reappears there.
+                    // ⚠ ARMY AND RESEARCH KEEP THEIR LockedDetail FRAME - locked troops (mockup
+                    // panel 4) and locked perks (WO-1518) both still exist and are still worth
+                    // photographing. Expected is derived from plan.Length, so nothing else changes
+                    // and no frame count is hand-kept.
+                    if (tabs[t] == DeNelle.Core.Manage.ManageTabId.Build &&
+                        frames[f] == ManageFlowFrame.LockedDetail) continue;
                     plan.Add(new ManageFlowShot(tabs[t], frames[f]));
+                }
             plan.Add(new ManageFlowShot(DeNelle.Core.Manage.ManageTabId.Research, ManageFlowFrame.SchoolPerks));
             return plan.ToArray();
         }

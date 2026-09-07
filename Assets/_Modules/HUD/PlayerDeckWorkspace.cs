@@ -84,7 +84,14 @@ namespace DeNelle.HUD
             switch (page.Kind)
             {
                 case PlayerDeckKind.Realm: return "Realm services, records, and guidance.";
-                case PlayerDeckKind.Hero: return "Your equipment, inventory, skills, loadout, and wardrobe.";
+                // WO-1523: the line names what the deck actually carries. While no cosmetic is
+                // unlocked the Wardrobe card is not built, and a purpose line that still promised a
+                // wardrobe would send the player hunting for a section that is not on the screen -
+                // the same "name N cards, show N cards" rule WO-1421 settled for Journey below.
+                case PlayerDeckKind.Hero:
+                    return HeroDeckWardrobeVM.FromCurrentState().WardrobeHasUnlocked
+                        ? "Your equipment, inventory, skills, loadout, and wardrobe."
+                        : "Your equipment, inventory, skills, and loadout.";
                 // WO-1421 (owner 2026-09-06): the deck is two cards, so the line names two.
                 // Labelled explicitly for symmetry with the two arms above; `default:` is stacked
                 // on the same return so the enum stays exhaustively covered.
@@ -662,7 +669,18 @@ namespace DeNelle.HUD
                     // the medallion renders the "W" monogram exactly as Equipment/Skills do today.
                     // Owner may re-rule the door into the Night Market (WO-1164): move THIS line,
                     // the panel stays. CosmeticShopReachabilityRegression pins the route.
-                    return new List<Card>
+                    //
+                    // WO-1523 (owner 2026-09-06: "everything in wardobe is locked so dont show the
+                    // section in hero"). The Wardrobe card is now CONDITIONAL: it is added only when
+                    // HeroDeckWardrobeVM.WardrobeHasUnlocked is true, and it is ABSENT from the list
+                    // rather than locked or zero-height - a collapsed card still shows up in a
+                    // measured layout case, which the WO forbids. The View decides nothing: the VM
+                    // reads CosmeticSignals.OwnedCount, which DeNelle.Cosmetics publishes (HUD may
+                    // not reference that assembly). On its first appearance the card carries the
+                    // VM's NEW word on its purpose line until the player opens it once.
+                    // This is the owner's explicit exception to the WO-1008 "a hidden door reads as
+                    // broken" precedent that keeps the Journey raid card visible-and-locked.
+                    var heroCards = new List<Card>
                     {
                         Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroBag, "deck"),
                             "Every item you carry", "inventory", PanelId.Inventory),
@@ -670,9 +688,19 @@ namespace DeNelle.HUD
                         Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroSkills, "deck"),
                             "Learn and improve skills", "skill", PanelId.HeroSkillTree),
                         Route(HudStrings.HeroFaceLabel(HudStrings.KeyHeroLoadout, "deck"),
-                            "Abilities equipped for battle", "magic", PanelId.HeroLoadout),
-                        Route("Wardrobe", "Looks for your hero, Echo, and town", "wardrobe", PanelId.CosmeticShop)
+                            "Abilities equipped for battle", "magic", PanelId.HeroLoadout)
                     };
+                    var wardrobeVm = HeroDeckWardrobeVM.FromCurrentState();
+                    if (wardrobeVm.WardrobeHasUnlocked)
+                    {
+                        var wardrobe =
+                            Route("Wardrobe", "Looks for your hero, Echo, and town", "wardrobe", PanelId.CosmeticShop);
+                        wardrobe.Purpose = wardrobeVm.PurposeWithBadge(wardrobe.Purpose);
+                        var openWardrobe = wardrobe.Open;
+                        wardrobe.Open = () => { HeroDeckWardrobeVM.MarkSeen(); openWardrobe(); };
+                        heroCards.Add(wardrobe);
+                    }
+                    return heroCards;
                 case PlayerDeckKind.Journey:
                 {
                     var journey = JourneyDeckSubtitleVM.FromCurrentState();

@@ -239,10 +239,15 @@ UnityEngine.UI, Unity.TextMeshPro, **GoogleSignIn (NEW, WO-769)**.
 Tutorial V2 lives in Core + Village: `FeatureFlags.TutorialV2` **default ON** (`Core/FeatureFlags.cs:462`),
 signals/model in `Core/Tutorial/` (TutorialSignals.cs, TutorialStepModel.cs — WO-T1), interpreter
 `Village/Tutorial/V2/TutorialFlow.cs` (self-bootstraps on hub scenes when ON, `:50`), legacy
-`Village/Tutorial/TutorialDirector.cs` stands down while ON (`:128-134`),
+⛔ **`Village/Tutorial/TutorialDirector.cs` NO LONGER EXISTS — do not go looking for it** (verified
+2026-09-06: no `TutorialDirector.cs` anywhere under `Assets/`). It was DELETED, 849 lines, by commit
+`17cf8736b` *"feat(tutorial): WO-971 - the original tutorial is REMOVED; only the wolf guide remains"*,
+along with its oracle `TutorialDirectorHubGateTest.cs`. The two claims this paragraph used to make
+about it - that it "stands down while ON (`:128-134`)" and that it "suppresses legacy OnboardingFlow by
+reflection (`TutorialDirector.cs:689`)" - describe a file that is gone, and a seat chasing either line
+loses the session to it. The live path is `Village/Tutorial/V2/TutorialFlow.cs` alone.
 `Village/NPCs/SylasStewardInjector.cs` gated `TutorialV2 && !Onboarded` (`:82`, `:141`). Onboarding's only
-touchpoints: TitleController sets OnboardingMode; TutorialDirector suppresses legacy OnboardingFlow by reflection
-(`TutorialDirector.cs:689`).
+remaining touchpoint: TitleController sets OnboardingMode.
 
 ### Cross-module trio — all intact (re-verified)
 - `Core/OnboardingMode.cs` — static `FullTutorial` ↔ PlayerPrefs `onboarding.fullTutorial` (`:32`, `:44-62`),

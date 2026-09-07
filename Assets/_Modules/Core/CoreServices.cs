@@ -5,7 +5,7 @@
 // lets implementing modules register concrete services behind Core-defined
 // interfaces, so consumers never need an assembly reference to the implementor.
 //
-// Slots (7):
+// Slots (8):
 //   Hud               — IVillageHud          (WO-41, DeNelle.HUD)
 //   HudModel          — IHudModel            (WO-541, HUD model layer)
 //   Population        — IPopulationService   (DeNelle.Core.Population)
@@ -13,6 +13,7 @@
 //   Jupiter           — IJupiterService      (WO-43, DeNelle.Web3)
 //   WalletSigner      — IWalletSigner        (wallet signer service)
 //   SceneLinkResolver — ISceneLinkResolver   (DeNelle.Core.World)
+//   VillageBridge     — IVillageBridge       (WO-1510, DeNelle.Village)
 //
 // Each slot follows the same Register/Unregister pattern: the concrete
 // MonoBehaviour calls Register in Awake and Unregister in OnDestroy.
@@ -226,6 +227,36 @@ namespace DeNelle.Core
         public static void UnregisterSceneLinkResolver(DeNelle.Core.World.ISceneLinkResolver resolver)
         {
             if (ReferenceEquals(SceneLinkResolver, resolver)) SceneLinkResolver = null;
+        }
+
+        // ── Village bridge (WO-1510) ──────────────────────────────────────────
+        /// <summary>
+        /// The DeNelle.Village seam — hero pose, hero input suppression, wave-clear
+        /// notification — or null when the Village assembly is not loaded (headless /
+        /// Core-only contexts). This slot REPLACES the four
+        /// <c>Type.GetType("DeNelle.Village…")</c> sites that used to live inside Core
+        /// (SceneRouter x2, PersistenceBridge, BreakCaptureHarness); Core now names no
+        /// Village type at all. Always null-check before use.
+        /// </summary>
+        public static DeNelle.Core.Bridging.IVillageBridge VillageBridge { get; private set; }
+
+        /// <summary>Registers the Village bridge. Called by VillageBridgeService's
+        /// RuntimeInitializeOnLoadMethod installer (DeNelle.Village).</summary>
+        public static void RegisterVillageBridge(DeNelle.Core.Bridging.IVillageBridge bridge)
+        {
+            if (VillageBridge != null && !ReferenceEquals(VillageBridge, bridge))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("CoreSvc", "REPLACING existing IVillageBridge registration (double-register / stale host?).");
+                Debug.LogWarning("[CoreServices] Replacing existing IVillageBridge registration.");
+            }
+            VillageBridge = bridge;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("CoreSvc", bridge != null ? "IVillageBridge registered." : "IVillageBridge registered as NULL.");
+        }
+
+        /// <summary>Unregisters the Village bridge.</summary>
+        public static void UnregisterVillageBridge(DeNelle.Core.Bridging.IVillageBridge bridge)
+        {
+            if (ReferenceEquals(VillageBridge, bridge)) VillageBridge = null;
         }
     }
 }

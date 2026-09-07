@@ -1,6 +1,6 @@
 # WO-1516: the Manage BUILD grid shows only structures that are unlocked and available to the player
 
-**Status:** READY TO IMPLEMENT - owner ruling, 2026-09-06 20:07
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Silo:** Manage 2000-block - `ManageScreenVM` build inventory + `ManageWorkspacePanel` grid (WO-2006 / 2007).
 **LANDS AFTER** the WO-1405 lane commits - `ManageScreenVM.cs` is being gated tonight.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

@@ -256,16 +256,27 @@ namespace DeNelle.Editor
                 if (svc.GetMethod(m, BindingFlags.Public | BindingFlags.Static) == null)
                     failures.Add($"ArmyLoadoutService.{m} is missing");
 
+            // The bank must be LIVE UI, and that is a two-link chain since WO-1512 moved the
+            // loadout verbs off the View: the VM must call ArmyLoadoutService, and the panel must
+            // route through the VM. Pinning only the panel's own use of the service would have
+            // failed a correct separation; pinning only the VM would let the screen orphan it.
             string panel = ReadSource("Assets/_Modules/Village/Troops/ArmyMusterPanel.cs", failures);
             if (panel != null)
             {
-                if (panel.IndexOf("ArmyLoadoutService", StringComparison.Ordinal) < 0)
-                    failures.Add("ArmyMusterPanel does not use ArmyLoadoutService — loadouts would be dead UI");
+                if (panel.IndexOf("ArmyMusterVM", StringComparison.Ordinal) < 0)
+                    failures.Add("ArmyMusterPanel does not route through ArmyMusterVM — the loadout bank would be unreachable");
                 if (panel.IndexOf("Save slot", StringComparison.Ordinal) < 0)
                     failures.Add("ArmyMusterPanel missing Save slot control");
             }
 
-            log.AppendLine("  loadout bank — 3 slots + To/FromLoadout + service surface OK");
+            string vm = ReadSource("Assets/_Modules/Village/Troops/ArmyMusterVM.cs", failures);
+            if (vm != null)
+            {
+                if (vm.IndexOf("ArmyLoadoutService", StringComparison.Ordinal) < 0)
+                    failures.Add("ArmyMusterVM does not use ArmyLoadoutService — loadouts would be dead UI");
+            }
+
+            log.AppendLine("  loadout bank — 3 slots + To/FromLoadout + service surface + VM->ArmyLoadoutService OK");
         }
 
         // ── 7. ASCII-only player-visible strings ──────────────────────────────

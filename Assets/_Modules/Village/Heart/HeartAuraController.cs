@@ -301,16 +301,33 @@ namespace DeNelle.Village
             // It rides the SAME lifecycle as the FireFlies seat above - built once in BuildAura,
             // seated off the same renderer-bounds scan - so there is no second spawner and no second
             // pool (CLAUDE.md s7).
-            _footHandle = HeldVfxHook.Play(
-                "tree-of-life foot",
-                HeldVfxKeys.TreeOfLifeFootAura,
-                _hasTreeBody ? foot : transform.position,
-                transform,
-                0f,                     // catalog DefaultScale - nothing here rescales her prefab
-                "WO-1343 Ask 1: this seat WAS bound on 2026-09-03 to her re-tagged Aura row " +
-                "(Aura_Nature.prefab). An EMPTY key here means HeldVfxKeys.TreeOfLifeFootAura was " +
-                "blanked by a later edit - restore the constant; do not re-type the key at this " +
-                "call site.");
+            // WO-1476 (owner 2026-09-07, verbatim): "there is a VFX exiting about town along Y and
+            // it needs removed or turned off". The riser is THIS seat, proven from the prefab bytes
+            // rather than picked between the WO's two candidates: Aura_Nature's "Energy" sub-emitter
+            // carries VelocityModule enabled with y = 0.3-0.5 u/s over a 2-4 s lifetime, while the
+            // FireFlies loop at (B) has VelocityModule/ForceModule disabled and gravity 0 and so
+            // cannot rise at all. See AmbientAuraPolicy's WO-1476 block for the full field values.
+            //
+            // Withheld the SAME way WO-1002 withheld the FireFlies loop -- the owner's
+            // VfxManualPicks row is byte-intact (it is hers, and NightStoreAuraSelectionRegression
+            // pins it), the seat and its position survive, and the absence is TRACED so a capture
+            // says why rather than showing a hole. One readonly flag restores it.
+            if (AmbientAuraPolicy.ShouldWithholdTreeFootAura(HeldVfxKeys.TreeOfLifeFootAura))
+                FlowTrace.Step("Heart",
+                    $"HeartAura '{name}': " +
+                    AmbientAuraPolicy.TreeFootWithholdReason("tree-of-life foot seat") +
+                    $" (treeBody={_hasTreeBody}, footPos={(_hasTreeBody ? foot : transform.position):F2}).");
+            else
+                _footHandle = HeldVfxHook.Play(
+                    "tree-of-life foot",
+                    HeldVfxKeys.TreeOfLifeFootAura,
+                    _hasTreeBody ? foot : transform.position,
+                    transform,
+                    0f,                 // catalog DefaultScale - nothing here rescales her prefab
+                    "WO-1343 Ask 1: this seat WAS bound on 2026-09-03 to her re-tagged Aura row " +
+                    "(Aura_Nature.prefab). An EMPTY key here means HeldVfxKeys.TreeOfLifeFootAura was " +
+                    "blanked by a later edit - restore the constant; do not re-type the key at this " +
+                    "call site.");
 
             // (C) WO-891 (adjacent, reported): THE HEART DID NOT FLINCH WHEN STRUCK.
             //

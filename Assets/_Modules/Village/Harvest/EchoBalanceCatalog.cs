@@ -40,6 +40,23 @@ namespace DeNelle.Village
         [JsonProperty("mult")] public float Mult = 1f;
     }
 
+    /// <summary>WO-1474: the three WORKFORCE per-hour harvest rates that
+    /// <see cref="EchoBonusCalculator.HarvestRatePerHour"/> returns, one per rate CLASS.
+    /// They were C# literals (3600 / 900 / 4) until 2026-09-06, which put them out of reach
+    /// of the WO-1331 remote-retune seam even though this file is on its allowlist. The
+    /// defaults below are the EXACT literals they replaced -- keep them in step with the
+    /// authored json so an absent file cannot silently change the split.</summary>
+    [System.Serializable]
+    public sealed class EchoHarvestRateDef
+    {
+        /// <summary>Wood / Iron / Food, per hour at level 1 (5 every 5 seconds).</summary>
+        [JsonProperty("common")] public float Common = 3600f;
+        /// <summary>Gold per hour at level 1 -- valuable, but not premium.</summary>
+        [JsonProperty("gold")] public float Gold = 900f;
+        /// <summary>Crystals per hour -- the deliberately tiny drip, exactly 1 per 15 minutes.</summary>
+        [JsonProperty("crystals")] public float Crystals = 4f;
+    }
+
     /// <summary>The parsed echoes-balance.json root. Field defaults ARE the built-in fallback.</summary>
     [System.Serializable]
     public sealed class EchoBalanceData
@@ -78,6 +95,12 @@ namespace DeNelle.Village
         /// file cannot silently reintroduce the 6x. ADDITIVE knob: absent in an older
         /// echoes-balance.json, Newtonsoft leaves this default -- no version bump.</summary>
         [JsonProperty("repairFractionPerHour")] public float RepairFractionPerHour = 0.35f;
+
+        /// <summary>WO-1474: the three workforce per-hour harvest rates (see
+        /// <see cref="EchoHarvestRateDef"/>). ADDITIVE knob -- absent in an older
+        /// echoes-balance.json, Newtonsoft leaves this default, which equals the literals
+        /// it replaced, so no version bump and no split change.</summary>
+        [JsonProperty("harvestRatePerHour")] public EchoHarvestRateDef HarvestRatePerHour = new EchoHarvestRateDef();
     }
 
     /// <summary>Static surface over echoes-balance.json -- load + cache + typed getters (WO-738).</summary>
@@ -118,7 +141,33 @@ namespace DeNelle.Village
         /// at level 1 (EchoBonusCalculator.RepairFractionsPerSecond is the ONE consumer).</summary>
         public static float RepairFractionPerHour { get { EnsureLoaded(); return Mathf.Max(0f, _data.RepairFractionPerHour); } }
 
-        /// <summary>The per-echo base contribution rate for an echo id (1.0 fallback when absent).</summary>
+        /// <summary>WO-1474: Wood/Iron/Food workforce rate per hour at level 1 (was the
+        /// C# literal 3600). Clamped >= 0 so a bad authored row cannot go negative.</summary>
+        public static float CommonResourcePerHour
+        {
+            get { EnsureLoaded(); return Mathf.Max(0f, RatesOrDefault().Common); }
+        }
+
+        /// <summary>WO-1474: Gold workforce rate per hour at level 1 (was the literal 900).</summary>
+        public static float GoldPerHour
+        {
+            get { EnsureLoaded(); return Mathf.Max(0f, RatesOrDefault().Gold); }
+        }
+
+        /// <summary>WO-1474: Crystals per hour -- level-flat by design (was the literal 4).</summary>
+        public static float CrystalPerHour
+        {
+            get { EnsureLoaded(); return Mathf.Max(0f, RatesOrDefault().Crystals); }
+        }
+
+        private static EchoHarvestRateDef RatesOrDefault()
+        {
+            return _data.HarvestRatePerHour ?? (_data.HarvestRatePerHour = new EchoHarvestRateDef());
+        }
+
+        /// <summary>The per-echo base contribution rate for an echo id (1.0 fallback when absent).
+        /// WO-1474: this is the DumpSilos split WEIGHT MULTIPLIER -- EchoBonusCalculator.
+        /// HarvestTargetWeights is the production consumer (it had none before 2026-09-06).</summary>
         public static float BaseRateFor(string echoId)
         {
             EnsureLoaded();

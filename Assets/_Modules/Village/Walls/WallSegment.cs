@@ -43,6 +43,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;             // NavMeshObstacle — dropped on collapse (see Collapse)
+using DeNelle.Core.Catalog;       // RepoProps.MaxStructureLevel — the SINGLE structure ceiling
 using DeNelle.Core.Combat;        // IDamageable / IDamageableStructure / DamageElement
 using DeNelle.Core.Diagnostics;   // FlowTrace / Guard (CLAUDE.md S12)
 
@@ -85,9 +86,9 @@ namespace DeNelle.Village
         [Tooltip("Box collider blocking the hero / enemies on this section.")]
         [SerializeField] private BoxCollider _blocker;
 
-        [Header("Tier (S5 — wood→stone→reinforced)")]
-        [Tooltip("Upgrade tier (1..3). Higher tiers absorb contact damage more slowly " +
-                 "(effective HP scales ~x1.6 per tier) — the build-mode wall-tier sink.")]
+        [Header("Tier (S5 — wood→stone→reinforced→…)")]
+        [Tooltip("Upgrade tier (1..RepoProps.MaxStructureLevel). Higher tiers absorb contact damage " +
+                 "more slowly (effective HP scales x1.6 per tier) — the build-mode wall-tier sink.")]
         [SerializeField] private int _tier = 1;
 
         [Header("Collapse (WO-853)")]
@@ -95,10 +96,14 @@ namespace DeNelle.Village
                  "the collider drop and the Collapsed event both fire on frame 0.")]
         [SerializeField, Min(0.01f)] private float _collapseSeconds = 0.9f;
 
-        // Effective-HP multiplier per tier: wood (x1) → stone (x1.6) → reinforced (x2.56).
-        // Incoming contact damage is DIVIDED by this, so a tier-3 wall takes ~2.56x longer to
-        // wear down on the shared 0-100 damage track without changing the collapse threshold.
-        private static readonly float[] s_tierToughness = { 1f, 1f, 1.6f, 2.56f };
+        // WO-1480 — the effective-HP multiplier is DERIVED, not tabled. It used to be the
+        // literal array { 1f, 1f, 1.6f, 2.56f }, which defined a divisor for tiers 1..3 ONLY;
+        // paired with SetTier's literal 1..3 clamp that was a NINTH hardcoded structure ceiling
+        // (WO-1108b replaced eight of them with RepoProps.MaxStructureLevel = 6 and missed this
+        // one). A geometric step reproduces the old numbers EXACTLY at the tiers that existed
+        // (x1 / x1.6 / x2.56) and keeps every level the ceiling now admits defined, so a level-4
+        // wall can never silently take level-3 damage reduction.
+        private const float TierToughnessStep = 1.6f;
 
         /// <summary>Full health on the wall's inverted 0-100 damage track (Damage 0 == MaxHp).</summary>
         public const float MaxHp = 100f;
@@ -140,11 +145,31 @@ namespace DeNelle.Village
         /// <summary>True once the section has taken full damage (Week 4+).</summary>
         public bool IsDestroyed => _damage >= 100f;
 
-        /// <summary>Upgrade tier (1..3). Higher = tougher (S5 wall-tier sink).</summary>
+        /// <summary>Upgrade tier (1..<see cref="MaxTier"/>). Higher = tougher (S5 wall-tier sink).</summary>
         public int Tier => _tier;
 
         /// <summary>
-        /// S5 — set the wall's upgrade tier (clamped 1..3). Higher tiers divide incoming
+        /// WO-1480 — the highest tier a wall may hold, read from the SINGLE structure ceiling
+        /// (<see cref="RepoProps.MaxStructureLevel"/>) rather than restated as a literal. A row
+        /// still opts in with its own <c>repo.maxLevel</c> (<c>wall_wood</c> authors 2 today);
+        /// this is only the hard bound the clamp may never exceed.
+        /// </summary>
+        public static int MaxTier => RepoProps.MaxStructureLevel;
+
+        /// <summary>
+        /// WO-1480 — the effective-HP divisor for a tier, defined for EVERY tier the clamp
+        /// admits (1..<see cref="MaxTier"/>) instead of for a tabled 1..3. Tier 1 is x1 and each
+        /// step multiplies by <see cref="TierToughnessStep"/> (1.6), which reproduces the old
+        /// table exactly: 1 → x1, 2 → x1.6, 3 → x2.56.
+        /// </summary>
+        public static float ToughnessFor(int tier)
+        {
+            int t = Mathf.Clamp(tier, 1, MaxTier);
+            return Mathf.Pow(TierToughnessStep, t - 1);
+        }
+
+        /// <summary>
+        /// S5 — set the wall's upgrade tier (clamped 1..<see cref="MaxTier"/>). Higher tiers divide incoming
         /// contact damage by a per-tier toughness factor (~x1.6 effective HP per tier), so a
         /// reinforced wall wears down far slower. The tier accent tint is owned by
         /// StructureTierVisual; this is the gameplay (durability) half of the upgrade.
@@ -153,7 +178,7 @@ namespace DeNelle.Village
         /// </summary>
         public void SetTier(int tier)
         {
-            _tier = Mathf.Clamp(tier, 1, 3);
+            _tier = Mathf.Clamp(tier, 1, MaxTier);
             ApplyTierBlockerHeight();
         }
 
@@ -175,7 +200,11 @@ namespace DeNelle.Village
             // there would silently re-size baked raid/perimeter scenes.
             if (GetComponent<PlacedStructure>() == null) return;
 
-            float h = Walls.WallDefense.TargetHeight(Mathf.Clamp(_tier - 1, 0, 3));
+            // WO-1480: no literal bound here either. WallDefense.TargetHeight already clamps the
+            // ladder level into its OWN authored walls.json table (0..tiers-1), so a tier the
+            // structure ceiling now admits above that table keeps the top authored height rather
+            // than reading a restated-and-drifting 3 from this side.
+            float h = Walls.WallDefense.TargetHeight(_tier - 1);
             if (h <= 0f || Mathf.Approximately(h, _height)) return;
 
             var box = _blocker != null ? _blocker : GetComponent<BoxCollider>();
@@ -299,8 +328,10 @@ namespace DeNelle.Village
 
             // S5 — higher tiers absorb the hit more slowly (effective-HP scaling on the
             // shared 0-100 track). The collapse threshold stays 100; only the rate changes.
-            int t = Mathf.Clamp(_tier, 1, 3);
-            float effective = amount / s_tierToughness[t];
+            // WO-1480: the divisor is derived across the WHOLE admissible range, so a wall the
+            // clamp now lets reach level 4+ no longer takes level-3 reduction off a 1..3 table.
+            int t = Mathf.Clamp(_tier, 1, MaxTier);
+            float effective = amount / ToughnessFor(t);
 
             // WO-676 (BULWARK): Hardened Ramparts (structureToughness, always-on) +
             // Warden of Elarion (structureToughnessWave, only while the wave phase is

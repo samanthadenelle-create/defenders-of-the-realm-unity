@@ -46,7 +46,6 @@ namespace DeNelle.Village
         // DEF-100: proximity is owned by THIS controller now (3 m, criterion 3),
         // independent of any host trigger radius.
         public float activationRadius = 3f;
-        public float flashDuration    = 0.22f;
 
         [Header("WO-272 Glow Layer")]
         [Tooltip("Idle emissive HDR intensity multiplier on the arch + glow.")]
@@ -770,16 +769,15 @@ namespace DeNelle.Village
             _nextHeroRefresh = Time.time + HeroRefreshInterval;
 
             var p = GameObject.FindWithTag("Player");
-            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-            if (p == null) p = SafeFindWithTag("HeroTarget");
+            // WO-1513: the old fallback read the "HeroTarget" tag, which
+            // TagManager.asset has never declared — a permanently dead branch.
+            // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+            if (p == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) p = loco.gameObject;
+            }
             if (p != null) _hero = p.transform;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
 
         public void OnHeroApproach()
@@ -809,7 +807,12 @@ namespace DeNelle.Village
             // no CameraShakeManager/ShakeTier). Medium tier ≈ 0.3 intensity / 0.3s.
             VFXManager.Play(VFXType.Portal_Enter, transform.position);
             CameraShakeBridge.Shake(0.3f, 0.3f);
-            StartCoroutine(ScreenFlashRoutine());
+            // WO-1513: the screen-flash beat used to start here. It resolved its
+            // overlay Image through the "ScreenFlash" TAG, which TagManager.asset has
+            // never declared and nothing in Assets/ ever sets — so the coroutine
+            // yield-broke on its first line and the flash NEVER rendered, in any build.
+            // Deleted rather than re-pointed: there is no overlay object to find.
+            // The portal's felt punch is the burst + VFXManager + camera shake above.
         }
 
         /// <summary>
@@ -848,23 +851,12 @@ namespace DeNelle.Village
             _transition = null;
         }
 
-        private IEnumerator ScreenFlashRoutine()
-        {
-            // "ScreenFlash" may be undefined (FindWithTag throws on an undefined tag).
-            var flash = SafeFindWithTag("ScreenFlash");
-            if (flash == null) yield break;
-            var img = flash.GetComponent<UnityEngine.UI.Image>();
-            if (img == null) yield break;
-            img.color = Color.white;
-            float elapsed = 0f;
-            while (elapsed < flashDuration)
-            {
-                img.color = Color.Lerp(Color.white, Color.clear, elapsed / flashDuration);
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-            img.color = Color.clear;
-        }
+        // WO-1513: ScreenFlashRoutine lived here. It was the ONLY reader of the
+        // "ScreenFlash" tag — undeclared in TagManager.asset and set by nothing in
+        // Assets/ — so it exited on its first statement every time it ran. Removed
+        // with its `flashDuration` knob so no future reader mistakes it for a live
+        // presentation path. Re-adding a flash means building the overlay Image, not
+        // restoring the tag.
 
         private void OnDrawGizmosSelected()
         {

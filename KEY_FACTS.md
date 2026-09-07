@@ -1,4 +1,111 @@
-> ## > LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-03.md` - read it FIRST (re-stamped 2026-09-03 night, IN THE SAME CHANGE AS THE ANCHOR)
+> ## LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-06.md` - read it FIRST (re-stamped 2026-09-06 21:05)
+>
+> WARNING **RE-STAMPED LATE FOR THE FOURTH TIME, AND THE MARGIN WAS ONE MINUTE.** The 09-06 anchor was
+> written at 20:05 and THIS file was edited at 20:06 - the pointer sat on 09-03 through that edit and
+> was only corrected in tonight's 21:05 pass. The rule below ("re-stamp in the SAME change as any new
+> anchor") has now failed four times in four anchors; it is not a reminder problem, it is duplicated
+> state. *(Corrected 2026-09-06 21:51: this read "`ls CANON_GROUND_TRUTH_*.md` returns 08-21, 08-23,
+> 09-02, 09-03, 09-06" - it returns **21 files, 2026-07-12 through 2026-09-06**, measured tonight. The
+> five named were the recent tail, not the listing. WARNING that is itself the CLAUDE.md section 15
+> violation - "keep exactly ONE current" - and it is FLAGGED here, not fixed, because pruning anchors is
+> out of this file's lane. The NEWEST date is the anchor; the other twenty are history.)*
+>
+> ### 2026-09-06 21:05 - the Sunday sweep, measured tonight. Every line names where it was read.
+> **TREE AND BUILD**
+> - **Branch `feat/synty-art-retheme`, 118 commits UNPUSHED** - `git status -sb` reads
+>   `[ahead 118]`, `git rev-list --count origin/feat/synty-art-retheme..HEAD` = **118**, both run
+>   2026-09-06 ~21:00. The 09-06 anchor's **103** was read earlier the same evening and both are true
+>   at their timestamps. **Never state a push count from a doc - re-run the command.**
+> - **Tester build on the Seeker = `2026.09.07.358574`.** `ProjectSettings/ProjectSettings.asset:148`
+>   `bundleVersion: 2026.09.07.358574`, `:177` `AndroidBundleVersionCode: 358574`, read at source
+>   tonight. The Seeker install itself is the lead's `adb dumpsys` reading; **it is not re-provable
+>   from this repo** and is recorded as the lead's report, not as a repo fact (CLAUDE.md 11B).
+> - **The PUBLIC store build is still `2026.08.17.328845`** - `publishing/SUBMIT_CHECKLIST.md:41`,
+>   *"Existing live release observed on-device"*. Twenty days and hundreds of commits behind the
+>   tester build. Every growth statement starts from THAT number, not from the tree.
+> - **Save schema = `SaveSchema.CurrentVersion` = 41** (v41 = WO-823 Phase E `everCompletedRaid`),
+>   `Assets/_Modules/Core/State/SaveSchema.cs:41`. **The number is written here once, dated, as
+>   evidence the const was read - the Persistence section below deliberately carries no number.**
+> - **Assembly definitions under `Assets/_Modules` = 25** (`find Assets/_Modules -name '*.asmdef'`).
+>   WARNING CLAUDE.md section 5 still says **19**; that is out of this file's lane and is flagged, not edited here.
+>
+> **THE FOUR GATE LOGS, judged by MARKER on a FRESH log (never an exit code)**
+> - `Builds/cg-quiet.log` **20:04** -> `COMPILE_GATE_OK`. GREEN.
+> - `Builds/reg-quiet.log` **20:07** -> **`REGRESSION_FAIL: 2 failure(s) (417/419 registered suites
+>   green, 0 skipped)`**. The two reds, verbatim from the log: **(a)** `[ui-mvvm]` NEW View reading
+>   game state - `Assets/_Modules/Village/BuildMode/BuildPreviewModal.cs:252,253` `GameStateService`;
+>   **(b)** a **hollow pass** at `NightMarketNoWalletRegression.cs:761` `[A-missing-dependency]`, a
+>   null guard that returns having asserted nothing. Both are the classes this file already names
+>   (the WO-1138 hollow-pass class, the armed `[ui-mvvm]` ratchet) - **neither is new shape, both are
+>   real.**
+> - `Builds/r2-parity.log` **20:24** (UTF-16LE - `iconv -f UTF-16LE` first, a plain grep finds
+>   nothing) -> **`R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`**, and it names
+>   **`Android/catalog_2026.09.07.358574.bin` + `.hash`** - the CLAUDE.md section 16 proof that the CDN
+>   carries THIS build's content-hashed bundles, not a previous build's.
+> - `Builds/ui-capture.log` **2026-09-05 07:51** -> `UI_CAPTURE_OK 91`. **A day and a half old and
+>   the oldest of the four** - it covers an earlier tree.
+>
+> **DEPLOY IS ON HOLD, AND THE HOLD HAS A TICKET**
+> - **Do NOT deploy `api/` until `auth_sessions.signed_at` exists on the live Neon DB.** WO-1446
+>   (`WorkOrders/WORK_ORDER_1446_auth_sessions_signed_at_missing_on_live_db.md`, **READY TO
+>   IMPLEMENT**): the live-DB sweep reads `MISSING ON LIVE DB: auth_sessions.signed_at` while
+>   `api/_lib/wallet-auth.js:320` (WORKING COPY - the file is `M` in `git status`, so the line moves
+>   until it is committed) INSERTs it on the normal mint path - **deploying would 500 every
+>   wallet session.** The uncommitted work waits at
+>   `WorkOrders/patches/wo1441-api-renewal-cap.UNCOMMITTED.patch`. Owner runs
+>   `tools/run-schema-repair.mjs`.
+>
+> **WO NUMBERING** - main line **next free = read `CLI_LANES_WO_NUMBERS.md:190`**, the RECONCILED
+> line. The 09-06 anchor recorded the banner three dozen mints behind `WorkOrders/`; the lead
+> reconciled it tonight. **Do not copy the number - the banner is the sole authority (CLAUDE.md
+> section 2).** *(Corrected 2026-09-06 21:51: this sentence copied "ninety-seventh pass, currently
+> 1533" while forbidding exactly that, and the banner had already moved to the ninety-eighth pass
+> within the hour. The copy is deleted rather than updated - a fresher copy would drift the same way.)*
+>
+> **FIVE DEFECT/RULING FACTS PROVEN TONIGHT**
+> - **The raid garrison spawner carries a HARDCODED stat block that contradicts the roster.**
+>   `Assets/_Modules/Village/World/Camps/GarrisonStatBlocks.cs:122` -
+>   `case "orc-berserker": ... 260f, 2.2f, 13f, ...` - while `enemies.json` authors that same id at
+>   **hp 117, contactDamage 10** (`Assets/Resources/Data/Canonical/enemies.json:239,241`; the
+>   `Assets/StreamingAssets/` twin is byte-identical at the same lines). **Better than 2x HP and 1.3x
+>   damage, in the mode the owner is being asked to felt-test.** Only `orc-raider` in that switch was
+>   ever SSOT'd back to
+>   `WildlandsRoster.BaseDef` (`:125-135`, with the drift called out in its own comment); every other
+>   case is still a literal. **A balance pass run against `enemies.json` cannot move the raid.**
+> - **The F8 device bridge dedupes on message TEXT forever - 319 captures published 0, including the
+>   owner's own FLAG.** WO-1531 (P0, READY),
+>   `.claude/skills/run-defenders/f8-device-bridge.ps1` `Get-EntryKey`. Both producers were alive all
+>   day, so this is not the daemon dying. **This is CLAUDE.md section 14's failure mode with the harness
+>   itself as the cause** - the owner F8s and no seat ever hears it.
+> - **The Echo Guide grants NOTHING, on purpose, and that is a fence not a gap.** WO-1380
+>   (`WORK_ORDER_1380_echo_guides_and_memory_lines.md:44`, `:91`; RESULT `:21`, `:35`): narrative only
+>   at launch, **no stat, yield or combat effect**, and a regression FAILS if one ever appears.
+>   **Do not "wire up" the Guide bonus - there is none to wire.**
+> - **The Field Cleric's 205 gold is a ROW MISSED BY A UNIFORM x5 RESCALE - not a typo, not
+>   deliberate.** WO-1529 (SPEC, needs an owner decision), `:43`: `4a3423108` multiplied EIGHT troop
+>   rows by exactly x5 and skipped this one. **The arithmetically-derived intent is `1025`**
+>   (90/70/45 x5), `:80` - explicitly **NOT** the WO's earlier speculative 1,050 or 2,050, which were
+>   guesses. Recorded in `docs/RAID_BALANCE_AUDIT_2026-09-06.md`.
+> - **Army cap: Option A stands TODAY; Option C is the long-term model and is BLOCKED.** WO-1527
+>   (SPEC, owner ruling 2026-09-06 20:33). Verbatim: *"Adopt Option C as the long-term progression
+>   model"* AND *"Keep Option A as the immediate ruling. Do not raise the cap yet."* Option C = base
+>   10 army cap, **+5 per Barracks tier**, with the one-time +5 capacity perk repurposed (the job is
+>   the one open question). **BLOCKED until the WO-1520 retest passes** - shipping the cap raise first
+>   would mask whether the mechanical fixes worked.
+>
+> **FIVE DOCUMENTS WRITTEN TONIGHT (paths, so nobody re-derives them)**
+> - `CANON_GROUND_TRUTH_2026-09-06.md` - the new anchor (untracked at time of writing).
+> - `docs/READY_RCA_2026-09-06.md` - root causes behind the READY backlog, from the read-only audit fleet.
+> - `docs/GROWTH_RCA_2026-09-06.md` - why nobody is arriving: a twenty-day-old public build, no
+>   analytics on the landing project, a `solanadappstore://` deep link as the only call to action.
+> - `docs/GET_WELL_PLAN_2026-09-06.md` - **LIVE**; it sequences both RCAs and holds the P0 order.
+> - `docs/RAID_BALANCE_AUDIT_2026-09-06.md` - restructured to the owner's spine (verdict, why, fix
+>   first, retest gate, progression, rulings, questions, appendix).
+>
+> *(The 09-03 pointer this replaces, and the two older ones below it, are kept as history - the
+> warnings they carry are still the rule.)*
+>
+> ### was: LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-03.md` (stamped 2026-09-03 night)
 >
 > *(The 09-02 pointer this replaces, and the stale-re-stamp warning it carried, are kept below as history - the warning is still the rule.)*
 >
@@ -52,13 +159,21 @@
 >   SILENTLY on a rename;** the gate is now an exclusion list.
 >
 > ### 2026-09-03 EVENING - the production candidate, appended to the block above
+> - WARNING **SUPERSEDED 2026-09-06: `354315` IS NO LONGER THE CANDIDATE AND IS NO LONGER ON HER SEEKER.**
+>   `ProjectSettings/ProjectSettings.asset:148/:177` now read **`2026.09.07.358574` / `358574`**, and
+>   `Builds/r2-parity.log` (20:24) names `Android/catalog_2026.09.07.358574.bin`. The 09-04 gate
+>   numbers below are frozen point-in-time readings for 354315 - read tonight's block at the top of
+>   this file for the current four markers. *(The body is kept unrewritten per CLAUDE.md section 15.)*
 > - **`2026.09.04.354315` IS THE PRODUCTION CANDIDATE and it is on her Seeker.** Version read off
 >   `ProjectSettings/ProjectSettings.asset:148,177`. Gates, markers on fresh logs (never an exit code):
 >   `COMPILE_GATE_OK` `Builds/compile-gate.log` 20:10; `REGRESSION_OK 358/358 suites -- 358 green, 0 red,
 >   0 skipped` `Builds/regression.log` 20:13; `R2_PUSH_OK` + `R2_PARITY_OK
 >   targets=Android,StandaloneWindows64,WebGL objects=266` 20:21. ⭐ The push log names
 >   `Android/catalog_2026.09.04.354315.bin` - which is the §16 proof that the CDN carries THIS build's
->   content-hashed bundles, not a previous build's. Branch `feat/synty-art-retheme`, pushed.
+>   content-hashed bundles, not a previous build's. Branch `feat/synty-art-retheme`. STOP **"pushed" was
+>   WRONG here and is retired - never state a push state from a doc. Measure it:
+>   `git rev-list --count origin/<branch>..HEAD` (**118 unpushed, measured 2026-09-06 ~21:00**; it
+>   read 103 earlier the same evening, which is the point - the count moves inside a session).**
 > - ⛔ **SAVE DATA LOSS, AND NO TICKET EXISTS.** `[Flow:BaseLayout] Enter build mode CENSUS: live
 >   PlacedStructure(s) in scene=9, loader.Loaded=9, persisted BaseLayout=17` - **eight structures gone**,
 >   and the trace names it as an earlier vanish. Emitter
@@ -76,6 +191,11 @@
 >   against APK `2026.09.04.354266`; the shipped build is `354315`. The APK sha256, versionName,
 >   versionCode, source commit and path all describe the wrong file. **Marked, not re-derived** - the
 >   lead re-records against whichever APK ships.
+>   - **RE-VERIFIED 2026-09-06 AND IT IS NOW THREE BUILDS STALE, NOT ONE.** `SUBMIT_CHECKLIST.md:120-126`
+>     still record `2026.09.04.354266` as the final versionName/versionCode/badging while the tree is at
+>     `2026.09.07.358574`; `:232` reads `| APK versionCode | PENDING |`; the checklist is unticked from
+>     `:186` onward. `:41` still reads the live PUBLIC release as `2026.08.17.328845`. **Store approval
+>     of any later submission is NOT observable from this repo** - do not tick it from a ruling.
 > - **The 180s hold ceiling still applies to WALLET SIGNING.** Flagged not changed in WO-1360
 >   (`3e6ae4274`): signing is user-paced, and if the ceiling fires the world thaws under a live payment -
 >   a route into "paid but not granted". **Owner call.** The mechanism already exists:
@@ -156,9 +276,11 @@
 >   token list, and there is no bare `skr` token anywhere. ⭐ **Fix the GATE first or the purge just
 >   produces another green marker nobody can trust — which is how we got here.**
 > - **CORRECTED 2026-09-04: THE AAB LANE NOW HAS A SHIP CHAIN** - `google-play-aab-build.ps1` at the REPO ROOT (not under `tools/`), landed in commit `da9694c86` (WO-1365): it expects the `[AndroidBuild] SUCCEEDED` marker (`:270`), calls the one-file `tools/r2-ship.ps1` (`:316`) and asserts size (`AAB_SIZE_OK` / `AAB_SIZE_FAIL`, exit 6). *(The line below is the pre-fix wording, kept per s15:)* ⛔ THE AAB LANE HAS NO SHIP CHAIN (WO-1365): no script invokes `BuildGooglePlayAab`, it never
->   calls `tools
-2-ship.ps1` (so its own content-hashed catalog is never pushed — §16 occurrence FIVE
->   waiting), and nothing asserts size.
+>   calls `tools/r2-ship.ps1` (so its own content-hashed catalog is never pushed - section 16 occurrence FIVE
+>   waiting), and nothing asserts size. *(Corrected 2026-09-06: this path was GARBLED here - a
+>   backslash had eaten the `r`, leaving `tools` and `2-ship.ps1` split across a line break. A seat
+>   grepping for the literal it read would have found nothing and concluded the script does not
+>   exist. The file is `tools/r2-ship.ps1` - CLAUDE.md section 16's one sanctioned path.)*
 > - ⚠ **THE AAB CANNOT CARRY A CHOSEN VERSION.** `AndroidBuild.ApplyVersionStamp` (`:350-365`) is
 >   parameterless, called unconditionally, and computes the code from `DateTime.UtcNow`. A fresh build
 >   stamps a NEW higher code. Fine for Play (it requires monotonic) — but it will not match the APK
@@ -365,6 +487,14 @@
 - **The economy direction:** V1 ships ZERO crypto; soft currency client-owned now, flips
   server-authoritative (auth scaffolding already built) when currency carries real value; SKR is a
   later, separate arc. Monetization = rewarded-ad income paths, never a wall.
+  **WARNING THE BULLET BELOW IS FALSE AND HAS BEEN SINCE 2026-08-23. RE-VERIFIED AT SOURCE 2026-09-06:**
+  `Assets/_Modules/Core/FeatureFlags.cs:753` reads `RealmStorePurchase => Get("realmstorepurchase",
+  defaultOn: **true**)`. The pay path IS activated; purchases and ads both work. What is still true is
+  the fact the 08-25 block above states: **every unit of revenue so far is the owner's own.** So the
+  "clean purge" licence below is **WITHDRAWN** - an economy removal now has real purchases behind it.
+  This is a LIVING section, not a frozen dated one, so the correction is written here rather than left
+  to be met three sections later. *(Kept unrewritten below, because the two halves it separates -
+  "published" vs "taking money" - are still a distinction worth reading.)*
   **⛔ THE APP IS PUBLISHED, BUT THE PAY PATH HAS NEVER BEEN ACTIVATED (owner, 2026-08-21):
   nobody has ever bought anything.** "Published on a store" and "taking money" are DIFFERENT facts,
   and only the first has ever been true here (`FeatureFlags.RealmStorePurchase` is
@@ -896,6 +1026,9 @@
   `dg_stairwell_probe`. The deletion is a future single-commit job (WO-930 §5).
 - **⚠ `structures-catalog.json` is `version: 15`** (both copies identical, 29 entries, `_heightCadence`
   present). Any doc saying v6/v7/v8 is a stale point-in-time reading. **Read it off the file, not off a doc.**
+  *(Proof that the instruction is the durable half: measured 2026-09-06, the file reads **version 42,
+  28 entries** - the "v15 / 29 entries" above is itself now a stale point-in-time reading, exactly as
+  its own last sentence predicted.)*
 - **Still open and CARRIED FORWARD** (the 08-08 anchor dropped these — see the 08-09 anchor §8): the VFX
   **ONESHOT pool saturates 40/40** (different pool, different reclaim path — **NOT closed** by the 08-06
   loop-cap fix) · the **absence** of `SKIPPED - active loops 20/20` across a full wave has **never been
@@ -1064,7 +1197,14 @@
   number into docs, point at it. As of 2026-08-02 two DISJOINT blocks are in use: the CLI mints the
   main line, the UI seat mints only from a reserved 860–899 block. Five collisions happened on
   2026-08-02 alone, every one caused by a mint that did not bump the banner in the SAME edit.)
-- **Verified inventories (cite these):** FeatureFlags = 62 (⚠ XML summaries LIE on 12 defaults —
+  STOP **CORRECTED 2026-09-06: the "860-899" UI block is CLOSED (it filled at 899) and the seat moved on.**
+  CLAUDE.md section 2 records that this exact stale copy kept re-seeding the collision it existed to
+  prevent. **Both block ranges are deliberately unwritten here - read them off the banner rows.**
+- **Verified inventories** - STOP **DO NOT CITE THE NUMBERS BELOW; they are a 2026-08-01 point-in-time
+  reading and both have moved** *(checked 2026-09-06: the flag count is well past 62 and the save const
+  is 41, not 36)*. **Count the flags at source in `FeatureFlags.cs` and read the schema off
+  `SaveSchema.CurrentVersion`** - a raw grep over that file double-counts `#if`-paired declarations, so
+  count deliberately. The one part still worth carrying is the WARNING: FeatureFlags = 62 (WARNING XML summaries LIE on 12 defaults - 
   trailing `//` comment is truth); save **v36** (`SaveSchema.cs:36`, WO-834 `everBuiltStructureIds`).
 - **⚠ CORRECTED 2026-08-02 — the WaveDataTest line that used to sit here was FALSE and dangerous.**
   It read "EditMode reds live in `Assets/Data/Tests/WaveDataTest.cs` (wave-1 ruling open)". There are
@@ -1192,7 +1332,7 @@
 - **Builds:** Seeker APK -> Windows -> WebGL launched detached ~06:28; WebGL DEPLOY pending owner `vercel` CLI.
 
 ## Persistence / save
-- Save schema **v38** — `SaveSchema.cs:41` → `public const int CurrentVersion = 38;` *(re-verified at source 2026-08-10; the const moved lines, read it off the file)*. **v38 = WO-934 army loadout bank** — `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout` index; additive on nested Army JSON, `MigrateToV38` EnsureLoadouts for empty slots. History: v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738 — deliberate pass-through; v34 persists Tribes/Wards/Arena + pet active-slot; **v35** `obsidianQueue` — WO-773 multi-channel Builder/Train/Research queue, `MigrateToV35` folds legacy buildJobs/pendingBuilds/buildingCooldowns into the Builder channel, idempotent; **v36** WO-834 `everBuiltStructureIds` (the blank-town baked standdown); **v37** WO-911 M2 **the per-job PAID BASKET** — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for the owner's Q1 ruling that **cancel refunds 100% of what was paid, flat**; ⚠ **a pre-v37 job refunds ZERO and says so.** Every bump carries a `SaveMigrator` step so the CORE_SAVE version-triple oracle stays green.
+- STOP **Save schema: NO NUMBER LIVES HERE. Read `SaveSchema.CurrentVersion`** in `Assets/_Modules/Core/State/SaveSchema.cs` - the const, not the file's own header comment, which has itself been two versions stale. This line said **v38** and stayed at v38 while the const moved three bumps on; measured 2026-09-06. The const's trailing comment is the changelog for every version, so a copy here can only go wrong. History, kept as prose without a current number: v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738 - deliberate pass-through; v34 persists Tribes/Wards/Arena + pet active-slot; **v35** `obsidianQueue` - WO-773 multi-channel Builder/Train/Research queue, `MigrateToV35` folds legacy buildJobs/pendingBuilds/buildingCooldowns into the Builder channel, idempotent; **v36** WO-834 `everBuiltStructureIds` (the blank-town baked standdown); **v37** WO-911 M2 **the per-job PAID BASKET** - `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for the owner's Q1 ruling that **cancel refunds 100% of what was paid, flat**; WARNING **a pre-v37 job refunds ZERO and says so.** Every bump carries a `SaveMigrator` step so the CORE_SAVE version-triple oracle stays green.
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
 - Local save = PlayerPrefs `dotr-save`, signed (LB-3 HMAC, tamper-rejected); server save/load nonce-auth is built but `BackendAuthConfig.Enforced` = **OFF**. *(2026-07-12)*
 
@@ -1255,6 +1395,12 @@
   vs `defaultOn: true` (classic: verify from code). *(2026-07-15)*
 - Minor, unfixed: `FloorDeepDiag.cs:32` is hard-scoped to `TargetScene = "MainCastle_Hall"`, so it never runs
   in the live merged world `Main_Castle_Overworld`. MagentaGuard's own FloorDiag dump is what actually fires. *(2026-07-15)*
+- STOP **SUPERSEDED 2026-09-06 - `Assets/Resources/Structures` DOES NOT EXIST ON DISK AT ALL** (checked
+  tonight; `Assets/Resources/Enemies` is gone too). The R2 migration deleted both - structure and enemy
+  ART IS SERVED REMOTELY and there is **no local fallback** (CLAUDE.md section 16). The bullet below
+  describes a folder that has not existed for weeks; its *lesson* (two-machine drift is real and it
+  caused both 07-15 bugs) still stands, which is why the body is kept. **Do not go looking for those 4
+  tracked models, and do not "restore" the folder.**
 - ⚠ **`/Assets/Resources/Structures/` is gitignored** (`.gitignore:121`) — only **4** models are tracked
   (ArcaneSpire_1/2/3, WizardTower_1); the other ~37 arrive ONLY by manual LAN copy from the laptop.
   **This is DELIBERATE and stays** (owner ruling 2026-07-15): there are exactly **two machines** (this
@@ -1307,6 +1453,9 @@
 - **2026-08-01 release train:** fresh desktop exe · Seeker APK v-wave installed on-device + Firebase App
   Distribution (testers) · WebGL→Vercel preview refreshed. Screenshot archive
   `Builds\ui-capture-archive\2026-08-01\`.
+- WARNING **`tools/webbot/` IS STILL ABSENT FROM DISK** (re-checked 2026-09-06 - unchanged since the 08-09
+  finding above: present at HEAD, never deleted by any commit, not gitignored, simply gone). Restore
+  with `git checkout -- tools/webbot/` before believing anything the bullet below promises.
 - **Web-build self-test = `tools/webbot/`** (Playwright): `webbot.js` drives the DEPLOYED build for
   screenshots + live browser-console `[Flow:*]` capture + a drag-pan engage check; `introtest.js`
   clicks Play Intro. CAVEAT: synthetic clicks do NOT reliably fire Unity uGUI buttons in WebGL — the
@@ -1338,6 +1487,15 @@
     (`defenders-of-the-realm-v2`, `prj_qUmuwr8BN492oZH8yRuvPZMN3e0J`). Deploy from the **repo root** so
     the link resolves to the real project. *(The stray file only exists when `Builds/WebGL/` has been
     built + linked; `Builds/WebGL/` is absent from disk right now, so the trap is dormant, not gone.)*
+    - **CORRECTED 2026-09-06:** `Builds/WebGL/` **IS present** (Build/, StreamingAssets/, index.html,
+      validation-key.txt) but carries **no `.vercel/` directory**, so the trap is still dormant - for a
+      different reason than the line above gives. **The reason matters:** the folder existing is what
+      makes a `cd Builds\WebGL` plausible again, and one `vercel link` there re-arms it.
+- WARNING **THE FLEET BASELINE BELOW IS A 2026-07-19 READING AND THE FLEET IS NOT GREEN TONIGHT.** Measured
+  2026-09-06: `Builds/reg-quiet.log` (20:07) reads **`REGRESSION_FAIL: 2 failure(s) (417/419 registered
+  suites green, 0 skipped)`** - the `[ui-mvvm]` ratchet on `BuildPreviewModal.cs:252,253` and a hollow
+  pass at `NightMarketNoWalletRegression.cs:761`. **Read the marker on the newest `Builds/` log, never
+  this line.**
 - Fleet baseline: DataRegression = **REGRESSION_OK, 0 reds** — all 5 long-standing reds fixed 2026-07-19 (R1 arena ground texture, R2 dual-wallet Grant->GameState, R3 pet active-slot persist, R4 core-save Tribes/Wards/Arena persist, R5 orc-raider SSOT enemies.json Hp 130). *(2026-07-19)*; re-certified 2026-08-01 with UI_CAPTURE_OK 23 (103 checks).
 
 ## UI / MVVM (WO-744 — DONE 2026-07-18)
@@ -1380,6 +1538,10 @@
 ## Process
 - Boot: **START_HERE.md** routes everything; SAMANTHA.md = the confirmation gate; PREFLIGHT_GATE A/B/C.
 - Phone/async triage: `/triage-web-issue` skill — pull the web-trace from the db (`api/admin/db.js`, `X-Admin-Key`=`ADMIN_DASH_KEY`), RCA from the proving line, write the WO left READY for the Windows machine. *(2026-07-12)*
-- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner (**832** as of 2026-08-01; NEVER copy the number — the banner is the only authority; historical: 761–773 consumed — 762 builder-queue, 763 Wisdom, 764 hub-Y-height, 765 capture-Default-Town, 766 Seeker wallet, 767 texture caps, 768 thin-client, 769 Firebase auth, 770 dungeon, 771 raid, 772 enemy, 773 Obsidian queue; earlier: 739-753 consumed — 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here→there = **716–722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. ⚠ UI-seat mints in the old 674–685 space collide — translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677–681 duplicate specs renumbered to 688–692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
+- WO numbering: mint from the `CLI_LANES_WO_NUMBERS.md` banner - STOP **NO NUMBER LIVES HERE.** *(Corrected
+  2026-09-06: this line read "**832** as of 2026-08-01" and had sat ~700 mints stale for five weeks, in
+  the same sentence that says "NEVER copy the number". A copied number is the bug even when the warning
+  is beside it - CLAUDE.md section 2. The historical consumption list below is kept as history only.)*
+  (NEVER copy the number - the banner is the only authority; historical: 761-773 consumed - 762 builder-queue, 763 Wisdom, 764 hub-Y-height, 765 capture-Default-Town, 766 Seeker wallet, 767 texture caps, 768 thin-client, 769 Firebase auth, 770 dungeon, 771 raid, 772 enemy, 773 Obsidian queue; earlier: 739-753 consumed - 750 Right-ActionBar naming SPEC, 751 Y-height normalization DONE, 752 Echo founding-card SPEC, 753 Destructible IN PROGRESS; Grok-03 here->there = **716-722** + **715** VFX; see `docs/UI/Grok-03-here-to-there-WO-program.md`), bump in the same edit. WARNING UI-seat mints in the old 674-685 space collide - translation table in the banner; owner syncing the UI seat 07-13. Collisions resolved 2026-07-13: 677-681 duplicate specs renumbered to 688-692, 682/683/685 dupes to 695/693/694; a fresh 07-13 mint colliding with the 684 board renumbered to **696** (repair-before-upgrade context). *(2026-07-13)*
 - Outstanding board: `WorkOrders/WORK_ORDER_684_outstanding_items_board.md` (exact asks + steps).
 - ✅ Apex dragon model = **SWAP LANDED 2026-07-24 (WO-760)** — the licensed Asset-Store dragon (product 71047 "Dragon Animated", WDallgraphics; source `Assets/Dragon/`, now git-tracked, not gitignored) ships as `Resources/Enemies/Boss_Dragon.prefab`, built by `DragonAnimatorSetup` + force-tracked `Assets/Generated/Animators/SyndrathDragon.controller`. Old CC-BY-NC 3DHaupt `Dragon.fbx`/2 controllers/materials + the orphan `Prefabs/Village/Generated/Boss_Dragon.prefab` git-rm'd; unlicensed `RedDragon 1.2` stray deleted; `EnemyFactory` dragon keys repointed to `Boss_Dragon`. ⚠ **The earlier "RESOLVED 2026-07-23" claim was PREMATURE** — that commit only repointed comments; the CC-BY-NC model still SHIPPED (Resources includes unused assets) until the 07-24 builder-run + git-rm. Commercial-ship blocker now ACTUALLY cleared; boss "Syndrath the Devourer" retained; fly-in->land->burn-towers->retarget-Tree behavior built (WO-760, felt-verify pending).

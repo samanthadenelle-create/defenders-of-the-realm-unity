@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-09-06 by `CANON_GROUND_TRUTH_2026-09-06.md`.** Frozen, not rewritten (CLAUDE.md section 15). Read the newer anchor for current state.
+
 # CANON GROUND TRUTH — 2026-08-23 (GO LIVE)
 
 **This supersedes `CANON_GROUND_TRUTH_2026-08-21.md`.** Keep exactly ONE current; supersede by date.

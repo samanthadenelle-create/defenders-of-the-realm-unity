@@ -28,8 +28,16 @@ namespace DeNelle.Editor
         private static readonly Regex EntryGuid =
             new Regex(@"^\s+-\s+m_GUID:\s+([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline);
 
+        // WO-1496: menu / standalone entry. The registered `Run(out string)` below carries
+        // the assertions; this one only routes the verdict to the console markers.
         [MenuItem("Defenders/Regression/Gear Addressable Group (WO-975)")]
         public static void Run()
+        {
+            Run(out _);
+        }
+
+        /// <summary>Registered-suite entry point (DataRegression.RunAll, WO-1496).</summary>
+        public static bool Run(out string reason)
         {
             var failures = new List<string>();
             int total = 0;
@@ -73,10 +81,15 @@ namespace DeNelle.Editor
                     Debug.LogError($"[GearAddressableGroup] {f}");
                 Debug.LogError($"{MarkerFail} {ok}/{total} resolvable :: {failures.Count} defect(s) — " +
                                "WO-975: tracked Gear group asserts content that is not on disk.");
-                return;
+                reason = $"GEAR ADDRESSABLE GROUP: {failures.Count} defect(s) ({ok}/{total} resolvable): " +
+                         string.Join(" | ", failures.ToArray());
+                return false;
             }
 
             Debug.Log($"{MarkerOk} {ok}/{total} resolvable :: every Gear.asset entry GUID maps to an on-disk asset.");
+            reason = $"GEAR ADDRESSABLE GROUP OK {ok}/{total} entry GUID(s) resolve to an on-disk asset " +
+                     "(no dangling entry, no gitignored-pack hollow)";
+            return true;
         }
     }
 }

@@ -17,6 +17,7 @@ The goal is not to reduce the amount of game content. The goal is to increase un
 
 - current: ~2 visible choices at a time
 - target: grid-first browsing with at least 12 visible build tiles at target aspect where the filter contains 12+ items
+  > **STALE 2026-09-06 (WO-1534 B1):** superseded by `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` (implemented in `32659c0f6`). The shipped BUILD grid is 5 x 2 = **10** tiles - `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs:3500-3507`.
 - Army: all 9 troop types visible at once
 - Research: research schools visible first, then a small local list of perks
 
@@ -50,6 +51,7 @@ Filters:
 - CRAFT
 - STORAGE
 - CIVIC
+  > **STALE 2026-09-06 (WO-1534 B1): CIVIC is retired** - the mockup `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` screen 2 draws FIVE chips, implemented in `32659c0f6`. Authority: `Assets/_Modules/Core/Catalog/BuildFilter.cs:57`, `:87-89`; the five CIVIC rows re-homed at `:59-73`.
 
 Every structure must belong to at least one filter besides ALL.
 
@@ -59,6 +61,7 @@ ALL may scroll. That is allowed.
 
 Per-filter target:
 - show at least 12 tiles simultaneously when the filter contains 12 or more
+  > **STALE 2026-09-06 (WO-1534 B1):** same supersession as section 1 - the mockup's grid is 5 x 2 = **10** tiles (`ManageScreenVM.cs:3500-3507`, commit `32659c0f6`).
 - all items in a filter reachable in one short vertical scroll
 - no nested scroll region inside a selected-item detail card
 

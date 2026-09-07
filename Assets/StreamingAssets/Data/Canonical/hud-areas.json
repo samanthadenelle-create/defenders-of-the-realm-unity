@@ -41,7 +41,8 @@
           "area": "queueStatus",
           "widgets": [
             "queueStatusChip",
-            "collectorsChip"
+            "collectorsChip",
+            "defenseReportChip"
           ]
         },
         {

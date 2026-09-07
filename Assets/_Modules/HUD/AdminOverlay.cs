@@ -64,7 +64,7 @@ namespace DeNelle.HUD
 #endif
 
         // Reflection handles — resolved lazily on first show.
-        private Type _gameStateServiceType;
+        // WO-1511: the cached GameStateService Type is gone — the type is named directly.
         private object _gameStateInstance;
         private object _gameStateState;
 #if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
@@ -233,6 +233,20 @@ namespace DeNelle.HUD
             // The Close button below stays so the (release-gated, can't-open) overlay
             // is still dismissable if it ever renders.
 #if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
+            // ⛔ WO-1512 — THE CURRENCY/PROGRESSION GRANT DOOR IS DEVELOPER-ONLY, NOT TESTER-ONLY.
+            // Everything in the inner guard below MINTS value (spendable resources, Wisdom, hero
+            // levels). The outer guard admits TESTER_BUILD, which is the APK that goes to Firebase
+            // App Distribution — i.e. to people who are not developers — while the pay path is LIVE
+            // (memory `published-but-payments-never-activated`). A tester who can mint 50,000 of
+            // every resource makes the economy unmeasurable and the purchase funnel meaningless.
+            // The inner guard therefore drops TESTER_BUILD: grants compile ONLY in the Editor or a
+            // Development build. The rest of the tester tooling (FLAG chip, time-skip, wallet reset,
+            // VFX parade, seating editor) stays reachable under the outer guard because none of it
+            // creates value. The handlers themselves carry the SAME inner guard (see below), so this
+            // is compile-stripping, not a hidden button.
+            // ⚠ DIRECTION IS DELIBERATE: the narrow guard is the one that gates the money. Widening
+            // it back to TESTER_BUILD re-opens the door — do not "simplify" the two guards into one.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
             scroll.Add(Button("Load resources (full base)",   OnLoadResources));
             // Level shortcuts — same REAL leveling path the F10 DevPanel uses
             // (HeroProgression.AddXp -> ApplyLevelRewards grants Wisdom + skill points),
@@ -246,6 +260,7 @@ namespace DeNelle.HUD
             // sees) — this is the live Settings -> DevTools panel, so they belong HERE.
             scroll.Add(Button("+25 Wisdom (talents)",         () => OnGiveWisdom(25)));
             scroll.Add(Button("+100 Wisdom (talents)",        () => OnGiveWisdom(100)));
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — WO-1512 value-minting grants, never TESTER_BUILD
             scroll.Add(Button("Trigger next wave",            OnTriggerWave));
             // ── QUEUE TIME-SKIP (owner 2026-08-04) ───────────────────────────
             // "A speed timer for testing building queues ... but NOT impact the battle
@@ -519,15 +534,14 @@ namespace DeNelle.HUD
         private void ResolveGameState()
         {
             if (_gameStateInstance != null && _gameStateState != null) return;
-            _gameStateServiceType = Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
-            if (_gameStateServiceType == null) return;
-            var instanceProp = _gameStateServiceType.GetProperty("Instance",
-                BindingFlags.Public | BindingFlags.Static);
-            _gameStateInstance = instanceProp?.GetValue(null);
-            if (_gameStateInstance == null) return;
-            var stateProp = _gameStateServiceType.GetProperty("State",
-                BindingFlags.Public | BindingFlags.Instance);
-            _gameStateState = stateProp?.GetValue(_gameStateInstance);
+            // WO-1511: GameStateService is in DeNelle.Core, and DeNelle.HUD.asmdef references
+            // "DeNelle.Core" — so the resolve is a direct call. The fields stay `object`
+            // deliberately: the reflection below them crosses into DeNelle.Village (WaveManager),
+            // which the asmdef does NOT reference, and that seam is sanctioned (CLAUDE.md §5).
+            var service = DeNelle.Core.State.GameStateService.Instance;
+            if (service == null) return;
+            _gameStateInstance = service;
+            _gameStateState = service.State;
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
@@ -777,6 +791,8 @@ namespace DeNelle.HUD
                 : "Queue clock was already at real time - nothing to reset.");
         }
 
+        // WO-1512: value-minting handler — developer-only, TESTER_BUILD deliberately excluded.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         private void OnGiveCrystals(int delta)
         {
             ResolveGameState();
@@ -790,6 +806,7 @@ namespace DeNelle.HUD
             InvokeMethod(_gameStateInstance, "AddCrystals", delta);
             SetStatus($"+{delta} crystals requested (if AddCrystals isn't defined, owner adds it).");
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — WO-1512
 
         private void OnSetOnboarded(bool value)
         {
@@ -829,6 +846,11 @@ namespace DeNelle.HUD
             SetStatus("Reset(): new game -> FTUE gate cleared, reloading Village2 (tutorial + companion re-fire).");
         }
 
+        // ─── WO-1512: VALUE-MINTING GRANTS — DEVELOPER-ONLY (TESTER_BUILD EXCLUDED) ───
+        // Resource grant, hero-level grant, Wisdom grant and their trace helpers. Compile-stripped
+        // from a TESTER_BUILD APK as well as from release, so the Firebase App Distribution build
+        // physically cannot mint currency. Matches the inner guard on the buttons above.
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         /// <summary>
         /// Grants a full base of SPENDABLE resources through EconomyService.GrantSpendableUncapped —
         /// which lands Wood/Iron in BOTH wallets the game keeps: the in-session pool the shop +
@@ -1033,6 +1055,7 @@ namespace DeNelle.HUD
             FlowTrace.Step("Hero", $"DevPanel (AdminOverlay) granted +{amount} Wisdom -> {wisdom} total.");
             SetStatus($"+{amount} Wisdom — now {wisdom} to spend in the skill tree.");
         }
+#endif // DEVELOPMENT_BUILD || UNITY_EDITOR — WO-1512 value-minting grants, never TESTER_BUILD
 
         // ── FULL RESET (owner 2026-07-08: "clears all persistent data and resources and
         // wisdom to a brand new instance") ────────────────────────────────────────────

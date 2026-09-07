@@ -246,6 +246,8 @@ namespace DeNelle.Editor
                 CheckCombatHudComposition(failures, notes);
                 CheckResourceRailRaise(modulesDir, failures, notes);
                 CheckHarvestChipClearsResourcePanel(modulesDir, failures, notes);   // WO-1435
+                CheckGearDrawerClearsNeighbours(failures, notes);                   // WO-1465
+                CheckStackBadgeInsideMedallion(failures, notes);                    // WO-1468
             }
             catch (Exception ex)
             {
@@ -261,7 +263,8 @@ namespace DeNelle.Editor
             {
                 reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths, " +
                          "safe-area corner, combat-hud composition, resource-rail raise, " +
-                         "harvest-chip clearance all green" + noteStr;
+                         "harvest-chip clearance, gear-drawer clearance, stack-badge containment " +
+                         "all green" + noteStr;
                 Debug.Log(reason);
                 return true;
             }
@@ -1559,8 +1562,16 @@ namespace DeNelle.Editor
         //       neighbour, recreating this overlap by a second route.
         //
         // ⚠ WHAT THIS IS AND IS NOT: authored-anchor ARITHMETIC (the check-7g precedent), not a
-        // laid-out measurement. DeNelle.EditorRegression.asmdef does not reference DeNelle.HUD,
-        // and batchmode runs no layout pass (recorded at HudKitController.TickResourceExpandVerify:
+        // laid-out measurement.
+        // ⛔ CORRECTED 2026-09-06 (WO-1465/1468). This comment used to assert
+        // "DeNelle.EditorRegression.asmdef does not reference DeNelle.HUD". THAT IS FALSE and has
+        // been false for as long as anyone checked: Assets/Editor/Regression/
+        // DeNelle.EditorRegression.asmdef lists "DeNelle.HUD" in its references array, second row.
+        // The claim was load-bearing in the wrong direction - it is the stated reason several
+        // cases settled for a source lint when they could have measured a real object, and it is
+        // repeated at HudLabelFitRegression Case 0. The REAL constraint is the one below, and it
+        // still holds: batchmode runs no layout pass (recorded at
+        // HudKitController.TickResourceExpandVerify:
         // "UNMEASURABLE => NAMED SKIP, NEVER A PASS"). Every input is READ FROM SOURCE so it cannot
         // go stale; the live measurement is HudRailClearance's own FlowTrace line plus a headless
         // capture with the window open.
@@ -1702,6 +1713,440 @@ namespace DeNelle.Editor
             if (!float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
                 return fallback;
             return v;
+        }
+
+        // =====================================================================
+        // CHECK 9  [gear-drawer-clearance]  THE OPEN GEAR DRAWER SHARES NO RECT
+        //          WITH THE MOVEMENT STICK, AND CANNOT BE PAINTED OVER.
+        //                                                       (WO-1465, 2026-09-06)
+        // ---------------------------------------------------------------------
+        // EVIDENCE this case was written from — Builds/ui-capture/
+        // AdaptiveHudGearOpen_2670x1200.png, one frame, two defects:
+        //   * the drawer's first row reads "...ERBOARD" — the Night Market card is painted OVER
+        //     LEADERBOARD;
+        //   * the PAUSE face lands on the analog-stick ring, so "pause" and "move" share a rect.
+        //
+        // ⭐ THIS IS A MEASUREMENT, NOT A SOURCE LINT, and it is measured against a REAL
+        // HudAreasHost: the mounts are instantiated (HudAreasHost.Create) and their anchors read
+        // back, then compared with the drawer band HudKitController itself resolves
+        // (ResolveDockPanel / ResolveDockCell — the same numbers BuildSlideDock builds with, not
+        // a copy). No layout pass is needed: every rect here is an ANCHOR in screen fractions.
+        //
+        // 9a  the PAUSE cell does not intersect the MoveCluster mount, at both authored aspects;
+        // 9b  the whole open drawer does not intersect MoveCluster, the Heart objective, the
+        //     hero vitals plate, or the Night Market card's band;
+        // 9c  the occlusion half: if the Dock mount is an EARLIER sibling than the Minimap mount
+        //     (it is — HudAreasHost adds Dock at line 155, Minimap at 170), then uGUI paints the
+        //     card AFTER the drawer and a sibling shuffle inside the dock cannot help. In that
+        //     case the drawer MUST carry its own sorting Canvas, and the source pin for it is
+        //     required. When the mount order is ever reversed the pin stops being required — the
+        //     case follows the real order rather than asserting a remembered one.
+        //
+        // RED, one line each: give DockPanelSeatAnchorX a `return 0f;` (9a/9b); delete the
+        // RaiseDockAboveNeighbourMounts() call in BuildSlideDock (9c).
+        //
+        // ⚠ ToastZone is deliberately NOT in 9b. Toasts are a transient FEEDBACK overlay that
+        // legitimately paints over the town HUD; listing it would make this case fail for a
+        // reason WO-1465 is not about.
+        // =====================================================================
+        private static void CheckGearDrawerClearsNeighbours(List<string> failures, List<string> notes)
+        {
+            const string Tag = "GEAR DRAWER (WO-1465) —";
+            // ASCII section name for the RegressionOutcome.PartialSkip token (Tag carries an
+            // em dash, and a stand-down line has to be greppable in a log).
+            const string DrawerSection = "GEAR DRAWER (WO-1465)";
+
+            DeNelle.HUD.Kit.HudAreasHost host = null;
+            try
+            {
+                try { host = DeNelle.HUD.Kit.HudAreasHost.Create(null); }
+                catch (Exception ex)
+                {
+                    // HARNESS-CAPABILITY-ABSENT -> RegressionOutcome.PartialSkip (the three-way
+                    // rule's visible third column). Instantiating a live HudAreasHost is a thing
+                    // batch mode may refuse; that is not a product defect. But a bare notes.Add
+                    // told the CALLER nothing and landed in the green column - the arithmetic bug
+                    // RegressionOutcome exists to end. The token is what makes it subtractable.
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(DrawerSection,
+                        "HudAreasHost could not be instantiated headlessly (" + ex.GetType().Name +
+                        ": " + ex.Message + ") - drawer clearance was not measured this run"));
+                    return;
+                }
+                if (host == null)
+                {
+                    // FIXTURE-ABSENT, NOT A STAND-DOWN (the three-way rule,
+                    // RegressionMarkerRegression: fixture-absent -> FAIL naming the missing path;
+                    // harness-capability-absent -> RegressionOutcome.PartialSkip;
+                    // content/art-absent -> assert THROUGH the proven fallback).
+                    //
+                    // This arm is NOT a harness capability. HudAreasHost.Create
+                    // (Assets/_Modules/HUD/Kit/HudAreasHost.cs:98-105) news a GameObject,
+                    // AddComponents the host, calls Build() and returns it - there is no path
+                    // through it that yields null, and the throwing path is already caught above
+                    // and stood down by name. So a null here is not "the editor cannot do this
+                    // headlessly"; it means the HUD's own mount factory returned nothing, and
+                    // every clearance below it is UNPROVEN. The old notes.Add + return answered
+                    // OK out of a null guard having asserted nothing, which is exactly the
+                    // hollow pass the marker names (CLAUDE.md sec.12: an unknown must never read
+                    // as a pass). FAIL, naming what was missing.
+                    failures.Add(Tag + " HudAreasHost.Create(null) returned NULL without throwing - " +
+                                 "Assets/_Modules/HUD/Kit/HudAreasHost.cs:98 constructs and returns " +
+                                 "unconditionally, so there is no legitimate shape for this. The area " +
+                                 "mount table does not exist this run, so the pause/MoveCluster overlap " +
+                                 "and every drawer clearance below are UNPROVEN - not clear, unmeasured.");
+                    return;
+                }
+
+                Rect move = MountBand(host, DeNelle.HUD.Kit.HudArea.MoveCluster);
+                if (move.width <= 0f || move.height <= 0f)
+                {
+                    // FIXTURE-ABSENT -> FAIL, naming the missing path. This is NOT the headless
+                    // layout limitation the arm above is: MountBand reads rt.anchorMin/anchorMax
+                    // (this file, MountBand), which are set when the mount is CONSTRUCTED and
+                    // need no layout pass. A zero band therefore means one of two real faults -
+                    // host.Mount(MoveCluster) returned null (MountBand answers `default`), or the
+                    // mount exists with degenerate anchors. Either way the HUD's area table has
+                    // no usable MoveCluster, which is the very rect this case measures against.
+                    failures.Add(Tag + " the MoveCluster mount resolved to a ZERO band " + R(move) +
+                                 " - host.Mount(HudArea.MoveCluster) is null, or its anchors are " +
+                                 "degenerate. MountBand reads anchors, not laid-out rects, so this is " +
+                                 "not a headless limitation: the area table has no usable MoveCluster, " +
+                                 "and the pause/stick overlap the owner felt is UNPROVEN.");
+                    return;
+                }
+
+                foreach (var a in new[] { new { N = "2670x1200 (the capture)", W = 2670f, H = 1200f },
+                                          new { N = "1920x1080",               W = 1920f, H = 1080f } })
+                {
+                    Rect panel = DeNelle.HUD.Kit.HudKitController.ResolveDockPanel(a.W, a.H);
+                    Rect pause = DeNelle.HUD.Kit.HudKitController.ResolveDockCell(
+                        panel, DeNelle.HUD.Kit.HudKitController.DockPauseCellIndex, 2, 3);
+
+                    // 9a — the one the owner felt: pause and move may not share a rect.
+                    if (HudLayoutBands.Intersects(pause, move))
+                        failures.Add(Tag + " at " + a.N + " the PAUSE cell " + R(pause) +
+                                     " INTERSECTS the MoveCluster mount " + R(move) +
+                                     " — tapping pause and moving the hero share a rect, which is the " +
+                                     "captured AdaptiveHudGearOpen defect");
+
+                    // 9b — nothing else in the left column is sat on either.
+                    RequireClear(failures, Tag, a.N, "the open drawer", panel, "MoveCluster mount", move);
+                    RequireClear(failures, Tag, a.N, "the open drawer", panel,
+                                 "the Heart objective band", HudLayoutBands.HeartMount);
+                    RequireClear(failures, Tag, a.N, "the open drawer", panel,
+                                 "the hero vitals band", HudLayoutBands.VitalsMount);
+                    RequireClear(failures, Tag, a.N, "the open drawer", panel, "the Night Market card",
+                                 HudLayoutBands.ResolveNightMarketCard(a.W, a.H));
+
+                    notes.Add(Tag + " " + a.N + ": drawer " + R(panel) + ", PAUSE " + R(pause) +
+                              ", stick " + R(move));
+                }
+
+                // 9c — the occlusion half, driven by the REAL mount order.
+                var dockMount = host.Mount(DeNelle.HUD.Kit.HudArea.Dock);
+                var minimapMount = host.Mount(DeNelle.HUD.Kit.HudArea.Minimap);
+                if (dockMount == null || minimapMount == null)
+                    // FIXTURE-ABSENT -> FAIL. hud-areas.json declares both areas in every posture
+                    // the drawer can open in, so a null mount is the area table not building what
+                    // it declares - not an environment limitation. 9c's whole occlusion argument
+                    // rests on the relative order of these two, so without them it is unproven.
+                    failures.Add(Tag + " the Dock and/or Minimap mount is ABSENT (dock=" +
+                                 (dockMount == null ? "null" : "present") + ", minimap=" +
+                                 (minimapMount == null ? "null" : "present") + ") - hud-areas.json " +
+                                 "declares both, so the area table did not build what it declares. The " +
+                                 "paint order 9c depends on is UNPROVEN, so the Night Market card may " +
+                                 "still occlude the open drawer.");
+                else
+                {
+                    int dockIdx = dockMount.GetSiblingIndex();
+                    int minimapIdx = minimapMount.GetSiblingIndex();
+                    notes.Add(Tag + " mount paint order: dock=" + dockIdx + " minimap=" + minimapIdx);
+                    if (dockIdx < minimapIdx)
+                    {
+                        // hud-areas.json puts "nightMarketCard" in the minimap area and "chatDock"
+                        // in the dock area, so the card is painted after the drawer.
+                        string hud = ReadHudSource();
+                        if (hud == null)
+                            // FIXTURE-ABSENT -> FAIL, naming the path. The file is tracked source
+                            // at a fixed location; unreadable means the tree moved or the read
+                            // threw, and the sorting pin - the ONLY thing standing between the
+                            // open drawer and the card painted over it - was not checked.
+                            failures.Add(Tag + " Assets/_Modules/HUD/Kit/HudKitController.cs could not be " +
+                                         "read, so the drawer's sorting-Canvas pin was NOT checked. With the " +
+                                         "Dock mount painting before the Minimap mount, that pin is the only " +
+                                         "thing keeping the Night Market card off the open drawer.");
+                        else
+                        {
+                            if (hud.IndexOf("RaiseDockAboveNeighbourMounts();", StringComparison.Ordinal) < 0)
+                                failures.Add(Tag + " the Minimap mount (sibling " + minimapIdx + ") paints AFTER " +
+                                             "the Dock mount (sibling " + dockIdx + "), so the Night Market card " +
+                                             "occludes an opened menu — and BuildSlideDock no longer calls " +
+                                             "RaiseDockAboveNeighbourMounts(). That is the captured '...ERBOARD'.");
+                            if (hud.IndexOf("canvas.overrideSorting = true;", StringComparison.Ordinal) < 0)
+                                failures.Add(Tag + " the drawer's sorting Canvas no longer sets overrideSorting — " +
+                                             "without it the nested Canvas inherits the host order and the card wins again");
+                            if (hud.IndexOf("GraphicRaycaster>() == null) go.AddComponent<GraphicRaycaster>()",
+                                            StringComparison.Ordinal) < 0)
+                                failures.Add(Tag + " the drawer's sorting Canvas has no GraphicRaycaster of its own — " +
+                                             "a nested Canvas registers its graphics to ITSELF, so every menu row goes dead");
+                        }
+                    }
+                    else notes.Add(Tag + " the Dock mount already paints after the Minimap mount — the sorting " +
+                                         "Canvas is belt-and-braces at this mount order, so its pin is not required");
+                }
+            }
+            finally
+            {
+                if (host != null && host.gameObject != null)
+                    UnityEngine.Object.DestroyImmediate(host.gameObject);
+            }
+        }
+
+        /// <summary>A mount's band in SCREEN fractions. Every HudAreasHost mount is anchored
+        /// inside a full-stretch canvas root, so its anchors ARE screen fractions.</summary>
+        private static Rect MountBand(DeNelle.HUD.Kit.HudAreasHost host, DeNelle.HUD.Kit.HudArea area)
+        {
+            var rt = host == null ? null : host.Mount(area);
+            if (rt == null) return default;
+            return Rect.MinMaxRect(rt.anchorMin.x, rt.anchorMin.y, rt.anchorMax.x, rt.anchorMax.y);
+        }
+
+        private static void RequireClear(List<string> failures, string tag, string aspect,
+                                         string whoName, Rect who, string otherName, Rect other)
+        {
+            if (other.width <= 0f || other.height <= 0f) return;
+            if (HudLayoutBands.Intersects(who, other))
+                failures.Add(tag + " at " + aspect + " " + whoName + " " + R(who) +
+                             " INTERSECTS " + otherName + " " + R(other));
+        }
+
+        private static string R(Rect r)
+        {
+            return "[x " + r.xMin.ToString("0.000") + ".." + r.xMax.ToString("0.000") +
+                   ", y " + r.yMin.ToString("0.000") + ".." + r.yMax.ToString("0.000") + "]";
+        }
+
+        private static string ReadHudSource()
+        {
+            try
+            {
+                return File.ReadAllText(Path.Combine(Application.dataPath,
+                    "_Modules/HUD/Kit/HudKitController.cs"));
+            }
+            catch { return null; }
+        }
+
+        // =====================================================================
+        // CHECK 10  [stack-badge-inside-medallion]  THE CHARGE BADGE IS CONTAINED
+        //           BY THE ROUND FACE IT BELONGS TO.        (WO-1468, 2026-09-06)
+        // ---------------------------------------------------------------------
+        // EVIDENCE: Builds/ui-capture/AdaptiveHudCombat_2670x1200.png (charge "0" outside the
+        // frame) and the owner's device build 358574 (a "7", same place). Two aspects, one defect.
+        //
+        // ⛔ THE TEST THAT WOULD HAVE LIED. "The badge is inside the SLOT rect" is TRUE today —
+        // ElarionUiKit.StyleAsStackBadge anchors it to the slot root's own top-right corner with
+        // a 3 px inset — and "inside the ActionBarHousing rect" is true as well, because the
+        // housing stretches the entire mount. Either one is green while the player sees the digit
+        // outside the frame. What the eye calls "the frame" is the MEDALLION: the square
+        // "MedallionBounds" child that StyleAsRoundMedallion inscribes in the top 80% of the
+        // (wider-than-tall) cell. That is the rect measured here.
+        //
+        // ⭐ REAL OBJECTS, AND A SELF-PROVING RED. The case builds TWO slots through the shipping
+        // kit calls: one seated by HudKitController.SeatStackBadgeInMedallion (must be contained)
+        // and one left at the kit's default corner (must NOT be). If the unseated control ever
+        // measures as contained, the oracle has stopped measuring anything and says so — that is
+        // the RED proof, executed rather than asserted. If layout cannot resolve headlessly the
+        // case is a NAMED SKIP, never a pass.
+        //
+        // RED, one line: delete the SeatStackBadgeInMedallion(...) call in BuildAdaptiveCombatDock.
+        // =====================================================================
+        private static void CheckStackBadgeInsideMedallion(List<string> failures, List<string> notes)
+        {
+            const string Tag = "STACK BADGE (WO-1468) —";
+            // ASCII section name for the RegressionOutcome.PartialSkip token (Tag carries an
+            // em dash, and a stand-down line has to be greppable in a log).
+            const string BadgeSection = "STACK BADGE (WO-1468)";
+            GameObject canvasGo = null;
+            try
+            {
+                canvasGo = new GameObject("HudUiRegression_BadgeProbe", typeof(Canvas));
+                var canvas = canvasGo.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                var canvasRt = (RectTransform)canvasGo.transform;
+
+                // A cell shaped like the shipping one: the ActionBar mount is 0.460 of 2670 wide
+                // over six faces (~205 px) and 0.135 of 1200 tall (~162 px). Wider than tall is
+                // the whole point — that is what puts the cell's corner outside the round face.
+                var seated = BuildProbeSlot(canvasRt, seat: true);
+                var unseated = BuildProbeSlot(canvasRt, seat: false);
+
+                Canvas.ForceUpdateCanvases();
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(canvasRt);
+                Canvas.ForceUpdateCanvases();
+
+                Rect medallion, badge;
+                string absent;
+                if (!ProbeRects(seated, out medallion, out badge, out absent))
+                {
+                    // THE THREE-WAY RULE, both live arms of it. The old single line answered OK
+                    // out of a negated call having asserted nothing (scanner arm C).
+                    if (absent != null)
+                        // FIXTURE-ABSENT -> FAIL, naming the missing path. A badge that was never
+                        // built is not an unmeasurable run; it is the WO-1468 defect itself, and
+                        // standing down on it is the oracle refusing to see its own subject.
+                        failures.Add(Tag + " the probe hierarchy is INCOMPLETE - " + absent +
+                                     ". The charge badge was not built or not seated, so the shipped " +
+                                     "ITEM '0' outside the bar frame is UNPROVEN - not absent, unmeasured.");
+                    else
+                        // HARNESS-CAPABILITY-ABSENT -> PartialSkip. Both widgets exist; batch mode
+                        // simply did not give them a layout pass, so there is nothing to measure
+                        // and nothing to blame the product for.
+                        notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(BadgeSection,
+                            "MedallionBounds and StackBadge both exist but measured degenerate rects - " +
+                            "headless batch ran no layout pass, so badge containment was not measured"));
+                    return;
+                }
+
+                if (!Contains(medallion, badge))
+                    failures.Add(Tag + " the SEATED charge badge " + RectPx(badge) + " is NOT contained by the " +
+                                 "medallion face " + RectPx(medallion) + " — that is the captured ITEM '0' " +
+                                 "sitting outside the bar frame");
+                else
+                    notes.Add(Tag + " seated badge " + RectPx(badge) + " inside medallion " + RectPx(medallion));
+
+                Rect medallion2, badge2;
+                string absent2;
+                if (ProbeRects(unseated, out medallion2, out badge2, out absent2))
+                {
+                    if (Contains(medallion2, badge2))
+                        failures.Add(Tag + " the UNSEATED control badge " + RectPx(badge2) + " also measures inside " +
+                                     "the medallion " + RectPx(medallion2) + " — this case cannot go RED, so it is " +
+                                     "not measuring the defect it was written for. Fix the oracle before trusting it.");
+                    else
+                        notes.Add(Tag + " RED proof holds: the kit's default corner seat " + RectPx(badge2) +
+                                  " measures OUTSIDE the medallion " + RectPx(medallion2));
+                }
+                // The RED control, under the same three-way split. A missing widget on the CONTROL
+                // is still a fixture fault (the control is what proves this case can go red at
+                // all); degenerate rects on it are the harness.
+                else if (absent2 != null)
+                    failures.Add(Tag + " the UNSEATED control's hierarchy is INCOMPLETE - " + absent2 +
+                                 ". The RED proof cannot be exercised, so a green result above proves " +
+                                 "nothing about whether this case can still fail.");
+                else
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(BadgeSection,
+                        "the unseated RED control measured degenerate rects (no headless layout pass) - " +
+                        "the seated assertion ran, but its red-proof control did not"));
+            }
+            catch (Exception ex)
+            {
+                // HARNESS-CAPABILITY-ABSENT -> declared stand-down, not a silent green. Building a
+                // live Canvas and forcing a layout is something batch mode may refuse outright;
+                // that is not a product defect, but the run must SAY it asserted nothing here.
+                notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(BadgeSection,
+                    "the probe threw " + ex.GetType().Name + ": " + ex.Message +
+                    " - badge containment was not measured this run"));
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+            }
+        }
+
+        private static ElarionUiKit.ActionSlotHandle BuildProbeSlot(RectTransform canvasRt, bool seat)
+        {
+            var cell = new GameObject(seat ? "SeatedCell" : "UnseatedCell", typeof(RectTransform));
+            cell.transform.SetParent(canvasRt, false);
+            var crt = (RectTransform)cell.transform;
+            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+            crt.pivot = new Vector2(0.5f, 0.5f);
+            crt.sizeDelta = new Vector2(205f, 162f);   // the shipping cell's shape (see the header)
+            crt.anchoredPosition = seat ? new Vector2(-300f, 0f) : new Vector2(300f, 0f);
+
+            var slot = ElarionUiKit.BuildActionSlot(cell.transform, Vector2.zero, Vector2.one);
+            if (slot == null) return null;
+            ElarionUiKit.StyleAsRoundMedallion(slot);
+            ElarionUiKit.StyleAsStackBadge(slot);
+            if (seat) DeNelle.HUD.Kit.HudKitController.SeatStackBadgeInMedallion(slot);
+            return slot;
+        }
+
+        /// <summary>
+        /// Probe the two rects. FALSE has TWO CAUSES AND THEY ARE NOT THE SAME EVENT, which is
+        /// why <paramref name="absent"/> exists: a single bool forced every caller to treat a
+        /// MISSING WIDGET (a product defect - StyleAsStackBadge / SeatStackBadgeInMedallion did
+        /// not run, i.e. verbatim what WO-1468 pins) as if it were a HARNESS limitation, and the
+        /// only honest thing left to do with that bool was stand down. That is the hollow pass.
+        ///
+        /// absent != null  -> a named child is not in the hierarchy. FIXTURE-ABSENT: the caller
+        ///                    FAILs, naming it.
+        /// absent == null  -> the children exist but their rects measured degenerate, which
+        ///                    headless batch mode legitimately does (no layout pass).
+        ///                    HARNESS-CAPABILITY-ABSENT: the caller PartialSkips, naming it.
+        /// </summary>
+        private static bool ProbeRects(ElarionUiKit.ActionSlotHandle slot, out Rect medallion,
+                                       out Rect badge, out string absent)
+        {
+            medallion = default; badge = default; absent = null;
+            if (slot == null || slot.root == null)
+            {
+                absent = "the probe slot itself (BuildProbeSlot returned no root)";
+                return false;
+            }
+            var bounds = slot.root.transform.Find("MedallionBounds") as RectTransform;
+            var plate = FindDeepRect(slot.root.transform, "StackBadge");
+            if (bounds == null || plate == null)
+            {
+                absent = bounds == null && plate == null
+                    ? "both 'MedallionBounds' and 'StackBadge' are missing under " + slot.root.name
+                    : (bounds == null ? "'MedallionBounds' is missing under " + slot.root.name
+                                      : "'StackBadge' is missing under " + slot.root.name +
+                                        " - ElarionUiKit.StyleAsStackBadge did not build a badge");
+                return false;
+            }
+            medallion = WorldRect(bounds);
+            badge = WorldRect(plate);
+            return medallion.width > 0.01f && medallion.height > 0.01f &&
+                   badge.width > 0.01f && badge.height > 0.01f;
+        }
+
+        private static RectTransform FindDeepRect(Transform root, string name)
+        {
+            if (root == null) return null;
+            if (string.Equals(root.name, name, StringComparison.Ordinal)) return root as RectTransform;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                var hit = FindDeepRect(root.GetChild(i), name);
+                if (hit != null) return hit;
+            }
+            return null;
+        }
+
+        private static readonly Vector3[] s_corners = new Vector3[4];
+
+        private static Rect WorldRect(RectTransform rt)
+        {
+            rt.GetWorldCorners(s_corners);
+            float xMin = Mathf.Min(s_corners[0].x, s_corners[2].x);
+            float xMax = Mathf.Max(s_corners[0].x, s_corners[2].x);
+            float yMin = Mathf.Min(s_corners[0].y, s_corners[2].y);
+            float yMax = Mathf.Max(s_corners[0].y, s_corners[2].y);
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        /// <summary>Containment with a half-pixel tolerance (a corner-anchored plate legitimately
+        /// touches the rim it is seated against).</summary>
+        private static bool Contains(Rect outer, Rect inner)
+        {
+            const float Slack = 0.5f;
+            return inner.xMin >= outer.xMin - Slack && inner.xMax <= outer.xMax + Slack &&
+                   inner.yMin >= outer.yMin - Slack && inner.yMax <= outer.yMax + Slack;
+        }
+
+        private static string RectPx(Rect r)
+        {
+            return "[x " + r.xMin.ToString("0.0") + ".." + r.xMax.ToString("0.0") +
+                   ", y " + r.yMin.ToString("0.0") + ".." + r.yMax.ToString("0.0") + "]";
         }
 
     }

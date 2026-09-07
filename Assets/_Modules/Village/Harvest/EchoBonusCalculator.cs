@@ -86,9 +86,10 @@ namespace DeNelle.Village
     /// </summary>
     public static class EchoBonusCalculator
     {
-        private const float CommonResourcePerHour = 3600f; // 5 every 5 seconds
-        private const float GoldPerHour = 900f;            // valuable, but not premium
-        private const float CrystalPerHour = 4f;           // exactly 1 every 15 minutes
+        // WO-1474: the three per-hour rates USED to be private consts here (3600 / 900 / 4),
+        // which put them out of reach of the WO-1331 remote-retune seam. They now live in
+        // echoes-balance.json (EchoBalanceCatalog.CommonResourcePerHour / GoldPerHour /
+        // CrystalPerHour), authored at the SAME values, so the split is unchanged by the move.
         // Hidden tri-synergy activation edge (trace on transition, not per frame --
         // AggregateHarvestMultiplier runs every tick). Internal-only observability.
         private static bool s_triWasActive;
@@ -166,12 +167,25 @@ namespace DeNelle.Village
 
         /// <summary>
         /// WO-830: per-TARGET split WEIGHTS for DumpSilos across all five harvest targets
-        /// (Wood/Iron/Food/Gold/Crystals). Each Harvest-assigned echo contributes its
-        /// (BaseRateFor(id) * level) weight to its ASSIGNED resource (player-picked --
-        /// EchoAssignments.ResourceTokenOf; a v33 generic "harvest" token defaults to the
-        /// echo's affinity on read). Non-Harvest echoes contribute nothing. If the total is
-        /// 0 (no harvest echoes), falls back to an even Wood/Iron/Food split so the caller
-        /// never divides by zero (Gold/Crystals never flow without an explicit assignment).
+        /// (Wood/Iron/Food/Gold/Crystals). Each Harvest-assigned echo contributes
+        ///
+        ///   HarvestRatePerHour(assignedTarget, level) x EchoBalanceCatalog.BaseRateFor(echoId)
+        ///
+        /// to its ASSIGNED resource (player-picked -- EchoAssignments.ResourceTokenOf; a v33
+        /// generic "harvest" token defaults to the echo's affinity on read). Non-Harvest echoes
+        /// contribute nothing.
+        ///
+        /// WO-1474 corrected this header AND the code it described. The old text claimed the
+        /// weight was "BaseRateFor(id) * level"; the code multiplied NEITHER factor in -- it
+        /// returned the raw rate-class per-hour number, so the authored perEchoBaseRate rows
+        /// were dead and the level term came only from HarvestRatePerHour's own +10%/level.
+        /// BaseRateFor is now wired in (it is the AUTHORITY for the per-echo weight; the rate
+        /// classes are the AUTHORITY for the per-resource cadence), which is what makes the
+        /// WO-830 Sec.3b crystals monetization guard actually run.
+        ///
+        /// There is deliberately NO even-split fallback when no echo is assigned (the old
+        /// header claimed one): every weight stays 0 and callers must handle a zero total --
+        /// Gold/Crystals must never flow without an explicit assignment.
         /// </summary>
         public static Dictionary<HarvestTarget, float> HarvestTargetWeights()
         {
@@ -185,7 +199,6 @@ namespace DeNelle.Village
             };
 
             int count = OwnedCount();
-            float total = 0f;
             for (int i = 0; i < count; i++)
             {
                 if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Harvest) continue;
@@ -195,11 +208,13 @@ namespace DeNelle.Village
                 if (entry == null) continue;
 
                 int level = EchoAssignments.LevelOf(i);
-                float w = HarvestRatePerHour(target, level);
+                // WO-1474: the authored per-echo weight finally applies. `entry` was resolved
+                // and then thrown away here before today, which is exactly why it was dead.
+                float w = HarvestRatePerHour(target, level)
+                          * Mathf.Max(0f, EchoBalanceCatalog.BaseRateFor(entry.Id));
                 if (w <= 0f) continue;
 
                 weights[target] += w;
-                total += w;
             }
 
             return weights;
@@ -216,11 +231,11 @@ namespace DeNelle.Village
             switch (target)
             {
                 case HarvestTarget.Crystals:
-                    return CrystalPerHour;
+                    return EchoBalanceCatalog.CrystalPerHour;
                 case HarvestTarget.Gold:
-                    return GoldPerHour * (1f + 0.10f * (clamped - 1));
+                    return EchoBalanceCatalog.GoldPerHour * (1f + 0.10f * (clamped - 1));
                 default:
-                    return CommonResourcePerHour * (1f + 0.10f * (clamped - 1));
+                    return EchoBalanceCatalog.CommonResourcePerHour * (1f + 0.10f * (clamped - 1));
             }
         }
 

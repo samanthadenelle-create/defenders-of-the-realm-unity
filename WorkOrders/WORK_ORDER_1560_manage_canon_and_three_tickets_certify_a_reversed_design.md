@@ -1,7 +1,6 @@
 # WO-1560: three Manage tickets and both canon files certify a design that was reversed — banner them
 
-**Status:** READY TO IMPLEMENT — **DO THIS FIRST. It is documentation only, costs about an hour, and
-while it stands every Manage review pays the tax in §3.**
+**Status:** IMPLEMENTED 2026-09-06 (documentation only, UNCOMMITTED in the shared tree) - landed as WO-1534 Part B1; evidence in `WorkOrders/WORK_ORDER_1534_the_raid_loop_never_closes_and_manage_cannot_reach_it.RESULT.md`, section "Part B1". *(was: READY TO IMPLEMENT - "DO THIS FIRST. It is documentation only, costs about an hour, and while it stands every Manage review pays the tax in section 3.")*
 **Priority:** P1 (highest leverage in the WO-1534 set)
 **Silo:** `WorkOrders/ManageRedesign/*.md` — **DOCUMENTATION ONLY. Not one `.cs` file is touched.**
 **Parent:** WO-1534 §B1. **Source:** read-only review 2026-09-06 (CLI seat), every line re-read at source.

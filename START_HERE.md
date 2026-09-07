@@ -23,7 +23,7 @@ ANYTHING until the boot sequence below is complete and reported.**
 | 3 | `SAMANTHA.md` | The boot-confirmation gate: verify state with evidence → report → WAIT for the owner's go. |
 | 4 | `PREFLIGHT_GATE.md` | Gate A before ANY code, Gate B before ANY debugging, Gate C before "done". Answer YES + proof, out loud. |
 | 5 | `CLAUDE.md` | The binding rules (§0 mount, §1 brace gate, §2 roles/WOs, §11 orchestration, §12 instrument-don't-guess, §13 ticket pipeline, §14 F8 watcher, §15 canon maintenance). |
-| 6 | `docs/HANDOVER.md` (newest ★★ block only) | What the last session did and left open. |
+| 6 | `docs/HANDOVER.md` (the newest SESSION HANDOVER block at the top of the file) | What the last session did and left open. |
 | 7 | `docs/MASTER_CATALOG.md` → the `docs/MASTER_CATALOG/<area>.md` for whatever you'll touch | Be the SME before changing anything. Verified from code; comments lie. |
 | 8 | `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE_PRINCIPLES.md` | The HP B2B law: bounded contexts, presentation never touches objects, the One Model, queue by leverage. |
 | 9 | Auto-memory `MEMORY.md` index | Owner preferences + hard-won lessons. Index lines are pointers — read the file before asserting. |

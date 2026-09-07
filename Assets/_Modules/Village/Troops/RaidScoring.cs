@@ -134,6 +134,34 @@ namespace DeNelle.Village
         [Tooltip("Extra food per earned star.")]
         [SerializeField] private int _lootFoodPerStar = 20;
 
+        // ── THE ENGAGEMENT GATE (WO-1520) ─────────────────────────────────────
+        //
+        // OWNER RULING 2026-09-06: "battle for raids should start in some staging area outside
+        // of the attack range of everything so TIME STARTS ON FIRST ENGAGE."
+        //
+        // MEASURED BEFORE: RaidScoring.Update advanced the clock by Time.deltaTime from the
+        // frame the scene loaded. raid-no-abilities-2026-09-06.log 12:59:47 shows that -
+        // "elapsed=45s/180s" with the hero already dead, because the seconds the player spent
+        // finding the deploy bar were billed to the raid clock while turrets shot them.
+        //
+        // ONE AUTHORITY, deliberately: NotifyEngagement is the only way _engaged is set, and
+        // _elapsed is the only clock. Everything that can start a raid - a hero strike, a troop
+        // strike, a defender acquiring a target - routes through that one method, so there is
+        // never a second answer to "has the raid begun". DetectEngagement is the passive half
+        // for the seams this component may not edit (Enemy / TroopController / AwarenessSensor
+        // are owned by other lanes): it OBSERVES their public state instead of hooking them.
+        //
+        // NO GRACE TIMER. The owner explicitly refused one (WO-1520 sec.3): a countdown still
+        // spawns the player in the fire. The staging MARKER is the fix; this flag is what stops
+        // the clock billing them for standing on it.
+        private bool _engaged;
+        private string _engagedReason;
+        private float _detectTimer;
+        private float _spireHpAtStart = -1f;
+
+        /// <summary>How often the passive engagement detector sweeps while the raid is staging.</summary>
+        private const float EngagementScanInterval = 0.2f;
+
         // ── Runtime ───────────────────────────────────────────────────────────
         private float _elapsed;
         private bool _finalized;
@@ -175,6 +203,21 @@ namespace DeNelle.Village
         public float RemainingSeconds => Mathf.Max(0f, _clockSeconds - _elapsed);
         /// <summary>True once the raid has settled (victory / timeout).</summary>
         public bool Finalized => _finalized;
+
+        /// <summary>
+        /// WO-1520 - true once the raid has actually BEGUN (first engagement). The clock does
+        /// not advance until this latches; see <see cref="NotifyEngagement"/>.
+        /// </summary>
+        public bool Engaged => _engaged;
+
+        /// <summary>
+        /// WO-1520 - true while the player is still in the staging area: nothing has engaged
+        /// and the raid has not settled. The HUD reads "STAGING - deploy your troops" here.
+        /// </summary>
+        public bool InStaging => !_engaged && !_finalized;
+
+        /// <summary>What started the clock ("hero strike", "defender acquired", ...); empty while staging.</summary>
+        public string EngagedReason => _engagedReason ?? string.Empty;
 
         /// <summary>The garrison's stable total defender count (peak observed during spawn).</summary>
         public int GarrisonTotal => _garrisonTotalPeak;
@@ -712,21 +755,136 @@ namespace DeNelle.Village
         {
             if (_finalized) return;
 
-            _elapsed += Time.deltaTime;
-
             // Track the peak garrison total (it grows as the staggered spawn lands,
-            // then holds stable — the denominator for destruction%).
+            // then holds stable — the denominator for destruction%). This runs during
+            // STAGING too: the spawn is what fills the denominator, and it happens
+            // whether or not the player has engaged yet.
             if (_spawner != null)
             {
                 int t = _spawner.TotalGarrison;
                 if (t > _garrisonTotalPeak) _garrisonTotalPeak = t;
             }
 
+            // ── WO-1520: THE CLOCK CANNOT ADVANCE BEFORE FIRST ENGAGEMENT ──────
+            // This early return is the whole ticket. _elapsed is written in exactly
+            // two places (here and nowhere else), so there is no path that bills a
+            // player for the seconds they spend in the staging area.
+            if (!_engaged)
+            {
+                _detectTimer -= Time.deltaTime;
+                if (_detectTimer <= 0f)
+                {
+                    _detectTimer = EngagementScanInterval;
+                    DetectEngagement();
+                }
+                return;
+            }
+
+            _elapsed += Time.deltaTime;
+
             if (!_timeExpiredFired && _elapsed >= _clockSeconds)
             {
                 _timeExpiredFired = true;
                 FlowTrace.Step("Raid", $"raid clock expired at {_elapsed:0.0}s (destruction {DestructionPct * 100f:0}%). Ending the raid.");
                 OnTimeExpired?.Invoke();
+            }
+        }
+
+        // =====================================================================
+        //  FIRST ENGAGEMENT (WO-1520) — the one authority that starts the clock.
+        // =====================================================================
+
+        /// <summary>
+        /// Start the raid clock. THE ONE AUTHORITY (WO-1520): every caller - the hero's first
+        /// strike, a troop's first strike, a defender acquiring a target - routes through here,
+        /// and nothing else may write <c>_elapsed</c>.
+        ///
+        /// <para>Idempotent and null-safe: the second and every later call is a no-op, so a
+        /// caller may fire it every frame without thinking. The permanent
+        /// <c>FlowTrace.Step("Raid", "clock started reason=...")</c> line is the acceptance
+        /// evidence for this ticket - it must appear AFTER the player's first deploy, never at
+        /// scene entry. Do NOT strip it (CLAUDE.md §12).</para>
+        /// </summary>
+        /// <param name="reason">Short, stable phrase naming what engaged ("hero strike",
+        /// "troop strike", "defender acquired target"). Logged verbatim.</param>
+        public void NotifyEngagement(string reason)
+        {
+            if (_engaged || _finalized) return;
+            _engaged = true;
+            _engagedReason = string.IsNullOrEmpty(reason) ? "unspecified" : reason;
+            FlowTrace.Step("Raid", $"clock started reason={_engagedReason} " +
+                                   $"(staging ended; {_clockSeconds:0}s raid clock now running, " +
+                                   $"deployed={_deployedCount}).");
+        }
+
+        /// <summary>
+        /// The PASSIVE half of the engagement gate: observes public state on systems this
+        /// component is not allowed to hook, and calls <see cref="NotifyEngagement"/> on the
+        /// first sign of contact. Throttled to <see cref="EngagementScanInterval"/> and only
+        /// runs while staging, so it costs nothing once the raid is live.
+        ///
+        /// <para>WHY OBSERVE RATHER THAN HOOK: <c>Enemy</c>, <c>TroopController</c> and
+        /// <c>AwarenessSensor</c> are owned by other lanes and may not be edited from here.
+        /// Each of them already publishes the fact we need, so reading it is both cheaper and
+        /// impossible to leave half-wired. When those lanes land, they should call
+        /// <see cref="NotifyEngagement"/> DIRECTLY - this detector then simply never fires
+        /// first, which is the intended end state, not a duplicate authority.</para>
+        ///
+        /// <para>The four observable signs, all of which mean combat has genuinely begun:</para>
+        /// <list type="number">
+        /// <item>A defender's <c>AwarenessSensor</c> has escalated to
+        /// <c>AwarenessState.Engaged</c> - a committed target, the ticket's "first defender
+        /// acquiring a target". <c>Alerted</c> deliberately does NOT count: it also fires on a
+        /// shared family alert and on an ally dying, so it can latch without the player.</item>
+        /// <item>The spire has lost HP - the hero or a troop struck the objective.</item>
+        /// <item>Any censused wall/turret has lost HP (StructuresRazedPct &gt; 0) - a strike
+        /// landed on the base.</item>
+        /// <item>The garrison has lost a member - something killed a defender.</item>
+        /// </list>
+        /// Fail-safe throughout: every read is guarded and a fake-null object is skipped.
+        /// </summary>
+        private void DetectEngagement()
+        {
+            // (1) A defender committed to a target.
+            var sensors = FindObjectsByType<AwarenessSensor>(FindObjectsSortMode.None);
+            for (int i = 0; i < sensors.Length; i++)
+            {
+                var s = sensors[i];
+                if (s == null) continue;
+                if (s.State == DeNelle.Core.AwarenessState.Engaged)
+                {
+                    NotifyEngagement($"defender acquired target ({s.name})");
+                    return;
+                }
+            }
+
+            // (2) The objective took a hit.
+            if (_spire != null)
+            {
+                if (_spireHpAtStart < 0f) _spireHpAtStart = _spire.Hp;
+                else if (_spire.Hp < _spireHpAtStart - 0.01f)
+                {
+                    NotifyEngagement("spire struck");
+                    return;
+                }
+            }
+
+            // (3) A wall or a garrison turret took a hit.
+            if (_structuresTotalAtStart > 0 && StructuresRazedPct > 0.0001f)
+            {
+                NotifyEngagement("structure struck");
+                return;
+            }
+
+            // (4) A defender died. RaidGarrisonSpawner increments BOTH _garrison (TotalGarrison)
+            //     and _aliveCount on every spawn (RaidGarrisonSpawner.cs:431-432) and only ever
+            //     decrements _aliveCount, on death (:459). So TotalGarrison is monotonic and
+            //     AliveCount < TotalGarrison means exactly "at least one defender has died" -
+            //     true during the staggered ramp as well, which is why this needs no baseline.
+            if (_spawner != null && _spawner.AliveCount < _spawner.TotalGarrison)
+            {
+                NotifyEngagement("defender killed");
+                return;
             }
         }
 

@@ -1,5 +1,7 @@
 # WO-2012 — Replace Per-Destination Queue UI With One Global Queue
 
+**Status:** IN PROGRESS - PARTIAL: a Manage queue drawer exists (ManageScreenPanel.cs, ManageQueueDrawerRegression.cs); one global queue used from all three tabs with no per-destination drawer left is not verified at HEAD 2026-09-06.
+
 **Priority:** P0  
 **Depends on:** WO-2002  
 **Note:** P0 because the new common shell depends on it.

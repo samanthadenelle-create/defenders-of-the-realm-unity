@@ -1,5 +1,16 @@
 # WO-2001 — Replace Manage Hub With Direct BUILD / ARMY / RESEARCH Tabs
 
+> **SUPERSEDED 2026-09-06 (WO-1534 Part B1). Body frozen per CLAUDE.md section 15 - do not rewrite it.**
+> A later owner mockup, `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png`, replaced this ticket's tab IA
+> with a HUB plus a back arrow, and commit `32659c0f6` ("the Manage screens rebuilt against the owner's
+> mockup") implemented it. This ticket's whole objective was reversed, so its acceptance line 71
+> ("BUILD, ARMY, RESEARCH are one tap from each other") is no longer a criterion the shipped screen owes.
+> Evidence: `Assets/_Modules/Core/Manage/ManageWorkspacePanel.cs:412` - "AND THERE IS NO TAB ROW AT ALL
+> ANY MORE - BuildTabs IS DELETED, NOT EMPTIED", with :410 recording that the door MOVED to the host's
+> chrome row. The mockup is the spec; the work in this ticket was correct on the day it landed.
+
+**Status:** SUPERSEDED 2026-09-06 by the owner's hub mockup (`MANAGE_MOCKUP_8_SCREENS.png`, implemented in 32659c0f6); see banner. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*
+
 **Priority:** P0  
 **Depends on:** none  
 **Blocks:** WO-2002 onward

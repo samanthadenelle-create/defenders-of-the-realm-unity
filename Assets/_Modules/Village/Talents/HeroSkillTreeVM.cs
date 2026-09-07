@@ -237,8 +237,17 @@ namespace DeNelle.Village.Talents
         };
 
         /// <summary>True when this node's effect is read by a real runtime system.
-        /// <paramref name="why"/> carries the plain-words reason when it is NOT (ASCII, safe to
-        /// show a player).</summary>
+        /// <paramref name="why"/> carries the DIAGNOSTIC reason when it is NOT.
+        ///
+        /// ⛔ <paramref name="why"/> IS NOT PLAYER COPY. WO-1522 (device frame
+        /// Logs/device/screens/owner-screen-20260906-202355.png): this out-string used to be
+        /// concatenated straight into the learn dialog, so the player read
+        /// "NO EFFECT YET - not implemented yet (data note: 'v2'). C" - an AUTHORING NOTE, quoting
+        /// the token an author typed into hero-talents.json, truncated mid-sentence. The doc line
+        /// here previously claimed it was "safe to show a player"; it never was. It names the data
+        /// file's private vocabulary ("v2", "stub", "no consumer") and grows with it.
+        /// Route it to FlowTrace only. The one player-facing sentence for a dead node is composed
+        /// by the VM (see <c>DeadNodePlayerLine</c>) and says the WORD "COMING".</summary>
         public static bool HasRuntimeConsumer(HeroTalentNodeDef n, out string why)
         {
             why = "";
@@ -1261,7 +1270,7 @@ namespace DeNelle.Village.Talents
                 // cost/lock line for an unowned dead node, so the panel can never imply
                 // otherwise; an owned one still explains itself below.
                 if (!owned.Contains(n.Id) && !TalentEffectLiveness.HasRuntimeConsumer(n, out string deadWhy))
-                    return "NO EFFECT YET - " + deadWhy + ". Costs " + n.Cost + " Wisdom.";
+                    return DeadNodePlayerLine(n, deadWhy);
                 if (owned.Contains(n.Id))
                 {
                     // Owner 2026-08-15: loadout left this screen; owned just explains itself.
@@ -1300,6 +1309,30 @@ namespace DeNelle.Village.Talents
         public int SelectedAssignedSlot => SelectedIsAssignable
             ? AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId) + 1 : 0;
 
+        /// <summary>WO-1522 - the ONE player-facing sentence for a talent with no runtime
+        /// consumer. It is COMPOSED here, from nothing but the node's own cost, so no authoring
+        /// vocabulary can reach the screen: the diagnostic reason is emitted to FlowTrace instead.
+        ///
+        /// The word is COMING, stated in words (never a hue): the owner is red/green colourblind,
+        /// so "this is not buyable value yet" has to survive greyscale. It is deliberately a
+        /// SHORT, whole sentence - the learn dialog's state band truncates silently (FitBlock
+        /// overflow Truncate), which is how the old string lost its tail mid-word.</summary>
+        private static string DeadNodePlayerLine(HeroTalentNodeDef n, string diagnosticWhy)
+        {
+            string id = n != null ? n.Id : "";
+            if (!string.Equals(id, s_lastDeadLogged, StringComparison.Ordinal))
+            {
+                s_lastDeadLogged = id;
+                // The authoring note lives HERE and only here - a trace line, never a label.
+                FlowTrace.Step("SkillTree", "dead node '" + id + "' shown as COMING; reason (dev only): " +
+                                            (string.IsNullOrEmpty(diagnosticWhy) ? "unstated" : diagnosticWhy));
+            }
+            int cost = n != null ? n.Cost : 0;
+            return "COMING - no effect in game yet. Costs " + cost + " Wisdom.";
+        }
+
+        private static string s_lastDeadLogged = "";
+
         // Best-available text when a node carries no authored description string.
         private static string DescribeFallback(HeroTalentNodeDef n)
         {
@@ -1326,6 +1359,27 @@ namespace DeNelle.Village.Talents
         /// <summary>Read-only quick-swap hint naming Loadout as the one assignment owner.</summary>
         public string QuickSwapStatus => "Assigned skills - change them in " +
                                          HudStrings.Get(HudStrings.KeyHeroLoadout) + ".";
+
+        /// <summary>WO-1522 - THE CLASS'S LOCKED BASIC, NAMED. Canon (CLAUDE.md sec.7, WO-1105 R5):
+        /// slot Q is the class's LOCKED basic; only W/E/R are loadout-swappable. The rail showed
+        /// three swappable seats and never said so, so the player could not tell whether the bar
+        /// was three abilities or four, nor which one they can never change.
+        ///
+        /// Q is <c>AbilityCatalog.GetLoadout(slug)[0]</c> - that method walks q,w,e,r IN ORDER, so
+        /// index 0 IS Q by construction; it is not an assumption about authoring order.
+        /// SlotKey is the literal "Q" (never a number - the three swappable seats own 1..3).
+        /// Empty AbilityId means the class has no authored Q and the View draws nothing.</summary>
+        public LoadoutSlotVM LockedBasic
+        {
+            get
+            {
+                var loadout = AbilityCatalog.GetLoadout(_heroSlug);
+                if (loadout == null || loadout.Count == 0) return new LoadoutSlotVM(-1, "Q", "", "");
+                var q = loadout[0];
+                if (q == null || string.IsNullOrEmpty(q.Id)) return new LoadoutSlotVM(-1, "Q", "", "");
+                return new LoadoutSlotVM(-1, "Q", q.Id, string.IsNullOrEmpty(q.Name) ? q.Id : q.Name);
+            }
+        }
 
         private void BuildQuickSlots()
         {

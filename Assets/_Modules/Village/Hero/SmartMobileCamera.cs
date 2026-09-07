@@ -785,11 +785,12 @@ namespace DeNelle.Village
         private void TryFindHero()
         {
             var heroGo = GameObject.FindWithTag("Player");
-            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-            if (heroGo == null) heroGo = SafeFindWithTag("HeroTarget");
-            // Tag-independent fallback: the baked Village2 hero is NOT tagged Player/
-            // HeroTarget, which left this camera with no target ("fixed, doesn't follow
-            // the hero"). The hero definitively carries HeroLocomotion, so lock onto that.
+            // WO-1513: a SafeFindWithTag("HeroTarget") term sat here. That tag has never
+            // been declared in TagManager.asset, so it never returned anything — the
+            // component fallback below was always doing the work it appeared to back up.
+            // Tag-independent fallback: the baked Village2 hero is NOT tagged Player,
+            // which left this camera with no target ("fixed, doesn't follow the hero").
+            // The hero definitively carries HeroLocomotion, so lock onto that.
             if (heroGo == null)
             {
                 var loco = FindAnyObjectByType<HeroLocomotion>();
@@ -862,15 +863,13 @@ namespace DeNelle.Village
             if (IsTargetValid()) ForceFollowImmediate();
         }
 
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
-        }
-
         private void LateUpdate()
         {
+            // WO-1483 frame budget. FIRST line so every early-return path is still timed.
+            // Accumulating overload (4-arg) — no per-frame log; PerfReporter rolls it up 1/s.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "SmartMobileCamera.LateUpdate", 4f, 1f);
+
             // Enforce sole camera every frame so no additive scene camera or Cinemachine vcam can steal the view.
             EnforceSoleCamera();
 

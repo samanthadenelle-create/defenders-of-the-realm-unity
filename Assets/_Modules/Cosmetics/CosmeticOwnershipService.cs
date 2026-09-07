@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.HudModel;   // WO-1523: CosmeticSignals - the one number the HUD may read
 
 namespace DeNelle.Cosmetics
 {
@@ -98,6 +99,7 @@ namespace DeNelle.Cosmetics
             EnsureState();
             if (!_ownedSet.Add(id)) return false;
             _state.OwnedCosmetics.Add(id);
+            PublishOwnedCount();
             Save();
             Changed?.Invoke();
             return true;
@@ -112,7 +114,17 @@ namespace DeNelle.Cosmetics
             _ownedSet.Clear();
             foreach (string id in _state.OwnedCosmetics)
                 if (!string.IsNullOrEmpty(id)) _ownedSet.Add(id);
+            PublishOwnedCount();
         }
+
+        /// <summary>
+        /// WO-1523. Copy the OWNED COUNT (never the list) into CosmeticSignals so the Hero
+        /// deck can decide whether the Wardrobe section exists without referencing this
+        /// assembly - DeNelle.HUD/Core cannot see DeNelle.Cosmetics. Published on the
+        /// first state read (so the boot count is live before any deck opens) AND on every
+        /// grant, because the section must appear the moment the first look unlocks.
+        /// </summary>
+        private void PublishOwnedCount() => CosmeticSignals.SetOwnedCount(_ownedSet.Count);
 
         private bool TryLoad(out CosmeticOwnershipSaveData data)
         {

@@ -56,9 +56,17 @@ namespace DeNelle.Village.World.Camps
     [DisallowMultipleComponent]
     public sealed class RaidVictoryController : MonoBehaviour
     {
+        // WO-1543 (owner ruling 2026-09-06: "Hold on touch, longer guard") - 12f -> 30f.
+        // TWELVE SECONDS DID NOT READ THIS SCREEN. The player has to take in the star result,
+        // up to FIVE spoils rows, a companion-join line and, at a capped bank, "Some of the
+        // reward could not be paid out" - the one message they must not miss. The guard STAYS
+        // (an end state that never dismisses can strand a player, and that is what it is for);
+        // it is now long enough to read, and EndStateVM.HoldOnInteraction re-arms it on every
+        // touch, so a reading player is never yanked and an absent one still goes home.
         [Tooltip("Seconds after victory before the hero auto-returns to the castle if the " +
-                 "player never taps the button (anti-soft-lock safety net).")]
-        [SerializeField] private float _autoReturnSeconds = 12f;
+                 "player never taps the button (anti-soft-lock safety net). Re-armed by any " +
+                 "interaction - see EndStateVM.HoldOnInteraction, WO-1543.")]
+        [SerializeField] private float _autoReturnSeconds = 30f;
 
         private RaidGarrisonSpawner _spawner;
         private RaidSpire _spire;  // THE OBJECTIVE (owner concept 2026-08-02) - razing it wins
@@ -801,23 +809,47 @@ namespace DeNelle.Village.World.Camps
         /// <summary>
         /// The optional "X unlocked" line for the victory screen, given the new victory count.
         ///
-        /// <para>DELIBERATELY NULL TODAY, AND THAT IS NOT AN OVERSIGHT. The section-4 thresholds
-        /// (3 / 10 / 20) and the gate they open are the sibling ladder lane's to own; naming a
-        /// target here would fork the ladder across two files, which is the duplicated state
-        /// that makes this repo's most expensive bugs. This seam exists so that lane fills in
-        /// ONE method body and nothing else in the victory path moves - the count is already
-        /// computed, the VM already carries the field, and the screen already renders it.</para>
+        /// <para>WO-1562 - THIS RETURNED NULL UNCONDITIONALLY, AND THE DEFERRAL IT NAMED HAD
+        /// EXPIRED. Its retired body said the section-4 thresholds "belong to the ladder lane,
+        /// not to this file". That lane is WO-1375, CLOSED 2026-09-06, and its RESULT does not
+        /// claim this seam - so the announcement was not deferred, it was ORPHANED. Meanwhile the
+        /// grid advertised the ladder at one end, the win was counted at the other
+        /// (<see cref="RecordVictory"/>), and the screen in the middle said nothing; only the
+        /// first-raid tutorial dialogue (PostRaidBeatTokens) ever spoke it, once, ever.</para>
         ///
-        /// <para>Traced, so the absence is OBSERVABLE: a player crossing a threshold and seeing
-        /// no line must be distinguishable in a capture from a player who crossed nothing.</para>
+        /// <para>THE ORIGINAL REASONING IS HONOURED, NOT OVERTURNED. Naming a target here would
+        /// still fork the ladder across two files - so nothing is named here. It asks
+        /// <c>RaidSelectionVM.UnlockAnnouncementFor</c>, which reads the SAME
+        /// <c>FlagshipRaidIds</c> + authored <c>unlockVictories</c> pair the grid's own lock
+        /// sentences read. ONE ladder, one set of thresholds, no copy (WO-1562 acceptance 2).</para>
+        ///
+        /// <para>STILL TRACED ON BOTH BRANCHES, which is the property the retired comment was
+        /// written to preserve: a player crossing a threshold and seeing no line must stay
+        /// distinguishable IN A CAPTURE from a player who crossed nothing. Never strip FlowTrace
+        /// (CLAUDE.md section 12).</para>
         /// </summary>
         private static string ResolveUnlockLine(int victories)
         {
-            FlowTrace.Step("Raid", $"UNLOCK LINE: victories={victories}; no ladder gate is wired into this " +
-                                   "seam yet, so the victory screen announces no unlock. The count is " +
-                                   "persisted and correct - only the announcement is unowned (section-4 " +
-                                   "thresholds belong to the ladder lane, not to this file).");
-            return null;
+            string line = null;
+            // Guarded: the catalog is legitimately absent in EditMode / headless, and a fault
+            // resolving the ladder must never cost the player their victory screen.
+            Guard.Try("Raid", "resolve the victory unlock line",
+                () => { line = DeNelle.Village.Hero.RaidSelectionVM.UnlockAnnouncementFor(victories); });
+
+            if (string.IsNullOrEmpty(line))
+            {
+                FlowTrace.Step("Raid", $"UNLOCK LINE: victories={victories} crossed NO ladder threshold - " +
+                                       "the victory screen stays silent, which is correct. (A count that " +
+                                       "DOES cross one logs the announcement instead, so the two cases are " +
+                                       "distinguishable in a capture.)");
+                return null;
+            }
+
+            FlowTrace.Step("Raid", $"UNLOCK LINE: victories={victories} CROSSED a ladder threshold - " +
+                                   $"announcing \"{line}\". Thresholds are read from the raid catalog's " +
+                                   "authored unlockVictories through RaidSelectionVM, the same authority " +
+                                   "the grid's lock sentences read - never a second copy in this file.");
+            return line;
         }
 
         private void ReturnHome()

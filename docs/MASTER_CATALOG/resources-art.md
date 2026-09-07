@@ -386,6 +386,57 @@ the owner's machines — EXCEPT a small force-tracked exception set.
   its own flagged follow-up: promote used prefabs into tracked Resources). **PARTIALLY ADDRESSED
   2026-08-06** — the promote-to-tracked follow-up is what §6-DELTA below actually did.
 
+### DELTA 2026-09-06  -  `VFXManager` gained a LOOP RELEASE POLICY (WO-1473), and `_activeLoops` is now DERIVED
+
+`Assets/_Modules/Village/Vfx/VFXManager.cs`. **Evidence, from the device log 2026-09-06:** 20
+occurrences of `STUCK LOOP ArcaneTower_Aura owner='Arcane Spire'#N age=303s ... 14/24`  -  **fourteen of
+the twenty-four slots held by ambient tower auras**, all past the report threshold, while the raid
+that followed pinned at **24/24 and dropped `Damage_Ruin` 31x**.
+
+- (!) **NOTHING WAS LEAKED.** Every one of those auras was BEHAVING  -  `ArcaneAura` holds exactly one
+  handle and stops it on `OnDisable`/`OnDestroy`/orphan. **The town simply grew more permanent
+  ambient loops than the pool has slots.** WO-1057 deliberately shipped the DETECTOR with no policy
+  (*"Reported only  -  release policy is the follow-up"*); this is that follow-up.
+- STOP: **SUSPEND, NEVER `ReturnToPool`  -  and the reason is not stylistic.** Every loop's caller still
+  holds a live `VFXHandle` pointing at that host (`ArcaneAura._handle`,
+  `StructureDamageVisuals rec.Burn`/`rec.Beacon`, ...). Handing the host back to the pool behind the
+  caller's back makes its later, **entirely correct** `Stop()` a **SECOND return of an instance the
+  pool may already have handed to somebody else**  -  one GameObject enqueued twice and simultaneously
+  owned by two effects. That is worse than the bug being fixed, and it is the class WO-955 spent a
+  day on. Instead the slot is released **without disturbing ownership**: particles stopped-and-cleared,
+  the record marked `Suspended`, and the count stops including it. **The handle stays valid**, the
+  record stays in the same registry (so every existing return path works unchanged), and resume is
+  `PlayAllParticles` on the same host. The one HARD release stays where WO-1057 put it  - 
+  `ReclaimDestroyedLoops`, for a host Unity has actually destroyed.
+- **`_activeLoops` is a computed property**: `CountHeld(_loopObjects) + CountHeld(_hovlLoopObjects)`,
+  a walk of two <=32-entry dictionaries with a struct enumerator  -  **no allocation**. (!) **A REGISTERED
+  LOOP IS NOT NECESSARILY A HELD SLOT**: `Registry.Count` is the registered total and is deliberately
+  **not** the same number. **DERIVED on purpose**  -  a cached "held" int is exactly the drift WO-1057
+  deleted from this class.
+- `LoopRecord` gained `Suspended` / `SuspendedAt` / `OffscreenSince` (**`-1` means "no off-camera
+  streak running"**, which is not the same as `0` seconds).
+- **Policy constants:** `OFFSCREEN_RELEASE_GRACE = 6f` (off-camera this long -> suspend),
+  `LOOP_POLICY_INTERVAL = 0.5f` (**cadence, NOT per frame**), `LOOP_VISIBILITY_RADIUS = 3f` (AABB
+  half-extent for the frustum test, with **hysteresis on the LEAVE edge only** so a loop at the screen
+  edge cannot flicker), `LOOPS_PER_OWNER_CAP = 4`. `TickLoopReleasePolicy` runs **BEFORE** the stuck-loop
+  audit on purpose  -  a loop just suspended must not also be reported as stuck in the same sweep.
+- **`EnforceOwnerLoopCap`, asserted at the moment the slot is taken.** A single owner accumulating loop
+  records is the counter-leak SHAPE (the same host re-registering, or a driver starting a second aura
+  without stopping the first): invisible in a bare count, obvious here. **The ceiling is DERIVED, not
+  picked**  -  the largest legitimate simultaneous hold read at source is **THREE** on one structure
+  (`StructureDamageVisuals`' Burn loop + its Beacon loop + an `ArcaneAura` ring), so the cap sits one
+  above. Overflow releases **OLDEST-KEPT / NEWEST-DROPPED**, because the oldest record is the one the
+  owner's own handle field still points at. It uses its **own** scratch list, not a share of the
+  policy walker's  -  a shared scratch is one refactor away from being cleared mid-walk.
+- (!) **RECONCILED WITH WO-889, because a reader will reach for it.** `VfxAuraProximityCuller` says
+  nearest-N must NEVER cull tower/Heart/boss auras, and **that still holds**  -  a DISTANCE cull deletes
+  information the player can still read (a far-away landmark is exactly when you want to see it).
+  **This is not a distance cull.** It releases only what is **outside the camera frustum**, i.e. what
+  the player cannot see at all, and it **RESUMES on re-entry**. The two rules do not collide.
+- The stuck-loop audit's age threshold **changed meaning**: age alone no longer reports (a five-minute
+  aura in front of the camera is the feature); it is now only the "and it is ancient too" note on a
+  line the **policy failure** already earned. `VfxLoopFlagRegression` was updated alongside.
+
 ### DELTA 2026-09-02 — `MarqueeSpellVfx`, and the gitignored-prefab trap under it
 
 **`Assets/_Modules/Village/Vfx/MarqueeSpellVfx.cs` (`DeNelle.Village`, WO-1305 Part A).** The ONE

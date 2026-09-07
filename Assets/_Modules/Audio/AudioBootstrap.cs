@@ -187,14 +187,14 @@ namespace DeNelle.Audio
             if (PlayerPrefs.GetInt(UnmuteMigrationKey, 0) == 1) return;
             try
             {
-                var t = System.Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
-                if (t == null) return;
-                var instance = t.GetProperty("Instance",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
-                if (instance == null) return;
-                var setMuted = t.GetMethod("SetMuted",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                setMuted?.Invoke(instance, new object[] { false });
+                // WO-1511: GameStateService is in DeNelle.Core, and DeNelle.Audio.asmdef
+                // references "DeNelle.Core" — so this is a direct call. The live guard (no
+                // service alive yet -> skip, migration key still stamped by the finally) is
+                // unchanged; only the "type missing" path, which cannot happen when the
+                // compiler resolves the type, is gone.
+                var service = DeNelle.Core.State.GameStateService.Instance;
+                if (service == null) return;
+                service.SetMuted(false);
             }
             catch (System.Exception ex)
             {

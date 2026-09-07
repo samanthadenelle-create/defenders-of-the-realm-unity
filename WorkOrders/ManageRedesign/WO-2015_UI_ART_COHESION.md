@@ -1,5 +1,7 @@
 # WO-2015 — Standardize Manage Art and Icon Contracts
 
+**Status:** READY TO IMPLEMENT
+
 **Priority:** P1  
 **Depends on:** new layout geometry stable
 

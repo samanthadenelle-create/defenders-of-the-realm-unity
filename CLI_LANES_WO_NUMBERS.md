@@ -187,7 +187,18 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 22:5x (CLI, hundred-and-fourth pass): main line next free = **1568**.
+> ## RECONCILED 2026-09-06 (CLI, hundred-and-fifth pass): main line next free = **1569**.
+> *(Diagnosis lane minted **1568** = DUNGEON DOORS READ AS MOVING WALLS. The composed-dungeon
+> working door is a `PrimitiveType.Cube` (`CommonDungeonDoor.cs:57-60`) of the same primitive family
+> as the room walls, 2.2 x 2.4 x 0.16, told apart only by a brown colour - the one cue the
+> colourblind owner cannot use - hung in an untrimmed 2.2 x 4.0 gap (`BuildWallWithGap`,
+> `DefaultDungeonRoomsBuilder.cs:464-502`) it is 1.6 m too short to fill. The hinge motion is already
+> correct; the geometry is the defect. Presentation-only fix: frame + inset panelled leaf, built at
+> runtime, so NO prefab rebuild, NO recompose and NO re-bake - the isolated-worktree constraint is
+> recorded but not triggered. KayKit leaf measured on disk (OBJ only, 2.0 x 2.75) against the 2.2 m
+> gap. Bumped 1568 -> 1569 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 22:5x (CLI, hundred-and-fourth pass): main line next free = **1568**.
 > *(CLI minted **1567** = CONSOLIDATE THE MANAGE ART WAVE - gate, capture, build, push. Handover to the
 > CLI lane on the owner's ask. The art is ALREADY COMMITTED (`ad808ecf3`): 57 PNGs + 58 metas, 26 of 26
 > BUILD rows now resolve a portrait (up from 5), filenames an EXACT match for the 21 missing catalog ids.

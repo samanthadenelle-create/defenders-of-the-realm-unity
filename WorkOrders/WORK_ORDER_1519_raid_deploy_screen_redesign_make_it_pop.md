@@ -1,6 +1,6 @@
 # WO-1519: raid deploy screen redesign - hierarchy, art and chips, so the screen pops
 
-**Status:** READY TO IMPLEMENT - owner ask, 2026-09-06 20:14
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Silo:** `RaidDeployScreen` + `RaidDeployController` (the deploy modal).
 **LANDS AFTER** tonight's RaidDeployScreen / Controller commit, and BUILDS ON WO-1462 (backdrop),
 WO-1463 (magenta flag) and WO-1464 (overlaps). Those are the layout defects; this is the design pass.

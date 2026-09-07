@@ -300,7 +300,13 @@ namespace DeNelle.Village.World.Camps
                 ? GarrisonStatBlocks.BuildTypedDef(NextTypeId(), level)
                 : (stonebelly ? GarrisonStatBlocks.BuildStonebellyDef(threatLevel)
                               : GarrisonStatBlocks.BuildTrollDef(threatLevel));
+            float builtHp = def != null ? def.Hp : 0f, builtDmg = def != null ? def.ContactDamage : 0f;
             GarrisonStatBlocks.ApplyLevelScale(def, level);
+            // WO-1530 — the permanent spawn measurement. This path applies NO further fold,
+            // so lvl == final here; both are printed so the line reads identically to the raid one.
+            GarrisonStatBlocks.TraceSpawnScale(
+                $"garrison-guard[{index}] threat={threatLevel}", def, level,
+                builtHp, builtDmg, def != null ? def.Hp : 0f, def != null ? def.ContactDamage : 0f);
 
             var enemy = EnemyFactory.Build(def, pos, rot, _garrisonRoot);
             if (enemy == null)

@@ -1,8 +1,11 @@
 // =============================================================================
 // BlankStartCensusRegression — WO-703 / ticket BLANK-1 acceptance oracle.
 // -----------------------------------------------------------------------------
-// Assembly: DeNelle.EditorRegression. STANDALONE (NOT wired into DataRegression
-// .RunAll — invoke via:
+// Assembly: DeNelle.EditorRegression. REGISTERED in DataRegression.RunAll as of
+// WO-1496 (2026-09-06) — it is the LAST line above the END fence because it opens
+// Main_Castle_Overworld single-mode. It had sat unregistered since WO-703: a suite
+// no entry point runs is worse than no suite, because it reads as coverage.
+// Still invokable standalone via:
 //   Unity.exe -batchmode -quit -projectPath <repoRoot>   (root is MACHINE-DEPENDENT)
 //     -executeMethod DeNelle.Editor.BlankStartCensusRegression.Run
 // or the "Defenders > Regression > Blank Start Census (WO-703)" menu item).
@@ -59,8 +62,22 @@ namespace DeNelle.Editor
     {
         private const string ScenePath = "Assets/Scenes/Main_Castle_Overworld.unity";
 
+        // WO-1496: menu / standalone entry. It owns the process-exit decision (Finish's
+        // EditorApplication.Exit is now reached only from here) because inside
+        // DataRegression.RunAll an exit would kill the batch before REGRESSION_OK is written.
         [MenuItem("Defenders/Regression/Blank Start Census (WO-703)")]
         public static void Run()
+        {
+            bool ok = Run(out _);
+            if (!ok && Application.isBatchMode) EditorApplication.Exit(1);
+        }
+
+        /// <summary>
+        /// Registered-suite entry point (DataRegression.RunAll, WO-1496). Registered LAST
+        /// above the END fence on purpose: it opens Main_Castle_Overworld single-mode, so
+        /// anything registered after it would census a different world than it expected.
+        /// </summary>
+        public static bool Run(out string reason)
         {
             var failures = new List<string>();
             var log = new StringBuilder();
@@ -74,7 +91,7 @@ namespace DeNelle.Editor
                 // ── 0. The merged hub scene, opened for a REAL scene-content census ──
                 var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
                 if (!scene.IsValid() || !scene.isLoaded)
-                { failures.Add($"could not open '{ScenePath}' — no scene to census"); Finish(failures, log); return; }
+                { failures.Add($"could not open '{ScenePath}' — no scene to census"); return Finish(failures, log, out reason); }
                 if (scene.name != SceneRouter.Castle)
                     failures.Add($"opened scene '{scene.name}' != SceneRouter.Castle '{SceneRouter.Castle}' — " +
                                  "the standdown gates are castle-scoped and would not engage");
@@ -272,10 +289,10 @@ namespace DeNelle.Editor
                     if (o != null) UnityEngine.Object.DestroyImmediate(o);
             }
 
-            Finish(failures, log);
+            return Finish(failures, log, out reason);
         }
 
-        private static void Finish(List<string> failures, StringBuilder log)
+        private static bool Finish(List<string> failures, StringBuilder log, out string reason)
         {
             if (failures.Count == 0)
             {
@@ -283,11 +300,15 @@ namespace DeNelle.Editor
                     "BLANK_START_OK — fresh save census: tree + well + walls/gates only " +
                     "(zero records, zero vendors — WO-707: the player places everything; WO-971: no founding " +
                     "steward NPC either, the guide's only body is the wolf the founding arc summons).");
-                return;
+                reason = "BLANK START OK — a fresh save censuses to tree + well + walls/gates only: every " +
+                         "baked storefront stands down (with and without a replacement record), no vendor or " +
+                         "founding NPC is seated, and the runtime stations skip spawn";
+                return true;
             }
             Debug.LogError(log.ToString() + "BLANK_START_FAIL (" + failures.Count + "):\n  - " +
                            string.Join("\n  - ", failures));
-            if (Application.isBatchMode) EditorApplication.Exit(1);
+            reason = "BLANK START: " + failures.Count + " failure(s): " + string.Join(" | ", failures.ToArray());
+            return false;
         }
 
         // ── census-table readers (reflection on the REAL private tables — the same

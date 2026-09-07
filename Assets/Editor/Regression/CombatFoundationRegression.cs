@@ -8,6 +8,30 @@ namespace DeNelle.Editor
     /// <summary>Focused executable proof for attack concurrency and occupancy contracts.</summary>
     public static class CombatFoundationRegression
     {
+        // WO-1496: this suite asserts by THROWING (Require -> InvalidOperationException).
+        // Registered in DataRegression.RunAll through the wrapper below, which turns the
+        // throw into a red reason string. It must not be registered as the raw void Run():
+        // a throw inside Guard.Try is swallowed, the suite emits neither a [tag] line nor a
+        // failure, and it vanishes from the denominator (the G1 shortfall this WO exists for).
+        public static bool Run(out string reason)
+        {
+            try
+            {
+                Run();
+                reason = "COMBAT FOUNDATION OK -- fodder attack tokens cap at 2 and are reusable after " +
+                         "Release, the elite committer slot is exclusive, EnemyOccupancySlot seats are " +
+                         "single-occupant and reusable, both HitFrame seams exist, and the mobile " +
+                         "telegraph/recover floors + the 4 Hz occupancy budget hold";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reason = "COMBAT FOUNDATION: " + ex.GetType().Name + ": " + ex.Message;
+                Debug.LogError("COMBAT_FOUNDATION_REGRESSION_FAIL " + reason);
+                return false;
+            }
+        }
+
         public static void Run()
         {
             GameObject targetA = null, targetB = null, a = null, b = null, c = null;

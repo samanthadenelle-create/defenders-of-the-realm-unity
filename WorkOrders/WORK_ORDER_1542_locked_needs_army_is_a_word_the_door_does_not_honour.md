@@ -1,6 +1,6 @@
 # WO-1542: `LOCKED - needs Army 9` is a word the door does not honour, and the card is not even dimmed
 
-**Status:** READY TO IMPLEMENT — **owner ruling 2026-09-06: "Warning, not a lock."** (was: BLOCKED)
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate — **owner ruling 2026-09-06: "Warning, not a lock."** (was: BLOCKED)
 **Priority:** P1
 **Silo:** `Assets/_Modules/Village/Hero/RaidSelectionScreen.cs` + `RaidSelectionVM.cs`. **Both CLEAN** in
 the working tree as of 2026-09-06 21:50.
@@ -101,3 +101,8 @@ words** — they should read as one voice about the same fact.
 - The grid card's cleared-state marker and repeat-clear disclosure — **WO-1562**.
 - Deploy hierarchy and art — **WO-1519**; backdrop — **WO-1462**; overlaps — **WO-1464**.
 - Spoils numbers — **WO-1461**.
+
+> **OWNER RULING 2026-09-06 22:20 (CLI seat, via the question tool, then "add the confirm toast"):** the warning
+> DOES carry a confirm toast on BEGIN ASSAULT when the card is outmatched. This supersedes the "no confirm prompt"
+> line above. The toast is a confirm step on the deploy footer, NOT a readiness gate: it never refuses, it asks once,
+> and HeartfireRegression PIN F must stay green. The VM composes the toast text; the view only shows it.

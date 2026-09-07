@@ -12,7 +12,18 @@
 //   run-unity-method.ps1 -Method DeNelle.Editor.SessionRegression.RunAll -LogName session-regression.log
 //
 // Prints a single authoritative marker:
-//   SESSION_GUARDS_OK 6/6 checks  /  SESSION_GUARDS_FAIL: <n> failure(s)
+//   SESSION_GUARDS_OK <pass>/<total> checks  /  SESSION_GUARDS_FAIL: <n> failure(s)
+//
+// COUNT NOTE (WO-1493, 2026-09-06): that marker used to read the string literal
+// "SESSION_GUARDS_OK 6/6 checks" — a LABEL, not a MEASUREMENT. It would have printed
+// 6/6 whether six checks ran, one ran, or none did, which is exactly the
+// `gates-report-success-without-proving-it` class (audit G8 in
+// RegressionMarkerRegression names it by name). The checks are now a TABLE
+// (`Checks` below) that RunAll iterates; both numbers in the marker are derived from
+// that table and from which entries added no failure. Adding or removing a check
+// moves the marker with no edit to the format string. ⛔ Never write a digit back
+// into that string — RegressionMarkerRegression RULE 6 [gate-marker-count] fails if
+// you do.
 //
 // MARKER NOTE (2026-08-02): this class used to emit a bare `REGRESSION_OK`, the same
 // literal DataRegression.RunAll and the legacy Assets/Editor/RegressionSuite.cs emitted.
@@ -40,6 +51,7 @@
 //   6. VENDOR STOCK NON-EMPTY — a general vendor's resolved stock (weapons+armors
 //      via the contract) is non-empty.
 // =============================================================================
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
@@ -52,28 +64,62 @@ namespace DeNelle.Editor
 {
     public static class SessionRegression
     {
+        /// <summary>One session guard: a name for the log, and the check itself.</summary>
+        private sealed class SessionCheck
+        {
+            public readonly string Name;
+            public readonly Action<List<string>, StringBuilder> Run;
+            public SessionCheck(string name, Action<List<string>, StringBuilder> run) { Name = name; Run = run; }
+        }
+
+        // THE TABLE IS THE COUNT. RunAll iterates this and derives both halves of the
+        // marker from it — the denominator is Checks.Length, the numerator is how many
+        // entries returned without appending a failure. See the COUNT NOTE in the header.
+        private static readonly SessionCheck[] Checks =
+        {
+            new SessionCheck("vendor-contract",     CheckVendorContract),     // WO-444
+            new SessionCheck("starter-weapons",     CheckStarterWeapons),     // WO-425
+            new SessionCheck("enemy-models",        CheckEnemyModels),        // #22 class
+            new SessionCheck("structure-prefabs",   CheckStructurePrefabs),   // #22 class
+            new SessionCheck("save-round-trip",     CheckSaveRoundTrip),      // WO-159 + pet-persist + PetName audit
+            new SessionCheck("general-vendor-stock", CheckGeneralVendorStock),
+        };
+
         public static void RunAll()
         {
             var failures = new List<string>();
             var log = new StringBuilder();
             log.AppendLine("=== SessionRegression: guards this session's fixes (data/logic, headless) ===");
 
-            CheckVendorContract(failures, log);     // 1 — WO-444
-            CheckStarterWeapons(failures, log);     // 2 — WO-425
-            CheckEnemyModels(failures, log);        // 3 — #22 class
-            CheckStructurePrefabs(failures, log);   // 4 — #22 class
-            CheckSaveRoundTrip(failures, log);      // 5 — WO-159 + pet-persist + PetName audit
-            CheckGeneralVendorStock(failures, log); // 6
+            int total = Checks.Length;
+            int passed = 0;
+            foreach (var check in Checks)
+            {
+                int before = failures.Count;
+                try
+                {
+                    check.Run(failures, log);
+                }
+                catch (System.Exception ex)
+                {
+                    // Never swallow (CLAUDE.md sec.12): a throwing check is a RED check, and it
+                    // must still leave the denominator intact so the marker cannot shrink quietly.
+                    failures.Add($"check '{check.Name}' THREW {ex.GetType().Name}: {ex.Message}");
+                }
+                if (failures.Count == before) passed++;
+                log.AppendLine($"  -- check '{check.Name}': {(failures.Count == before ? "OK" : "RED")}");
+            }
 
             log.AppendLine("=== verdict ===");
             if (failures.Count == 0)
             {
-                log.AppendLine("SESSION_GUARDS_OK 6/6 checks");
+                // Both numbers MEASURED, never typed. Do not inline a digit here.
+                log.AppendLine($"SESSION_GUARDS_OK {passed}/{total} checks");
                 Debug.Log(log.ToString());
             }
             else
             {
-                log.AppendLine($"SESSION_GUARDS_FAIL: {failures.Count} failure(s):");
+                log.AppendLine($"SESSION_GUARDS_FAIL: {failures.Count} failure(s) across {total - passed}/{total} check(s):");
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());

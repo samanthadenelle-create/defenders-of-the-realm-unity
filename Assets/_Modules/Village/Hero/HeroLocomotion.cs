@@ -929,6 +929,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483 frame budget. FIRST line so every early-return path is still timed.
+            // Accumulating overload (4-arg) — it does NOT log per frame; PerfReporter rolls
+            // it up once a second, and a single pass over 4ms warns at most once a second.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "HeroLocomotion.Update", 4f, 1f);
+
             TryResolveWaveManager();
             // The legacy FootstepsWalk loop is intentionally not driven. Its leading transient
             // sounded like a UI/load ding every time movement resumed. Footstep cadence belongs
@@ -2029,6 +2035,10 @@ namespace DeNelle.Village
         // No compile dependency on DeNelle.HUD — Type.GetType + static property lookup.
         // When the HUD prefab/manager is dropped into a battle or map scene, its thumb D-Pad
         // (Lean Touch only) supplies normalized movement that is OR-ed with other inputs.
+        // WO-1510: first-hit guard for the ReadHudDpadMove catch below. Static because the read
+        // is static and the failure is process-wide (a missing/renamed HudMoveInput type).
+        private static bool _hudDpadReadThrewTraced;
+
         private static Vector2 ReadHudDpadMove()
         {
             try
@@ -2042,8 +2052,22 @@ namespace DeNelle.Village
                 var val = p.GetValue(null);
                 return val is Vector2 v ? v : Vector2.zero;
             }
-            catch
+            catch (System.Exception e)
             {
+                // WO-1510: this catch was BARE. When it fired, the HUD thumb-stick contributed
+                // nothing and the hero simply stopped moving — with not one line in the log,
+                // which CLAUDE.md §12 forbids outright ("a catch that swallows without logging").
+                // First hit only, but at WARN severity: this runs inside the movement read every
+                // frame, so a per-frame line would bury the capture it is meant to explain —
+                // while FlowTrace.Once emits at INFO (FlowTrace.cs:236 Sink.Info), which is the
+                // wrong severity for a swallowed input failure. Hence the explicit guard.
+                if (!_hudDpadReadThrewTraced)
+                {
+                    _hudDpadReadThrewTraced = true;
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                        $"ReadHudDpadMove threw ({e.GetType().Name}: {e.Message}) — HUD D-Pad input reads as ZERO " +
+                        "for the rest of this session; if the hero will not move from the on-screen pad, this is why.");
+                }
                 return Vector2.zero;
             }
         }

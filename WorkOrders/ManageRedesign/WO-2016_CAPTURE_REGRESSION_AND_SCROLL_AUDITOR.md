@@ -1,5 +1,7 @@
 # WO-2016 — Rewrite Manage Regression Suite and Fix Scroll Auditor
 
+**Status:** IN PROGRESS - PARTIAL: the Manage capture regression suites exist under Assets/Editor/Regression; the scroll-auditor false-positive fix (geometry/touch passing legitimate scrolled states) is not verified at HEAD 2026-09-06.
+
 **Priority:** P0  
 **Depends on:** new layout implementation
 

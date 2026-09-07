@@ -284,11 +284,17 @@ namespace DeNelle.Village.World.Camps
             // Build through the SHARED stat blocks + level scale, then fold difficulty
             // and the boss multipliers (x3 HP / x1.5 dmg, min height) on top.
             EnemyDef def = GarrisonStatBlocks.BuildTypedDef(bossId, enemyLevel);
+            float builtHp = def != null ? def.Hp : 0f, builtDmg = def != null ? def.ContactDamage : 0f;
             GarrisonStatBlocks.ApplyLevelScale(def, enemyLevel);
+            float lvlHp = def != null ? def.Hp : 0f, lvlDmg = def != null ? def.ContactDamage : 0f;
             FoldDifficulty(def, difficulty);
             def.Hp            *= Mathf.Max(1f, bossHpMult);
             def.ContactDamage *= Mathf.Max(1f, bossDamageMult);
             def.Height         = Mathf.Max(def.Height, bossMinHeight);
+            // WO-1530 — the permanent spawn measurement, AFTER every fold this path applies.
+            GarrisonStatBlocks.TraceSpawnScale(
+                $"raid-boss config='{configId}' difficultyx{difficulty:F2} bossHpx{Mathf.Max(1f, bossHpMult):F2} bossDmgx{Mathf.Max(1f, bossDamageMult):F2}",
+                def, enemyLevel, builtHp, builtDmg, lvlHp, lvlDmg);
 
             Transform marker = transform.Find("BossSpawn");
             Vector3 want = marker != null ? marker.position : transform.position;
@@ -341,8 +347,14 @@ namespace DeNelle.Village.World.Camps
 
             // SHARED stat block -> level scale -> fold difficulty. Hostile by default.
             EnemyDef def = GarrisonStatBlocks.BuildTypedDef(enemyId, enemyLevel);
+            float builtHp = def != null ? def.Hp : 0f, builtDmg = def != null ? def.ContactDamage : 0f;
             GarrisonStatBlocks.ApplyLevelScale(def, enemyLevel);
+            float lvlHp = def != null ? def.Hp : 0f, lvlDmg = def != null ? def.ContactDamage : 0f;
             FoldDifficulty(def, difficulty);
+            // WO-1530 — the permanent spawn measurement, AFTER every fold this path applies.
+            GarrisonStatBlocks.TraceSpawnScale(
+                $"raid-guard[{index}] config='{configId}' difficultyx{difficulty:F2}",
+                def, enemyLevel, builtHp, builtDmg, lvlHp, lvlDmg);
 
             var guard = EnemyFactory.Build(def, pos, Quaternion.identity, _garrisonRoot);
             if (guard == null)

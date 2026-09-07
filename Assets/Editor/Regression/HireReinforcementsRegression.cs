@@ -59,6 +59,12 @@ namespace DeNelle.Editor
     {
         private const string ServicePath = "Assets/_Modules/Village/Buildings/BuildTimerService.cs";
         private const string HudPath     = "Assets/_Modules/Village/BuildMode/ObsidianQueueHud.cs";
+        // WO-1512: the work-queue surface's PRICING moved off the View and onto its ViewModel
+        // (presentation never touches the objects, ARCHITECTURE_PRINCIPLES §2). Case 5b's subject
+        // is "whatever prices the work-queue surface", so it follows the seam to the VM and keeps
+        // the negative Builder-only check on the View as well - a re-inlined price there is still
+        // the defect this case exists to catch.
+        private const string QueueVmPath = "Assets/_Modules/Village/BuildMode/ObsidianQueueVM.cs";
         private const string VmPath      = "Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs";
 
         public static bool Run(out string reason)
@@ -406,21 +412,34 @@ namespace DeNelle.Editor
 
             // 5b. the HUD must price through the CHANNEL overload. The Builder-only one cannot
             // resolve a Train job, which is why training had no CTA in this HUD at all.
+            // The negative half stays on the VIEW: a price re-inlined there is the §2 breach AND
+            // the Builder-only bug at once.
             string hud = ReadSource(HudPath, failures);
             if (hud != null)
             {
-                string code = StripLineComments(hud);
+                string hudCode = StripLineComments(hud);
+                if (hudCode.IndexOf("InstantFinishPrice(", StringComparison.Ordinal) >= 0)
+                    failures.Add("[case 5b] ObsidianQueueHud prices a job itself again. WO-1512 moved the quote to " +
+                                 "ObsidianQueueVM.OfferFor; a View that re-quotes can (and did) reach for the " +
+                                 "Builder-only overload, which prices every Train/Research job at 0 and makes the " +
+                                 "finish CTA silently disappear from the training queue.");
+            }
+
+            string queueVm = ReadSource(QueueVmPath, failures);
+            if (queueVm != null)
+            {
+                string code = StripLineComments(queueVm);
                 if (code.IndexOf("InstantFinishPrice(job.StructureId)", StringComparison.Ordinal) >= 0)
-                    failures.Add("[case 5b] ObsidianQueueHud is back on the Builder-only " +
+                    failures.Add("[case 5b] ObsidianQueueVM is back on the Builder-only " +
                                  "InstantFinishPrice(structureId). A Train/Research job prices at 0 there, and every " +
                                  "list gates its button on price > 0 - so the finish CTA silently disappears from " +
                                  "the training queue.");
                 if (code.IndexOf("InstantFinishPrice(channel,", StringComparison.Ordinal) < 0 &&
                     code.IndexOf("InstantFinishPrice(job.ChannelId,", StringComparison.Ordinal) < 0)
-                    failures.Add("[case 5b] ObsidianQueueHud does not call the CHANNEL overload of " +
+                    failures.Add("[case 5b] ObsidianQueueVM does not call the CHANNEL overload of " +
                                  "InstantFinishPrice - training jobs cannot be priced from this surface.");
                 if (code.IndexOf("HireReinforcementsVerb", StringComparison.Ordinal) < 0)
-                    failures.Add("[case 5b] ObsidianQueueHud does not quote " +
+                    failures.Add("[case 5b] ObsidianQueueVM does not quote " +
                                  "BuildTimerService.HireReinforcementsVerb - a retyped face drifts from canon.");
             }
 

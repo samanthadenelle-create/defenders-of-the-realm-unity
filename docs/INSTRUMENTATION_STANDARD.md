@@ -373,3 +373,74 @@ would be unreachable from any oracle.
   behaviour; it is the *right* path (true zero-cost on ship) but is held until a debugging
   cycle is done and is paired with the `Guard` decoupling so the safety net survives. Owner
   flips it with eyes open (§1.6).
+
+---
+
+## 8. 2026-09-06 additions - cadence, severity, and the hollow-pass three-way
+
+From one night's device audit. Every rule is cited to source.
+
+### 8.1 The frame budget belongs to the 4-arg `Measure`
+
+The 3-arg `Measure` logs **one line per Dispose** (`Assets/_Modules/Core/Diagnostics/
+FlowTrace.cs:257`, emit `:285-290`) - ~400 lines/s on a frame path. The 4-arg overload
+`Measure(system, what, warnAboveMs, everySeconds)` (`:308`) returns a `FrameScope` (`:401`)
+that **accumulates** (`RecordFrameSample`, `:339`), warns at most once per `everySeconds` when
+one pass blows budget, and is drained by `SnapshotAndResetFrameSamples` (`:374`) into ONE
+roll-up per second: `PerfReporter.ReportFrameBudget` (`.../PerfReporter.cs:154-193`) emits
+`[Flow:Perf] frame budget: <what>=<ms>ms/s (xN worst Xms) | measured total=...`.
+
+Worked example - first line of the tick, so early returns are covered:
+```csharp
+using var _perf = FlowTrace.Measure("Perf", "WaveManager.Update", 4f, 1f);
+```
+(`Assets/_Modules/Village/Waves/WaveManager.cs:1167`; also `Pets/PetHeroLeash.cs:266`.)
+
+**Why 4 ms:** the budget must sit well under one 60 fps frame or a scope eats the frame
+silently; too low and it fires every frame. Band pinned `MinSaneBudgetMs = 0.5f` /
+`MaxSaneBudgetMs = 16f` (`Assets/Editor/Regression/FrameBudgetMeasureRegression.cs:57-58`).
+Timing uses `Stopwatch` ticks, not `Time.realtimeSinceStartup` (`FlowTrace.cs:305-307`).
+
+### 8.2 Per-frame log rule - never `Step` inside `Update()`
+
+`Enemy.ProbeForStructure`'s acquire line was a bare `Step`: **38,018 lines at ~320/sec**,
+which evicted the boot window out of the 256 KiB Android logcat ring in under two seconds.
+It now gates **twice** - emit only on target **CHANGE** (`_lastProbeTargetId`,
+`Assets/_Modules/Village/Enemies/Enemy.cs:287`, `:1884-1900`), then `Throttle` keyed **per
+entity** (`$"probe-hit-{_enemyId}"`, 1 s). Kept, not stripped (sec. 1.4).
+
+**Rule:** in a per-frame or per-mob path, `Throttle` with a key carrying the entity id
+(`FlowTrace.cs:211`), or emit on state change only. A shared key throttles the whole fleet to
+one voice and hides the entity that matters.
+
+### 8.3 The `Once` severity trap
+
+`FlowTrace.Once` emits through `Sink.Info` (`FlowTrace.cs:236`) - a breadcrumb. Using it for
+a swallowed failure files that failure at Log level, where `BreakCaptureHarness` never sees
+it (sec. 5). For a first-hit **failure**, keep the severity: a static first-hit bool around
+`FlowTrace.Warn`/`Fail`. Severity follows what happened, never how often.
+
+### 8.4 Release stack traces are None - do not re-add them
+
+`ProjectSettings/ProjectSettings.asset:59` (`m_StackTraceTypes:
+010000000100000000000000000000000100000001000000`): Log and Warning carry **no** stack trace
+in release - the managed stack walk was a measured cost on the hot lines above. **Never**
+append `Environment.StackTrace` or `new StackTrace()` to a FlowTrace message; put the
+discriminating state in the message (sec. 5). Error keeps its trace - another reason real
+failures use `Fail`. Relatedly, every player-paced world pause is taken by name through
+`WorldHold.AcquirePlayerOwned` (`Assets/_Modules/Core/UI/WorldHold.cs:446`), which **requires
+a liveness predicate** (`:471`), so an abandoned hold cannot outlive its screen.
+
+### 8.5 The hollow-pass three-way rule for regression guards
+
+An absent thing is three different events; conflating them is how a suite reads green having
+asserted nothing.
+
+| Absent | Outcome | Why + source |
+|---|---|---|
+| **Fixture** (tracked source) | **FAIL**, naming the path | It is the thing under test, not an option. `Assets/Editor/Regression/ArmourCatalogJobRegression.cs:242-263` |
+| **Capability** (no layout pass/renderer) | **`RegressionOutcome.PartialSkip`** | The suite did assert; the note names the hole. `.../RegressionOutcome.cs:59`, `:77`; `CosmeticApplyRegression.cs:178` |
+| **Content** (set legitimately empty) | **assert through** a presence precondition | Else everything downstream passes vacuously. `.../AuthoredFieldReaderRegression.cs:448`, `ArmedHeroInvariantRegression.cs:251` |
+
+Whole-suite stand-down is `RegressionOutcome.Skip` (`RegressionOutcome.cs:65-71`): returns
+true but stamps `[SKIPPED] ... ASSERTED NOTHING (this is not a pass)` (sec. 1.4b).

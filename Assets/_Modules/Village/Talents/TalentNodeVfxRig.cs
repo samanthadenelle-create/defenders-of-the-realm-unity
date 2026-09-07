@@ -149,6 +149,25 @@ namespace DeNelle.Village.Talents
                 return false;
             }
 
+            // ⛔ WO-1522 - A FRESHLY CREATED RENDERTEXTURE HOLDS UNDEFINED GPU MEMORY, AND THE
+            // PANEL BINDS IT TO A RawImage IMMEDIATELY.
+            // Device frame Logs/device/screens/owner-screen-20260906-202355.png shows a
+            // MULTI-COLOURED TILE GRID filling a square around exactly two node plates - the
+            // focused one and the single owned one. That is not a missing sprite (a missing icon
+            // draws the two-letter mono label, HeroSkillTreePanelMvvm.BuildGraphNode, and never a
+            // texture) and it is not a missing shader (that is FLAT magenta). It is the shape and
+            // size of BuildVfxPatch's quad: peek 0.35 for the pointer, 0.25 for the aura - which
+            // is why the focus node's tiles are visibly the larger square of the two. The device
+            // log (Logs/device/freeze-20260904-095249.log 07:48:40 / 07:48:45) proves BOTH rigs
+            // reach "attach: rig live" and bind patches on this exact path.
+            // ⚠ WHAT IS NOT PROVEN: why the render leaves the texture undefined on device. No
+            // capture in the tree names the failing call, so the cause is NOT asserted here. What
+            // IS closed is the consequence: an undefined texture can never reach the screen,
+            // because the texture is DEFINED before anything can sample it.
+            // This is not "tinting the magenta" (WO-1522 sec.3) - it is a different component
+            // entirely, and the node's own authored medallion art is untouched underneath.
+            ClearToWellInk();
+
             _root = new GameObject(_rigName) { hideFlags = HideFlags.HideAndDontSave };
             _root.transform.position = _origin;
             SetLayerRecursive(_root, _layer);
@@ -191,7 +210,40 @@ namespace DeNelle.Village.Talents
         public void RenderTick()
         {
             if (!IsValid) return;
+            // Android loses graphics-device contents on backgrounding: the RT comes back
+            // NOT created, and re-creating it hands back undefined memory again (WO-1522).
+            // Re-define it before the camera draws, so no frame can present garbage.
+            if (!_rt.IsCreated())
+            {
+                if (!_rt.Create())
+                {
+                    FlowTrace.Warn(_flowSys, "rt lost and re-Create() FAILED - node patches would " +
+                        "present undefined memory; the code-built plate art stands alone this frame.");
+                    return;
+                }
+                ClearToWellInk();
+                FlowTrace.Step(_flowSys, "rt was lost (device context) and has been re-created + cleared");
+            }
             _cam.Render();
+            _ticks++;
+            if (_ticks == 1)
+                FlowTrace.Step(_flowSys, "RenderTick: first camera draw executed on this device - " +
+                                         "if the patch still shows tiles after this line, the draw is the suspect");
+        }
+
+        private int _ticks;
+
+        /// <summary>Paint the whole texture the graph well's own ink. Called once the RT exists
+        /// and again after any device-loss re-create, so a bound RawImage can only ever sample a
+        /// DEFINED surface. The colour is the same one the camera clears to, so a cleared frame
+        /// and a rendered-but-empty frame are indistinguishable against the canvas.</summary>
+        private void ClearToWellInk()
+        {
+            if (_rt == null) return;
+            var prev = RenderTexture.active;
+            RenderTexture.active = _rt;
+            GL.Clear(true, true, WellInk);
+            RenderTexture.active = prev;
         }
 
         /// <summary>Destroy the instance, camera, rig holder and render texture.</summary>

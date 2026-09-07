@@ -98,11 +98,17 @@ namespace DeNelle.Village
 
         private void CheckCombatProximity()
         {
-            // Find the hero by canonical tag (CLAUDE.md §7). "HeroTarget" may be
-            // undefined (FindWithTag throws on an undefined tag) — guard it;
-            // "Player" is a built-in tag and always safe.
-            var heroGo = SafeFindWithTag("HeroTarget");
-            if (heroGo == null) heroGo = GameObject.FindWithTag("Player");
+            // Find the hero by the canonical tag (CLAUDE.md §7 — "Player" is the ONE
+            // hero tag). WO-1513: the old first-choice SafeFindWithTag("HeroTarget")
+            // read a tag ProjectSettings/TagManager.asset has never declared, so that
+            // branch was dead the day it was written. The hero definitively carries
+            // HeroLocomotion, so the component IS the fallback.
+            var heroGo = GameObject.FindWithTag("Player");
+            if (heroGo == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) heroGo = loco.gameObject;
+            }
             if (heroGo == null) return;
 
             bool enemyNear = false;
@@ -113,13 +119,6 @@ namespace DeNelle.Village
 
             if (vcCombat  != null) vcCombat.enabled  = enemyNear;
             if (vcVillage != null) vcVillage.enabled  = !enemyNear;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
 
         /// <summary>

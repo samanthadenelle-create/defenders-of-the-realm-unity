@@ -1,6 +1,6 @@
 # WO-1513: seventeen sites read three tags that were NEVER declared - all guarded, all dead forever
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** PARTIALLY IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** Village. Low severity, high clarity value.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1513 -> 1514 in the same edit).

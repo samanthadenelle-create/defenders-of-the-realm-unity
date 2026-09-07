@@ -1,3 +1,87 @@
+> ## >> SESSION HANDOVER - 2026-09-06 - START HERE <<
+>
+> **Live anchor: `CANON_GROUND_TRUTH_2026-09-06.md` (repo root).** Branch `feat/synty-art-retheme`.
+> **117 commits unpushed** - measured, not quoted: `git rev-list --count origin/feat/synty-art-retheme..HEAD`
+> = 117. Every banner below this block is history, kept, not guidance.
+>
+> ### What landed tonight (21 commits, `949e848a0..HEAD`, 19:25 - 20:43)
+>
+> - **The audit fleet minted 72 tickets in one pass, WO-1446..WO-1517** (`0a171806b`), each with quoted
+>   evidence. The owner's raid rulings then minted WO-1518..WO-1531 (`758be6125`, `f3825df2c`,
+>   `b37b2cb89`). **Mint from the `CLI_LANES_WO_NUMBERS.md` banner and bump it in the same edit.** No
+>   number is copied into this block - the working-tree banner is newer than any commit message.
+> - **Owner felt-test of tester APK `2026.09.07.358574`** (installed 19:20 on the Seeker): two validation
+>   ingests, **15 tickets closed on her Pass**, WO-1414 bounced Fail (`0af22982f`, `815c628e9`).
+>   WO-1441/1442/1443/1420 were found already landed and never flipped - RESULTs written (`b64fa0a25`).
+> - **API lane:** WO-1446/1505 ledger-driven migration runner + `signed_at` migration + drift oracle
+>   (`26e9fb0a8`); WO-1453 wallet-signature verify against reconstructed bytes, no more 500 on
+>   redeem/save (`0f35490ad`); WO-1457/1456 schema_version monotonic + nonce IP budget (`321b753c4`);
+>   WO-1506/1502/1501 (`f957bdbaa`); WO-1449 builders-hour sellable on both rails (`9fb58306f`).
+> - **Ship lane:** WO-1469/1470 - `distribute-android.ps1` gains the R2 parity gate, two chains now
+>   refuse a stale parity log (`4ec1a861d`, `b30e551ce`).
+> - **Seven gated gameplay lanes** in `eb161dc98` (raid AI breach push, fireball catalog off-by-two,
+>   defense rows, welcome-back doors, shield seat facets, Night Market no-wallet, Build affordability).
+>
+> ### Tree state - WAVE TWO IS UNCOMMITTED AND IT IS LARGE
+>
+> `git status --short` shows 190 modified + 52 untracked paths. Owning lanes:
+> raid/camps (`Village/World/Camps/*`, `RaidDeployScreen`, `RaidScoring`, `RaidGarrisonSpawner`) -
+> WO-1520 and WO-1530 (both grep-confirmed against the ticket bodies); Manage/HUD MVVM (`ObsidianQueueVM`, `ArmyMusterVM`, `HeroDeckWardrobeVM`,
+> `Core/Bridging/`, `VillageBridgeService`) - grouped by path, owning WO to confirm at commit time;
+> 8 new regression suites
+> (`AllowlistExpiry`, `CloudLoadRestore`, `CoreReflectionSource`, `DefenseReportLayout`,
+> `EnemyProbeCadence`, `FrameBudgetMeasure`, `PreviewRenderTextureSamples`, `RaidStagingMarker`);
+> tooling (`f8-*.ps1` - WO-1460/1531; `tools/gen-sku-catalog.mjs` + `api/_lib/sku-catalog.generated.json`
+> - WO-1532; both grep-confirmed. `tools/r2-ship.ps1`, `checkin_gate.ps1` grouped by path); canon docs. **Commit by explicit path, per lane.**
+>
+> ### Gate ladder - one red, and it is known
+>
+> - `Builds/cg-quiet.log` 20:04 - **`COMPILE_GATE_OK`**.
+> - `Builds/reg-quiet.log` 20:07 - **RED**. Verbatim (the log is NUL-padded; `tr -d '\000'` before grep),
+>   and both lines truncate in the log exactly as shown:
+>   `REGRESSION_FAIL: 2 failure(s) (417/419 registered suites gree` and
+>   `REGRESSION MARKER FAIL (1): hollow pass: NightMarketNoWalletRegressio`. Whether that is 2 items or
+>   3 was NOT established. Fixes went into the lanes after this run; **all of it is UNPROVEN until the
+>   wave-two re-gate.**
+> - `Builds/r2-parity.log` 20:24 - **`R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`**.
+>
+> ### Owner actions outstanding (she must do these; do not do them for her)
+>
+> 1. With `$env:DATABASE_URL` set (it is redacted for every agent seat, so only she can run this):
+>    `node tools/run-migrations.mjs --baseline 20260906_0019_promo_guest_redeem_ip_budget.sql` once -
+>    records the already-applied files, applies nothing - then plain `node tools/run-migrations.mjs`.
+>    Judge `MIGRATIONS_OK applied=N skipped=M`, never the exit code (`tools/run-migrations.mjs:57-82`).
+> 2. Set `ADMIN_OPS_KEY` in the Vercel project env.
+> 3. Approve the Solana dApp Store update - 4 screenshots + icon.
+> 4. **Rulings open:** WO-1527 perk A/B; WO-1477 PrevPage wrap vs no-wrap; WO-1518 research SHORT/LOCKED
+>    wording confirm; WO-1475 loot into a full bank (lost or retained); WO-1504 ranger (which is canon);
+>    WO-1529 cleric price 1,025; WO-1486 prune keep-one-previous; WO-1446/1505 runner DROP-CONSTRAINT
+>    exemption.
+>
+> ### DEPLOY HOLD
+>
+> **No `vercel --prod` until the WO-1446 migration runs.** WO-1449 and WO-1453 are FIXED in tree and
+> explicitly held behind it. Deploying first puts code against a schema that has not moved.
+>
+> ### Documents written tonight
+>
+> `docs/GET_WELL_PLAN_2026-09-06.md`, `docs/READY_RCA_2026-09-06.md`, `docs/GROWTH_RCA_2026-09-06.md`,
+> `docs/RAID_BALANCE_AUDIT_2026-09-06.md`, `CANON_GROUND_TRUTH_2026-09-06.md`. The raid audit is
+> restructured to the owner's spine (verdict / why / fix first / retest gate / progression / rulings /
+> questions / appendix) and carries the WO-1529 provenance: 205 is a row the x5 rescale missed; 1,025
+> was intended.
+>
+> ### NEXT STEPS, IN ORDER
+>
+> 1. **Wave-two gate on the quiet tree:** compile gate, then regression. Judge the MARKER on a FRESH log,
+>    never the exit code (CLAUDE.md section 8). Expect 419/419.
+> 2. **Commit each lane by explicit path** - never `git add -A`. `git reset` after any 3-way apply.
+> 3. **Flip each WO `**Status:**` in the same commit as its work; write the RESULT files.**
+>    Then `python tools/board_build.py`.
+> 4. **Tester APK:** `.\overnight-apk-build.ps1 -Tester` (repo root, not `tools/`).
+> 5. **Hand to the owner for the Easy-camp retest per WO-1520's acceptance criteria.** She felt-verifies
+>    and closes; the CLI does not close.
+
 > ## > REFRESHED 2026-09-03 - read `docs/HANDOVER_2026-09-03_production_build.md` FIRST
 >
 > **The live anchor is `CANON_GROUND_TRUTH_2026-09-03.md` (repo root).** The 09-02 banner below is
@@ -7,7 +91,9 @@
 > `COMPILE_GATE_OK` (`Builds/compile-gate.log` 20:10), `REGRESSION_OK 358/358 suites -- 358 green,
 > 0 red, 0 skipped` (`Builds/regression.log` 20:13), `R2_PUSH_OK` and
 > `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=266` (20:21). Branch
-> `feat/synty-art-retheme`, pushed. Version read off `ProjectSettings/ProjectSettings.asset:148,177`.
+> `feat/synty-art-retheme`. ⛔ **"pushed" was WRONG here and is retired — never state a push state from
+> a doc. Measure it: `git rev-list --count origin/<branch>..HEAD` (103 unpushed on 2026-09-06).**
+> Version read off `ProjectSettings/ProjectSettings.asset:148,177`.
 >
 > **THE OPEN ITEM THAT MATTERS MOST HAS NO TICKET: SAVE DATA LOSS.**
 > `[Flow:BaseLayout] Enter build mode CENSUS: live PlacedStructure(s) in scene=9, loader.Loaded=9,

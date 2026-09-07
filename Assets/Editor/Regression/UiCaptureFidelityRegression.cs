@@ -1,5 +1,11 @@
 // =============================================================================
 // UiCaptureFidelityRegression [ui-capture-fidelity]
+//   ⛔ SOURCE LINT over UICaptureLaunch.cs + ElarionUiKit.cs. 100% of it. (WO-1494)
+//   It reads those two files as TEXT and asserts that call sites, markers and tokens are
+//   still PRESENT. It never runs the capture harness, never builds a canvas, never renders
+//   a png and never reads a laid-out RectTransform. It proves the harness still CONTAINS
+//   its fidelity machinery; it cannot prove that machinery BEHAVES. Both are worth having
+//   and they are not the same claim - see "what this can and cannot see" below.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression.  Namespace: DeNelle.Editor.Regression.
 // Markers: UI_CAPTURE_FIDELITY_GUARD_OK / UI_CAPTURE_FIDELITY_GUARD_FAIL.
@@ -30,7 +36,17 @@
 //     surface. 2340x1080 was only the harness size.
 //
 // This oracle pins the fix so it cannot be quietly undone. All of it is decidable
-// from TEXT, so it runs in every batch with no scene, no play mode and no GPU:
+// from TEXT, so it runs in every batch with no scene, no play mode and no GPU.
+//
+// ⚠ WHAT THIS CAN AND CANNOT SEE (WO-1494, 2026-09-06). Every RULE below is asserted by
+// TEXT MATCH against the harness source - IndexOf / Regex / brace-matched method bodies.
+// The RULE prose is written in the harness's voice ("the run PROVES its own fix"): that
+// describes what UICaptureLaunch.cs is supposed to DO, and this file only checks that the
+// code saying so is still there. So a green run here means THE CALL SITES SURVIVE. It does
+// NOT mean a capture ran, that Screen actually moved, that two aspects actually diverged,
+// or that any png is geometrically correct. Those are the harness's own markers
+// (UI_CAPTURE_FIDELITY_OK / UI_GEOMETRY_OK) and the owner's eyes - deliberately NOT this
+// suite's markers, and deliberately not restated as this suite's findings.
 //
 //   RULE 1 [targets]      The capture matrix still contains 2670x1200, and the file
 //          no longer claims 2340x1080 is the device/Seeker resolution.
@@ -181,11 +197,15 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "UI CAPTURE FIDELITY OK - the harness builds every panel at the resolution it " +
-                         "shoots it at (Seeker 2670x1200 included) by driving the kit's injectable " +
-                         "surface, verifies that move instead of assuming it, proves two aspects resolve " +
-                         "different zone rects, degrades LOUDLY when it cannot, and asserts the layout " +
-                         "numerically rather than trusting a reviewer's eyes" + noteStr;
+                reason = "UI CAPTURE FIDELITY GUARD OK (SOURCE LINT, not a capture) - UICaptureLaunch.cs " +
+                         "still CONTAINS the 2670x1200 target, the per-target build/shoot/teardown, the " +
+                         "CaptureSurfaceScope read-back, the ProveGeometryMoves call site and its " +
+                         "RunCaptureHeadless caller, the DEGRADED LogError, and the AuditGeometry gate " +
+                         "tokens; ElarionUiKit.cs still routes PostScaleCanvasHeight through the " +
+                         "injectable surface. This is PRESENCE OF THE CODE, proven by text match. It is " +
+                         "NOT proof that a capture ran, that Screen moved, or that any png is " +
+                         "geometrically correct - that is UI_CAPTURE_FIDELITY_OK / UI_GEOMETRY_OK on a " +
+                         "harness run" + noteStr;
                 return true;
             }
             reason = "ui-capture-fidelity FAIL x" + failures.Count + ": " +
@@ -395,6 +415,7 @@ namespace DeNelle.Editor.Regression
 
         // =====================================================================
         //  RULE 7 - the run proves its own fix, or fails
+        //  (SOURCE LINT: this case only checks the proof's call sites still exist)
         // =====================================================================
         private static void Case7_AspectDivergence(string src, List<string> failures, List<string> notes)
         {
@@ -463,7 +484,8 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  RULE 5 - the numeric layout gate still exists and still fails
+        //  RULE 5 - the numeric layout gate still EXISTS and is still wired as a failure
+        //  (SOURCE LINT: the numbers are AuditGeometry's, computed on a harness run, never here)
         // =====================================================================
         private static void Case5_GeometryGate(string src, List<string> failures, List<string> notes)
         {
@@ -487,7 +509,8 @@ namespace DeNelle.Editor.Regression
                              "made failures on purpose: as warnings they are indistinguishable from the " +
                              "silence that shipped the defect.");
 
-            // The four rules, each pinned by the thing it measures.
+            // Each rule pinned by an IndexOf on its token - presence in the harness source,
+            // never a measurement of what the rule does at runtime (WO-1494).
             RequireAll(src, failures, notes, "geometry-gate", new[]
             {
                 Pin("ZoneBacking", "the layout.body black-plate containment rule - the founding Echo card's " +

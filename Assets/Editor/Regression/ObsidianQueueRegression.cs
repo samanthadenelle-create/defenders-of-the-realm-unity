@@ -246,17 +246,39 @@ namespace DeNelle.Editor
             if (barracksTarget == null || !barracksTarget.Contains("Barracks") || !barracksTarget.Contains("L2"))
                 failures.Add("FormatJobTarget(barracks-upgrade) expected 'Barracks -> L2', got '" + barracksTarget + "'");
 
-            // Troop upgrade target.
+            // Troop upgrade target - WO-1564 wording rule: the CATALOG display name plus the level
+            // in WORDS. The fixture id is the REAL catalog id "troop-archer"; the old fixture said
+            // "archer", which no troops.json row carries, so it only ever passed through the silent
+            // SpacedName fallback that leaked "Troop Upgrade:militia" to the player
+            // (Builds/cap-manage-wave3.log:3739).
             var troopUp = new BuildJobData
             {
-                StructureId = BarracksService.TroopUpgradePrefix + "archer",
+                StructureId = BarracksService.TroopUpgradePrefix + "troop-archer",
                 Kind = (int)JobKind.TroopUpgrade,
                 Channel = (int)ChannelId.Research,
                 TargetTier = 3,
             };
             string troopUpTarget = ObsidianQueueHud.FormatJobTarget(troopUp);
-            if (troopUpTarget == null || !troopUpTarget.Contains("L3"))
-                failures.Add("FormatJobTarget(troop-upgrade) expected tier L3, got '" + troopUpTarget + "'");
+            if (troopUpTarget != "Archer - Level 3")
+                failures.Add("FormatJobTarget(troop-upgrade) expected 'Archer - Level 3', got '" +
+                             troopUpTarget + "'");
+            AssertNoIdGrammar("troop-upgrade", troopUpTarget, failures);
+
+            // The SECOND producer's grammar: "troop-upgrade:<troopId>", with no barracks prefix.
+            // This is the exact shape the capture carried, and the shape the old extractor returned
+            // whole - so the row read as a raw id. Pinned so the extraction stays prefix-agnostic.
+            var troopUpShort = new BuildJobData
+            {
+                StructureId = "troop-upgrade:troop-archer",
+                Kind = (int)JobKind.TroopUpgrade,
+                Channel = (int)ChannelId.Research,
+                TargetTier = 2,
+            };
+            string troopUpShortTarget = ObsidianQueueHud.FormatJobTarget(troopUpShort);
+            if (troopUpShortTarget != "Archer - Level 2")
+                failures.Add("FormatJobTarget(troop-upgrade, bare prefix) expected 'Archer - Level 2', got '" +
+                             troopUpShortTarget + "'");
+            AssertNoIdGrammar("troop-upgrade (bare prefix)", troopUpShortTarget, failures);
 
             // Job line (queued) carries target, not kind alone.
             string queuedLine = ObsidianQueueHud.FormatJobLine(trainJob, 0, queued: true);
@@ -277,6 +299,26 @@ namespace DeNelle.Editor
             // different player-facing word (Build/Upgrade intentionally match their enum names).
             if (got == kind.ToString() && expected != kind.ToString())
                 failures.Add("FormatKindLabel(" + kind + ") returned raw enum (player-facing leak)");
+        }
+
+        /// <summary>
+        /// WO-1564 wording rule: a player-facing row label may carry NO id grammar. ':' and '_'
+        /// are id separators, "->" is developer arrow notation, and a surviving "troop-" prefix
+        /// means the raw catalog id reached the row instead of its display name.
+        /// </summary>
+        private static void AssertNoIdGrammar(string what, string label, List<string> failures)
+        {
+            if (string.IsNullOrEmpty(label)) return;
+            if (label.IndexOf(':') >= 0)
+                failures.Add("FormatJobTarget(" + what + ") leaks a ':' id separator: '" + label + "'");
+            if (label.IndexOf('_') >= 0)
+                failures.Add("FormatJobTarget(" + what + ") leaks a '_' id separator: '" + label + "'");
+            if (label.IndexOf("->", System.StringComparison.Ordinal) >= 0)
+                failures.Add("FormatJobTarget(" + what + ") speaks developer arrow notation, not words: '" +
+                             label + "'");
+            if (label.IndexOf("troop-", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("FormatJobTarget(" + what + ") leaks the raw troop id instead of its catalog " +
+                             "display name: '" + label + "'");
         }
 
         // ── 7c. WO-778 reachability (HUD caller) + layout.body list host ──────

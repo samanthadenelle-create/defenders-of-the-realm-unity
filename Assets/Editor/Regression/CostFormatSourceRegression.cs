@@ -59,12 +59,13 @@ namespace DeNelle.Editor.Regression
             CheckBehavior(assets, failures);
             CheckStoneIcon(assets, failures);
             CheckCurrencyConceptIcons(assets, failures);
+            CheckElarionMedievalAndroidOverride(assets, failures);
             if (failures.Count != 0)
             {
                 reason = "cost-format-source: " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 11 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry";
+            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 11 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry; " + ElarionMedievalPngCount + " ElarionMedieval png carry a LIVE Android override (overridden+crunch+<=2048+Compressed)";
             return true;
         }
 
@@ -129,6 +130,60 @@ namespace DeNelle.Editor.Regression
             if (!formatter.Contains("UiStyle.Icon(part.ConceptId)") ||
                 !formatter.Contains("part.Word + \" \" + part.AmountText"))
                 failures.Add("renderers lost UiStyle lookup or full-word fallback");
+        }
+
+        // WO-1485: the ElarionMedieval UI atlas expanded to 161.6 MB in the APK from 51 MB of source
+        // (Builds/apk-build.log:26485-26494 - textures were 81.7% of user assets). Every png.meta in
+        // the folder DID carry an Android platformSettings block, but with `overridden: 0`, which
+        // Unity IGNORES - so the block read as configured while the atlas shipped at the
+        // DefaultTexturePlatform settings (4096 / Compressed HQ / no crunch). Pin the four fields
+        // that actually make the override do something. The 512px ceiling used by CheckStoneIcon
+        // deliberately does NOT apply here: these frames/panels are authored at 2048 by design.
+        // WO-1567 2026-09-06: 37 -> 73. The Manage art pack (commit ad808ecf3) added 36 PNGs under
+        // .../ElarionMedieval/Manage/, and this pin caught them the same run
+        // (Builds/reg-wave3b.log:15041 - "holds 73 png, not the pinned 37", then 36 x "Android
+        // override lost crunch compression"). Their metas were templated off a Portraits meta, so
+        // the Android block carried crunchedCompression 0 with an EXPLICIT ASTC textureFormat (50),
+        // which crunch does not apply to - green-looking and inert, the same class as the
+        // `overridden: 0` bug above. All 36 Android blocks were rewritten to match the other 37
+        // verbatim (2048 / textureFormat -1 Automatic / Compressed / crunch 1 / overridden 1).
+        private const string ElarionMedievalRoot = "Assets/Resources/UI/ElarionMedieval";
+        private const int ElarionMedievalPngCount = 73;
+
+        private static void CheckElarionMedievalAndroidOverride(string assets, List<string> failures)
+        {
+            string root = Path.Combine(assets, "Resources/UI/ElarionMedieval");
+            if (!Directory.Exists(root))
+            {
+                failures.Add(ElarionMedievalRoot + " is missing - the shipped UI atlas moved without updating this pin");
+                return;
+            }
+
+            string[] pngs = Directory.GetFiles(root, "*.png", SearchOption.AllDirectories);
+            if (pngs.Length != ElarionMedievalPngCount)
+                failures.Add(ElarionMedievalRoot + " holds " + pngs.Length + " png, not the pinned " +
+                             ElarionMedievalPngCount + " - re-run the Android override pass over the new art, then bump this count");
+
+            foreach (string full in pngs)
+            {
+                string rel = "Assets" + full.Replace('\\', '/').Substring(assets.Length);
+                var importer = AssetImporter.GetAtPath(rel) as TextureImporter;
+                if (importer == null)
+                {
+                    failures.Add(rel + " has no TextureImporter");
+                    continue;
+                }
+
+                TextureImporterPlatformSettings android = importer.GetPlatformTextureSettings("Android");
+                if (!android.overridden)
+                    failures.Add(rel + " Android platform settings are NOT overridden - the block is inert and the sprite ships at the 4096 default");
+                if (android.maxTextureSize > 2048)
+                    failures.Add(rel + " exceeds the 2048px Android ceiling (" + android.maxTextureSize + ")");
+                if (android.textureCompression != TextureImporterCompression.Compressed)
+                    failures.Add(rel + " Android texture compression is " + android.textureCompression + ", not Compressed");
+                if (!android.crunchedCompression)
+                    failures.Add(rel + " Android override lost crunch compression");
+            }
         }
 
         private static void CheckStoneIcon(string assets, List<string> failures)

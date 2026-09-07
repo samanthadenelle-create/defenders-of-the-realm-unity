@@ -3084,6 +3084,22 @@ namespace DeNelle.Village
             return best;
         }
 
+        /// <summary>
+        /// WO-1524 — the side the hero's ABILITY lane strikes FROM, handed to
+        /// <see cref="CombatFactionRules"/> so friend-or-foe is answered by the ONE authority
+        /// instead of an inline <c>Faction != CombatFaction.Hostile</c> copy. WO-1503 routed
+        /// the hero's MELEE lane (PlayerAttackController's <c>HeroFaction</c>); this ability
+        /// lane was the divergence left inside the same hero — the exact split a single
+        /// authority exists to prevent.
+        ///
+        /// A LITERAL rather than a derived property because <see cref="AsHostile"/> is STATIC
+        /// and holds no hero instance; Friendly is the same value PlayerAttackController's
+        /// <c>HeroFaction</c> resolves to (its own fallback, and HeroHealth's Faction).
+        /// <see cref="CombatFaction"/> has exactly two members (IDamageable.cs:28-34), so
+        /// <c>MayAttack(Friendly, t)</c> is bit-for-bit the predicates replaced below.
+        /// </summary>
+        private const CombatFaction HeroSide = CombatFaction.Friendly;
+
         /// <summary>Resolves a collider to a living hostile target, or null.</summary>
         private static IDamageable AsHostile(Collider col)
         {
@@ -3094,7 +3110,10 @@ namespace DeNelle.Village
             // dead, or a non-Hostile faction. Throttled+keyed so it names the excluded object once/sec.
             if (dmg == null)
                 return null;   // not a damageable at all (wall/prop) — silent, expected
-            if (!dmg.IsAlive || dmg.Faction != CombatFaction.Hostile)
+            // WO-1524: the ONE authority decides. MayAttack folds null + IsAlive + faction;
+            // `dmg` is IDamageable-typed, so the IDamageable overload is picked unambiguously.
+            // The §12 trace below is UNCHANGED — it still names alive/faction per candidate.
+            if (!CombatFactionRules.MayAttack(HeroSide, dmg))
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroAbility", "ashostile-reject-" + col.transform.root.name, 1f,
                     $"AsHostile REJECTED '{col.transform.root.name}': alive={dmg.IsAlive} faction={dmg.Faction} " +
@@ -3122,7 +3141,9 @@ namespace DeNelle.Village
                 _wave = found.Length > 0 ? found[0] : null;
             }
             var boss = _wave?.LiveApexBoss;
-            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile)
+            // WO-1524: one authority — MayAttack folds the null + IsAlive + faction triple.
+            // DragonBoss implements IDamageable only (DragonBoss.cs:158): no overload ambiguity.
+            if (CombatFactionRules.MayAttack(HeroSide, (IDamageable)boss))
                 return boss;
             return null;
         }

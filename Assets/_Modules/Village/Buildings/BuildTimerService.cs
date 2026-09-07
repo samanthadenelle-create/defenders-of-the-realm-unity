@@ -2290,6 +2290,9 @@ namespace DeNelle.Village
             _journeyRaidDeployableInput = deployableBodies;
 
             int openCamps = 0;
+            // WO-1541: the NEXT camp, picked in this SAME walk. See the publish below for why it
+            // rides here and not in a second loop of its own.
+            SceneConfigDef nextCamp = null;
             for (int i = 0; i < _journeyRaidProjection.Raids.Count; i++)
             {
                 string id = _journeyRaidProjection.Raids[i].Id;
@@ -2298,8 +2301,43 @@ namespace DeNelle.Village
                 // WO-1404: NEW open predicate at this base; do not attribute it to RaidSelectionVM.
                 if (def != null && DeNelle.Village.Hero.RaidSelectionVM.GarrisonCount(def) <= deployableBodies)
                     openCamps++;
+                // WO-1541: the NEXT camp is the cheapest UNLOCKED one to reach - lowest
+                // unlockVictories - and it is deliberately NOT filtered by the open predicate
+                // above. The two facts answer different questions and must not be merged:
+                //   RaidOpenCampCount = "how many can you take RIGHT NOW" (the Journey deck)
+                //   RaidNextCamp      = "who are you training FOR"        (the Manage/ARMY line)
+                // A camp you cannot yet field an army against is precisely the one that motivates
+                // training, so gating the name on <= deployableBodies would blank the sentence in
+                // the exact state it exists to serve.
+                if (def != null && (nextCamp == null || def.unlockVictories < nextCamp.unlockVictories))
+                    nextCamp = def;
             }
             DeNelle.Core.HudModel.PostureSignals.SetRaidOpenCampCount(openCamps);
+
+            // WO-1541 - THE ONE PRODUCER OF "WHICH CAMP IS NEXT".
+            // ManageScreenVM.BuildTroopArmySummary used to build its OWN RaidSelectionVM over
+            // SceneConfigCatalog.All-where-IsEnemy and run this same minimum-unlockVictories walk
+            // a second time. Two derivations, two separator styles, one drift waiting to happen.
+            // The walk now lives here, beside the count it belongs with, on the SAME relay and the
+            // SAME cadence, and Manage READS the result. ⛔ Do not re-derive a camp name anywhere
+            // else - the oracle in ManageTroopsTrainDoorRegression fails the build if you do.
+            //
+            // ⚠ SET DIFFERENCE, RECORDED RATHER THAN ASSUMED: this projection's defs come from
+            // RaidSelectionVM.CreateDefault (the sole flagship/fallback resolver, above), whereas
+            // the retired Manage walk filtered SceneConfigCatalog.All on IsEnemy. Where the two
+            // sets disagree the CreateDefault set now wins, because it is the set the raid GRID
+            // itself offers - naming a camp the grid does not list would be the worse bug.
+            DeNelle.Core.Diagnostics.Guard.Try("HudKit", "publish next raid camp", () =>
+            {
+                if (nextCamp == null)
+                {
+                    DeNelle.Core.HudModel.PostureSignals.SetRaidNextCamp(null, 0);
+                    return;
+                }
+                string campName = !string.IsNullOrEmpty(nextCamp.displayName) ? nextCamp.displayName : nextCamp.id;
+                DeNelle.Core.HudModel.PostureSignals.SetRaidNextCamp(
+                    campName, DeNelle.Village.Hero.RaidSelectionVM.GarrisonCount(nextCamp));
+            });
         }
 
         /// <summary>Stable fingerprint of every catalog field that can change the resolved raid

@@ -5,19 +5,20 @@
 // Markers: ENEMY_ART_COVERAGE_OK / ENEMY_ART_COVERAGE_FAIL
 // Standalone: run-unity-method DeNelle.Editor.EnemyArtCoverageRegression.RunAll
 //
-// regression-registry: standalone
+// regression-registry: REGISTERED (WO-1496, 2026-09-06) — the [enemy-art-coverage]
+// row is in DataRegression.RunAll, between the fences.
 //
-// ⚠ THAT TOKEN IS A DELIBERATE, TEMPORARY HOLD — AND THE COMMITTER'S DECISION TO
-// UNDO. The contract below is DataRegression-shaped and this suite is MEANT to be
-// registered; DataRegression.cs is lane-fenced, so it is not self-registered here.
-// It is marked standalone rather than left unregistered for one reason: as of
-// 2026-08-20 this suite FAILS BY DESIGN on four models whose art does not exist
-// (see the warning below), and registering it today would red the batch on a defect
-// that belongs to the in-flight orc import, not to the registry. Registering it
-// while it fails would also make the very first instinct "relax the suite".
-// WHEN THE ORC ART LANDS: delete this token and add the [enemy-art-coverage] row to
-// DataRegression.RunAll. Leaving it standalone forever is the failure mode this
-// header exists to prevent — an unregistered oracle is a file that never runs.
+// ⚠ THE STANDALONE HOLD IS WITHDRAWN, AND ITS OWN CONDITION IS WHY. The header
+// token said: "WHEN THE ORC ART LANDS: delete this token and add the row." Measured
+// 2026-09-06 against the tree: Orc_Berserker.mat + EnemyContent/textures/Orc_Berserker/
+// and Materials/orcnecromancer_basecolor.mat exist on disk, and Orc_Shaman is no
+// longer referenced by enemies.json at all. The named blocker was the orc import and
+// the orc import has landed. What remains — enemies.json:400 "modelKey": "OgreMage",
+// a key with no mesh and no art — is a DIFFERENT defect, already sanctioned as
+// art-pending in a local HashSet this suite cannot see (EnemyResolverRegression.cs:221),
+// and it is ticketed rather than exempted here. THE 2026-08-20 WARNING BELOW STILL
+// BINDS: if this suite reds, land the art or change what the row references. Never
+// relax the file. A suite edited until it passes is not an oracle.
 //
 // THE INVARIANT: every model referenced by enemies.json must have a RESOLVABLE
 // BASECOLOR — a real albedo image this project could put on that mesh.
@@ -80,6 +81,30 @@
 //                         EnemyFactory.ResolveBasecolor loses it, this suite's tier-3
 //                         probe and the game's would silently disagree, and a body
 //                         that passes here would render untextured in play.
+//   4 [binding-and-sentinel] WO-1509, 2026-09-06. Two FILE-LEVEL facts, asked without
+//                         AssetDatabase so they are true in a FRESH CLONE and in a
+//                         headless run before any import has happened:
+//                           (a) every *.fbx directly under the enemy content root has its
+//                               sibling ".tripo-extracted" sentinel. WITHOUT ONE,
+//                               TripoAssetPostprocessor.OnPreprocessModel force-sets
+//                               materialLocation=External + materialName=BasedOnTextureName
+//                               on EVERY import, which makes the importer IGNORE the
+//                               externalObjects remap table and resolve materials BY
+//                               TEXTURE NAME instead (.gitignore:629-635). That is not a
+//                               theory: on 2026-09-06 the device logged
+//                               "NO ALBEDO on 'Orc_Berserker(Clone)' ... material=
+//                               'tripo_mat_f84a1f82_Pbr (URP)'" — a search-by-name hit —
+//                               while Orc_Berserker.fbx.meta's remap table pointed at
+//                               Orc_Berserker.mat the whole time. The sentinel IS the state.
+//                           (b) every enemy-family .mat under that root — a .mat whose stem
+//                               is a modelKey, or <modelKey>_Body — carries a NON-ZERO guid
+//                               on its _BaseMap. "m_Texture: {fileID: 0}" is the exact byte
+//                               pattern behind every NO ALBEDO line this ticket collected.
+//                         ⚠ (b) IS WEAKER THAN CASE 2 TIER 1 AND MUST NOT BE MISTAKEN FOR IT.
+//                         It proves a guid is present, never that the texture belongs to that
+//                         body: Orc_Berserker.mat passes (b) while binding the WARRIOR
+//                         basecolor, and Orc_Necromancer/Orc_Shaman pass on a STOPGAP Mage
+//                         binding (WO-1509). Only tier 1 under Unity reads the renderer.
 // =============================================================================
 
 using System;
@@ -115,6 +140,12 @@ namespace DeNelle.Editor
         /// (including tier-4 pack images and authoring .psd), whereas the runtime loads through
         /// Resources and never sees an extension at all. Not an art-path literal.</summary>
         private static readonly string[] ImageExts    = { ".png", ".jpg", ".jpeg", ".tga", ".psd" };
+
+        /// <summary>WO-1509: the opt-out marker TripoAssetPostprocessor honours. Mirrors that
+        /// file's own private MarkerSuffix — the two are in different assemblies, so this is a
+        /// second copy by necessity; Case 4's failure text names the source file so a rename
+        /// there surfaces here as a whole-root red rather than a silent pass.</summary>
+        private const string MarkerSuffix = ".tripo-extracted";
 
         /// <summary>Batchmode entry: writes the OK/FAIL marker, exits 1 on failure.</summary>
         public static void RunAll()
@@ -227,6 +258,69 @@ namespace DeNelle.Editor
                     log.Append("[new-suffix-rule] ok (behavioural + delegation); ");
             }
 
+            // ── 4 [binding-and-sentinel] ─────────────────────────────────────
+            // WO-1509, 2026-09-06. Pure File/Directory work: no AssetDatabase, so this case
+            // answers the same in a fresh clone, in batchmode, and before the first import.
+            var noSentinel = new List<string>();
+            var unbound    = new List<string>();
+            if (!Directory.Exists(ContentRoot))
+            {
+                failures.Add("[binding-and-sentinel] the enemy content root '" + ContentRoot +
+                             "' does not exist, so neither the sentinel sweep nor the _BaseMap sweep " +
+                             "examined anything — a vacuous pass is worse than no case");
+            }
+            else
+            {
+                foreach (string fbx in Directory.GetFiles(ContentRoot, "*.fbx"))
+                {
+                    if (!File.Exists(fbx + MarkerSuffix))
+                        noSentinel.Add(Path.GetFileName(fbx));
+                }
+                if (noSentinel.Count > 0)
+                {
+                    noSentinel.Sort(StringComparer.Ordinal);
+                    failures.Add("[binding-and-sentinel] " + noSentinel.Count + " FBX under '" + ContentRoot +
+                                 "' have NO '" + MarkerSuffix + "' sentinel, so TripoAssetPostprocessor." +
+                                 "OnPreprocessModel force-sets materialLocation=External + materialName=" +
+                                 "BasedOnTextureName on every import of each — which IGNORES that FBX's own " +
+                                 "externalObjects remap table and binds materials BY TEXTURE NAME instead " +
+                                 "(.gitignore:629-635; WO-1509 device capture). Add the sentinel beside the " +
+                                 "FBX and TRACK it — ignoring it makes the fix local-only and the defect " +
+                                 "returns silently on a fresh clone: " + string.Join(", ", noSentinel));
+                }
+                else
+                {
+                    log.Append("[binding-and-sentinel] sentinels ok; ");
+                }
+
+                // Enemy-family materials only: a .mat whose stem is a modelKey or <modelKey>_Body.
+                // Scoped deliberately — the root also holds Tripo scratch materials and shared
+                // pack materials, and widening the net is how an oracle gets weakened to shut up.
+                var family = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string m in models) { family.Add(m); family.Add(m + "_Body"); }
+
+                foreach (string mat in Directory.GetFiles(ContentRoot, "*.mat", SearchOption.AllDirectories))
+                {
+                    string stem = Path.GetFileNameWithoutExtension(mat);
+                    if (!family.Contains(stem)) continue;
+                    if (HasBoundBaseMap(mat)) continue;
+                    unbound.Add(stem + " (" + mat.Replace('\\', '/') + ")");
+                }
+                if (unbound.Count > 0)
+                {
+                    unbound.Sort(StringComparer.Ordinal);
+                    failures.Add("[binding-and-sentinel] " + unbound.Count + " enemy-family material(s) carry " +
+                                 "_BaseMap m_Texture {fileID: 0} — a NULL albedo, the exact byte pattern behind " +
+                                 "every 'NO ALBEDO on <body>' line the device logs. Bind a real texture guid or " +
+                                 "land the art; do NOT drop the material from the family set to go green: " +
+                                 string.Join("; ", unbound));
+                }
+                else
+                {
+                    log.Append("[binding-and-sentinel] ").Append("bindings ok; ");
+                }
+            }
+
             if (failures.Count > 0)
             {
                 reason = failures.Count + " failure(s): " + string.Join(" | ", failures) + " || context: " +
@@ -234,7 +328,7 @@ namespace DeNelle.Editor
                 return false;
             }
 
-            reason = "3/3 cases pass — " + log.ToString().TrimEnd(' ', ';');
+            reason = "4/4 cases pass — " + log.ToString().TrimEnd(' ', ';');
             return true;
         }
 
@@ -340,6 +434,46 @@ namespace DeNelle.Editor
         private static IEnumerable<string> NameCandidates(string model)
         {
             return EnemyArtPaths.NameAliases(model);
+        }
+
+        /// <summary>
+        /// WO-1509: true when a .mat's _BaseMap entry names a NON-ZERO texture guid.
+        /// <para>Read as TEXT, not through AssetDatabase, so the answer is the same in a fresh
+        /// clone and before any import. Unity serialises the slot as two lines —
+        /// "- _BaseMap:" then an indented "m_Texture: {fileID: ...}" — and an unbound slot is
+        /// the literal "{fileID: 0}" with no guid at all, which is precisely what
+        /// Orc_Necromancer.mat and Orc_Shaman.mat carried when this case was written.</para>
+        /// </summary>
+        private static bool HasBoundBaseMap(string matPath)
+        {
+            string[] lines;
+            try { lines = File.ReadAllLines(matPath); }
+            catch { return false; }   // unreadable == unproven == not bound
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Trim() != "- _BaseMap:") continue;
+                // The binding is on the next non-blank line; scan a couple in case the
+                // serialiser ever interleaves a comment.
+                for (int j = i + 1; j < lines.Length && j <= i + 3; j++)
+                {
+                    string s = lines[j].Trim();
+                    if (s.Length == 0) continue;
+                    if (!s.StartsWith("m_Texture:", StringComparison.Ordinal)) break;
+                    int g = s.IndexOf("guid:", StringComparison.Ordinal);
+                    if (g < 0) return false;                      // "{fileID: 0}" — no guid
+                    // Take the hex run directly rather than splitting on a delimiter set:
+                    // a char literal for the closing brace would unbalance CLAUDE.md §1's
+                    // brace count on an otherwise valid file, and this reads no worse.
+                    string rest = s.Substring(g + 5).TrimStart();
+                    int n = 0;
+                    while (n < rest.Length && Uri.IsHexDigit(rest[n])) n++;
+                    string guid = rest.Substring(0, n);
+                    return guid.Length == 32 && guid.Trim('0').Length > 0;
+                }
+                return false;
+            }
+            return false;   // no _BaseMap slot at all
         }
 
         /// <summary>First diffuse/basecolor image in a folder, or null.</summary>

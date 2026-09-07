@@ -4,6 +4,17 @@
 // Assembly: DeNelle.EditorRegression (references DeNelle.Core + DeNelle.Village).
 // Markers: COLLECTOR_INCOME_OK / COLLECTOR_INCOME_FAIL.
 //
+// ⚠ WHAT THIS SUITE ACTUALLY DOES (WO-1494, 2026-09-06 - verified by reading every case body,
+// not by trusting this header):
+//   SOURCE LINT - cases 1-12 and 14-16. They Regex the harvester/collector/view .cs and parse
+//               the canonical JSON catalogs. They prove a call site, a guard or an authored
+//               number is present, absent or ordered correctly; they CANNOT see runtime state.
+//   HYBRID     - case 13 [configure-rekeys] ONLY: the lint half above MeasureConfigureRekey,
+//               plus a real measurement that constructs a live ResourceCollector, calls
+//               Configure and reads the real ResourceCollectorRegistry back.
+//   Where a case description below says a defect was "measured" on a date, that is the HISTORY
+//   of the headless/device capture that FOUND it - not a claim that this suite re-measures it.
+//
 // THE DEFECT CLASS THIS PINS (measured 2026-08-04): PHANTOM COLLECTOR INCOME.
 //
 // ResourceBuildingHarvester.Update iterated all three
@@ -47,9 +58,13 @@
 //   12 [tell-wired]             CollectorStackView.Attach actually has a caller, the tell stays
 //                               event-driven, the FULL toast is coalesced, and the copy never
 //                               says "Storage" (that word is the town bank's).
-//   13 [configure-rekeys]       MEASURED: AddComponent fires OnEnable before Configure, so every
-//                               collector registered under the default id "farm". Configure must
-//                               re-key the registry.
+//   13 [configure-rekeys]       SOURCE LINT + MEASURED (WO-1494). AddComponent fires OnEnable before
+//                               Configure, so every collector registered under the default id "farm";
+//                               Configure must re-key the registry. The DEFECT was measured headless
+//                               2026-08-04. The lint half greps Configure, so a DELETED call site is
+//                               caught; the measured half drives a real ResourceCollector and reads
+//                               the real ResourceCollectorRegistry, so a call site that is PRESENT
+//                               AND WRONG is caught too.
 //
 // THE ORIGINAL SIX CASES:
 //
@@ -167,7 +182,8 @@ namespace DeNelle.Editor.Regression
                      "can no longer back-door the existence gate, away accrual shares the online rate authority " +
                      "and is bounded by capacity, the last-accrual stamp advances even AT CAP (no frozen " +
                      "backlog), capacity is expressed in HOURS so fill time is level- and echo-invariant at " +
-                     "~8h, no collector opens a crystal faucet, Configure re-keys the registry, and the " +
+                     "~8h, no collector opens a crystal faucet, Configure re-keys the registry (MEASURED " +
+                     "on a live ResourceCollector against the real ResourceCollectorRegistry, WO-1494), and the " +
                      "collector FULL tell is wired with a coalesced toast. AND (WO-1416): the Quarry " +
                      "pays STONE in all three of its answers - the role word, the harvest tick and the " +
                      "offline/welcome-back summary - off ONE producer" + noteStr;
@@ -834,10 +850,11 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  CASE 13 - Configure RE-KEYS the registry (measured 2026-08-04)
+        //  CASE 13 - Configure RE-KEYS the registry
+        //  (source lint + a live registry measurement; WO-1494)
         // =====================================================================
         //
-        //  MEASURED, not theorised. Headless blank-town capture, three consecutive lines:
+        //  THE DEFECT was MEASURED, not theorised. Headless blank-town capture, three consecutive lines:
         //      [Flow:Harvest] register id=farm pending=1088/2000   (x3, one per collector)
         //      [Flow:Harvest] existence gate CLOSED for 'lumbermill' (liveCollector=no, ...)
         //      [Flow:Harvest] accrue-pending building=forge pending=87/600   (rising in ~12s
@@ -878,6 +895,106 @@ namespace DeNelle.Editor.Regression
             if (unreg && assignAt > 0 && unregAt > assignAt)
                 failures.Add("[configure-rekeys] Configure unregisters AFTER assigning _buildingId - the registry removes " +
                              "by CURRENT id, so the stale entry under the old key is orphaned forever and the bug survives");
+
+            // The source lint above survives on purpose (WO-1494 sec.3): it catches a DELETED call
+            // site. The half below is the one that catches a call site that is present and WRONG.
+            MeasureConfigureRekey(failures, notes);
+        }
+
+        /// <summary>
+        /// WO-1494 - the MEASURED half of [configure-rekeys]. Everything above this point is Regex
+        /// over ResourceCollector.cs; this drives the real component and reads the real registry.
+        ///
+        /// <para>⚠ WHY OnEnable IS STOOD IN FOR EXPLICITLY: <see cref="ResourceCollector"/> carries
+        /// no <c>[ExecuteAlways]</c> / <c>[ExecuteInEditMode]</c> (verified at source 2026-09-06,
+        /// ResourceCollector.cs:19 declares only <c>[DisallowMultipleComponent]</c>), so inside an
+        /// edit-mode batch method <c>AddComponent</c> does NOT fire Awake/OnEnable and the collector
+        /// would never register under its serialized default. A case relying on that would go green
+        /// on a broken tree - Unregister would find nothing and Register would succeed with no
+        /// re-key proven. So the OnEnable step is reproduced through the SAME public registry call
+        /// OnEnable makes, and only Configure's own behaviour is then under test.</para>
+        ///
+        /// <para>The probe id is synthetic, never a real progression id: <see cref="ResourceCollector"/>
+        /// LoadState reads PlayerPrefs under `prefix + id`, and no real key may be touched by a suite.</para>
+        /// </summary>
+        private static void MeasureConfigureRekey(List<string> failures, List<string> notes)
+        {
+            const string probeId = "wo1494-rekey-probe";
+            string defaultId = ResourceBuildingProgression.FarmId;
+
+            // A batch session may have a live collector registered; put the registry back exactly.
+            ResourceCollector priorDefault = ResourceCollectorRegistry.Get(defaultId);
+            ResourceCollector priorProbe = ResourceCollectorRegistry.Get(probeId);
+
+            GameObject go = null;
+            ResourceCollector probe = null;
+            try
+            {
+                go = new GameObject("WO1494_ConfigureRekeyProbe") { hideFlags = HideFlags.HideAndDontSave };
+                probe = go.AddComponent<ResourceCollector>();
+
+                if (!string.Equals(probe.BuildingId, defaultId, StringComparison.Ordinal))
+                {
+                    failures.Add("[configure-rekeys] MEASURED: a fresh ResourceCollector's serialized default id is '" +
+                                 probe.BuildingId + "', not '" + defaultId + "' - the whole defect is that the default " +
+                                 "is what OnEnable registers under, so re-point this oracle deliberately, do not " +
+                                 "assume the new default is harmless");
+                    return;
+                }
+
+                ResourceCollectorRegistry.Register(probe);   // stands in for OnEnable (see remarks)
+                if (ResourceCollectorRegistry.Get(defaultId) != probe)
+                {
+                    failures.Add("[configure-rekeys] MEASURED: could not establish the pre-condition (collector " +
+                                 "registered under the default id '" + defaultId + "') - ResourceCollectorRegistry." +
+                                 "Register did not take. The measurement below would be vacuous, so it is withheld " +
+                                 "rather than reported green");
+                    return;
+                }
+
+                probe.Configure(probeId);
+
+                if (!string.Equals(probe.BuildingId, probeId, StringComparison.Ordinal))
+                    failures.Add("[configure-rekeys] MEASURED: Configure('" + probeId + "') left BuildingId at '" +
+                                 probe.BuildingId + "' - the collector never took its real id");
+                if (ResourceCollectorRegistry.Get(probeId) != probe)
+                    failures.Add("[configure-rekeys] MEASURED: after Configure the registry does NOT return this " +
+                                 "collector under its real id '" + probeId + "'. That is the 2026-08-04 defect exactly: " +
+                                 "the lumbermill and the forge have no live collector, so their income is silently " +
+                                 "withheld by the no-live-collector branch");
+                if (ResourceCollectorRegistry.Get(defaultId) == probe)
+                    failures.Add("[configure-rekeys] MEASURED: after Configure the STALE '" + defaultId + "' entry still " +
+                                 "points at this collector. The registry removes by CURRENT id, so an orphaned default " +
+                                 "entry is permanent - the farm's tick is then paid into whichever collector registered " +
+                                 "last and banked as the WRONG RESOURCE");
+                else
+                    notes.Add("configure-rekeys MEASURED: live collector re-keyed '" + defaultId + "' -> '" + probeId +
+                              "' and the stale default entry is gone");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[configure-rekeys] MEASURED half THREW " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                // Unregister EXPLICITLY: without [ExecuteAlways] OnDisable may not fire on
+                // DestroyImmediate, and a leaked entry in this static registry would poison every
+                // suite that runs after this one. Unregister removes by CURRENT id, so this drops
+                // whichever key the probe ended up holding.
+                //
+                // ⚠ KNOWN LIMIT OF THIS CLEANUP, stated rather than papered over: in the DEFECT
+                // case (a stale default-id entry still pointing at the probe) this cannot remove
+                // BOTH keys - ResourceCollectorRegistry exposes no remove-by-id, only
+                // Unregister(collector), which removes by collector.BuildingId and so drops just
+                // the probe's CURRENT key. The priorDefault re-Register below overwrites the stale
+                // '<defaultId>' slot when a real collector was there; when it was empty, a dead
+                // entry can survive this method. That only happens on an ALREADY-RED run, so it
+                // cannot manufacture a false green - but a later suite in the same batch may see it.
+                if (probe != null) ResourceCollectorRegistry.Unregister(probe);
+                if (go != null) UnityEngine.Object.DestroyImmediate(go);
+                if (priorDefault != null) ResourceCollectorRegistry.Register(priorDefault);
+                if (priorProbe != null) ResourceCollectorRegistry.Register(priorProbe);
+            }
         }
 
         // =====================================================================

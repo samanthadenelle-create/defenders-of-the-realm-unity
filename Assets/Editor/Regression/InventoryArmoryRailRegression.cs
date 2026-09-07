@@ -1,10 +1,43 @@
 // =============================================================================
 // InventoryArmoryRailRegression — WO-1133 "The Armory Rail" is what it says it is.
 // -----------------------------------------------------------------------------
-// A SOURCE-LINT + MEASUREMENT oracle (the HudLabelFitRegression family): it reads the
-// .cs that authors the Bag and the two canonical string copies, and it MEASURES. It
-// does not run PlayMode, so it slots straight into the headless DataRegression batch.
-// Never throws - an unreadable file becomes a failure line, never a crash.
+// AS EXECUTED THIS IS A 100% SOURCE-LINT ORACLE. It does not run PlayMode and it never
+// builds the Bag's visual tree, so it slots straight into the headless DataRegression
+// batch. Never throws - an unreadable file becomes a failure line, never a crash.
+//
+// ⚠ WHAT Run() ACTUALLY EXECUTES (corrected WO-1494, 2026-09-06 - this header used to say
+// flatly "and it MEASURES", which read as though the whole suite measured the built UI):
+//
+//   Run() calls exactly THREE cases: [canon-parity], [wo-1254-tabs], [wo-1293-peek].
+//
+//   SOURCE LINT - all three. They Regex / IndexOf the .cs that AUTHORS the Bag and diff the
+//               canonical JSON against the key list the View can paint. They can prove a
+//               call site or a key is present or gone, and they CANNOT see the built rects.
+//               A lint check is legitimate; a lint check calling itself a measurement is not.
+//   ARITHMETIC ON SOURCE-PARSED CONSTANTS - the MinTouchPx touch bands inside
+//               [wo-1254-tabs]. The floor (ElarionUiKit.MinTouchPx) and the CanvasScaler
+//               math are independent authorities, but the anchors (RailY0/RailY1/HeaderY0/
+//               HeaderY1) are PARSED OUT OF THE SOURCE TEXT by TryConst, not read off a
+//               laid-out RectTransform. It catches an anchor authored below the touch
+//               floor; it does not catch a band that lays out differently than its anchors
+//               say. That is still lint, not measurement.
+//   MEASURED  - NOTHING. Case3_LabelFit does call ElarionUiKit.MeasureLineWidthPx (a real
+//               per-glyph TMP advance walk), but IT IS NOT WIRED INTO Run() - see below.
+//
+// ⛔ SEVEN CASES BELOW ARE DEFINED AND NEVER EXECUTE (read off git, not inferred, 2026-09-06):
+//     commit d6d3146b2 "fix(inventory): replace buried rail with gear tabs" (2026-08-28)
+//     DELETED the Run() call sites for Case0_BoxesStillAuthored [zones-pinned],
+//     Case2_ZoneRatios, Case3_LabelFit, Case4_TouchFloor, Case5_RemovalsStayRemoved,
+//     Case6_PreviewEvidenceGate and Case7_DeviceUxRulings, and added [wo-1254-tabs] in
+//     their place. The methods were left in the file. So the WO-1133 rail description that
+//     follows, and every "INDEPENDENT authority" pairing in it, DESCRIBES CODE THAT DOES
+//     NOT RUN - including the only measurement this file ever had.
+//     ⚠ Re-wire-or-delete is a DELIBERATE decision, not a tidy-up: those cases assert a
+//     BURIED RAIL that d6d3146b2 replaced with gear tabs, so several would fail on today's
+//     Bag by design. It needs a REGRESSION_OK run to settle and is NOT done here.
+//
+// ⚠ EVERYTHING FROM HERE TO THE END OF THIS HEADER DESCRIBES THE UNWIRED WO-1133 CASES.
+//   Read it as history of what the file CONTAINS, never as what a green run PROVED.
 //
 // ⚠ THE RULE THIS SUITE WAS WRITTEN AGAINST: DO NOT ASSERT GEOMETRY BY RECOMPUTING IT
 // FROM THE SAME CONSTANTS THE LAYOUT USES. That yields a suite structurally incapable
@@ -90,6 +123,9 @@ namespace DeNelle.Editor.Regression
             var notes = new List<string>();
             try
             {
+                // ⛔ THESE THREE ARE THE WHOLE SUITE (WO-1494). Case0/2/3/4/5/6/7 are defined
+                // below and are NOT called - d6d3146b2 removed their call sites on 2026-08-28.
+                // Do not read the header's WO-1133 rail prose as a description of this list.
                 Case(failures, "canon-parity",   () => Case1_CanonParity(failures, notes));
                 Case(failures, "wo-1254-tabs",   () => Case1254TopTabs(failures, notes));
                 Case(failures, "wo-1293-peek",   () => Case1293_PeekStripOneLayoutGroup(failures, notes));
@@ -104,7 +140,9 @@ namespace DeNelle.Editor.Regression
                 reason = failures.Count + " failure(s): " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "Bag top-tabs verified - " + string.Join("; ", notes);
+            reason = "Bag top-tabs SOURCE LINT ok (canon-parity + wo-1254-tabs + wo-1293-peek; " +
+                     "source text and canonical JSON only - no built rect was measured, and the " +
+                     "file's other seven cases do not run, WO-1494) - " + string.Join("; ", notes);
             return true;
         }
 
@@ -157,8 +195,10 @@ namespace DeNelle.Editor.Regression
             if (Regex.IsMatch(StripComments(grid), @"overflow\s*\+\s*"" more"))
                 failures.Add("[wo-1254-tabs] overflow word is hard-coded instead of canonical");
 
-            // Independent touch arithmetic at the primary aspect. These values come from the
-            // CanvasScaler contract and MinTouchPx, not from the runtime's own trace.
+            // Touch arithmetic at the primary aspect. The FLOOR is independent (ElarionUiKit
+            // .MinTouchPx + the CanvasScaler contract, not the runtime's own trace) but the
+            // ANCHORS are PARSED OUT OF SOURCE TEXT by TryConst - this is arithmetic on authored
+            // constants, NOT a measurement of a laid-out RectTransform (WO-1494).
             float tabY0, tabY1, headerY0, headerY1;
             if (!TryConst(builder, "RailY0", out tabY0) || !TryConst(builder, "RailY1", out tabY1) ||
                 !TryConst(builder, "HeaderY0", out headerY0) || !TryConst(builder, "HeaderY1", out headerY1))
@@ -196,7 +236,8 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[wo-1254-tabs] Forge Off Hand shelf/category contract missing");
             notes.Add("exactly six canonical non-scrolling tabs; Talents/Map header chips; Gear landing; " +
                 "Off Hand split; landscape/portrait 40% peek + canonical word + kit permanent scrollbar; " +
-                "independent 2670x1200 touch arithmetic; Forge shelf reservation");
+                "MinTouchPx arithmetic on source-parsed RailY/HeaderY anchors at 2670x1200 (lint, " +
+                "not a laid-out rect); Forge shelf reservation");
         }
 
         // =====================================================================
@@ -258,6 +299,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         //  CASE 0 - the insets this suite measures against are STILL the insets
         // =====================================================================
         // Without this case the suite would be measuring against numbers it made up.
@@ -322,6 +364,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         //  CASE 2 - the built zones match the RATIFIED design, not themselves
         // =====================================================================
         // The design's authority is 374 / 1496 / 800 across 2670. The code's claim is four
@@ -385,6 +428,9 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
+        //     This is the ONLY real measurement in the file (MeasureLineWidthPx walks the
+        //     TMP font's per-glyph advances) and it has not executed since that commit.
         //  CASE 3 - every label FITS its real box, measured, at the legibility floor
         // =====================================================================
         // The captured defect on the sibling HUD was "Tap to collec" and "Manag..." - words
@@ -512,6 +558,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         //  CASE 4 - nothing interactive is below the touch floor
         // =====================================================================
         // MinTouchPx is a FLOOR, and D3 is explicit that relying on ClampMinTouch to rescue a
@@ -577,6 +624,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         //  CASE 5 - the deletions stay deleted (half this ticket was removal)
         // =====================================================================
         private static void Case5_RemovalsStayRemoved(List<string> failures, List<string> notes)
@@ -624,6 +672,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         //  CASE 6 - a blank preview can never be mounted again
         // =====================================================================
         // THE DEFECT THIS PINS, from captured data: F8 seq 2833 and seq 3585 both recorded
@@ -671,6 +720,7 @@ namespace DeNelle.Editor.Regression
             notes.Add("preview mount is evidence-gated and tagged per call site");
         }
 
+        //  ⛔ UNWIRED SINCE d6d3146b2 (2026-08-28) - Run() DOES NOT CALL THIS. WO-1494.
         private static void Case7_DeviceUxRulings(List<string> failures, List<string> notes)
         {
             string pane = ReadSrc(PaneSrc);

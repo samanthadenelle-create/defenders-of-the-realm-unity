@@ -697,6 +697,24 @@ namespace DeNelle.Village
             if (_aimBeam != null) _aimBeam.enabled = false;
         }
 
+        /// <summary>
+        /// WO-1524 — the side this scan strikes FROM, handed to <see cref="CombatFactionRules"/>
+        /// so friend-or-foe is answered by the ONE authority rather than an inline
+        /// <c>Faction != CombatFaction.Hostile</c> copy (forbidden by that file's header).
+        ///
+        /// ⚠ A LITERAL, NOT <see cref="Faction"/>, AND THAT ASYMMETRY IS A FINDING, NOT AN
+        /// OVERSIGHT — the same one recorded on <c>ArcaneTower.ScanSide</c>. This turret's
+        /// <see cref="Faction"/> is derived from ownership and reads Hostile on an EnemyOwned
+        /// garrison, yet this sweep has always admitted only Hostile bodies, i.e. a garrison
+        /// turret's roster is its OWN side. (In practice the EnemyOwned path uses RescanParty,
+        /// not this method — which is precisely why the latent contradiction survived here
+        /// unnoticed.) Passing <see cref="Faction"/> would change behaviour; WO-1524 forbids
+        /// that, so it is reported rather than absorbed. The literal is exact:
+        /// <see cref="CombatFaction"/> has only two members (IDamageable.cs:28-34), so
+        /// <c>IsFriendlyFire(Friendly, t)</c> ≡ <c>t.Faction != Hostile</c>.
+        /// </summary>
+        private const CombatFaction ScanSide = CombatFaction.Friendly;
+
         private void Rescan()
         {
             // WO-676: refresh the BULWARK talent sums on the same 0.4s cadence as the
@@ -714,7 +732,11 @@ namespace DeNelle.Village
             _hostiles.Clear();
             foreach (var d in FindObjectsByType<EnemyDamageable>())
             {
-                if (d == null || d.Faction != CombatFaction.Hostile) continue;
+                // WO-1524: the ONE authority answers "is this one of ours?" — skip if so.
+                // IsFriendlyFire (not MayAttack) is deliberate: it is liveness-BLIND, exactly
+                // like the inline copy it replaces, so the scan set is unchanged. Acquire()
+                // below still owns the IsAlive filter.
+                if (d == null || CombatFactionRules.IsFriendlyFire(ScanSide, d)) continue;
                 // TOWERS DEFEND THE TOWN AUTONOMOUSLY (owner 2026-06-28): roaming overworld
                 // encounter reps (RepEngageWatcher) used to be SKIPPED here as "un-killable
                 // Hp=9999 hooks". That is no longer true — reps are now killable (Hp=150,
@@ -727,7 +749,10 @@ namespace DeNelle.Village
                 _hostiles.Add(d);
             }
             foreach (var d in FindObjectsByType<DragonBoss>())
-                if (d != null && d.Faction == CombatFaction.Hostile)
+                // WO-1524: same authority, same liveness-blind shape as the sweep above.
+                // DragonBoss implements IDamageable only (DragonBoss.cs:158), never
+                // IDamageableStructure, so this overload resolves unambiguously.
+                if (d != null && !CombatFactionRules.IsFriendlyFire(ScanSide, d))
                     _hostiles.Add(d);
         }
 

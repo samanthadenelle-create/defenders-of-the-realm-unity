@@ -267,10 +267,16 @@ namespace DeNelle.Village
         //  WO-1437 — THE TERMINAL-STATE NET. Every raid session ends, full stop.
         // =====================================================================
         /// <summary>
-        /// Unscaled seconds a SETTLED raid may still be standing in its own scene before
-        /// this controller takes the route home back. Must stay comfortably LONGER than
-        /// <c>RaidVictoryController._autoReturnSeconds</c> (12s) so the normal victory
-        /// auto-dismiss always wins and this never pre-empts a working exit.
+        /// Unscaled seconds a SETTLED raid may still be standing in its own scene, WITH NO END
+        /// STATE ON SCREEN, before this controller takes the route home back.
+        ///
+        /// <para>WO-1543 / WO-1561 - THE "COMFORTABLY LONGER THAN 12s" RULE THIS COMMENT USED TO
+        /// STATE IS RETIRED, AND DELIBERATELY NOT REPLACED BY A BIGGER NUMBER. Both raid end
+        /// states now HOLD while the player interacts, so a reading player can legitimately sit
+        /// there forever and no constant here could outlast them. The countdown is instead
+        /// suspended while <c>EndStateView.IsShowing</c> (see StrandingWatchdog), which is the
+        /// honest condition: an end state on screen IS a live route home. Do not re-tune this
+        /// number to chase a screen's dismiss value - that coupling is what went stale.</para>
         /// </summary>
         private const float SettledExitGraceSeconds = 30f;
 
@@ -343,6 +349,22 @@ namespace DeNelle.Village
                 bool settled = _scoring != null && _scoring.Finalized;
                 if (settled)
                 {
+                    // WO-1543 / WO-1561 - THE NET MUST NOT BECOME THE NEW UNSTOPPABLE TIMER.
+                    // The owner ruled that a raid end state HOLDS while the player interacts
+                    // (EndStateVM.HoldOnInteraction), which means a reading player has UNLIMITED
+                    // time - so no fixed grace is "comfortably longer" any more, and simply
+                    // raising the number would only move the yank later. While an end state is on
+                    // screen the route home is demonstrably ALIVE (it is that screen's primary
+                    // action and its re-arming guard), so there is nothing to rescue: the clock
+                    // resets. This makes the watchdog TIGHTER, not looser - it now fires 30s after
+                    // the last end state CLOSED with the player still standing in a raid scene,
+                    // which is precisely "the route home was eaten".
+                    if (DeNelle.Village.UI.EndStateView.IsShowing)
+                    {
+                        settledFor = 0f;
+                        continue;
+                    }
+
                     settledFor += dt;
                     if (settledFor < SettledExitGraceSeconds) continue;
 
@@ -401,7 +423,10 @@ namespace DeNelle.Village
         private void OnRaidTimeExpired()
         {
             SetStatus("Time! The assault is called off - your warband retreats.");
-            DoRetreat();
+            // WO-1561: the SAME settlement and the SAME screen as a chosen retreat - only the
+            // reason differs, and the result screen leads with a sentence that says which exit
+            // this was. A player who ran out of clock did not choose to leave.
+            DoRetreat(DeNelle.Village.UI.EndStateVM.TimeoutReason);
         }
 
         private void Update()
@@ -618,6 +643,26 @@ namespace DeNelle.Village
         // warband is rallying. No flag prefab exists, so we build a cheap primitive
         // marker (a thin pole + a gold banner quad) and just MOVE it on each rally
         // tap. Non-colliding (the troops path THROUGH the point), null-safe.
+        //
+        // ⛔ WO-1463 — WHY EVERY PRIMITIVE HERE MUST BE GIVEN A MATERIAL EXPLICITLY.
+        // GameObject.CreatePrimitive assigns Unity's BUILT-IN `Default-Material`, which
+        // has no URP variant. In the editor it looks fine; in a URP PLAYER BUILD it falls
+        // to the magenta error shader, and setting `.color` on it changes nothing — the
+        // owner's capture (Logs/device/screens/owner-raid-ui-2026-09-06-143701.png) shows
+        // the rally flag as a magenta block for exactly that reason. The cure is the
+        // project's ONE runtime material authority, DeNelle.Core.MagentaGuard:
+        // BuildUrpLitMaterial resolves URP/Lit and, when the shader was stripped from the
+        // build, BORROWS it off a live scene material rather than degrading to Standard
+        // (MagentaGuard.cs:814-869). It returns NULL rather than lying, so the caller
+        // leaves the renderer alone and WARNS — a silent fallthrough here is what §12
+        // forbids. Same pattern as Editor/WallTools/RaidBaseGenerator.ApplyUrpMaterial and
+        // Village/World/DungeonWorldPortalSpawner.BuildArch.
+        //
+        // ⛔ AND `ProtectPrimitiveArt` IS NOT OPTIONAL. MagentaGuard's scene sweep treats a
+        // built-in primitive mesh as a stray placeholder and DISABLES it
+        // (MagentaGuard.IsPrimitivePlaceholder, :864). Deliberate primitive art must
+        // register, or the fix for the magenta flag becomes an invisible flag.
+        // Pinned by RaidSelectionLayoutRegression case S8:no-bare-primitive.
         private GameObject _rallyFlag;
 
         private void ShowRallyFlag(Vector3 groundPoint)
@@ -642,7 +687,7 @@ namespace DeNelle.Village
                 pole.transform.localScale = new Vector3(0.08f, 1.2f, 0.08f);
                 pole.transform.localPosition = new Vector3(0f, 1.2f, 0f);
                 StripCollider(pole);
-                TintRenderer(pole, new Color(0.32f, 0.22f, 0.12f)); // dark wood
+                ApplyUrpMaterial(pole, PoleWood);
 
                 // Gold banner quad near the top of the pole.
                 var banner = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -651,7 +696,10 @@ namespace DeNelle.Village
                 banner.transform.localScale = new Vector3(0.9f, 0.6f, 1f);
                 banner.transform.localPosition = new Vector3(0.45f, 2.0f, 0f);
                 StripCollider(banner);
-                TintRenderer(banner, new Color(0.85f, 0.68f, 0.22f)); // gilt
+                ApplyUrpMaterial(banner, BannerGilt);
+
+                // Deliberate primitive art -> register, or the MagentaGuard sweep hides it.
+                MagentaGuard.ProtectPrimitiveArt(root, "RaidDeployController.BuildRallyFlag");
 
                 return root;
             }
@@ -668,10 +716,34 @@ namespace DeNelle.Village
             if (col != null) Destroy(col);
         }
 
-        private static void TintRenderer(GameObject go, Color c)
+        /// <summary>
+        /// The flag's two tones. NEITHER IS A NEW CREATIVE CHOICE (the owner is colourblind —
+        /// memory `owner-colorblind-delegate-visual-creative`): the banner takes the kit's own
+        /// canonical gilt, <see cref="ElarionUi.Gilt"/> (#eec848, Core/UI/ElarionUi.cs:60), the
+        /// same gold the obsidian chrome trims every panel with; the pole keeps the dark-wood
+        /// literal this marker has always shipped with. WO-1463 changes HOW the colour is
+        /// applied (a real URP material instead of a tint on the built-in default), not WHICH
+        /// colour it is.
+        /// </summary>
+        private static readonly Color PoleWood   = new Color(0.32f, 0.22f, 0.12f);
+        private static readonly Color BannerGilt = ElarionUi.Gilt;
+
+        /// <summary>
+        /// Assigns a REAL URP material through the project's one runtime material authority.
+        /// Never tints the built-in Default-Material (WO-1463: that is the magenta path), and
+        /// never silently no-ops — a null material is the stripped-shader case and it WARNS,
+        /// leaving the renderer untouched rather than forcing magenta (MagentaGuard's own
+        /// contract, MagentaGuard.cs:843-848).
+        /// </summary>
+        private static void ApplyUrpMaterial(GameObject go, Color c)
         {
             var r = go != null ? go.GetComponent<Renderer>() : null;
-            if (r != null && r.material != null) r.material.color = c;
+            if (r == null) return;
+            var m = MagentaGuard.BuildUrpLitMaterial(c);
+            if (m != null) { r.sharedMaterial = m; return; }
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                "rally flag: no URP/Lit shader resolvable for '" + go.name +
+                "' - leaving its renderer alone rather than forcing the built-in default.");
         }
 
         private void ToggleRally()
@@ -699,21 +771,170 @@ namespace DeNelle.Village
                 }
                 return;
             }
-            DoRetreat();
+            // WO-1561: ONE DoRetreat, taking the exit reason. A parameterless forwarder was
+            // written here first and deliberately removed: RaidExitParityRegression PIN 1 locates
+            // this method by SIGNATURE, so a one-line forwarder would have handed the oracle an
+            // empty body and quietly disarmed every exit-parity assertion on it. A lint that
+            // matches the wrong overload passes while the contract rots - the failure mode this
+            // repo has paid for repeatedly.
+            DoRetreat(DeNelle.Village.UI.EndStateVM.RetreatReason);
         }
 
-        private void DoRetreat()
+        /// <summary>
+        /// =====================================================================
+        ///  WO-1561 - THE NON-VICTORY EXIT NOW REPORTS. P0.
+        /// =====================================================================
+        ///
+        /// <para><b>WHAT THIS METHOD USED TO DO, IN FULL:</b> settle the partial loot, reconcile
+        /// the army, clear the rally, save, set a status string and call
+        /// <c>SceneRouter.GoCastle()</c>. <b>No <c>EndStateVM</c>. No <c>EndStateView.Show</c>.</b>
+        /// Measured: <c>grep -c "EndStateVM\.|EndStateView.Show"</c> on this file returned 1, and
+        /// that single hit was a COMMENT. The timeout exit funnels here too
+        /// (<see cref="OnRaidTimeExpired"/>).</para>
+        ///
+        /// <para><b>AND NOTHING PICKED IT UP IN TOWN EITHER</b> - that was checked, because
+        /// "deferred to town" would have downgraded the finding. Every reader of
+        /// <c>RaidResult</c> is raid-scene-side; the "welcome back" surfaces are the
+        /// offline-harvest popups, which never mention a raid. So the outcome was computed,
+        /// BANKED, and then discarded unread: a player who retreated - or simply ran out the
+        /// clock - was teleported into town having earned real loot and possibly a star, and was
+        /// told none of it, while a WIN got the full treatment. That is the exit a new player is
+        /// most likely to finish (memory retention-is-the-business-problem).</para>
+        ///
+        /// <para>NO NEW SCREEN: it reuses the ONE shared <c>EndStateView</c> template the victory
+        /// takes, so the two exits cannot drift in shape or in timing. The route home is the
+        /// screen's single primary action AND its re-armable auto-dismiss guard, exactly as the
+        /// victory's is - and <see cref="StrandingWatchdog"/> is the non-view net behind both, so
+        /// no exit is owned only by a destroyable view (WO-1437).</para>
+        ///
+        /// <para>ORDER IS UNCHANGED AND MUST STAY UNCHANGED: loot settles BEFORE the army
+        /// reconcile, because <c>Finalize</c> samples destruction and survival off the LIVE field
+        /// (RaidExitParityRegression PIN 1 pins this order across retreat and hero death).</para>
+        /// </summary>
+        /// <param name="reason">EndStateVM.RetreatReason or EndStateVM.TimeoutReason.</param>
+        private void DoRetreat(string reason)
         {
-            SettlePartialLoot("retreat");
+            SettlePartialLoot(reason);
 
             // A retreat / clock-expiry exit is never a 3-star clear -> 0 stars, no veterancy.
             ReconcileRaidEnd(0);
 
             TroopRally.Clear();
             GameStateService.Instance?.Save();
-            SetStatus("Retreating to the castle...");
+            SetStatus(string.Equals(reason, DeNelle.Village.UI.EndStateVM.TimeoutReason,
+                                    System.StringComparison.OrdinalIgnoreCase)
+                ? "Time! Falling back to the castle..."
+                : "Retreating to the castle...");
+
+            ShowNonVictoryResult(reason);
+        }
+
+        /// <summary>
+        /// WO-1561 - build and show the result screen, then leave through IT rather than
+        /// straight past it.
+        ///
+        /// <para>EVERY NUMBER IS READ OFF THE SETTLED STATE, NEVER OFF AN ESTIMATE: stars, razed
+        /// % and the clock come from <c>RaidScoring.Result</c> (the object
+        /// <see cref="SettlePartialLoot"/> just settled), and the spoils come from the MEASURED
+        /// wallet delta <see cref="GrantRetreatLoot"/> captured either side of the grant. WO-1461
+        /// records why that matters: the deploy card quoted ~1,800 wood and 25 arrived, because
+        /// the bank was full. This screen reports the 25, and says so when the bank ate the rest.</para>
+        ///
+        /// <para>A PRESENTATION FAILURE MUST NEVER STRAND THE PLAYER - the same contract
+        /// <c>RaidVictoryController.ShowVictoryScreen</c> keeps: if the screen throws, the route
+        /// home fires directly.</para>
+        /// </summary>
+        /// <summary>Latched: the non-victory result is shown at most ONCE per raid.</summary>
+        private bool _nonVictoryShown;
+
+        private void ShowNonVictoryResult(string reason)
+        {
+            // LATCHED, and not defensively. Both settlement calls in DoRetreat are already
+            // idempotent, so a second exit reaching here is a harmless no-op for the ECONOMY - but
+            // it would call EndStateView.Show a second time, and Show DESTROYS the standing panel
+            // with a "destroyed WITHOUT firing its primary action" Warn. Warns are F8-captured, so
+            // an unlatched re-show would manufacture triage noise from a non-bug. Mirrors the
+            // _handled / _reconciled / _returning latches every other raid exit already carries.
+            if (_nonVictoryShown)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "non-victory result already shown for this raid (" + reason + ") - ignoring the " +
+                    "duplicate call rather than replacing the standing screen.");
+                return;
+            }
+            _nonVictoryShown = true;
+
+            try
+            {
+                var result = _scoring != null ? _scoring.Result : null;
+
+                var vm = DeNelle.Village.UI.EndStateVM.FromRaidRetreat(
+                    reason, RetreatReturnHome, NonVictoryReturnSeconds,
+                    result != null ? result.Stars : -1,
+                    result != null ? result.DestructionPercent : -1,
+                    result != null ? result.ElapsedSeconds : -1f,
+                    _retreatCredited, _retreatRewardShort,
+                    _lastDeployedCount, _lastSurvivorCount);
+
+                DeNelle.Village.UI.EndStateView.Show(vm);
+
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "NON-VICTORY RESULT shown (" + reason + "): stars=" +
+                    (result != null ? result.Stars.ToString() : "unknown") + " razed=" +
+                    (result != null ? result.DestructionPercent + "%" : "unknown") +
+                    " banked=" + _retreatCredited.Wood + "w/" + _retreatCredited.Iron + "i/" +
+                    _retreatCredited.Food + "f/" + _retreatCredited.Coins + "g/" +
+                    _retreatCredited.Crystals + "c short=" + _retreatRewardShort +
+                    " deployed=" + _lastDeployedCount + " survived=" + _lastSurvivorCount +
+                    ". Before WO-1561 this exit routed home with NO screen at all.");
+            }
+            catch (System.Exception e)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                    "non-victory result screen build threw - returning home directly: " + e.Message);
+                RetreatReturnHome();
+            }
+        }
+
+        /// <summary>
+        /// The route home the result screen owns, latched so the button and the auto-dismiss
+        /// guard can never both fire it.
+        /// </summary>
+        private bool _retreatReturned;
+        private void RetreatReturnHome()
+        {
+            if (_retreatReturned) return;
+            _retreatReturned = true;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "NON-VICTORY RETURN -> SceneRouter.GoCastle() (the loop continues; no soft-lock).");
+            GameStateService.Instance?.Save();
+            SceneOwnership.SetEnemyOwned(false);
             SceneRouter.GoCastle();
         }
+
+        /// <summary>
+        /// The non-victory screen's anti-softlock guard, in seconds. Matches the victory
+        /// screen's WO-1543 value on purpose: the timing rule that ticket landed applies to BOTH
+        /// raid end states, and two raid screens on two different clocks is exactly the drift
+        /// this repo keeps paying for. Re-armed by any interaction
+        /// (<c>EndStateVM.HoldOnInteraction</c>), so a reading player is never yanked.
+        /// </summary>
+        private const float NonVictoryReturnSeconds = 30f;
+
+        // WO-1561 - the MEASURED credit from this raid's partial-loot grant, kept so the result
+        // screen can state what was BANKED rather than what was awarded. Same contract, same
+        // shape and the same reason as RaidVictoryController._credited / _rewardShort (WO-978):
+        // at a capped town bank the two differ, and the screen is what the player believes.
+        private ResourceCost _retreatCredited;
+        private bool _retreatRewardShort;
+
+        // WO-1561 - the army outcome of THIS raid, captured where it is already computed
+        // (ReconcileRaidEnd walks the deploy ledger, the only place the deployed set exists,
+        // because a fallen troop's body is destroyed seconds after death and a scene scan would
+        // find survivors only). -1 = never reconciled, and the screen then omits the line rather
+        // than printing a zero it cannot prove.
+        private int _lastDeployedCount = -1;
+        private int _lastSurvivorCount = -1;
 
         /// <summary>
         /// THE ONE partial-loot settlement, shared by EVERY non-victory raid exit
@@ -757,32 +978,103 @@ namespace DeNelle.Village
             GrantRetreatLoot(loot, result);
         }
 
-        /// <summary>WO-932: partial loot on retreat/timeout/death (stars may still be 1 from >=50% razed).</summary>
-        private static void GrantRetreatLoot(ResourceCost loot, RaidResult result)
+        /// <summary>
+        /// WO-932: partial loot on retreat/timeout/death (stars may still be 1 from >=50% razed).
+        ///
+        /// <para>WO-1561 - IT NOW MEASURES WHAT THE WALLET ACTUALLY TOOK. This used to grant and
+        /// walk away, logging the REQUESTED amounts ("+{loot.Crystals}c") as though they had
+        /// landed. Raid loot is EarnedIncome, which TownBankCapacity clamps against the town
+        /// storage ceiling, so at a full bank the request and the credit differ - and until now
+        /// nothing on this exit could tell them apart, because nothing on this exit was shown to
+        /// the player at all. The before/after read is the same measurement
+        /// <c>RaidVictoryController.GrantLoot</c> takes (the WO-978 contract): the wallet
+        /// properties read straight through to the single GameState-backed store, so a delta is a
+        /// real measurement and not a derivation.</para>
+        ///
+        /// <para>Instance, not static, because the measurement has to reach the result screen.
+        /// It writes <see cref="_retreatCredited"/> / <see cref="_retreatRewardShort"/> and
+        /// NOTHING ELSE reads or writes those two fields.</para>
+        /// </summary>
+        private void GrantRetreatLoot(ResourceCost loot, RaidResult result)
         {
             int stars = result != null ? result.Stars : 0;
+            _retreatCredited = default(ResourceCost);
+            _retreatRewardShort = false;
+
             if (loot.IsZero)
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                    $"retreat settle: stars={stars} loot=0 (no grant).");
+                    $"retreat settle: stars={stars} loot=0 (no grant). The result screen will draw " +
+                    "no spoils rows, which is honest - a raid that banked nothing must never " +
+                    "advertise a payout.");
                 return;
             }
+
             var eco = EconomyService.Instance;
             if (eco != null)
             {
+                int w0 = eco.Wood, f0 = eco.Food, i0 = eco.Iron, c0 = eco.Crystals, g0 = eco.Coins;
                 eco.Grant(loot);
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                    $"retreat LOOT via EconomyService: stars={stars} +{loot.Crystals}c +{loot.Food}f.");
+                int dw = eco.Wood - w0, df = eco.Food - f0, di = eco.Iron - i0,
+                    dc = eco.Crystals - c0, dg = eco.Coins - g0;
+                _retreatCredited = new ResourceCost(wood: dw, food: df, iron: di, crystals: dc, coins: dg);
+                _retreatRewardShort = dw < loot.Wood || df < loot.Food || di < loot.Iron
+                                   || dc < loot.Crystals || dg < loot.Coins;
+                LogRetreatCredit("EconomyService", loot, dw, df, di, dc, dg);
                 return;
             }
+
             var gs = GameStateService.Instance;
-            if (gs != null)
+            var state = gs != null ? gs.State : null;
+            if (gs != null && state != null)
             {
+                // This fallback route has NO wood/iron/gold mover at all, so those axes are
+                // genuinely DROPPED. The basket says so rather than leaving them unset, and the
+                // caveat sentence fires - a silent drop is what "I raided and got nothing" looks
+                // like from the inside.
+                int c0 = state.Resources.Crystals, f0 = state.Resources.Food;
                 if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
                 if (loot.Food != 0) gs.AddFood(loot.Food);
-                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                    $"retreat LOOT via GameState: stars={stars} +{loot.Crystals}c +{loot.Food}f.");
+                int dcF = state.Resources.Crystals - c0, dfF = state.Resources.Food - f0;
+                _retreatCredited = new ResourceCost(food: dfF, crystals: dcF);
+                _retreatRewardShort = dcF < loot.Crystals || dfF < loot.Food
+                                   || loot.Wood != 0 || loot.Iron != 0 || loot.Coins != 0;
+                LogRetreatCredit("GameStateService fallback", loot, 0, dfF, 0, dcF, 0);
+                return;
             }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                "RETREAT LOOT LOST - no EconomyService and no loaded GameState, so the settled " +
+                $"partial loot (wood {loot.Wood}, iron {loot.Iron}, food {loot.Food}, gold " +
+                $"{loot.Coins}, crystals {loot.Crystals}) was credited NOWHERE. The result screen " +
+                "will show no spoils, which at least matches what the player received.");
+        }
+
+        /// <summary>
+        /// WO-1561 - the retreat twin of <c>RaidVictoryController.LogCredit</c>: always
+        /// credited/requested per axis, and a shortfall is a Warn naming both numbers and the
+        /// consequence, never a routine Step. A capture must SHOW the clamp rather than agreeing
+        /// with a payout that never happened.
+        /// </summary>
+        private static void LogRetreatCredit(string route, ResourceCost requested,
+                                             int dWood, int dFood, int dIron, int dCrystals, int dCoins)
+        {
+            string measured =
+                $"wood {dWood}/{requested.Wood}, food {dFood}/{requested.Food}, iron {dIron}/{requested.Iron}, " +
+                $"crystals {dCrystals}/{requested.Crystals}, gold {dCoins}/{requested.Coins} (credited/requested)";
+
+            bool shortfall = dWood < requested.Wood || dFood < requested.Food || dIron < requested.Iron
+                          || dCrystals < requested.Crystals || dCoins < requested.Coins;
+
+            if (shortfall)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    $"RETREAT LOOT SHORT via {route} - the wallet took LESS than the raid awarded: " +
+                    measured + ". Raid loot is EarnedIncome, which TownBankCapacity clamps against " +
+                    "the town storage ceiling. The result screen states this in WORDS so the player " +
+                    "is not left believing a payout that did not land (WO-978 / WO-1461).");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"RETREAT LOOT credited via {route}: {measured}.");
         }
 
         // =====================================================================
@@ -935,6 +1227,13 @@ namespace DeNelle.Village
             // Extreme assault and a failed practice run charged the player identically and
             // there was no loop, only a faucet with a pause in front of it.
             float recovery = ResolveRecoverySeconds();
+
+            // WO-1561 - captured HERE because this is the only place the deployed set exists (see
+            // the deploy-ledger note above). The non-victory result screen states "N troops return
+            // wounded" from these two numbers; a raid that never reconciled leaves them at -1 and
+            // the screen omits the line rather than printing a zero it cannot prove.
+            _lastDeployedCount = deployedIds.Count;
+            _lastSurvivorCount = survivorIds.Count;
 
             DeNelle.Core.Diagnostics.Guard.Try("Raid", "reconcile army after raid",
                 () => army.ReconcileAfterRaid(deployedIds, survivorIds, recovery));

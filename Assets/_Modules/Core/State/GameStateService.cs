@@ -176,6 +176,31 @@ namespace DeNelle.Core.State
         public double? ServerLastSeenMs { get; private set; }
 
         /// <summary>
+        /// WO-1448 — unix-ms of the most recent LOCAL save this device holds. Stamped by
+        /// <see cref="Save"/> and re-hydrated in <see cref="Load"/> from the envelope's
+        /// <c>exportedAt</c>, so it survives a process restart. <c>0</c> means "this device
+        /// has never written a save" — which is exactly the reinstall/new-device case where
+        /// the server row must win outright.
+        /// <para>
+        /// It is the ONE input to the cloud-load recency gate in
+        /// <see cref="ApplyBackendState"/>: a server row is applied only when its
+        /// <c>updated_at</c> is strictly NEWER than this stamp. Before WO-1448 there was no
+        /// comparison at all and every scene enter overwrote local resources.
+        /// </para>
+        /// <para>
+        /// ⚠ CROSS-CLOCK CAVEAT, stated rather than engineered around: this stamp comes from
+        /// the DEVICE clock and the server's anchor comes from Postgres <c>updated_at</c>.
+        /// A device whose clock is skewed forward will consider its local save newer than a
+        /// genuinely newer server row and keep playing locally (safe — nothing is lost, the
+        /// next save re-uploads); a device skewed backwards will accept the server row more
+        /// readily (also safe — the server row IS this player's own last accepted save).
+        /// Neither direction can mint currency, which is why the WO prescribes this
+        /// comparison rather than a field-by-field merge.
+        /// </para>
+        /// </summary>
+        public double LastLocalSaveUnixMs { get; private set; }
+
+        /// <summary>
         /// WO-1128 §3.3 — the most recent accrual clamp the server reported on a save, or
         /// null when the last save was accepted whole. Kept for display/diagnostics ("your
         /// offline haul was provisional") so a future screen needs no extra round trip.
@@ -403,6 +428,13 @@ namespace DeNelle.Core.State
             // V (verify): the validated payload applied — the load produced live state.
             ApplyPersisted(validation.Data);
             _state.SchemaVersion = SaveSchema.CurrentVersion;
+            // WO-1448 — re-hydrate the local-save recency stamp from the envelope so the
+            // cloud-load gate has a real anchor on the FIRST scene enter of a cold boot
+            // (without this it would be 0 and the server row would always win, which is
+            // the very overwrite this ticket closes). Guarded: a hand-edited or absent
+            // exportedAt must not fail a load that is otherwise valid — it degrades to
+            // 0 (= "unknown, let the server win"), said out loud.
+            StampLocalSaveClockFromEnvelope(file.ExportedAt);
             FlowTrace.Step("Save", $"Load OK — applied save (storeVersion={file.StoreVersion} -> schema v{SaveSchema.CurrentVersion}).");
             // WO-1220 §12 — name the hero progression this load just installed. A Load that
             // runs AFTER a New Game is one of only two ways GameState.HeroLevel can climb back
@@ -478,6 +510,11 @@ namespace DeNelle.Core.State
                 // in a SINGLE atomic Provider.Write, so the payload and signature can
                 // never tear apart (a torn pair would reject a valid save → save loss).
                 Provider.Write(SaveSchema.PlayerPrefsKey, SaveSchema.EmbedSignature(json));
+                // WO-1448 — the write SUCCEEDED, so this device now holds local progress
+                // newer than anything the server has yet accepted. Stamp it INSIDE the try,
+                // after the write: a failed write must NOT advance the recency anchor, or a
+                // device that cannot persist would start refusing its own cloud restore.
+                StampLocalSaveClockFromEnvelope(file.ExportedAt);
                 FlowTrace.Step("Save", $"wrote signed save via {Provider.GetType().Name} (len={json.Length}).");
             }
             catch (Exception ex)
@@ -485,6 +522,41 @@ namespace DeNelle.Core.State
                 // §12 TGVRU: a local save write failure is a player-device save
                 // problem — route it to the break-log, not just the console.
                 FlowTrace.Fail("Save", $"local Save FAILED (provider write) — progress not persisted this frame. {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// WO-1448 — parses the envelope's <c>exportedAt</c> ISO-8601 stamp into
+        /// <see cref="LastLocalSaveUnixMs"/>. One writer, two callers (Save + Load), so the
+        /// recency anchor can never fork between the write and the read path.
+        /// <para>
+        /// Guarded per §12: an unparseable/absent stamp degrades to <c>0</c> ("unknown") and
+        /// SAYS SO, rather than throwing on a load that is otherwise valid. Zero means the
+        /// cloud gate lets the server row win — the fail-safe direction, because the server
+        /// row is this same player's own last accepted save.
+        /// </para>
+        /// </summary>
+        private void StampLocalSaveClockFromEnvelope(string exportedAtIso)
+        {
+            double stamped = 0d;
+            Guard.Try("Save", "parse exportedAt -> LastLocalSaveUnixMs", () =>
+            {
+                if (string.IsNullOrEmpty(exportedAtIso)) return;
+                if (DateTimeOffset.TryParse(
+                        exportedAtIso,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        out var parsed))
+                {
+                    stamped = parsed.ToUnixTimeMilliseconds();
+                }
+            });
+            LastLocalSaveUnixMs = stamped;
+            if (stamped <= 0d)
+            {
+                FlowTrace.Warn("Save",
+                    $"WO-1448: could not read a local-save timestamp from exportedAt='{exportedAtIso}' — " +
+                    "the cloud-load recency anchor stays 0, so the next server row will win outright.");
             }
         }
 
@@ -2004,9 +2076,17 @@ namespace DeNelle.Core.State
         }
 
         /// <summary>
-        /// Fetches this player's authoritative server record and merges it onto
-        /// the live SO. Merge policy: server wins on BestWave (anti-rollback);
-        /// local wins on Towers and Pets (last in-session layout stands).
+        /// Fetches this player's authoritative server record and applies it onto the live SO
+        /// through <see cref="ApplyBackendState"/>.
+        /// <para>
+        /// ⚠ THE OLD MERGE POLICY DESCRIBED HERE - "server wins on BestWave; local wins on
+        /// Towers and Pets" - IS RETIRED (WO-1447/WO-1448). There was no per-field merge: the
+        /// body copied seven fields unconditionally and dropped the rest of the row, and there
+        /// was no recency comparison at all. The policy is now WHOLE-ROW and RECENCY-GATED -
+        /// the newer of {server row, local save} wins outright, never a field-by-field mix
+        /// (a max() merge on spendable resources mints currency). See
+        /// <see cref="ApplyBackendState"/> for the rules and the trace lines.
+        /// </para>
         /// </summary>
         public async UniTask LoadFromBackend()
         {
@@ -2095,56 +2175,234 @@ namespace DeNelle.Core.State
                 Debug.Log("[Sync] ServerConfig refreshed from backend.");
             }
 
-            var server = resp.Data;
+            // WO-1447 / WO-1448 — the ENTIRE apply is one seam, so the cloud path and the
+            // local path share ONE apply function. Everything above this line is transport
+            // (clock anchor, config absorb); everything below it is state.
+            ApplyBackendState(resp.Data, resp.SchemaVersion, resp.ServerLastSeenMs);
+        }
 
-            // Server wins on BestWave only — never roll the player back.
-            if (server.BestWave.HasValue && server.BestWave > (_state.BestWave))
-                _state.BestWave = (int)server.BestWave.Value;
+        /// <summary>
+        /// The outcome of <see cref="ApplyBackendState"/>. Returned (not just logged) so a
+        /// headless oracle can assert the DECISION, not merely its side effects.
+        /// </summary>
+        public enum BackendApplyOutcome
+        {
+            /// <summary>Nothing to apply — a null payload.</summary>
+            SkippedNoPayload,
+            /// <summary>The local save is newer than (or the same age as) the server row. Local kept, untouched.</summary>
+            SkippedStaleServer,
+            /// <summary>The row names a DIFFERENT bound wallet than this device. Fail closed — nothing applied.</summary>
+            RejectedIdentity,
+            /// <summary>The row could not be migrated to this build's schema (e.g. it is from a NEWER build).</summary>
+            RejectedMigration,
+            /// <summary>The migrated row failed <see cref="SaveSchema.Validate"/>.</summary>
+            RejectedValidation,
+            /// <summary>The row was applied onto the live state in full.</summary>
+            Applied,
+        }
 
-            // Resources: take server value (authoritative for economy integrity).
-            if (server.Resources.HasValue)
-                _state.Resources = server.Resources.Value;
-            if (server.Voidshards.HasValue) _state.Voidshards = (int)server.Voidshards.Value;
-            // Crystals are unified onto Resources.Crystals (save v18). A legacy/older
-            // backend record may still carry an aetherCrystals balance the server
-            // Resources blob doesn't include — fold it in so cloud load can't reopen the
-            // split-brain. (Field kept for back-compat; left at 0 locally.)
-            if (server.AetherCrystals.HasValue && server.AetherCrystals.Value > 0)
+        /// <summary>
+        /// WO-1447 + WO-1448 — applies a server row onto the live state through the SAME
+        /// migrate → validate → <see cref="ApplyPersisted"/> path the local
+        /// <see cref="Load"/> uses, gated on recency.
+        /// <para>
+        /// ⛔ WHY THIS EXISTS. Until WO-1447 the cloud load copied SEVEN fields by hand
+        /// (bestWave / resources / voidshards / aetherCrystals / stone / iron / wood) and
+        /// never called <see cref="ApplyPersisted"/> or <see cref="SaveMigrator.MigrateForImport"/>
+        /// at all. The server was never the limiter — <c>api/game/load.js</c> returns the whole
+        /// state document — so structures, army, build queue, echoes, cosmetics and quest
+        /// state were all present in the payload and all dropped on the floor. A player who
+        /// reinstalled, or signed in on a second device, got their currencies and a BLANK
+        /// TOWN. A hand-maintained copy list IS the defect: every save field added since
+        /// would silently have failed to restore too. There is now ONE apply function with
+        /// TWO callers, and the currency fields ride it like every other field.
+        /// </para>
+        /// <para>
+        /// ⛔ AND WHY IT IS GATED (WO-1448). <see cref="PersistenceBridge"/> fires the cloud
+        /// load on EVERY scene enter. With no recency comparison, a player who spent
+        /// resources, entered a raid scene and came back before the server row caught up had
+        /// the OLDER server numbers written over the newer local ones and immediately
+        /// persisted — silently, with no line in the log saying a decision was even made.
+        /// The gate is a strict <c>server &gt; local</c> comparison against
+        /// <see cref="LastLocalSaveUnixMs"/>, and BOTH branches trace.
+        /// </para>
+        /// <para>
+        /// ⛔ NOT a field-by-field <c>max()</c> merge, by explicit ruling: resources are
+        /// SPENDABLE, so a per-field max would mint currency out of a stale row. Whole row
+        /// or nothing.
+        /// </para>
+        /// </summary>
+        /// <param name="server">The deserialized server row (<c>resp.data</c>). Null = nothing to do.</param>
+        /// <param name="serverSchemaVersion">The row's <c>schema_version</c> column, as sent by
+        /// <c>api/game/load.js</c>. Null on a backend older than that field.</param>
+        /// <param name="serverLastSeenMs">The row's <c>updated_at</c> in unix-ms — the recency anchor.</param>
+        public BackendApplyOutcome ApplyBackendState(
+            SaveSchema.PersistedState server, double? serverSchemaVersion, double? serverLastSeenMs)
+        {
+            if (_state == null || server == null)
             {
-                var cr = _state.Resources;
-                cr.Crystals += (int)server.AetherCrystals.Value;
-                _state.Resources = cr;
+                FlowTrace.Step("Persist", "backend load: no payload to apply (null state or null server row) - local save kept.");
+                return BackendApplyOutcome.SkippedNoPayload;
             }
-            // WO-1212: the server's `stone` column is the retired balance. Same rule as the
-            // local save path - alias it onto the live Stone slot ONLY when the row carried no
-            // resources block, otherwise discard it aloud. Never a second balance, and never a
-            // free top-up: the stored number is a seed/dev echo, not earned value.
-            if (server.Stone.HasValue && server.Stone.Value != 0d)
+
+            // The whole seam is guarded: LoadFromBackend runs inside a Forget()'d UniTaskVoid
+            // on every scene enter (PersistenceBridge), so an escaping throw would vanish into
+            // an unobserved task instead of reaching the break-log. §12: no silent failures.
+            try
             {
-                if (!server.Resources.HasValue)
+                double localMs = LastLocalSaveUnixMs;
+                double serverMs = serverLastSeenMs.HasValue ? serverLastSeenMs.Value : 0d;
+
+                // ── WO-1448 recency gate ──────────────────────────────────────────
+                // Rules, stated so none of them is implicit:
+                //   • server > local            -> APPLY (the row is genuinely newer).
+                //   • server == local           -> SKIP (identical vintage; the row cannot
+                //                                  carry anything local does not, and an
+                //                                  overwrite is pure downside).
+                //   • server unknown (<= 0)     -> APPLY only when local is ALSO unknown
+                //                                  (localMs == 0 = this device has never
+                //                                  saved = the reinstall/new-device case
+                //                                  WO-1447 exists to serve). Otherwise SKIP.
+                bool serverKnown = serverMs > 0d;
+                bool localKnown  = localMs  > 0d;
+                bool serverWins  = serverKnown ? (serverMs > localMs) : !localKnown;
+
+                if (!serverWins)
                 {
-                    var aliasedCloud = _state.Resources;
-                    aliasedCloud.Food = (int)server.Stone.Value;
-                    _state.Resources = aliasedCloud;
-                    FlowTrace.Warn("Sync",
-                        $"WO-1212: cloud `stone` ALIASED onto the live Stone slot " +
-                        $"(Resources.Food={aliasedCloud.Food}); the row carried no resources block.");
+                    FlowTrace.Step("Persist",
+                        $"backend load: server={serverMs:0} local={localMs:0} winner=LOCAL - server row is " +
+                        (serverKnown ? "not newer" : "undated while this device holds a save") +
+                        "; NOTHING applied (local resources + town untouched, WO-1448). " +
+                        "The offline sync queue and the delta baseline are deliberately left alone.");
+                    return BackendApplyOutcome.SkippedStaleServer;
+                }
+
+                // ── Identity, FAIL CLOSED ────────────────────────────────────────
+                // The row is fetched by playerId, but the payload also CARRIES a boundWallet
+                // and ApplyPersisted would install it. A row naming a different owner is
+                // either a backend routing fault or a hostile response, and applying it would
+                // replace this player's town with a stranger's AND repoint their identity.
+                // Never fail open here: reject the whole row and keep the local save.
+                string localWallet = _state.BoundWallet;
+                if (!string.IsNullOrEmpty(server.BoundWallet)
+                    && !string.IsNullOrEmpty(localWallet)
+                    && !string.Equals(server.BoundWallet, localWallet, StringComparison.Ordinal))
+                {
+                    FlowTrace.Fail("Persist",
+                        "backend load REJECTED on IDENTITY - the server row's boundWallet does not match this " +
+                        "device's bound identity. Nothing applied; the local save stands. (Fail closed by design: " +
+                        "a mismatched row would both overwrite the town and repoint the account.)");
+                    return BackendApplyOutcome.RejectedIdentity;
+                }
+
+                // ── The SHARED path: migrate -> validate -> apply ────────────────
+                // Same three calls the local Load() makes (see Load()). The migration is what
+                // makes an OLD server row safe to apply at all - it is also where the v18
+                // aetherCrystals -> Resources.Crystals fold happens, which the retired
+                // seven-field block had to re-implement by hand. Nothing else is duplicated
+                // here on purpose.
+                double storeVersion;
+                if (serverSchemaVersion.HasValue && serverSchemaVersion.Value > 0d)
+                {
+                    storeVersion = serverSchemaVersion.Value;
                 }
                 else
                 {
-                    FlowTrace.Step("Sync",
-                        $"WO-1212: DISCARDED retired cloud balance stone={server.Stone.Value:0}; live " +
-                        $"Stone = Resources.Food={_state.Resources.Food}, untouched.");
+                    storeVersion = SaveSchema.CurrentVersion;
+                    FlowTrace.Warn("Persist",
+                        "backend load: the row carried no schemaVersion (older backend) - treating it as " +
+                        $"v{SaveSchema.CurrentVersion} so the migration chain is skipped rather than guessed. " +
+                        "A genuinely old row will be caught by SaveSchema.Validate below.");
                 }
-            }
-            if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
-            if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;
 
-            // Advance ack marker and re-persist locally.
-            _lastSyncedSnapshot = Snapshot();
-            Save();
-            StateReplaced.Invoke();
-            Debug.Log("[Sync] Server state merged onto local SO.");
+                // ── WO-1212 on the CLOUD row: alias inbound, discard aloud ───────
+                // The rule is the same one ApplyPersisted enforces for a LOCAL file, but it
+                // has to run HERE, BEFORE MigrateForImport, for two reasons:
+                //   • the v18 fold reads `resources` - an aliased value must already be in
+                //     the block the migrator is about to fold aetherCrystals into, or the
+                //     two writes race over a struct copy;
+                //   • the trace has to name the CLOUD path. A discard that only ever says
+                //     "Save" is a discard nobody can attribute.
+                // `Stone` is CLEARED in both branches so ApplyPersisted does not re-judge it:
+                // after an alias its verdict would be a LIE ("DISCARDED" for a value we just
+                // folded in), and after a discard it would simply double-log.
+                // The alias bases off the LIVE block (not ResourceBalance.Starter) so the
+                // player's crystals/coins are not zeroed by a row that carried no `resources`.
+                if (server.Stone.HasValue && server.Stone.Value != 0d)
+                {
+                    if (!server.Resources.HasValue)
+                    {
+                        var aliasedCloud = _state.Resources;
+                        aliasedCloud.Food = (int)server.Stone.Value;
+                        server.Resources = aliasedCloud;
+                        FlowTrace.Warn("Persist",
+                            $"WO-1212: legacy `stone` wire key ALIASED onto the live Stone slot " +
+                            $"(Resources.Food={aliasedCloud.Food}) on the CLOUD row; the payload carried " +
+                            "no `resources` block. An older sender's value is kept, never dropped.");
+                    }
+                    else
+                    {
+                        FlowTrace.Step("Persist",
+                            $"WO-1212: DISCARDED retired balance stone={server.Stone.Value:0} on the CLOUD " +
+                            $"row. Nothing read or spent it; the live Stone is the row's Resources.Food=" +
+                            $"{server.Resources.Value.Food}, left untouched. Discard by design - the field " +
+                            "only ever held a seed or a dev top-up.");
+                    }
+                    server.Stone = null;
+                }
+
+                var migration = SaveMigrator.MigrateForImport(server, storeVersion);
+                if (!migration.Ok)
+                {
+                    // A row from a NEWER build lands here. Fail closed is correct: keep local.
+                    FlowTrace.Fail("Persist",
+                        $"backend load REJECTED by MigrateForImport (storeVersion={storeVersion}) - " +
+                        $"local save kept. {migration.Reason}");
+                    return BackendApplyOutcome.RejectedMigration;
+                }
+
+                var validation = SaveSchema.Validate(migration.Data);
+                if (!validation.Ok)
+                {
+                    FlowTrace.Fail("Persist",
+                        $"backend load REJECTED by SaveSchema.Validate (field '{validation.FieldPath}') - " +
+                        $"local save kept. {validation.Message}");
+                    return BackendApplyOutcome.RejectedValidation;
+                }
+
+                ApplyPersisted(validation.Data);
+
+                // Identity is DEVICE-owned, never payload-owned. ApplyPersisted installs
+                // p.BoundWallet when non-null; a row with a null/blank wallet must not blank
+                // the live one out from under the signer. Restore it unconditionally - the
+                // mismatch case already returned above, so this is only ever a no-op or a
+                // repair of a null.
+                if (!string.IsNullOrEmpty(localWallet)) _state.BoundWallet = localWallet;
+                _state.SchemaVersion = SaveSchema.CurrentVersion;
+
+                FlowTrace.Step("Persist",
+                    $"backend load: server={serverMs:0} local={localMs:0} winner=SERVER - APPLIED the full row " +
+                    $"through MigrateForImport(v{storeVersion}) + Validate + ApplyPersisted (WO-1447). " +
+                    $"baseLayout={(_state.BaseLayout != null ? _state.BaseLayout.Count : 0)} record(s), " +
+                    $"army={(_state.Army != null && _state.Army.Owned != null ? _state.Army.Owned.Count : 0)} troop(s), " +
+                    $"resources c/f/g={_state.Resources.Crystals}/{_state.Resources.Food}/{_state.Resources.Coins}.");
+
+                // Only the APPLIED branch advances the delta baseline and re-persists. On a
+                // skip these three MUST NOT run: _lastSyncedSnapshot is the delta baseline
+                // (see BuildDelta), so advancing it on a skip would mark unsent local changes
+                // as already synced and lose them.
+                _lastSyncedSnapshot = Snapshot();
+                Save();
+                StateReplaced.Invoke();
+                return BackendApplyOutcome.Applied;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Persist",
+                    $"backend load THREW while applying the server row - local save kept, nothing half-applied " +
+                    $"beyond this point. {ex.GetType().Name}: {ex.Message}");
+                return BackendApplyOutcome.RejectedValidation;
+            }
         }
 
         // ── Backend save-auth (WO-121) — wallet-signed nonce headers ──────────
@@ -2723,38 +2981,125 @@ namespace DeNelle.Core.State
         {
             var queue = LoadOfflineQueue();
             queue.Add(delta);
+            queue = CoalesceOfflineQueue(queue);
             PlayerPrefs.SetString(SyncQueueKey,
                 JsonConvert.SerializeObject(queue, SaveSchema.JsonSettings));
             PlayerPrefs.Save();
             Debug.LogWarning($"[Sync] Queued offline payload (queue depth: {queue.Count}).");
 
-            // ⛔ WO-1441 — THIS QUEUE IS UNBOUNDED AND THAT WAS INVISIBLE. On 2026-09-06 it reached
-            // 100 entries in one session (measured across that day's four device captures: 96 -> 97
-            // -> 100) because no session was ever minted and every save refused fail-closed. The
-            // per-enqueue LogWarning above is a Debug line, so nothing reached F8 and the growth was
-            // only discovered by grepping a 22 MB log after the fact.
+            // ⛔ WO-1441 — THIS QUEUE WAS UNBOUNDED AND THAT WAS INVISIBLE. On 2026-09-06 it reached
+            // 112 entries in one session because no session was ever minted and every save refused
+            // fail-closed. The per-enqueue LogWarning above is a Debug line, so nothing reached F8
+            // and the growth was only discovered by grepping a 22 MB log after the fact.
             //
-            // ⚠ NO DATA IS AT RISK, AND THAT IS WHY THIS ONLY WARNS. Entries are retry MARKERS, not
-            // bodies (see SendCurrentSnapshot / FlushOfflineQueue): the upload is always the CURRENT
-            // full snapshot, so ONE successful save drains every entry at once and the player's
-            // progress lives in the local save regardless of queue depth. Do NOT "fix" the growth by
-            // trimming or clearing the queue - a queue that forgets it has unsent work is how a
-            // fail-closed refusal quietly becomes real data loss.
+            // ⛔ WO-1454/1455 — AND THE WARNING STRUCTURALLY MISSED. The old test was
+            // `Count % OfflineQueueDepthWarn == 0`, i.e. it fired ONLY if an enqueue landed on an
+            // exact multiple of 25. The 112-deep session emitted NOTHING, because coalescing,
+            // foreign-identity drops and partial drains mean the counter is not sampled on every
+            // integer. Unbounded growth plus a warning that can be stepped over is the worst pair:
+            // the memory climbs and the log says nothing. It is now a LATCHED CROSSING - warn once
+            // when the depth crosses up, re-arm only after it falls back below.
             //
-            // The threshold is a smell detector, not a limit: nothing is dropped and nothing is
-            // capped. Crossing it means saves have been failing for a long time, which is the
-            // finding worth waking someone for.
-            if (queue.Count >= OfflineQueueDepthWarn && queue.Count % OfflineQueueDepthWarn == 0)
-                FlowTrace.Warn("Sync",
-                    $"offline save queue has reached {queue.Count} unsent markers - cloud saves have been " +
-                    "failing continuously. Nothing is lost (the queue drains as ONE upload of the current " +
-                    "snapshot the moment a save succeeds), but identity is still unresolved: check the " +
-                    "[Flow:Wallet] line naming why= for this session.");
+            // ⚠ WHAT IS STILL TRUE: NO DATA IS AT RISK. Entries are retry MARKERS, not bodies (see
+            // SendCurrentSnapshot / FlushOfflineQueue): the upload is always the CURRENT full
+            // snapshot, so ONE successful save drains every entry at once and the player's progress
+            // lives in the local save regardless of depth. The prior comment therefore forbade any
+            // trimming outright. That was RIGHT about blind trimming and WRONG about coalescing —
+            // see CoalesceOfflineQueue, which drops only entries a LATER marker for the SAME
+            // identity already supersedes. No identity's "I have unsent work" flag is ever lost, so
+            // the fail-closed-becomes-data-loss failure that rule guarded against cannot occur.
+            if (queue.Count >= OfflineQueueDepthWarn)
+            {
+                if (!_offlineQueueDepthWarned)
+                {
+                    _offlineQueueDepthWarned = true;
+                    FlowTrace.Warn("Sync",
+                        $"offline save queue CROSSED {OfflineQueueDepthWarn} unsent markers (depth {queue.Count}) - " +
+                        "cloud saves have been failing continuously. Nothing is lost (the queue drains as ONE " +
+                        "upload of the current snapshot the moment a save succeeds), but identity is still " +
+                        "unresolved: check the [Flow:Wallet] line naming why= for this session. This fires ONCE " +
+                        "per crossing; it re-arms only if the depth falls back below the threshold.");
+                }
+            }
+            else
+            {
+                _offlineQueueDepthWarned = false;
+            }
         }
 
-        /// <summary>Depth at which a still-growing offline queue starts reporting to F8 (WO-1441).
-        /// A detector, never a cap - see <see cref="EnqueueOffline"/>.</summary>
+        /// <summary>
+        /// WO-1455. Bounds the retry queue by COALESCING, never by forgetting work.
+        /// <para>
+        /// The queue carries retry MARKERS against full-state snapshots, so for any one identity
+        /// only the NEWEST marker carries information — the older ones say the same thing about the
+        /// same pending upload. Over the cap we therefore keep the LAST marker per identity, oldest
+        /// first, which cannot lose an identity's unsent-work flag.
+        /// </para>
+        /// <para>
+        /// ⛔ NEVER DROP THE NEWEST ENTRY. The newest snapshot marker is the current truth; trimming
+        /// the tail would leave the queue describing a state the device has already moved past. If
+        /// coalescing alone cannot reach the cap (only possible with more distinct identities than
+        /// the cap, which this device cannot produce), the OLDEST survivors go, loudly.
+        /// </para>
+        /// </summary>
+        private List<SyncDeltaPayload> CoalesceOfflineQueue(List<SyncDeltaPayload> queue)
+        {
+            if (queue == null || queue.Count <= OfflineQueueMaxDepth) return queue;
+
+            int before = queue.Count;
+            var lastIndexById = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < queue.Count; i++)
+            {
+                var entry = queue[i];
+                if (entry == null) continue;
+                lastIndexById[entry.PlayerId ?? string.Empty] = i;
+            }
+
+            var kept = new List<SyncDeltaPayload>(lastIndexById.Count);
+            for (int i = 0; i < queue.Count; i++)
+            {
+                var entry = queue[i];
+                if (entry == null) continue;
+                if (lastIndexById.TryGetValue(entry.PlayerId ?? string.Empty, out int last) && last == i)
+                    kept.Add(entry);
+            }
+
+            if (kept.Count < before)
+                FlowTrace.Warn("Sync",
+                    $"offline queue COALESCED {before} -> {kept.Count} marker(s) at the cap of " +
+                    $"{OfflineQueueMaxDepth}. Only markers SUPERSEDED by a newer one for the SAME identity " +
+                    "were dropped - every identity still holds its newest unsent-work flag, and the upload " +
+                    "is the current snapshot regardless, so nothing was lost. A queue this deep means saves " +
+                    "have been failing for a long time: read the [Flow:Wallet] why= line.");
+
+            while (kept.Count > OfflineQueueMaxDepth)
+            {
+                var dropped = kept[0];
+                kept.RemoveAt(0);
+                FlowTrace.Warn("Sync",
+                    $"offline queue DROPPED the OLDEST marker (identity hash {IdentityHash(dropped?.PlayerId)}) - " +
+                    $"the cap of {OfflineQueueMaxDepth} was still exceeded after coalescing, which means more " +
+                    "distinct identities than the cap are queued on one device. The NEWEST markers are always " +
+                    "the survivors. This is a real loss of one identity's unsent-work flag: investigate.");
+            }
+
+            return kept;
+        }
+
+        /// <summary>Non-reversible short hash so a drop can be traced without logging a wallet (WO-1157).</summary>
+        private static string IdentityHash(string playerId)
+            => string.IsNullOrEmpty(playerId) ? "none" : (playerId.GetHashCode() & 0xFFFF).ToString("x4");
+
+        /// <summary>Depth at which a still-growing offline queue reports to F8, ONCE PER CROSSING (WO-1441/1455).
+        /// A detector; the CAP is <see cref="OfflineQueueMaxDepth"/>.</summary>
         private const int OfflineQueueDepthWarn = 25;
+
+        /// <summary>Hard bound on the retry queue, enforced by coalescing (WO-1455).
+        /// See <see cref="CoalesceOfflineQueue"/> — dropping is never blind.</summary>
+        private const int OfflineQueueMaxDepth = 50;
+
+        /// <summary>Latch for the depth warning: warn on the CROSSING, not on exact multiples (WO-1455).</summary>
+        private bool _offlineQueueDepthWarned;
 
         /// <summary>
         /// Drains the retry queue. Because the upload is always the CURRENT snapshot under
@@ -2814,6 +3159,9 @@ namespace DeNelle.Core.State
                 // is not a cosmetic gap: WO-1441's acceptance is "the queued offline deltas DRAIN,
                 // proven by measurement", and the only honest answer was "unprovable". This line IS
                 // the measurement - grep it after identity returns.
+                // WO-1455: the queue is empty, so re-arm the depth warning for the next crossing.
+                _offlineQueueDepthWarned = false;
+
                 FlowTrace.Step("Sync",
                     $"offline queue DRAINED - {mine.Count} queued marker(s) cleared by ONE successful " +
                     "upload of the current snapshot (markers are retry flags, not bodies, so a single " +
@@ -2909,6 +3257,16 @@ namespace DeNelle.Core.State
             /// backend must still load.
             /// </summary>
             [JsonProperty("serverLastSeenMs")] public double?           ServerLastSeenMs { get; set; }
+
+            /// <summary>
+            /// WO-1447 — the row's <c>schema_version</c> column. <c>api/game/load.js:128</c> has
+            /// been sending it and nothing parsed it, because the old apply block copied seven
+            /// fields by hand and never migrated anything. It is the <c>storeVersion</c> argument
+            /// <see cref="SaveMigrator.MigrateForImport"/> needs to bring an OLD server row up to
+            /// this build's schema before it is applied. Nullable for the same reason as
+            /// <see cref="ServerNowMs"/>: an older backend must still load.
+            /// </summary>
+            [JsonProperty("schemaVersion")] public double?              SchemaVersion { get; set; }
         }
 
         /// <summary>

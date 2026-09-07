@@ -538,6 +538,21 @@ namespace DeNelle.Pets
         // =====================================================================
 
         /// <summary>
+        /// WO-1524 — the side an Echo strikes FROM, passed to
+        /// <see cref="CombatFactionRules"/> so the friend-or-foe answer comes from the ONE
+        /// authority instead of an inline <c>Faction != CombatFaction.Hostile</c> copy
+        /// (that predicate's header forbids the copy; see Core/Combat/CombatFactionRules.cs).
+        ///
+        /// A LITERAL, not <c>this.Faction</c>, and deliberately so: Pet carries no faction of
+        /// its own, and an Echo is village-side by construction (it escorts the player — see
+        /// EchoWorldPresence). <see cref="CombatFaction"/> has exactly two members
+        /// (Friendly=0, Hostile=1, IDamageable.cs:28-34), so
+        /// <c>MayAttack(Friendly, t)</c> is bit-for-bit the old <c>t.Faction != Hostile</c>
+        /// plus the null/IsAlive folds the two call sites already performed by hand.
+        /// </summary>
+        private const CombatFaction EchoSide = CombatFaction.Friendly;
+
+        /// <summary>
         /// The nearest living hostile <see cref="IDamageable"/> within the
         /// hunt-scan radius, or null. Discovery is via an enemy-LayerMask
         /// overlap — Pet never references the concrete Village Enemy type.
@@ -553,7 +568,10 @@ namespace DeNelle.Pets
                 var col = _overlap[i];
                 if (col == null) continue;
                 var dmg = col.GetComponentInParent<IDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // WO-1524: one authority. MayAttack folds null + IsAlive + faction, so this
+                // single call is the whole guard. `dmg` is IDamageable-typed, which picks the
+                // IDamageable overload unambiguously (CombatFactionRules' overload-trap note).
+                if (!CombatFactionRules.MayAttack(EchoSide, dmg)) continue;
                 float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
                 if (sqr < bestSqr)
                 {
@@ -632,7 +650,8 @@ namespace DeNelle.Pets
                 var col = _overlap[i];
                 if (col == null) continue;
                 var dmg = col.GetComponentInParent<IDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // WO-1524: one authority (see NearestHostile) — null + IsAlive + faction.
+                if (!CombatFactionRules.MayAttack(EchoSide, dmg)) continue;
                 // Only target things that mark themselves as a live ranged attacker.
                 var ranged = col.GetComponentInParent<IRangedThreat>();
                 if (ranged == null || !ranged.IsRangedAttacker) continue;

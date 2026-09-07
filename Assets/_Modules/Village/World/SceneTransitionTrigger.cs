@@ -10,7 +10,8 @@ namespace DeNelle.Village
     /// <summary>
     /// Gate/portal SEAM between a hub scene (e.g. MainCastle_Hall) and the overworld.
     ///
-    /// PROXIMITY-based (not OnTriggerEnter): when the hero (tagged Player/HeroTarget) comes
+    /// PROXIMITY-based (not OnTriggerEnter): when the hero (tagged Player — WO-1513 removed
+    /// the never-declared "HeroTarget" tag; see HeroLocator) comes
     /// within <see cref="ProximityRadius"/> of this object, it ensures the target scene is
     /// loaded additively and <c>WarpTo</c>s the hero across to <see cref="targetPosition"/>.
     ///
@@ -185,7 +186,7 @@ namespace DeNelle.Village
                 if (_traceTimer >= 2f)
                 {
                     _traceTimer = 0f;
-                    Debug.LogWarning($"[SeamTrace] '{name}' still has NO hero (Player/HeroTarget tag not found).");
+                    Debug.LogWarning($"[SeamTrace] '{name}' still has NO hero (no Player tag and no HeroLocomotion).");
                 }
                 return;
             }
@@ -561,14 +562,13 @@ namespace DeNelle.Village
 
         private Transform ResolveHero()
         {
-            var p = SafeFindWithTag("Player") ?? SafeFindWithTag("HeroTarget");
-            return p != null ? p.transform : null;
-        }
-
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
+            // WO-1513: the old second term read the "HeroTarget" tag, which
+            // TagManager.asset has never declared — a permanently dead branch. The
+            // guarded "Player" read plus the definitive HeroLocomotion fallback
+            // (CLAUDE.md §7) now live once in HeroLocator, which is also the seam this
+            // seam-trigger must use: it builds a fade-overlay Image, so the UI-MVVM
+            // oracle classifies it as a View and bans a direct scene scan here.
+            return HeroLocator.ResolveTransform();
         }
 
         // ---------------------------------------------------------------------

@@ -75,15 +75,15 @@ namespace DeNelle.Core.Diagnostics
         bool _softlockReported;
         float _nextWatchdog;
 
-        // Cross-assembly read of DeNelle.Village.HeroLocomotion.InputSuppressed via reflection.
-        // Core must NOT reference Village (asmdef one-way: Village -> Core), so we cache the
-        // static getter once (same pattern as SceneRouter.FindHeroLocomotion / PersistenceBridge).
-        // The softlock MOVEMENT watchdog must not count scripted/dialogue/cutscene/autowalk time
-        // as a stall: while input is suppressed the hero legitimately stands still (reading a line,
-        // a camera beat, an autowalk), so the 75s timer would false-fire (it did, in MainCastle_Hall
-        // intro). Real softlocks during dialogue still surface via the error/exception path.
-        static bool _suppressProbed;       // have we attempted to resolve the getter yet
-        static System.Reflection.MethodInfo _inputSuppressedGetter;  // null = type/prop absent -> behave as today
+        // Cross-assembly read of hero input suppression. Core must NOT reference Village
+        // (asmdef one-way: Village -> Core), so this crosses via the sanctioned
+        // CoreServices.VillageBridge seam (WO-1510) instead of the cached reflected getter it
+        // used to hold. The softlock MOVEMENT watchdog must not count scripted/dialogue/
+        // cutscene/autowalk time as a stall: while input is suppressed the hero legitimately
+        // stands still (reading a line, a camera beat, an autowalk), so the 75s timer would
+        // false-fire (it did, in MainCastle_Hall intro). Real softlocks during dialogue still
+        // surface via the error/exception path.
+        static bool _suppressBridgeThrewTraced;   // first-hit guard for the bridge-threw warning
 
         // owner-pressed bug flag for subjective/visual bugs the code can't detect
         // on its own ("ugly", "feels off", "wrong text"). One tap = screenshot + mark.
@@ -477,28 +477,29 @@ namespace DeNelle.Core.Diagnostics
             catch { return null; }   // tag undefined / none in scene
         }
 
-        // True when DeNelle.Village.HeroLocomotion.InputSuppressed is set (dialogue / cutscene /
-        // autowalk active). Read via cached reflection so Core stays decoupled from Village.
-        // Null-safe: if the type or property can't be resolved (e.g. Village not loaded), returns
-        // false so the watchdog behaves exactly as it did before this guard existed.
+        // True when hero input is suppressed (dialogue / cutscene / autowalk active). Read
+        // through CoreServices.VillageBridge so Core stays decoupled from Village (WO-1510).
+        // Null-safe: no bridge registered (Village not loaded / headless) returns false, so the
+        // watchdog behaves exactly as it did before this guard existed.
         static bool IsHeroInputSuppressed()
         {
             try
             {
-                if (!_suppressProbed)
-                {
-                    _suppressProbed = true;
-                    var t = System.Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
-                    var p = t != null
-                        ? t.GetProperty("InputSuppressed",
-                              System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                        : null;
-                    _inputSuppressedGetter = p != null ? p.GetGetMethod(nonPublic: false) : null;
-                }
-                if (_inputSuppressedGetter == null) return false;
-                return _inputSuppressedGetter.Invoke(null, null) is bool b && b;
+                return CoreServices.VillageBridge?.IsHeroInputSuppressed ?? false;
             }
-            catch { return false; }   // any reflection failure -> behave as today (count as stall)
+            catch (Exception e)
+            {
+                // Never silent (§12) — first hit only, because this runs on a 2s watchdog tick
+                // and a per-tick line would drown the very capture this harness exists to
+                // produce. Explicitly NOT FlowTrace.Once: that emits at Info (FlowTrace.cs:236
+                // Sink.Info) and this is an anomaly, so it must land at Warn severity.
+                if (!_suppressBridgeThrewTraced)
+                {
+                    _suppressBridgeThrewTraced = true;
+                    FlowTrace.Warn("Break", $"IsHeroInputSuppressed: IVillageBridge threw ({e.GetType().Name}: {e.Message}) — treating hero as NOT suppressed, so a scripted beat may read as a stall.");
+                }
+                return false;
+            }
         }
 
         // F8-13: rising-edge flag so the build-mode suppression FlowTrace fires once per

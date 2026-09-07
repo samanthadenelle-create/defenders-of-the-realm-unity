@@ -198,7 +198,19 @@ namespace DeNelle.Editor
                     return;
                 }
 
-                Debug.Log($"[AndroidBuild] SUCCEEDED — {summary.totalSize / (1024 * 1024)} MB in {summary.totalTime}. " +
+                // WO-1486: the marker used to report summary.totalSize, which is the UNCOMPRESSED
+                // total (2367 MB against 463 MiB actually on disk on 2026-09-06). Nobody reading the
+                // log could tell whether the shipped artifact had grown. The FIRST number is now the
+                // artifact's real on-disk length; the report figure is kept as a second LABELLED
+                // number so the old signal is not lost. The literal marker text every caller greps
+                // ('[AndroidBuild] SUCCEEDED') is unchanged, and no caller parses the MB.
+                long onDiskBytes = File.Exists(artifactPath) ? new FileInfo(artifactPath).Length : -1L;
+                string onDisk = onDiskBytes >= 0
+                    ? $"{onDiskBytes / (1024 * 1024)} MB on-disk ({onDiskBytes} bytes)"
+                    : "on-disk size UNKNOWN (artifact not found at the build path)";
+
+                Debug.Log($"[AndroidBuild] SUCCEEDED — {onDisk} in {summary.totalTime}. " +
+                          $"report-uncompressed={summary.totalSize / (1024 * 1024)} MB. " +
                           $"{(isGooglePlay ? "AAB" : "APK")}: {artifactPath}");
             }
             else

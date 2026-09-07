@@ -105,6 +105,15 @@
 //           FILE, which is what made the old baseline hide new hollow passes too.
 //           Legit cases opt out with `hollow-pass-ok` INSIDE the guard block.
 //
+//   RULE 6  [gate-marker-count]  A COUNTED gate marker (CountedGateMarkers - the
+//           three distinct markers of CLAUDE.md section 8) must not print its count
+//           as a string literal. Audit G8 named SessionRegression's
+//           "SESSION_GUARDS_OK 6/6 checks" as a label rather than a measurement and
+//           nothing enforced it, so the label outlived the audit by five weeks
+//           (closed WO-1493, 2026-09-06). The scope is three markers on purpose and
+//           the limit was MEASURED - see the rule body for the four sites a tree-wide
+//           version would fire on, none of which are this defect.
+//
 // Self-reference: this file is EXCLUDED from the RULE 1 emitter scan (it names
 // other suites' markers in its own allowlists, which would read as emitting them)
 // and is subject to RULE 2 like every other suite - its own registration line in
@@ -360,6 +369,26 @@ namespace DeNelle.Editor.Regression
         // A plain re-assignment `<ident> = <literal>` (no declarator).
         private static readonly Regex MarkerAssign = new Regex(
             "(?:^|[;{}])\\s*(\\w+)\\s*=[^=]", RegexOptions.Compiled | RegexOptions.Multiline);
+
+        // ---------------------------------------------------------------------
+        //  RULE 6 - the three DISTINCT gate markers whose count must be MEASURED
+        // ---------------------------------------------------------------------
+        // These are the markers a GATE judges by (CLAUDE.md section 8): the check-in gate
+        // greps all three in their shaped form. A hardcoded count in any of them is a gate
+        // lying about how much of itself ran. Adding a fourth counted gate marker? Add it
+        // here in the same edit as the gate stage that greps it.
+        private static readonly HashSet<string> CountedGateMarkers = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "REGRESSION_OK",       // DataRegression.RunAll     -> REGRESSION_OK <n>/<n> suites
+            "CHECKIN_SUITE_OK",    // RegressionSuite.RunAll    -> CHECKIN_SUITE_OK <p>/<n> cases
+            "SESSION_GUARDS_OK",   // SessionRegression.RunAll  -> SESSION_GUARDS_OK <p>/<n> checks
+        };
+
+        // `"... MARKER 6/6 ..."` - a counted gate marker followed by a LITERAL fraction,
+        // inside a string literal. A derived count arrives via an interpolation hole or a
+        // concatenation and therefore matches nothing here.
+        private static readonly Regex HardcodedGateCount = new Regex(
+            "\"[^\"\\n]*?\\b([A-Z][A-Z0-9_]*_OK)\\s+(\\d+\\s*/\\s*\\d+)", RegexOptions.Compiled);
 
         // A marker token anywhere in a PowerShell grep line.
         private static readonly Regex MarkerToken = new Regex(
@@ -649,6 +678,54 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
+            // -----------------------------------------------------------------
+            //  RULE 6 - a counted gate marker's count is MEASURED, not TYPED
+            // -----------------------------------------------------------------
+            // AUDIT G8, CLOSED (WO-1493, 2026-09-06). SessionRegression printed the
+            // literal "SESSION_GUARDS_OK 6/6 checks" - a LABEL that would have read 6/6
+            // whether six checks ran, one ran, or none did. The G8 note further down this
+            // file already named that defect as the reason TryGetExpectedSuiteCount derives
+            // its number instead of declaring one; nothing enforced the same on the marker
+            // itself, so the label survived the audit that named it.
+            //
+            // The rule: for each of the three DISTINCT gate markers (canon section 8), the
+            // emitted literal must not carry a hardcoded "<digits>/<digits>". A derived
+            // count reaches the log through an interpolation hole or a concatenation, so a
+            // conforming emitter has no digits there at all.
+            //
+            // SCOPE IS NARROW ON PURPOSE, AND THE LIMIT IS MEASURED, NOT ASSUMED. Applying
+            // this to EVERY marker in the tree was run over this tree first and would fire
+            // on four sites that are not this defect: three suites whose literal count is
+            // guarded by an equality test on the measurement one line above
+            // (UICaptureLaunch's `if (count == 3) Debug.Log("..._OK 3/3")` family - the
+            // digits there are proven by the guard), and TroopRosterRegression's unlock
+            // ladder "1/1/2/3/4", which is content, not a count. A rule that fires on
+            // prose is not a ratchet (see the MarkerInLiteral note above for the same
+            // reasoning applied to the spaced `X OK` family). These three markers are the
+            // ones a GATE judges by, which is where a fake count actually costs something.
+            int rule6FilesScanned = 0;
+            foreach (var kv in codeByPath)
+            {
+                string name = Path.GetFileName(kv.Key);
+                if (string.Equals(name, SelfFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                rule6FilesScanned++;
+                HashSet<int> starts = literalStartsByPath.ContainsKey(kv.Key)
+                    ? literalStartsByPath[kv.Key]
+                    : new HashSet<int>();
+
+                foreach (Match m in HardcodedGateCount.Matches(kv.Value))
+                {
+                    // Must begin at a REAL literal, not a quote nested inside another one.
+                    if (!starts.Contains(m.Index)) continue;
+                    string marker = m.Groups[1].Value;
+                    if (!CountedGateMarkers.Contains(marker)) continue;
+                    failures.Add(name + " prints '" + marker + " " + m.Groups[2].Value +
+                                 "' with the count as a STRING LITERAL - that number is a label, not a " +
+                                 "measurement, and the gate that greps this marker would believe it. " +
+                                 "Derive both halves from the checks that actually ran (audit G8 / WO-1493).");
+                }
+            }
+
             if (failures.Count > 0)
             {
                 reason = "REGRESSION MARKER FAIL (" + failures.Count + "): " + string.Join(" | ", failures.ToArray());
@@ -670,7 +747,9 @@ namespace DeNelle.Editor.Regression
                      ledgerNote + "; " + detectorDetail + "; RULE 5 advisory: " + emptyIterationAdvisories +
                      " unguarded discovered-collection loop(s) across " + emptyIterationFiles +
                      " suite(s) could report OK having checked ZERO items (Shape B - see CountUnguardedDiscoveryLoops " +
-                     "for why this is counted and not failed)";
+                     "for why this is counted and not failed); RULE 6: all " + CountedGateMarkers.Count +
+                     " counted gate marker(s) carry a MEASURED count across " + rule6FilesScanned +
+                     " Assets/Editor file(s) - 0 hardcoded fractions (audit G8 / WO-1493)";
             return true;
         }
 
@@ -968,8 +1047,9 @@ namespace DeNelle.Editor.Regression
         //
         // WHY THIS IS DERIVED AND NOT A LITERAL. Writing `const int Expected = 130`
         // would BE the defect it is meant to catch - the same shape as
-        // SessionRegression's hardcoded "SESSION_GUARDS_OK 6/6 checks" (audit G8),
-        // a count that is a LABEL rather than a measurement. So both sides are
+        // SessionRegression's hardcoded SESSION_GUARDS_OK fraction (audit G8 - since
+        // CLOSED by WO-1493, and now held closed by RULE 6 above rather than by this
+        // comment), a count that is a LABEL rather than a measurement. So both sides are
         // measured: the expected count is counted from the SOURCE registration
         // call-sites between DataRegression's own START/END fences, and compared
         // against the count the RUN actually produced. Adding a suite moves both

@@ -22,7 +22,7 @@
 // read: a state flag that changes nothing is indistinguishable from a working feature
 // at the data layer.
 //
-// ── THE SIX RULES ────────────────────────────────────────────────────────────
+// ── THE SEVEN RULES ──────────────────────────────────────────────────────────
 //   1 [reaches]   THE LOAD-BEARING ONE, driven LIVE, not linted: build a real
 //                 GameObject with a real Renderer and a real material, apply a real
 //                 CosmeticDef through CosmeticApplier, and READ THE COLOUR BACK OFF
@@ -55,6 +55,15 @@
 //                 child, so a root-only applier would pass every hero test and decorate
 //                 nothing on a building. Plus the tier-reskin re-drive: an upgrade
 //                 destroys the decorated renderers and skins new ones.
+//   7 [catalog-coverage]
+//                 EVERY id in structures-catalog.json resolves a village cosmetic
+//                 member that cosmetics.json actually ships, or sits on a DATED
+//                 exemption list of explicit ids. Added by WO-1472 (2026-09-06):
+//                 rules 1-6 all measure ONE hand-picked id ("forge"), so a new catalog
+//                 row could join the game bound to nothing and no gate would notice.
+//                 The exemptions are IDS, never a prefix predicate — the mapper IS the
+//                 prefix rule, so a prefix-shaped oracle is a tautology that can never
+//                 go red.
 //
 // ── TWO ABSENCES THAT MUST NEVER BE CONFLATED (2026-08-21 hollow-pass sweep) ──
 // ART-ABSENT is EXPECTED and is ASSERTED THROUGH: no cosmetic art is staged, so every
@@ -95,6 +104,29 @@ namespace DeNelle.Editor.Regression
         private const string ApplierPath          = "Assets/_Modules/Cosmetics/CosmeticApplier.cs";
         private const string StructureFactoryPath = "Assets/_Modules/Village/Catalog/StructureFactory.cs";
 
+        /// <summary>Canonical relative path (CanonicalJson resolves Resources/StreamingAssets).</summary>
+        private const string StructuresCatalogRelPath = "Data/Canonical/structures-catalog.json";
+
+        /// <summary>
+        /// Rule 7's DATED EXEMPTION LIST: structure ids that deliberately wear no village cosmetic.
+        /// <para>⚠ EXPLICIT IDS, NOT A PREFIX RULE, AND THAT IS THE WHOLE POINT.
+        /// <c>StructureFactory.VillageCosmeticMemberFor</c> IS the prefix rule, so an oracle phrased as
+        /// "resolves a member OR matches a deco/rock/tree/fountain prefix" is a TAUTOLOGY that can
+        /// never go red. Listing ids makes a NEW unbound row FAIL until a human dates it here and says
+        /// why — which is the only thing an exemption list is for.</para>
+        /// </summary>
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-1472) - structure ids that deliberately
+        // wear no village cosmetic. Already dated per-ENTRY below; this line puts the pointer where
+        // the WO-1495 ratchet reads it, and sets the date the list is re-read as a whole.
+        private static readonly Dictionary<string, string> UnboundStructureExemptions =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // 2026-09-06 (WO-1472): pure decoration. AttachCosmeticSeam installs NO applier for a
+                // deco id and traces that choice with its own FlowTrace.Once — a building-palette
+                // reskin repainting a torch reads to the player as a bug, not as a cosmetic.
+                { "deco_torch", "2026-09-06 WO-1472: decoration, not a building — no village cosmetic axis by design" },
+            };
+
         [MenuItem("Defenders/Regression/Cosmetic Apply")]
         public static void RunAll()
         {
@@ -114,6 +146,7 @@ namespace DeNelle.Editor.Regression
             CheckMeshPathParsed(failures, notes);
             CheckFolderAgreement(failures, notes);
             CheckVillageReachesStructure(failures, notes);
+            CheckEveryStructureResolvesAMember(failures, notes);
 
             if (failures.Count > 0)
             {
@@ -123,7 +156,8 @@ namespace DeNelle.Editor.Regression
 
             reason = "COSMETIC APPLY OK — an equipped cosmetic reaches a real renderer, both hero body " +
                      "owners drive the one applier, the village category reaches a structure renderer, " +
-                     "and the pet folder constant still agrees. " +
+                     "every structure id in the catalog resolves a cosmetic member or is a dated " +
+                     "exemption, and the pet folder constant still agrees. " +
                      string.Join("; ", notes.ToArray());
             return true;
         }
@@ -662,6 +696,151 @@ namespace DeNelle.Editor.Regression
                 sb.AppendLine(line);
             }
             return sb.ToString();
+        }
+
+        // ── Rule 7 — EVERY structure id resolves a cosmetic member, or is a DATED exemption ──
+        //
+        // WO-1472 (2026-09-06). The ticket behind this rule was minted from 104 device-log lines
+        // reading "Refresh: '<name>' has no category bound" across 25 distinct names, and was read as
+        // "a quarter of the cosmetic surface silently resolves to nothing". IT DID NOT: those names
+        // were structure ROOT names (StructureFactory names a root entry.displayName, not the catalog
+        // id) and every one of them was bound ONE STATEMENT LATER — AddComponent fires OnEnable
+        // synchronously, so Refresh ran once before Attach assigned the category. The full RCA lives
+        // in CosmeticApplier.Refresh's empty-category branch; the false-positive Warn is gone and the
+        // real detector moved to Start().
+        //
+        // But the QUESTION the ticket asked was real, and NOTHING IN THE REPO ASSERTED IT. Rules 1-6
+        // all measure ONE hand-picked id ("forge"), so a new catalog row could join the game wearing
+        // no cosmetic member at all and no gate would notice — the same "nothing asserted the last
+        // link" shape that let WO-992 ship. This rule walks the WHOLE catalog.
+        private static void CheckEveryStructureResolvesAMember(List<string> failures, List<string> notes)
+        {
+            string json = DeNelle.Core.CanonicalJson.Read(StructuresCatalogRelPath);
+            if (string.IsNullOrEmpty(json))
+            {
+                // FIXTURE-ABSENT is a BROKEN GATE, never a stand-down (see the header's two-absences note).
+                failures.Add("[catalog-coverage] " + StructuresCatalogRelPath + " unreadable " +
+                             "(CanonicalJson.Read returned empty). With no structure catalog nothing can " +
+                             "be proven about which structures wear a cosmetic — this is a broken oracle, " +
+                             "not a pass.");
+                return;
+            }
+
+            var ids = new List<string>();
+            try
+            {
+                var root = Newtonsoft.Json.Linq.JObject.Parse(json);
+                var entries = root["entries"] as Newtonsoft.Json.Linq.JArray;
+                if (entries == null || entries.Count == 0)
+                {
+                    failures.Add("[catalog-coverage] structures-catalog.json carries no non-empty 'entries' " +
+                                 "array — the oracle has nothing to walk.");
+                    return;
+                }
+                foreach (var e in entries)
+                {
+                    string id = (string)e["id"];
+                    if (!string.IsNullOrEmpty(id)) ids.Add(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[catalog-coverage] structures-catalog.json failed to parse: " + ex.Message);
+                return;
+            }
+
+            if (ids.Count == 0)
+            {
+                failures.Add("[catalog-coverage] structures-catalog.json parsed but yielded ZERO ids.");
+                return;
+            }
+
+            // The village members cosmetics.json actually ships. A mapper that names a member the
+            // catalog does not sell decorates nothing — 6b proves this for "forge"; here for every row.
+            var shippedMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in CosmeticCatalog.All)
+            {
+                if (c == null) continue;
+                if (string.Equals(c.Category, "village", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(c.AppliesTo))
+                    shippedMembers.Add(c.AppliesTo);
+            }
+            if (shippedMembers.Count == 0)
+            {
+                failures.Add("[catalog-coverage] cosmetics.json ships NO village-category row with an " +
+                             "appliesTo — every structure binding in the game points at a member that " +
+                             "does not exist.");
+                return;
+            }
+
+            int bound = 0, exempt = 0;
+            var seenExemptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string id in ids)
+            {
+                string member;
+                try { member = DeNelle.Village.StructureFactory.VillageCosmeticMemberFor(id); }
+                catch (Exception ex)
+                {
+                    failures.Add("[catalog-coverage] VillageCosmeticMemberFor(\"" + id + "\") threw " +
+                                 ex.GetType().Name + ": " + ex.Message);
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(member))
+                {
+                    if (UnboundStructureExemptions.ContainsKey(id))
+                    {
+                        seenExemptions.Add(id);
+                        exempt++;
+                    }
+                    else
+                    {
+                        failures.Add("[catalog-coverage] structure '" + id + "' resolves NO village cosmetic " +
+                                     "member, and is not on the dated exemption list in this file. Either bind " +
+                                     "it in StructureFactory.VillageCosmeticMemberFor, or add it to " +
+                                     "UnboundStructureExemptions with a date and a reason so 'no cosmetic axis' " +
+                                     "is a DECISION on the record instead of an omission.");
+                    }
+                    continue;
+                }
+
+                if (!shippedMembers.Contains(member))
+                {
+                    failures.Add("[catalog-coverage] structure '" + id + "' maps to village cosmetic member '" +
+                                 member + "', but cosmetics.json ships no village row with that appliesTo. The " +
+                                 "mapper and the catalog have drifted, so an equipped palette reaches this " +
+                                 "building's renderers and finds nothing to apply.");
+                    continue;
+                }
+
+                bound++;
+            }
+
+            // A stale exemption is its own drift, and it goes stale TWO different ways. The message
+            // must say WHICH — a carve-out for a deleted row and a carve-out for a row that is now
+            // bound need opposite reading, and one blurred sentence covering both would send the next
+            // reader looking for the wrong thing.
+            var catalogIds = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in UnboundStructureExemptions)
+            {
+                if (seenExemptions.Contains(kv.Key)) continue;
+
+                if (catalogIds.Contains(kv.Key))
+                    failures.Add("[catalog-coverage] exemption '" + kv.Key + "' (" + kv.Value + ") is STALE: " +
+                                 "the id is still in structures-catalog.json but VillageCosmeticMemberFor now " +
+                                 "RESOLVES a member for it, so it is bound and no longer needs a carve-out. " +
+                                 "Remove the exemption.");
+                else
+                    failures.Add("[catalog-coverage] exemption '" + kv.Key + "' (" + kv.Value + ") names an id " +
+                                 "that is NOT in structures-catalog.json any more. Remove the exemption — a " +
+                                 "carve-out for a row that no longer exists silently widens the next time that " +
+                                 "id is reused.");
+            }
+
+            if (failures.Count == 0 || bound > 0)
+                notes.Add("[catalog-coverage] " + ids.Count + " catalog structure id(s): " + bound +
+                          " bound to a shipped village cosmetic member, " + exempt + " dated exemption(s)");
         }
     }
 }

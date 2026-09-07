@@ -460,16 +460,19 @@ namespace DeNelle.Village
         {
             if (e == null) return string.Empty;
             if (!string.IsNullOrWhiteSpace(e.description)) return e.description;
+            // WO-1565: the type-level prose that used to live here is DELETED, not moved.
+            // It painted a plausible sentence for any unauthored row, which is exactly why
+            // the defect survived a capture: every Tower row rendered one identical sentence
+            // about auto-firing on enemies in range, so the Catapult (a siege engine) and the
+            // Sky Ballista (anti-air) both described themselves as a generic defence tower.
+            // A fallback that looks right is worse than no fallback (CLAUDE.md sec.12, no silent
+            // failures): the unauthored case is now a DATA DEFECT that BuildEconomyRegression's
+            // [structure-descriptions] check FAILS on, so it cannot reach a build at all.
+            // Empty is a value every consumer already sees (the e == null branch above).
             FlowTrace.Once("Build", "desc-unauthored-" + e.id,
-                $"description fallback id={e.id} type={e.type} -- author CatalogEntry.description");
-            switch (e.type)
-            {
-                case CatalogType.Tower:    return "A defensive tower — auto-fires on enemies in range.";
-                case CatalogType.Wall:     return "A wall segment — blocks and slows the enemy advance.";
-                case CatalogType.Gate:     return "A gate — a controlled opening in your defenses.";
-                case CatalogType.Resource: return "A resource structure — gathers materials over time.";
-                default:                   return "A village structure.";
-            }
+                $"description UNAUTHORED id={e.id} type={e.type} -- author CatalogEntry.description " +
+                "in structures-catalog.json (BOTH canonical copies). No fallback prose is painted.");
+            return string.Empty;
         }
 
         /// <summary>

@@ -10,15 +10,22 @@
 // one band ABOVE RaidSelectionScreen so the deploy screen sits over the grid) +
 // tap-outside Scrim + a framed dark-glass panel + a Header.
 //
-// LAYOUT (portrait):
-//   Header   "RAID: <displayName>" + difficulty badge + ★★★ target time.
-//   Left     Hero + Companions row (PartyMemberIds → small framed class portraits),
-//            then a scrollable troop-card list from ArmyStorage.GetDeployable()
-//            grouped by TroopDefId (icon glyph, name, owned count), with an army-cap
-//            indicator (SlotsUsed / MaxArmySize).
-//   Right    three DISJOINT bands (WO-1385): the ENEMY BASE line (crest + stats +
-//            copy), the ECHO GUIDE block (header / name + CHANGE / two-line quote),
-//            then the SCOUT REPORT well. Band constants above BuildCenterColumn.
+// LAYOUT (portrait) — WO-1519 (owner: "can we make this screen pop?"):
+//   Header   "RAID: <displayName>" + the difficulty WORD + gold diamonds + the clock.
+//   Left     three DISJOINT bands: YOUR FORCES, the party medallion row, and the ARMY
+//            band (vm.ArmyBandText — its OWN row, which is the WO-1464 deploy-screen
+//            defect: the cap line used to print on top of the portraits), then the
+//            scrollable troop-card list from ArmyStorage.GetDeployable().
+//   Right    three DISJOINT bands: the ENEMY BASE HERO CARD (boss emblem + name + Power
+//            and Recon as two big numerals), the SPOILS chip row (wood / iron / gold
+//            icons + numbers), then the SCOUT REPORT well.
+//            ⛔ THERE IS NO ECHO GUIDE BAND HERE ANY MORE — owner ruling 2026-09-06
+//            20:24, WO-1519 §2B: "Remove it from the deploy screen." The FEATURE is not
+//            cut — EchoGuideService, its 24 memory lines and EchoWorldPresence's spoken
+//            return all stay, and NoteExpeditionTarget is still called from OnDeploy so
+//            the Echo still has somewhere to remember. What left is ONE SURFACE.
+//   ⛔ EVERY BAND IS A LITERAL IN THE TABLE BELOW (BandsFor), and the table — not a copy
+//   of its numbers in a suite — is what RaidDeployLayoutRegression MEASURES.
 //   Bottom   WO-1403: the footer is BOUND to vm.Fielded. Zero troops -> ONE wide
 //            primary, TRAIN TROOPS, a door to Manage > Troops (BEGIN ASSAULT is not
 //            drawn). Troops > 0 -> EDIT ARMY (same door) + BEGIN ASSAULT ->
@@ -63,6 +70,203 @@ namespace DeNelle.Village.Hero
 
         private const float RowHeightPx = 60f;
         private const float RowGapPx    = 3f;
+
+        // =====================================================================
+        //  WO-1519 — THE GEOMETRY SURFACE. Exposed so an oracle can MEASURE it.
+        // =====================================================================
+        //  Until this lane the deploy screen's layout was six `private const float`
+        //  literals, and the only thing judging them was a REGEX over this file
+        //  (RaidDeployUiRegression [deploy-bands-disjoint] read
+        //  "private const float GuideBandY0 = <literal>f;" out of the source text).
+        //  That is the duplicated-state shape CLAUDE.md §2/§5/§16 each describe in
+        //  their own words: rename a constant and the oracle stops judging anything,
+        //  silently, while still reporting OK. The sibling screen already solved this —
+        //  RaidSelectionScreen.CardBands is a LIVE table an oracle iterates — and this
+        //  is the same cure applied to the door one file away.
+        //
+        //  THE LAW EVERY BAND MUST CLEAR, and it is not a preference:
+        //  ElarionUiKit.FitSingleLine auto-sizes DOWN to ElarionUiKit.FontFloor (30),
+        //  and TMP's Ellipsis overflow CULLS THE WHOLE LINE when the floor's line height
+        //  exceeds the rect — a too-thin band renders NOTHING, not something small
+        //  (ElarionUiKitObsidian.cs:3096-3110). The post-layout relax guard is a RUNTIME
+        //  component and does not run in an edit-mode headless capture, so it cannot be
+        //  the answer either. The pixel a 30 pt line needs is
+        //  RaidSelectionScreen.NeedPx(30) = 38.6 — READ FROM THE SIBLING SCREEN'S OWN
+        //  FUNCTION rather than copied, because a second copy of that arithmetic is the
+        //  very failure this table exists to end.
+        //
+        //  ⚠ THE OLD BUDGET WAS UNDER THAT LAW AND SAID SO IN ITS OWN COMMENT. The
+        //  WO-1385/1403 banner claimed "every single-line row >= 36 px so the 30 px
+        //  FontFloor seats WITHOUT the runtime relax guard". 36 < 38.6. Those rows were
+        //  one measurement away from rendering blank in exactly the headless capture the
+        //  acceptance criteria are read off. Every band below is >= 39 ref px on the
+        //  411 ref px phone body, and RaidDeployLayoutRegression measures it rather than
+        //  trusting this sentence.
+        // ---------------------------------------------------------------------
+        //  THE BUDGET (fractions OF THE BODY ZONE; ~411 ref px at 2670x1200):
+        //    LEFT                                   RIGHT
+        //     forces   0.902-1.000  ( 40 px)         enemy    0.504-0.998  (203 px)
+        //     party    0.662-0.892  ( 95 px)         spoils   0.394-0.492  ( 40 px)
+        //     army     0.548-0.648  ( 41 px)         scout    0.000-0.382  (157 px)
+        //     troops   0.000-0.532  (219 px)
+        //  The two columns are INDEPENDENT stacks — a band only has to be disjoint from
+        //  its own column's neighbours, which is why Column is on the struct.
+        // =====================================================================
+
+        /// <summary>The panel's anchors, exposed so the layout oracle measures the REAL panel
+        /// rather than a typed copy of these two vectors.</summary>
+        public static readonly Vector2 PanelAnchorMin = new Vector2(0.10f, 0.05f);
+        public static readonly Vector2 PanelAnchorMax = new Vector2(0.90f, 0.95f);
+
+        // =====================================================================
+        //  THE BODY THIS SCREEN ACTUALLY GETS — the number the seat law is judged at.
+        // =====================================================================
+        //  ⚠ THIS IS A RECORDED MEASUREMENT, AND IT IS NOT THE SAME AS THE SIBLING
+        //  SCREEN'S. RaidSelectionScreen derives its well from
+        //  ElarionUiKit.ZonesFor(FrameCore) directly, and an oracle can call
+        //  RaidSelectionScreen.ComputeWellBand to reproduce it. THIS panel cannot be
+        //  reproduced that way: BuildObsidianPanel applies a CLOSE-BAND RESERVATION on
+        //  top of the zones (ElarionUiKit.cs:611-676) that depends on the live canvas
+        //  height, and ZonesFor / FrameZones / DefaultCloseZone are all PRIVATE to the
+        //  kit. An oracle that used ComputeWellBand here would measure a 534 ref px body
+        //  on the owner's surface while the screen really gets 411 — every band would
+        //  clear the seat law in the suite and some would render blank on her phone.
+        //  Measuring the wrong thing and reporting a pass is worse than not measuring.
+        //
+        //  SO THE FRACTION IS RECORDED HERE, WITH ITS PROVENANCE, AND IT IS THE FLOOR:
+        //  the reservation lifts the footer to 0.217-0.347 and the body floor to 0.362
+        //  under a body top of 0.835 -> 0.473 of the panel. That is the WO-1385 reading
+        //  of this panel's own BuildObsidianPanel FlowTrace line, which prints
+        //  "bodyYMin <before>-><after> ... reservedYMin=<n>" on EVERY framed panel build —
+        //  so it is re-provable from any fresh capture, by grepping that one line, and
+        //  does not have to be believed on this comment's word.
+        //
+        //  It is used as a FLOOR, never as "the" body: a bigger body only makes every
+        //  band taller, so a layout that seats at 0.473 seats everywhere. On the owner's
+        //  2670x1200 that floor is 411 ref px, the tightest of the four surfaces
+        //  (1920x1080 gives 460, 2340x1080 gives 417, portrait gives 817).
+        //
+        //  ⛔ IF THE KIT EVER EXPOSES THE RESERVATION AS A PURE FUNCTION, DELETE THIS AND
+        //  CALL IT. A recorded number is the second-best answer; it is here only because
+        //  the first-best is private, and widening shared kit visibility is not something
+        //  a player-facing lane gets to smuggle in (ARCHITECTURE_PRINCIPLES).
+        public const float MinBodyFracOfPanel = 0.473f;
+
+        /// <summary>Column key on a band — bands only have to clear their own stack.</summary>
+        public const string ColumnLeft  = "left";
+        public const string ColumnRight = "right";
+
+        /// <summary>
+        /// How far the whole layout drops on the PROCEDURAL chrome path (no FrameCore
+        /// sub-header zone), where the badge/stars/clock meta row keeps the legacy body-top
+        /// strip <see cref="MetaStripY0"/>..1.0 and everything else must clear it.
+        /// </summary>
+        public const float FallbackShift = 0.060f;
+
+        /// <summary>The legacy body-top meta strip, used ONLY on the fallback path.</summary>
+        public const float MetaStripY0 = 0.945f;
+
+        // ── LEFT column (sub-header path; the fallback subtracts FallbackShift) ──
+        private const float ForcesY0 = 0.902f, ForcesY1 = 1.000f;
+        private const float PartyY0  = 0.662f, PartyY1  = 0.892f;
+        private const float ArmyY0   = 0.548f, ArmyY1   = 0.648f;
+        private const float ListY0   = 0.000f, ListY1   = 0.532f;
+
+        // ── RIGHT column ──
+        private const float ScoutBandY0  = 0.000f, ScoutBandY1  = 0.382f;
+        private const float SpoilsBandY0 = 0.394f, SpoilsBandY1 = 0.492f;
+        private const float EnemyBandY0  = 0.504f, EnemyBandY1  = 0.998f;
+
+        // ── Column x-extents (WO-839 #3 seam, unchanged) ──
+        private const float LeftColX1  = 0.49f;
+        private const float RightColX0 = 0.51f;
+
+        /// <summary>One authored band of the deploy body: which column it stacks in, its
+        /// fractions, and the font its text must seat (0 = a container with no text of its
+        /// own, exempt from the seat law but not from the disjointness law).</summary>
+        public readonly struct DeployBand
+        {
+            public readonly string Name; public readonly string Column;
+            public readonly float Y0, Y1; public readonly int FontPt;
+            public DeployBand(string name, string column, float y0, float y1, int fontPt)
+            { Name = name; Column = column; Y0 = y0; Y1 = y1; FontPt = fontPt; }
+            /// <summary>Reference px this band gives its row on a body of <paramref name="bodyPx"/>.</summary>
+            public float HavePx(float bodyPx) => (Y1 - Y0) * bodyPx;
+            /// <summary>Reference px the row's text needs before TMP culls the whole line.
+            /// A fitted label shrinks to ElarionUiKit.FontFloor, so the demand is the FLOOR's
+            /// line, never the authored size.</summary>
+            public float NeedsPx =>
+                FontPt <= 0 ? 0f
+                : RaidSelectionScreen.NeedPx(Mathf.Min(FontPt, Mathf.RoundToInt(ElarionUiKit.FontFloor)));
+        }
+
+        /// <summary>
+        /// THE BODY'S BAND TABLE, live — RaidDeployLayoutRegression iterates THIS, so a
+        /// renamed constant moves the oracle with it instead of blinding it.
+        /// <paramref name="hasSubHeader"/> false = the procedural chrome path, where every
+        /// band drops by <see cref="FallbackShift"/> to clear the legacy meta strip.
+        /// </summary>
+        public static DeployBand[] BandsFor(bool hasSubHeader)
+        {
+            float d = hasSubHeader ? 0f : FallbackShift;
+            return new[]
+            {
+                new DeployBand("troops", ColumnLeft,  ListY0,          ListY1 - d,          0),
+                new DeployBand("army",   ColumnLeft,  ArmyY0 - d,      ArmyY1 - d,          ElarionUi.FontLabel),
+                new DeployBand("party",  ColumnLeft,  PartyY0 - d,     PartyY1 - d,         0),
+                new DeployBand("forces", ColumnLeft,  ForcesY0 - d,    ForcesY1 - d,        ElarionUi.FontLabel),
+                new DeployBand("scout",  ColumnRight, ScoutBandY0,     ScoutBandY1 - d,     ElarionUi.FontMicro),
+                new DeployBand("spoils", ColumnRight, SpoilsBandY0 - d, SpoilsBandY1 - d,   ElarionUi.FontLabel),
+                new DeployBand("enemy",  ColumnRight, EnemyBandY0 - d, EnemyBandY1 - d,     ElarionUi.FontLabel),
+            };
+        }
+
+        // ── The ENEMY BASE hero card's interior (fractions OF THE CARD) ──────────
+        // Boss emblem down the left; header, boss name and the two big numerals stacked
+        // down the right. On the 203 ref px card every text row is >= 38.6 px, the height
+        // RaidSelectionScreen.NeedPx(FontFloor=30) demands before TMP culls the line.
+        private const float CardHdrY0   = 0.776f, CardHdrY1   = 0.980f;   // 41 px
+        private const float CardNameY0  = 0.562f, CardNameY1  = 0.766f;   // 41 px
+        private const float CardStatY0  = 0.222f, CardStatY1  = 0.552f;   // 67 px - the numerals
+        private const float CardCapY0   = 0.010f, CardCapY1   = 0.212f;   // 41 px - their captions
+        /// <summary>The RpgUi sprite ROLE the boss emblems live under
+        /// (Resources/RpgUi/emblem/, mirrored by RpgUiImporter). RpgUiCatalog has no named
+        /// const for it — the role is the folder name, and this is the one place this screen
+        /// says it.</summary>
+        private const string EmblemRole = "emblem";
+        private const float CardEmblemX0 = 0.030f, CardEmblemX1 = 0.280f;
+        private const float CardTextX0   = 0.300f, CardTextX1   = 0.980f;
+        private const float CardStatMidX = 0.640f;   // the split between the two stat columns
+
+        /// <summary>The hero card's own stacked bands (fractions of the card), for the same
+        /// measured treatment as the body's. All four sit in one column.</summary>
+        public static DeployBand[] EnemyCardBands()
+        {
+            return new[]
+            {
+                new DeployBand("card-captions", ColumnRight, CardCapY0,  CardCapY1,  ElarionUi.FontMicro),
+                new DeployBand("card-stats",    ColumnRight, CardStatY0, CardStatY1, ElarionUi.FontHead),
+                new DeployBand("card-boss",     ColumnRight, CardNameY0, CardNameY1, ElarionUi.FontLabel),
+                new DeployBand("card-header",   ColumnRight, CardHdrY0,  CardHdrY1,  ElarionUi.FontLabel),
+            };
+        }
+
+        // ── The party row's interior (fractions OF THE ROW) ──────────────────────
+        // WO-1519 §2.3: the medallion grows (the 20:14 frame's portraits were "TINY") and
+        // the class word owns a real row under it instead of the 11 px sliver WO-1385 found.
+        private const float PartyNameY0  = 0.000f, PartyNameY1 = 0.450f;   // 43 px of a 95 px row
+        private const float PartyPlateY0 = 0.470f, PartyPlateY1 = 1.000f;  // 50 px
+        private const float PartyPlateHalfW = 0.040f;                      // was 0.028 (WO-1385)
+
+        /// <summary>The party row's two stacked bands (fractions of the row).</summary>
+        public static DeployBand[] PartyRowBands()
+        {
+            return new[]
+            {
+                new DeployBand("party-name",  ColumnLeft, PartyNameY0,  PartyNameY1,  ElarionUi.FontMicro),
+                new DeployBand("party-plate", ColumnLeft, PartyPlateY0, PartyPlateY1, 0),
+            };
+        }
 
         // ── Entry ──────────────────────────────────────────────────────────────
 
@@ -141,8 +345,22 @@ namespace DeNelle.Village.Hero
             string raidName = !string.IsNullOrEmpty(_vm.DisplayNameRaw)
                 ? _vm.DisplayNameRaw
                 : (!string.IsNullOrEmpty(_vm.RaidId) ? ElarionUiKit.SpacedDisplayName(_vm.RaidId) : "Raid");
+            // WO-1462 — THE BACKDROP IS THE KIT'S DEFAULT AND THIS SCREEN NOW TAKES IT.
+            // This call used to pass `withBackdrop: false`, the exact D3 defect WO-1442 fixed on
+            // the sibling RaidSelectionScreen five days earlier. The reasoning is identical and
+            // is repeated here because the two doors are separate files: this panel has NO other
+            // opaque layer. BuildObsidianPanel builds `chrome.content` at alpha 0 by design;
+            // MedievalUiSkin.ApplyShell re-asserts alpha 0 on it; and the shell sprite it swaps
+            // in (UI/ElarionMedieval/frames/modal-frame-16x9) is HOLLOW — alpha 0 at every
+            // interior sample. Three transparent layers, so the town's resource read bled
+            // straight through the deploy panel. The Scrim is a screen-wide 0.85 veil, not a
+            // panel backing, and it rides the open fade, so it is not a substitute.
+            // ⛔ DO NOT PASS `withBackdrop: false` BACK INTO THIS CALL — the kit's named
+            // "Backdrop" (a 0.94-alpha plate, ElarionUiKit.cs:568,573-579) is the ONE layer
+            // designed for this, and a bespoke opaque quad here would be a second authority.
+            // Pinned by RaidSelectionLayoutRegression case S7:deploy-opaque-backdrop.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAID: " + raidName,
-                new Vector2(0.10f, 0.05f), new Vector2(0.90f, 0.95f), Close, withBackdrop: false,
+                PanelAnchorMin, PanelAnchorMax, Close,
                 frameName: RpgUiCatalog.FrameCore);
 
             // WO-714 W4: ALL content drops into the FACTORY zones (chrome.layout.body /
@@ -199,14 +417,19 @@ namespace DeNelle.Village.Hero
             float y0 = subHeader != null ? 0.06f : 0.945f;
             float y1 = subHeader != null ? 0.94f : 1.00f;
 
-            Color tint = DifficultyColor(_vm != null ? _vm.Difficulty : null);
-            var badge = ElarionUiKit.AddImage(host, "DiffBadge",
-                new Vector2(0.00f, y0), new Vector2(0.16f, y1),
-                new Color(tint.r, tint.g, tint.b, 0.85f));
-            badge.GetComponent<Image>().raycastTarget = false;
-            // Colorblind text-first: the tint is decoration, the WORD carries the meaning.
-            var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_vm != null ? _vm.Difficulty : null),
-                0f, 1f, ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            // WO-1519 §2.5 - THE COLOURED DIFFICULTY PILL IS RETIRED, and the reason is a
+            // rule this project already holds: the owner is red/green colourblind, and the pill
+            // carried its distinction in HUE ALONE (DifficultyColor mapped Regular -> Affordable
+            // green, Hard -> amber, Extreme -> Danger red). To her, Regular and Extreme were the
+            // same grey plate behind the same word. The WORD was already doing all the work; the
+            // plate was doing none of it, and it was the loudest thing in the header.
+            // ⛔ DO NOT REINSTATE A TINTED PLATE HERE. If difficulty ever needs a second channel,
+            // it takes shape, weight or another word - never a colour. (DifficultyColor itself is
+            // deleted with this call, so there is no helper left to quietly re-wire.)
+            var badgeLbl = ElarionUiKit.Label(host, DifficultyLabel(_vm != null ? _vm.Difficulty : null),
+                y0, y1, ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left,
+                0.00f, 0.17f, bold: true);
+            ElarionUiKit.FitSingleLine(badgeLbl);
             badgeLbl.raycastTarget = false;
 
             // Tofu fix (2026-07-02): ★ (U+2605) is in NO project SDF font (scanned —
@@ -221,11 +444,6 @@ namespace DeNelle.Village.Hero
             timeLbl.raycastTarget = false;
         }
 
-        // WO-839 #3: the columns widen to 0.49 / 0.51 (the old 0.48 / 0.52 left a dead
-        // 4%-wide center seam the owner flagged).
-        private const float LeftColX1  = 0.49f;
-        private const float RightColX0 = 0.51f;
-
         // LEFT — Your Forces: hero + companions portrait row, then the scrollable
         // troop-card list grouped by TroopDefId, then the army-cap indicator.
         // WO-839 #1: with the meta row gone to the chrome sub-header, the left column
@@ -233,43 +451,73 @@ namespace DeNelle.Village.Hero
         // The fallback (no sub-header) keeps the legacy offsets below the body-top row.
         private void BuildLeftColumn(Transform body, bool hasSubHeader)
         {
-            // WO-1385 #2: the party row deepens 0.735 -> 0.690 (62 -> 80 px on the 411 px
-            // phone body) so a hero portrait PLATE and a 36 px name row can stack without
-            // the label painting over the plate; the cap line and the list top slide down
-            // by the same 0.035. YOUR FORCES and the cap line's content are untouched.
-            float forcesY0 = hasSubHeader ? 0.900f : 0.855f;
-            float forcesY1 = hasSubHeader ? 0.960f : 0.915f;
-            float partyY0  = hasSubHeader ? 0.690f : 0.655f;
-            float partyY1  = hasSubHeader ? 0.885f : 0.845f;
-            float capY0    = hasSubHeader ? 0.630f : 0.600f;
-            float capY1    = hasSubHeader ? 0.680f : 0.650f;
-            float listY1   = hasSubHeader ? 0.610f : 0.580f;
+            // WO-1519: every fraction comes off the ONE band table, so this builder and the
+            // measuring oracle can never be reading different numbers.
+            var bands = BandsFor(hasSubHeader);
+            var forces = BandNamed(bands, "forces");
+            var party  = BandNamed(bands, "party");
+            var army   = BandNamed(bands, "army");
+            var list   = BandNamed(bands, "troops");
 
-            var lbl = ElarionUiKit.Label(body, "YOUR FORCES", forcesY0, forcesY1, ElarionUi.Gilt,
+            var lbl = ElarionUiKit.Label(body, "YOUR FORCES", forces.Y0, forces.Y1, ElarionUi.Gilt,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
             ElarionUiKit.FitSingleLine(lbl);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
-            BuildPartyRow(body, partyY0, partyY1);
+            BuildPartyRow(body, party.Y0, party.Y1);
 
-            // Army-cap indicator (VM-computed SlotsUsed / MaxArmySize).
-            var capLbl = ElarionUiKit.Label(body, _vm != null ? _vm.ArmyCapText : "Army: -", capY0, capY1,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
+            // =============================================================
+            //  THE ARMY BAND — WO-1519 §2.3 + the deploy half of WO-1464.
+            // =============================================================
+            // This was a bare label sharing the party row's airspace, and on the owner's
+            // 20:14 frame it printed "Army: 10 / 10 slots" ON TOP of the Grom/Sylas
+            // portraits. It now owns a band of its own, on a plate, with the state word
+            // composed by the VM (vm.ArmyBandText - "ARMY 10 / 10 - FULL"), and the
+            // disjointness is MEASURED rather than eyeballed.
+            // ⛔ The View does not decide "full": ArmyFull is the VM's, from the same
+            // used/cap read the legacy ArmyCapText line uses.
+            var armyPlate = ElarionUiKit.Well(body,
+                new Vector2(0.00f, army.Y0), new Vector2(LeftColX1, army.Y1));
+            var armyPlateImg = armyPlate.GetComponent<Image>();
+            if (armyPlateImg != null) armyPlateImg.raycastTarget = false;
+            var capLbl = ElarionUiKit.Label(armyPlate.transform,
+                _vm != null ? _vm.ArmyBandText : "ARMY -", 0.00f, 1.00f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center,
+                0.04f, 0.96f, bold: true);
+            ElarionUiKit.FitSingleLine(capLbl);
             capLbl.raycastTarget = false;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy army band '" + (_vm != null ? _vm.ArmyBandText : "ARMY -") + "' full=" +
+                (_vm != null && _vm.ArmyFull) + " (own band " + army.Y0.ToString("0.###") + ".." +
+                army.Y1.ToString("0.###") + " - WO-1464: it used to print over the party row).");
 
-            // Troop list region (left half of the body zone, below the cap line). The body
+            // Troop list region (left half of the body zone, below the army band). The body
             // zone's bottom already sits ABOVE the footer + Close band (factory reservation,
             // WO-714 P6) — the old hand-computed 0.19 Close-dodge is retired.
             var listGo = new GameObject("TroopListArea", typeof(RectTransform));
             listGo.transform.SetParent(body, false);
             _troopListArea = listGo.GetComponent<RectTransform>();
-            _troopListArea.anchorMin = new Vector2(0.00f, 0.00f);
-            _troopListArea.anchorMax = new Vector2(LeftColX1, listY1);
+            _troopListArea.anchorMin = new Vector2(0.00f, list.Y0);
+            _troopListArea.anchorMax = new Vector2(LeftColX1, list.Y1);
             _troopListArea.offsetMin = Vector2.zero;
             _troopListArea.offsetMax = Vector2.zero;
 
             BuildTroopList();
+        }
+
+        /// <summary>Look one band out of the table by name. A missing name is a programming
+        /// error, not a player-visible one, so it traces and answers a zero band rather than
+        /// throwing a whole screen away.</summary>
+        private static DeployBand BandNamed(DeployBand[] bands, string name)
+        {
+            if (bands != null)
+                for (int i = 0; i < bands.Length; i++)
+                    if (bands[i].Name == name) return bands[i];
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                "deploy band '" + name + "' is not in BandsFor() - the layout table and a builder " +
+                "have drifted apart; that band will render at zero height.");
+            return new DeployBand(name, ColumnLeft, 0f, 0f, 0);
         }
 
         // Hero + companions as small framed class portraits across the top of the
@@ -309,14 +557,18 @@ namespace DeNelle.Village.Hero
             float rowWidth = slot * n;
             float rowStart = (1f - rowWidth) * 0.5f;
             // WO-1385 #2 (owner screenshot: "Thrain" / "Grom" painted OVER the olive plates).
-            // The old niche was the whole slot width (225 px) by 0.18-0.98 of a 62 px row,
-            // and the name sat in the 11 px left under it -- a FontMicro glyph cannot seat in
-            // 11 px, so it overflowed upward onto the plate. Now the plate is a SQUARE-ish
-            // alcove centred in the slot (0.028 half-width of the 749 px row = 42 px, y 0.47-
-            // 1.00 = 42 px on the 80 px row) and the name owns the bottom 0.00-0.45 (36 px),
-            // fitted single-line. Plate is decorative (no Button, raycast off), so the touch
-            // floor does not apply to it.
-            const float plateHalfW = 0.028f;
+            // The old niche was the whole slot width (225 px) by 0.18-0.98 of a 62 px row, and
+            // the name sat in the 11 px left under it -- a FontMicro glyph cannot seat in 11 px,
+            // so it overflowed upward onto the plate.
+            // WO-1519 §2.3 (owner 20:14: the portraits read "TINY"): the row deepens to 95 ref
+            // px and the plate grows with it -- 0.040 half-width (60 px) by 0.470-1.000 (50 px)
+            // -- while the name keeps a REAL 43 px row of its own underneath. Both fractions come
+            // off PartyRowBands(), which the layout oracle measures, so "bigger" is a number the
+            // suite can hold this file to rather than an adjective in a commit message.
+            // Plate is decorative (no Button, raycast off), so the touch floor does not apply.
+            var rowBands = PartyRowBands();
+            var plateBand = BandNamed(rowBands, "party-plate");
+            var nameBand  = BandNamed(rowBands, "party-name");
             for (int i = 0; i < n; i++)
             {
                 string cls = classes[i];
@@ -326,13 +578,14 @@ namespace DeNelle.Village.Hero
 
                 // Framed portrait niche -- the PLATE, above the label.
                 var niche = ElarionUiKit.Niche(rowHost.transform,
-                    new Vector2(cx - plateHalfW, 0.47f), new Vector2(cx + plateHalfW, 1.00f));
+                    new Vector2(cx - PartyPlateHalfW, plateBand.Y0),
+                    new Vector2(cx + PartyPlateHalfW, plateBand.Y1));
                 niche.GetComponent<Image>().raycastTarget = false;
                 var portrait = ElarionUiKit.Portrait(niche.transform, ElarionUiKit.PortraitForClass(cls), active: i == 0);
 
                 // Name BELOW the portrait plate (the canon companion name for the class).
                 var nameLbl = ElarionUiKit.Label(rowHost.transform, _vm != null ? _vm.CompanionName(cls) : cls,
-                    0.00f, 0.45f, ElarionUi.Parchment,
+                    nameBand.Y0, nameBand.Y1, ElarionUi.Parchment,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, x0, x1, bold: true);
                 ElarionUiKit.FitSingleLine(nameLbl);
                 nameLbl.raycastTarget = false;
@@ -414,144 +667,77 @@ namespace DeNelle.Village.Hero
             ownedLbl.raycastTarget = false;
         }
 
-        // RIGHT — battle preview + estimated clear time + summary + scout report.
-        // Fractions are OF THE BODY ZONE (WO-714 W4). WO-839 #3: the column widens to
-        // RightColX0 (seam closed) and the bare lower band becomes the SCOUT REPORT
-        // intel area (the header TODO's intended occupant).
         // =====================================================================
-        //  WO-1385 (owner 2026-09-04, Seeker build 355905: "screenshot. yuck") --
-        //  THE RIGHT COLUMN IS THREE DISJOINT BANDS, AND THE BUDGET IS 411 PX.
+        //  RIGHT — the ENEMY BASE hero card, the SPOILS chips, the SCOUT REPORT.
+        //  WO-1519 (owner 2026-09-06 20:14, on the deploy frame: "can we make this
+        //  screen pop?"). Fractions come off BandsFor(); the budget and the law it
+        //  clears are documented once, at the table, not again here.
         // ---------------------------------------------------------------------
-        //  The body zone is NOT the 0.075-0.835 that ZonesFor declares. On the phone
-        //  canvas (1080x1920 ref, match 0.5, 2670x1200 -> scale 1.243, canvasH 965)
-        //  the Close-band reservation in BuildObsidianPanel lifts the footer to
-        //  0.217-0.347 and the body floor to 0.362, so the body is 0.473 x 869 =
-        //  ~411 ref px tall. The old bands were authored against a taller body:
-        //  the guide band (0.455-0.600) was 60 px, its CHANGE button carried a
-        //  MinTouchPx=112 floor, and ClampMinTouch grew it symmetrically over the
-        //  ENEMY BASE copy above and the SCOUT REPORT header below -- the three
-        //  elements the owner saw sharing one band. The fix is a real pixel
-        //  budget, top to bottom, with every single-line row >= 36 px so the
-        //  30 px FontFloor seats WITHOUT the runtime relax guard (which does not
-        //  run in a headless capture).
-        //
-        //  WO-1403 RE-BUDGET (2026-09-05): the SCOUT REPORT gains a FOURTH line
-        //  ("Spoils: ..." - it read "Spoils if you win: ..." until the capture that
-        //  evening showed the words eating the gold amount off the right edge; the
-        //  vertical budget below was always right, the LINE was too long)
-        //  and every camp on disk already emits three
-        //  (walls / garrison / boss - scene-configs.json, all four Enemy rows carry a
-        //  boss), so the scout well must seat hdr 36 + 4 x 36 = 180 px. The 411 px
-        //  body cannot ALSO hold a 3-row enemy well (108) and the guide (144 +
-        //  gaps): 180 + 108 + 144 + 8 = 440 > 411. What gives, and why:
-        //   * ENEMY BASE stays TWO rows (72 px) and moves UP to the body top: its
-        //     two stats are one-per-line on the RIGHT (Recon / Power) while the
-        //     header and copy own the LEFT. "Troops N" leaves this well - it is
-        //     already said twice on this screen ("Army: N / M slots", left column,
-        //     and "Garrison: X defenders - you field N", scout report), and a third
-        //     copy is the duplicated-state smell, not information.
-        //   * ECHO GUIDE trims its padding, not its rows: 158 -> 148 px
-        //     (hdr 36 / name 36 / quote 72 = two 30 px lines; CHANGE 130 px > 112).
-        //   * SCOUT takes the 4th line at the floor with no relax.
-        //     ENEMY BASE  0.820-0.995  (72 px: 2 rows of 36)
-        //     gap         0.810-0.820  ( 4 px)
-        //     ECHO GUIDE  0.450-0.810  (148 px: hdr 36 / name 36 / quote 72 -- 2 lines)
-        //     gap         0.440-0.450  ( 4 px)
-        //     SCOUT       0.000-0.440  (181 px: hdr 35 / 4 lines in 145)
-        //  Pinned by RaidDeployUiRegression [deploy-bands-disjoint] (the oracle reads
-        //  these literals, so the geometry rule - disjoint, gapped, inside 0..1 - is
-        //  unchanged and stays green on the new values). These are body fractions;
-        //  the left column is untouched except the party row (see BuildPartyRow).
-        private const float ScoutBandY0 = 0.000f;
-        private const float ScoutBandY1 = 0.440f;
-        private const float GuideBandY0 = 0.450f;
-        private const float GuideBandY1 = 0.810f;
-        private const float EnemyBandY0 = 0.820f;
-        private const float EnemyBandY1 = 0.995f;
-
+        //  WHAT CHANGED AND WHY, in the owner's own terms:
+        //   * "Nothing on the screen is sized by its importance." The decision she is
+        //     about to make is WHICH CAMP, WITH WHAT. So ENEMY BASE stops being two
+        //     thin stat lines and becomes a HERO CARD: the boss's emblem at plate size,
+        //     his name, and Power / Recon as two BIG numerals with captions under them.
+        //     203 ref px instead of 72 — it is the loudest thing in the column, which
+        //     is what it should have been.
+        //   * SPOILS leave the prose. Four lines of scout text ending in "Spoils: ~1800
+        //     wood, ~1100 iron, ~2200 gold" is a sentence the eye has to parse; three
+        //     icon+number chips are a glance. Same numbers, same producer (the VM's
+        //     SpoilsChips and its SpoilsLine are one estimate), rendered through the
+        //     kit's existing ElarionUiKit.CostRow so this screen adds no chip authority
+        //     of its own.
+        //   * The SCOUT REPORT well therefore paints vm.ScoutIntel (three lines), not
+        //     vm.ScoutReport (four) — a projection of one list, never a second report.
+        //     vm.ScoutReport is untouched because RaidDeployZeroArmyRegression
+        //     [zero-army-spoils] pins its shape, and a pin is not weakened to make a
+        //     layout change easier.
+        //   * ⛔ THE ECHO GUIDE BAND IS GONE (owner ruling 20:24, WO-1519 §2B). She
+        //     asked "what is the Echo Guide even bringing to the table?", was told that
+        //     by her OWN scope fence (WO-1380: no stat, no yield, no combat effect) it
+        //     brings one memory line, and ruled: "Remove it from the deploy screen."
+        //     Its 148 px is where the hero card's extra height came from. NOTHING about
+        //     the Echo Guide FEATURE is deleted — see OnDeploy, which still calls
+        //     EchoGuideService.NoteExpeditionTarget so EchoWorldPresence has a place to
+        //     remember when it brings the Echo back after the battle.
+        // =====================================================================
         private void BuildCenterColumn(Transform body, bool hasSubHeader)
         {
-            // ENEMY BASE line. WO-839 #4: an INTENTIONAL framed pre-battle state instead of
-            // the raw "(enemy base)" stub copy. No runtime thumbnail exists yet
-            // (RaidBaseGenerator is a BAKE-TIME editor tool -- nothing renders the target
-            // base at runtime), so the band carries a small crest + honest copy until a
-            // thumbnail pipeline lands.
-            // WO-1385: this used to be a tall preview well with a large crest above a
-            // three-line rich-text block; on the 411 px body the third line (Est / Troops /
-            // Power) was truncated clean off and the second ran under the guide band. It is
-            // now TWO single-line rows. Each row is FitSingleLine (shrinks to the floor, then
-            // ellipsis -- never a silent cut).
-            // WO-1403: the 07:02 capture still read "Est. ~2:30 | Troops 0 | Pow..." - three
-            // stats piped into ONE FontMicro label at x 0.44-0.97 have no shrink room (32 ->
-            // 30 px floor) so the tail was ellipsised. The stats are now ONE PER LINE on the
-            // right half (row 1 "Recon ~2:30", row 2 "Power N"); the header and the copy own
-            // the left half. See the band budget above for why the well stays two rows.
-            // (#29) A dark recessed Well, not a Niche -- with BlinkChrome off the Niche painted
-            // an opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
-            float enemyTop = hasSubHeader ? EnemyBandY1 : 0.845f;
-            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, EnemyBandY0), new Vector2(1.00f, enemyTop));
-            preview.GetComponent<Image>().raycastTarget = false;
+            var bands = BandsFor(hasSubHeader);
+            var enemy  = BandNamed(bands, "enemy");
+            var spoils = BandNamed(bands, "spoils");
+            var scout  = BandNamed(bands, "scout");
 
-            var crest = ElarionUiKit.AddImage(preview.transform, "PreviewCrest",
-                new Vector2(0.03f, 0.54f), new Vector2(0.085f, 0.98f),
-                new Color(1f, 1f, 1f, 0.55f));
-            var crestImg = crest.GetComponent<Image>();
-            var crestSprite = UiStyle.Icon("combat", "crest", "shield", "emblem");
-            if (crestSprite != null)
-            {
-                crestImg.sprite = crestSprite;
-                crestImg.preserveAspect = true;
-            }
-            else
-            {
-                // No icon art in this build: a quiet gilt plate keeps the framed read.
-                crestImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.18f);
-            }
-            crestImg.raycastTarget = false;
+            BuildEnemyHeroCard(body, enemy);
+            BuildSpoilsChips(body, spoils);
 
-            var pvHdr = ElarionUiKit.Label(preview.transform, "ENEMY BASE", 0.50f, 1.00f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.10f, 0.42f, bold: true);
-            ElarionUiKit.FitSingleLine(pvHdr);
-            pvHdr.raycastTarget = false;
-
-            // The WORD carries the meaning (no colour-only rich text any more). One stat per
-            // row; each is FitSingleLine in its own rect, so neither can push the other off.
-            string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
-            int power = _vm != null ? _vm.PowerRating : 0;
-            var pvRecon = ElarionUiKit.Label(preview.transform, "Recon ~" + est, 0.50f, 1.00f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.46f, 0.97f);
-            ElarionUiKit.FitSingleLine(pvRecon);
-            pvRecon.raycastTarget = false;
-            var pvPower = ElarionUiKit.Label(preview.transform, "Power " + power, 0.00f, 0.50f,
-                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Right, 0.46f, 0.97f);
-            ElarionUiKit.FitSingleLine(pvPower);
-            pvPower.raycastTarget = false;
-
-            // WO-1403: "Assault to recon - deploy troops on the field" was jargon (merged review
-            // row 2). Plain words, left half of row 2, beside the Power stat.
-            var pvCopy = ElarionUiKit.Label(preview.transform, "Scout the camp",
-                0.00f, 0.50f, ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Left, 0.03f, 0.44f);
-            ElarionUiKit.FitSingleLine(pvCopy);
-            pvCopy.raycastTarget = false;
-
-            // WO-1380: the ECHO GUIDE band, between the enemy line and the scout report.
-            BuildGuideBand(body);
+            // WO-1519 §2B — THE PROOF OF A REMOVAL, in the capture. A band that is simply
+            // not built leaves no evidence that it was deliberately not built, and the next
+            // seat reading a frame with no Echo Guide on it cannot tell a ruling from a bug.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "deploy composes NO Echo Guide block (owner ruling 2026-09-06 20:24, WO-1519 " +
+                "section 2B). EchoGuideService, its 24 memory lines and EchoWorldPresence are " +
+                "untouched; NoteExpeditionTarget still fires on BEGIN ASSAULT.");
 
             // WO-839 #3: SCOUT REPORT intel band fills the previously bare lower band.
-            // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
-            // facts only (walls / gates / garrison / boss; never the cosmetic reward
-            // fields the loot math ignores).
-            // WO-1385: the well's top moved to ScoutBandY1 so the guide block above gets a
-            // band the CHANGE button actually fits in.
-            // WO-1403: four lines now (spoils is line 4). Header 0.805-1.00 of the 181 px well
-            // = 35 px; the report block 0.00-0.80 = 145 px seats 4 x 36 px at the 30 px floor.
-            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, ScoutBandY0), new Vector2(1.00f, ScoutBandY1));
+            // Strict MVVM: the View renders the VM's lines verbatim — honest config facts
+            // only (walls / gates / garrison / boss; never the cosmetic reward fields the
+            // loot math ignores). (The property it reads is now vm.ScoutIntel, not
+            // vm.ScoutReport; see the note on the read itself for why.)
+            // WO-1519: the well is 157 ref px and paints THREE lines (vm.ScoutIntel) — the
+            // spoils moved out to the chip row above, so the header takes a real 41 px row
+            // (0.740-1.000) and the block below it holds 3 x 38.6 px at the 30 px FontFloor
+            // with no reliance on the runtime relax guard.
+            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, scout.Y0), new Vector2(1.00f, scout.Y1));
             intel.GetComponent<Image>().raycastTarget = false;
-            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.805f, 1.00f,
+            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.740f, 1.00f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             ElarionUiKit.FitSingleLine(intelHdr);
             intelHdr.raycastTarget = false;
-            var report = _vm != null ? _vm.ScoutReport : null;
+            // vm.ScoutIntel, NOT vm.ScoutReport — the same list minus its spoils tail, which
+            // the chips now carry. Saying a number twice on one screen is the duplicated-state
+            // smell, and this file's own WO-1385 banner already rejected a third "Troops N"
+            // for exactly that reason.
+            var report = _vm != null ? _vm.ScoutIntel : null;
             string intelText = report != null && report.Count > 0
                 ? string.Join("\n", report) : "No scout intel available.";
             // 2026-09-05 - THE BLOCK IS 0.05-0.96 OF THE WELL, NOT 0.08-0.92, and the 13% is
@@ -564,163 +750,179 @@ namespace DeNelle.Village.Hero
             // the longest live line, "Spoils: ~4000 wood, ~2400 iron, ~6500 gold". The kit's
             // Well draws an inner rim, so 0.05/0.96 is as wide as the block can sit without
             // touching it.
-            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.00f, 0.80f,
+            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.00f, 0.730f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.05f, 0.96f);
             ElarionUiKit.FitBlock(intelLbl);
             intelLbl.raycastTarget = false;
         }
 
         // =====================================================================
-        //  WO-1380 — ECHO GUIDE. THE ECHO DOES NOT FIGHT. IT REMEMBERS.
+        //  THE ENEMY BASE HERO CARD — WO-1519 §2.2.
         // =====================================================================
-        // Before each expedition the player picks an Echo Guide (creative canon
-        // 2026-09-04 §7). The Heart cannot see clearly beyond its protection; an Echo
-        // can recognise fragments of the world that existed before the Realm fell, so
-        // the band shows WHO is guiding and WHAT they already remember about this
-        // target — the payoff line, right where the player is choosing.
-        //
-        // ⛔ SCOPE FENCE, owner-ruled and pinned by EchoGuideMemoryRegression: a Guide
-        // grants NO stat, NO yield and NO combat effect in V1. Nothing on this band
-        // touches power, readiness, loot or the deploy gate — swapping the Guide
-        // changes the SENTENCE and nothing else. Adding an effect later is a
-        // deliberate design decision, never a quiet one.
-        //
-        // ⛔ NO SECOND SPAWNER. This is a UI band. The Echo's world body still belongs
-        // solely to EchoWorldPresence (WO-1108 Lane B), which escorts the player to the
-        // gate and returns ONCE after the battle — and that return is where the Guide
-        // actually speaks this line aloud (EchoWorldPresence.SpeakGuideMemory).
-        //
-        // WO-1385 layout (fractions OF THE BAND, band = GuideBandY0..GuideBandY1 of the
-        // body; WO-1403 trimmed it 158 -> ~148 px on the phone body to seat the scout
-        // report's 4th line): a TEXT COLUMN on the left (x 0.04-0.63) of three rows --
-        // header 0.755-1.00 (36 px), name 0.51-0.755 (36 px), quote 0.01-0.50 (72 px =
-        // two 30 px lines) -- and the CHANGE button on the RIGHT (x 0.66-0.97,
-        // y 0.06-0.94 = 232 x 130 px), beside the name line and clear of every row. The
-        // button is taller than the name line ON PURPOSE: MinTouchPx is 112 and the band
-        // cannot give a single row that height, so the button owns the column's height
-        // instead of ClampMinTouch growing it over the neighbours (the shipped collision).
-        // (GuideBandY0/Y1 live with the other band constants above BuildCenterColumn.)
-
-        // Live band labels, so cycling the Guide re-renders two strings instead of
-        // rebuilding the screen (a rebuild would drop the player's scroll position).
-        private TMPro.TMP_Text _guideNameLabel;
-        private TMPro.TMP_Text _guideMemoryLabel;
-
-        private const float GuideTextX0 = 0.04f;
-        private const float GuideTextX1 = 0.63f;
-
-        private void BuildGuideBand(Transform body)
+        //  ⚠ THE WO ASKED FOR "the boss portrait from Portraits/". THAT FOLDER HAS NO
+        //  BOSS PORTRAIT — measured, not assumed: Assets/Resources/Portraits/ holds
+        //  buildings, walls and one companion (Sylas.png); a search for necromancer /
+        //  orc / warlord / berserker across it returns nothing. Building the card on
+        //  that path would have shipped an empty plate on every camp.
+        //  WHAT DOES EXIST AND DOES RENDER: the RpgUi EMBLEM pack —
+        //  Assets/Resources/RpgUi/emblem/Necromancer.png, opened and looked at
+        //  2026-09-06 (a full-colour dripping skull, not a blank or a magenta). All four
+        //  authored camps' bosses ("orc-necromancer" x2, "necromancer" x2) resolve to it
+        //  through vm.BossEmblemName. WO-1509's missing-albedo finding is about the
+        //  Necromancer FBX — a 3D model on a different pipeline — and does not touch
+        //  this sprite; that was the open question §3 told this lane to settle, and it
+        //  is settled by opening the file.
+        //  The camp/scene ART the WO also sketches does NOT exist either (no per-camp
+        //  image anywhere under Resources, and RaidSelectionScreen loads only frame
+        //  sprites for its cards), so the card is boss-led rather than scene-led. A
+        //  camp-art pipeline is a separate lane, and this card has a place to hang it.
+        //  Fallback chain, honest at every step: the boss emblem, else the shared combat
+        //  crest, else a quiet gilt plate. Never a blank, never a lie about a boss.
+        // =====================================================================
+        private void BuildEnemyHeroCard(Transform body, DeployBand band)
         {
-            var band = ElarionUiKit.Well(body, new Vector2(RightColX0, GuideBandY0), new Vector2(1.00f, GuideBandY1));
-            var bandImg = band.GetComponent<Image>();
-            if (bandImg != null) bandImg.raycastTarget = false;
+            var card = ElarionUiKit.Well(body, new Vector2(RightColX0, band.Y0), new Vector2(1.00f, band.Y1));
+            card.GetComponent<Image>().raycastTarget = false;
 
-            var hdr = ElarionUiKit.Label(band.transform, "ECHO GUIDE", 0.755f, 1.00f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
-            ElarionUiKit.FitSingleLine(hdr);
-            hdr.raycastTarget = false;
-
-            // "Change" cycles through the OWNED Echoes. A picker with one entry would be a
-            // dead control, so it is only offered when the player actually has a choice —
-            // "don't offer what you can't do" (WO-833), and an early player owning only the
-            // founding Echo simply sees who is guiding them.
-            var guides = DeNelle.Village.World.Camps.EchoGuideService.AvailableGuides();
-            if (guides != null && guides.Count > 1)
+            // The boss's face, at plate size down the card's left. Decorative: raycast off.
+            var emblem = ElarionUiKit.AddImage(card.transform, "BossEmblem",
+                new Vector2(CardEmblemX0, CardCapY0), new Vector2(CardEmblemX1, CardNameY1),
+                new Color(1f, 1f, 1f, 0.95f));
+            var emblemImg = emblem.GetComponent<Image>();
+            string emblemName = _vm != null ? _vm.BossEmblemName : "";
+            Sprite art = !string.IsNullOrEmpty(emblemName)
+                ? RpgUiCatalog.Get(EmblemRole, emblemName) : null;
+            if (art == null) art = UiStyle.Icon("combat", "crest", "shield", "emblem");
+            if (art != null)
             {
-                // ⚠ THE ANCHORS MUST SPAN A REAL BAND (y0 != y1). ElarionUiKit.Button writes
-                // offsetMin = offsetMax = Vector2.zero on BOTH the procedural path
-                // (ElarionUiKit.cs:1599-1600) and the Obsidian sprite path
-                // (ElarionUiKitObsidian.cs:154-155), so identical anchor y = a ZERO-PIXEL rect
-                // and an untappable control. The y0==y1 idiom used by the footer CTAs in this
-                // same file is legal ONLY because SeatFooterCtaAtCanonicalHeight (:654-662)
-                // supplies the height afterwards; this button has no such seat, so it carries
-                // its own band. UiKitMinTouchGuard is a net, not a layout — it does not run in
-                // an edit-mode headless capture (ElarionUiKit.cs:1075-1077).
-                // WO-1385/1403: the band spans y 0.06-0.94 of a ~148 px band = 130 px, above
-                // the 112 px floor by construction, so the clamp never has to grow it.
-                ElarionUiKit.Button(band.transform, "Change", ElarionUiKit.ButtonKind.Quiet,
-                    new Vector2(0.66f, 0.06f), new Vector2(0.97f, 0.94f), OnCycleGuide);
-            }
-
-            _guideNameLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.51f, 0.755f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, GuideTextX0, GuideTextX1, bold: true);
-            _guideNameLabel.raycastTarget = false;
-
-            _guideMemoryLabel = ElarionUiKit.Label(band.transform, string.Empty, 0.01f, 0.50f,
-                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, GuideTextX0, GuideTextX1);
-            _guideMemoryLabel.raycastTarget = false;
-
-            RefreshGuideBand();
-        }
-
-        // Re-renders the two band strings from the service. Never touches any deploy
-        // state — see the scope fence above.
-        private void RefreshGuideBand()
-        {
-            var guide = DeNelle.Village.World.Camps.EchoGuideService.SelectedGuide;
-            string raidId = _vm != null ? _vm.RaidId : null;
-
-            if (_guideNameLabel != null)
-            {
-                _guideNameLabel.text = guide != null && !string.IsNullOrEmpty(guide.DisplayName)
-                    ? guide.DisplayName : "No Echo awakened yet";
-                ElarionUiKit.FitSingleLine(_guideNameLabel);
-            }
-
-            if (_guideMemoryLabel == null) return;
-
-            string line = DeNelle.Village.World.Camps.EchoGuideService.MemoryLineFor(raidId);
-            if (string.IsNullOrEmpty(line))
-            {
-                // Honest empty state, never a blank band: the catalog has already WARNED with
-                // both keys, and the player is told the Guide has nothing to offer here rather
-                // than being shown an empty rectangle.
-                _guideMemoryLabel.text = "This Echo remembers nothing of this place.";
-                DeNelle.Core.Diagnostics.FlowTrace.Warn("EchoGuide",
-                    "deploy band has NO memory line for guide=" + (guide != null ? guide.Id : "(none)") +
-                    " target=" + (raidId ?? "(null)") + ". All 24 lines must ship (WO-1380).");
+                emblemImg.sprite = art;
+                emblemImg.preserveAspect = true;
             }
             else
             {
-                _guideMemoryLabel.text = "\"" + line + "\"";
-                DeNelle.Core.Diagnostics.FlowTrace.Step("EchoGuide",
-                    "deploy band shows " + (guide != null ? guide.Id : "(none)") + " at " +
-                    (raidId ?? "(null)") + ". Narrative only - no stat, no yield, no combat effect.");
+                // No art in this build: a quiet gilt plate keeps the framed read, and the
+                // capture records WHICH key found nothing rather than leaving a mute square.
+                emblemImg.color = new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.18f);
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "deploy hero card: no emblem art for boss '" + (emblemName ?? "(none)") +
+                    "' and no combat crest either - falling back to a gilt plate.");
             }
-            ElarionUiKit.FitBlock(_guideMemoryLabel);
-            // WO-1385 #3: FitBlock's overflow mode is Truncate, which is how the quote shipped
-            // cut mid-word ("...sowed this ground, an") with nothing telling the player the
-            // sentence went on. Wrap stays, auto-size stays (down to the 30 px floor), and a
-            // line that STILL does not fit the two-line rect ends in an ellipsis instead.
-            _guideMemoryLabel.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            emblemImg.raycastTarget = false;
+
+            var hdr = ElarionUiKit.Label(card.transform, "ENEMY BASE", CardHdrY0, CardHdrY1,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left,
+                CardTextX0, CardTextX1, bold: true);
+            ElarionUiKit.FitSingleLine(hdr);
+            hdr.raycastTarget = false;
+
+            // The boss NAME, or the honest camp sentence when a camp authors no boss. The
+            // card never claims a boss it does not have.
+            string boss = _vm != null ? _vm.BossDisplayName : "";
+            var nameLbl = ElarionUiKit.Label(card.transform,
+                !string.IsNullOrEmpty(boss) ? boss : "Scout the camp",
+                CardNameY0, CardNameY1, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.Left, CardTextX0, CardTextX1, bold: true);
+            ElarionUiKit.FitSingleLine(nameLbl);
+            nameLbl.raycastTarget = false;
+
+            // The two BIG numerals. Value on top at FontHead, its caption under it — the
+            // NUMBER is what the eye lands on, and the caption tells it what it read. The
+            // owner is colourblind, so the hierarchy is carried by SIZE and POSITION, which
+            // survive a greyscale copy of the capture intact.
+            int power = _vm != null ? _vm.PowerRating : 0;
+            string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
+            BuildCardStat(card.transform, "Power", power.ToString(), "POWER", CardTextX0, CardStatMidX);
+            BuildCardStat(card.transform, "Recon", "~" + est, "RECON", CardStatMidX, CardTextX1);
         }
 
-        // Advance to the next OWNED Echo and re-render. The choice is a preference, not a
-        // purchase: nothing is spent and nothing is granted.
-        private void OnCycleGuide()
+        // One big numeral + its caption, both fitted, both inside their own band.
+        private static void BuildCardStat(Transform card, string name, string value, string caption,
+                                          float x0, float x1)
         {
-            var guides = DeNelle.Village.World.Camps.EchoGuideService.AvailableGuides();
-            if (guides == null || guides.Count == 0)
-            {
-                ElarionUiKit.ShowToast("No Echo has awakened yet.", ElarionUiKit.ToastTone.Info);
-                return;
-            }
+            var val = ElarionUiKit.Label(card, value, CardStatY0, CardStatY1,
+                ElarionUi.Gilt, ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center,
+                x0, x1, bold: true);
+            val.name = "Stat_" + name;
+            ElarionUiKit.FitSingleLine(val);
+            val.raycastTarget = false;
 
-            string currentId = DeNelle.Village.World.Camps.EchoGuideService.SelectedGuideEchoId;
-            int at = 0;
-            for (int i = 0; i < guides.Count; i++)
-                if (guides[i] != null && guides[i].Id == currentId) { at = i; break; }
-
-            var next = guides[(at + 1) % guides.Count];
-            if (next == null) return;
-            if (!DeNelle.Village.World.Camps.EchoGuideService.SelectGuide(next.Id, "raid deploy band"))
-            {
-                // Refused (unowned / unknown) — the service has already WARNED with the reason.
-                ElarionUiKit.ShowToast("That Echo cannot guide you yet.", ElarionUiKit.ToastTone.Info);
-                return;
-            }
-            RefreshGuideBand();
+            var cap = ElarionUiKit.Label(card, caption, CardCapY0, CardCapY1,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                x0, x1, bold: true);
+            cap.name = "StatCaption_" + name;
+            ElarionUiKit.FitSingleLine(cap);
+            cap.raycastTarget = false;
         }
+
+        // =====================================================================
+        //  THE SPOILS CHIPS — WO-1519 §2.4.
+        // =====================================================================
+        //  Three icon+number chips through ElarionUiKit.CostRow, the kit's EXISTING
+        //  icon+amount row (CostFormat.cs) — this screen adds no chip authority of its
+        //  own, and CostRow already carries the WO-1060 childControlWidth law that keeps
+        //  a three-part row from spilling onto its neighbour.
+        //  The numbers are the VM's SpoilsChips: WO-1402's estimate through WO-1402's
+        //  rounding, the same pair vm.SpoilsLine produces its sentence from. Not parsed
+        //  out of that sentence — a string is an output of the producer, not a source.
+        //  ⚠ NOT CAP-AWARE OR REPEAT-AWARE YET (WO-1461, READY not landed). The chips
+        //  quote what the selection row quotes; the "~" says estimate, and the WO's
+        //  "the number shown is the number that will bank" acceptance is OWED, not met.
+        // =====================================================================
+        private void BuildSpoilsChips(Transform body, DeployBand band)
+        {
+            var plate = ElarionUiKit.Well(body, new Vector2(RightColX0, band.Y0), new Vector2(1.00f, band.Y1));
+            var plateImg = plate.GetComponent<Image>();
+            if (plateImg != null) plateImg.raycastTarget = false;
+
+            var chips = _vm != null ? _vm.SpoilsChips : null;
+            if (chips == null || chips.Count == 0)
+            {
+                // Never an empty plate: a camp whose estimate pays nothing says so in words.
+                var none = ElarionUiKit.Label(plate.transform, "Spoils unknown", 0.00f, 1.00f,
+                    ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
+                ElarionUiKit.FitSingleLine(none);
+                none.raycastTarget = false;
+                return;
+            }
+
+            var parts = new List<(string conceptId, string word, int amount)>(chips.Count);
+            foreach (var c in chips) parts.Add((c.ConceptId, c.Word, c.Amount));
+            ElarionUiKit.CostRow(plate.transform, DeNelle.Core.UI.CostFormat.Parts(parts),
+                new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.90f),
+                ElarionUi.Parchment, prefix: "SPOILS", fontPx: 24f);
+        }
+
+        // =====================================================================
+        //  WO-1519 §2B — THE ECHO GUIDE BAND USED TO LIVE HERE. IT IS GONE.
+        // =====================================================================
+        //  Owner, of the block on her 2026-09-06 20:14 frame:
+        //      "what is the Echo Guide even bringing to the table?"
+        //  Told that by her OWN 2026-09-04 scope fence (WO-1380: no stat, no yield, no
+        //  combat effect — narrative only) it brings one memory line, she ruled at 20:24:
+        //      "Remove it from the deploy screen."
+        //
+        //  DELETED FROM THIS FILE: BuildGuideBand, RefreshGuideBand, OnCycleGuide, the
+        //  _guideNameLabel / _guideMemoryLabel fields, GuideTextX0/X1 and the
+        //  GuideBandY0/Y1 constants. Their ~148 ref px is what the ENEMY BASE hero card
+        //  grew into.
+        //
+        //  ⛔ THIS IS ONE SURFACE REMOVED, NOT A FEATURE CUT — do not "finish the job":
+        //   * EchoGuideService and its 24 authored memory lines STAY, and
+        //     EchoGuideMemoryRegression's scope fence [no-effect] stays UNTOUCHED. It was
+        //     not weakened to make this removal easier, and it must not be.
+        //   * EchoWorldPresence is still the single appearance owner (WO-1108 Lane B) and
+        //     still SPEAKS the memory line aloud when it brings the Echo back after the
+        //     battle — which was always the payoff; the band was a preview of it.
+        //   * OnDeploy still calls EchoGuideService.NoteExpeditionTarget, so the Echo
+        //     still knows where it was taken. Removing THAT would silence the world beat.
+        //
+        //  ⚠ WHAT THIS LEAVES OPEN, stated rather than hidden: guide SELECTION now has no
+        //  UI home. WO-1519 §2B says it "can live on the Echoes screen instead"; that
+        //  screen is not built in this lane, so between this change and that one the
+        //  player keeps whichever Guide the service defaults to (Corvin). WO-1380's
+        //  acceptance "Guide selection EXISTS" is therefore OWED, and
+        //  EchoGuideMemoryRegression's [tappable] case records it as owed rather than
+        //  pretending either that the picker is here or that it never mattered.
 
         // =====================================================================
         //  WO-1403 (owner ruling 2026-09-05, merged UI review section 2 #2 - "Zero-army-
@@ -885,6 +1087,22 @@ namespace DeNelle.Village.Hero
                     "have been drawn.");
                 return;
             }
+            // WO-1542 - THE OUTMATCH CONFIRM (owner ruling 2026-09-06, "add the confirm toast").
+            // It ASKS ONCE and never refuses: the VM latches the acknowledgement, so this branch
+            // cannot fire twice and the next tap marches whatever the numbers say. The VM owns
+            // both the predicate and the words (RaidDeployVM.NeedsOutmatchConfirm / OutmatchToast,
+            // which read RaidSelectionVM's one producer); this View only shows the string.
+            // STOP - this is NOT a readiness gate. CanDeploy, ShowAssault and Deploy() are
+            // untouched, and HeartfireRegression PIN F must stay green (WO-1379 / WO-1403).
+            if (_vm.NeedsOutmatchConfirm)
+            {
+                _vm.AcknowledgeOutmatch();
+                ElarionUiKit.ShowToast(_vm.OutmatchToast, ElarionUiKit.ToastTone.Info);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "BEGIN ASSAULT: outmatched camp - asked once, did NOT refuse. The next tap marches.");
+                return;
+            }
+
             // WO-1380: remember WHERE the Guide is being taken, so the Echo has something to
             // remember when EchoWorldPresence brings it back after the battle. Records an id
             // only — it grants nothing and gates nothing, and a target with no authored lines
@@ -904,16 +1122,13 @@ namespace DeNelle.Village.Hero
         // (Army roster / party / deployable-count / power-rating all moved to RaidDeployVM —
         //  the View no longer reads GameState / TroopCatalog.)
 
-        private static Color DifficultyColor(string difficulty)
-        {
-            switch ((difficulty ?? "Regular").Trim().ToLowerInvariant())
-            {
-                case "extreme": return ElarionUi.Danger;
-                case "hard":    return new Color(0.92f, 0.78f, 0.28f, 1f);
-                default:        return ElarionUi.Affordable;
-            }
-        }
-
+        // ⛔ DifficultyColor IS DELETED (WO-1519 §2.5). It mapped Regular -> green,
+        // Hard -> amber, Extreme -> red, and the owner is red/green colourblind: to her
+        // those were one grey plate behind three different words, so the plate carried
+        // NO information and the word carried all of it. Do not restore a hue-only
+        // difficulty channel; DifficultyLabel below is the whole signal, beside the
+        // diamonds. (Kept as a comment rather than a dead method so a future seat sees
+        // the ruling instead of an unused helper begging to be re-wired.)
         private static string DifficultyLabel(string difficulty)
         {
             if (string.IsNullOrEmpty(difficulty)) return "Regular";

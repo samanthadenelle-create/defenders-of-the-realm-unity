@@ -266,7 +266,7 @@ namespace DeNelle.Village
 
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
                 $"recover: re-homed carried hero '{carried.name}' into active scene '{activeSceneName}' at {carried.transform.position} " +
-                $"(seat={(FindSpawnMarkerPosition().HasValue ? "baked marker" : fallbackSeat.HasValue ? "displaced baked-hero seat" : "carried pose - NO seat found")}).");
+                $"(seat={(FindSpawnMarkerPosition().HasValue ? (GameObject.Find(RaidStagingMarkerName) != null ? "STAGING marker (WO-1520)" : "baked marker") : fallbackSeat.HasValue ? "displaced baked-hero seat" : "carried pose - NO seat found")}).");
             if (!FindSpawnMarkerPosition().HasValue && !fallbackSeat.HasValue)
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
                     $"recover: '{activeSceneName}' offered NO seat (no HeroStartPoint_PlayerSpawn marker and nothing displaced) - " +
@@ -672,9 +672,24 @@ namespace DeNelle.Village
 
         // TKT-8: the scene's hero-start marker (raid/Village2 scenes seat the entry away from the hub
         // spot). Returns the marker position (capsule centre) or null so the caller keeps its hub fallback.
+        // WO-1520: a raid base bakes a STAGING marker ("RaidStagingPoint") whose distance
+        // RaidBaseGenerator COMPUTES to sit outside every turret's reach and every defender's
+        // awareness radius, and it is preferred over HeroStartPoint_PlayerSpawn wherever it
+        // exists. It is a SEPARATE marker rather than a moved one on purpose: the old entry
+        // point stays where it is for anything that reads it (and for non-raid scenes, which
+        // bake no staging marker and are unaffected by this line).
+        //
+        // MEASURED BEFORE: [Flow:Hero] "recover: re-homed carried hero (0.00, 0.08, -39.00)
+        // (seat=baked marker)" - the raider_camp_small entry marker at -39 m, which is 6.4 m
+        // INSIDE the outer turret band's ~45.4 m reach. The hero was under fire on frame one.
+        private const string RaidStagingMarkerName = "RaidStagingPoint";
+
+        // TKT-8: the scene's hero-start marker (raid/Village2 scenes seat the entry away from the hub
+        // spot). Returns the marker position (capsule centre) or null so the caller keeps its hub fallback.
         private static Vector3? FindSpawnMarkerPosition()
         {
-            var marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
+            var marker = GameObject.Find(RaidStagingMarkerName);
+            if (marker == null) marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
             if (marker == null) marker = GameObject.Find("HeroStartPoint_InsidePersonalQuarters");
             if (marker == null) return null;
             return marker.transform.position + Vector3.up * 0.9f;

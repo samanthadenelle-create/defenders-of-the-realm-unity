@@ -183,18 +183,17 @@ namespace DeNelle.Village
         private void ResolveHero()
         {
             var go = GameObject.FindWithTag("Player");
-            // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-            if (go == null) go = SafeFindWithTag("HeroTarget");
+            // WO-1513: the old fallback read the "HeroTarget" tag, which
+            // TagManager.asset has never declared — a permanently dead branch.
+            // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+            if (go == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) go = loco.gameObject;
+            }
             if (go == null) return;
             _hero = go.transform;
             _heroAgent = go.GetComponent<NavMeshAgent>();
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
     }
 }

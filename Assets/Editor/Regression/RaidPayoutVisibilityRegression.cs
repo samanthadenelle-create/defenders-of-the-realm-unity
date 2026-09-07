@@ -101,6 +101,8 @@ namespace DeNelle.Editor.Regression
             CaseD_VictoryCountPersistsAndIsMonotonic(fails, log);
             CaseE_ExactlyOneReportAndOnePublish(victory, fails, log);
             CaseF_SeasonPublishStaysOutcomeTyped(victory, fails, log);
+            CaseG_NonVictoryExitsReportToo(fails, log);            // WO-1561
+            CaseH_RaidEndStatesHoldOnTouch(fails, log);            // WO-1543
 
             if (fails.Count == 0)
             {
@@ -110,12 +112,175 @@ namespace DeNelle.Editor.Regression
                          "the WHOLE credited basket reaches the screen instead of two of its five axes, " +
                          "the monotonic RaidVictories counter round-trips the save wire and defaults " +
                          "clean on an older payload, and the settle seam emits EXACTLY ONE combat.raid " +
-                         "daily report and EXACTLY ONE outcome-typed season publish (no XP amount)";
+                         "daily report and EXACTLY ONE outcome-typed season publish (no XP amount); and the " +
+                         "NON-VICTORY exits report too - a retreat or a clock-expiry composes razed %, stars, the " +
+                         "spoils actually BANKED, the wounded count and the bank-short caveat through the same " +
+                         "EndState template (WO-1561), while both raid end states HOLD on interaction and keep " +
+                         "their anti-softlock guard with no sibling template's timing moved (WO-1543)";
                 return true;
             }
 
             reason = "raid-payout-visibility FAILED (" + fails.Count + "): " + string.Join(" | ", fails);
             return false;
+        }
+
+        // =====================================================================
+        //  CASE G - WO-1561: THE NON-VICTORY EXITS REPORT (BEHAVIOURAL)
+        // ---------------------------------------------------------------------
+        //  THE DEFECT. RaidDeployController.DoRetreat settled the score, paid the
+        //  partial loot, reconciled the army and called SceneRouter.GoCastle() with
+        //  NO SCREEN AT ALL - and the clock-expiry exit funnels into the same
+        //  method. Measured on the pre-change tree: grep -c
+        //  "EndStateVM\.|EndStateView.Show" on that file returned 1, and the single
+        //  hit was a COMMENT. Nothing picked it up in town either (every reader of
+        //  RaidResult is raid-scene-side), so the outcome was computed, BANKED and
+        //  discarded unread. A player who retreated - or simply ran out the clock -
+        //  landed in town having earned real loot and possibly a star and was told
+        //  none of it, while a WIN got the full treatment.
+        //
+        //  BEHAVIOURAL, not a grep: the defect is that the composition did not
+        //  EXIST, so the honest oracle constructs the real view-model and asserts
+        //  what it says. Source-lint that DoRetreat actually shows it lives in
+        //  RaidExitParityRegression, beside the other exit-parity pins.
+        //
+        //  RED-FIRST NOTE: this case CANNOT COMPILE against the pre-change tree -
+        //  EndStateVM.FromRaidRetreat does not exist there. That build failure IS
+        //  the honest red; the contract is exactly what was absent.
+        // =====================================================================
+        private static void CaseG_NonVictoryExitsReportToo(List<string> fails, StringBuilder log)
+        {
+            log.AppendLine("[case G] WO-1561 - retreat and timeout show a result");
+
+            // A half-razed retreat that banked a partial basket and wounded two troops.
+            var banked = new ResourceCost(wood: 420, food: 300, iron: 0, crystals: 0, coins: 180);
+            var vm = EndStateVM.FromRaidRetreat(EndStateVM.RetreatReason, null, 30f,
+                                                stars: 1, destructionPercent: 62, elapsedSeconds: 96f,
+                                                credited: banked, rewardShort: false,
+                                                troopsDeployed: 6, troopsSurvived: 4);
+            if (vm == null) { fails.Add("[G] FromRaidRetreat returned null on a normal retreat"); return; }
+
+            // RAZED %, STARS, TIME - the three facts a losing player earned and was never told.
+            if (vm.Stars != 1)
+                fails.Add("[G] a retreat settling 1 star reported Stars=" + vm.Stars +
+                          ". RaidScoring grants a star at >=50% razed, and the exit that earns it must say so.");
+            if (vm.TimeSeconds <= 0f)
+                fails.Add("[G] the retreat screen carries no clock (TimeSeconds=" + vm.TimeSeconds + ").");
+            if (vm.Subtitle == null || vm.Subtitle.IndexOf("62%", StringComparison.Ordinal) < 0)
+                fails.Add("[G] a retreat that razed 62% does not say so. Subtitle was: " + (vm.Subtitle ?? "<null>"));
+
+            // SPOILS ACTUALLY BANKED - one row per non-zero axis, exactly the victory screen's rule.
+            var labels = new List<string>();
+            foreach (var row in vm.Spoils) labels.Add(row != null ? row.Label : "<null row>");
+            if (vm.Spoils.Count != 3)
+                fails.Add("[G] a retreat banking wood/food/gold drew " + vm.Spoils.Count +
+                          " spoil row(s), expected 3. Rows were: " + string.Join(",", labels.ToArray()));
+            foreach (string expected in new[] { "Wood", "Gold" })
+                if (!labels.Contains(expected))
+                    fails.Add("[G] a retreat crediting " + expected.ToLowerInvariant() + " showed no " + expected +
+                              " row. Rows were: " + string.Join(",", labels.ToArray()));
+
+            // TROOPS LOST / WOUNDED, in words.
+            if (vm.Subtitle == null || vm.Subtitle.IndexOf("2 troops return wounded", StringComparison.Ordinal) < 0)
+                fails.Add("[G] 6 deployed and 4 survivors did not produce '2 troops return wounded'. Subtitle was: " +
+                          (vm.Subtitle ?? "<null>"));
+
+            var clean = EndStateVM.FromRaidRetreat(EndStateVM.RetreatReason, null, 30f, 0, 10, 20f,
+                                                   default(ResourceCost), false, 3, 3);
+            if (clean == null || clean.Subtitle == null ||
+                clean.Subtitle.IndexOf("Every troop came home", StringComparison.Ordinal) < 0)
+                fails.Add("[G] a retreat that lost nobody does not say so - that is the reassurance an early " +
+                          "retreat has earned, and 'wounded: 0' is not a sentence.");
+            if (clean != null && clean.Spoils.Count != 0)
+                fails.Add("[G] a retreat that banked NOTHING drew " + clean.Spoils.Count +
+                          " spoil row(s). A screen must never advertise a payout that did not land.");
+
+            // LOOT LOST TO A FULL BANK IS STATED IN WORDS. WO-1461's live case: the deploy card
+            // quoted ~1,800 wood and 25 arrived. The number here is the BANKED one, and the
+            // shortfall is said out loud rather than silently dropped.
+            var shortPay = EndStateVM.FromRaidRetreat(EndStateVM.RetreatReason, null, 30f, 1, 55, 80f,
+                                                       new ResourceCost(wood: 25), true, 4, 2);
+            if (shortPay == null || shortPay.Subtitle == null ||
+                shortPay.Subtitle.IndexOf(EndStateVM.RewardShortSentence, StringComparison.Ordinal) < 0)
+                fails.Add("[G] a retreat whose loot was clamped by a full bank does not say so. The player earned " +
+                          "it and did not receive it; silence there is the 'I raided and got nothing' " +
+                          "unfalsifiability (WO-978 / WO-1461).");
+
+            // THE TIMEOUT EXIT IS THE SAME SCREEN with its own lead sentence - a player who ran
+            // out of clock did not choose to leave.
+            var timeout = EndStateVM.FromRaidRetreat(EndStateVM.TimeoutReason, null, 30f, 1, 62, 180f,
+                                                      banked, false, 6, 4);
+            if (timeout == null || timeout.Title != EndStateVM.TimeoutTitle)
+                fails.Add("[G] the clock-expiry exit does not title itself '" + EndStateVM.TimeoutTitle +
+                          "' - the two non-victory exits are indistinguishable to the player.");
+            if (vm.Title != EndStateVM.RetreatTitle)
+                fails.Add("[G] the retreat exit does not title itself '" + EndStateVM.RetreatTitle + "'.");
+
+            // IT IS NOT A VICTORY. The emblem and the trace tag must not congratulate a fall-back.
+            if (vm.Kind == EndStateKind.Victory)
+                fails.Add("[G] the retreat screen reports itself as a Victory.");
+
+            // THE GUARD SURVIVES. A player stranded after a retreat is strictly worse than one who
+            // reads a screen too briefly - so this template never opts out with AutoDismissSeconds 0.
+            if (vm.AutoDismissSeconds <= 0f)
+                fails.Add("[G] the retreat screen has NO anti-softlock guard (AutoDismissSeconds=" +
+                          vm.AutoDismissSeconds + "). WO-1561 section 3 forbids that.");
+
+            log.AppendLine("  ok: razed %, stars, banked spoils, wounded count, bank-short caveat, both exit titles");
+        }
+
+        // =====================================================================
+        //  CASE H - WO-1543: THE RAID END STATES HOLD ON TOUCH (BEHAVIOURAL)
+        // ---------------------------------------------------------------------
+        //  Owner ruling 2026-09-06: "Hold on touch, longer guard." The guard STAYS
+        //  (an end state that never dismisses can strand a player); it is opt-in per
+        //  template so no OTHER end state's timing moves silently, which is WO-1543
+        //  acceptance 4 and the half a source-grep cannot answer.
+        // =====================================================================
+        private static void CaseH_RaidEndStatesHoldOnTouch(List<string> fails, StringBuilder log)
+        {
+            log.AppendLine("[case H] WO-1543 - raid end states hold on touch; nothing else moves");
+
+            var win = EndStateVM.FromRaidVictory(null, null, 30f, 3, 100, 42f,
+                                                 new ResourceCost(wood: 500));
+            if (win == null || !win.HoldOnInteraction)
+                fails.Add("[H] the raid VICTORY screen does not hold on interaction. In 12 seconds the player had to " +
+                          "read the star result, up to five spoils rows, a companion line and the bank-overflow " +
+                          "caveat, and no tap stopped it.");
+            if (win != null && win.AutoDismissSeconds <= 0f)
+                fails.Add("[H] the raid victory screen's anti-softlock guard is GONE (AutoDismissSeconds=" +
+                          win.AutoDismissSeconds + "). WO-1543 rule 1: never remove it, never set it to 0 on a " +
+                          "raid end state - a player who walked away must still be returned home.");
+
+            var lose = EndStateVM.FromRaidRetreat(EndStateVM.RetreatReason, null, 30f, 1, 60, 90f);
+            if (lose == null || !lose.HoldOnInteraction)
+                fails.Add("[H] the raid NON-VICTORY screen does not hold on interaction. WO-1543's rule applies to " +
+                          "BOTH raid screens; two raid results on two different rules is the drift the ticket " +
+                          "coordinated WO-1561 to avoid.");
+            if (lose != null && lose.AutoDismissSeconds <= 0f)
+                fails.Add("[H] the raid retreat screen has no anti-softlock guard.");
+
+            // NO OTHER END STATE MOVED. Each of these is a different surface with its own
+            // deliberate dismiss value; the hold is opt-in precisely so none of them changed.
+            var others = new[]
+            {
+                new { Name = "FromBattleDefeat",   Vm = EndStateVM.FromBattleDefeat() },
+                new { Name = "FromHeroDeath",      Vm = EndStateVM.FromHeroDeath(true) },
+                new { Name = "FromGameOver",       Vm = EndStateVM.FromGameOver(true, "t", "b", null) },
+                new { Name = "FromOutpostVictory", Vm = EndStateVM.FromOutpostVictory(null, true) },
+            };
+            foreach (var o in others)
+                if (o.Vm != null && o.Vm.HoldOnInteraction)
+                    fails.Add("[H] " + o.Name + " now holds on interaction. The hold is OPT-IN so no other end " +
+                              "state's timing moves silently (WO-1543 acceptance 4) - EndStateView serves the " +
+                              "arena, the dungeon, hero death, game over and the wave banner too.");
+
+            // FromGameOver's deliberate opt-out is untouched: Retry must be CHOSEN.
+            var over = EndStateVM.FromGameOver(true, "t", "b", null);
+            if (over != null && over.AutoDismissSeconds != 0f)
+                fails.Add("[H] FromGameOver's deliberate AutoDismissSeconds=0 moved to " + over.AutoDismissSeconds +
+                          " - an auto-fired Retry would reload the scene without player intent.");
+
+            log.AppendLine("  ok: both raid templates hold and keep their guard; four sibling templates unchanged");
         }
 
         // =====================================================================

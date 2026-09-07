@@ -9,8 +9,8 @@
 // HARD ISOLATION CONTRACT (mirrors CampVisual / the lane):
 //   * NEW types. Touch NO existing file. The mote is a CODE-BUILT primitive
 //     (GameObject.CreatePrimitive) with NO prefab hard-dep, NO scene edit, NO
-//     .meta authoring. It only READS the hero transform (tag "Player" /
-//     "HeroTarget") and grants via ItemInventory.GrantDrop (lane API).
+//     .meta authoring. It only READS the hero transform (tag "Player", then a
+//     HeroLocomotion lookup) and grants via ItemInventory.GrantDrop (lane API).
 //   * SHIPS DARK. ItemPickupSpawner.Spawn no-ops unless ItemDropSystem.Enabled,
 //     and the marker self-destructs if the flag flips off - so nothing spawns,
 //     bobs, or grants when the lane is off. Zero footprint in the build.
@@ -246,18 +246,13 @@ namespace DeNelle.Village.Items
             var p = GameObject.FindWithTag("Player");
             if (p == null)
             {
-                // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-                var ht = SafeFindWithTag("HeroTarget");
-                if (ht != null) p = ht;
+                // WO-1513: the old fallback read the "HeroTarget" tag, which
+                // TagManager.asset has never declared — a permanently dead branch.
+                // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) p = loco.gameObject;
             }
             _hero = p != null ? p.transform : null;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
     }
 }

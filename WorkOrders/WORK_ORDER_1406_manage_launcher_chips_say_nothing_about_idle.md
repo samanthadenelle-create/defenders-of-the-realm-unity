@@ -1,6 +1,6 @@
 # WO-1406: Manage launcher chips say nothing about IDLE, the Troops header has no army total, and the locked Troops card is a wall, not a door
 
-**Status:** IN PROGRESS - ABSORBED INTO WO-1418 (Codex batch, BATCH_STATE PART 8 / 8.5 ruling 1: all three chips activate their tab); lands and flips with 1418. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
+**Status:** CLOSED 2026-09-06 - landed with WO-1418 (owner PASS) (was: IN PROGRESS - ABSORBED INTO WO-1418 (Codex batch, BATCH_STATE PART 8 / 8.5 ruling 1: all three chips activate their tab); lands and flips with 1418. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*)
 
 ## Evidence
 - `docs/qa/UI_REVIEW_2026-09-05/03-manage-launcher.png` (device, build 355952) - SEEN (`REVIEW_MERGED.md` row 5):

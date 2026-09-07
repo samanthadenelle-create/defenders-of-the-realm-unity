@@ -2,8 +2,12 @@
 // RepairProbeRegression — REP-1 headless probe: "repair spend succeeds but
 // Buildings stay visually damaged."
 // -----------------------------------------------------------------------------
-// STANDALONE oracle (deliberately NOT wired into DataRegression.RunAll) —
-// invoked by the orchestrator via:
+// REGISTERED in DataRegression.RunAll as of WO-1496 (2026-09-06). It had opted out
+// of RULE 2 with the standalone header token since REP-1 (the token is deleted from
+// this file, not reworded); that opt-out is WITHDRAWN — it asserts a shipped-path
+// contract (RepairFull
+// reaches pristine) that belongs in the batch, not in a command somebody remembers.
+// Still invokable standalone via:
 //   run-unity-method.ps1 -Method DeNelle.Editor.RepairProbeRegression.RunStandalone
 //                        -LogName repair-probe.log
 // Contract mirrors the other suites: public static bool Run(out string reason);

@@ -1,6 +1,6 @@
 # WO-1451: TowerPreviewCamera raises 260 [BREAK]s in 144 seconds - RenderPass sample-count mismatch
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** `Assets/_Modules/Village/UI/TowerPreviewCamera.cs`. Disjoint from gameplay and from every api lane.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1451 -> 1452 in the same edit).

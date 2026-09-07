@@ -239,9 +239,19 @@ namespace DeNelle.Editor.Regression
         //  CASE 0 - the boxes this suite measures against are STILL the boxes
         // =====================================================================
         // Without this case the suite would be measuring against numbers it made up.
-        // DeNelle.EditorRegression cannot reference DeNelle.HUD, so the pin is a source
-        // lint: if someone narrows a chip, re-divides the bar, or drops the wave band,
-        // this fails LOUDLY instead of the oracle quietly following the layout down.
+        // The pin is a source lint: if someone narrows a chip, re-divides the bar, or
+        // drops the wave band, this fails LOUDLY instead of the oracle quietly following
+        // the layout down.
+        // ⛔ CORRECTED 2026-09-06 (WO-1465/1466/1468). The sentence that used to justify the
+        // lint — "DeNelle.EditorRegression cannot reference DeNelle.HUD" — IS FALSE:
+        // Assets/Editor/Regression/DeNelle.EditorRegression.asmdef lists "DeNelle.HUD" in its
+        // references array (second row), and HudUiRegression's [gear-drawer-clearance] and
+        // [stack-badge-inside-medallion] cases now instantiate HUD types to prove it. The same
+        // false claim sat in HudUiRegression and is corrected there too. The lint stays — a
+        // source pin is still the right tool for "this literal must not move" — but nothing in
+        // this file is limited to source reading by an assembly boundary that does not exist.
+        // The REAL limit is that batchmode runs no layout pass, so a laid-out measurement must
+        // force one and degrade to a NAMED SKIP when it cannot.
         private static void Case0_BoxesStillAuthored(List<string> failures, List<string> notes)
         {
             string src = ReadSrc(HudSrc);
@@ -1647,20 +1657,33 @@ namespace DeNelle.Editor.Regression
             float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
             string word = Copy(failures, notes, HudStrings.KeyStoreWordmark);
             if (string.IsNullOrEmpty(word)) return;
-            string d;
-            float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word,
-                                                        ElarionUiKit.FontHardFloor, out d);
-            if (ww < 0f) notes.Add("'" + word + "' not measurable headlessly: " + d);
+            // ⛔ WO-1466 (2026-09-06) — MEASURE THE GLYPHS THAT ARE DRAWN, NOT THE ONES AUTHORED.
+            // This block used to measure the MIXED-CASE storeWordmark and report the upper-case
+            // width as a NOTE, on the reasoning quoted above ("no case transform ... the authored
+            // casing is what TMP steps the pen by"). The capture disproves it:
+            // Builds/ui-capture/AdaptiveHudGearOpen_2670x1200.png paints "THE NIGHT MA..." while
+            // canon-strings authors "The Night Market" — and the same frame shows every other
+            // obsidian face upper-cased too (AddDockTab passes "Music"/"Settings"/"Realm"/"Pause";
+            // the HUD paints MUSIC / SETTINGS / REALM / PAUSE). So the oracle was measuring a
+            // narrower string than the player sees, which is exactly how a cut caption survived
+            // two builds, a felt-test and this very case. UPPER CASE IS NOW THE BINDING
+            // MEASUREMENT; the authored casing is kept as the note.
+            string dUpper;
+            string upper = word.ToUpperInvariant();
+            float ww = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, upper,
+                                                        ElarionUiKit.FontHardFloor, out dUpper);
+            if (ww < 0f) notes.Add("'" + upper + "' not measurable headlessly: " + dUpper);
             else if (ww > plateW)
-                failures.Add("[night-market-standout] '" + word + "' (canon storeWordmark) MEASURES " + ww.ToString("0.0") +
+                failures.Add("[night-market-standout] '" + upper + "' (canon storeWordmark, AS DRAWN - the " +
+                             "obsidian faces render upper case) MEASURES " + ww.ToString("0.0") +
                              " ref px at the " + ElarionUiKit.FontHardFloor + "px hard floor but the label plate is " +
-                             plateW.ToString("0.0") + " px wide (" + d + ") - that is the captured 'NIGHT MA...' " +
-                             "shape again. The words get shorter or the plate gets wider; the font does not shrink");
-            else notes.Add("'" + word + "' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
-            string du;
-            float wu = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word.ToUpperInvariant(),
-                                                        ElarionUiKit.FontHardFloor, out du);
-            if (wu >= 0f) notes.Add("upper-case '" + word.ToUpperInvariant() + "' would measure " + wu.ToString("0.0") + " px");
+                             plateW.ToString("0.0") + " px wide (" + dUpper + ") - that is the captured 'THE NIGHT " +
+                             "MA...' shape. The words get shorter or the plate gets wider; the font does not shrink");
+            else notes.Add("'" + upper + "' " + ww.ToString("0.0") + " px in a " + plateW.ToString("0.0") + " px plate");
+            string d;
+            float wa = ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word,
+                                                        ElarionUiKit.FontHardFloor, out d);
+            if (wa >= 0f) notes.Add("as authored, '" + word + "' would measure " + wa.ToString("0.0") + " px");
         }
 
         // =====================================================================
@@ -1767,13 +1790,17 @@ namespace DeNelle.Editor.Regression
             if (TryFloatConst(src, "NightMarketLabelPlateX0", out plateX0))
             {
                 // WO-1398: measure the canon storeWordmark the card renders, not a literal.
+                // WO-1466: and measure it UPPER CASE - the obsidian faces draw upper case (see
+                // the long note in Case 11c). Measuring the authored casing here was the second
+                // copy of the same blind spot.
                 float plateW = (0.97f - plateX0) * HudLayoutBands.NightMarketCardWidthPx * ButtonLabelInset;
                 string word = Copy(failures, notes, HudStrings.KeyStoreWordmark);
+                string upper = string.IsNullOrEmpty(word) ? "" : word.ToUpperInvariant();
                 string d;
-                float ww = string.IsNullOrEmpty(word) ? -1f
-                    : ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, word, ElarionUiKit.FontHardFloor, out d);
+                float ww = string.IsNullOrEmpty(upper) ? -1f
+                    : ElarionUiKit.MeasureLineWidthPx(ElarionUiKit.FontRole.Body, upper, ElarionUiKit.FontHardFloor, out d);
                 if (ww >= 0f && ww > plateW)
-                    failures.Add(Tag + " '" + word + "' (canon storeWordmark) MEASURES " + ww.ToString("0.0") +
+                    failures.Add(Tag + " '" + upper + "' (canon storeWordmark, as drawn) MEASURES " + ww.ToString("0.0") +
                                  " ref px at the hard floor but the plate is " + plateW.ToString("0.0") +
                                  " px - it would truncate again");
             }

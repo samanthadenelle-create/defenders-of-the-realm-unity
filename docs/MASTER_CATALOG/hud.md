@@ -48,7 +48,10 @@ Scope: `Assets/_Modules/HUD/**` (asmdef `DeNelle.HUD`) + its hard seams:
 
 ## 1. Kit/ — the live HUD
 
-### Kit/HudKitController.cs (1,836 lines — THE HUD)
+### Kit/HudKitController.cs (5,298 lines as of 2026-09-06  -  THE HUD)
+
+> The count above is from `wc -l` on 2026-09-06. It read **1,836** until then, understating the file by
+> a factor of nearly three; re-measure it rather than quoting this line.
 `DeNelle.HUD.Kit.HudKitController`, sealed MonoBehaviour. Built once per gameplay scene
 by `VillageHudController.Start` via `HudKitController.Create(owner)` (`:132-148`):
 creates `HudAreasHost`, adds a `PostureEvaluator`, loads `HudAreasConfig`, resolves
@@ -198,6 +201,56 @@ models + `PostureSignals.TalkChanged`; late-binds via `InvokeRepeating` if
 (`:1636-1640`), quest-context face (`:1647-1656`), flee availability (`:1659-1664`),
 collapsed-chips expand window (`:1666-1681`), queue chip Version (`:1686-1701`),
 raids army Version (`:1707-1725`), map Onboarded (`:1731-1741`).
+
+#### DELTA 2026-09-06  -  three geometry/copy fixes, each with the frame that proved it
+
+- **WO-1468  -  `public static void SeatStackBadgeInMedallion(ElarionUiKit.ActionSlotHandle)`** (called
+  for `_itemSlot` and `_adaptiveCombatSlots[5]`). **Evidence:**
+  `Builds/ui-capture/AdaptiveHudCombat_2670x1200.png` shows the ITEM charge `"0"` **outside the bar's
+  frame**, up and to the right of the round ITEM face; the owner's device build 358574 shows the same
+  escape with a `"7"`  -  two aspects, one defect. **PROVEN CAUSE, read from the kit source:**
+  `ElarionUiKit.StyleAsStackBadge` anchors the plate to the **SLOT ROOT** at pivot `(1,1)` with a 3 px
+  inset (the top-right corner of the **CELL**), while `StyleAsRoundMedallion` puts the visible art in a
+  child `MedallionBounds` anchored `(0,0.20)..(1,1)` with an `AspectRatioFitter` **FitInParent at ratio
+  1**  -  a SQUARE inscribed in the top 80% of the cell. The cell is **wider than it is tall**, so the
+  square is narrower than the cell and the cell's corner is well outside it. **The badge was never
+  "mis-offset": it was anchored to the right rect.**
+  - (!) **AND THIS IS WHY THE OBVIOUS TEST WOULD HAVE PASSED.** *"The badge is inside the slot rect"* is
+    TRUE today, and so is *"inside the ActionBarHousing rect"*. A containment case written against
+    either is **green while the player sees the digit outside the frame.** The rect that matches what
+    the eye calls "the frame" is the **MEDALLION**, so that is the rect the badge is seated in and the
+    rect the oracle measures.
+  - The seat: `plate.SetParent(bounds, false)`, anchors at
+    **`StackBadgeMedallionAnchor = 0.85355339f`** = `0.5 + 0.5/sqrt(2)`, the 45-degree point of the
+    inscribed circle  -  **derived, not tuned**  -  and a **FRACTION rather than a pixel offset** because
+    the medallion's side is resolved by the `AspectRatioFitter` at runtime and differs per aspect
+    (WO-1468 S3 forbids a one-resolution offset). The plate keeps its fixed 52x40 px size.
+  - **PUBLIC + STATIC deliberately:** `HudUiRegression [stack-badge-inside-medallion]` builds a real
+    slot and calls **THIS** method, so the oracle measures the shipping seat rather than a re-typed
+    copy. Object names are consts matched here, never re-typed at a call site (`StackBadgeObjectName`,
+    `MedallionBoundsObjectName`). Both miss paths **trace** (a missing `StackBadge` warns that the
+    charge count is not being drawn; a slot with no medallion is a `FlowTrace.Once`, keeping the kit's
+    corner seat)  -  never silent.
+- **WO-1466  -  `NightMarketLabelPlateX0` 0.30 -> 0.20, and the ORACLE WAS BLIND, not just the plate.**
+  `Builds/ui-capture/AdaptiveHudGearOpen_2670x1200.png` renders the caption **`"THE NIGHT MA..."` in
+  CAPITALS** while canon-strings authors `storeWordmark` as the mixed-case *"The Night Market"*. The
+  same frame proves the transform is not this card's: `AddDockTab` passes
+  "Leaderboard"/"Music"/"Settings"/"Realm"/"Pause" and the capture paints MUSIC / SETTINGS / REALM /
+  PAUSE  -  **every obsidian button face in this HUD renders upper-case.** `HudLabelFitRegression`
+  `[night-market-standout]` 11c measured the **MIXED-CASE** string and reported the upper-case width as
+  a **NOTE**, so *the oracle could be green while the player saw a cut word.* 11c and 12e now measure
+  the **upper-case form** (the glyphs actually drawn); the plate widens to `(0.97-0.20)*320*0.92 =
+  226.7` ref px against 197.2 before. STOP: **The CARD is NOT widened and the authored copy is NOT
+  retyped**  -  canon-strings is the owner's call and a second copy of the name is forbidden
+  (`StoreNameSingleSourceRegression`). Only the plate inside the card moves.
+- **WO-1465  -  the open gear drawer seats CLEAR of the movement stick.** `AdaptiveHudGearOpen` shows the
+  PAUSE face landing **on the analog-stick ring**, so "pause" and "move" share a rect. **Not a tuning
+  slip  -  arithmetic:** the panel sat at `x = edge + 112 + 12` ref px centred on the Dock mount, which
+  at the owner's aspect (canvas 2147.9 x 965.4) puts it at screen `x 0.058..0.393, y 0.182..0.648`,
+  while `HudAreasHost` seats `MoveCluster` at `x 0.010..0.270, y 0.030..0.330`  -  so the drawer's
+  bottom-left cell, exactly where `AddDockTab`'s 2x3 grid puts row index 4 (**PAUSE**), lies inside the
+  stick's band. The panel moves **sideways, not upward, and the grid is not reshaped**  -  the reasoning
+  for both is recorded in-line at the anchor assignment.
 
 ### Kit/HudAreasHost.cs (132)
 Enum `HudArea` (**11 areas** — QueueStatus added WO-778, `:49-50`) + the one-canvas

@@ -1,6 +1,6 @@
 # WO-1522: the hero SKILLS / LOADOUT screen is flat, its icons are missing, and a developer note reaches the player
 
-**Status:** READY TO IMPLEMENT - owner ask, 2026-09-06 20:23
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (prior: READY TO IMPLEMENT - owner ask, 2026-09-06 20:23)
 **Silo:** hero skill tree + loadout - the talent tree panel, the learn dialog, the assigned-skills strip.
 WO-1310 / 1342 / 1401 are prior art on this surface.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

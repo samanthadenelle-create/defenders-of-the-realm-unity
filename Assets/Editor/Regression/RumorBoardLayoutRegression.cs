@@ -123,6 +123,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "head-row", () => Case3_HeadRow(failures, notes));
                 Case(failures, "source-laws", () => Case4_SourceLaws(failures, notes));
                 Case(failures, "previous", () => Case5_Previous(failures, notes));
+                Case(failures, "backdrop", () => Case6_Backdrop(failures, notes));
             }
             catch (Exception ex)
             {
@@ -138,7 +139,9 @@ namespace DeNelle.Editor.Regression
                          Aspects.GetLength(0) + " landscape capture aspects, Previous is a real paging " +
                          "control whose MEASURED label fits (>= MinTouchPx, never 'Pr...'), the shared " +
                          "Close keeps its canonical box inside the panel, and the retired surfaces " +
-                         "(tabs / detail pane / In-Progress / Track / selection) stay retired" + noteStr;
+                         "(tabs / detail pane / In-Progress / Track / selection) stay retired, and the " +
+                         "modal BACKDROP is measured on every open and repaired only when it is missing, " +
+                         "undrawn or see-through (WO-1521 sec.4)" + noteStr;
                 return true;
             }
             reason = "rumor-board-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -527,9 +530,26 @@ namespace DeNelle.Editor.Regression
                 if (Regex.IsMatch(vm, "\\b" + kv.Key + "\\b"))
                     failures.Add("[source-laws] RumorBoardVM has re-grown " + kv.Key + " - " + kv.Value);
             }
-            if (Regex.IsMatch(vm, "\\bpublic\\s+void\\s+Track\\s*\\("))
-                failures.Add("[source-laws] RumorBoardVM.Track is back - the rumor board only OFFERS work; " +
-                             "pinning a quest belongs to the HUD tracker (owner ruling 2026-08-26)");
+            // WO-1521 REPOINTS THIS RULE, AND SAYS WHY RATHER THAN DELETING IT.
+            // It used to forbid `public void Track(` anywhere in RumorBoardVM.cs, on the
+            // 2026-08-26 ruling that the board only OFFERS. WO-1521 (newer owner report) puts
+            // ACTIVE work back on the board with a GO TO door, whose honest fallback - when the
+            // quest's stage names no destination panel - is to PIN the quest to the HUD tracker.
+            // That pin lives on the BACKEND SEAM (RumorBoardLiveBackend.Track -> QuestService),
+            // which is still "the HUD tracker's job" done through the right layer. What the old
+            // rule was really protecting is that the BOARD does not grow a tracking SURFACE, so
+            // that is what is pinned now: no Track command on the VM itself, and the GO TO door
+            // must exist rather than the board silently swallowing active work.
+            if (Regex.IsMatch(vm, @"\bpublic\s+void\s+Track\s*\([^)]*\)\s*(=>|\r?\n?\s*\{[^}]*Status)"))
+                failures.Add("[source-laws] RumorBoardVM has re-grown a Track COMMAND - pinning is the backend " +
+                             "seam's job (RumorBoardLiveBackend.Track -> QuestService.SetTracked), not a board verb");
+            if (!Regex.IsMatch(vm, @"public\s+void\s+GoTo\s*\("))
+                failures.Add("[source-laws] RumorBoardVM.GoTo is gone - WO-1521: an ACTIVE quest must carry a " +
+                             "door to the place that finishes it, or the board is back to swallowing the work " +
+                             "the owner could not find ('no idea how or what to do to complete it')");
+            if (!Regex.IsMatch(vm, @"public\s+void\s+ClaimDaily\s*\("))
+                failures.Add("[source-laws] RumorBoardVM.ClaimDaily is gone - WO-1521: the 'N ready to claim' " +
+                             "counter must have exactly one door, and it is this one");
 
             // -- the v3 shape is actually built ----------------------------------
             if (view.IndexOf("PageQuests", StringComparison.Ordinal) < 0)
@@ -551,9 +571,27 @@ namespace DeNelle.Editor.Regression
             if (view.IndexOf("MeasureLineWidthPx", StringComparison.Ordinal) < 0)
                 failures.Add("[source-laws] the View no longer MEASURES the Previous label " +
                              "(MeasureLineWidthPx) - a character-count host is how 'Previous' becomes 'Pr...'");
-            if (!Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*\"Accept\""))
-                failures.Add("[source-laws] a poster no longer carries its OWN Accept - the whole point of v3 " +
-                             "is that there is no selection step between reading a rumor and taking it");
+            // WO-1521: the poster's door is still ITS OWN and there is still no selection step -
+            // but its FACE is now Claim / Go To / Accept, chosen by the row's kind. So the law
+            // moved from "the literal string Accept" to "the door exists and the VM names it".
+            // STOP The literal was a fact written twice the moment a second verb existed; pinning
+            // the VM projection instead is what survives the next verb.
+            if (!Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*ActionLabelFor"))
+                failures.Add("[source-laws] a poster no longer carries its OWN door labelled by " +
+                             "RumorBoardVM.ActionLabelFor - the whole point of v3 is that there is no selection " +
+                             "step between reading a rumor and acting on it, and WO-1521 is that the door's FACE " +
+                             "comes from the row's kind rather than a hardcoded word");
+            if (!Regex.IsMatch(vm, @"public\s+string\s+ActionLabelFor\s*\(") ||
+                !Regex.IsMatch(vm, @"public\s+void\s+Invoke\s*\("))
+                failures.Add("[source-laws] RumorBoardVM.ActionLabelFor / Invoke are gone - WO-1521 puts the " +
+                             "Claim / Go To / Accept branch in the VM precisely so the skin cannot re-decide it");
+            if (Regex.IsMatch(view, @"_vm\s*\.\s*(Accept|ClaimDaily|GoTo)\s*\("))
+                failures.Add("[source-laws] the View calls a specific poster verb instead of RumorBoardVM.Invoke - " +
+                             "a View that picks the verb is how a CLAIM face ends up starting a quest (WO-1521)");
+            if (view.IndexOf("IsQuiet", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the empty-state gate is not RumorBoardVM.IsQuiet - it was `shown == 0` " +
+                             "(this PAGE), which is exactly how 'The board is quiet.' painted while the Journey " +
+                             "card said one quest was ready to claim (WO-1521 owner report 2026-09-06)");
             if (Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*\"Prev\""))
                 failures.Add("[source-laws] the Previous face is labelled 'Prev' - that is the truncated form " +
                              "the owner bounce forbids. The word is Previous");
@@ -737,6 +775,96 @@ namespace DeNelle.Editor.Regression
                 notes.Add(b.W + "x" + b.H + ": Previous " + prevX0.ToString("F0") + "-" +
                           prevX1.ToString("F0") + " in a " + b.PanelW.ToString("F0") + " px panel");
             }
+        }
+
+        // =====================================================================
+        //  CASE 6 - WO-1521 sec.4: the backdrop actually hides the town
+        // =====================================================================
+        /// <summary>
+        /// The ticket says the backdrop is ABSENT and the town bleeds through the board. Read at
+        /// source that is NOT what the code does: RumorBoardPanel calls
+        /// ElarionUiKit.BuildObsidianModal, which calls BuildObsidianPanel with withBackdrop at
+        /// its default true and authors a full-rect 0.94-alpha "Backdrop" image, and
+        /// MedievalUiSkin.ApplyShell never touches chrome.backdrop. Naming a cause from that
+        /// read alone would be the inference-fix CLAUDE.md sec.12 bans - and blindly ADDING a
+        /// second backdrop would have stacked a duplicate on the kit's own.
+        ///
+        /// So the panel now MEASURES its built backdrop on every open (present / drawn / alpha,
+        /// into FlowTrace - that trace line IS the hierarchy dump WO-1521 sec.4 was blocked on)
+        /// and repairs it only when the invariant is genuinely broken. This case FIXTURES that
+        /// decision: RumorBoardPanel.BackdropNeedsRepair is pure, so every branch of it is
+        /// decidable here at gate speed, and the alpha floor the panel repairs against is the
+        /// same constant the oracle asserts - not a second copy of the number.
+        /// </summary>
+        private static void Case6_Backdrop(List<string> failures, List<string> notes)
+        {
+            const string tag = "[backdrop]";
+            Type view = FindType(ViewType);
+            if (view == null) { failures.Add(tag + " RumorBoardPanel type not found"); return; }
+
+            var floorField = view.GetField("BackdropAlphaFloor",
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            var nameField = view.GetField("BackdropObjectName",
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            var predicate = view.GetMethod("BackdropNeedsRepair",
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (floorField == null || nameField == null || predicate == null)
+            {
+                failures.Add(tag + " RumorBoardPanel.BackdropAlphaFloor / BackdropObjectName / " +
+                             "BackdropNeedsRepair is missing - the board has stopped checking whether " +
+                             "its own backdrop is drawn, which is the WO-1521 sec.4 report exactly");
+                return;
+            }
+
+            float floor = floorField.GetValue(null) is float f ? f : -1f;
+            if (floor <= 0.5f || floor > 1f)
+                failures.Add(tag + " BackdropAlphaFloor is " + floor + " - a backdrop below about 0.9 " +
+                             "alpha still shows the town through it, which is the reported defect");
+            if (!(nameField.GetValue(null) is string bdName) || bdName != "Backdrop")
+                failures.Add(tag + " BackdropObjectName no longer matches the kit's own object name " +
+                             "(\"Backdrop\", ElarionUiKit.BuildObsidianPanel) - the panel would look for a " +
+                             "child that does not exist and 'repair' a duplicate beside the real one");
+
+            // The four states, driven as fixtures. Only the last one is healthy.
+            var cases = new[]
+            {
+                new { Present = false, Drawn = false, Alpha = 0f,    Want = true,  Why = "no Backdrop child at all" },
+                new { Present = true,  Drawn = false, Alpha = 0.94f, Want = true,  Why = "built but not drawn" },
+                new { Present = true,  Drawn = true,  Alpha = 0.25f, Want = true,  Why = "drawn but see-through" },
+                new { Present = true,  Drawn = true,  Alpha = 0.94f, Want = false, Why = "the kit's authored backdrop" },
+            };
+            foreach (var c in cases)
+            {
+                object got = predicate.Invoke(null, new object[] { c.Present, c.Drawn, c.Alpha });
+                bool needs = got is bool b && b;
+                if (needs != c.Want)
+                    failures.Add(tag + " BackdropNeedsRepair(present=" + c.Present + ", drawn=" + c.Drawn +
+                                 ", alpha=" + c.Alpha + ") returned " + needs + ", expected " + c.Want +
+                                 " (" + c.Why + ")");
+            }
+
+            // And the panel must actually TAKE the measurement, every open - a predicate nobody
+            // calls proves nothing, and the dump is the evidence the ticket is owed.
+            string raw = ReadSource(ViewSrc, failures, tag);
+            if (raw == null) return;
+            string src = StripComments(raw);
+            if (src.IndexOf("EnsureBackdrop(", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " RumorBoardPanel.Open no longer calls EnsureBackdrop - nothing measures " +
+                             "or repairs the backdrop, so 'the town bleeds through' would again be reportable " +
+                             "only by eye");
+            if (!Regex.IsMatch(src, @"FlowTrace\s*\.\s*Step\s*\(\s*""RumorBoard"""))
+                failures.Add(tag + " the backdrop hierarchy dump (FlowTrace.Step on open) is gone - that trace " +
+                             "line is the runtime evidence WO-1521 sec.4 was blocked on");
+            if (src.IndexOf("BackdropNeedsRepair(", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " EnsureBackdrop no longer gates on BackdropNeedsRepair - an ungated " +
+                             "repair stacks a SECOND backdrop on the kit's own, which is the failure a blind " +
+                             "'add a backdrop' fix would have shipped");
+            if (Regex.IsMatch(src, @"new\s+GameObject\s*\([^;]*typeof\s*\(\s*Image\s*\)"))
+                failures.Add(tag + " the backdrop repair hand-rolls a raw Image - it must go through " +
+                             "ElarionUiKit.AddImage, the same primitive BuildObsidianPanel's own withBackdrop " +
+                             "block uses (and the hand-rolled-uGUI law is armed on this file)");
+
+            notes.Add("backdrop repair predicate fixtured on 4 states; floor " + floor.ToString("0.00"));
         }
 
         // =====================================================================

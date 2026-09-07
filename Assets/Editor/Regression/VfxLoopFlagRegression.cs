@@ -512,6 +512,37 @@ namespace DeNelle.Editor.Regression
         /// from its prefab's emission. Missing prefabs / prefabs with no ParticleSystem
         /// are skipped and counted (gitignored art packs must not turn this red).
         /// </summary>
+        /// <summary>
+        /// The largest UPWARD (+Y) velocity-over-lifetime any ParticleSystem under
+        /// <paramref name="prefab"/> can impart, in units per second; 0 when no system enables the
+        /// module or every authored y is zero or negative. <paramref name="detail"/> names the worst
+        /// sub-emitter and its simulation space, so a red case says WHICH emitter climbs rather than
+        /// only that one does. Measured from the prefab, never from a table (CLAUDE.md s11B).
+        /// </summary>
+        public static float MaxUpwardVelocityOverLifetime(GameObject prefab, out string detail)
+        {
+            detail = "no ParticleSystem enables velocity-over-lifetime";
+            if (prefab == null) return 0f;
+
+            float worst = 0f;
+            var systems = prefab.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < systems.Length; i++)
+            {
+                var ps = systems[i];
+                if (ps == null) continue;
+                var vol = ps.velocityOverLifetime;
+                if (!vol.enabled) continue;
+
+                float y = MaxOf(vol.y);
+                if (y <= worst) continue;
+                worst = y;
+                detail = "sub-emitter '" + ps.name + "' velocity-over-lifetime y peaks at " +
+                         y.ToString("0.###") + " u/s in " + vol.space + " space, over a lifetime of up to " +
+                         MaxOf(ps.main.startLifetime).ToString("0.##") + " s";
+            }
+            return worst;
+        }
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
@@ -709,6 +740,217 @@ namespace DeNelle.Editor.Regression
                                  "committed prefabs -- re-point this case rather than trusting it.");
                 notes.Add("enum-alignment aligned=" + aligned + " unjudged=" + unjudged +
                           " (no same-named committed prefab)");
+            }
+
+            // =================================================================
+            //  WO-1473 — the loop RELEASE POLICY decision table
+            // =================================================================
+            //
+            // WHY IT IS HERE. This suite's subject is "a loop slot that is taken and never given
+            // back": every case above asks whether a row's IsLoop flag is honest, because a
+            // mis-flagged burst holds a slot forever. WO-1473 is the same defect from the other
+            // end - 14 of 24 slots held by correctly-flagged, correctly-behaved ambient tower
+            // auras (device log 2026-09-06, "STUCK LOOP ArcaneTower_Aura owner='Arcane Spire'
+            // ... 14/24", 20 occurrences), after which the raid pinned at 24/24 and dropped
+            // Damage_Ruin 31 times. Same suite, same question, so the policy is pinned here
+            // rather than in a second file nobody runs.
+            //
+            // ⚠ WHAT THIS CASE CANNOT DO, stated plainly rather than implied: the WO's own
+            // acceptance test - spawn N aura owners, destroy them, assert the pool drains to
+            // zero - is a PLAYMODE assertion against a live VFXManager, and this is a static
+            // EditMode suite with no scene. It cannot make that assertion and does not pretend
+            // to. What it CAN pin is the decision itself, which is why VfxLoopReleasePolicy.Decide
+            // was written as pure arithmetic with no Unity object in its signature.
+            //
+            // RED PROOF: with Decide hardwired to return Keep, cases 1, 2, 4 and 6 below fail
+            // (4 failures). With it hardwired to Suspend, cases 3, 5, 7 and 8 fail. Neither
+            // degenerate implementation is green, so this case cannot pass vacuously.
+            {
+                const float Grace = 6f;
+                int policyChecked = 0;
+                void Policy(string what, VfxLoopReleasePolicy.LoopAction expect,
+                            VfxLoopReleasePolicy.LoopAction actual)
+                {
+                    policyChecked++;
+                    if (actual != expect)
+                        failures.Add("WO-1473 release policy: " + what + " -- expected " + expect +
+                                     " but Decide returned " + actual + ". The loop pool's release " +
+                                     "policy is the only thing standing between a town's ambient " +
+                                     "auras and a pool pinned at its cap (14/24 held by one effect, " +
+                                     "device log 2026-09-06).");
+                }
+
+                // 1. Owner destroyed -> release NOW, no grace. The WO's first clause.
+                Policy("owner destroyed, on camera",
+                    VfxLoopReleasePolicy.LoopAction.Suspend,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: false,
+                        ownerDestroyed: true, ownerActive: false, cameraKnown: true,
+                        visible: true, offscreenFor: 0f, grace: Grace, slotAvailable: true));
+
+                // 2. Owner merely disabled -> release NOW as well (it is off screen by definition).
+                Policy("owner disabled, on camera",
+                    VfxLoopReleasePolicy.LoopAction.Suspend,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: false,
+                        ownerDestroyed: false, ownerActive: false, cameraKnown: true,
+                        visible: true, offscreenFor: 0f, grace: Grace, slotAvailable: true));
+
+                // 3. Off camera but INSIDE the grace -> keep. The grace is the anti-flicker
+                //    hysteresis; releasing on the first tick off-frustum would strobe every
+                //    aura at the screen edge.
+                Policy("off camera for less than the grace",
+                    VfxLoopReleasePolicy.LoopAction.Keep,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: true,
+                        visible: false, offscreenFor: Grace - 0.5f, grace: Grace, slotAvailable: true));
+
+                // 4. Off camera PAST the grace -> release. This is the Arcane Spire case: the
+                //    aura is correct, its owner is alive, and the player cannot see it.
+                Policy("off camera past the grace (the ArcaneTower_Aura case)",
+                    VfxLoopReleasePolicy.LoopAction.Suspend,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: true,
+                        visible: false, offscreenFor: Grace + 0.1f, grace: Grace, slotAvailable: true));
+
+                // 5. Already suspended and still off camera -> stay released (no churn).
+                Policy("suspended and still off camera",
+                    VfxLoopReleasePolicy.LoopAction.Keep,
+                    VfxLoopReleasePolicy.Decide(suspended: true, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: true,
+                        visible: false, offscreenFor: Grace * 10f, grace: Grace, slotAvailable: true));
+
+                // 6. Back on camera with headroom -> resume. A release policy with no resume is
+                //    a deletion policy, and the owner would see her tower auras vanish for good.
+                Policy("suspended, back on camera, slot free",
+                    VfxLoopReleasePolicy.LoopAction.Resume,
+                    VfxLoopReleasePolicy.Decide(suspended: true, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: true,
+                        visible: true, offscreenFor: 0f, grace: Grace, slotAvailable: true));
+
+                // 7. Back on camera with the pool FULL -> wait. Resume is budgeted, or a town
+                //    of returning spires re-starves combat feedback the instant the player turns.
+                Policy("suspended, back on camera, pool full",
+                    VfxLoopReleasePolicy.LoopAction.Keep,
+                    VfxLoopReleasePolicy.Decide(suspended: true, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: true,
+                        visible: true, offscreenFor: 0f, grace: Grace, slotAvailable: false));
+
+                // 8. NO CAMERA (headless AutoPilot, boot, a scene between cameras) -> never
+                //    suspend for visibility. An unjudgeable loop is kept, never guessed at;
+                //    otherwise every headless capture would measure a different pool.
+                Policy("no camera to judge by",
+                    VfxLoopReleasePolicy.LoopAction.Keep,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: false,
+                        ownerDestroyed: false, ownerActive: true, cameraKnown: false,
+                        visible: false, offscreenFor: Grace * 10f, grace: Grace, slotAvailable: true));
+
+                // 9. The accessibility allowlist (WO-1229) outranks all of it: the colourblind
+                //    low-HP tell is a LOOP, so a policy that could suspend it would take away the
+                //    hero's only non-colour danger signal.
+                Policy("accessibility loop, off camera past the grace",
+                    VfxLoopReleasePolicy.LoopAction.Keep,
+                    VfxLoopReleasePolicy.Decide(suspended: false, exempt: true,
+                        ownerDestroyed: true, ownerActive: false, cameraKnown: true,
+                        visible: false, offscreenFor: Grace * 10f, grace: Grace, slotAvailable: false));
+
+                notes.Add("wo1473 release-policy cases=" + policyChecked);
+            }
+
+            // =================================================================
+            //  WO-1476 — NO TOWN AMBIENT SEAT MAY DRIVE PARTICLES UP +Y
+            // =================================================================
+            //
+            // Owner, 2026-09-07: "there is a VFX exiting about town along Y and it needs removed
+            // or turned off". The town's ambient seats are permanent loops parented to the Heart
+            // of Elarion world tree, so an upward velocity term does not disperse -- it climbs
+            // until the particle's lifetime runs out, every second the player is in town.
+            //
+            // WHY IT IS PINNED HERE RATHER THAN BY DELETING A PICK: the rows in
+            // VfxManualPicks.json are the OWNER's tags (memory vfx-map-owner-tags-no-creative-pick)
+            // and this very pair is pinned byte-for-byte by NightStoreAuraSelectionRegression. The
+            // ONLY correct lever is whether the seat SPAWNS, which is AmbientAuraPolicy. So this
+            // case reads her row, measures the prefab, and fails only when a RISING prefab is also
+            // ALLOWED to spawn -- a re-point to another riser and a flip of the withhold flag are
+            // both caught, and re-tagging a non-riser stays green with no code change.
+            //
+            // RED PROOF (it can fail): flip AmbientAuraPolicy.WithholdTreeFootAura to false with
+            // the Spells Pack imported and this case names 'atfootprintoftree_Aura' with
+            // maxUpY 0.5. It is measured, never asserted from a table.
+            {
+                int townChecked = 0, townSkipped = 0;
+                string picksJson = null;
+                string picksAbs = System.IO.Path.Combine(Application.dataPath, "Editor/VfxManualPicks.json");
+                try
+                {
+                    if (System.IO.File.Exists(picksAbs)) picksJson = System.IO.File.ReadAllText(picksAbs);
+                    else failures.Add("WO-1476: VfxManualPicks.json is absent at " + picksAbs +
+                                      " -- the owner's VFX tag file is the input this case measures.");
+                }
+                catch (System.Exception e)
+                {
+                    failures.Add("WO-1476: could not read VfxManualPicks.json: " + e.Message);
+                }
+
+                // The town's ambient aura seats, and whether AmbientAuraPolicy lets each SPAWN
+                // today. Both keys come from the constants the game itself plays, never re-typed,
+                // so a rename cannot leave this case quietly measuring nothing.
+                var townSeats = new List<KeyValuePair<string, bool>>
+                {
+                    new KeyValuePair<string, bool>(
+                        AmbientAuraPolicy.WithheldAmbientAuraKey,
+                        !AmbientAuraPolicy.ShouldWithholdAtHeartTree(AmbientAuraPolicy.WithheldAmbientAuraKey)),
+                    new KeyValuePair<string, bool>(
+                        HeldVfxKeys.TreeOfLifeFootAura,
+                        !AmbientAuraPolicy.ShouldWithholdTreeFootAura(HeldVfxKeys.TreeOfLifeFootAura)),
+                };
+
+                for (int i = 0; i < townSeats.Count && picksJson != null; i++)
+                {
+                    string seatKey = townSeats[i].Key;
+                    bool allowed = townSeats[i].Value;
+
+                    var pick = System.Text.RegularExpressions.Regex.Match(
+                        picksJson,
+                        "\"key\"\\s*:\\s*\"" +
+                        System.Text.RegularExpressions.Regex.Escape(seatKey) +
+                        "\"\\s*,\\s*\"prefabPath\"\\s*:\\s*\"([^\"]*)\"");
+                    if (!pick.Success)
+                    {
+                        failures.Add("WO-1476: VfxManualPicks.json has NO row for the town ambient key '" +
+                                     seatKey + "'. The seat is wired in code and the owner's tag is gone, " +
+                                     "so nothing here can judge what it would spawn. Restore her row; do " +
+                                     "not re-type the key at the call site.");
+                        continue;
+                    }
+
+                    string prefabPath = pick.Groups[1].Value.Replace("\\\\", "\\").Replace("\\/", "/");
+                    var seatPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                    if (seatPrefab == null)
+                    {
+                        townSkipped++;
+                        notes.Add("wo1476 " + seatKey + " SKIPPED (prefab '" + prefabPath +
+                                  "' not on disk -- gitignored art pack, not a failure)");
+                        continue;
+                    }
+
+                    townChecked++;
+                    float upY = MaxUpwardVelocityOverLifetime(seatPrefab, out string upDetail);
+                    notes.Add("wo1476 " + seatKey + " allowed=" + allowed + " maxUpY=" +
+                              upY.ToString("0.###") + " u/s (" + upDetail + ")");
+
+                    if (allowed && upY > 0f)
+                        failures.Add("WO-1476: the town ambient seat '" + seatKey + "' is ALLOWED to " +
+                                     "spawn and its prefab '" + prefabPath + "' drives particles UP +Y at " +
+                                     upY.ToString("0.###") + " u/s -- " + upDetail + ". That is the column " +
+                                     "the owner reported rising over the town on 2026-09-07. Withhold the " +
+                                     "seat in AmbientAuraPolicy, or ASK HER for a non-rising tag; do NOT " +
+                                     "re-point VfxManualPicks.json from this seat.");
+                }
+
+                if (townChecked == 0)
+                    notes.Add("wo1476 ⚠ VACUOUS ON THIS MACHINE: " + townSkipped + " town ambient seat(s) " +
+                              "skipped because their owner-tagged prefabs are gitignored art-pack assets " +
+                              "that are absent here. The case is live on a machine with the packs imported, " +
+                              "which is the machine the catalog is generated on");
             }
 
             // Mirror-join summary. Printed on PASS as well as FAIL, and deliberately spelling

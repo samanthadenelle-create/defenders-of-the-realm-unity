@@ -1,8 +1,16 @@
 # WO-1534: the raid loop never closes, and three Manage tickets are DONE against a design that was reversed
 
-**Status:** READY TO IMPLEMENT — minted 2026-09-06 from the owner's ask, *"can you review the manage
+**Status:** READY - PARTIAL: Part B1 (documentation only) landed 2026-09-06, see the RESULT file; Parts A, B2-B5 READY behind the wave-two gate. Minted 2026-09-06 from the owner's ask, *"can you review the manage
 sections and the raid UX screens and make better"* (follow-up: *"read only detailed WO"*, so nothing was
 edited and this file is the deliverable).
+<!-- Status wording note (WO-1534 B1, 2026-09-06): the dispatched wording began "PART B1 DONE". It is
+     deliberately NOT used. `tools/board_build.py:158-160` only honours a CANONICAL FIRST WORD; "PART" is
+     not one, so the row falls to the substring pass at `:183`, where BOTH `has_result` (a RESULT.md now
+     exists) and `"DONE" in s` are true - and the ticket's five OPEN parts would render green Done. That
+     is the "error only ever ran one way: toward finished" failure the file's own comment at `:143-145`
+     describes. A READY lead returns at `:160` before the fallback, and `has_landed_partial` (`:198-206`)
+     picks up PARTIAL for the sub-badge, so the slice still reads as landed. -->
+
 **Silo:** TWO parts, deliberately disjoint.
 - **PART A (code)** — the raid flow's REPORTING and NAVIGATION seams: `RaidSelectionScreen` /
   `RaidSelectionVM`, `RaidDeployController` (exits only), `RaidVictoryController`, `EndStateVM` /
@@ -279,10 +287,30 @@ The RESULT went stale under a legitimate reversal and nothing bannered it** — 
 §B1 and exactly the failure §15 exists to prevent. Treat all three rows this way: not as bad work, as an
 unrecorded reversal.
 
-⚠ **The consequence nobody has ticketed:** with CIVIC gone, **barracks, Store, Echo Hollow and Healing
-Caravan are reachable only under ALL — the one filter that scrolls.** `BuildFilter.cs:59-73` re-homes
-five rows by what each building *does* and names each one, so the mapping was deliberate; whether four
-service structures sharing only the scrolling filter is the intended result is §D4.
+⛔ **A CLAIMED CONSEQUENCE OF THIS — "barracks, Store, Echo Hollow and Healing Caravan are now reachable
+only under ALL" — IS FALSE, AND IT REACHED THE OWNER AS A QUESTION BEFORE IT WAS CHECKED. Recorded here
+because the mistake is the instructive part.** Measured in `structures-catalog.json` on 2026-09-06:
+`healing_caravan -> [DEFENSE]`, `pet-house -> [ECONOMY]`, `market -> [ECONOMY]`, `arcane-tower -> [CRAFT]`,
+`barracks -> [DEFENSE]`. **Zero rows carry a CIVIC token**, and the only rows with no membership at all are
+`deco_torch` and `repair_default` — which `BuildFilter.cs:59-73` explicitly excludes as *"not player
+content"*. **The data already implements the re-homing that file documents; nothing is stranded under ALL
+and no re-home is owed.** The lesson is §11B's: the CLI verified the three table rows above at source and
+then passed this one consequence through from an agent summary unverified. **A claim is hearsay until it is
+re-read at source — including the ones that merely sit next to proven claims.**
+
+> **THE LAST LINK, WALKED AT SOURCE 2026-09-06 (WO-1534 B1).** The data being right only refutes the claim
+> if the chip actually READS it, so the whole chain was opened rather than assumed:
+> `CatalogEntry.manageFilters` (`Assets/_Modules/Core/Catalog/CatalogEntry.cs:87`) ->
+> `BuildInventoryModel.Reconcile`, `Filters = e.manageFilters ?? Array.Empty<string>()`
+> (`Assets/_Modules/Village/BuildMode/BuildInventoryModel.cs:283`) -> `BuildInventoryModel.For(chip)`,
+> which matches a row against the chip on that array (`:200-206`) and rejects a non-chip with
+> `FlowTrace.Fail` rather than a wrong list (`:193-199`) -> `Tiles(chip)`, narrowing to Offered (`:229-234`)
+> -> `ManageScreenVM`: `_inventoryTiles = BuildInventoryModel.Tiles(_activeFilter);` (`ManageScreenVM.cs:3905`),
+> with `_activeFilter` set from the tapped chip at `:3248` and validated against `BuildFilter.Chips` at
+> `:3242`. `BuildFilter.Matches` (`BuildFilter.cs:121-130`) applies the same rule for callers that hold an
+> entry. **So the ruling at section D4 ("re-home the four service structures") is already satisfied end to
+> end by the tree and owes NO code change** - barracks and Healing Caravan under DEFENSE, Store and Echo
+> Hollow under ECONOMY, the Cathedral under CRAFT, none of them on the scrolling filter alone.
 
 **The canon carries the same rot**, and it is what made this review nearly ship two false defects (§C):
 `OWNER_RULINGS_LOCKED.md:7` still says CIVIC; `00_MANAGE_REDESIGN_CANON.md:19,61` still says "at least
@@ -402,6 +430,21 @@ document, and it is the evidence for §B1's cost.**
 
 ⚠ **1 and 2 interact.** If §A2 becomes a real gate, §A1's door matters much more — the player now needs a
 route from "you are locked out" back to the place they fix it.
+
+### D. RULINGS - the owner answered all four, 2026-09-06
+
+Ruled via the question tool on the CLI seat, 2026-09-06. These CLOSE the four calls above; the numbered
+questions stay as written for provenance.
+
+1. **A1 = option (a), the NAMED CAMP plus the door.** The raid authority publishes ONE "next camp" fact;
+   the Journey deck and Manage both READ it, so there is one producer and no second source to drift. The
+   Manage/ARMY line becomes a DOOR to the raid grid.
+2. **A2 = a WARNING, not a lock.** `LOCKED - needs Army N` becomes *"Outmatched - Army 9 advised"*; the
+   card stays TAPPABLE, and a confirm toast fires on BEGIN ASSAULT. **NO SECOND GATE** - this stays
+   inside section E's "must not add one" (WO-1379 / `HeartfireRegression` PIN F).
+3. **A4 = first touch cancels the timer.** The anti-softlock guard STAYS, lengthened to about **30 s**.
+4. **B1 = re-home the four service structures.** **Already satisfied at HEAD - see the section B1
+   refutation above.** No code change is owed for this ruling; the tree already implements it.
 
 ---
 

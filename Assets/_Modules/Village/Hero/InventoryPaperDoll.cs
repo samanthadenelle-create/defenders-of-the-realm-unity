@@ -79,8 +79,7 @@ namespace DeNelle.Village
             // Vitals are a presentation read of the live hero's components (the same resolve
             // family the medallion portrait uses). A missing hero leaves quiet full bars with
             // BLANK labels — never a fake number (ResetLabel), never a blank column.
-            var vitalsHero = GameObject.FindWithTag("Player");
-            if (vitalsHero == null) vitalsHero = SafeFindByTag("HeroTarget");
+            var vitalsHero = ResolveHeroObject();   // WO-1513: tag "Player", then HeroLocomotion
             var hh = vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroHealth>() : null;
             var ha = vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroAbilities>() : null;
             var prog = _loadout != null ? _loadout.GetComponent<HeroProgression>()

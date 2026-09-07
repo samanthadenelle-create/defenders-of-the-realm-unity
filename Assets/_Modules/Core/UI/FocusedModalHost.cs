@@ -18,7 +18,7 @@ namespace DeNelle.Core.UI
         {
             if (_open) return true;
             _open = true; _depth = 1;
-            _hold = WorldHold.Acquire(HoldReason);
+            _hold = AcquireHold();
             _panel ??= PanelManager.Register(panelName, Close, () => _open);
             if (!PanelManager.NotifyOpened(_panel)) { Close(); return false; }
             return true;
@@ -30,8 +30,21 @@ namespace DeNelle.Core.UI
         {
             if (_open) return true;
             _open = true; _depth = 1;
-            _hold = WorldHold.Acquire(HoldReason);
+            _hold = AcquireHold();
             return true;
+        }
+
+        /// <summary>
+        /// WO-1471: PLAYER-OWNED, not the bounded default. A card modal is dismissed by the player,
+        /// so elapsed time is never evidence that this hold leaked - the 180s ceiling would thaw the
+        /// world underneath an open card. Both Open paths funnel here so the two call sites cannot
+        /// drift apart. The probe reuses the SAME expression PanelManager.Register is given
+        /// (<c>() =&gt; _open</c>) plus this component's own existence: it asks "does its owner still
+        /// exist", never "is this old" (WO-1369).
+        /// </summary>
+        private WorldHold.Handle AcquireHold()
+        {
+            return WorldHold.AcquirePlayerOwned(HoldReason, () => this != null && _open);
         }
 
         public void Push() { if (_open) _depth++; }
@@ -46,7 +59,8 @@ namespace DeNelle.Core.UI
             _hold = null;
         }
 
-        private void Update() { if (_open) WorldHold.Renew(_hold); }
+        // WO-1471: the per-frame renew Update is DELETED - it was the workaround for
+        // the bounded ceiling, and a player-owned hold has no ceiling to outrun.
         private void OnDisable() => Close();
         private void OnDestroy() => Close();
     }

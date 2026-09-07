@@ -140,6 +140,9 @@ namespace DeNelle.Editor
         }
 
         // Path literals in code that must NOT be asserted as WebGL load surface.
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - path literals that exist only as negative-path
+        // probe fixtures (CoreCatalogRegression's __does_not_exist__.json) and must never be
+        // asserted as WebGL load surface; re-read then to confirm each fixture still exists.
         private static readonly HashSet<string> LiteralAllowlist =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

@@ -65,12 +65,12 @@ namespace DeNelle.Core.State
 
         private static PersistenceBridge _instance;
 
-        // WaveManager lives in DeNelle.Village, which this (DeNelle.Core) assembly
-        // cannot reference without a circular dependency. Bridge to it via reflection
-        // (the codebase's cross-asmdef pattern): cache the boxed instance, its boxed
-        // OnWaveCleared UnityEvent<int>, and the listener delegate.
-        private object _waveManager;
-        private object _waveClearedEvent;
+        // WaveManager lives in DeNelle.Village, which this (DeNelle.Core) assembly cannot
+        // reference without a circular dependency. WO-1510: the crossing is now the sanctioned
+        // CoreServices.VillageBridge seam (Village implements IVillageBridge and registers it),
+        // NOT Type.GetType("DeNelle.Village.WaveManager, DeNelle.Village") — a rename used to
+        // sever wave-clear -> backend sync with only a warning; now it fails to compile on the
+        // Village side. Only the listener delegate is held here; the bridge owns the manager.
         private UnityAction<int> _waveClearedHandler;
 
         // ── Bootstrap ─────────────────────────────────────────────────────────
@@ -166,66 +166,44 @@ namespace DeNelle.Core.State
 
         private void WireWaveManager()
         {
-            // §12 TGVRU: this reflection lookup is the GAP-1 seam (wave-clear → backend
-            // sync). A null Type or a renamed/removed OnWaveCleared member would SILENTLY
-            // no-op — severing wave-clear persistence with zero trace. A missing TYPE in a
-            // build that should carry DeNelle.Village is a hard Fail; a missing MEMBER on a
-            // present Type means the event was renamed/removed = the seam is severed = Fail.
-            var wmType = Type.GetType("DeNelle.Village.WaveManager, DeNelle.Village");
-            if (wmType == null)
+            // §12 TGVRU: this is the GAP-1 seam (wave-clear → backend sync). Every failure
+            // mode below used to be a SILENT no-op that severed wave persistence with zero
+            // trace; each one now reports, and none is swallowed.
+            var bridge = CoreServices.VillageBridge;
+            if (bridge == null)
             {
-                // Expected in a Core-only / no-Village context, but if DeNelle.Village
-                // SHOULD be loaded this is the renamed-assembly/class signature.
-                FlowTrace.Warn("Save", "WireWaveManager: DeNelle.Village.WaveManager type not found " +
-                    "(expected if Village isn't loaded; a renamed assembly/class severs wave-clear sync).");
-                return;
-            }
-
-            var found = FindObjectsByType(wmType);
-            if (found == null || found.Length == 0)
-            {
-                // Normal — most scenes have no WaveManager. Not a failure.
-                return;
-            }
-            _waveManager = found[0];
-
-            // OnWaveCleared is a public UnityEvent<int> (field, or property fallback).
-            var field = wmType.GetField("OnWaveCleared");
-            _waveClearedEvent = field != null
-                ? field.GetValue(_waveManager)
-                : wmType.GetProperty("OnWaveCleared")?.GetValue(_waveManager);
-            if (_waveClearedEvent == null)
-            {
-                FlowTrace.Fail("Save", "WireWaveManager: WaveManager found but its OnWaveCleared member " +
-                    "resolved NULL (renamed/removed field+property) — wave-clear → backend sync is SEVERED.");
-                _waveManager = null;
+                // Expected in a Core-only / no-Village context. If DeNelle.Village SHOULD be
+                // loaded, this means VillageBridgeService never installed.
+                FlowTrace.Warn("Save", "WireWaveManager: no IVillageBridge registered " +
+                    "(expected if Village isn't loaded; otherwise the bridge never installed and wave-clear sync is severed).");
                 return;
             }
 
             _waveClearedHandler = OnWaveCleared;
-            var addListener = _waveClearedEvent.GetType().GetMethod("AddListener");
-            if (addListener == null)
+            var outcome = bridge.SubscribeWaveCleared(_waveClearedHandler);
+            switch (outcome)
             {
-                FlowTrace.Fail("Save", "WireWaveManager: OnWaveCleared event has no AddListener method " +
-                    "(unexpected UnityEvent shape) — wave-clear → backend sync is SEVERED.");
-                _waveManager = null;
-                _waveClearedEvent = null;
-                _waveClearedHandler = null;
-                return;
+                case DeNelle.Core.Bridging.WaveClearedSubscription.Subscribed:
+                    FlowTrace.Step("Save", "WireWaveManager: subscribed to WaveManager.OnWaveCleared (wave-clear → backend sync live).");
+                    break;
+
+                case DeNelle.Core.Bridging.WaveClearedSubscription.EventNull:
+                    FlowTrace.Fail("Save", "WireWaveManager: WaveManager found but its OnWaveCleared event is NULL " +
+                        "— wave-clear → backend sync is SEVERED.");
+                    _waveClearedHandler = null;
+                    break;
+
+                default:
+                    // NoWaveManager — normal, most scenes have none. Not a failure.
+                    _waveClearedHandler = null;
+                    break;
             }
-            addListener.Invoke(_waveClearedEvent, new object[] { _waveClearedHandler });
-            FlowTrace.Step("Save", "WireWaveManager: subscribed to WaveManager.OnWaveCleared (wave-clear → backend sync live).");
         }
 
         private void UnsubscribeWaveManager()
         {
-            if (_waveClearedEvent != null && _waveClearedHandler != null)
-            {
-                _waveClearedEvent.GetType().GetMethod("RemoveListener")
-                    ?.Invoke(_waveClearedEvent, new object[] { _waveClearedHandler });
-            }
-            _waveManager = null;
-            _waveClearedEvent = null;
+            if (_waveClearedHandler != null)
+                CoreServices.VillageBridge?.UnsubscribeWaveCleared(_waveClearedHandler);
             _waveClearedHandler = null;
         }
     }

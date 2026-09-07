@@ -13,14 +13,22 @@
 //   • The HUD button (HudKitController, DeNelle.HUD) calls
 //     ObsidianQueueGate.RequestToggle() (Core seam — HUD never references Village, §5)
 //     via OpenWorkQueue() (public static for regression reachability).
-//   • This view subscribes to ObsidianQueueGate.ToggleRequested + BuildTimerService.
-//     QueueChanged and repaints (plus a 1s tick for the live countdowns).
+//   • This view subscribes to ObsidianQueueGate.ToggleRequested and to its VM's
+//     Changed, and repaints. (WO-1512: it no longer subscribes to BuildTimerService.
+//     QueueChanged itself — ObsidianQueueVM.Attach owns that subscription.)
 //
 // WO-778: kind labels cover BarracksUpgrade/TroopUpgrade; job lines carry target
 // identity (Footman ×1 / Barracks → L2 / Archer → L3); list parents to layout.body
 // (NOT chrome.content) inside a MakeScrollZone so busy queues scroll instead of
-// clipping; sell-time Instant / Ad-skip / Buy-slot buttons call the existing
-// BuildTimerService APIs (no new economy logic).
+// clipping.
+//
+// WO-1512 — THE "DUMB SKIN" CONTRACT IN THE TITLE IS NOW ENFORCED, NOT JUST CLAIMED.
+// The sell-time Instant / Ad-skip / Buy-slot verbs used to resolve BuildTimerService
+// here, quote the price here and evaluate the ad gate here. They are now COMMANDS on
+// ObsidianQueueVM; this file resolves no service, quotes no price, decides no gate
+// and interprets no outcome. Read ObsidianQueueVM's header for the distinction
+// between "spends currency" (it never did) and "decides when to ask for money"
+// (it did, and that is the breach that was fixed).
 //
 // WO-864 (2026-08-03): the vertical ASCII job rows are GONE. Each channel now renders
 // its own titled CoC-style CARD RAIL via the shared DeNelle.Core.UI.QueueRailView —
@@ -125,21 +133,26 @@ namespace DeNelle.Village
             _instance = this;
         }
 
+        // WO-1512: the VM is the ONLY seam this view has to the queue. It resolves no
+        // BuildTimerService singleton, quotes no price and evaluates no ad gate — see
+        // ObsidianQueueVM's header for what the WO-864 "dumb skin" contract had actually lost.
+        private ObsidianQueueVM _vm;
+
         private void Start()
         {
+            _vm = ObsidianQueueVM.CreateDefault();
+            _vm.Changed += Refresh;
+            _vm.Attach();
             Build();
             Hide();
             ObsidianQueueGate.ToggleRequested += Toggle;
-            var svc = BuildTimerService.Instance;
-            if (svc != null) svc.QueueChanged += Refresh;
             FlowTrace.Step("HUD", "ObsidianQueueHud built (hidden; opens via ObsidianQueueGate)");
         }
 
         private void OnDestroy()
         {
             ObsidianQueueGate.ToggleRequested -= Toggle;
-            var svc = BuildTimerService.Instance;
-            if (svc != null) svc.QueueChanged -= Refresh;
+            if (_vm != null) { _vm.Changed -= Refresh; _vm.Dispose(); _vm = null; }
             if (_instance == this) _instance = null;
         }
 
@@ -224,8 +237,7 @@ namespace DeNelle.Village
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Destroy(_listContent.GetChild(i).gameObject);
 
-            var svc = BuildTimerService.Instance;
-            if (svc == null)
+            if (_vm == null || !_vm.ServiceReady)
             {
                 AddTextRow("Work queue unavailable.", LineHeightPx, new Color(0.88f, 0.88f, 0.92f, 1f), bold: false);
                 return;
@@ -242,9 +254,9 @@ namespace DeNelle.Village
 
             foreach (var (id, label) in Channels)
             {
-                var active = svc.ActiveJobsOf(id);
-                var pending = svc.PendingJobsOf(id);
-                int slots = svc.SlotCount(id);
+                var active = _vm.ActiveJobs(id);
+                var pending = _vm.PendingJobs(id);
+                int slots = _vm.SlotCount(id);
 
                 // Channel header + Buy-slot CTA. NO TIMER here — the card owns the
                 // countdown, and printing it in both places is exactly the double-timer
@@ -261,7 +273,7 @@ namespace DeNelle.Village
                 // raycast-off decoration, so the buttons remain the only tap targets and
                 // nothing on the rail can swallow a tap.
                 for (int i = 0; i < active.Count; i++)
-                    AddJobActionRow(active[i], svc);
+                    AddJobActionRow(active[i]);
             }
         }
 
@@ -274,8 +286,11 @@ namespace DeNelle.Village
                 x0: 0.02f, x1: 0.72f);
             lbl.fontSize = ElarionUi.FontBody;
 
-            // Buy-slot: BuildTimerService.BuySlot does not spend crystals (caller handles
-            // premium). V1 wires the button + warns that economy hook is stub.
+            // Buy-slot. ⚠ THE OLD COMMENT HERE WAS STALE AND SAID THE OPPOSITE OF THE CODE:
+            // "BuildTimerService.BuySlot does not spend crystals (caller handles premium) ...
+            // economy hook is stub". WO-911 Q6/B3 replaced that with TryBuySlot, which DOES apply
+            // the two-step Echo/crystal gate and DOES charge. A View reading the old comment would
+            // have "fixed" the missing charge by adding a second debit here.
             ElarionUiKit.BuildObsidianButton(row.transform, "+queue",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.74f, 0.10f), new Vector2(0.98f, 0.90f),
@@ -292,20 +307,19 @@ namespace DeNelle.Village
         // quotes a training job in GOLD (FinishPaysGold) and this row renders the canon
         // HIRE REINFORCEMENTS face for it; the old flat "500g" literal and its private coins
         // check are gone — the service is the ONE price and the ONE debit.
-        private void AddJobActionRow(BuildJobData job, BuildTimerService svc)
+        private void AddJobActionRow(BuildJobData job)
         {
-            if (job.StartMs <= 0 || svc == null) return;
+            if (_vm == null) return;
 
+            // WO-1512: the price, the currency and the ad gate are ONE decision, made by the VM.
+            // This row draws the offer it is handed. It renders nothing when nothing is on offer.
             ChannelId channel = job.ChannelId;
-            int price = svc.InstantFinishPrice(channel, job.StructureId);
-            bool paysGold = svc.FinishPaysGold(channel, job.StructureId);
-            // RELEASE BLOCKER GATE (2026-08-07): no ad SDK exists, so the "Ad" button is ABSENT
-            // (not greyed, not silently dead) until FeatureFlags.RewardedAdSkip's prerequisites
-            // land — a real SDK plus WO-912 server-side ad-window validation. The row falls back
-            // to Instant-only, or renders nothing at all when there is no Instant either.
-            bool adOk = DeNelle.Core.FeatureFlags.RewardedAdSkip && svc.CanWatchAdToSkip(channel, job.StructureId);
+            var offer = _vm.OfferFor(job);
+            if (offer.IsEmpty) return;
 
-            if (price <= 0 && !adOk) return;
+            int price = offer.Price;
+            bool paysGold = offer.PaysGold;
+            bool adOk = offer.AdAvailable;
 
             var row = MakeRowHost("JobActions", ActionRowHeightPx);
             AddStretchLabel(row.transform, "   " + FormatJobTarget(job),
@@ -319,9 +333,7 @@ namespace DeNelle.Village
                 // ad button would otherwise take when no ad is offered. Offered even when the
                 // player is broke (owner: the button STAYS VISIBLE and the tap explains).
                 float w = paysGold ? (adOk ? 0.24f : 0.44f) : 0.22f;
-                string face = paysGold
-                    ? BuildTimerService.HireReinforcementsVerb + " " + price + "g"
-                    : price + "c";
+                string face = offer.PriceFace;
                 var color = paysGold ? ElarionUiKit.ObsidianButtonColor.Blue
                                      : ElarionUiKit.ObsidianButtonColor.Yellow;
                 ElarionUiKit.BuildObsidianButton(row.transform, face,
@@ -385,65 +397,45 @@ namespace DeNelle.Village
             return tmp;
         }
 
-        // ── sell-time handlers (existing BuildTimerService APIs only) ─────────
+        // ── sell-time handlers: THIN ROUTES to VM commands (WO-1512) ─────────
+        // Each of the three spend verbs is one VM call plus one toast. The service singleton, the
+        // two-step Echo/crystal gate, the currency branch and the ad-outcome interpretation all
+        // live in ObsidianQueueVM. Nothing here decides whether the player may be asked for money.
 
-        private static void OnBuySlot(ChannelId channel)
+        private static ElarionUiKit.ToastTone Toast(QueueTone tone)
         {
-            var svc = BuildTimerService.Instance;
-            if (svc == null) return;
-            // WO-911 (Q6 / B3): the free increment is GONE. TryBuySlot applies the owner's
-            // TWO-STEP gate — the Echo count unlocks the RIGHT to buy, crystals complete it — and
-            // reports a player-readable reason instead of silently granting a free worker.
-            if (svc.TryBuySlot(channel, out string failure))
-                ElarionUiKit.ShowToast("Extra " + channel + " slot unlocked.", ElarionUiKit.ToastTone.Confirm);
-            else
-                ElarionUiKit.ShowToast(failure ?? "Could not buy a slot.", ElarionUiKit.ToastTone.Danger);
-        }
-
-        // ONE handler for the priced finish on every channel. The currency is the SERVICE's
-        // decision (FinishPaysGold inside TryInstantFinish); this view only words the toast.
-        // It never reads a wallet and never debits anything (HireReinforcementsRegression 5a).
-        private static void OnInstantFinish(ChannelId channel, string structureId, bool paysGold)
-        {
-            var svc = BuildTimerService.Instance;
-            if (svc == null || string.IsNullOrEmpty(structureId)) return;
-            bool ok = svc.TryInstantFinish(channel, structureId, out string failure);
-            if (ok)
-                ElarionUiKit.ShowToast(paysGold ? "Reinforcements hired." : "Finished instantly.",
-                    ElarionUiKit.ToastTone.Confirm);
-            else
-                ElarionUiKit.ShowToast(failure ?? "Can't finish now.", ElarionUiKit.ToastTone.Danger);
-            FlowTrace.Step("HUD", "ObsidianQueueHud TryInstantFinish '" + structureId + "' on " + channel +
-                                  " paysGold=" + paysGold + " ok=" + ok);
-        }
-
-        private static void OnAdSkip(ChannelId channel, string structureId)
-        {
-            var svc = BuildTimerService.Instance;
-            if (svc == null || string.IsNullOrEmpty(structureId)) return;
-            // WO-1125: the ASYNC overload. The bool one reports "reward earned", which a real SDK
-            // can never answer synchronously - the callback lands seconds after the return, so the
-            // player would watch a full ad and be toasted "unavailable". The outcome now arrives
-            // when the ad actually finishes.
-            svc.WatchAdToSkip(channel, structureId, result =>
+            switch (tone)
             {
-                if (result.Rewarded)
-                {
-                    ElarionUiKit.ShowToast("Time skipped.", ElarionUiKit.ToastTone.Info);
-                }
-                else if (result.Reason == DeNelle.Core.Ads.AdUnavailableReason.Abandoned)
-                {
-                    // Dismissed early is NOT an error and must not read as one - the player chose
-                    // to stop watching, and telling them something broke is a lie.
-                    ElarionUiKit.ShowToast("Ad closed early - no time skipped.", ElarionUiKit.ToastTone.Info);
-                }
-                else
-                {
-                    ElarionUiKit.ShowToast("Ad skip unavailable right now.", ElarionUiKit.ToastTone.Danger);
-                }
-                FlowTrace.Step("HUD",
-                    "ObsidianQueueHud WatchAdToSkip '" + structureId + "' outcome=" + result);
-            });
+                case QueueTone.Good: return ElarionUiKit.ToastTone.Confirm;
+                case QueueTone.Bad:  return ElarionUiKit.ToastTone.Danger;
+                default:             return ElarionUiKit.ToastTone.Info;
+            }
+        }
+
+        private static void Say(QueueCommandResult result)
+        {
+            if (string.IsNullOrEmpty(result.Message)) return;
+            ElarionUiKit.ShowToast(result.Message, Toast(result.Tone));
+        }
+
+        private void OnBuySlot(ChannelId channel)
+        {
+            if (_vm == null) return;
+            Say(_vm.BuySlot(channel));
+        }
+
+        private void OnInstantFinish(ChannelId channel, string structureId, bool paysGold)
+        {
+            if (_vm == null) return;
+            Say(_vm.InstantFinish(channel, structureId, paysGold));
+        }
+
+        private void OnAdSkip(ChannelId channel, string structureId)
+        {
+            if (_vm == null) return;
+            // ASYNC by construction (WO-1125): a real SDK cannot answer "reward earned" on the
+            // return, so the toast lands when the ad actually finishes.
+            _vm.WatchAdSkip(channel, structureId, Say);
         }
 
         // ── public format helpers (regression + Refresh) ──────────────────────
@@ -485,14 +477,34 @@ namespace DeNelle.Village
                 return name + " x1";
             }
 
-            // Troop upgrade: barracks-troop-upgrade:<troopId> → "Archer → L{targetTier}"
+            // Troop upgrade: <prefix>:<troopId> -> "Archer - Level 2" (WO-1564 scope extension).
+            //
+            // THE DEFECT this arm carried: TroopIdFromUpgrade returned the WHOLE id whenever it did
+            // not start with BarracksService.TroopUpgradePrefix, and TroopDisplayName then fell
+            // through to SpacedName, which rewrites '-' and '_' but NOT ':'. A job id of
+            // "troop-upgrade:militia" therefore reached the player as "Troop Upgrade:militia" -
+            // an internal identifier title-cased into something that reads like a name. Captured
+            // at Builds/cap-manage-wave3.log:3739 by the WO-1564 id-grammar instrument.
+            //
+            // The fix is the WO-1564 wording rule: the TROOP CATALOG names the troop (the same
+            // authority ArmyMusterVM.DisplayNameOf and ManageScreenVM use), the level is spelled
+            // in WORDS, and a catalog MISS is a traced FlowTrace.Fail naming the id - never a
+            // title-cased id quietly presented to the player as a name (CLAUDE.md section 12).
             if (kind == JobKind.TroopUpgrade || id.StartsWith(BarracksService.TroopUpgradePrefix))
             {
                 string troopId = TroopIdFromUpgrade(id);
-                string name = TroopDisplayName(troopId);
+                string name = TroopCatalogDisplayNameOrNull(troopId);
                 int tier = job.TargetTier > 0 ? job.TargetTier : 0;
-                // ASCII "->" only — LiberationSans SDF lacks U+2192 (tofu oracle).
-                return tier > 0 ? (name + " -> L" + tier) : (name + " upgrade");
+                if (string.IsNullOrEmpty(name))
+                {
+                    FlowTrace.Fail("HUD", "queue troop-upgrade row: TroopCatalog has no row for troop id '" +
+                        troopId + "' (job '" + id + "'). Author the troop in troops.json or fix the job id; " +
+                        "the row paints an honest placeholder rather than the raw id");
+                    // Mirrors ManageScreenVM's "Unknown structure - Level N": still paints (a queue
+                    // that hides a running job is worse), carries no ':' or '_' id grammar.
+                    return tier > 0 ? ("Unknown troop - Level " + tier) : "Unknown troop";
+                }
+                return tier > 0 ? (name + " - Level " + tier) : (name + " upgrade");
             }
 
             // Building-perk research: building-research:<buildingId>:<perkId> -> "Arcane Basics"
@@ -567,9 +579,31 @@ namespace DeNelle.Village
 
         private static string TroopIdFromUpgrade(string jobId)
         {
-            if (string.IsNullOrEmpty(jobId) || !jobId.StartsWith(BarracksService.TroopUpgradePrefix))
-                return jobId;
-            return jobId.Substring(BarracksService.TroopUpgradePrefix.Length);
+            if (string.IsNullOrEmpty(jobId)) return jobId;
+            if (jobId.StartsWith(BarracksService.TroopUpgradePrefix))
+                return jobId.Substring(BarracksService.TroopUpgradePrefix.Length);
+            // PREFIX-AGNOSTIC by design: there is a second producer of troop-upgrade job ids
+            // ("troop-upgrade:<troopId>") and returning the WHOLE id for it is what leaked
+            // "Troop Upgrade:militia" to the player. Troop ids carry hyphens, never colons
+            // (same invariant TroopIdFromTrain relies on), so the segment after the last ':'
+            // is the troop id for every prefix shape.
+            int lastColon = jobId.LastIndexOf(':');
+            if (lastColon >= 0 && lastColon < jobId.Length - 1)
+                return jobId.Substring(lastColon + 1);
+            return jobId;
+        }
+
+        /// <summary>
+        /// Troop display name from the CATALOG, or null when the catalog does not know the id.
+        /// Separate from TroopDisplayName on purpose: the TRAIN arm still wants the silent
+        /// spaced-id fallback, while the UPGRADE arm must trace a miss (WO-1564 wording rule).
+        /// </summary>
+        private static string TroopCatalogDisplayNameOrNull(string troopId)
+        {
+            if (string.IsNullOrEmpty(troopId)) return null;
+            var def = TroopCatalog.Find(troopId);
+            if (def == null || string.IsNullOrEmpty(def.DisplayName)) return null;
+            return def.DisplayName;
         }
 
         private static string TroopDisplayName(string troopId)

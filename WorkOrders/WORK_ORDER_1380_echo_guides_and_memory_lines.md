@@ -113,3 +113,20 @@ under **WO-1519** (raid deploy redesign).
 
 The ruling removes one SURFACE, not the feature. Status is deliberately left as it was; this section is the
 record, per CLAUDE.md sec.15 (frozen bodies get a dated banner, not a rewrite).
+
+### FOLLOW-ON, same day: the removal LANDED, and it left one thing OWED
+
+Landed 2026-09-06 in the WO-1519 lane (uncommitted at the time of writing, awaiting the gate).
+`RaidDeployScreen.cs` no longer contains `BuildGuideBand` / `RefreshGuideBand` / `OnCycleGuide`, the two
+band labels, or the `"ECHO GUIDE"` literal. `EchoGuideService`, the 24 lines, `EchoWorldPresence` and the
+`NoteExpeditionTarget` seam in `OnDeploy` are all intact, and the scope fence `[no-effect]` was not touched.
+
+**OWED, and named rather than quietly dropped:** this WO's acceptance line *"Guide selection EXISTS"* now
+has no UI home. Section 2B of WO-1519 says selection "can live on the Echoes screen instead"; that screen
+was NOT built in the WO-1519 lane. Until it is, the player keeps whatever Guide the service defaults to
+(Corvin, still pinned by `EchoGuideMemoryRegression` group 6 `[default]`).
+
+`EchoGuideMemoryRegression`'s `[tappable]` case was RETARGETED, not deleted: with no picker on the deploy
+screen it now asserts that `EchoGuideService.SelectGuide` still exists, so a lane that removed the SERVICE
+while satisfying "no guide band on the deploy screen" still reds. A new WO is needed for the Echoes-screen
+picker; this section is the record that it is missing, not an argument that it does not matter.

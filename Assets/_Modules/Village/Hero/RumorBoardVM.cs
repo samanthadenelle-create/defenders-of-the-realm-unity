@@ -20,6 +20,24 @@
 //   a retired surface quietly grows back (CLAUDE.md sec.15: a state change with no
 //   canon update is an incomplete change; the same is true of a dead API).
 //
+// !! WO-1521 (owner report 2026-09-06) PARTLY REVERSES THE "ONLY OFFERS" RULING ABOVE,
+//   AND THE REVERSAL IS NAMED HERE RATHER THAN SLIPPED IN.
+//   Owner, verbatim: "quests say one quest to claim but no idea how or what to do to
+//   complete it." The Journey card said 1 ready to claim; this board said "The board is
+//   quiet."; and NOTHING in the game named the quest, its objective, or a way to claim it.
+//   That is not a copy bug - it is TWO LISTS. The counter read DailyQuestService; the
+//   board read QuestCatalog; neither could see the other.
+//   So the board now carries THREE ROW KINDS off ONE list (see BoardRowKind):
+//     CLAIMABLE - a daily whose reward was never latched. Objective, reward, CLAIM door.
+//     ACTIVE    - a story quest underway. Its CURRENT objective and a GO TO door.
+//     AVAILABLE - the offer posters the v3 board already had. ACCEPT door, unchanged.
+//   STOP The 08-26 ruling's real point still stands and is NOT reversed: there is still no
+//   second list, no tab band, no detail pane, no separate "In Progress" section. One list,
+//   one poster shape, one verb per poster - the row's KIND picks the verb. A claimable or
+//   active row is the SAME poster geometry as an offer, which is why the fixed-pixel band
+//   law (and RumorBoardLayoutRegression) is untouched by this change.
+//   "The board is quiet." now paints only when that ONE list is empty.
+//
 // WHAT REPLACED THEM:
 //   * PAGING. Available rumors are windowed PageSize (3) at a time. NextPage()
 //     advances and WRAPS at the end; PrevPage() steps back and WRAPS at the
@@ -75,6 +93,35 @@ namespace DeNelle.Village.Hero
         /// <summary>Record that this rumor has been shown. Called by the View once per
         /// page paint, AFTER the page's NEW flags were read.</summary>
         void MarkSeen(string id);
+
+        // -- WO-1521 - the two seams that make the board and the counter ONE list --
+
+        /// <summary>Today's daily quests, in slot order. Never null. The VM filters this to the
+        /// CLAIMABLE ones with <see cref="DailyQuestService.IsClaimable"/> - the SAME predicate
+        /// <see cref="DeNelle.Core.HudModel.JourneyDeckSubtitleVM"/> counts with, which is what
+        /// makes "1 ready to claim" and the board's claimable row the same fact.</summary>
+        IReadOnlyList<DailyQuestInstance> Dailies { get; }
+
+        /// <summary>The authored reward row for a daily slot, or null when unauthored.</summary>
+        DailyQuestSlotReward DailyReward(string slot);
+
+        /// <summary>Press CLAIM on a daily. True only when the reward actually LANDED - the
+        /// live backend judges that by the payer's latch, never by "an event was raised".</summary>
+        bool ClaimDaily(string dailyQuestId);
+
+        /// <summary>The CURRENT objective line of an ACTIVE story quest ("" when unknown). The
+        /// current stage, not stage 0 - a player three beats in is owed the beat she is on.</summary>
+        string ActiveObjective(string questId);
+
+        /// <summary>The GO TO door for an active story quest. True when a real destination panel
+        /// was opened (the stage's `completeOn` names one); false when there is none, in which
+        /// case the VM falls back to PINNING the quest to the HUD tracker. Two honest doors -
+        /// never a button that routes nowhere.</summary>
+        bool GoTo(string questId);
+
+        /// <summary>Pin a quest to the HUD tracker (the fallback half of <see cref="GoTo"/>).</summary>
+        void Track(string questId);
+
         event Action Changed;
     }
 
@@ -86,7 +133,26 @@ namespace DeNelle.Village.Hero
         /// VM-local enum: mapping it to the kit's CurrencyKind (and from there to the ONE
         /// concept-id translator, ElarionUiKit.ConceptIdFor) is the View's job. A second
         /// copy of that translator here would be a second registry.</summary>
-        public enum RewardKind { Xp, Crystals, Wood, Iron, Stone, Magic, Item }
+        public enum RewardKind { Xp, Crystals, Wood, Iron, Stone, Magic, Item, Wisdom }
+
+        /// <summary>WO-1521: what a board row IS, which is the ONLY thing that picks its verb.
+        /// One list, one poster shape, three kinds - never three lists.</summary>
+        public enum BoardRowKind
+        {
+            /// <summary>An offer. ACCEPT starts it. (The whole v3 board, before WO-1521.)</summary>
+            Available,
+            /// <summary>A story quest underway. GO TO opens where it is finished.</summary>
+            Active,
+            /// <summary>A finished daily whose reward was never latched. CLAIM pays it.</summary>
+            Claimable,
+        }
+
+        /// <summary>The face on a CLAIMABLE row's door.</summary>
+        public const string ClaimLabel = "Claim";
+        /// <summary>The face on an ACTIVE row's door.</summary>
+        public const string GoToLabel = "Go To";
+        /// <summary>The face on an AVAILABLE row's door.</summary>
+        public const string AcceptLabel = "Accept";
 
         /// <summary>One READY-TO-DRAW reward chip. <see cref="Text"/> is the full word form
         /// ("Crystals 220", "Relic Drowned Ledger") and is what a no-icon fallback renders;
@@ -118,8 +184,12 @@ namespace DeNelle.Village.Hero
         private readonly Action _changedHandler;
 
         private readonly List<ItemVM> _available = new List<ItemVM>();
+        private readonly List<ItemVM> _rows = new List<ItemVM>();
         private readonly List<ItemVM> _page = new List<ItemVM>();
         private readonly Dictionary<string, QuestDef> _byId = new Dictionary<string, QuestDef>();
+        private readonly Dictionary<string, BoardRowKind> _kindById = new Dictionary<string, BoardRowKind>();
+        private readonly Dictionary<string, DailyQuestInstance> _dailyById = new Dictionary<string, DailyQuestInstance>();
+        private readonly Dictionary<string, string> _objectiveById = new Dictionary<string, string>();
         private int _pageIndex;
         private bool _disposed;
 
@@ -142,21 +212,96 @@ namespace DeNelle.Village.Hero
         // -- Read-only data the View renders -----------------------------------
 
         /// <summary>Every available quest (not active, not completed, prerequisite met).
-        /// Never null. The View renders <see cref="PageQuests"/>, not this.</summary>
+        /// Never null. The View renders <see cref="PageQuests"/>, not this. This is a SUBSET of
+        /// <see cref="Rows"/> - the AVAILABLE kind only - kept because "what can I start" is a
+        /// question worth its own name.</summary>
         public IReadOnlyList<ItemVM> AvailableQuests => _available;
+
+        /// <summary>WO-1521 - THE ONE LIST the board pages over: claimable dailies first, then
+        /// active story quests, then the offers. Never null. Claimable rows lead deliberately, so
+        /// the Journey card's "N ready to claim" tap lands on page 0 with the claim in front of
+        /// the player rather than three pages deep.</summary>
+        public IReadOnlyList<ItemVM> Rows => _rows;
+
+        /// <summary>How many rows are CLAIMABLE. THE number the Journey card also shows - both
+        /// derive from <see cref="DailyQuestService.IsClaimable"/> over the same set, so they
+        /// cannot disagree.</summary>
+        public int ClaimableCount => CountOfKind(BoardRowKind.Claimable);
+
+        /// <summary>How many rows are ACTIVE story work.</summary>
+        public int ActiveCount => CountOfKind(BoardRowKind.Active);
+
+        /// <summary>TRUE only when the ONE list is empty - i.e. exactly when "The board is quiet."
+        /// is an honest sentence. The View asks this instead of testing the PAGE, because a page
+        /// can be empty while rows exist (WO-1521: the quiet copy must never paint over work).</summary>
+        public bool IsQuiet => _rows.Count == 0;
+
+        /// <summary>What KIND of row this id is. Defaults to Available for an unknown id, which
+        /// is the only kind whose verb is safe on a row the board does not own.</summary>
+        public BoardRowKind KindOf(string id) =>
+            id != null && _kindById.TryGetValue(id, out var k) ? k : BoardRowKind.Available;
+
+        /// <summary>The word on this row's door. One map, one place.</summary>
+        public string ActionLabelFor(string id)
+        {
+            switch (KindOf(id))
+            {
+                case BoardRowKind.Claimable: return ClaimLabel;
+                case BoardRowKind.Active: return GoToLabel;
+                default: return AcceptLabel;
+            }
+        }
+
+        /// <summary>
+        /// THE verb. The View routes every poster's door here and never branches on kind itself -
+        /// a second copy of that branch in the skin is how a CLAIM face ends up calling Accept.
+        /// </summary>
+        public void Invoke(string id)
+        {
+            switch (KindOf(id))
+            {
+                case BoardRowKind.Claimable: ClaimDaily(id); return;
+                case BoardRowKind.Active: GoTo(id); return;
+                default: Accept(id); return;
+            }
+        }
+
+        /// <summary>
+        /// WHAT THE PLAYER HAS TO DO, in one line - the half of the owner's report that the
+        /// counter never answered ("no idea how or what to do to complete it"). An ACTIVE row
+        /// gives its CURRENT stage objective; a CLAIMABLE daily gives its label with progress;
+        /// an offer falls back to the letter's hook, which is what the v3 poster always showed.
+        /// </summary>
+        public string ObjectiveFor(string id)
+        {
+            // Cut here, ONCE. The View renders this straight into the one-line hook band; if it
+            // re-cut what came back, an Available row (whose fallback is already a cut hook)
+            // would be hooked twice and a 73-char word-cut could lose another word to nothing.
+            if (id != null && _objectiveById.TryGetValue(id, out var text) && !string.IsNullOrEmpty(text))
+                return OneLineHook(text);
+            return HookFor(id);
+        }
+
+        private int CountOfKind(BoardRowKind kind)
+        {
+            int n = 0;
+            for (int i = 0; i < _rows.Count; i++)
+                if (KindOf(_rows[i].Id) == kind) n++;
+            return n;
+        }
 
         /// <summary>The current window of at most <see cref="PageSize"/> rumors. Never null,
         /// and never longer than PageSize - a page with fewer is a real short page, not an
         /// error, and the View renders only the posters it is given.</summary>
         public IReadOnlyList<ItemVM> PageQuests => _page;
 
-        /// <summary>How many pages of three the available rumors make. 1 when the board is
+        /// <summary>How many pages of three the board's rows make. 1 when the board is
         /// empty, so "page 1 of 1" is always a truthful sentence.</summary>
         public int PageCount
         {
             get
             {
-                int n = _available.Count;
+                int n = _rows.Count;
                 if (n <= 0) return 1;
                 return (n + PageSize - 1) / PageSize;
             }
@@ -176,6 +321,10 @@ namespace DeNelle.Village.Hero
         /// than an empty well.</summary>
         public string LetterFor(string id)
         {
+            // A claimable daily has no letter - it has a finished job and a reward. Say that.
+            if (id != null && _dailyById.TryGetValue(id, out var daily) && daily != null)
+                return "You finished this: " + DailyQuestCatalog.ResolveLabel(daily) +
+                       ". Press Claim to take the reward.";
             var def = FindDef(id);
             if (def != null && def.Stages != null && def.Stages.Count > 0 && def.Stages[0] != null
                 && !string.IsNullOrEmpty(def.Stages[0].ObjectiveText))
@@ -221,6 +370,7 @@ namespace DeNelle.Village.Hero
         /// wording is a display concern; this returns the canonical bucket in title case.</summary>
         public string TypeFor(string id)
         {
+            if (id != null && _dailyById.ContainsKey(id)) return "Daily";
             var def = FindDef(id);
             string ty = NormalizedType(def);
             if (ty == "gear") return "Gear";
@@ -260,6 +410,26 @@ namespace DeNelle.Village.Hero
         public IReadOnlyList<RewardChipVM> RewardChipsFor(string id)
         {
             var chips = new List<RewardChipVM>();
+
+            // A CLAIMABLE daily's reward is authored on its SLOT row, not on quest stages. It is
+            // read through the backend seam (not DailyQuestCatalog directly) so a claim row is
+            // unit-testable without StreamingAssets - the same reason the rest of this VM is pure.
+            if (id != null && _dailyById.TryGetValue(id, out var daily) && daily != null)
+            {
+                var slot = _backend != null ? _backend.DailyReward(daily.Slot) : null;
+                if (slot == null) return chips;
+                if (slot.RewardCrystals > 0)
+                    chips.Add(new RewardChipVM(RewardKind.Crystals, slot.RewardCrystals, "Crystals " + slot.RewardCrystals));
+                // Canon sec.7: the authored `food` slot IS Stone. Never label it Food.
+                if (slot.RewardFood > 0)
+                    chips.Add(new RewardChipVM(RewardKind.Stone, slot.RewardFood, "Stone " + slot.RewardFood));
+                if (slot.RewardWisdom > 0)
+                    chips.Add(new RewardChipVM(RewardKind.Wisdom, slot.RewardWisdom, "Wisdom " + slot.RewardWisdom));
+                if (slot.RewardRandomItem)
+                    chips.Add(new RewardChipVM(RewardKind.Item, 0, "A found item"));
+                return chips;
+            }
+
             var def = FindDef(id);
             if (def == null || def.Stages == null) return chips;
 
@@ -350,8 +520,60 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
+        /// <summary>
+        /// CLAIM a finished daily. Routes to the ONE payer (DailyQuestService.RequestClaim ->
+        /// ClaimRequested -> DailyQuestRewardBridge) and reports what actually happened: a claim
+        /// that credits nothing STAYS on the board and says why, because a row that silently
+        /// disappears having paid nothing is the WO-978 defect wearing a button.
+        /// </summary>
+        public void ClaimDaily(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            if (_backend == null) { Status = "Quests aren't ready yet."; Raise(); return; }
+            _dailyById.TryGetValue(id, out var daily);
+            string name = daily != null ? DailyQuestCatalog.ResolveLabel(daily) : id;
+
+            if (_backend.ClaimDaily(id))
+            {
+                Status = "Claimed: " + name + ".";
+                Rebuild();
+            }
+            else
+            {
+                Status = "Nothing could be credited for " + name + " - your stores may be full. Make room, then claim again.";
+            }
+            Raise();
+        }
+
+        /// <summary>
+        /// GO TO the place an active quest is finished. The backend opens the destination panel
+        /// when the quest's current stage names one; when it does not, the honest fallback is to
+        /// PIN the quest to the HUD tracker and say so - never a door that routes nowhere.
+        /// </summary>
+        public void GoTo(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            if (_backend == null) { Status = "Quests aren't ready yet."; Raise(); return; }
+            var def = FindDef(id);
+            string name = def != null && !string.IsNullOrEmpty(def.Title) ? def.Title : id;
+
+            if (_backend.GoTo(id))
+            {
+                Status = "Opening " + name + ".";
+                Raise();
+                Close();
+                return;
+            }
+
+            _backend.Track(id);
+            Status = "Tracking " + name + " - the objective is pinned to your HUD.";
+            Raise();
+            Close();
+        }
+
         /// <summary>Accept an available quest (StartQuest). It leaves the board - the board
-        /// only OFFERS work, so an accepted rumor is not shown here again.</summary>
+        /// only OFFERS work. WO-1521: the accepted rumor does not VANISH any more - it comes back
+        /// on the next Rebuild as an ACTIVE row carrying its objective and a GO TO door.</summary>
         public void Accept(string id)
         {
             if (string.IsNullOrEmpty(id)) return;
@@ -423,10 +645,38 @@ namespace DeNelle.Village.Hero
             return id;
         }
 
+        /// <summary>
+        /// WO-1521 - THE ONE LIST IS COMPOSED HERE, AND NOWHERE ELSE.
+        /// Order is CLAIMABLE, then ACTIVE, then AVAILABLE: what is owed to the player, then
+        /// what she is in the middle of, then what she could take on. That order is also what
+        /// puts a claim on page 0 for the Journey card's tap.
+        /// </summary>
         private void Rebuild()
         {
             _available.Clear();
+            _rows.Clear();
             _byId.Clear();
+            _kindById.Clear();
+            _dailyById.Clear();
+            _objectiveById.Clear();
+
+            var active = new List<ItemVM>();
+
+            // 1. CLAIMABLE dailies. The predicate is DailyQuestService.IsClaimable - the SAME
+            //    one JourneyDeckSubtitleVM counts with, which is the whole point of this ticket.
+            var dailies = _backend != null ? _backend.Dailies : null;
+            if (dailies != null)
+            {
+                foreach (var q in dailies)
+                {
+                    if (q == null || string.IsNullOrEmpty(q.Id)) continue;
+                    if (!DailyQuestService.IsClaimable(q)) continue;
+                    _dailyById[q.Id] = q;
+                    _kindById[q.Id] = BoardRowKind.Claimable;
+                    _objectiveById[q.Id] = "Done: " + DailyQuestCatalog.ResolveLabel(q) + ". Your reward is waiting.";
+                    _rows.Add(new ItemVM(q.Id, DailyQuestCatalog.ResolveLabel(q), "daily", q.Id, 0, "", true));
+                }
+            }
 
             var catalog = _backend != null ? _backend.Catalog : null;
             if (catalog != null)
@@ -436,17 +686,36 @@ namespace DeNelle.Village.Hero
                     if (def == null || string.IsNullOrEmpty(def.Id)) continue;
                     _byId[def.Id] = def;
 
-                    if (_backend.IsActive(def.Id)) continue;      // underway - the HUD tracker's job
+                    string title = !string.IsNullOrEmpty(def.Title) ? def.Title : def.Id;
+
+                    // 2. ACTIVE story work. This is the half the owner's "no idea how or what to
+                    //    do" was asking for: the quest is named, its CURRENT objective is on the
+                    //    card, and GO TO is the door to the place that finishes it. Before
+                    //    WO-1521 an accepted quest simply vanished from every surface but the
+                    //    small HUD tracker pin.
+                    if (_backend.IsActive(def.Id))
+                    {
+                        _kindById[def.Id] = BoardRowKind.Active;
+                        string objective = _backend.ActiveObjective(def.Id);
+                        if (string.IsNullOrEmpty(objective)) objective = LetterFor(def.Id);
+                        _objectiveById[def.Id] = objective;
+                        active.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true));
+                        continue;
+                    }
+
                     if (_backend.IsCompleted(def.Id)) continue;   // done - off the board
                     // A quest whose requiresQuestId names an unfinished quest stays off the board
                     // entirely (see PrerequisiteMet). Hidden rather than shown locked: a v3 poster
                     // has no lock affordance, so a locked poster would look acceptable.
                     if (!PrerequisiteMet(def)) continue;
 
-                    string title = !string.IsNullOrEmpty(def.Title) ? def.Title : def.Id;
+                    _kindById[def.Id] = BoardRowKind.Available;
                     _available.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true));
                 }
             }
+
+            _rows.AddRange(active);
+            _rows.AddRange(_available);
 
             // A page that no longer exists (the last rumor on it was accepted) walks back to
             // the last real page rather than showing an empty board with rumors still on it.
@@ -460,8 +729,8 @@ namespace DeNelle.Village.Hero
         {
             _page.Clear();
             int start = _pageIndex * PageSize;
-            for (int i = start; i < _available.Count && i < start + PageSize; i++)
-                _page.Add(_available[i]);
+            for (int i = start; i < _rows.Count && i < start + PageSize; i++)
+                _page.Add(_rows[i]);
         }
 
         // Normalize a quest's free-string Type -> a lowercase bucket; empty/null = "story".
@@ -493,6 +762,58 @@ namespace DeNelle.Village.Hero
 
         public void StartQuest(string id) { if (QuestService.Instance != null) QuestService.Instance.StartQuest(id); }
 
+        // -- WO-1521 - the claim / objective / go-to seams -----------------------
+
+        public IReadOnlyList<DailyQuestInstance> Dailies =>
+            DailyQuestService.Instance != null
+                ? DailyQuestService.Instance.TodayQuests
+                : System.Array.Empty<DailyQuestInstance>();
+
+        public DailyQuestSlotReward DailyReward(string slot) => DailyQuestCatalog.RewardFor(slot);
+
+        /// <summary>The ONE payer is re-entered through the service's claim seam; this returns
+        /// its VERDICT (the latch landed), never "the call was made".</summary>
+        public bool ClaimDaily(string dailyQuestId) =>
+            DailyQuestService.Instance != null && DailyQuestService.Instance.RequestClaim(dailyQuestId);
+
+        public string ActiveObjective(string questId)
+        {
+            var stage = QuestService.Instance != null ? QuestService.Instance.GetStage(questId) : null;
+            return stage != null && !string.IsNullOrEmpty(stage.ObjectiveText) ? stage.ObjectiveText : "";
+        }
+
+        /// <summary>
+        /// The GO TO door. A stage whose `completeOn` is kind `panel` names a PanelId VERBATIM
+        /// (quests.json ships BuildingUpgrade / Crafting / Inventory / JewelerCrafting /
+        /// RumorBoard), so the destination is routed through <see cref="PanelRouter"/> - the one
+        /// door registry - and never through a hand-rolled opener. Any other completion kind
+        /// (talk / build / wave / arena / pet ...) happens out in the world, where there is no
+        /// panel to open: those return FALSE and the VM pins the quest to the HUD tracker
+        /// instead. STOP Do not invent a destination for them here; an invented door is worse than
+        /// a tracked objective, because it teaches the player the wrong place.
+        /// </summary>
+        public bool GoTo(string questId)
+        {
+            var stage = QuestService.Instance != null ? QuestService.Instance.GetStage(questId) : null;
+            var completion = stage != null ? stage.CompleteOn : null;
+            if (completion == null) return false;
+            if (completion.NormalizedKind != QuestCompletion.KindPanel) return false;
+            if (string.IsNullOrEmpty(completion.TargetId)) return false;
+            if (!System.Enum.TryParse(completion.TargetId.Trim(), ignoreCase: true, out PanelId panel))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Quest",
+                    "Rumor board GO TO: quest '" + questId + "' names panel target '" + completion.TargetId +
+                    "' which is not a PanelId - falling back to tracking the quest.");
+                return false;
+            }
+            return PanelRouter.Open(panel);
+        }
+
+        public void Track(string questId)
+        {
+            if (QuestService.Instance != null) QuestService.Instance.SetTracked(questId);
+        }
+
         public bool HasSeen(string id) =>
             !string.IsNullOrEmpty(id) && UnityEngine.PlayerPrefs.GetInt(SeenPrefix + id, 0) == 1;
 
@@ -503,10 +824,24 @@ namespace DeNelle.Village.Hero
             UnityEngine.PlayerPrefs.SetInt(SeenPrefix + id, 1);
         }
 
+        /// <summary>
+        /// WO-1521: BOTH quest services, because the board now projects BOTH. Wiring only
+        /// QuestService left a claimed daily sitting on the board until the panel was reopened -
+        /// a row that has been paid must leave the moment it is paid. DailyQuestService.SetChanged
+        /// fires on a fresh roll, a reroll and a claim, all of which change what the board shows.
+        /// </summary>
         public event Action Changed
         {
-            add { if (QuestService.Instance != null) QuestService.Instance.QuestChanged += value; }
-            remove { if (QuestService.Instance != null) QuestService.Instance.QuestChanged -= value; }
+            add
+            {
+                if (QuestService.Instance != null) QuestService.Instance.QuestChanged += value;
+                if (DailyQuestService.Instance != null) DailyQuestService.Instance.SetChanged += value;
+            }
+            remove
+            {
+                if (QuestService.Instance != null) QuestService.Instance.QuestChanged -= value;
+                if (DailyQuestService.Instance != null) DailyQuestService.Instance.SetChanged -= value;
+            }
         }
     }
 }

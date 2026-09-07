@@ -87,21 +87,37 @@ namespace DeNelle.Editor.Regression
                 hud.IndexOf("gameObject.name = \"BuildHudPlaceCancel\"", StringComparison.Ordinal) < 0)
                 failures.Add("a ghost verb seat was renamed -- UICaptureLaunch.AssertConfirmChipInvalid finds 'OkChip' by name and would stop measuring the blocked verdict");
 
-            // ── 3. The confirm modal prices the tap ─────────────────────────────────────
+            // ── 3. The confirm modal prices the tap — AND THE MODEL COMPOSES IT ─────────
+            // RE-POINTED before commit: the first cut composed the line inside the modal, and
+            // UiMvvmConformanceRegression failed BuildPreviewModal for reading GameStateService
+            // (canon 9 — derived text is model work). The terms are pinned in the VM now; the
+            // View is pinned to PAINT and to READ NO STATE, which is the stronger assertion.
             if (modal.IndexOf("BuildCostTimeLine(", StringComparison.Ordinal) < 0 ||
-                modal.IndexOf("CostFormat.Words(", StringComparison.Ordinal) < 0 ||
-                modal.IndexOf("ElarionUi.Duration(", StringComparison.Ordinal) < 0)
-                failures.Add("the confirm modal still shows orientation only -- no cost basket and/or no duration above CONFIRM");
-            if (modal.IndexOf("\"Builder free\"", StringComparison.Ordinal) < 0)
-                failures.Add("the confirm line does not say whether a builder is free");
+                modal.IndexOf("StructureCardVM.PlacementSummaryFor(", StringComparison.Ordinal) < 0)
+                failures.Add("the confirm modal still shows orientation only -- no cost/time line above CONFIRM, or it no longer takes it from the VM");
             if (modal.IndexOf("confirm cost='", StringComparison.Ordinal) < 0)
                 failures.Add("the WO-1411 proving trace (confirm cost='...' time=<s>) is missing from the modal");
+            if (vm.IndexOf("public static PlacementSummary PlacementSummaryFor(", StringComparison.Ordinal) < 0 ||
+                vm.IndexOf("CostFormat.Words(", StringComparison.Ordinal) < 0 ||
+                vm.IndexOf("ElarionUi.Duration(", StringComparison.Ordinal) < 0)
+                failures.Add("the placement summary (basket + duration) is not composed by the VM");
+            if (vm.IndexOf("\"Builder free\"", StringComparison.Ordinal) < 0)
+                failures.Add("the confirm line does not say whether a builder is free");
             // The duration must be the one the placement will ACTUALLY run: same three steps
             // BuildModeController takes at commit. A literal would be a guess with a suffix.
-            if (modal.IndexOf("TierForCost(", StringComparison.Ordinal) < 0 ||
-                modal.IndexOf("GraceAdjustedDurationMs(", StringComparison.Ordinal) < 0 ||
-                modal.IndexOf("GraceReasonFor(", StringComparison.Ordinal) < 0)
+            if (vm.IndexOf("TierForCost(", StringComparison.Ordinal) < 0 ||
+                vm.IndexOf("GraceAdjustedDurationMs(", StringComparison.Ordinal) < 0 ||
+                vm.IndexOf("GraceReasonFor(", StringComparison.Ordinal) < 0)
                 failures.Add("the confirm duration is not derived through TierForCost + the grace rule, so the modal can quote a wait the build does not run");
+            // MVVM: the View may not reach game state. Comment lines are excluded exactly as
+            // UiMvvmConformanceRegression excludes them, so the retired-approach note survives.
+            foreach (string ln in modal.Split('\n'))
+            {
+                string t = ln.TrimStart();
+                if (t.StartsWith("//") || t.StartsWith("*") || t.StartsWith("/*")) continue;
+                if (t.IndexOf("GameStateService", StringComparison.Ordinal) >= 0)
+                { failures.Add("BuildPreviewModal reads GameStateService again -- the View must paint the VM's line, not derive it"); break; }
+            }
 
             // ── 4. No card is titled 'Upgrade Defenses'; the door is a footer link ───────
             if (browser.IndexOf("\"Upgrade Defenses\"", StringComparison.Ordinal) >= 0)

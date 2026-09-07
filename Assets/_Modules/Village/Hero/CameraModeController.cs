@@ -422,14 +422,15 @@ namespace DeNelle.Village
         private static Transform TryFindHero()
         {
             var go = GameObject.FindWithTag("Player");
-            if (go == null) go = SafeFindWithTag("HeroTarget");
+            // WO-1513: the old fallback read the "HeroTarget" tag, which
+            // TagManager.asset has never declared — a permanently dead branch.
+            // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+            if (go == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) go = loco.gameObject;
+            }
             return go != null ? go.transform : null;
-        }
-
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
 
         private static float Smoothstep01(float x)

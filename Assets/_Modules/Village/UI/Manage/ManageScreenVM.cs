@@ -99,7 +99,9 @@ namespace DeNelle.Village.UI
     /// </summary>
     public sealed class QueueRowVM
     {
-        /// <summary>Player-facing ASCII label ("Barracks -&gt; L2", "Footman").</summary>
+        /// <summary>Player-facing ASCII label ("Barracks - Level 2", "Footman x1").
+        /// <para>WO-1564: WORDS, never id grammar and never the developer arrow. A catalog miss is
+        /// a traced failure with an honest placeholder - see <c>MakeJobRow</c>.</para></summary>
         public string Label;
         /// <summary>State as TEXT, never colour ("Building 2m 10s", "Queued - 3rd in line").</summary>
         public string StateText;
@@ -257,6 +259,31 @@ namespace DeNelle.Village.UI
         public bool TrainReady;
         /// <summary>The whole fact sentence: "Train one: 45s . Ready" (WO-1387 shape).</summary>
         public string TrainFactText = "";
+
+        // ── WO-1517 (owner 2026-09-06 20:10) - the two CAPS, as first-class facts ──────
+        // "on train army screens should show if queue is full and army is full". Both were
+        // knowable and neither reached a face; a player at the cap tapped TRAIN and got silence.
+        // Composed in FillTrainFacts from ArmyReadiness.Compute - the SAME formula
+        // BarracksService.EnqueueTraining seeds its own refusal from - so the sentence on the
+        // button and the refusal in the service can never disagree.
+        /// <summary>True when one more of THIS troop would not fit under the army cap (its own
+        /// slot cost included, exactly as EnqueueTraining tests it).</summary>
+        public bool ArmyFull;
+        /// <summary>"Army is full . 20/20 slots used", or "" when it is not. The band the TRAIN
+        /// face wears, replacing the free-floating footnote the owner captured.</summary>
+        public string ArmyFullText = "";
+        /// <summary>"Training line full . 5/5 queued", or "" when the Train line has room.</summary>
+        public string QueueFullText = "";
+        /// <summary>Army slots committed right now (roster + in-flight). 0 when unknown.</summary>
+        public int ArmyUsedSlots;
+        /// <summary>The army's slot ceiling. 0 when unknown (headless, no state).</summary>
+        public int ArmyCapSlots;
+        /// <summary>WO-1517 - the per-troop UPGRADE word, exactly one of
+        /// <c>"UPGRADE AVAILABLE" | "MAX" | "UPGRADING" | "NEEDS &lt;blocker&gt;"</c>. ASCII, and
+        /// the WORD is the carrier (the owner is red/green colourblind). Composed in
+        /// <see cref="ManageScreenVM.FillUpgradeFacts"/> from BarracksService.CanUpgradeTroop's own
+        /// reason, never from a second gate.</summary>
+        public string UpgradeWord = "";
         /// <summary>False at max level - the View then shows a non-interactable MAX LEVEL face.</summary>
         public bool HasNextLevel;
         /// <summary>True while a TroopUpgrade job for this troop is on the Research line.</summary>
@@ -355,7 +382,9 @@ namespace DeNelle.Village.UI
         public string CatalogEntryId;
         /// <summary>Display name only - never "X - grid 3, 7 - L1 -&gt; L2" (the retired browse label).</summary>
         public string Name;
-        /// <summary>ResolveBuildingPortraitKey output, e.g. "Portraits/archer-tower-2".</summary>
+        /// <summary><see cref="ManageArt.BuildingPortraitKey"/> output, e.g.
+        /// "Portraits/Buildings/tower_ground_archer-2". ⛔ ID-keyed, never a display-name slug -
+        /// see the note where the slug composer was deleted.</summary>
         public string PortraitKey;
         /// <summary>The LOWEST placed level of this type - the one the CTA acts on.</summary>
         public int Level;
@@ -479,8 +508,26 @@ namespace DeNelle.Village.UI
         /// states including the two the legacy browse list hid (ruling 3.7).</summary>
         public readonly List<ResearchChoiceVM> ResearchChoices = new List<ResearchChoiceVM>(24);
 
-        /// <summary>WO-1406 Troops header copy, projected here so the View never reads game state.</summary>
+        /// <summary>WO-1406 Troops header copy, projected here so the View never reads game state.
+        /// <para>WO-1541: its camp clause is READ from <c>PostureSignals.RaidNextCampName</c> /
+        /// <c>RaidNextCampGarrison</c>, never re-derived here. See
+        /// <see cref="BuildTroopArmySummary"/> for the one-producer reasoning.</para></summary>
         public string TroopArmySummaryText { get; private set; }
+
+        /// <summary>WO-1541 ruling 2 - the door from the army line to the raid grid. Null when no
+        /// camp is published, so the View can never paint an affordance that goes nowhere.
+        /// <para>⚠ NOT PAINTED YET, and that is a BLOCKED RULING, not an oversight. The Troops
+        /// card has no seat that clears <c>ElarionUiKit.MinTouchPx</c> (112): the army band is
+        /// 26px, the card is at its 256px selection floor, and the CTA band already holds TRAIN +
+        /// UPGRADE at the floor with WO-1422 ruling 3.10 recorded IN THE VIEW
+        /// (<c>ManageScreenPanel</c>, the DoorLabel escape hatch) saying a third face is REPORTED
+        /// rather than squeezed. The model publishes the door so it is one BuildObsidianButton
+        /// away the moment the owner names a seat.</para></summary>
+        public Action TroopArmyDoor { get; private set; }
+
+        /// <summary>ASCII face for <see cref="TroopArmyDoor"/> ("RAID THE FORSAKEN CAMP"). Null
+        /// whenever the door is null - the two are set and cleared together.</summary>
+        public string TroopArmyDoorLabel { get; private set; }
 
         /// <summary>Categories earned by structures standing in the current town. Defense is the
         /// one intentional empty-state exception: it remains visible before the first placement
@@ -589,6 +636,8 @@ namespace DeNelle.Village.UI
                 DefenseChoices.Clear();
                 ResearchChoices.Clear();
                 TroopArmySummaryText = null;
+                TroopArmyDoor = null;             // WO-1541 - cleared with the copy it belongs to
+                TroopArmyDoorLabel = null;
                 _inventoryTiles = null;   // WO-2001 - the per-rebuild BUILD inventory cache
                 _inventoryChip = null;
 
@@ -809,13 +858,87 @@ namespace DeNelle.Village.UI
             int balance = paysGold ? GoldBalance() : crystals;
             string buildingId = channel == ChannelId.Builder ? NormalizeBuildingJobId(job) : "";
             var building = !string.IsNullOrEmpty(buildingId) ? BuildingTierCatalog.Find(buildingId) : null;
+            // ⭐ WO-1564 part 2 - THE QUEUE ROW NAMES THE STRUCTURE AND THE LEVEL IN WORDS.
+            //
+            // ⛔ THE DEFECT. The drawer read "Tower Ground Archer -> L2" and "Barracks -> L4".
+            // The "-> Ln" was composed right here, and on a catalog MISS the row fell through to
+            // BuildTimerService.PrettyJobLabel, which title-cases the id's own tokens
+            // (tower_ground_archer -> "Tower Ground Archer") with its own comment conceding
+            // "no catalog lookup". The player was reading an internal identifier dressed up as a
+            // name, and a developer's arrow notation as a level.
+            //
+            // ⚠ THE RULE-SHAPED PART, and it is why this fix is HERE and not in the View: Manage
+            // canon 9 forbids the UI parsing ids - and the UI was not parsing one. The VM was. The
+            // dumb-View rule was technically honoured while the player still read an identifier.
+            // The rule has to bind wherever the STRING IS MADE.
+            //
+            // ⛔ PrettyJobLabel IS LEFT ALONE - it has other callers (the Core-safe HUD queue chip,
+            // which must never block on data readiness). The honest path is ADDED here rather than
+            // its behaviour repurposed underneath them.
             string label = ObsidianQueueHud.FormatJobTarget(job);
             if (building != null)
             {
                 string name = Ascii(!string.IsNullOrWhiteSpace(building.DisplayName)
                     ? building.DisplayName : buildingId);
-                label = job.TargetTier > 0 ? name + " -> L" + job.TargetTier : name;
+                label = job.TargetTier > 0 ? name + " - Level " + job.TargetTier : name;
             }
+            else if (channel == ChannelId.Builder && !string.IsNullOrEmpty(buildingId))
+            {
+                // ⛔ TWO CATALOGS, AND THE SECOND ONE IS NOT OPTIONAL. BuildingTierCatalog holds the
+                // TIER LADDER buildings only; every TOWER and WALL lives in CatalogRegistry
+                // (structures-catalog), which this VM already reads elsewhere (HasLevelLadder).
+                // Treating a BuildingTierCatalog miss as the failure would rename EVERY tower
+                // upgrade - by far the most common Builder job - to a placeholder and fire a Fail
+                // on healthy data. The order is: tier catalog, then structures catalog, THEN the
+                // honest miss.
+                // ⚠ CatalogRegistry.Get is an EXACT id match, so it is asked with the RAW structure
+                // id minus its placement suffix ("tower_ground_archer@15_7" -> "tower_ground_archer").
+                // buildingId cannot be used: NormalizeBuildingJobId lower-cases it and rewrites
+                // '_' to '-', which no structures-catalog id carries.
+                string catalogId = job.StructureId ?? "";
+                int suffix = catalogId.IndexOfAny(new[] { '@', ':' });
+                if (suffix > 0) catalogId = catalogId.Substring(0, suffix);
+                var structure = !string.IsNullOrEmpty(catalogId) ? CatalogRegistry.Get(catalogId) : null;
+                if (structure != null && !string.IsNullOrEmpty(structure.displayName))
+                {
+                    string structureName = Ascii(structure.displayName);
+                    label = job.TargetTier > 0
+                        ? structureName + " - Level " + job.TargetTier
+                        : structureName;
+                }
+                else
+                {
+                    // Neither catalog knows this id. That is a DATA DEFECT, not a formatting
+                    // inconvenience, and CLAUDE.md section 12 says it must be LOUD. The row still
+                    // paints (a queue that hides a running job is worse), but it paints an honest
+                    // placeholder instead of a title-cased id quietly presented as a name.
+                    FlowTrace.Fail("Manage", "queue row catalog MISS: neither BuildingTierCatalog ('" +
+                        buildingId + "') nor CatalogRegistry ('" + catalogId + "') has a display name " +
+                        "for job '" + job.StructureId + "' (channel " + channel + "). The player would " +
+                        "otherwise read the raw id as a structure name");
+                    label = job.TargetTier > 0
+                        ? "Unknown structure - Level " + job.TargetTier
+                        : "Unknown structure";
+                }
+            }
+
+            // The TRAIN and RESEARCH channels never reach the BuildingTierCatalog branch above,
+            // and ObsidianQueueHud.FormatJobTarget still speaks the developer arrow for troop,
+            // barracks and tower UPGRADE rows ("Archer -> L3"). ⛔ It is NOT changed underneath its
+            // other callers - the Core-safe HUD queue chip renders the same string and
+            // ObsidianQueueRegression pins "Barracks -> L2" verbatim. The Manage drawer normalises
+            // the notation it RECEIVES, which is a presentation concern and belongs on this side.
+            label = label.Replace(" -> L", " - Level ");
+
+            // ⛔ A RAW INTERNAL ID REACHING THE PLAYER IS A DATA DEFECT AND IT IS LOUD
+            // (CLAUDE.md section 12). Underscores and colons are id grammar, never display
+            // grammar - "tower_ground_archer" and "barracks-train:footman:7" both trip this. The
+            // row still paints; the failure is traced rather than silently prettified, which is
+            // exactly what PrettyJobLabel's title-casing used to do.
+            if (label.IndexOf('_') >= 0 || label.IndexOf(':') >= 0)
+                FlowTrace.Fail("Manage", "queue row label '" + label + "' carries id grammar for job '" +
+                    job.StructureId + "' (channel " + channel + ") - the player is reading an " +
+                    "internal identifier. Author the catalog display name for this id");
 
             return new QueueRowVM
             {
@@ -1570,15 +1693,35 @@ namespace DeNelle.Village.UI
                         Id = tally.ItemId,
                         CatalogEntryId = !string.IsNullOrEmpty(entry.id) ? entry.id : tally.ItemId,
                         Name = name,
-                        // The DISPLAY-NAME slug, not the itemId: the tier portraits on disk are
-                        // named archer-tower[-2|-3].png / ballista / catapult / arcane-spire, which
-                        // is what PortraitSlug(entry.displayName) produces. Passing the itemId would
-                        // emit "Portraits/tower-ground-archer-2", which exists nowhere, and every
-                        // tier sheet would stay unreachable — the defect ruling 3.8 exists to close.
-                        // A name the slug cannot match (e.g. "Sky Ballista (Anti-Air)") simply falls
-                        // through to the View's alias table, which is where that mapping lives.
-                        PortraitKey = ResolveBuildingPortraitKey(
-                            entry, PortraitSlug(entry.displayName) ?? tally.ItemId, level),
+                        // ⛔ ONE PRODUCER OF THE PORTRAIT KEY, AND IT IS ManageArt.
+                        //
+                        // ⚠ THE COMMENT THAT STOOD HERE WAS THE SECOND PRODUCER, AND IT WAS THE
+                        // STALE COPY. It read "the DISPLAY-NAME slug, not the itemId ... passing the
+                        // itemId would emit Portraits/tower-ground-archer-2, which exists nowhere",
+                        // and composed `ResolveBuildingPortraitKey(entry, PortraitSlug(displayName),
+                        // level)` -> "Portraits/<display-name-slug>[-N]" in the MIXED ROOT folder.
+                        // MEASURED in Builds/ui-capture/ManageFlow_BUILD_gridtop_2670x1200.png:
+                        // Wooden Palisade and Crystal Mine painted as blank tan ovals - the warm-tan
+                        // PLACEHOLDER DISC ManageArt.LoadSprite's own note describes (:177-186) -
+                        // because cap-manage-wave3.log traced this line asking for
+                        // 'Portraits/wooden-palisade' and 'Portraits/crystal-mine-2', which exist
+                        // nowhere. The same run shows 'Portraits/lumberyard-3', 'Portraits/foundry-2',
+                        // 'Portraits/stoneyard' and 'Portraits/healing-caravan' missing too.
+                        //
+                        // BuildBuildingChoices was re-pointed to ManageArt.BuildingPortraitKey
+                        // already, and ManagePortraitCoverageRegression's header records why (its
+                        // [building-tier-portrait] case failed on TWENTY keys against the root
+                        // folder, and "(none)" were missing under Portraits/Buildings/). This line
+                        // was the last surviving slug producer. ⛔ Two spellings of one filename is
+                        // the duplicated-state failure CLAUDE.md 2/5/16 keeps paying for - the ID is
+                        // load-bearing (WO-1567 section 7), so the id-keyed seam wins and the slug
+                        // composition is deleted rather than "kept in sync".
+                        //
+                        // The tier ladder is UNCHANGED: BuildingPortraitKey appends "-<level>" for
+                        // level >= 2 and leaves level 1 unsuffixed (ManageArt.cs:158-162), which is
+                        // exactly what forge-4 and barracks-3 already resolve through.
+                        PortraitKey = ManageArt.BuildingPortraitKey(
+                            !string.IsNullOrEmpty(entry.id) ? entry.id : tally.ItemId, level),
                         Level = level,
                         MaxLevel = ceiling,
                         PlacedCount = tally.Count,
@@ -1898,25 +2041,24 @@ namespace DeNelle.Village.UI
             });
         }
 
-        /// <summary>
-        /// Deterministic Resources-relative preferred portrait key. For level 2+ this names
-        /// <c>Portraits/&lt;ladder-id&gt;-&lt;level&gt;</c>; level 1 names the unsuffixed portrait.
-        /// The View owns existence checks and must fall back from a missing tier key to the
-        /// unsuffixed ladder portrait, then to its shared generic resolver.
-        /// </summary>
-        private static string ResolveBuildingPortraitKey(CatalogEntry entry, string ladderId, int level)
-        {
-            string raw = !string.IsNullOrEmpty(ladderId) ? ladderId.Trim().ToLowerInvariant().Replace('_', '-') : null;
-            string source = entry != null && !string.IsNullOrEmpty(entry.id)
-                ? entry.id.Trim().ToLowerInvariant().Replace('_', '-') : null;
-            string slug = entry != null ? PortraitSlug(entry.displayName) : null;
-            string key = !string.IsNullOrEmpty(raw) ? raw : !string.IsNullOrEmpty(source) ? source : slug;
-            if (string.IsNullOrEmpty(key)) return null;
-            return "Portraits/" + key + (level >= 2 ? "-" + level : "");
-        }
-
-        private static string PortraitSlug(string value) =>
-            string.IsNullOrEmpty(value) ? null : value.Trim().ToLowerInvariant().Replace(' ', '-');
+        // =====================================================================
+        //  ⛔ ResolveBuildingPortraitKey AND PortraitSlug WERE HERE. THEY ARE DELETED.
+        // ---------------------------------------------------------------------
+        //  They composed "Portraits/<display-name-slug>[-N]" against the MIXED ROOT folder - a
+        //  SECOND producer of a key ManageArt.BuildingPortraitKey already owns, built from the
+        //  catalog ID against Portraits/Buildings/. Two spellings of one filename is the
+        //  duplicated-state failure this repo keeps paying for, and this pair was the stale copy:
+        //  ManagePortraitCoverageRegression's header records that its [building-tier-portrait]
+        //  case failed on TWENTY root keys while "(none)" were missing under Portraits/Buildings/,
+        //  and BuildBuildingChoices was re-pointed at ManageArt then. BuildDefenseChoices was the
+        //  last caller and is re-pointed now, so the pair has ZERO callers.
+        //
+        //  ⛔ DO NOT REINTRODUCE EITHER. The id is load-bearing (WO-1567 section 7). A missing tier
+        //  must go BLANK AND LOG so the oracle catches it and the owner gets an art request -
+        //  quietly serving a level-1 sheet for a level-4 building is a wrong icon, and a wrong icon
+        //  is a lie the capture loop cannot see (ManageArt.cs:152-156). The oracle case
+        //  [vm-uses-building-portrait-key] fires if this composition returns.
+        // =====================================================================
 
         /// <summary>WO-1406 army/camp line, composed once in the VM for the Troops header.</summary>
         private void BuildTroopArmySummary()
@@ -1926,39 +2068,63 @@ namespace DeNelle.Village.UI
             if (cap <= 0)
             {
                 TroopArmySummaryText = null;
+                TroopArmyDoor = null;             // WO-1541 - no sentence, no destination, no door
+                TroopArmyDoorLabel = null;
                 FlowTrace.Step("Manage", "troops army summary omitted: army fill has not been published");
                 return;
             }
 
-            var defs = new List<SceneConfigDef>();
-            foreach (var def in SceneConfigCatalog.All)
-                if (def != null && def.IsEnemy) defs.Add(def);
-
-            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-            int victories = state != null ? Mathf.Max(0, state.RaidVictories) : 0;
-            SceneConfigDef camp = null;
-            using (var raids = new Hero.RaidSelectionVM(defs, null, victories,
-                       Hero.RaidSelectionVM.SceneAvailableProvider))
-            {
-                for (int i = 0; i < raids.Raids.Count; i++)
-                {
-                    var row = raids.Raids[i];
-                    if (row.Locked) continue;
-                    var candidate = raids.DefFor(row.Id);
-                    if (candidate == null) continue;
-                    if (camp == null || candidate.unlockVictories < camp.unlockVictories) camp = candidate;
-                }
-            }
+            // ⛔ WO-1541 - THIS METHOD NO LONGER DERIVES WHICH CAMP IS NEXT. IT READS THE FACT.
+            // It used to build its own Hero.RaidSelectionVM over SceneConfigCatalog.All-where-
+            // IsEnemy and walk it for the lowest unlockVictories - a SECOND, independent
+            // derivation of a fact BuildTimerService.PublishJourneyOpenCamps was already
+            // computing for the Journey deck. Different walk, different separator, two answers to
+            // "which camp is next" and nothing keeping them equal. That is the duplicated-state
+            // class PlayerDeckWorkspace.cs:719-723 names in words: "a second check would drift
+            // from the first, and the drift is the actual defect."
+            //
+            // ⚠ IT WAS NEVER AN ASSEMBLY VIOLATION - this VM is DeNelle.Village and may construct
+            // a RaidSelectionVM legally. It broke the ONE-PRODUCER rule. Do not "fix" a future
+            // reading of this comment by moving code across assemblies, and do not restore the
+            // walk because it compiles.
+            string campName = DeNelle.Core.HudModel.PostureSignals.RaidNextCampName;
+            int fields = DeNelle.Core.HudModel.PostureSignals.RaidNextCampGarrison;
 
             string army = "Army " + used + " / " + cap;
-            if (camp != null)
-            {
-                string campName = !string.IsNullOrEmpty(camp.displayName) ? camp.displayName : camp.id;
-                int fields = Hero.RaidSelectionVM.GarrisonCount(camp);
-                if (fields > 0) army += " - " + Ascii(campName) + " fields " + fields;
-            }
+            if (!string.IsNullOrEmpty(campName) && fields > 0)
+                army += " - " + Ascii(campName) + " fields " + fields;
             TroopArmySummaryText = army;
-            FlowTrace.Step("Manage", "troops army summary='" + army + "'");
+
+            // WO-1541 ruling 2 - THE DOOR. The model decides it exists and what it says; the View
+            // only paints it. A door is offered exactly when there is a named camp to walk to -
+            // otherwise the sentence has no destination and a live button would be a lie.
+            if (!string.IsNullOrEmpty(campName))
+            {
+                string doorCamp = campName;
+                TroopArmyDoorLabel = "RAID " + Ascii(doorCamp).ToUpperInvariant();
+                TroopArmyDoor = () =>
+                {
+                    FlowTrace.Step("Manage", "army line door -> raid grid (camp='" + doorCamp + "')");
+                    // ⛔ THE SAME CALL THE JOURNEY DECK'S RAIDS CARD MAKES, reused verbatim:
+                    // PlayerDeckWorkspace.cs:746 is `Open = RaidEntryGate.RequestOpen`.
+                    // ⚠ NOT RaidSelectionScreen.Open() directly, even though this VM is
+                    // DeNelle.Village and could call it. RaidEntryGate is the Core seam whose
+                    // Village-side subscriber (RaidEntryBridge) opens the screen, and routing both
+                    // doors through it is what stops the raid entry point from forking - the same
+                    // one-producer discipline this whole ticket is about. And NO new PanelId: the
+                    // raid grid has never had one, and an unregistered id ships a dead door.
+                    Guard.Try("Manage", "open the raid grid from the army line",
+                        () => DeNelle.Core.UI.RaidEntryGate.RequestOpen());
+                };
+            }
+            else
+            {
+                TroopArmyDoorLabel = null;
+                TroopArmyDoor = null;
+            }
+
+            FlowTrace.Step("Manage", "troops army summary='" + army + "' door=" +
+                (TroopArmyDoor != null ? TroopArmyDoorLabel : "(none)"));
         }
 
         /// <summary>
@@ -2152,11 +2318,52 @@ namespace DeNelle.Village.UI
 
             choice.TrainCostText = "";
             choice.TrainTimeText = FormatTime(def.BuildSeconds);
-            if (lineFull)
+
+            // ⭐ WO-1517 - THE ARMY CAP IS NOW A SENTENCE ON THIS SCREEN, NOT A SILENT REFUSAL.
+            // Owner ruling 2026-09-06 20:10, verbatim: "on train army screens should show if queue
+            // is full and army is full also should show if a troop type can be upgraded".
+            // Until now this method tested queue DEPTH only ("WO-1387: there is no gold test any
+            // more"), so a player at the cap read "Train one: 1m 0s . Ready", tapped TRAIN, and got
+            // nothing but a notice - which is exactly the frame she captured
+            // (owner-screen-20260906-201037.png: TRAIN . 1M 0S inviting the tap, with "Army is
+            // full." as a footnote under it, contradicting the button).
+            //
+            // ⛔ ONE AUTHORITY, AND IT IS THE SERVICE'S OWN. ArmyReadiness.Compute is the formula
+            // BarracksService.EnqueueTraining itself seeds its refusal from (BarracksService.cs:
+            // "the SEED numbers ... come from ArmyReadiness.Compute - the ONE readiness formula"),
+            // and the slot cost is TroopDialogueCommands.SlotOf, the same reader. So the sentence
+            // on the face and the refusal in the service can never disagree.
+            //
+            // ⛔ AND IN THE SERVICE'S ORDER. EnqueueTraining tests the army cap INSIDE its per-unit
+            // loop, before it ever reaches queue.Enqueue - so the cap refuses first and the line
+            // depth second. Reporting them the other way round would name the wrong blocker to a
+            // player who is at both.
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            bool armyFull = false;
+            if (state != null && state.Army != null)
+            {
+                var readiness = ArmyReadiness.Compute(state);
+                int unitSlots = TroopDialogueCommands.SlotOf(choice.Id);
+                int used = readiness.RosterSlots + readiness.QueuedSlots;
+                armyFull = readiness.CapSlots > 0 && used + unitSlots > readiness.CapSlots;
+                choice.ArmyUsedSlots = used;
+                choice.ArmyCapSlots = readiness.CapSlots;
+                if (armyFull)
+                    choice.ArmyFullText = "Army is full . " + used + "/" + readiness.CapSlots + " slots used";
+            }
+            choice.ArmyFull = armyFull;
+
+            if (armyFull)
+            {
+                choice.TrainStateText = choice.ArmyFullText;
+                choice.TrainReady = false;
+            }
+            else if (lineFull)
             {
                 int depth = svc.QueueDepth(ChannelId.Train);
                 int cap = svc.QueueDepthLimit(ChannelId.Train);
-                choice.TrainStateText = "Training line full . " + depth + "/" + cap + " queued";
+                choice.QueueFullText = "Training line full . " + depth + "/" + cap + " queued";
+                choice.TrainStateText = choice.QueueFullText;
                 choice.TrainReady = false;
             }
             else
@@ -2165,6 +2372,8 @@ namespace DeNelle.Village.UI
                 choice.TrainReady = true;
             }
             choice.TrainFactText = "Train one: " + choice.TrainTimeText + " . " + choice.TrainStateText;
+            FlowTrace.Step("Manage", "train facts id=" + choice.Id + " ready=" + choice.TrainReady +
+                " armyFull=" + armyFull + " lineFull=" + lineFull + " state='" + choice.TrainStateText + "'");
         }
 
         /// <summary>
@@ -2183,6 +2392,7 @@ namespace DeNelle.Village.UI
                 choice.UpgradeStateText = "At max level";
                 choice.UpgradeReady = false;
                 choice.UpgradeFactText = "This troop is at its current maximum level.";
+                choice.UpgradeWord = "MAX";
                 return;
             }
 
@@ -2206,6 +2416,29 @@ namespace DeNelle.Village.UI
                 choice.UpgradeReady = true;
             }
             choice.UpgradeFactText = "Upgrade: " + choice.UpgradeCostText + " . " + choice.UpgradeStateText;
+
+            // ⭐ WO-1517 - "also should show if a troop type can be upgraded" (owner, 20:10).
+            // The word is ASKED OF THE SERVICE, never re-derived: BarracksService.CanUpgradeTroop
+            // is the one gate UpgradeTroop itself calls before it enqueues, and it hands back the
+            // reason. A refusal that is not "already running" or "at max" is a PREREQUISITE
+            // (research/tier) and is reported as NEEDS <blocker>, so the tile names what to go and
+            // get instead of leaving the player to guess which of the two ladders is short.
+            // ⚠ The Research LINE being full is deliberately NOT folded in here: that is the
+            // QUEUE's state, it is reported by the queue face, and mixing it into the upgrade word
+            // would say "this troop cannot be upgraded" about a troop that can.
+            if (!BarracksService.CanUpgradeTroop(id, out string upgradeBlocker))
+            {
+                choice.UpgradeWord = choice.UpgradeInProgress
+                    ? "UPGRADING"
+                    : "NEEDS " + Ascii(string.IsNullOrEmpty(upgradeBlocker)
+                        ? "a prerequisite" : upgradeBlocker.TrimEnd('.')).ToUpperInvariant();
+                FlowTrace.Step("Manage", "troop '" + id + "' upgrade word='" + choice.UpgradeWord +
+                    "' from CanUpgradeTroop reason '" + (upgradeBlocker ?? "") + "'");
+            }
+            else
+            {
+                choice.UpgradeWord = "UPGRADE AVAILABLE";
+            }
         }
 
         /// <summary>
@@ -3124,6 +3357,7 @@ namespace DeNelle.Village.UI
                     (_nav != null ? _nav.Tab.ToString() : "BUILD"));
                 return;
             }
+            ClearStaleNotice("tab " + TabWordOf(id));
             _activeFilter = BuildFilter.All;
             _nav = new ManageNavEntry { Kind = ManageScreenKind.Grid, Tab = id, Filter = _activeFilter };
             PlayerPrefs.SetInt(LastTabPrefKey, (int)id);
@@ -3160,9 +3394,40 @@ namespace DeNelle.Village.UI
 
         // ── the screen graph ─────────────────────────────────────────────────
 
+        /// <summary>
+        /// ⭐ WO-1518 - a REFUSAL SENTENCE NEVER FOLLOWS THE PLAYER TO ANOTHER SCREEN.
+        ///
+        /// <para>Owner device frame Logs/device/screens/owner-screen-20260906-201242.png is the
+        /// ARMORER RESEARCH screen and it carries "Army is full." in the bottom-left. So does the
+        /// Archer troop detail one minute earlier (owner-screen-20260906-201037.png). The ticket
+        /// reads that as a global footer; it is not. It is <see cref="Notice"/> - the single band
+        /// ManageScreenPanel.BuildNotice seats beside CLOSE - still holding the sentence
+        /// BarracksService handed back when a TRAIN tap was refused
+        /// (<see cref="TrainTroop"/>, "Refused: locked / army full / ..."). Nothing cleared it, so
+        /// it rode the back stack onto a screen where the army cap refuses nothing at all.</para>
+        ///
+        /// <para>⛔ The fix is HERE, in the navigator, not in the band. A notice is about the verb
+        /// the player just pressed on the screen they pressed it on; leaving the screen ends its
+        /// scope. Suppressing it in the renderer instead would need the View to decide which
+        /// sentences belong on which screen - exactly the derivation canon 9 forbids it, and it
+        /// would leave the stale string alive to reappear somewhere else.</para>
+        ///
+        /// <para>WO-1517's ARMY FULL band is the replacement and it is a different mechanism: it is
+        /// composed onto the TRAIN action itself (<see cref="ComposeTroopItem"/>), so it is painted
+        /// on the button it refuses, before the tap, and it cannot travel.</para>
+        /// </summary>
+        private void ClearStaleNotice(string destination)
+        {
+            if (string.IsNullOrEmpty(Notice)) return;
+            FlowTrace.Step("Manage", "notice '" + Notice + "' is dropped on the way to " + destination +
+                " - a refusal belongs to the screen whose verb was refused (WO-1518)");
+            ClearNotice();
+        }
+
         private void GoTo(ManageNavEntry entry)
         {
             if (entry == null) { CloseRequested?.Invoke(); return; }
+            ClearStaleNotice(TabWordOf(entry.Tab) + " " + entry.Kind);
             _nav = entry;
             if (!string.IsNullOrEmpty(entry.Filter)) _activeFilter = entry.Filter;
             PlayerPrefs.SetInt(LastTabPrefKey, (int)entry.Tab);
@@ -3373,6 +3638,8 @@ namespace DeNelle.Village.UI
                     //   panel 7, the TREE    - a vertical LIST of that building's upgrades
                     // One column is what makes the renderer lay rows instead of cards, and it is the
                     // MODEL saying so - the View never decides a layout from an id.
+                    // ⚠ The RESEARCH PICKER's 4 x 1 below is a SEED ONLY - it is overwritten from
+                    // the live school count after FillActiveTab. See ApplyPickerCapacity (WO-1564).
                     GridColumns = id == ManageTabId.Build ? 5
                                 : id == ManageTabId.Research
                                     ? (isActive && nav != null && nav.Kind == ManageScreenKind.ResearchPerks ? 1 : 4)
@@ -3383,6 +3650,7 @@ namespace DeNelle.Village.UI
                                  : 3
                 };
                 if (isActive) FillActiveTab(tab, nav);
+                if (isActive) ApplyPickerCapacity(tab, id, nav);
                 tabs.Add(tab);
             }
 
@@ -3754,11 +4022,31 @@ namespace DeNelle.Village.UI
             if (_inventoryTiles != null &&
                 string.Equals(_inventoryChip, _activeFilter, StringComparison.OrdinalIgnoreCase))
                 return _inventoryTiles;
-            // ManageTiles, not Tiles: the Manage grid SHOWS not-yet-unlocked rows as locked tiles
-            // (mockup panel 9 - selectable, padlock, requirement line), where the BUILD browser
-            // still hides them. A chip that says ALL and hides rows is a claim the screen does not
-            // honour, and it is why ManageFlow_BUILD_locked had no locked tile to capture.
-            _inventoryTiles = BuildInventoryModel.ManageTiles(_activeFilter);
+            // ⛔ Tiles, NOT ManageTiles - WO-1516, OWNER RULING 2026-09-06 20:07, VERBATIM:
+            // "manage build scren should only show items that are unlocked and avaliable to them".
+            // She took Logs/device/screens/owner-screen-20260906-200741.png in the same minute:
+            // eight DEFENSE tiles, five of them placeholder discs, no locked/unlocked distinction
+            // visible anywhere on the screen.
+            //
+            // ⛔ THIS RETIRES THE PARAGRAPH THAT USED TO STAND HERE ("ManageTiles, not Tiles: the
+            // Manage grid SHOWS not-yet-unlocked rows as locked tiles ... mockup panel 9"). That
+            // reading of the mockup was an inference from a picture; this is the owner's sentence,
+            // and a sentence outranks an inference drawn from a drawing. BuildInventoryModel
+            // .ManageTiles is left in place and untouched - it is not deleted, because the ARMY
+            // grid's locked-troop treatment (mockup panel 4) still stands and a future ruling may
+            // want it back - but the BUILD grid no longer calls it.
+            //
+            // ⭐ ONE PREDICATE, AND IT IS THE PALETTE'S OWN. BuildInventoryModel.Tiles is the
+            // accessor whose own doc comment records that it matches the browser
+            // (BuildCollectionBrowser, "hide cards that are not unlocked"): it admits exactly
+            // BuildAvailability.Offered, which Reconcile derives from the same unlock flags the
+            // palette reads. The Manage grid and the Build palette therefore answer "is this
+            // unlocked" from ONE authority. Never write a second unlock test beside this call.
+            //
+            // ⚠ AFFORDABILITY IS NOT AN UNLOCK (WO-1516 section 3). An unlocked row the player
+            // cannot pay for STAYS on the grid and gets WORDS - a player must be able to see what
+            // they are saving for. The filter here is unlock only.
+            _inventoryTiles = BuildInventoryModel.Tiles(_activeFilter);
             _inventoryChip = _activeFilter;
             return _inventoryTiles;
         }
@@ -3783,10 +4071,58 @@ namespace DeNelle.Village.UI
                 // also a screen that teaches nothing on arrival.
                 // `tiles.Count == 0` rather than `i == 0` deliberately: several of these loops skip
                 // rows with `continue`, so the first INDEX is not always the first TILE.
-                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
+                tiles.Add(ProjectAffordanceTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Build, id, null, null)));
             }
             return tiles;
+        }
+
+        /// <summary>
+        /// <see cref="ManageVmProjection.ProjectTile"/> plus ONE model-side rule: the green
+        /// up-arrow medallion is painted ONLY when the item can actually be acted on right now.
+        ///
+        /// <para>⭐ WO-1516 / 1517 / 1518, owner 2026-09-06. Her device frame
+        /// (owner-screen-20260906-200741.png) shows the SAME green up-arrow on all eight BUILD
+        /// tiles, and owner-screen-20260906-201242.png shows it again beside a research row reading
+        /// SHORT. The acceptance line in all three tickets is identical: the badge "either states a
+        /// REAL affordance (upgrade available / can build) or it is removed".</para>
+        ///
+        /// <para>⛔ THE TEST IS THE PRIMARY ACTION'S OWN AVAILABILITY, NOT A SECOND DERIVATION.
+        /// <see cref="ManageArt.StatusFor"/> has four DISTINCT glyphs (locked / in-progress /
+        /// queue / max) and one CATCH-ALL, <c>status-available</c>, which
+        /// <see cref="ManageVmProjection.VisualStateFor"/> hands to READY, SHORT and HEART GATED
+        /// alike - so on the four distinct states the medallion already tells the truth and is left
+        /// exactly as it is. It is only the catch-all that lies, and it lies precisely when the
+        /// primary action is refused. So: keep the glyph when the composer marked the primary
+        /// action <see cref="ManageActionAvailability.Available"/>; drop it otherwise. The tile
+        /// then loses NO information - the refusal already has a home on the detail card's why
+        /// band, which is the affordance ruling 15 asks for.</para>
+        ///
+        /// <para>⚠ A null <c>StateIconKey</c> is a SUPPORTED value, not a hole:
+        /// ManageWorkspacePanel.PaintSprite (:1234-1243) resolves a null key to a null sprite and
+        /// sets the Image fully transparent, so the slot simply carries nothing. Verified at source,
+        /// not assumed.</para>
+        ///
+        /// <para>⚠ NOT used by <see cref="ComposeResearchSchoolTiles"/>. A school row carries no
+        /// ManageAction at all by design ("a school TILE is pure navigation"), so this rule would
+        /// strip every school medallion - a change to a screen nobody reported, on a row whose word
+        /// ("2 READY" / "3 PERKS") is already the real state. Left alone deliberately.</para>
+        /// </summary>
+        private static ManageTileVM ProjectAffordanceTile(ManageItemState item, bool isSelected,
+            Action onSelect)
+        {
+            var tile = ManageVmProjection.ProjectTile(item, isSelected, onSelect);
+            if (tile == null || item == null) return tile;
+            if (ManageVmProjection.VisualStateFor(item.Badge) != ManageTileVisualState.Available)
+                return tile;                       // locked / queue / running / max: a real glyph
+            var primary = item.PrimaryAction;
+            if (primary != null && primary.Availability == ManageActionAvailability.Available)
+                return tile;                       // "you can press this now" - the arrow is true
+            tile.StateIconKey = null;
+            FlowTrace.Step("Manage", "tile '" + (item.ItemId ?? "?") + "' badge=" +
+                (item.BadgeText ?? "") + " carries no live affordance - the status medallion is " +
+                "withheld rather than painting the green up-arrow on a refused item (WO-1516)");
+            return tile;
         }
 
         private ManageItemState ComposeBuildItem(BuildInventoryRow row)
@@ -3876,7 +4212,7 @@ namespace DeNelle.Village.UI
                 costLine: costLine,
                 invoke: c.Activate));
 
-            ApplyBuildBadge(item, atMax, running, c.Locked, c.UpgradeReady);
+            ApplyBuildBadge(item, atMax, running, c.Locked, c.UpgradeReady, c.UpgradeCostParts);
             return item;
         }
 
@@ -3912,7 +4248,7 @@ namespace DeNelle.Village.UI
                 costLine: CostFormat.Words(c.UpgradeCostParts),
                 invoke: c.Activate));
 
-            ApplyBuildBadge(item, atMax, running, false, c.UpgradeReady);
+            ApplyBuildBadge(item, atMax, running, false, c.UpgradeReady, c.UpgradeCostParts);
             return item;
         }
 
@@ -3997,7 +4333,7 @@ namespace DeNelle.Village.UI
         /// action already carries the sentence and the door.
         /// </summary>
         private static void ApplyBuildBadge(ManageItemState item, bool atMax, bool running,
-            bool locked, bool ready)
+            bool locked, bool ready, IReadOnlyList<CostPart> costParts)
         {
             if (atMax) { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; return; }
             if (running) { item.Badge = ManageTileBadge.Upgrading; item.BadgeText = "UPGRADING"; return; }
@@ -4005,7 +4341,9 @@ namespace DeNelle.Village.UI
             if (LineIsFull(ChannelId.Builder))
             { item.Badge = ManageTileBadge.QueueBlocked; item.BadgeText = "QUEUE FULL"; return; }
             item.Badge = ready ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.UpgradeUnaffordable;
-            item.BadgeText = ready ? "READY" : "SHORT";
+            // WO-1518: the bare word "SHORT" named neither the resource nor the amount. It now
+            // carries both, from the item's OWN cost basket - see ShortBadgeText.
+            item.BadgeText = ready ? "READY" : ShortBadgeText(costParts);
         }
 
         // ── ARMY ─────────────────────────────────────────────────────────────
@@ -4020,7 +4358,7 @@ namespace DeNelle.Village.UI
                 var item = ComposeTroopItem(c);
                 string id = c.Id;
                 // First tile selected by default - see ComposeBuildTiles' note (mockup screen 4).
-                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
+                tiles.Add(ProjectAffordanceTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Army, id, null, null)));
             }
             return tiles;
@@ -4080,17 +4418,35 @@ namespace DeNelle.Village.UI
                     Invoke = () => TrainTroop(troopId)
                 });
             else
+                // ⭐ WO-1517 - A REFUSED TRAIN NOW SAYS ITS REASON ON ITS OWN FACE.
+                // The ARMY-FULL arm is deliberately QueueBlocked WITH ManageRoute.None, and both
+                // halves of that are the ruling:
+                //   * QueueBlocked, not Unaffordable - the enum's own words are "affordable and
+                //     permitted, but the relevant capacity has none left", which is exactly the
+                //     army cap. Unaffordable means the WALLET is short and training charges
+                //     nothing at all since WO-1387, so it would state something untrue.
+                //     PrerequisiteBlocked is not available either: the invariant
+                //     [lock-without-a-door] requires a routable Route, and raising the army cap is
+                //     not one destination (ArmyStorage.MaxArmySize is a base plus a SUMMED
+                //     armyCapBonus off any owning perk or tier), so any single door we named here
+                //     would be a guess dressed as a fact.
+                //   * Route.None so ProjectAction leaves the face reading TRAIN, disabled, with
+                //     the reason on the why band - which is the ruling's "ARMY FULL becomes a band
+                //     on the TRAIN button, replacing the footnote". A routable blocked action gets
+                //     its LABEL REPLACED by the route's CTA, so giving it a door would delete the
+                //     very verb the band is explaining.
+                // The LINE-FULL arm is untouched and keeps its queue door.
                 item.Add(new ManageAction
                 {
                     Kind = ManageActionKind.Train,
-                    Availability = trainLineFull
+                    Availability = (trainLineFull || c.ArmyFull)
                         ? ManageActionAvailability.QueueBlocked
                         : ManageActionAvailability.Unaffordable,
                     Cta = "TRAIN",
                     BlockerReason = string.IsNullOrEmpty(c.TrainStateText)
                         ? "Training cannot start right now."
                         : Ascii(c.TrainStateText),
-                    Route = trainLineFull ? ManageRoute.ToQueue() : ManageRoute.None,
+                    Route = (trainLineFull && !c.ArmyFull) ? ManageRoute.ToQueue() : ManageRoute.None,
                     CostLine = Ascii(c.TrainTimeText),
                     IsPrimary = true
                 });
@@ -4123,15 +4479,115 @@ namespace DeNelle.Village.UI
                     });
             }
 
+            // ⭐ WO-1517 - THE TILE'S ONE WORD, and the two caps now have their own.
+            // Owner, 20:10: "should show if queue is full and army is full also should show if a
+            // troop type can be upgraded". Precedence is BLOCKERS FIRST, because a word that says
+            // "TRAINABLE" on a troop the service will refuse is worse than no word at all - and
+            // that is precisely what the 20:10 frame showed. ARMY FULL leads QUEUE FULL because
+            // EnqueueTraining tests the cap before the line (see FillTrainFacts).
+            // The UPGRADE word rides the tile only when nothing is blocking the train verb, so one
+            // tile still says exactly one thing (canon 8).
+            //
+            // ⭐ AMENDED 2026-09-06 (WO-1541 lane, cause captured, NOT inferred). The ARMY_max
+            // capture frame threw and MANAGE_FLOW_MAP_FAIL'd at frames=14/15:
+            //   Builds/cap-manage-wave3.log:3832 - "no max item reachable on the ARMY tab ...
+            //   States actually present: QueueBlocked,Locked over 9 tiles"
+            // while the same run traced (:3775) "troop state id=troop-footman word=Max
+            // upgrading=False hasNext=False" against "lineFull=True". A MAXED troop was wearing
+            // QUEUE FULL, so the screen could not show a Max tile at all.
+            //
+            // ⛔ THE STATE WORD DESCRIBES THE ITEM, NOT THE LINE. QUEUE FULL and ARMY FULL are
+            // properties of the SHARED train line and the roster cap - identical on all nine tiles,
+            // so as a tile word they carry no per-item information at all. MAX is a property of
+            // THIS troop (!HasNextLevel) and is the one word that tells the player something the
+            // neighbouring tile does not. Canon 8 asks each tile to say exactly one thing; this is
+            // the one thing worth saying.
+            //
+            // ⚠ THIS DOES NOT WEAKEN WO-1517, and the distinction matters. Its rule is "blockers
+            // first" for a specific reason, written above: a word saying "TRAINABLE" on a troop the
+            // service will REFUSE is worse than no word. MAX makes no such promise - it states the
+            // upgrade ladder is finished, which stays true whatever the line is doing. The refusal
+            // reason is untouched and still rides the TRAIN button's why-band, which is where
+            // ruling 3.10 / WO-1517 actually put it ("ARMY FULL becomes a band on the TRAIN
+            // button"), so nothing the player needs is lost.
+            //
+            // ⚠ UPGRADING DELIBERATELY STILL LEADS: an in-flight job is also item-specific, and it
+            // is the more urgent fact. Locked troops never reach here - they return at :4383.
             if (c.UpgradeInProgress) { item.Badge = ManageTileBadge.Training; item.BadgeText = "UPGRADING"; }
+            else if (atMax) { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; }
+            else if (c.ArmyFull) { item.Badge = ManageTileBadge.QueueBlocked; item.BadgeText = "ARMY FULL"; }
             else if (trainLineFull) { item.Badge = ManageTileBadge.QueueBlocked; item.BadgeText = "QUEUE FULL"; }
+            else if (string.Equals(c.UpgradeWord, "UPGRADE AVAILABLE", StringComparison.Ordinal))
+            { item.Badge = ManageTileBadge.UpgradeAffordable; item.BadgeText = "UPGRADE AVAILABLE"; }
+            else if (string.Equals(c.UpgradeWord, "MAX", StringComparison.Ordinal))
+            { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; }
+            else if (c.UpgradeWord.StartsWith("NEEDS ", StringComparison.Ordinal))
+            // Idle, NOT Locked: ruling 15 - the troop is owned and trainable; it is the UPGRADE
+            // that is blocked, and the word says which.
+            { item.Badge = ManageTileBadge.Idle; item.BadgeText = c.UpgradeWord; }
             else if (c.TrainReady) { item.Badge = ManageTileBadge.Trainable; item.BadgeText = "TRAINABLE"; }
+            // ⚠ KEPT, and it is now a BACKSTOP rather than the primary Max arm: the hoisted
+            // `atMax` branch above catches every !HasNextLevel troop first. It is left in place
+            // deliberately - it costs nothing, and deleting the last Max arm from the tail would
+            // mean a future edit to the hoisted branch could silently drop MAX entirely.
             else if (atMax) { item.Badge = ManageTileBadge.Max; item.BadgeText = "MAX"; }
             else { item.Badge = ManageTileBadge.Idle; item.BadgeText = "IDLE"; }
             return item;
         }
 
         // ── RESEARCH ─────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// WO-1564 part 1 - the RESEARCH PICKER's capacity, DERIVED from the live school count.
+        ///
+        /// <para>⛔ THE DEFECT THIS REPLACES. The picker was authored <c>GridColumns = 4,
+        /// GridRows = 1</c> from a comment reading "four research BUILDINGS in ONE row". FIVE
+        /// schools exist. <c>ManageFlow_RESEARCH_gridtop</c> showed the result: four across, the
+        /// Lumber Mill ALONE on a second row beside three empty cells, and roughly 60% of the well
+        /// black. WO-2010's acceptance ("all schools visible without scrolling") PASSES on that
+        /// frame - the ticket was satisfied while the screen read as broken.</para>
+        ///
+        /// <para>⛔ AND A LITERAL 5 WOULD BE THE SAME DEFECT ONE SCHOOL LATER. The model owns
+        /// school membership (canon 5), so it already knows the count; the geometry follows it.
+        /// The shape is <c>columns = ceil(sqrt(n))</c>, <c>rows = ceil(n / columns)</c> - the
+        /// squarest grid that seats every school, with no literal column or row count anywhere:
+        ///   4 -&gt; 2x2, 5 -&gt; 3x2, 6 -&gt; 3x2, 9 -&gt; 3x3.
+        /// It leaves at most <c>columns - 1</c> empty cells, so a school can never be orphaned
+        /// alone on a ragged row the way the Lumber Mill was.</para>
+        ///
+        /// <para>⚠ WHY TWO ROWS RATHER THAN ONE WIDE ROW, stated so the next seat does not undo
+        /// it: the renderer caps a cell at <c>ManageWorkspacePanel.MaxTileHeightPx</c> (190), so a
+        /// ONE-row picker can only ever paint 190px of a much taller well - that cap, not the
+        /// column count, is why 60% of the well was black. Two rows double the vertical fill
+        /// without touching the renderer, which is another lane's file this wave.</para>
+        ///
+        /// <para>⛔ PICKER ONLY. The perk TREE (<see cref="ManageScreenKind.ResearchPerks"/>) keeps
+        /// its authored ONE column - a single column is what makes the renderer lay ROWS instead
+        /// of cards, and that is a shape decision, not a capacity one. BUILD and ARMY keep the
+        /// mockup's authored capacities untouched.</para>
+        /// </summary>
+        private void ApplyPickerCapacity(ManageTabVM tab, ManageTabId id, ManageNavEntry nav)
+        {
+            if (tab == null || id != ManageTabId.Research) return;
+            if (nav != null && nav.Kind == ManageScreenKind.ResearchPerks) return;
+
+            int schools = tab.Tiles != null ? tab.Tiles.Count : 0;
+            if (schools <= 0)
+            {
+                FlowTrace.Warn("Manage", "research picker composed ZERO schools - the authored seed " +
+                    "capacity stands, because a derived one would be 0x0 and the renderer would " +
+                    "refuse the band rather than say the list is empty");
+                return;
+            }
+
+            int columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(schools)));
+            int rows = Mathf.Max(1, Mathf.CeilToInt(schools / (float)columns));
+            tab.GridColumns = columns;
+            tab.GridRows = rows;
+            FlowTrace.Step("Manage", "research picker capacity derived from " + schools +
+                " live school(s) -> " + columns + "x" + rows + " (" + (columns * rows - schools) +
+                " empty cell(s))");
+        }
 
         /// <summary>Canon 5: schools first. Membership is the model's; the View never infers it from an id.</summary>
         private List<ManageTileVM> ComposeResearchSchoolTiles()
@@ -4189,7 +4645,7 @@ namespace DeNelle.Village.UI
                 string perk = c.PerkId;
                 string school = c.BuildingId;
                 // First tile selected by default - see ComposeBuildTiles' note (mockup screen 7).
-                tiles.Add(ManageVmProjection.ProjectTile(item, tiles.Count == 0,
+                tiles.Add(ProjectAffordanceTile(item, tiles.Count == 0,
                     () => OpenDetail(ManageTabId.Research, perk, school, null)));
             }
             return tiles;
@@ -4221,7 +4677,40 @@ namespace DeNelle.Village.UI
                     ? "Locked until its building reaches Tier " + c.UnlockTier + "."
                     : Ascii(c.LockReason);
                 item.Badge = ManageTileBadge.Locked;
-                item.BadgeText = "LOCKED";
+                // ⭐ WO-1518 - the LOCKED face now NAMES ITS BLOCKER AND SAYS WHAT THE TAP DOES.
+                // Owner, 2026-09-06 20:12: "if locked what is blocking and link to it", and at
+                // 20:19: "the logic is there on some if i click takes me there but should tell
+                // them that". Both halves were already composed and neither reached a face:
+                // ResearchChoiceVM.LockReason (:428) carries BuildingPerkService.CanResearch's
+                // reason verbatim and Activate (:444) is already the door. The DEFECT WAS THE
+                // WORDS, so nothing here rebuilds the routing.
+                //
+                // TWO CHANNELS, because the row has two and neither alone can hold both facts:
+                //  * the STATE column (x 0.71-0.985 of the row, ~a quarter of its width, 18px
+                //    FitSingleLine floor) takes the SHORT form "LOCKED - TAP". A whole sentence
+                //    there shrinks to the floor and TMP culls it blank - the law
+                //    ManageWorkspacePanel states three separate times.
+                //  * the row's SECOND LINE (NextRungLine -> Subtitle, x 0.12-0.60, roughly half
+                //    the row) takes the BLOCKER SENTENCE, which is where there is room for it.
+                // So the row reads: name / "Requires Barracks Tier 3" / [padlock] LOCKED - TAP.
+                //
+                // ⚠ "- TAP" is appended ONLY when a door actually exists. ProjectAction turns a
+                // PrerequisiteBlocked action with a routable Route into a live door, and the action
+                // below always carries ManageRoute.ToBuildCard, so every locked perk has one today
+                // - but the word is derived from the route rather than assumed, so a future locked
+                // row WITHOUT a door can never advertise a tap that does nothing.
+                bool hasDoor = !string.IsNullOrEmpty(c.BuildingId);
+                item.BadgeText = hasDoor ? "LOCKED - TAP" : "LOCKED";
+                // JOINED, not replaced: the effect sentence is the line the player decides on
+                // (mockup panel 7 gives every row one) and the blocker is what they must clear.
+                // Dropping either to make room for the other trades one missing fact for another.
+                item.NextRungLine = string.IsNullOrEmpty(item.NextRungLine)
+                    ? item.LockReason
+                    : item.NextRungLine + " . " + item.LockReason;
+                if (!hasDoor)
+                    FlowTrace.Warn("Manage", "locked perk '" + (c.PerkId ?? "?") + "' names no owning " +
+                        "building, so no door can be routed - its face says LOCKED with no tap " +
+                        "affordance rather than promising a navigation that would go nowhere");
                 item.Add(new ManageAction
                 {
                     Kind = ManageActionKind.Research,
@@ -4282,7 +4771,8 @@ namespace DeNelle.Village.UI
             }
 
             item.Badge = c.Ready ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.UpgradeUnaffordable;
-            item.BadgeText = c.Ready ? "READY" : "SHORT";
+            // WO-1518, owner 2026-09-06 20:12: "short doesnt help, i need to know waht im short".
+            item.BadgeText = c.Ready ? "READY" : ShortBadgeText(c.CostParts);
             var action = c.Ready
                 ? new ManageAction
                 {
@@ -4316,6 +4806,8 @@ namespace DeNelle.Village.UI
             string description = null;
             IReadOnlyList<ManageStatVM> stats = Array.Empty<ManageStatVM>();
             IReadOnlyList<ManageCostVM> costs = Array.Empty<ManageCostVM>();
+            // WO-1517 §1B item 3 - the troop card's SECOND live face. Null on every other screen.
+            ManageAction troopUpgradeFace = null;
 
             switch (nav.Tab)
             {
@@ -4326,7 +4818,8 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeTroopItem(c);
                         description = Ascii(c.Description);
-                        stats = TwoFacts(Ascii(c.TrainFactText), Ascii(c.UpgradeFactText));
+                        stats = TroopStatRows(c);
+                        troopUpgradeFace = item.ActionOf(ManageActionKind.Upgrade);
                     }
                     break;
                 }
@@ -4337,7 +4830,7 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeResearchItem(c);
                         description = Ascii(c.Description);
-                        stats = TwoFacts(Ascii(c.TierText), Ascii(c.TimeText));
+                        stats = TwoFacts("Tier", Ascii(c.TierText), "Research time", Ascii(c.TimeText));
                         costs = CostVms(c.CostParts);
                     }
                     break;
@@ -4349,7 +4842,8 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeBuildingItem(b, null);
                         description = Ascii(b.Description);
-                        stats = TwoFacts(Ascii(b.AfterUpgradeText), Ascii(b.UpgradeTimeText));
+                        stats = TwoFacts("Next level", Ascii(b.AfterUpgradeText),
+                                         "Upgrade time", Ascii(b.UpgradeTimeText));
                         costs = CostVms(b.UpgradeCostParts);
                         break;
                     }
@@ -4358,7 +4852,8 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeDefenseItem(d, null);
                         description = Ascii(d.Description);
-                        stats = TwoFacts(Ascii(d.PlacedText), Ascii(d.UpgradeTimeText));
+                        stats = TwoFacts("Placed", Ascii(d.PlacedText),
+                                         "Upgrade time", Ascii(d.UpgradeTimeText));
                         costs = CostVms(d.UpgradeCostParts);
                         break;
                     }
@@ -4384,7 +4879,37 @@ namespace DeNelle.Village.UI
                 };
             }
 
-            return ManageVmProjection.ProjectSelection(item, description, stats, costs, Navigate);
+            var selection = ManageVmProjection.ProjectSelection(item, description, stats, costs, Navigate);
+
+            // ⭐ WO-1517 §1B item 3 - "An UPGRADE button beside TRAIN whenever upgrade is Ready,
+            // with its time and cost on its face."
+            //
+            // ⛔ WHY IT IS SEATED HERE AND NOT IN THE PROJECTION. ComposeTroopItem has ALWAYS
+            // added an Upgrade action beside the Train one, and it has never been painted: the
+            // card has three face slots and ProjectSelection fills them as requirement-door /
+            // Cancel / primary (ManageVmProjection: SecondaryAction = item.ActionOf(Cancel)).
+            // A troop has no Cancel, so the SECONDARY SLOT WAS EMPTY ON EVERY TROOP CARD while the
+            // composed Upgrade action fell on the floor - which is why the owner's frame says
+            // "Upgrade: 12m 0s . Ready" on a row and offers no button. The renderer already lays
+            // the secondary face beside the primary in reading order
+            // (ManageWorkspacePanel.VisibleFaces), so seating it is the whole fix.
+            // ⚠ Widening the projection's own slot rule to "Cancel, else the first non-primary
+            // action" would change every Build and Research card in the same stroke, and
+            // ManageVmProjection is another lane's file. Composers own which action goes in which
+            // slot; this is the composer saying so, for the one screen the ruling is about.
+            if (troopUpgradeFace != null && selection != null && selection.Visible)
+            {
+                var face = ManageVmProjection.ProjectAction(troopUpgradeFace, Navigate);
+                if (face != null && face.Visible)
+                {
+                    selection.SecondaryAction = face;
+                    FlowTrace.Step("Manage", "troop detail '" + nav.ItemId + "' seats an UPGRADE face " +
+                        "beside TRAIN: label='" + face.Label + "' cost='" + face.CostText +
+                        "' enabled=" + face.Enabled);
+                }
+            }
+
+            return selection;
         }
 
         private TroopChoiceVM TroopChoiceById(string id)
@@ -4430,12 +4955,98 @@ namespace DeNelle.Village.UI
             return null;
         }
 
-        private static IReadOnlyList<ManageStatVM> TwoFacts(string a, string b)
+        /// <summary>
+        /// Two labelled facts. ⭐ WO-1517 §1B item 4 - THE LABELS ARE THE CALLER'S, because the
+        /// hardcoded pair was wrong on every screen that used it.
+        ///
+        /// <para>Owner device frame owner-screen-20260906-201037.png, verbatim off the Archer
+        /// detail: row 1 <c>Next -&gt; "Train one: 1m 0s . Ready"</c>, row 2
+        /// <c>Time -&gt; "Upgrade: 12m 0s . Ready"</c>. Neither label names its value; "Next" was
+        /// labelling a TRAIN fact and "Time" an UPGRADE fact. The Research card had the same defect
+        /// one screen over ("Next" over "TIER 2"). A label that contradicts its value is worse than
+        /// no label - the player reads it and learns something false.</para>
+        /// </summary>
+        private static IReadOnlyList<ManageStatVM> TwoFacts(string labelA, string a, string labelB, string b)
         {
             var list = new List<ManageStatVM>(2);
-            if (!string.IsNullOrWhiteSpace(a)) list.Add(new ManageStatVM { Label = "Next", Value = a });
-            if (!string.IsNullOrWhiteSpace(b)) list.Add(new ManageStatVM { Label = "Time", Value = b });
+            if (!string.IsNullOrWhiteSpace(a)) list.Add(new ManageStatVM { Label = labelA, Value = a });
+            if (!string.IsNullOrWhiteSpace(b)) list.Add(new ManageStatVM { Label = labelB, Value = b });
             return list;
+        }
+
+        /// <summary>
+        /// ⭐ WO-1517 §1B items 1 and 2 - THE TROOP DETAIL'S STATS, CURRENT LEVEL AND LEVEL+1.
+        ///
+        /// <para>Owner ruling 2026-09-06 20:10, verbatim: <i>"see screen needs clear should show
+        /// stats and what upgrade will promote to"</i>. Her frame
+        /// (owner-screen-20260906-201037.png) carries NO stat of any kind - a portrait, a flavour
+        /// line and two mislabelled timer rows - so a player cannot answer either of the two
+        /// questions the screen exists for.</para>
+        ///
+        /// <para>⛔ ONE AUTHORITY: <see cref="TroopStatResolver.Effective"/>, which is the SAME
+        /// resolver TroopDeployer applies to the live unit when it spawns
+        /// (TroopDeployer.cs:58-59) - it folds troops.json's baseline with troop-upgrades.json's
+        /// reach/strength curves. So the number on the card is the number that fights. Never
+        /// re-multiply a curve here.</para>
+        ///
+        /// <para>⭐ THE BEFORE -&gt; AFTER IS THE EXISTING TABLE, NOT A SECOND PATTERN.
+        /// <see cref="ManageStatVM.DeltaText"/> already renders as
+        /// <c>value  -&gt;  delta</c> in gold (ManageWorkspacePanel.BuildStatRows), which is the
+        /// shape the mockup draws for buildings. The ruling asks for the SAME table, so this fills
+        /// that field rather than inventing a next-level layout.</para>
+        ///
+        /// <para>⚠ FIVE ROWS, DELIBERATELY. BuildStatRows seats <c>Mathf.Min(count, 5)</c> rows and
+        /// WARNS when the band cannot hold them all, so a sixth would silently be the one dropped.
+        /// Health / Damage / Range / Speed are the four the curves actually move (strength scales
+        /// MaxHp + DPS, reach scales AttackRange + AggroRadius, per troop-upgrades.json's own
+        /// header); Train time is the fifth because it is the price. COST is not a row: training
+        /// charges nothing since WO-1387, so a cost row would read "free" forever.</para>
+        /// </summary>
+        private static IReadOnlyList<ManageStatVM> TroopStatRows(TroopChoiceVM c)
+        {
+            var def = c != null ? TroopCatalog.Find(c.Id) : null;
+            if (def == null)
+            {
+                FlowTrace.Warn("Manage", "troop detail for '" + (c != null ? c.Id : "<null>") +
+                    "' has no TroopDef - the card shows its timers only, with no stat table, rather " +
+                    "than inventing numbers");
+                return c == null
+                    ? Array.Empty<ManageStatVM>()
+                    : TwoFacts("Train one", Ascii(c.TrainFactText), "Upgrade", Ascii(c.UpgradeFactText));
+            }
+
+            int level = Mathf.Max(1, c.Level);
+            var now = TroopStatResolver.Effective(def, level);
+            var next = c.HasNextLevel ? TroopStatResolver.Effective(def, level + 1) : null;
+
+            var rows = new List<ManageStatVM>(5);
+            rows.Add(StatRow("Health", now.MaxHp, next != null ? (float?)next.MaxHp : null, "0"));
+            rows.Add(StatRow("Damage", now.AttackDamage, next != null ? (float?)next.AttackDamage : null, "0.0"));
+            rows.Add(StatRow("Range", now.AttackRange, next != null ? (float?)next.AttackRange : null, "0.0"));
+            rows.Add(StatRow("Speed", now.MoveSpeed, next != null ? (float?)next.MoveSpeed : null, "0.0"));
+            // Training time does NOT scale with troop level (BarracksService prices a train at
+            // TroopDef.BuildSeconds flat), so this row carries no delta - stating one would be a
+            // promotion the game does not deliver.
+            rows.Add(new ManageStatVM { Label = "Train time", Value = FormatTime(def.BuildSeconds) });
+            FlowTrace.Step("Manage", "troop detail stats id=" + c.Id + " L" + level +
+                (next != null ? " -> L" + (level + 1) : " (max)") +
+                " hp=" + now.MaxHp.ToString("0") + " dmg=" + now.AttackDamage.ToString("0.0"));
+            return rows;
+        }
+
+        /// <summary>One before -&gt; after stat row. The arrow is omitted at max level.</summary>
+        private static ManageStatVM StatRow(string label, float now, float? next, string format)
+        {
+            return new ManageStatVM
+            {
+                Label = label,
+                Value = now.ToString(format),
+                // Only when it actually CHANGES: an arrow pointing at the same number reads as a
+                // promotion that buys nothing.
+                DeltaText = next.HasValue && Mathf.Abs(next.Value - now) > 0.01f
+                    ? next.Value.ToString(format)
+                    : null
+            };
         }
 
         /// <summary>
@@ -4466,6 +5077,54 @@ namespace DeNelle.Village.UI
         /// method does not know, so an unknown currency never renders as "you cannot afford it" -
         /// a false refusal is worse than a missing one, and the trace names it.
         /// </summary>
+        /// <summary>
+        /// ⭐ WO-1518 - the SHORT state word WITH ITS NUMBERS: "SHORT 120 IRON",
+        /// "SHORT 120 IRON, 40 WOOD". Owner ruling 2026-09-06 20:12, verbatim:
+        /// <i>"see screen, short doesnt help, i need to know waht im short"</i>
+        /// (Logs/device/screens/owner-screen-20260906-201242.png - "Reinforced Plating / Troop
+        /// health +5% / SHORT", naming no resource and no amount).
+        ///
+        /// <para>⛔ NO SECOND AFFORDABILITY PREDICATE (ruling section 3). The shortfall is
+        /// <c>Amount - BankOf(ConceptId)</c> over the SAME <see cref="CostPart"/> list the cost
+        /// basket paints and the SAME bank reader <see cref="CostVms"/> uses for its per-row
+        /// verdict, which in turn reads the identical GameState fields as
+        /// <see cref="CanAfford"/>. One ledger, three faces.</para>
+        ///
+        /// <para>⚠ It falls back to the bare word "SHORT" when nothing measures short - which
+        /// happens legitimately when the refusal is gold-priced through a bank this reader does not
+        /// know (<see cref="BankOf"/> returns int.MaxValue and says so once). A bare SHORT is the
+        /// old, weaker face; it is never a WRONG number, and the trace names the concept.</para>
+        ///
+        /// <para>⚠ LENGTH IS LOAD-BEARING. This word lands in the research row's STATE column,
+        /// which ManageWorkspacePanel.BuildListRow seats at x 0.71-0.985 of the row - roughly a
+        /// quarter of its width - and FitSingleLine there floors at 18px. "SHORT 120 IRON" is 14
+        /// characters and fits; a whole sentence would shrink to the floor and be culled blank
+        /// (the same MinTextBandPx law the renderer states three times). So this stays a WORD plus
+        /// NUMBERS. The sentence form lives on the detail card's why band, which has the room.</para>
+        /// </summary>
+        private static string ShortBadgeText(IReadOnlyList<CostPart> parts)
+        {
+            if (parts == null || parts.Count == 0) return "SHORT";
+            string text = null;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var p = parts[i];
+                if (p.Amount <= 0) continue;
+                int bank = BankOf(p.ConceptId);
+                int missing = p.Amount - bank;
+                if (missing <= 0) continue;
+                string term = missing + " " + (p.Word ?? p.ConceptId ?? "").ToUpperInvariant();
+                text = text == null ? term : text + ", " + term;
+            }
+            if (text == null)
+            {
+                FlowTrace.Step("Manage", "a row reads SHORT but no cost part measured short against " +
+                    "its bank - the face keeps the bare word rather than inventing an amount");
+                return "SHORT";
+            }
+            return "SHORT " + text;
+        }
+
         private static int BankOf(string conceptId)
         {
             var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;

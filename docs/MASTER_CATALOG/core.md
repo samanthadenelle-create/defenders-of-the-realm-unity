@@ -3,7 +3,7 @@
 > **Verified from code 2026-08-02** (HEAD ~b77a178e, branch `wip/village2-and-f8-tickets`). Every claim
 > below was read from the actual `.cs` files, NOT from their comments — file banners lie (the worst
 > offenders are ledgered in RISK at the end). Supersedes the 2026-06-12 body + the 07-22/07-26 addenda.
-> **Headline state: SaveSchema v36 · SaveMigrator top step 36 · CoreServices 7 slots ·
+> **Headline state: SaveSchema v36 * SaveMigrator top step 36 * CoreServices 8 slots *
 > FeatureFlags 62 flags (12 XML-summary lies) · PanelId 0–15 (RealmMap=15) · ZoneManager home box 52/52.**
 
 Foundation layer. Three asmdefs live here (verified from the `.asmdef` files):
@@ -238,7 +238,7 @@ source so a reader who finds the old third in an older doc copy can tell which i
 
 | Class | Path | Responsibility (verified) | Bootstrap |
 |---|---|---|---|
-| `CoreServices` (static) | `CoreServices.cs` | Cross-asmdef registry, **7 slots** — see next section. | — |
+| `CoreServices` (static) | `CoreServices.cs` | Cross-asmdef registry, **8 slots**  -  see next section. |  -  |
 | `FeatureFlags` (static) | `FeatureFlags.cs` | **62** demo/web feature gates — see dedicated section. | — |
 | `SceneRouter` (static) | `SceneRouter.cs` | Scene routing — see dedicated section. | — |
 | `HubScenes` (static) | `HubScenes.cs` | ONE hub/overworld/raid/enemy-scene classifier — see Behaviors. | — |
@@ -257,7 +257,7 @@ source so a reader who finds the old third in an older doc copy can tell which i
 
 ---
 
-## CoreServices — 7 slots (`CoreServices.cs`, 200L)
+## CoreServices  -  8 slots (`CoreServices.cs`)
 
 Register-in-Awake / Unregister-in-OnDestroy; callers null-check (`CoreServices.Hud?.…`). Replacing a
 live registration logs a FlowTrace `Warn` (`:51`, `:115`, `:187`).
@@ -271,6 +271,13 @@ live registration logs a FlowTrace `Warn` (`:51`, `:115`, `:187`).
 | `Jupiter` | `IJupiterService` (`Web3/IJupiterService.cs`) | JupiterSwapService | 130–144 |
 | `WalletSigner` | `IWalletSigner` (`Web3/IWalletSigner.cs`) | WalletService on Connect | 155–169 |
 | `SceneLinkResolver` | `ISceneLinkResolver` (`World/ISceneLinkResolver.cs`, WO1) | SceneLinkResolverHost | 179–198 |
+| `VillageBridge` | `IVillageBridge` (`Bridging/IVillageBridge.cs`, WO-1510) | VillageBridgeService (`_Modules/Village/VillageBridgeService.cs`, RuntimeInitializeOnLoadMethod) |  -  |
+
+**WO-1510 (2026-09-06):** the `VillageBridge` slot REPLACED the four `Type.GetType("DeNelle.Village...")`
+sites that used to sit inside Core (`SceneRouter.cs:510,523`, `PersistenceBridge.cs:174`,
+`BreakCaptureHarness.cs:491`)  -  a layering inversion, since `DeNelle.Core.asmdef` references no game
+assembly. Core now names no Village type. Pinned by `Assets/Editor/Regression/CoreReflectionSourceRegression.cs`,
+which fails on any `Type.GetType("DeNelle.Village` under `Assets/_Modules/Core`.
 
 ---
 
@@ -419,6 +426,61 @@ claim is DEAD (closed by v34).**
   `LoadFromBackend :1019`, wallet-signed auth headers `:1145` (gated by `BackendAuthConfig.Enforced`, default OFF).
 - Bootstrap is DUAL (both guard on Instance): `GameStateBootstrap` `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`
   (`GameStateBootstrap.cs:16`) AND `GameStateService.EnsureInstance` AfterSceneLoad (`GameStateService.cs:167`).
+
+#### DELTA 2026-09-06  -  the cloud LOAD became a real load, and the offline queue coalesces
+
+> STOP: **THE OLD MERGE POLICY SENTENCE IS RETIRED, AND IT WAS NEVER TRUE OF THE CODE.** Both this
+> catalog and `LoadFromBackend`'s own docstring said *"server wins on BestWave (anti-rollback);
+> local wins on Towers and Pets"*. There was **no per-field merge at all**: the body copied SEVEN
+> fields by hand  -  `bestWave / resources / voidshards / aetherCrystals / stone / iron / wood`  -  and
+> **never called `SaveMigrator.MigrateForImport` or `ApplyPersisted`**. The server was never the
+> limiter (`api/game/load.js` returns the whole state document), so structures, army, build queue,
+> echoes, cosmetics and quest state were all present in the payload and all dropped on the floor.
+> A player who reinstalled or signed in on a second device got their currencies and a **BLANK
+> TOWN**. Read at source: `GameStateService.cs` `LoadFromBackend` docstring `:2079-2089`.
+
+- **`ApplyBackendState(SaveSchema.PersistedState server, double? serverSchemaVersion, double? serverLastSeenMs)`**
+  (`:2244`, WO-1447 + WO-1448)  -  **the ONE apply seam, with TWO callers**, running the server row
+  through the *same* `MigrateForImport -> SaveSchema.Validate -> ApplyPersisted` path the local
+  `Load()` uses. Currency now rides that path like every other field, so a save field added later
+  cannot silently fail to restore. `LoadFromBackend` is reduced to transport (clock anchor, config
+  absorb) and one call to this. Ordered guards, each tracing:
+  - **Recency gate (WO-1448):** `server > local` APPLY * `server == local` SKIP (same vintage, an
+    overwrite is pure downside) * `server` undated SKIP *unless* local is also undated (the
+    reinstall/new-device case). STOP: **NOT a per-field `max()` merge, by explicit ruling**  -  resources
+    are SPENDABLE, so a per-field max mints currency out of a stale row. **Whole row or nothing.**
+  - **Identity, FAIL CLOSED:** a row whose `boundWallet` differs from this device's rejects whole  - 
+    applying it would both overwrite the town and repoint the account.
+  - `BoundWallet` is **device-owned, never payload-owned**: restored unconditionally after
+    `ApplyPersisted` so a null/blank row cannot blank the live wallet under the signer.
+  - Only the APPLIED branch advances `_lastSyncedSnapshot` (the delta baseline) and calls `Save()`
+     -  advancing that on a skip would mark unsent local changes as already synced and lose them.
+  - The whole body is `try`-wrapped because `LoadFromBackend` runs inside a `Forget()`'d
+    `UniTaskVoid` on every scene enter (`PersistenceBridge`), where an escaping throw would vanish
+    into an unobserved task instead of reaching the break-log (CLAUDE.md S12).
+- **`public enum BackendApplyOutcome`** (`:2211`)  -  `SkippedNoPayload` / `SkippedStaleServer` /
+  `RejectedIdentity` / `RejectedMigration` / `RejectedValidation` / `Applied`. **RETURNED, not just
+  logged**, so a headless oracle asserts the DECISION rather than its side effects
+  (`CloudLoadRestoreRegression`, marker `CLOUDLOAD_RESTORE_OK`).
+- **`public double LastLocalSaveUnixMs { get; private set; }`** (`:198`)  -  the recency anchor. Stamped
+  by `Save()` **inside the try, after the write succeeds** (a failed write must not advance it, or a
+  device that cannot persist starts refusing its own cloud restore) and re-hydrated in `Load()` from
+  the envelope's `exportedAt`. One writer for both: **`StampLocalSaveClockFromEnvelope`** (`:544`),
+  `Guard.Try`-wrapped, degrading to `0` **and saying so** on an unparseable/absent stamp. `0` means
+  "this device has never saved"  -  the fail-safe direction, because the server row is this same
+  player's own last accepted save. (!) **Cross-clock caveat is STATED, not engineered around**: this
+  stamp is the DEVICE clock, the server's is Postgres `updated_at`; neither skew direction can mint
+  currency, which is why the WO prescribes a comparison rather than a field merge.
+- **Offline sync queue now COALESCES** (`:2946` region, WO-1441/WO-1454/WO-1455):
+  `CoalesceOfflineQueue` runs on every enqueue. (!) **Nothing is at risk and that is why it only
+  warns**  -  entries are retry MARKERS, not bodies; the upload is always the CURRENT full snapshot,
+  so ONE successful save drains every entry. STOP: **Do not "fix" growth by trimming or clearing**  -  a
+  queue that forgets it has unsent work is how a fail-closed refusal becomes real data loss. The
+  depth warning was rewritten because it **structurally missed**: the old test was
+  `Count % OfflineQueueDepthWarn == 0`, so it fired only on an exact multiple of 25 and a measured
+  **112-deep** session emitted NOTHING (coalescing, foreign-identity drops and partial drains mean
+  the counter is not sampled on every integer). It is now a **LATCHED CROSSING**  -  warn once on the
+  way up, re-arm only after the depth falls back below.
 
 ### SaveSchema (static — `State/SaveSchema.cs`, 914L)
 - `CurrentVersion` (the const line doubles as the full changelog, one clause per version, newest first — **read the number and the changelog there, never here**),
@@ -587,6 +649,7 @@ chrome is gated by `FeatureFlags.BlinkChrome`.
 | `CombatTextLayer` | `UI/CombatTextLayer.cs` (222L) | Pooled, capped, non-stacking combat stamps (single writer). |
 | `HudCommands` (static) | `HUD/HudCommands.cs` (124L) | Core command sink HUD-kit → Village handlers (HUD_OBSIDIAN A4). |
 | `HudBuildingFocus` (static) | `UI/HudBuildingFocus.cs` | Cross-assembly "hero near upgradable building" proximity signal. |
+| STOP: **`WorldHold` (static) + `WorldHold.Handle`**  -  entry added 2026-09-06 | `UI/WorldHold.cs` (1053L) | **THE ref-counted freeze owner.** Every pause / modal / purchase / death screen takes a hold instead of touching `Time.timeScale`; slowest-wins. **Two acquire FAMILIES, and the distinction is CATEGORICAL, not a bigger number** (WO-1360): `Acquire`/`AcquireScale` `:403,:498` are **`BoundedBeat`**  -  the DEFAULT for every caller, with a ceiling, because a hit stop / celebration / death cam has a length the CODE owns. `AcquirePlayerOwned(reason, isOwnerAlive)` `:446` and `AcquirePlayerOwnedScale` `:457` are **`HoldKind.PlayerOwned`**  -  **no ceiling**, because a pause menu, a bug-report form or a modal the player is reading can legitimately last hours and backgrounding the app is the normal way to do it. STOP: **RAISING THE CEILING IS NOT THE FIX**  -  it reproduces the bug at a longer timeout; on 2026-09-03 the 180 s ceiling force-released `pause-menu` after 507 s and the world ran underneath a PAUSED screen. An unbounded hold must be ASKED for **by name**, so it cannot be got by accident. STOP: **The liveness probe is REQUIRED and `RequireProbe` `:467` THROWS `ArgumentNullException` on null** (the `OverTimeEffects`/WO-1330 shape)  -  WO-1369: `game-over` was acquired by a screen that delegated release to a view it did not own, the arbiter destroyed that view 18 ms later, and with no ceiling and no probe the world sat at `timeScale 0.00` for 2 m 07 s until the OS killed the app. A good probe is a null-tolerant EXISTENCE test (`() => view != null`), **never** "has enough time passed"; `() => true` is the hole with a lambda around it and **`WorldHoldLivenessRegression` rejects it**. Other nets: `ReleaseAllForSceneLoad` `:951` (wired to `sceneLoaded`), `ForceReleaseAll` `:635`, `RestoreIfDrifted` `:907`, `WatchdogTick` `:803`, `Describe()` `:386`. **Live player-owned sites (measured 2026-09-06  -  10 under `_Modules`):** `PauseController:284` * `HudKitController:2693` (combat item picker) * `FocusedModalHost:47` * `HarvestOverflowModal:112` * `ObsidianNavigationWorkspace:58` * `BreakCaptureHarness:595` (F8 note) * `BugReportView:98` * `GameOverScreen:415` * `EndStateView:211` * `JewelerDiscoveryFtue:66`. Reason tokens are consts on the class (`ReasonPauseMenu` `:154`, `ReasonPurchase` `:157`, `ReasonCombatItemPicker` `:160`). |
 | `HarvestPanelGate` / `ObsidianQueueGate` / `PauseGate` / `RaidEntryGate` (statics) | `UI/*Gate.cs` | Core open/close seams: Echo harvest panel · work-queue panel (WO-773) · back/pause · **RaidEntryGate** (F8 2026-07-30: HudKit "Raids" button → Village raid selection). `PauseGate` also owns the scoped native-full-screen suppression bit: rewarded ads keep the invoking `PanelManager` caller registered, so Android's ad-driven application-pause callback cannot replace it with Pause. The scope owns no navigation and reopens nothing. |
 | `LoadingOverlay` | `UI/LoadingOverlay.cs` (211L) | Reusable code-built loading screen (Load Default / Design My Own delay). |
 | `VillageLoadOverlay` | `UI/VillageLoadOverlay.cs` (265L) | Village-specific loader (spinner/progress/lore) driven by SceneRouter. |
@@ -671,6 +734,7 @@ chrome is gated by `FeatureFlags.BlinkChrome`.
 |---|---|---|
 | `IDamageableStructure` | `Combat/IDamageableStructure.cs` | `IsAlive` + `ApplyContactDamage`. Impl: HeartController, HeroHealth, Building, Tower, Gate. |
 | `IDamageable` bundle (+ CombatFaction/Layer/ICombatLayered/IDamageTintable/DamageElement/StatusEffect) | `Combat/IDamageable.cs` | Cross-module attack target; air/ground via ICombatLayered. |
+| STOP: **`CombatFactionRules` (static)**  -  NEW 2026-09-06 | `Combat/CombatFactionRules.cs` | **WO-1439/WO-1438  -  THE ONE PLACE THAT ANSWERS "may this attacker hit that?"**, and the reason it exists is measured, not theorised: a raid garrison spent an entire raid destroying the RaidSpire it guards, because the sweep's own reject tally (`rejected[null,noStructComp,dead,hero]`, quoted in the file header at `:9-14`) enumerates every filter it had  -  **and faction was not among them**. Pure, allocation-free, side-effect-free so a per-frame selection loop can call it per candidate and an oracle can assert it directly. Surface: `MayAttack(CombatFaction, IDamageableStructure)` `:52`, `MayAttack(CombatFaction, IDamageable)` `:99` (WO-1438  -  the two interfaces are SEPARATE, neither extends the other, so the body-shaped selectors could not reach the structure overload and were re-implementing the predicate inline), `IsFriendlyFire` on both contracts (`:117`, `:128`  -  deliberately **liveness-blind**: classification is not attackability, and conflating them silently re-classifies a corpse), all funnelling into one private `Decide` `:108` (`!alive -> false; targetFaction != attacker`). STOP: **DO NOT COPY THE COMPARISON INTO A CALL SITE** and STOP: **do not special-case a target by name or id**  -  both bans are in the header, with the reasoning that "is it the spire?" leaves every wall, tower and building unfixed while looking fixed. (!) **OVERLOAD TRAP:** passing a CONCRETE type implementing BOTH interfaces is an ambiguous call and does not compile  -  deliberate, a loud error rather than a silent wrong answer; call through an interface-typed reference, which every selection loop already holds. (!) **The remaining-inline-copy census in the docstring (`:71-84`) is HAND-MAINTAINED and says so**  -  it was corrected on 2026-09-06 (WO-1503) from a singular "the one remaining copy" to a counted list after the author ran the grep instead of recalling it. **Run `grep "Faction != CombatFaction.Hostile" Assets/_Modules`  -  do not read that list as current.** |
 | `BattleLock` (static) | `Combat/BattleLock.cs` (79L) | WO-437 single source of "is a battle active" — the PanelManager/PanelRouter gate. |
 | `HeroCombatEngagement` / `PursuitBattleProbe` | `Combat/*.cs` | Battle-lock sources: in-scene real-time fight (2026-06-30) · "actively pursued = in battle" (F8-46 Option A). |
 | ⚠ **Both battle-lock sources are released by `Enemy.OnDisable`** | `Village/Enemies/Enemy.cs` | WO-1337: an enemy raises the lock through TWO owners — the engagement token AND the pursuit pulse it stamps every DriveNav tick. Only the token was released on despawn; `PostureSignals.RevokePursuit` lived in `Die()` alone, so a body removed WITHOUT dying (the arena's retreat teardown uses `Destroy(gameObject)`) left a pulse live for `PursuitTtl`. `OnDisable` now revokes too — the one hook covering Destroy + pool release + scene unload. Revoked in BOTH places on purpose (death revokes immediately so town chrome returns with the last threat). |
@@ -767,7 +831,7 @@ retired — signature is IN the value now) · `dotr-sync-queue` · `dotr-event-q
 
 ## Behaviors & seams (cross-assembly contracts)
 
-- **Service registry:** `CoreServices` (7 slots, above). Callers null-check; register Awake / unregister OnDestroy.
+- **Service registry:** `CoreServices` (8 slots, above). Callers null-check; register Awake / unregister OnDestroy.
 - **Panel routing:** panel registers opener on `PanelRouter` (+ optional context / context+mode arities);
   any assembly opens by `PanelId`; visibility is arbitered by `PanelManager` (one modal at a time,
   WO-437 battle-lock, WO-465 IsOpen verify). `PanelRouter.PanelOpened` feeds TutorialSignals.

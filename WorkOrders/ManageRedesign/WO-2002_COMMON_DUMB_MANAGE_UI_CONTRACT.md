@@ -1,5 +1,7 @@
 # WO-2002 — Create the Shared Dumb Manage UI Contract and Common Renderer
 
+**Status:** DONE - landed in bb51b8b9c (verified 2026-09-06)
+
 **Priority:** P0  
 **Depends on:** WO-2001  
 **Blocks:** BUILD, ARMY, RESEARCH implementation work

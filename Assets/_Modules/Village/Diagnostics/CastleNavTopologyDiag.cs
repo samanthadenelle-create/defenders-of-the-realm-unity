@@ -94,16 +94,19 @@ namespace DeNelle.Village
                 var hero = GameObject.FindWithTag("Player");
                 if (hero == null)
                 {
-                    // fallback tag
-                    Guard.Try(Sys, "hero-fallback-tag", () =>
+                    // WO-1513: the old fallback read the "HeroTarget" tag, which
+                    // TagManager.asset has never declared — a permanently dead branch.
+                    // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+                    Guard.Try(Sys, "hero-fallback-component", () =>
                     {
-                        hero = GameObject.FindWithTag("HeroTarget");
+                        var loco = FindFirstObjectByType<HeroLocomotion>();
+                        if (loco != null) hero = loco.gameObject;
                     });
                 }
 
                 if (hero == null)
                 {
-                    FlowTrace.Fail(Sys, "HERO_NOT_FOUND: no GameObject tagged 'Player' or 'HeroTarget'");
+                    FlowTrace.Fail(Sys, "HERO_NOT_FOUND: no GameObject tagged 'Player' and no HeroLocomotion in the scene");
                     return;
                 }
 
@@ -147,25 +150,18 @@ namespace DeNelle.Village
                     }
                 });
 
-                // SceneTransitionTrigger components — by resolved type, fall back to name scan
+                // SceneTransitionTrigger components — WO-1511: SceneTransitionTrigger lives in
+                // THIS assembly (DeNelle.Village), so the type is nameable directly and the
+                // "type not resolved via reflection" Warn branch is now unreachable BY
+                // CONSTRUCTION — a missing type would be a compile error, not a silent skip.
                 Guard.Try(Sys, "section2-transitiontriggers", () =>
                 {
-                    var sttType = System.Type.GetType("DeNelle.Village.SceneTransitionTrigger, DeNelle.Village")
-                                  ?? System.Type.GetType("DeNelle.Village.SceneTransitionTrigger");
-                    if (sttType != null)
+                    var comps = Object.FindObjectsByType<SceneTransitionTrigger>(FindObjectsInactive.Include);
+                    FlowTrace.Step(Sys, $"SceneTransitionTrigger count={comps.Length}");
+                    foreach (var comp in comps)
                     {
-                        var comps = Object.FindObjectsByType(sttType, FindObjectsInactive.Include);
-                        FlowTrace.Step(Sys, $"SceneTransitionTrigger count={comps.Length}");
-                        foreach (var c in comps)
-                        {
-                            var comp = c as Component;
-                            if (comp == null) continue;
-                            AddTarget(seamTargets, $"STT:{comp.gameObject.name}", comp.transform.position);
-                        }
-                    }
-                    else
-                    {
-                        FlowTrace.Warn(Sys, "SceneTransitionTrigger type not resolved via reflection — skipping component scan");
+                        if (comp == null) continue;
+                        AddTarget(seamTargets, $"STT:{comp.gameObject.name}", comp.transform.position);
                     }
                 });
 

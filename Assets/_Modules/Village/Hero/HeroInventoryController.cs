@@ -304,15 +304,27 @@ namespace DeNelle.Village
         private void ResolveLoadout()
         {
             if (_loadout != null) return;
-            var hero = GameObject.FindWithTag("Player");
-            if (hero == null) hero = SafeFindByTag("HeroTarget");
+            var hero = ResolveHeroObject();
             if (hero != null) _loadout = hero.GetComponentInChildren<GearLoadout>();
         }
 
-        private static GameObject SafeFindByTag(string tag)
+        /// <summary>
+        /// The ONE hero resolve the three inventory partials share (WO-1513). The old
+        /// second term was SafeFindByTag("HeroTarget") — a tag TagManager.asset has
+        /// never declared, so that fallback was dead from the day it was written and
+        /// read as a live alternative to anyone debugging a blank paper doll. The hero
+        /// definitively carries HeroLocomotion (CLAUDE.md §7), so the component is the
+        /// real fallback.
+        /// </summary>
+        private static GameObject ResolveHeroObject()
         {
-            try { return GameObject.FindWithTag(tag); }
-            catch { return null; }
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) hero = loco.gameObject;
+            }
+            return hero;
         }
 
         private string HeroJob =>

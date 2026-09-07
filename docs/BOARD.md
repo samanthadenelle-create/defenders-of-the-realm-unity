@@ -72,6 +72,7 @@ hole. Filter them out with the `Doc` chip when you want a pure work view.
 | `DONE` / `IMPLEMENTED` / `COMPLETE` — **or a `.RESULT.md` exists** | **Done** |
 | `BLOCKED` | **Blocked** |
 | `READY` (any phrasing containing it) | **Ready** |
+| `IN PROGRESS` (substring fallback only - never a leading verdict) | **Ready** |
 | `DRAFT` / `SPEC` / `NOT STARTED` / `PROPOSAL` | **Spec** |
 | anything else | **Unlabeled** |
 
@@ -139,6 +140,15 @@ no one's build should start failing because a WO file is sloppy.
 first, so the gate enforces the vocabulary without failing anyone retroactively. A board-check FAIL
 fails the gate summary but does not short-circuit the code stages — it is a docs defect, not a
 compile one.
+
+**Recursive missing-status sweep (WO-1492, 2026-09-06):** every run also sweeps
+`WorkOrders/**` at ANY depth for work-order files (`WORK_ORDER_*.md` **or** `WO-<n>_*.md`, never a
+RESULT) that carry no `**Status:**` line at all, prints `MISSING_STATUS_LINE <n>` naming each, and
+folds the count into `BOARD_CHECK_FAIL`. The flat `WorkOrders/*.md` glob plus the `WORK_ORDER_`
+prefix rule missed the seventeen-ticket `WorkOrders/ManageRedesign/` program twice over - wrong
+directory AND wrong filename shape - so the largest lane in flight rendered as nothing and no
+marker said so. The sweep only asks whether a status line is PRESENT; bucketing stays with
+`classify_status`, so it can never re-classify an existing row.
 
 Both runs also print a report-only `DUPLICATE_WO_NUMBERS` block — WO numbers claimed by more than one
 file (56 known legacy collisions). Duplicates are **flagged, never silently renumbered** (a collision

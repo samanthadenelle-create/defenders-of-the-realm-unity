@@ -667,27 +667,18 @@ namespace DeNelle.HUD
         {
             try
             {
-                var t = System.Type.GetType("DeNelle.Core.State.GameStateService, DeNelle.Core");
-                if (t == null) { ShowToast("Reset failed - GameStateService missing."); return; }
-                var instance = t.GetProperty("Instance",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
-                if (instance == null) { ShowToast("Reset failed - service not alive."); return; }
-                var reset = t.GetMethod("ResetToNewGame",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                reset?.Invoke(instance, null);
+                // WO-1511: GameStateService and SceneRouter both live in DeNelle.Core, which
+                // DeNelle.HUD.asmdef already references ("DeNelle.Core" is its first entry) —
+                // so both are called directly. The two "type missing" toasts they used to
+                // guard are unreachable by construction now (a missing type is a compile
+                // error, not a runtime toast); the LIVE guard — service not alive — is kept
+                // verbatim, as is the try/catch below.
+                var service = DeNelle.Core.State.GameStateService.Instance;
+                if (service == null) { ShowToast("Reset failed - service not alive."); return; }
+                service.ResetToNewGame();
 
-                var router = System.Type.GetType("DeNelle.Core.SceneRouter, DeNelle.Core");
-                var goHero = router?.GetMethod("GoHeroSelect",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (goHero != null)
-                {
-                    ShowToast("Reset - heading back to Hero Select...");
-                    goHero.Invoke(null, null);
-                }
-                else
-                {
-                    ShowToast("Reset done - restart the game to redo selection.");
-                }
+                ShowToast("Reset - heading back to Hero Select...");
+                DeNelle.Core.SceneRouter.GoHeroSelect();
             }
             catch (System.Exception ex)
             {

@@ -26,17 +26,26 @@
 //      bases - i.e. the settle payout's own arithmetic, no second table. A x1.5 camp
 //      estimates 1.5x the wood of a x1.0 camp (wood and iron ride the multiplier; gold
 //      does not - RaidLootTunables header).
-//   C. THE ARMY WORD. With 0 fieldable troops every garrisoned camp reads
-//      "LOCKED - needs Army <garrison>"; with an army that covers the garrison the word
-//      is absent; with the army UNKNOWN (-1, headless) the word is absent - a frame must
-//      never print a lock it cannot prove.
+//   C. THE ARMY WORD - A WARNING SINCE WO-1542, NEVER A LOCK. With 0 fieldable troops
+//      every garrisoned camp reads "Outmatched - Army <garrison> advised"; with an army
+//      that covers the garrison the word is absent; with the army UNKNOWN (-1, headless)
+//      it is absent - a frame must never print advice it cannot prove. The BEGIN ASSAULT
+//      confirm toast fires on the SAME predicate from the SAME producer, and neither the
+//      word nor the toast may read as a refusal (the door is unchanged, WO-1379 PIN F).
+//   C2. WO-1562 - A CLEARED CAMP IS MARKED, from RaidClaimService through ClaimedProvider
+//      and never a second claim predicate, and the marker DISCLOSES the live repeat-clear
+//      rate formatted off RaidClaimService.RepeatClearLootMultiplier (never typed).
+//   C3. WO-1562 - A VICTORY ANNOUNCES A CROSSED LADDER RUNG and stays silent otherwise,
+//      reading the catalog's authored unlockVictories - the same authority the grid's
+//      lock sentences read, so there is one ladder and no second copy of the thresholds.
 //   D. THE PIPS. ShowStarPips is false with no rating producer (today's wiring), false
 //      when every known rating is identical, true only when known ratings differ.
 //   E. SOURCE LINT (the MVVM seam): RaidSelectionVM calls RaidScoring.EstimateSpoils and
 //      types no spoils literal; RaidScoring.LootFor and .EstimateSpoils both route
-//      through ProjectLoot; RaidSelectionScreen reads SpoilsLineFor / ArmyLockWordFor /
-//      ShowStarPips, gates StarRatingRow.Build behind ShowStarPips, and types neither
-//      "Spoils:" nor "LOCKED" itself (the VM owns the words).
+//      through ProjectLoot; RaidSelectionScreen reads SpoilsLineFor / ArmyWarnWordFor /
+//      ClearedWordFor / ShowStarPips, wires ClaimedProvider, gates StarRatingRow.Build
+//      behind ShowStarPips, and types neither "Spoils:" nor "LOCKED" itself (the VM owns
+//      the words).
 //   F. THE BANDS ARE TALL ENOUGH TO RENDER. Every entry of RaidSelectionScreen.CardBands
 //      must satisfy HavePx >= NeedsPx. This case exists because on 2026-09-05 the WO-1402
 //      spoils line shipped INVISIBLE and no suite noticed: the VM composed it
@@ -49,8 +58,18 @@
 //      A band is not "tight" when it fails this: it renders NOTHING, silently.
 //
 // MUTATIONS THIS SUITE CATCHES (named, so the RED is reproducible):
-//   M1. In RaidSelectionVM.ArmyLockWord, delete the `garrison > deployableTroops`
-//       compare (return null) -> C fails on every garrisoned camp.
+//   M1. In RaidSelectionVM.ArmyWarnWord, delete the `garrison > deployableTroops`
+//       compare (return null) -> C fails on every garrisoned camp, AND its confirm-toast
+//       parity half fails, because the grid word and the BEGIN ASSAULT confirm read the
+//       one predicate.
+//   M1b. Put the word back to "LOCKED - needs Army " -> C fails on the advice-not-a-lock
+//       assertion. That is WO-1542 acceptance 4 held from the word's side: a card face
+//       may not claim a refusal the tap never gives, and the tap is deliberately
+//       unchanged (no readiness gate; HeartfireRegression PIN F owns the door).
+//   M1c. Make RaidDeployScreen.OnDeploy `return` after the outmatch toast without ever
+//       calling AcknowledgeOutmatch -> the confirm becomes a permanent refusal, i.e. the
+//       second gate WO-1379 forbids. Held by the toast's own wording assertion plus the
+//       latch in RaidDeployVM.
 //   M2. In RaidSelectionVM.Rebuild, replace `EstimateSpoils(d)` with a literal basket
 //       (`new ResourceCost(wood: 600, iron: 250)`) -> B fails (line != the scorer's
 //       estimate) and E fails (no RaidScoring.EstimateSpoils call).
@@ -113,6 +132,8 @@ namespace DeNelle.Editor.Regression
             CheckSpoilsLines(defs, failures, log);          // A
             CheckOneProducer(defs, failures, log);          // B
             CheckArmyLockWord(defs, failures, log);         // C
+            CheckClearedMarker(defs, failures, log);       // C2 (WO-1562 part 2)
+            CheckUnlockAnnouncement(defs, failures, log);  // C3 (WO-1562 part 1)
             CheckPipsGate(defs, failures, log);             // D
             CheckSourceSeams(failures, log);                // E
             CheckCardBands(failures, log);                  // F
@@ -121,8 +142,11 @@ namespace DeNelle.Editor.Regression
             {
                 Debug.Log(log.ToString() + "RAID_SELECTION_SPOILS_OK");
                 reason = "RAID SELECTION SPOILS OK - every row carries a '~' spoils line from RaidScoring's own " +
-                         "estimate (one producer), the pips hide until ratings vary, and a camp above the army " +
-                         "reads 'LOCKED - needs Army N' in words";
+                         "estimate (one producer), the pips hide until ratings vary, a camp above the army reads " +
+                         "'Outmatched - Army N advised' in words (a WARNING - the card stays tappable and the door " +
+                         "is unchanged) with a matching BEGIN ASSAULT confirm from the same predicate, a CLEARED " +
+                         "camp is marked from RaidClaimService and discloses the live repeat rate, and a victory " +
+                         "announces only a ladder rung it actually crossed";
                 return true;
             }
 
@@ -239,6 +263,17 @@ namespace DeNelle.Editor.Regression
         }
 
         // -- C: the army word ---------------------------------------------------------------
+        //
+        // WO-1542 (owner ruling 2026-09-06, "Warning, not a lock"): the word this case pins
+        // CHANGED, and the change is the point. It read "LOCKED - needs Army N" while
+        // OnCardTapped refused on exactly the escalation lock and Heartfire and then opened the
+        // deploy screen anyway, under a lit BEGIN ASSAULT - a refusal the tap never gave. It now
+        // reads "Outmatched - Army N advised": same fact, same producer, same predicate
+        // (garrison BODIES > deployable BODIES), without claiming a gate.
+        //
+        // RED-FIRST NOTE: this case CANNOT COMPILE against the pre-change tree - ArmyWarnPrefix,
+        // ArmyWarnWordFor and OutmatchConfirmToast do not exist there. That build failure IS the
+        // honest red; the oracle asserts a contract whose absence was the defect.
         private static void CheckArmyLockWord(List<SceneConfigDef> defs, List<string> failures, StringBuilder log)
         {
             // Army 0: every garrisoned camp is above it.
@@ -246,32 +281,33 @@ namespace DeNelle.Editor.Regression
             {
                 foreach (var c in Ladder)
                 {
-                    string expected = RaidSelectionVM.ArmyLockPrefix + GarrisonOf(c);
-                    string word = vm.ArmyLockWordFor(c.Id);
+                    string expected = RaidSelectionVM.ArmyWarnPrefix + GarrisonOf(c) + RaidSelectionVM.ArmyWarnSuffix;
+                    string word = vm.ArmyWarnWordFor(c.Id);
                     if (!string.Equals(word, expected, StringComparison.Ordinal))
                         failures.Add($"C: with 0 fieldable troops '{c.Id}' (garrison {GarrisonOf(c)}) reads " +
                                      $"\"{word ?? "(null)"}\" - expected \"{expected}\"; the row must SAY the camp is above the army");
                 }
-                log.AppendLine("OK: army 0 -> every garrisoned camp carries 'LOCKED - needs Army <garrison>'");
+                log.AppendLine("OK: army 0 -> every garrisoned camp carries the outmatch warning with its garrison count");
             }
 
             // Army 9: the Forsaken Camp (9) is covered, the Broken Garrison (15) is not.
             using (var vm = new RaidSelectionVM(defs, null, 20, _ => true, deployableTroops: 9))
             {
-                if (vm.ArmyLockWordFor("raider_camp_small") != null)
-                    failures.Add("C: with 9 fieldable troops 'raider_camp_small' (garrison 9) still reads the lock word - " +
+                if (vm.ArmyWarnWordFor("raider_camp_small") != null)
+                    failures.Add("C: with 9 fieldable troops 'raider_camp_small' (garrison 9) still reads the warning - " +
                                  "the compare is garrison > army, and 9 is not above 9");
-                if (vm.ArmyLockWordFor("fortified_garrison") != RaidSelectionVM.ArmyLockPrefix + "15")
-                    failures.Add("C: with 9 fieldable troops 'fortified_garrison' (garrison 15) does not read 'LOCKED - needs Army 15'");
-                log.AppendLine("OK: army 9 -> camp of 9 open, camp of 15 locked in words");
+                string expect15 = RaidSelectionVM.ArmyWarnPrefix + "15" + RaidSelectionVM.ArmyWarnSuffix;
+                if (vm.ArmyWarnWordFor("fortified_garrison") != expect15)
+                    failures.Add($"C: with 9 fieldable troops 'fortified_garrison' (garrison 15) does not read \"{expect15}\"");
+                log.AppendLine("OK: army 9 -> camp of 9 open, camp of 15 warned in words");
             }
 
             // Army covers everything: no words.
             using (var vm = new RaidSelectionVM(defs, null, 20, _ => true, deployableTroops: 99))
             {
                 foreach (var c in Ladder)
-                    if (vm.ArmyLockWordFor(c.Id) != null)
-                        failures.Add($"C: with 99 fieldable troops '{c.Id}' still reads \"{vm.ArmyLockWordFor(c.Id)}\" - a covered camp must carry no lock word");
+                    if (vm.ArmyWarnWordFor(c.Id) != null)
+                        failures.Add($"C: with 99 fieldable troops '{c.Id}' still reads \"{vm.ArmyWarnWordFor(c.Id)}\" - a covered camp must carry no warning");
             }
 
             // Army UNKNOWN (headless / unwired): no words, because none can be proven.
@@ -280,15 +316,163 @@ namespace DeNelle.Editor.Regression
                 if (vm.DeployableTroops != RaidSelectionVM.Unknown)
                     failures.Add($"C: an unwired VM reports DeployableTroops={vm.DeployableTroops}, expected Unknown ({RaidSelectionVM.Unknown})");
                 foreach (var c in Ladder)
-                    if (vm.ArmyLockWordFor(c.Id) != null)
-                        failures.Add($"C: with the army UNKNOWN '{c.Id}' reads \"{vm.ArmyLockWordFor(c.Id)}\" - a headless frame " +
-                                     "must never print a lock it cannot prove");
-                log.AppendLine("OK: army unknown / army 99 -> no lock word on any row");
+                    if (vm.ArmyWarnWordFor(c.Id) != null)
+                        failures.Add($"C: with the army UNKNOWN '{c.Id}' reads \"{vm.ArmyWarnWordFor(c.Id)}\" - a headless frame " +
+                                     "must never print advice it cannot prove");
+                log.AppendLine("OK: army unknown / army 99 -> no warning on any row");
             }
 
-            // The word is ASCII and the prefix is the one the WO spells.
-            if (RaidSelectionVM.ArmyLockPrefix != "LOCKED - needs Army ")
-                failures.Add($"C: ArmyLockPrefix is \"{RaidSelectionVM.ArmyLockPrefix}\" - WO-1402 spells it 'LOCKED - needs Army N'");
+            // THE WORD IS ADVICE, NOT A LOCK - the WO-1542 ruling in one assertion. A word that
+            // says LOCKED while the door opens anyway IS the defect, so it must not claim one.
+            if (RaidSelectionVM.ArmyWarnPrefix.IndexOf("LOCK", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                RaidSelectionVM.ArmyWarnSuffix.IndexOf("LOCK", StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("C: the army word says LOCK again. Owner ruling WO-1542: it is a WARNING - the card stays " +
+                             "tappable and the door is unchanged, so a word claiming a refusal the tap never gives is " +
+                             "the exact defect that ticket closed");
+            if (RaidSelectionVM.ArmyWarnPrefix != "Outmatched - Army " ||
+                RaidSelectionVM.ArmyWarnSuffix != " advised")
+                failures.Add($"C: the army warning is \"{RaidSelectionVM.ArmyWarnPrefix}N{RaidSelectionVM.ArmyWarnSuffix}\" - " +
+                             "WO-1542 spells it 'Outmatched - Army N advised'");
+
+            // THE CONFIRM TOAST fires on exactly the same predicate, from the same producer, so
+            // the grid warning and the BEGIN ASSAULT confirm can never disagree about which camp
+            // is over-matched. That drift is what WO-1542 exists to close.
+            foreach (var c in Ladder)
+            {
+                var def = FindDef(defs, c.Id);
+                bool warned = RaidSelectionVM.ArmyWarnWord(def, 9) != null;
+                bool asks = RaidSelectionVM.OutmatchConfirmToast(def, 9) != null;
+                if (warned != asks)
+                    failures.Add($"C: '{c.Id}' at army 9 warns={warned} but confirms={asks} - the grid word and the " +
+                                 "BEGIN ASSAULT confirm read different predicates. One producer, or they drift");
+            }
+            string toast = RaidSelectionVM.OutmatchConfirmToast(FindDef(defs, "fortified_garrison"), 9);
+            if (string.IsNullOrEmpty(toast))
+                failures.Add("C: an over-matched camp composes no confirm toast - BEGIN ASSAULT would march silently");
+            else
+            {
+                if (toast.IndexOf("15", StringComparison.Ordinal) < 0 || toast.IndexOf("9", StringComparison.Ordinal) < 0)
+                    failures.Add($"C: the confirm toast \"{toast}\" does not carry BOTH numbers - the player must be told " +
+                                 "what they are marching into, not merely that something is wrong");
+                if (toast.IndexOf("annot", StringComparison.Ordinal) >= 0 ||
+                    toast.IndexOf("LOCK", StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add($"C: the confirm toast \"{toast}\" reads as a REFUSAL. It is a confirm STEP - it asks once " +
+                                 "and never refuses (WO-1542; a second gate is the shape WO-1379 forbids)");
+            }
+        }
+
+        // -- C2: WO-1562 - a cleared camp is marked, and it discloses the repeat rate ---------
+        //
+        // The clear was persisted by RaidClaimService.MarkClaimed from the victory seam and then
+        // read by NOTHING: grepping the VM and the screen for RaidClaimService / IsClaimed /
+        // Cleared returned comments only. So the return leg of the raid loop had no memory, and
+        // nothing warned that a repeat clear pays a fraction - which the player then discovered
+        // after committing, one screen later, on the deploy card.
+        //
+        // RED-FIRST NOTE: cannot compile against the pre-change tree (ClearedWordFor and the
+        // claimed constructor argument do not exist there) - that is the honest red.
+        private static void CheckClearedMarker(List<SceneConfigDef> defs, List<string> failures, StringBuilder log)
+        {
+            // Nothing claimed -> no marker anywhere. A grid must never advertise a win.
+            using (var vm = new RaidSelectionVM(defs, null, 20, _ => true, 99, null, _ => false))
+                foreach (var c in Ladder)
+                    if (vm.ClearedWordFor(c.Id) != null)
+                        failures.Add($"C2: '{c.Id}' reads CLEARED with nothing claimed - the marker must come from " +
+                                     "RaidClaimService, never from a second predicate");
+
+            // Unwired provider (headless / EditMode) -> no marker, for the same reason.
+            using (var vm = new RaidSelectionVM(defs, null, 20, _ => true, 99))
+                foreach (var c in Ladder)
+                    if (vm.ClearedWordFor(c.Id) != null)
+                        failures.Add($"C2: '{c.Id}' reads CLEARED with NO ClaimedProvider wired - a frame that cannot " +
+                                     "prove a clear must not claim one");
+
+            // One camp claimed -> exactly that camp is marked, and it states the repeat rate.
+            using (var vm = new RaidSelectionVM(defs, null, 20, _ => true, 99, null,
+                                                id => string.Equals(id, "raider_camp_small", StringComparison.OrdinalIgnoreCase)))
+            {
+                string word = vm.ClearedWordFor("raider_camp_small");
+                if (string.IsNullOrEmpty(word))
+                    failures.Add("C2: a CLAIMED camp carries no cleared marker - the return leg of the loop still has no memory");
+                else
+                {
+                    if (word.IndexOf(RaidSelectionVM.ClearedPrefix, StringComparison.Ordinal) < 0)
+                        failures.Add($"C2: the cleared marker \"{word}\" does not carry the word CLEARED. The state is carried " +
+                                     "by WORDS - the owner is red/green colourblind and a tint would say nothing to her");
+                    // The rate is READ from RaidClaimService.RepeatClearLootMultiplier, never typed:
+                    // WO-1461 owns that number and this row only discloses whatever it lands.
+                    int pct = (int)Math.Round(
+                        DeNelle.Village.World.Camps.RaidClaimService.RepeatClearLootMultiplier * 100.0);
+                    if (word.IndexOf(pct + "%", StringComparison.Ordinal) < 0)
+                        failures.Add($"C2: the cleared marker \"{word}\" does not state the live repeat rate ({pct}%). It must " +
+                                     "format RaidClaimService.RepeatClearLootMultiplier so it can never advertise a rate the " +
+                                     "settle does not pay");
+                }
+                if (vm.ClearedWordFor("fortified_garrison") != null)
+                    failures.Add("C2: an UNCLAIMED camp reads CLEARED while a sibling is claimed - the marker is not per-camp");
+                log.AppendLine("OK: cleared marker is per-camp, comes from the claim provider, and discloses the live repeat rate");
+            }
+        }
+
+        // -- C3: WO-1562 part 1 - the victory screen announces a crossed ladder rung ----------
+        //
+        // RaidVictoryController.ResolveUnlockLine returned null UNCONDITIONALLY, and the lane its
+        // comment deferred to (WO-1375) CLOSED 2026-09-06 without claiming the seam - so the
+        // announcement was orphaned, not deferred. It now reads the SAME authored unlockVictories
+        // the grid's own lock sentences read: one ladder, no second copy of the thresholds.
+        private static void CheckUnlockAnnouncement(List<SceneConfigDef> defs, List<string> failures, StringBuilder log)
+        {
+            // A count that crosses nothing stays SILENT. (The trace does the other half: a
+            // crossing and a non-crossing must stay distinguishable in a capture.)
+            foreach (int quiet in new[] { 0, 1, 2, 4, 9, 11, 21 })
+            {
+                string line = RaidSelectionVM.UnlockAnnouncementFor(quiet);
+                if (line != null)
+                    failures.Add($"C3: {quiet} victories crosses no authored rung yet announces \"{line}\" - " +
+                                 "a win that unlocked nothing must say nothing");
+            }
+
+            // The rungs are the CATALOG's, not this suite's: whatever thresholds scene-configs
+            // authors, a count landing exactly on one announces THAT camp.
+            //
+            // THE COUNTER BELOW IS NOT BOOKKEEPING - IT IS THE CASE. Every rung is skipped when
+            // the catalog does not resolve, so without it a SceneConfigCatalog that answers null
+            // in EditMode would make the positive half never run at all and this case would pass
+            // while proving nothing about the announcement. A vacuous green is worse than a red:
+            // it certifies the exact seam that was orphaned for a whole release.
+            int rungsChecked = 0;
+            foreach (var c in Ladder)
+            {
+                if (c.Unlock <= 0) continue;
+                var live = SceneConfigCatalog.Find(c.Id);
+                if (live == null || live.unlockVictories != c.Unlock) continue;   // catalog moved; not this suite's call
+                rungsChecked++;
+                string line = RaidSelectionVM.UnlockAnnouncementFor(c.Unlock);
+                if (string.IsNullOrEmpty(line))
+                {
+                    failures.Add($"C3: {c.Unlock} victories opens '{c.Id}' in the catalog and the victory screen announces " +
+                                 "NOTHING - the ladder is advertised on the grid and silent at the win");
+                    continue;
+                }
+                if (line.IndexOf(RaidSelectionVM.UnlockPrefix, StringComparison.Ordinal) != 0)
+                    failures.Add($"C3: the announcement \"{line}\" does not open with the one authored prefix");
+            }
+            if (rungsChecked == 0)
+                failures.Add("C3: ZERO ladder rungs were checked - SceneConfigCatalog resolved none of the flagship " +
+                             "camps, so the positive half of this case never ran and its green would mean nothing. " +
+                             "The silence half above still passed, which is exactly how a vacuous pass looks. Fix the " +
+                             "catalog load in this context rather than trusting the marker");
+            log.AppendLine("OK: an unlock announcement fires only on a crossed rung, from the catalog's own " +
+                           "unlockVictories (" + rungsChecked + " rung(s) actually exercised)");
+        }
+
+        /// <summary>Fixture lookup by id (this suite's def list, never the live catalog).</summary>
+        private static SceneConfigDef FindDef(List<SceneConfigDef> defs, string id)
+        {
+            if (defs == null) return null;
+            foreach (var d in defs)
+                if (d != null && string.Equals(d.id, id, StringComparison.OrdinalIgnoreCase)) return d;
+            return null;
         }
 
         // -- D: the pips carry data or nothing ----------------------------------------------
@@ -398,8 +582,17 @@ namespace DeNelle.Editor.Regression
             // Screen: renders the VM's strings, owns none of them, gates the pips.
             if (screen.IndexOf("_vm.SpoilsLineFor(", StringComparison.Ordinal) < 0)
                 failures.Add("E: RaidSelectionScreen.cs does not read _vm.SpoilsLineFor( - the spoils line is not painted");
-            if (screen.IndexOf("_vm.ArmyLockWordFor(", StringComparison.Ordinal) < 0)
-                failures.Add("E: RaidSelectionScreen.cs does not read _vm.ArmyLockWordFor( - the army lock word is not painted");
+            if (screen.IndexOf("_vm.ArmyWarnWordFor(", StringComparison.Ordinal) < 0)
+                failures.Add("E: RaidSelectionScreen.cs does not read _vm.ArmyWarnWordFor( - the army warning is not painted");
+            // WO-1562: the cleared marker and its ONE input. Source-lint because a VM-only case
+            // cannot see whether the View ever asked, and "the model composed it and the renderer
+            // discarded it" is a defect this repo has already shipped once (WO-1534 B2).
+            if (screen.IndexOf("_vm.ClearedWordFor(", StringComparison.Ordinal) < 0)
+                failures.Add("E: RaidSelectionScreen.cs does not read _vm.ClearedWordFor( - a cleared camp still looks " +
+                             "exactly like one the player never fought (WO-1562)");
+            if (screen.IndexOf("RaidSelectionVM.ClaimedProvider", StringComparison.Ordinal) < 0)
+                failures.Add("E: RaidSelectionScreen.cs never wires RaidSelectionVM.ClaimedProvider - the cleared marker " +
+                             "has no input, so it can never fire in a build");
             int pipsGate = screen.IndexOf("_vm.ShowStarPips", StringComparison.Ordinal);
             int pipsBuild = screen.IndexOf("StarRatingRow.Build(", StringComparison.Ordinal);
             if (pipsGate < 0)
@@ -409,7 +602,8 @@ namespace DeNelle.Editor.Regression
             if (screen.IndexOf("\"Spoils:", StringComparison.Ordinal) >= 0)
                 failures.Add("E: RaidSelectionScreen.cs types \"Spoils: - the View owns no words; the VM composes the line");
             if (screen.IndexOf("\"LOCKED", StringComparison.Ordinal) >= 0)
-                failures.Add("E: RaidSelectionScreen.cs types \"LOCKED - the View owns no words; RaidSelectionVM.ArmyLockPrefix does");
+                failures.Add("E: RaidSelectionScreen.cs types \"LOCKED - the View owns no words, and since WO-1542 the " +
+                             "army word is not a lock at all; RaidSelectionVM owns both halves");
 
             log.AppendLine("OK: VM -> RaidScoring.EstimateSpoils; LootFor + EstimateSpoils -> ProjectLoot; screen renders VM strings, pips gated");
         }

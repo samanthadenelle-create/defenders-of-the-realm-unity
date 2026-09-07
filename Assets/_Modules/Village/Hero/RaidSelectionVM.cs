@@ -23,7 +23,7 @@
 // chain RaidScoring.LootFor pays through) - there is no second loot table and no
 // literal. The three identical gold pips are hidden until per-camp star ratings VARY
 // (no producer records them today, so they stay hidden by data). A camp whose
-// garrison exceeds the fieldable army carries the WORD "LOCKED - needs Army N"
+// garrison exceeds the fieldable army carries the WARNING "Outmatched - Army N advised"
 // (WO-1389 compare rule: garrison bodies vs deployable bodies). VM owns every string;
 // RaidSelectionScreen only renders them. Pinned by RaidSelectionSpoilsRegression.
 //
@@ -102,7 +102,7 @@ namespace DeNelle.Village.Hero
         public static Func<string, bool> SceneAvailableProvider;
 
         /// <summary>
-        /// WO-1402 - THE ARMY INPUT for the row's <c>LOCKED - needs Army N</c> word: how many
+        /// WO-1402 - THE ARMY INPUT for the row's <c>Outmatched - Army N advised</c> word: how many
         /// troop BODIES the player can field right now. Compared against each camp's garrison
         /// headcount (<see cref="GarrisonCount"/>) - the SAME two numbers RaidDeployVM's scout
         /// report puts side by side ("Garrison: 9 defenders - you field 3", WO-1389 pressure
@@ -126,12 +126,60 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static Func<string, int> BestStarsProvider;
 
+        /// <summary>
+        /// WO-1562 PART 2 - HAS THIS CAMP ALREADY BEEN CLEARED? Wired in
+        /// <c>RaidSelectionScreen.OpenInternal</c> to <c>RaidClaimService.IsClaimed</c>, and to
+        /// NOTHING ELSE.
+        ///
+        /// <para>STOP - NEVER A SECOND CLAIM PREDICATE. <c>RaidClaimService</c> is the one place a
+        /// clear is persisted (<c>MarkClaimed</c>, from the victory seam) and it must stay the one
+        /// place a clear is READ. The WO-1521 lesson, recorded at
+        /// <c>PlayerDeckWorkspace.cs:719-723</c>: "ONE rule, TWO surfaces... a second check would
+        /// drift from the first, and the drift is the actual defect."</para>
+        ///
+        /// <para>Unwired / null / throwing = NOT CLEARED for every row, because a headless or
+        /// pre-state frame must never claim a win it cannot prove. Same contract as
+        /// <see cref="DeployableTroopsProvider"/>.</para>
+        /// </summary>
+        public static Func<string, bool> ClaimedProvider;
+
         /// <summary>Sentinel for "not known" on the army and star inputs.</summary>
         public const int Unknown = -1;
 
-        /// <summary>The word a row carries when the camp's garrison exceeds the fieldable army.
-        /// ASCII; the number is the garrison headcount the player must be able to field.</summary>
-        public const string ArmyLockPrefix = "LOCKED - needs Army ";
+        // =====================================================================
+        //  WO-1542 - THE ARMY WORD IS ADVICE, NOT A LOCK (owner ruling 2026-09-06)
+        // =====================================================================
+        //  RETIRED: `ArmyLockPrefix = "LOCKED - needs Army "`. That word was
+        //  DISPLAY-ONLY - it appeared on the card face and in one log line and
+        //  NOWHERE ELSE. OnCardTapped refuses on exactly two conditions (the
+        //  escalation lock and Heartfire) and then falls through to
+        //  RaidDeployScreen.Open, so a card reading LOCKED opened anyway, under a lit
+        //  BEGIN ASSAULT. Two PNGs of the same build and the same camp show both
+        //  halves (seeker-357453-raids.png / -raid-deploy.png). The word, the styling
+        //  and the door disagreed three ways.
+        //
+        //  NEITHER SIDE WAS A BUG ALONE, WHICH IS WHY IT SURVIVED: WO-1402 authored
+        //  the word as a row label, and WO-1403's RESULT deliberately decoupled the
+        //  deploy footer from readiness so the first-raid soft gate stays at the ONE
+        //  door. Both correct; nobody reconciled them.
+        //
+        //  OWNER RULING: "Warning, not a lock." The player may still attack (WWCD -
+        //  Clash of Clans lets you attack an over-matched base and never calls it
+        //  locked), and BEGIN ASSAULT asks ONCE via a confirm toast.
+        //
+        //  STOP - DO NOT TURN THIS BACK INTO A GATE. The tap must keep opening the
+        //  deploy screen exactly as it does today. RaidDeployVM.CanDeploy and the
+        //  deploy footer stay bound to scene + Build Settings, never to readiness;
+        //  a readiness check inside the deploy screen is the second-gate shape
+        //  WO-1379 forbids and HeartfireRegression PIN F reds the file for.
+        // =====================================================================
+
+        /// <summary>Leading half of the army warning; the number is the garrison headcount the
+        /// player is advised to be able to field. ASCII (device tofu risk).</summary>
+        public const string ArmyWarnPrefix = "Outmatched - Army ";
+        /// <summary>Trailing half - "advised", never "required": the door honours no such
+        /// requirement and the word must not claim one.</summary>
+        public const string ArmyWarnSuffix = " advised";
 
         /// <summary>Prefix of every spoils line; the oracle asserts on it.</summary>
         public const string SpoilsPrefix = "Spoils: ";
@@ -144,11 +192,15 @@ namespace DeNelle.Village.Hero
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _starsById =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>WO-1562: per-camp cleared flag, resolved once per <see cref="Rebuild"/>.</summary>
+        private readonly Dictionary<string, bool> _clearedById =
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly Action _onClose;
         private readonly int _victories;
         private readonly int _deployableTroops;
         private readonly Func<string, bool> _sceneAvailable;
         private readonly Func<string, int> _bestStars;
+        private readonly Func<string, bool> _claimed;
         private bool _showStarPips;
         private bool _disposed;
 
@@ -288,20 +340,103 @@ namespace DeNelle.Village.Hero
         public int DeployableTroops => _deployableTroops;
 
         /// <summary>
-        /// <c>LOCKED - needs Army N</c> when this camp's garrison headcount exceeds the army
+        /// <c>Outmatched - Army N advised</c> when this camp's garrison headcount exceeds the army
         /// the player can field (WO-1389 compare rule: garrison bodies vs deployable bodies);
         /// null when the army covers it OR when the army is <see cref="Unknown"/>. The colour
         /// edge bar may keep painting the tier; this WORD is what carries the state, because
         /// the owner is red/green colourblind and a hue is not a sentence.
+        ///
+        /// <para>WO-1542: the card carrying this word STAYS AT FULL BRIGHTNESS, and that is now
+        /// CORRECT rather than a second defect. <c>RaidSelectionScreen</c>'s <c>dimmed</c> is
+        /// bound to the ESCALATION lock alone; dimming an over-matched camp would say
+        /// "unavailable" about a camp the player may march on today.</para>
         /// </summary>
-        public string ArmyLockWordFor(string id) => ArmyLockWord(DefFor(id), _deployableTroops);
+        public string ArmyWarnWordFor(string id) => ArmyWarnWord(DefFor(id), _deployableTroops);
 
-        /// <summary>Static form so the oracle and the VM produce the identical word.</summary>
-        public static string ArmyLockWord(SceneConfigDef d, int deployableTroops)
+        /// <summary>Static form so the oracle, the grid VM and the DEPLOY VM produce the
+        /// identical word from the identical two numbers. <c>RaidDeployVM</c> calls this with its
+        /// <c>DeployableCount</c> (the raw HEADCOUNT, the same axis WO-1389's "you field N"
+        /// compare line uses) - never with the slot-weighted <c>Fielded</c>, which would let the
+        /// grid say Outmatched while the deploy screen stayed silent. That drift is exactly the
+        /// two-producer defect this ticket exists to close.</summary>
+        public static string ArmyWarnWord(SceneConfigDef d, int deployableTroops)
         {
             if (d == null || deployableTroops < 0) return null;
             int garrison = GarrisonCount(d);
-            return garrison > deployableTroops ? ArmyLockPrefix + garrison : null;
+            return garrison > deployableTroops ? ArmyWarnPrefix + garrison + ArmyWarnSuffix : null;
+        }
+
+        /// <summary>
+        /// WO-1542 (owner ruling appended 2026-09-06 22:20, "add the confirm toast") - the
+        /// sentence BEGIN ASSAULT shows when the player marches on an over-matched camp.
+        ///
+        /// <para>NOTE - IT IS A CONFIRM STEP, NOT A GATE. It never refuses, it asks ONCE, and the
+        /// second tap marches. The VM composes the words; the View only shows them. Null when the
+        /// army covers the garrison or the army is <see cref="Unknown"/> - the same predicate as
+        /// <see cref="ArmyWarnWord"/>, read from the same two numbers, so the grid warning and the
+        /// footer confirm can never disagree about which camp is above the army.</para>
+        /// </summary>
+        public static string OutmatchConfirmToast(SceneConfigDef d, int deployableTroops)
+        {
+            if (ArmyWarnWord(d, deployableTroops) == null) return null;
+            int garrison = GarrisonCount(d);
+            return "Outmatched: " + garrison + " defenders against your " + deployableTroops +
+                   ". Tap BEGIN ASSAULT again to march anyway.";
+        }
+
+        /// <summary>Instance form for the grid, same two numbers.</summary>
+        public string OutmatchConfirmToastFor(string id) =>
+            OutmatchConfirmToast(DefFor(id), _deployableTroops);
+
+        // =====================================================================
+        //  WO-1562 PART 2 - THE RETURN LEG OF THE LOOP GETS A MEMORY
+        // =====================================================================
+        //  The clear was persisted and never read back: grepping this file and
+        //  RaidSelectionScreen for RaidClaimService / IsClaimed / Cleared returned
+        //  COMMENTS ONLY. So a camp the player had already broken read exactly like
+        //  one they had never fought, and nothing warned that a repeat clear pays a
+        //  fraction - which the player then discovered AFTER committing.
+        //
+        //  NOT covered by WO-1461, which puts repeat-clear economics on the DEPLOY
+        //  CARD. A player choosing among four camps chooses on the GRID, one screen
+        //  earlier. This is DISCLOSURE ONLY - it re-authors no number.
+        // =====================================================================
+
+        /// <summary>Leading word of the cleared marker. ASCII; carried in WORDS because the owner
+        /// is red/green colourblind and a tint would say nothing to her.</summary>
+        public const string ClearedPrefix = "CLEARED";
+        /// <summary>Joins the marker to the repeat-clear disclosure.</summary>
+        public const string ClearedRepeatJoin = " - repeats pay ";
+
+        /// <summary>True when this camp has already been broken (read from the claim service
+        /// through <see cref="ClaimedProvider"/>, never from a second predicate).</summary>
+        public bool IsClearedFor(string id) =>
+            id != null && _clearedById.TryGetValue(id, out var c) && c;
+
+        /// <summary>
+        /// The grid row's cleared marker - <c>CLEARED - repeats pay 25%</c> - or null when the
+        /// camp has not been broken.
+        ///
+        /// <para>STOP - THE PERCENTAGE IS READ, NEVER TYPED. It formats
+        /// <c>RaidClaimService.RepeatClearLootMultiplier</c>, the same constant
+        /// <c>RaidVictoryController.ApplyFirstClearGate</c> pays through, so this line states
+        /// whatever WO-1461 lands and can never advertise a rate the settle does not pay.</para>
+        ///
+        /// <para>NOTE - CONTRADICTION RECORDED, NOT RESOLVED: WO-1562 and WO-1534 section A6 both say
+        /// WO-1461 sets the repeat rate at 60%; the live constant read 0.25f on 2026-09-06. The
+        /// number is not restated here precisely so this line follows the constant when that
+        /// ticket lands, whichever way it lands.</para>
+        /// </summary>
+        public string ClearedWordFor(string id) => ClearedWord(IsClearedFor(id));
+
+        /// <summary>Static form so the oracle asserts the exact grammar with no catalog and no
+        /// save loaded.</summary>
+        public static string ClearedWord(bool cleared)
+        {
+            if (!cleared) return null;
+            int pct = (int)Math.Round(
+                DeNelle.Village.World.Camps.RaidClaimService.RepeatClearLootMultiplier * 100.0);
+            return ClearedPrefix + ClearedRepeatJoin + pct + "%";
         }
 
         /// <summary>Best star rating recorded for this camp, or <see cref="Unknown"/>.</summary>
@@ -352,6 +487,69 @@ namespace DeNelle.Village.Hero
                 (best != null ? "'" + best.id + "' at " + best.unlockVictories + " wins" : "<none - ladder climbed>"));
             return best;
         }
+
+        // =====================================================================
+        //  WO-1562 PART 1 - THE LADDER ANNOUNCEMENT, FROM THE ONE LADDER AUTHORITY
+        // =====================================================================
+
+        /// <summary>The camp the ladder OPENED at exactly <paramref name="victories"/> banked wins,
+        /// or null when this win crossed nothing.
+        ///
+        /// <para><b>WHY THIS LIVES HERE AND NOT IN RaidVictoryController.</b>
+        /// <c>ResolveUnlockLine</c> returned null unconditionally, and its own comment said why:
+        /// naming a target there "would fork the ladder across two files, which is the duplicated
+        /// state that makes this repo's most expensive bugs". So the announcement reads the SAME
+        /// authority the grid's lock sentences read - <see cref="FlagshipRaidIds"/> plus each
+        /// def's authored <c>unlockVictories</c>, the identical pair <see cref="ResolveLock"/> and
+        /// <see cref="NextLockedCamp"/> consult. There is still ONE ladder and no second copy of
+        /// the thresholds; WO-1562 acceptance 2.</para>
+        ///
+        /// <para><b>"CROSSED ON THIS WIN" IS EXACT, NOT APPROXIMATE, AND THE EQUALITY IS THE
+        /// PROOF.</b> <c>RaidVictoryController.RecordVictory</c> increments
+        /// <c>GameState.RaidVictories</c> by ONE per settled win, from the one <c>_handled</c>
+        /// latch, and the counter is monotonic - so the count equals any given threshold on
+        /// EXACTLY ONE win, ever. A repeat clear of an already-claimed camp still increments (the
+        /// counter is wins, not claims), and it still cannot re-announce, because it lands on a
+        /// count the ladder has already passed. No previous-count parameter is needed and none is
+        /// taken: an extra input here would be a second thing to keep in sync.</para></summary>
+        public static SceneConfigDef CampUnlockedAt(int victories)
+        {
+            if (victories <= 0) return null;
+            SceneConfigDef crossed = null;
+            foreach (var id in FlagshipRaidIds)
+            {
+                var def = SceneConfigCatalog.Find(id);
+                if (def == null) continue;      // NextLockedCamp already warns by name for a missing id
+                if (def.unlockVictories != victories) continue;
+                // Deterministic on the (mis-authored) case of two camps sharing a threshold: the
+                // FIRST in the flagship order wins, and the collision is reported rather than
+                // silently picking one (CLAUDE.md section 12 - no silent failures).
+                if (crossed == null) { crossed = def; continue; }
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "CampUnlockedAt(" + victories + "): '" + crossed.id + "' and '" + def.id +
+                    "' both author unlockVictories=" + victories + ". Announcing the first in the " +
+                    "flagship order; scene-configs.json should not put two camps on one rung.");
+            }
+            return crossed;
+        }
+
+        /// <summary>The sentence a victory screen announces when this win opened a camp, or null.
+        /// Static and pure so the oracle asserts the exact words without a victory scene, and so
+        /// the announcement can never name a camp the grid does not.</summary>
+        public static string UnlockAnnouncementFor(int victories)
+        {
+            var crossed = CampUnlockedAt(victories);
+            if (crossed == null) return null;
+            string name = !string.IsNullOrEmpty(crossed.displayName)
+                ? crossed.displayName : crossed.id;
+            return UnlockPrefix + name + UnlockSuffix;
+        }
+
+        /// <summary>Leading half of the unlock announcement; the oracle asserts on it. ASCII.</summary>
+        public const string UnlockPrefix = "New target unlocked: ";
+        /// <summary>Trailing half - it names the DOOR, because an announcement the player cannot
+        /// act on is only half a beat. ASCII.</summary>
+        public const string UnlockSuffix = ". It is open on the raid board.";
 
         /// <summary>Static composer so the dialogue token and the oracle read the SAME sentence.</summary>
         public static string ScoutLine(SceneConfigDef d)
@@ -430,8 +628,8 @@ namespace DeNelle.Village.Hero
             }
 
             // WO-1402 - the army input. Unknown (-1) when unwired or faulting, never 0: a 0
-            // would print "LOCKED - needs Army N" on every camp of a headless frame, which is
-            // a lock the frame cannot prove.
+            // would print "Outmatched - Army N advised" on every camp of a headless frame, which
+            // is advice the frame cannot prove.
             int deployable = Unknown;
             var armyProvider = DeployableTroopsProvider;
             if (armyProvider != null)
@@ -449,22 +647,24 @@ namespace DeNelle.Village.Hero
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                     "RaidSelectionVM: no DeployableTroopsProvider wired - army UNKNOWN, no row " +
-                    "carries 'LOCKED - needs Army N' (expected headless / EditMode).");
+                    "carries 'Outmatched - Army N advised' (expected headless / EditMode).");
             }
 
             return new RaidSelectionVM(list, onClose, victories, SceneAvailableProvider,
-                                       deployable, BestStarsProvider);
+                                       deployable, BestStarsProvider, ClaimedProvider);
         }
 
         public RaidSelectionVM(IReadOnlyList<SceneConfigDef> defs, Action onClose,
                                int victories = 0, Func<string, bool> sceneAvailable = null,
-                               int deployableTroops = Unknown, Func<string, int> bestStars = null)
+                               int deployableTroops = Unknown, Func<string, int> bestStars = null,
+                               Func<string, bool> claimed = null)
         {
             _onClose = onClose;
             _victories = victories < 0 ? 0 : victories;
             _sceneAvailable = sceneAvailable;
             _deployableTroops = deployableTroops < 0 ? Unknown : deployableTroops;
             _bestStars = bestStars;
+            _claimed = claimed;
             if (defs != null)
                 foreach (var d in defs)
                 {
@@ -551,6 +751,35 @@ namespace DeNelle.Village.Hero
             _raids.Clear();
             _spoilsById.Clear();
             _starsById.Clear();
+            _clearedById.Clear();
+
+            // WO-1562 - the CLEARED flag, resolved once per row from the ONE claim authority.
+            // Guarded: a provider fault must never blank the grid and must never be swallowed
+            // without a log (CLAUDE.md section 12). A fault resolves NOT CLEARED - the forgiving
+            // direction, because claiming a win the save cannot prove is the worse lie.
+            foreach (var d in _defs)
+            {
+                if (d == null || string.IsNullOrEmpty(d.id)) continue;
+                bool cleared = false;
+                if (_claimed != null)
+                {
+                    try { cleared = _claimed(d.id); }
+                    catch (Exception ex)
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                            "RaidSelectionVM: ClaimedProvider threw for '" + d.id + "' (" +
+                            ex.GetType().Name + ": " + ex.Message + ") - the row reads NOT CLEARED " +
+                            "rather than advertising a clear this save cannot prove.");
+                        cleared = false;
+                    }
+                }
+                _clearedById[d.id] = cleared;
+            }
+            if (_claimed == null)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "RaidSelectionVM: no ClaimedProvider wired - no row carries the CLEARED marker " +
+                    "(expected headless / EditMode). Wire it with " +
+                    "RaidSelectionVM.ClaimedProvider = RaidClaimService.IsClaimed.");
 
             // WO-1402 - star ratings first, because ShowStarPips is a property of the WHOLE
             // grid (do they vary?), not of one row.
@@ -600,7 +829,8 @@ namespace DeNelle.Village.Hero
                 var est = EstimateSpoils(d);
                 string spoils = FormatSpoils(est);
                 if (!string.IsNullOrEmpty(d.id)) _spoilsById[d.id] = spoils;
-                string armyWord = ArmyLockWord(d, _deployableTroops);
+                string armyWord = ArmyWarnWord(d, _deployableTroops);
+                string clearedWord = ClearedWordFor(d.id);
 
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                     "row '" + d.id + "' spoils est=" + est.Wood + "w/" + est.Iron + "i/" + est.Coins +
@@ -608,6 +838,7 @@ namespace DeNelle.Village.Hero
                     (spoils != null ? "\"" + spoils + "\"" : "<none - estimate all zero>") +
                     " pips=" + (_showStarPips ? "shown" : "hidden") +
                     " lock=" + (lockReason != null ? "escalation" : armyWord != null ? "\"" + armyWord + "\"" : "none") +
+                    " cleared=" + (clearedWord != null ? "\"" + clearedWord + "\"" : "no") +
                     " (garrison " + GarrisonCount(d) + ", army " +
                     (_deployableTroops < 0 ? "unknown" : _deployableTroops.ToString()) + ")");
             }

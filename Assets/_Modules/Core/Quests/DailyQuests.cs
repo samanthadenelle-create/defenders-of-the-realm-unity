@@ -209,6 +209,22 @@ namespace DeNelle.Core.Quests
         /// </summary>
         public event Action<DailyQuestInstance> QuestCompleted;
 
+        /// <summary>
+        /// WO-1521 — THE CLAIM VERB'S SEAM. Fired when the player presses CLAIM on a daily that
+        /// is <see cref="IsClaimable"/>: completed, but never latched because its payout credited
+        /// NOTHING (a full town bank is the usual cause, DailyQuestRewardBridge:168).
+        ///
+        /// ⛔ THIS IS NOT A SECOND CLAIM PATH. It re-enters the SAME payer — the bridge listens
+        /// with the SAME handler it uses for <see cref="QuestCompleted"/>, so the re-entrancy set
+        /// and the ClaimedAtUnix latch are the ones that already exist. Before this seam the
+        /// "N ready to claim" counter (JourneyDeckSubtitleVM) was the only surface that could see
+        /// such a quest, and there was NO verb anywhere in the game to act on it: the owner's
+        /// "quests say one quest to claim but no idea how or what to do" was literally true.
+        /// </summary>
+        public event Action<DailyQuestInstance> ClaimRequested;
+
+        private static readonly List<DailyQuestInstance> EmptyQuests = new List<DailyQuestInstance>();
+
         private DailyQuestSet _today;
         private System.Random _rng;
 
@@ -297,11 +313,109 @@ namespace DeNelle.Core.Quests
                     { PlayerPrefs.SetInt(Day1DonePrefKey, 1); PlayerPrefs.Save(); }
                     QuestCompleted?.Invoke(q);
                 }
+
+                // ⛔ WO-1521 — PERSIST THE LATCH THE HANDLERS JUST SET. The Save() above runs
+                // BEFORE QuestCompleted fires, and DailyQuestRewardBridge writes ClaimedAtUnix
+                // from inside that handler — so before this line the latch lived in MEMORY ONLY
+                // and a quest paid as the last act of a session reloaded as Completed with
+                // ClaimedAtUnix == 0. That is CLAIMABLE. It used to only make the "N ready to
+                // claim" counter lie; the moment WO-1521 gives that state a CLAIM door it
+                // becomes a DOUBLE GRANT. RequestClaim already saves after its payout; this is
+                // the same rule on the completion path.
+                Save();
             }
         }
 
         /// <summary>Template id of the tutorial-aligned Day-1 guaranteed quest.</summary>
         public const string Day1QuestTemplateId = "combat.build-towers";
+
+        // ── WO-1521: the ONE authority for "ready to claim" ──────────────────
+        // Every surface that says a number about claimable dailies reads THESE, so the
+        // counter and the rumor board can never again disagree. The old counter kept its
+        // own copy of the predicate (JourneyDeckSubtitleVM's inline
+        // `q.Completed && q.ClaimedAtUnix == 0` loop) — a fact written twice, which is this
+        // repo's dominant failure mode (CLAUDE.md sec.2/sec.5/sec.16).
+
+        /// <summary>Today's rolled quests. Never null; empty rather than null on a bad roll.</summary>
+        public IReadOnlyList<DailyQuestInstance> TodayQuests
+        {
+            get
+            {
+                var set = Today;
+                return set != null && set.Quests != null ? (IReadOnlyList<DailyQuestInstance>)set.Quests : EmptyQuests;
+            }
+        }
+
+        /// <summary>THE predicate. Completed work whose reward has never been latched.</summary>
+        public static bool IsClaimable(DailyQuestInstance q) =>
+            q != null && q.Completed && q.ClaimedAtUnix == 0;
+
+        /// <summary>How many of today's quests are claimable right now. THE count.</summary>
+        public int ClaimableCount
+        {
+            get
+            {
+                int n = 0;
+                var quests = TodayQuests;
+                for (int i = 0; i < quests.Count; i++) if (IsClaimable(quests[i])) n++;
+                return n;
+            }
+        }
+
+        /// <summary>Today's quest with this instance id (the per-day `Id`, not the template id).</summary>
+        public DailyQuestInstance Find(string questId)
+        {
+            if (string.IsNullOrEmpty(questId)) return null;
+            var quests = TodayQuests;
+            for (int i = 0; i < quests.Count; i++)
+                if (quests[i] != null && quests[i].Id == questId) return quests[i];
+            return null;
+        }
+
+        /// <summary>
+        /// The player pressed CLAIM. Re-enters the ONE payer through <see cref="ClaimRequested"/>
+        /// and reports whether the reward actually landed — judged by the LATCH the payer sets,
+        /// never by the fact that an event was raised (a raised event proves a call, not a
+        /// credit; CLAUDE.md sec.11B). Returns false when there was nothing to claim, when no
+        /// payer is listening, or when the payout credited nothing again — the caller shows the
+        /// player WHY rather than pretending.
+        /// </summary>
+        public bool RequestClaim(string questId)
+        {
+            var q = Find(questId);
+            if (!IsClaimable(q))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DailyQuest",
+                    $"RequestClaim('{questId}') found no claimable quest (already claimed, or not today's).");
+                return false;
+            }
+
+            if (ClaimRequested == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DailyQuest",
+                    $"RequestClaim('{questId}') has NO listener — the Village reward bridge is not hooked, " +
+                    "so the CLAIM face would be a door onto nothing. Reward NOT paid.");
+                return false;
+            }
+
+            ClaimRequested.Invoke(q);
+
+            bool paid = q.ClaimedAtUnix != 0;
+            if (paid)
+            {
+                Save();
+                SetChanged?.Invoke();
+                DeNelle.Core.Diagnostics.FlowTrace.Step("DailyQuest",
+                    $"RequestClaim('{questId}') PAID and latched.");
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DailyQuest",
+                    $"RequestClaim('{questId}') credited NOTHING — the quest stays claimable so the " +
+                    "player can retry once the town bank has room (WO-978 section 6).");
+            }
+            return paid;
+        }
 
         /// <summary>
         /// Spends a re-roll on the given slot (free up to RerollsFreePerDay,

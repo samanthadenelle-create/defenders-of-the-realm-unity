@@ -52,6 +52,11 @@ namespace DeNelle.Editor
     public static class PromoRedeemEntryRegression
     {
         private const string PanelPath   = "Assets/_Modules/Wallet/RedeemCodePanel.cs";
+        // WO-1512: the redeem VERB moved off the View onto its ViewModel (presentation never
+        // touches the objects, ARCHITECTURE_PRINCIPLES §2). The ROUTING half of case 1 follows the
+        // seam here; the PRESENTATION half stays on the panel, and a new check pins that the panel
+        // does NOT reach the service directly again.
+        private const string VmPath      = "Assets/_Modules/Wallet/RedeemCodeVM.cs";
         private const string StorePath   = "Assets/_Modules/Wallet/PackStore.cs";
         private const string ServicePath = "Assets/_Modules/Core/Promo/PromoCodeService.cs";
         private const string StringsPath = "Assets/_Modules/Core/Promo/PromoStrings.cs";
@@ -115,15 +120,55 @@ namespace DeNelle.Editor
             // doing it, and a scan that cannot tell them apart punishes the documentation.
             panel = StripLineComments(panel);
 
-            if (panel.IndexOf("PromoCodeService", StringComparison.Ordinal) < 0 ||
-                panel.IndexOf("RedeemAsync", StringComparison.Ordinal) < 0)
-                failures.Add("RedeemCodePanel does not call PromoCodeService.RedeemAsync — the door is not connected to the system it opens");
+            // WO-1512: the panel must NOT resolve the service any more — it binds RedeemCodeVM.
+            // This is the §2 pin: a View that transacts against a currency-minting backend is the
+            // breach, and re-inlining PromoCodeService here is how it comes back.
+            if (panel.IndexOf("PromoCodeService", StringComparison.Ordinal) >= 0)
+                failures.Add("RedeemCodePanel names PromoCodeService in CODE — WO-1512 moved the redeem verb to " +
+                             "RedeemCodeVM. A View that resolves the promo service transacts against a live " +
+                             "currency-minting backend from the presentation layer (ARCHITECTURE_PRINCIPLES §2).");
+            if (panel.IndexOf("_vm", StringComparison.Ordinal) < 0 ||
+                panel.IndexOf("RedeemCodeVM", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel does not bind RedeemCodeVM — the door is not connected to the system it opens");
 
             foreach (var banned in new[] { "UnityWebRequest", "UploadHandlerRaw", "DownloadHandlerBuffer", "api/promo" })
                 if (panel.IndexOf(banned, StringComparison.Ordinal) >= 0)
                     failures.Add($"RedeemCodePanel names '{banned}' — it is speaking to the backend directly. " +
                                  "A second client duplicates the identity proof and the error taxonomy, and the copy " +
                                  "that drifts silently burns real codes. Route through PromoCodeService.");
+
+            // The routing half now lives on the VM. Same assertions, followed to where the work went.
+            string vm = ReadRepoFile(VmPath);
+            if (vm == null)
+            {
+                failures.Add($"{VmPath} missing — RedeemCodePanel's ViewModel is gone, so nothing calls PromoCodeService");
+            }
+            else
+            {
+                vm = StripLineComments(vm);
+                if (vm.IndexOf("PromoCodeService", StringComparison.Ordinal) < 0 ||
+                    vm.IndexOf("RedeemAsync", StringComparison.Ordinal) < 0)
+                    failures.Add("RedeemCodeVM does not call PromoCodeService.RedeemAsync — the door is not connected to the system it opens");
+
+                foreach (var banned in new[] { "UnityWebRequest", "UploadHandlerRaw", "DownloadHandlerBuffer", "api/promo" })
+                    if (vm.IndexOf(banned, StringComparison.Ordinal) >= 0)
+                        failures.Add($"RedeemCodeVM names '{banned}' — it is speaking to the backend directly instead of " +
+                                     "routing through PromoCodeService, which is the one client that owns the identity " +
+                                     "proof and the error taxonomy.");
+
+                // The endpoint stores/compares uppercase: a lowercase entry must not read as "no such code".
+                if (vm.IndexOf("ToUpperInvariant", StringComparison.Ordinal) < 0)
+                    failures.Add("RedeemCodeVM never uppercases the entry — the endpoint compares uppercase, so a player " +
+                                 "typing their real code in lower case would be told it does not exist");
+
+                // Subscribe AND unsubscribe: a detached VM that still handles callbacks writes into dead UI.
+                if (vm.IndexOf("OnRedeemed", StringComparison.Ordinal) < 0 ||
+                    vm.IndexOf("OnRedeemFailed", StringComparison.Ordinal) < 0)
+                    failures.Add("RedeemCodeVM does not subscribe to OnRedeemed/OnRedeemFailed — the player would get no answer at all");
+                if (vm.IndexOf("-= RaiseRedeemed", StringComparison.Ordinal) < 0 ||
+                    vm.IndexOf("-= RaiseFailed", StringComparison.Ordinal) < 0)
+                    failures.Add("RedeemCodeVM never unsubscribes from the service events — a closed panel keeps handling redeem callbacks");
+            }
 
             // A UIDocument here would repeat the exact mistake that left PromoCodeUI unreachable.
             if (panel.IndexOf("UIDocument", StringComparison.Ordinal) >= 0)
@@ -133,18 +178,14 @@ namespace DeNelle.Editor
             if (panel.IndexOf("ElarionUiKit", StringComparison.Ordinal) < 0)
                 failures.Add("RedeemCodePanel does not route through ElarionUiKit — it is hand-rolling chrome instead of using the house frame");
 
-            // The endpoint stores/compares uppercase: a lowercase entry must not read as "no such code".
-            if (panel.IndexOf("ToUpperInvariant", StringComparison.Ordinal) < 0)
-                failures.Add("RedeemCodePanel never uppercases the entry — the endpoint compares uppercase, so a player " +
-                             "typing their real code in lower case would be told it does not exist");
-
-            // Subscribe AND unsubscribe: a closed panel that still handles callbacks writes into dead UI.
-            if (panel.IndexOf("OnRedeemed", StringComparison.Ordinal) < 0 ||
-                panel.IndexOf("OnRedeemFailed", StringComparison.Ordinal) < 0)
-                failures.Add("RedeemCodePanel does not subscribe to OnRedeemed/OnRedeemFailed — the player would get no answer at all");
-            if (panel.IndexOf("-= HandleRedeemed", StringComparison.Ordinal) < 0 ||
-                panel.IndexOf("-= HandleFailed", StringComparison.Ordinal) < 0)
-                failures.Add("RedeemCodePanel never unsubscribes from the service events — a closed panel keeps handling redeem callbacks");
+            // The panel still has to WIRE the two outcomes to its own status line, and still has to
+            // let go on Close — the assertions kept their meaning, they just changed subject from
+            // the service's events to the VM's.
+            if (panel.IndexOf("Redeemed += HandleRedeemed", StringComparison.Ordinal) < 0 ||
+                panel.IndexOf("Failed   += HandleFailed", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel does not bind the VM's Redeemed/Failed outcomes — the player would get no answer at all");
+            if (panel.IndexOf("_vm.Detach()", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel never detaches its VM on close — a closed panel keeps handling redeem callbacks");
 
             // A successful redeem can open the Welcome Letter over this panel. Closing that letter
             // must reveal a receipt, not another live Redeem button (which also overlaps the longer

@@ -210,7 +210,16 @@ namespace DeNelle.Village
 
         private static Transform ResolveHero()
         {
-            var p = SafeFindWithTag("Player") ?? SafeFindWithTag("HeroTarget");
+            // WO-1513: the old second term read the "HeroTarget" tag, which
+            // TagManager.asset has never declared — a permanently dead branch. "Player"
+            // is a live tag so its guarded read stays; the hero definitively carries
+            // HeroLocomotion (CLAUDE.md §7), so the component is the real fallback.
+            var p = SafeFindWithTag("Player");
+            if (p == null)
+            {
+                var loco = FindFirstObjectByType<HeroLocomotion>();
+                if (loco != null) p = loco.gameObject;
+            }
             return p != null ? p.transform : null;
         }
 

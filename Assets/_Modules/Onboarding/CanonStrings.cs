@@ -39,7 +39,10 @@ namespace DeNelle.Onboarding
         private const string LocaleRelativePath = "Data/Canonical/en.json";
 
         // ── Canon-strings.json keys used by the Onboarding module ────────────
-        /// <summary>Key — the title-screen tagline ("Hold the last light.").</summary>
+        /// <summary>Key — the title-screen tagline ("Echoes of a Forgotten Civilization").
+        /// Value read at source 2026-09-06 from
+        /// Assets/StreamingAssets/Data/Canonical/canon-strings.json:53. The doc-comment
+        /// previously quoted the RETIRED "Hold the last light." (2026-07-24 rebrand).</summary>
         public const string KeyTagline = "tagline";
         /// <summary>Key — the publisher / studio name ("DeNelle Studios").</summary>
         public const string KeyPublisher = "publisher";
@@ -81,7 +84,8 @@ namespace DeNelle.Onboarding
             return Resolve(_locale, key);
         }
 
-        /// <summary>The title-screen tagline — "Hold the last light."</summary>
+        /// <summary>The title-screen tagline — "Echoes of a Forgotten Civilization"
+        /// (canon-strings.json "tagline"). Never hardcode it; this property is the seam.</summary>
         public static string Tagline => Canon(KeyTagline);
 
         /// <summary>The publisher name — "DeNelle Studios".</summary>

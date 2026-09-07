@@ -63,8 +63,37 @@ namespace DeNelle.Editor.Regression
         }
 
         /// <summary>
-        /// Registered-suite entry point so this runs inside DataRegression.RunAll rather than only
-        /// on demand — a gate nobody runs is not a gate.
+        /// Registered-suite entry point (DataRegression.RunAll, WO-1496). Verify() used to be
+        /// called directly, and from ABOVE the START FENCE: it ran, but uncounted — its
+        /// [move-manifest] line landed in the pre-fence baseline and no `.Run(out` call-site
+        /// existed for RegressionMarkerRegression's denominator to pin. This overload gives it
+        /// the same shape as every other registered suite, so it is counted like one.
+        /// </summary>
+        public static bool Run(out string reason)
+        {
+            // WO-1496: the whole-suite stand-down is decided BEFORE Verify, on the one condition
+            // that makes it stand down. Reporting green because a fresh clone has no manifest is
+            // the exact arithmetic this project's third state exists to end.
+            if (!System.IO.File.Exists(ManifestPath))
+                return RegressionOutcome.Skip(out reason, "MOVE MANIFEST",
+                    "no manifest at " + ManifestPath + " — no Addressables migration has run in this tree");
+
+            var failures = new List<string>();
+            var log = new StringBuilder();
+            Verify(failures, log);
+
+            if (failures.Count == 0)
+            {
+                reason = "MOVE MANIFEST OK — " + log.ToString().Replace("\r", " ").Replace("\n", " ").Trim();
+                return true;
+            }
+            reason = "MOVE MANIFEST: " + failures.Count + " failure(s): " + string.Join(" | ", failures.ToArray());
+            return false;
+        }
+
+        /// <summary>
+        /// The verification body, shared by the standalone marker path and the registered
+        /// Run(out string) above.
         /// </summary>
         public static void Verify(List<string> failures, StringBuilder log)
         {
@@ -74,7 +103,13 @@ namespace DeNelle.Editor.Regression
             {
                 // ABSENT IS NOT A FAILURE. No migration has run yet on a fresh clone, and failing
                 // here would make every developer's first gate red for a file they never needed.
-                log.AppendLine("  manifest absent — no migration has run. Nothing to verify (not a failure).");
+                // WO-1496: it is not a PASS either, and until now it read as one — a bare `return`
+                // out of a void section, into a caller whose only channel is a bool. DECLARED as a
+                // stand-down instead, so the run says it asserted nothing rather than implying it did.
+                log.AppendLine("  " + RegressionOutcome.PartialSkip(
+                    "[move-manifest] manifest verification",
+                    "manifest absent at " + ManifestPath + " — no migration has run (a fresh clone is " +
+                    "the normal case); nothing to verify, and nothing verified"));
                 return;
             }
 

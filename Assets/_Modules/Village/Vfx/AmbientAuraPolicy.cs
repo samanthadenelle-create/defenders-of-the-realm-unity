@@ -92,6 +92,58 @@ namespace DeNelle.Village
         public static bool ShouldWithholdAtHeartTree(string key)
             => ShouldWithhold(key) && !(HeartTreeFirefliesExempt && IsRejectedAmbientKey(key));
 
+        // -- WO-1476 THE TREE-FOOT AURA THAT CLIMBS THE SKY -------------------------------------
+        // Owner validation note on UI-001, 2026-09-07T00:50Z, verbatim:
+        //   "there is a VFX exiting about town along Y and it needs removed or turned off"
+        //
+        // WHICH OF THE TWO CANDIDATES IT IS, PROVEN FROM THE PREFAB BYTES (CLAUDE.md s11B -- the
+        // WO named two candidates and a candidate is not a conclusion). Both prefabs were read
+        // as YAML on 2026-09-06:
+        //
+        //   TreeofLifeAura_Aura -> FireFlies.prefab  -- BOTH of its ParticleSystems carry
+        //     VelocityModule enabled: 0, ForceModule enabled: 0, gravityModifier scalar 0 and
+        //     startSpeed scalar 0. Nothing in that prefab can impart directed motion, so it
+        //     CANNOT be the thing rising along Y. It stays exactly as she tagged it.
+        //
+        //   atfootprintoftree_Aura -> Aura_Nature.prefab -- its "Energy" sub-emitter carries
+        //     VelocityModule enabled: 1 with y minMaxState 3 (two constants) minScalar 0.3 /
+        //     scalar 0.5, i.e. every particle is pushed UP local +Y at 0.3-0.5 u/s for a
+        //     startLifetime of 2-4 s, inWorldSpace 0. That is the column climbing over the town.
+        //     (Its "Trails" sub-emitter is z-only; the other four have VelocityModule enabled: 0.)
+        //
+        // THE SEAM IS THIS POLICY, NOT THE PICK. VfxManualPicks.json is HERS
+        // (memory vfx-map-owner-tags-no-creative-pick) and this exact row is additionally pinned
+        // by NightStoreAuraSelectionRegression's PinnedTags table, whose own comment says a red
+        // case means ASK HER, never re-point the file. So the row is left byte-intact and the
+        // SPAWN is withheld here -- the same shape WO-1002 established for the FireFlies loop
+        // above, which is why this lives in this file and not in a second gate.
+
+        /// <summary>The owner-tagged key whose prefab (Aura_Nature) drives particles up local +Y
+        /// at 0.3-0.5 u/s -- the effect she reported "exiting about town along Y". The KEY and its
+        /// pick are untouched; this is only the name of the seat that must not start.</summary>
+        public const string WithheldTreeFootAuraKey = "atfootprintoftree_Aura";
+
+        /// <summary>TRUE (owner 2026-09-07): the tree-foot Aura_Nature seat is NOT spawned.
+        /// Flip to false to restore it verbatim -- the pick, the seat, the position and the trace
+        /// all still exist. (static readonly, not const, so neither branch is CS0162.)</summary>
+        public static readonly bool WithholdTreeFootAura = true;
+
+        /// <summary>True when <paramref name="key"/> is the rising tree-foot aura and the owner
+        /// ruling above is in force. Ordinal compare: catalog keys are exact identifiers.</summary>
+        public static bool ShouldWithholdTreeFootAura(string key)
+            => WithholdTreeFootAura &&
+               string.Equals(key, WithheldTreeFootAuraKey, StringComparison.Ordinal);
+
+        /// <summary>One-line reason for the FlowTrace at the tree-foot seat, so the capture states
+        /// WHY the aura is absent instead of leaving a hole nobody can prove.</summary>
+        public static string TreeFootWithholdReason(string siteName)
+            => siteName + ": '" + WithheldTreeFootAuraKey + "' WITHHELD by AmbientAuraPolicy " +
+               "(WO-1476, owner 2026-09-07 -- a VFX rises over the town along Y). PROOF: its " +
+               "Aura_Nature prefab's Energy sub-emitter has VelocityModule enabled with y = 0.3 " +
+               "to 0.5 u/s over a 2-4 s lifetime. The VfxManualPicks tag is UNCHANGED and the " +
+               "seat still exists; the emitter is simply not spawned. Flip " +
+               "AmbientAuraPolicy.WithholdTreeFootAura to false to restore it.";
+
         /// <summary>Scale multiplier a withheld-site caller should pass when it is still
         /// allowed to play <paramref name="key"/> (i.e. under the shrink flip). 1 for every
         /// other key, so a non-rejected effect is never quietly resized.</summary>

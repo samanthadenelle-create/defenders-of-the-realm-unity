@@ -1,7 +1,12 @@
 import os, shutil, subprocess
+from pathlib import Path
 
-SRC = r'D:\eoa-codex-six'
-DST = r'D:\eoa'
+# CLAUDE.md sec.0 (owner ruling 2026-08-09): the repo root is MACHINE-DEPENDENT
+# (C:\eoa on one seat, D:\eoa on another) - resolve it from this script's own
+# location, never hardcode a drive letter. dev/tmp/<script>.py -> parents[2].
+# SRC is the Codex linked worktree, a SIBLING of the repo root by convention.
+DST = str(Path(__file__).resolve().parents[2])
+SRC = str(Path(DST).parent / (Path(DST).name + '-codex-six'))
 
 # Explicit allowlist. Codex's own exclusions honoured:
 #   - Assets/EnemyContent materials/.fbm  (Unity-generated during clean import)

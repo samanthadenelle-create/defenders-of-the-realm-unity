@@ -149,6 +149,63 @@ Do not migrate these to Addressables without a fresh ruling.
    from its own bbox. ⭐ The earlier defect — two frames opaque-centred, two hollow — **is fixed**; all
    four now read centre alpha 0.
 
+3. **✅ THE BLANK TAN OVALS WERE A CODE DEFECT — A SECOND KEY PRODUCER. FIXED 2026-09-06.**
+   **NO ART IS REQUESTED BY THIS ITEM.** Recorded by the WO-1541/1563/1564 lane.
+
+   `Builds/ui-capture/ManageFlow_BUILD_gridtop_2670x1200.png` showed **Wooden Palisade** and
+   **Crystal Mine** as empty medallion rings. ⚠ My first note here called that a missing asset;
+   **that was wrong and is retracted.** The art was never missing — the key was.
+
+   **Cause, measured:** `BuildDefenseChoices` composed the key from the **display-name slug**
+   (`ManageScreenVM.ResolveBuildingPortraitKey` + `PortraitSlug`), so `cap-manage-wave3.log` traced
+   `id=wall_wood -> 'Portraits/wooden-palisade'` and `id=mine_crystal -> 'Portraits/crystal-mine-2'`
+   against the **mixed root** folder, where neither exists. `ManageArt.LoadSprite:177-186` documents
+   the exact symptom: a miss paints the **warm-tan placeholder disc** inside its ring. Six ids were
+   affected, not two — `lumberyard-3`, `foundry-2`, `stoneyard`, `healing-caravan` too.
+
+   That was a **SECOND producer** of a key `ManageArt.BuildingPortraitKey` already owns from the
+   catalog **id** against `Portraits/Buildings/` — the duplicated-state failure, with the slug as
+   the stale copy. `ManagePortraitCoverageRegression`'s header records that `BuildBuildingChoices`
+   had already been re-pointed for this reason (its `[building-tier-portrait]` case failed on
+   **twenty** root keys while **"(none)"** were missing under `Portraits/Buildings/`).
+   `BuildDefenseChoices` was the last slug caller.
+
+   **Fixed in code, art untouched:** `BuildDefenseChoices` now calls
+   `ManageArt.BuildingPortraitKey(entry.id, level)`; `ResolveBuildingPortraitKey` and `PortraitSlug`
+   are **deleted** (zero callers). Verified at source that every base id resolves —
+   `tower_ground_archer`, `tower_ballista`, `wall_wood`, `mine_crystal`, `lumberyard`, `foundry`,
+   `silo`, `healing_caravan` — and the tier ladder is unchanged (`forge-4`, `barracks-3` still
+   resolve). Pinned by a new fixture case `[portrait-key-single-producer]` in
+   `ManageProgressiveDisclosureRegression`.
+
+   ✅ **THE MISPLACED TIER SHEETS ARE MOVED — nothing is owed here any more.** The lead moved all
+   eight into `Portraits/Buildings/` under the id spelling (`tower_ground_archer-2/-3`,
+   `tower_ballista-2/-3`, `tower_catapult-2/-3`, `tower_arcane_spire-2/-3`). Verified on disk
+   2026-09-07: every one of the five defence ladders now resolves at every authored tier, and all
+   twelve base sheets resolve.
+
+4. **ART ASK — two Sky Ballista tier sheets were never commissioned.** `tower_siege_tower-2` and
+   `tower_siege_tower-3` do not exist under **any** spelling, in either portrait folder.
+
+   ⚠ **This is NOT a regression and NOT misplacement** — corrected here after I first guessed it was.
+   `structures-catalog.json` names `tower_siege_tower` **"Sky Ballista (Anti-Air)"**, so its retired
+   slug would have been `sky-ballista-2/-3`, which have never existed either: the old display-name
+   composer would have asked for them and painted the placeholder disc exactly as today's id key
+   does. ⛔ `wizard-tower-2.png` / `wizard-tower-3.png` in the root folder are **unrelated legacy
+   art and are NOT this tower's sheets** — I had inferred they were; they are not. Moving them under
+   the id spelling would have silently swapped in the wrong picture, which is the "a wrong icon is a
+   lie the capture loop cannot see" failure `ManageArt.cs:152-156` exists to prevent.
+
+   **Consequence today:** a level 2 or 3 Sky Ballista paints its base sheet and logs. That is the
+   designed behaviour for uncommissioned art.
+   **`ManageDefenseCardRegression` deliberately does NOT fail on these** — it emits an
+   `ART ASK (not a failure)` note line naming them, because failing would block the gate on a
+   picture nobody has drawn. It DOES fail on misplacement (a tier sheet present under the retired
+   spelling but absent under the id spelling), which is the real defect class.
+
+   **Owed: two sheets, `tower_siege_tower-2` and `tower_siege_tower-3`, drawn to match
+   `Sky_Ballista` / `tower_siege_tower`.**
+
 ---
 
 ## 6. ACCEPTANCE

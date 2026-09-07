@@ -59,6 +59,7 @@ namespace DeNelle.Editor
                 CheckEnemyStatBlockSanity(failures, log);  // G
                 CheckSynthesizedStatDivergence(byDesign, log); // H (fail-by-design)
                 CheckSynthesizerVsCatalog(failures, log);     // H2 (F18/F46/F47)
+                CheckEnemyScaleTracePresent(failures, log);   // H3 (WO-1530)
                 NoteKnownHardcodes(log);                   // I (documented skips)
             }
             catch (Exception ex)
@@ -701,6 +702,49 @@ namespace DeNelle.Editor
                            "NOTE: WardTetherService.BuildKindleDef (F19) is NOT covered here - it requires a live " +
                            "WardStone instance to invoke, so asserting it needs a fixture rather than reflection. " +
                            "Recorded as an explicit gap rather than skipped silently.");
+        }
+
+        // =====================================================================
+        //  H3. WO-1530 — the PERMANENT [Flow:EnemyScale] spawn measurement must exist.
+        //      The enemy level-scaling formula is only measurable in play because one
+        //      FlowTrace.Step names built -> levelled -> final HP/damage at every
+        //      garrison + raid spawn. CLAUDE.md §12: instrumentation is never stripped,
+        //      so its removal is a REGRESSION, asserted here from source text (the call
+        //      sites are MonoBehaviour spawn paths that cannot be invoked headless).
+        // =====================================================================
+        private static void CheckEnemyScaleTracePresent(List<string> failures, StringBuilder log)
+        {
+            var sites = new Dictionary<string, int>
+            {
+                { "_Modules/Village/World/Camps/GarrisonStatBlocks.cs",  1 },  // the ONE Step
+                { "_Modules/Village/World/Camps/RaidGarrisonSpawner.cs", 2 },  // boss + guard
+                { "_Modules/Village/World/Camps/GarrisonController.cs",  1 },  // additive camp
+            };
+
+            foreach (var kv in sites)
+            {
+                string path = System.IO.Path.Combine(Application.dataPath, kv.Key);
+                if (!System.IO.File.Exists(path))
+                {
+                    failures.Add($"[enemy-scale-trace] source not found: Assets/{kv.Key} (moved or renamed — the WO-1530 measurement cannot be proven)");
+                    continue;
+                }
+
+                string src = System.IO.File.ReadAllText(path);
+                string needle = kv.Key.EndsWith("GarrisonStatBlocks.cs")
+                    ? "FlowTrace.Step(\"EnemyScale\""
+                    : "GarrisonStatBlocks.TraceSpawnScale(";
+
+                int hits = 0, at = 0;
+                while ((at = src.IndexOf(needle, at, StringComparison.Ordinal)) >= 0) { hits++; at += needle.Length; }
+
+                if (hits < kv.Value)
+                    failures.Add($"[enemy-scale-trace] Assets/{kv.Key} has {hits} '{needle}' occurrence(s), expected at least " +
+                                 $"{kv.Value}. The WO-1530 enemy level-scale measurement was stripped or bypassed — " +
+                                 "instrumentation is PERMANENT (CLAUDE.md §12); flag it off, never remove it.");
+                else
+                    log.AppendLine($"  [enemy-scale-trace] Assets/{kv.Key}: {hits} site(s) OK (>= {kv.Value})");
+            }
         }
 
         private static void CheckSynthesizedStatDivergence(List<string> byDesign, StringBuilder log)

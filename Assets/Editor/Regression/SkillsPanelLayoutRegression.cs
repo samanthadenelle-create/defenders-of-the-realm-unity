@@ -132,6 +132,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "source", () => Case5_SourceLaws(failures, notes));
                 Case(failures, "popup", () => Case6_SpendPopup(failures, notes));
                 Case(failures, "rail", () => Case7_QuickSwapRail(failures, notes));
+                Case(failures, "elevation", () => Case8_Elevation(failures, notes));
             }
             catch (Exception ex)
             {
@@ -146,7 +147,9 @@ namespace DeNelle.Editor.Regression
                          "the node graph is padded + clipped on a fixed-pixel lattice, no catalog " +
                          "label is forced to ellipsize at 2340x1080, and the spend popup wraps its full " +
                          "ASCII-only description inside a frame that encloses it (WO-1342), and the " +
-                         "quick-swap slots and their hint are disjoint bands measured on the real builder (WO-1401)" + noteStr;
+                         "quick-swap slots and their hint are disjoint bands measured on the real builder " +
+                         "(WO-1401), and the screen carries a three-tier ELEVATION LADDER whose steps are " +
+                         "measured in Rec.709 luma so depth survives a greyscale capture (WO-1522)" + noteStr;
                 return true;
             }
             reason = "skills-panel-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -656,7 +659,119 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[source] HeroSkillTreePanelMvvm.cs contains an embedded NUL byte " +
                              "(mount-garble, CLAUDE.md Sec.0) - the compile gate rejects this");
 
+            // =================================================================
+            //  WO-1522 - NO AUTHORING NOTE MAY REACH A PLAYER-FACING STRING.
+            // -----------------------------------------------------------------
+            // Device frame Logs/device/screens/owner-screen-20260906-202355.png: the learn
+            // dialog rendered, verbatim,
+            //     "NO EFFECT YET - not implemented yet (data note: 'v2'). C"
+            // - a data-entry comment, quoting the token an author typed into
+            // hero-talents.json, truncated mid-sentence. It got there because
+            // TalentEffectLiveness.HasRuntimeConsumer's diagnostic `why` out-string was
+            // concatenated straight into HeroSkillTreeVM.SelectedNodeStateLine.
+            //
+            // RED PROOF (grep against the pre-fix tree, this file's own tokens):
+            //   HeroSkillTreeVM.cs:259  why = "not implemented yet (data note: '" + token + "')";
+            //   HeroSkillTreeVM.cs:1264 return "NO EFFECT YET - " + deadWhy + ". Costs " ...
+            // The second line is what the case below catches: it is the CONCATENATION that
+            // turns a diagnostic into copy. The first is legitimate - it stays a trace string -
+            // so the case pins the SEAM, not the vocabulary.
+            //
+            // The word the player gets instead is COMING, composed by the VM with nothing but
+            // the node's cost (HeroSkillTreeVM.DeadNodePlayerLine), and stated as a WORD on the
+            // node plate too, because the owner is red/green colourblind and a hue cannot carry
+            // "this grants nothing yet".
+            //
+            // MUTATION THAT REDS IT: restore the concatenation in SelectedNodeStateLine.
+            Case5b_NoAuthoringNoteInPlayerCopy(failures, notes);
+
             notes.Add("source laws checked on " + ViewSrc);
+        }
+
+        /// <summary>WO-1522. No player-facing string in the Talents silo may be built from the
+        /// liveness diagnostic, and no authoring vocabulary may be typed into one directly.</summary>
+        private static void Case5b_NoAuthoringNoteInPlayerCopy(List<string> failures, List<string> notes)
+        {
+            string vmRaw = ReadText(VmSrc, failures, "[authoring-note]");
+            if (vmRaw == null) return;
+            string vm = StripComments(vmRaw);
+
+            // 1. THE SEAM: the diagnostic out-string may never be concatenated into a returned
+            //    sentence. `deadWhy` is the parameter name HasRuntimeConsumer's caller binds.
+            //    Comments are already stripped above, and a FlowTrace statement is EXEMPT: routing
+            //    the diagnostic to a trace line is the sanctioned home (WO-1522 says "route it to
+            //    FlowTrace only"), so matching one there fails the very fix it is pinning.
+            foreach (var probe in new[] { @"""[^""\n]*""\s*\+\s*deadWhy", @"deadWhy\s*\+\s*""", "NO EFFECT YET" })
+            {
+                foreach (Match m in Regex.Matches(vm, probe))
+                {
+                    if (IsDiagnosticOnly(vm, m.Index)) continue;
+                    failures.Add("[authoring-note] the liveness diagnostic is being concatenated into player copy again " +
+                                 "(WO-1522: the learn dialog read \"NO EFFECT YET - not implemented yet (data note: " +
+                                 "'v2'). C\" on the owner's device). The diagnostic belongs to FlowTrace; the player " +
+                                 "sentence is composed by HeroSkillTreeVM.DeadNodePlayerLine and says COMING.");
+                    break;
+                }
+            }
+
+            // 2. THE VOCABULARY: these literals may appear ONLY inside the liveness detector's
+            //    own token table / trace lines, never anywhere a label can read them. The
+            //    NotWiredNoteTokens array is the one sanctioned home and is excluded by name.
+            string vmOutsideTokens = Regex.Replace(vm,
+                // Lazy [\s\S] rather than a negated-brace class: a bare closing brace inside a
+                // character class unbalances the CLAUDE.md sec.1 brace count on this very file.
+                @"NotWiredNoteTokens\s*=\s*\{[\s\S]*?\}", "NotWiredNoteTokens={}", RegexOptions.Singleline);
+            foreach (var banned in new[] { "data note", "not implemented" })
+            {
+                foreach (Match m in Regex.Matches(vmOutsideTokens, "\"[^\"\\n]*\""))
+                {
+                    string literal = m.Value;
+                    if (literal.IndexOf(banned, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    // A trace string, or the diagnostic `why` out-string itself, is fine - neither
+                    // can reach a label now that the seam above is closed. Anything else is not.
+                    if (IsDiagnosticOnly(vmOutsideTokens, m.Index)) continue;
+                    failures.Add("[authoring-note] authoring vocabulary '" + banned + "' appears in a " +
+                                 "non-trace string literal in " + VmSrc + " (" + literal + "). Player copy " +
+                                 "never quotes the data file's private vocabulary.");
+                }
+            }
+
+            // 3. THE VIEW: the panel must never type the note vocabulary at all.
+            string viewRaw = ReadText(ViewSrc, failures, "[authoring-note]");
+            if (viewRaw != null)
+            {
+                string view = StripComments(viewRaw);
+                foreach (var banned in new[] { "data note", "not implemented", "NO EFFECT YET" })
+                    if (view.IndexOf(banned, StringComparison.OrdinalIgnoreCase) >= 0)
+                        failures.Add("[authoring-note] '" + banned + "' appears in " + ViewSrc +
+                                     " - the View paints strings, so any authoring vocabulary here is on screen.");
+
+                // The replacement cue has to actually exist, stated as a WORD (colourblind law).
+                Law(failures, view, "\"COMING\"",
+                    "the inert node no longer states COMING in words on its plate - an unimplemented " +
+                    "perk would again be distinguishable only by a pip glyph");
+            }
+
+            Law(failures, vm, "DeadNodePlayerLine",
+                "the VM no longer composes the dead-node sentence in one place; the liveness " +
+                "diagnostic can leak back into the learn dialog");
+
+            notes.Add("authoring-note lint checked on " + VmSrc + " + " + ViewSrc);
+        }
+
+        /// <summary>True when the string literal at <paramref name="index"/> belongs to a statement
+        /// that can only ever be DIAGNOSTIC: a FlowTrace call, or the assignment of the liveness
+        /// detector's own `why` out-parameter. Those two are the sanctioned homes for the data
+        /// file's private vocabulary; every other literal is a candidate label.</summary>
+        private static bool IsDiagnosticOnly(string code, int index)
+        {
+            int start = Math.Max(0, Math.Min(index, code.Length - 1));
+            int back = Math.Max(0, start - 400);
+            string window = code.Substring(back, Math.Max(0, start - back));
+            int cut = window.LastIndexOf(';');
+            string statement = cut >= 0 ? window.Substring(cut + 1) : window;
+            return statement.IndexOf("FlowTrace.", StringComparison.Ordinal) >= 0
+                || Regex.IsMatch(statement, @"\bwhy\s*=");
         }
 
         // =====================================================================
@@ -1246,6 +1361,126 @@ namespace DeNelle.Editor.Regression
             if (v is double dv) return (float)dv;
             failures.Add($"{tag} {t.Name}.{name} is not a numeric constant (got {(v == null ? "null" : v.GetType().Name)})");
             return 0f;
+        }
+
+        // =====================================================================
+        //  CASE 8 - WO-1522 [elevation]: the screen has DEPTH, and it survives greyscale
+        // =====================================================================
+        /// <summary>
+        /// Owner words: "loadout screen feels very flat". It was literally flat - the graph
+        /// viewport painted a near-black slab with NO edge, the loadout slots sat straight on the
+        /// panel frame with nothing behind them, and the wisdom plate was the only bordered
+        /// surface. Three tiers of content on one apparent plane.
+        ///
+        /// THE OWNER IS RED/GREEN COLOURBLIND, so this case does NOT check that the tiers are
+        /// different colours - it checks that they are different GREYS. Every assertion below is
+        /// on Rec.709 luma, which is exactly what a greyscale capture of the screen shows: if
+        /// these pass, depth is readable with hue stripped entirely; if they were hue-only, they
+        /// would collapse here.
+        ///
+        /// It is a FIXTURE case: the TWO authored surfaces (WellSurface, RaisedSurface) are public
+        /// statics on the View, read live by reflection, so it measures the shipped values rather
+        /// than a copy of them - and a future edit that quietly moves the two rungs together fails
+        /// the gate instead of shipping a flat screen a second time. There is deliberately no
+        /// third constant: the rung between them is the frame's own textured centre, and a plate
+        /// authored for it would be invisible under the opaque graph viewport.
+        /// </summary>
+        private static void Case8_Elevation(List<string> failures, List<string> notes)
+        {
+            const string tag = "[elevation]";
+            Type view = FindType(ViewType);
+            if (view == null) { failures.Add(tag + " HeroSkillTreePanelMvvm type not found"); return; }
+
+            Color well = ColorConst(view, "WellSurface", failures, tag);
+            Color raised = ColorConst(view, "RaisedSurface", failures, tag);
+            float step = ConstFloat(view, "ElevationLumaStep", failures, tag);
+            if (step <= 0f) return;
+
+            float lWell = Luma(well), lRaised = Luma(raised);
+
+            // THE LADDER: recessed well BELOW the frame's own textured centre BELOW the raised
+            // shelf. The middle rung is the frame art, not an authored constant (see the View's
+            // note - a plate there is either invisible under the graph viewport or it re-covers
+            // what MedievalUiSkin.ApplyShell deliberately uncovers), so what is decidable here is
+            // the gap ACROSS it: two rungs, hence twice the adjacent-step floor.
+            if (lWell >= lRaised)
+                failures.Add(tag + " the recessed well (" + lWell.ToString("0.000") + " luma) is not " +
+                             "darker than the raised shelf (" + lRaised.ToString("0.000") + ") - a ladder " +
+                             "whose rungs are out of order reads as noise, not depth");
+            if (lRaised - lWell < step * 2f)
+                failures.Add(tag + " the graph well and the loadout shelf are only " +
+                             (lRaised - lWell).ToString("0.000") + " luma apart (floor " +
+                             (step * 2f).ToString("0.000") + ") - in a greyscale capture they are one " +
+                             "surface, which is the owner's 'very flat' verbatim");
+
+            // Fully opaque, or the tier below shows through and the step measured above is a lie.
+            foreach (var pair in new[] { new { N = "WellSurface", C = well },
+                                         new { N = "RaisedSurface", C = raised } })
+                if (pair.C.a < 0.99f)
+                    failures.Add(tag + " " + pair.N + " has alpha " + pair.C.a.ToString("0.00") +
+                                 " - a translucent tier blends with the one under it and the measured " +
+                                 "luma step is not the step the player sees");
+
+            // SIZE is the second depth channel (WO-1021): the focus plate must be materially
+            // larger than a normal one, or selection is carried by tint alone.
+            float focus = ConstFloat(view, "NodeFocusPx", failures, tag);
+            float normal = ConstFloat(view, "NodeSizePx", failures, tag);
+            if (focus > 0f && normal > 0f && focus < normal * 1.10f)
+                failures.Add(tag + " the focus plate (" + focus.ToString("F0") + " px) is less than 10% " +
+                             "larger than a normal one (" + normal.ToString("F0") + " px) - SIZE is the " +
+                             "one selection cue that survives greyscale and it has stopped carrying");
+
+            // ...and the surfaces have to actually be BUILT, through the one builder, with the
+            // plate and the bezel kept as SEPARATE images. Collapsing them is verbatim the
+            // WO-1515 tan-slab defect: card-frame-empty has a transparent centre.
+            string src = ReadText(ViewSrc, failures, tag);
+            if (src == null) return;
+            string code = StripComments(src);
+            foreach (string call in new[] { "\"GraphWellBezel\"",
+                                            "\"QuickSwapShelfPlate\"", "\"QuickSwapShelfBezel\"" })
+                if (code.IndexOf(call) < 0)
+                    failures.Add(tag + " the elevation surface " + call + " is no longer built - the " +
+                                 "screen loses a tier and goes back toward flat");
+            if (code.IndexOf("BuildElevationPlate(") < 0)
+                failures.Add(tag + " BuildElevationPlate is gone - the surfaces would be authored " +
+                             "several different ways, which is how they drift back together");
+            // A plate under the graph viewport is INVISIBLE (the viewport is opaque and fills the
+            // same rect). Building one is dead paint that would make the ladder look authored
+            // while the player still sees one plane.
+            if (Regex.IsMatch(code, @"BuildElevationPlate\s*\(\s*graphWell\s*,[^;]*bezel\s*:\s*false"))
+                failures.Add(tag + " a FILL plate is built under the graph viewport - the viewport is " +
+                             "opaque and fills the same rect, so that paint is 100% occluded and the " +
+                             "tier it claims to add is not on screen");
+            if (Regex.IsMatch(code, @"BuildElevationPlate\s*\([^;]*bezel\s*:\s*true[^;]*RaisedSurface"))
+                failures.Add(tag + " a bezel and a fill are being asked of ONE image - card-frame-empty " +
+                             "has a transparent centre, so that leaves no surface at all (WO-1515)");
+            if (Regex.IsMatch(code, @"vImg\.color\s*=\s*new\s+Color"))
+                failures.Add(tag + " the graph viewport re-hardcodes its own colour instead of reading " +
+                             "WellSurface - a second copy of a tier is how the ladder goes stale");
+
+            // TWO authored rungs, with the frame's own textured centre between them - so the
+            // note reports the gap ACROSS that middle rung against twice the adjacent-step floor.
+            notes.Add("elevation ladder well " + lWell.ToString("0.000") + " < raised " +
+                      lRaised.ToString("0.000") + " (gap " + (lRaised - lWell).ToString("0.000") +
+                      ", floor " + (step * 2f).ToString("0.000") + ")");
+        }
+
+        /// <summary>Rec.709 relative luminance - what a greyscale capture of the screen shows.
+        /// The ONLY depth measure this owner can read, so it is the one the case asserts on.</summary>
+        private static float Luma(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+        /// <summary>Read a public static Color field. A MISSING surface is a FAILURE, never a
+        /// default: a black default would silently satisfy the "recessed" half of the ladder.</summary>
+        private static Color ColorConst(Type t, string name, List<string> failures, string tag)
+        {
+            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (f == null)
+            {
+                failures.Add(tag + " " + t.Name + "." + name + " does not exist - the elevation ladder " +
+                             "this case pins was renamed or removed; re-point it rather than deleting the guard");
+                return new Color(0f, 0f, 0f, 0f);
+            }
+            return f.GetValue(null) is Color c ? c : new Color(0f, 0f, 0f, 0f);
         }
 
         private static string ReadText(string path, List<string> failures, string tag)

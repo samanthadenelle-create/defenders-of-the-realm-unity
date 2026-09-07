@@ -35,6 +35,12 @@
 //   F  Runtime: PanelRouter.IsRegistered(PanelId.CosmeticShop) flips true once a fake opener
 //      is registered and the id round-trips through Open - the card's Available predicate is
 //      the router's own answer, never a second flag.
+//   G  WO-1523: the Wardrobe route is CONDITIONAL - the Hero block gates it on the VM's
+//      WardrobeHasUnlocked, badges its purpose through PurposeWithBadge, and clears the badge
+//      with HeroDeckWardrobeVM.MarkSeen when the card is opened.
+//   H  WO-1523 measured: HeroDeckWardrobeVM answers hide at owned=0, show + NEW at owned=1, and
+//      drops NEW after the first open. This is the SAME decider the deck consults, so the case
+//      measures what the screen does, not a parallel rule.
 //
 // RED-FIRST: on the pre-WO-1397 tree A fails (no Wardrobe route), C fails (header claims a
 // Marketplace interactable), D fails (fixed h * 0.5f) and E fails (no trace). ONE-LINE
@@ -53,6 +59,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 using DeNelle.Core.UI;
+using DeNelle.Core.HudModel;   // WO-1523: CosmeticSignals + HeroDeckWardrobeVM
 
 namespace DeNelle.Editor.Regression
 {
@@ -92,6 +99,8 @@ namespace DeNelle.Editor.Regression
                 CaseD_GridGrowsRows(deck, failures, log);
                 CaseE_DoorIsTraced(shop, failures, log);
                 CaseF_RouterRoundTrip(failures, log);
+                CaseG_WardrobeGatedOnUnlock(deck, failures, log);
+                CaseH_VmDecidesShowAndNew(failures, log);
             }
             catch (Exception ex)
             {
@@ -251,6 +260,84 @@ namespace DeNelle.Editor.Regression
             if (PanelRouter.IsRegistered(PanelId.CosmeticShop))
                 failures.Add(Tag + " F: PanelId.CosmeticShop is still registered after Unregister - the stand-in leaked into the next suite");
             log.AppendLine("  F: PanelId.CosmeticShop round-trips Register -> IsRegistered -> Open (arbiter-verified) -> Unregister");
+        }
+
+        // G (WO-1523): the Wardrobe card is CONDITIONAL on the VM, and it is ABSENT rather than
+        // locked/collapsed when nothing is unlocked. Source case - the owner's ruling is
+        // "dont show the section", and a card that is built and then hidden still lands in a
+        // measured layout capture.
+        private static void CaseG_WardrobeGatedOnUnlock(string deck, List<string> failures, StringBuilder log)
+        {
+            int cardsFor = deck.IndexOf("List<Card> CardsFor(", StringComparison.Ordinal);
+            string hero = cardsFor < 0 ? null
+                : Between(deck.Substring(cardsFor), "case PlayerDeckKind.Hero:", "case PlayerDeckKind.Journey:");
+            if (hero == null)
+            {
+                failures.Add(Tag + " G: no Hero deck block in " + DeckSrc + " - G is measuring nothing");
+                return;
+            }
+            if (hero.IndexOf("WardrobeHasUnlocked", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " G: the Hero deck does not gate its Wardrobe route on " +
+                             "HeroDeckWardrobeVM.WardrobeHasUnlocked - WO-1523 rules an all-locked wardrobe " +
+                             "off the Hero screen entirely");
+            if (hero.IndexOf("PurposeWithBadge", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " G: the Wardrobe card does not take its purpose from " +
+                             "HeroDeckWardrobeVM.PurposeWithBadge - the NEW word must arrive with the section");
+            if (hero.IndexOf("HeroDeckWardrobeVM.MarkSeen", StringComparison.Ordinal) < 0)
+                failures.Add(Tag + " G: opening the Wardrobe card does not call HeroDeckWardrobeVM.MarkSeen - " +
+                             "the NEW word would never clear");
+            log.AppendLine("  G: Wardrobe route is gated on WardrobeHasUnlocked, badged, and clears NEW on open");
+        }
+
+        // H (WO-1523): the measured case. Zero unlocked cosmetics -> the section is not shown;
+        // one -> it is shown and carries the NEW word. Read through the VM, which is the ONE
+        // decider the deck consults, so this measures the same answer the screen gets.
+        private static void CaseH_VmDecidesShowAndNew(List<string> failures, StringBuilder log)
+        {
+            int restore = CosmeticSignals.OwnedCount;
+            bool restoreSeen = PlayerPrefs.GetInt(HeroDeckWardrobeVM.SeenPrefKey, 0) != 0;
+            try
+            {
+                // A previous gate run on this machine can leave the seen flag set; the NEW arm
+                // measures a FIRST arrival, so clear it deliberately rather than inherit it.
+                HeroDeckWardrobeVM.ClearSeenForTests();
+
+                CosmeticSignals.SetOwnedCount(0);
+                var locked = HeroDeckWardrobeVM.FromCurrentState();
+                if (locked.WardrobeHasUnlocked)
+                    failures.Add(Tag + " H: with ZERO unlocked cosmetics WardrobeHasUnlocked is true - " +
+                                 "the Hero screen would still carry an all-locked wardrobe section");
+                if (locked.WardrobeIsNew)
+                    failures.Add(Tag + " H: a hidden wardrobe reports WardrobeIsNew - a NEW word on a " +
+                                 "section nobody can see");
+
+                CosmeticSignals.SetOwnedCount(1);
+                var unlocked = HeroDeckWardrobeVM.FromCurrentState();
+                if (!unlocked.WardrobeHasUnlocked)
+                    failures.Add(Tag + " H: with ONE unlocked cosmetic WardrobeHasUnlocked is false - " +
+                                 "the section never returns and the shop is dead end 4 again");
+                if (!unlocked.WardrobeIsNew)
+                    failures.Add(Tag + " H: the first appearance does not carry NEW");
+                string badged = unlocked.PurposeWithBadge("Looks for your hero, Echo, and town");
+                if (badged == null || badged.IndexOf(HeroDeckWardrobeVM.NewWord, StringComparison.Ordinal) != 0)
+                    failures.Add(Tag + " H: the badged purpose does not lead with '" +
+                                 HeroDeckWardrobeVM.NewWord + "': '" + badged + "'");
+
+                HeroDeckWardrobeVM.MarkSeen();
+                var seen = HeroDeckWardrobeVM.FromCurrentState();
+                if (!seen.WardrobeHasUnlocked)
+                    failures.Add(Tag + " H: the section disappeared after being opened once");
+                if (seen.WardrobeIsNew)
+                    failures.Add(Tag + " H: NEW survives the first open - MarkSeen did not stick");
+            }
+            finally
+            {
+                if (restoreSeen) PlayerPrefs.SetInt(HeroDeckWardrobeVM.SeenPrefKey, 1);
+                else HeroDeckWardrobeVM.ClearSeenForTests();
+                CosmeticSignals.SetOwnedCount(restore);
+            }
+            log.AppendLine("  H: owned=0 hides the section; owned=1 shows it carrying " +
+                           HeroDeckWardrobeVM.NewWord + ", cleared by the first open");
         }
 
         private static string ReadOrNull(string path)

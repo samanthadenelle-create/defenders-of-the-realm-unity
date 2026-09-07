@@ -203,8 +203,138 @@ namespace DeNelle.Village.Hero
         /// through. See <see cref="SpoilsLine"/>. Never null; always at least one line.</summary>
         public IReadOnlyList<string> ScoutReport => _scoutReport;
 
+        /// <summary>
+        /// WO-1519 - the scout WELL's lines: <see cref="ScoutReport"/> WITHOUT the trailing
+        /// spoils line, because on the redesigned screen the spoils are the chip row
+        /// (<see cref="SpoilsChips"/>) and a number said twice on one screen is the
+        /// duplicated-state smell this file's WO-1385 banner already names ("Troops N leaves
+        /// this well - it is already said twice on this screen").
+        ///
+        /// ⛔ ScoutReport ITSELF IS UNCHANGED, on purpose. RaidDeployZeroArmyRegression
+        /// [zero-army-spoils] pins that its LAST line is the WO-1403 spoils estimate and that
+        /// it reads four lines for a walls+garrison+boss+spoils camp; that pin is the contract
+        /// between this screen and WO-1402's producer and it must not be weakened to make a
+        /// layout change easier. This is a VIEW-side projection of the same list, not a second
+        /// report - one producer, two presentations.
+        /// Never null; falls back to the whole report if there is no spoils line to drop.
+        /// </summary>
+        public IReadOnlyList<string> ScoutIntel
+        {
+            get
+            {
+                if (!_hasSpoilsLine || _scoutReport.Count <= 1) return _scoutReport;
+                return _scoutReport.GetRange(0, _scoutReport.Count - 1);
+            }
+        }
+
+        /// <summary>Whether <see cref="BuildScoutReport"/> appended the spoils line (so
+        /// <see cref="ScoutIntel"/> knows there is one to drop, rather than pattern-matching
+        /// the prefix back out of a string it just produced).</summary>
+        private bool _hasSpoilsLine;
+
         /// <summary>"Army: N / M slots" (or "Army: -" with no roster).</summary>
         public string ArmyCapText { get; private set; }
+
+        // =====================================================================
+        //  WO-1519 - THE ARMY BAND. The word is composed HERE, never in the View.
+        // ---------------------------------------------------------------------
+        //  The deploy screen used to paint ArmyCapText as a bare line directly under the
+        //  hero portraits, and on the owner's 20:14 frame it printed ON TOP of them
+        //  ("Army: 10 / 10 slots" over the Grom/Sylas row - WO-1464 evidence). WO-1519
+        //  gives it its OWN band, and WO-1517's grammar gives it the state word: a player
+        //  at the cap is TOLD, on the screen where they decide, instead of discovering it
+        //  by a tap that does nothing.
+        //
+        //  "ARMY 10 / 10 - FULL" / "ARMY 7 / 10" / "ARMY -". WO-1517's ruling word is
+        //  FULL, uppercase, and the SAME word the train door will use - one grammar for
+        //  one state across two screens, so a player who learns it once has learned it.
+        //  ⛔ The View may not re-derive this: a second "used >= cap" test on the
+        //  presentation side is the divergence WO-823 Phase E removed from this file.
+        // =====================================================================
+        /// <summary>WO-1517's word for the cap state, or null while there is no roster to state.</summary>
+        public const string ArmyFullWord = "FULL";
+
+        /// <summary>"ARMY 7 / 10", "ARMY 10 / 10 - FULL", or "ARMY -" with no roster.
+        /// Composed here so the band and the trace can never disagree.</summary>
+        public string ArmyBandText { get; private set; }
+
+        /// <summary>True when the roster is at (or over) its slot cap - the state the band words.
+        /// False with no roster: absence of a number is not a full army.</summary>
+        public bool ArmyFull { get; private set; }
+
+        // =====================================================================
+        //  WO-1519 - SPOILS AS CHIPS, from the ONE producer, never a parsed string.
+        // ---------------------------------------------------------------------
+        //  §2.4: "SPOILS as three icon+number chips (wood, iron, gold)". The numbers are
+        //  WO-1402's estimate - the same RaidSelectionVM.EstimateSpoils the selection row
+        //  and <see cref="SpoilsLine"/> read - put through the same <c>Approx</c> rounding,
+        //  so the chip, the row and the line quote one camp with one set of numbers.
+        //  ⛔ NEVER parse SpoilsLine to build these. A string is an output of the producer,
+        //  not a second source; splitting it would be the parallel formula this file's
+        //  WO-1403 banner already forbids in the other direction.
+        //
+        //  ⚠ NOT YET CAP-AWARE OR REPEAT-AWARE. WO-1461 (READY, not landed as of
+        //  2026-09-06) is what makes the estimate equal what actually BANKS after storage
+        //  caps and the repeat-clear decay. Until it lands these chips are honest about
+        //  the same thing the selection row is honest about, and no more - the word is
+        //  still an estimate ("~"), which is why the tilde stays on every chip.
+        // =====================================================================
+        /// <summary>One spoils chip - a concept id the View resolves an icon for, its word
+        /// (the honest fallback when no icon art answers), and the estimated amount. PURE:
+        /// no Unity type, no sprite, no formatting decision.</summary>
+        public readonly struct SpoilsChip
+        {
+            public readonly string ConceptId;
+            public readonly string Word;
+            public readonly int Amount;
+            public SpoilsChip(string conceptId, string word, int amount)
+            { ConceptId = conceptId; Word = word; Amount = amount; }
+        }
+
+        private readonly List<SpoilsChip> _spoilsChips = new List<SpoilsChip>();
+
+        /// <summary>Wood / iron / gold chips for the deploy screen's spoils row, in the economy
+        /// map's order, zero currencies dropped. Never null; empty when the estimate pays nothing
+        /// (and the View then says so in words rather than painting an empty row).</summary>
+        public IReadOnlyList<SpoilsChip> SpoilsChips => _spoilsChips;
+
+        // =====================================================================
+        //  WO-1519 - THE BOSS, for the ENEMY BASE hero card.
+        // ---------------------------------------------------------------------
+        //  §2.2 makes the enemy band a hero card carrying the boss. §3 says: check the
+        //  portrait renders before relying on it. MEASURED 2026-09-06, not assumed -
+        //  Assets/Resources/Portraits/ holds NO enemy portrait at all (no necromancer, no
+        //  orc, no boss), so the "boss portrait from Portraits/" the WO sketches does not
+        //  exist. What DOES exist and DOES render is the emblem sprite pack:
+        //  Assets/Resources/RpgUi/emblem/Necromancer.png, opened and looked at - a full
+        //  colour dripping green skull, unaffected by WO-1509's missing-albedo FBX (that
+        //  is the 3D model; this is 2D art on a different pipeline).
+        //  All four authored camps' bosses ("orc-necromancer" x2, "necromancer" x2)
+        //  resolve to that one emblem through <see cref="BossEmblemName"/>.
+        //  The View keeps its crest fallback for a boss with no emblem - honest missing
+        //  art, never a blank card.
+        // =====================================================================
+        /// <summary>"Orc Necromancer" - the boss, title-cased, never a raw id. Empty when the
+        /// camp authors no boss (the card then reads as a camp, not as a lie about a boss).</summary>
+        public string BossDisplayName =>
+            _def != null && _def.garrison != null && !string.IsNullOrEmpty(_def.garrison.boss)
+                ? TitleCaseId(_def.garrison.boss) : "";
+
+        /// <summary>The emblem sprite NAME for the boss - the last hyphen segment, title-cased
+        /// ("orc-necromancer" -> "Necromancer"), which is how the RpgUi emblem pack is keyed.
+        /// Empty when there is no boss. The View resolves the art (or falls back); the VM never
+        /// touches a sprite.</summary>
+        public string BossEmblemName
+        {
+            get
+            {
+                string boss = _def != null && _def.garrison != null ? _def.garrison.boss : null;
+                if (string.IsNullOrEmpty(boss)) return "";
+                int cut = boss.LastIndexOf('-');
+                string tail = cut >= 0 && cut + 1 < boss.Length ? boss.Substring(cut + 1) : boss;
+                return TitleCaseId(tail);
+            }
+        }
 
         /// <summary>Whether a troop row's role is ranged (drives the glyph). Pure VM data.</summary>
         public bool IsRanged(string troopDefId) =>
@@ -232,6 +362,56 @@ namespace DeNelle.Village.Hero
                 case "healer": return "Elara";
                 default: return string.IsNullOrEmpty(cls) ? "Hero" : cls;
             }
+        }
+
+        // =====================================================================
+        //  WO-1542 - THE OUTMATCH CONFIRM. A STEP, NOT A GATE.
+        // =====================================================================
+        //  Owner ruling 2026-09-06 ("Warning, not a lock") plus the appended ruling
+        //  22:20 ("add the confirm toast"): the grid word became advice, and BEGIN
+        //  ASSAULT asks ONCE before marching on an over-matched camp.
+        //
+        //  STOP - THIS IS NOT A READINESS GATE AND MUST NEVER BECOME ONE. It never
+        //  refuses: the second tap marches, always, whatever the numbers say.
+        //  CanDeploy is UNTOUCHED (scene name + Build Settings only), ShowAssault is
+        //  UNTOUCHED (Fielded > 0 only), and Deploy() gains no new refusal branch. A
+        //  readiness check inside this screen is the second-gate shape WO-1379 forbids
+        //  and HeartfireRegression PIN F reds the file for; WO-1403 decoupled this
+        //  footer from readiness on purpose and that decoupling stands.
+        //
+        //  IT USES THE GRID'S OWN PREDICATE, FROM THE GRID'S OWN PRODUCER, ON THE
+        //  GRID'S OWN AXIS. RaidSelectionVM.ArmyWarnWord is called with DeployableCount
+        //  - the raw HEADCOUNT, which is what WO-1389's "you field N" compare line uses
+        //  and what the garrison headcount is measured against. Passing the
+        //  slot-weighted Fielded here would let the grid say Outmatched while this
+        //  screen stayed silent, which is precisely the drift WO-1542 exists to close.
+        // =====================================================================
+
+        private bool _outmatchAcknowledged;
+
+        /// <summary>True while BEGIN ASSAULT should ASK once before marching: this camp's
+        /// garrison outnumbers the bodies the player can field, and the player has not yet
+        /// confirmed. False once <see cref="AcknowledgeOutmatch"/> has been called, and false
+        /// whenever the army covers the garrison.</summary>
+        public bool NeedsOutmatchConfirm =>
+            !_outmatchAcknowledged &&
+            RaidSelectionVM.OutmatchConfirmToast(_def, DeployableCount) != null;
+
+        /// <summary>The sentence the confirm toast shows. Composed HERE, in the model; the View
+        /// only displays it. Null when nothing needs confirming.</summary>
+        public string OutmatchToast =>
+            RaidSelectionVM.OutmatchConfirmToast(_def, DeployableCount);
+
+        /// <summary>The player answered the confirm. Latched for the life of this screen, so the
+        /// question is asked ONCE and a second tap always marches.</summary>
+        public void AcknowledgeOutmatch()
+        {
+            if (_outmatchAcknowledged) return;
+            _outmatchAcknowledged = true;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"OUTMATCH CONFIRM acknowledged for raid='{RaidId}' (garrison outnumbers the " +
+                $"{DeployableCount} bodies the player can field). The next BEGIN ASSAULT marches. " +
+                "This is a confirm STEP, never a refusal - WO-1542 owner ruling.");
         }
 
         // ── Commands ────────────────────────────────────────────────────────────
@@ -310,6 +490,7 @@ namespace DeNelle.Village.Hero
 
             Rebuild();
             BuildScoutReport();
+            BuildSpoilsChips();
         }
 
         // WO-839 #3: honest intel from the def only (walls / gates / garrison / boss).
@@ -351,9 +532,32 @@ namespace DeNelle.Village.Hero
                 // banner below). The player is told what a raid PAYS on the screen where they
                 // decide to raid.
                 string spoils = SpoilsLine(_def);
-                if (!string.IsNullOrEmpty(spoils)) _scoutReport.Add(spoils);
+                if (!string.IsNullOrEmpty(spoils)) { _scoutReport.Add(spoils); _hasSpoilsLine = true; }
             }
             if (_scoutReport.Count == 0) _scoutReport.Add("No scout intel available.");
+        }
+
+        // WO-1519 §2.4 - the chip row, from WO-1402's estimator and its own rounding. Pure
+        // string/int work; the View resolves the icons. Called from the constructor beside
+        // BuildScoutReport so the chips and the report's spoils line are one read.
+        private void BuildSpoilsChips()
+        {
+            _spoilsChips.Clear();
+            if (_def == null) return;
+            var est = RaidSelectionVM.EstimateSpoils(_def);
+            // The SAME rounding the line uses (RaidSelectionVM.Approx), so a chip can never
+            // quote a different number from the sentence produced by the same estimate.
+            if (est.Wood  > 0) _spoilsChips.Add(new SpoilsChip("wood", "Wood", RaidSelectionVM.Approx(est.Wood)));
+            if (est.Iron  > 0) _spoilsChips.Add(new SpoilsChip("iron", "Iron", RaidSelectionVM.Approx(est.Iron)));
+            if (est.Coins > 0) _spoilsChips.Add(new SpoilsChip("gold", "Gold", RaidSelectionVM.Approx(est.Coins)));
+            if (_spoilsChips.Count == 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "spoils chips: WO-1402's estimator pays nothing for raid='" + RaidId + "' - the deploy " +
+                    "screen shows the no-spoils sentence instead of an empty chip row.");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "spoils chips: " + _spoilsChips.Count + " for raid='" + RaidId +
+                    "' from RaidSelectionVM.EstimateSpoils (NOT cap-aware yet - WO-1461 owed).");
         }
 
         // =====================================================================
@@ -497,6 +701,12 @@ namespace DeNelle.Village.Hero
             DeployableCount = deployable;
             PowerRating = (int)System.Math.Round(power);
             ArmyCapText = ComputeArmyCapText();
+            // WO-1519: the band word rides the SAME used/cap read ComputeArmyCapText just took
+            // (_armyUsed/_armyCap, set there), so the two readouts cannot diverge.
+            ArmyFull = _armyCap > 0 && _armyUsed >= _armyCap;
+            ArmyBandText = _armyCap > 0
+                ? "ARMY " + _armyUsed + " / " + _armyCap + (ArmyFull ? " - " + ArmyFullWord : "")
+                : "ARMY -";
 
             // ── The ONE readiness snapshot behind Fielded / ShowAssault / PrimaryCtaLabel ──
             // Order of preference, and why:
@@ -514,8 +724,16 @@ namespace DeNelle.Village.Hero
                 : new ArmyReadiness.Snapshot { Ready = true });
         }
 
+        // WO-1519: the ONE used/cap read, recorded so ArmyBandText (the band the player reads)
+        // and ArmyCapText (the legacy line + the trace) are the same two numbers. Zero cap means
+        // "not known", which is why ArmyBandText words that as "ARMY -" and never as full.
+        private int _armyUsed;
+        private int _armyCap;
+
         private string ComputeArmyCapText()
         {
+            _armyUsed = 0;
+            _armyCap = 0;
             if (_army == null)
             {
                 // WO-1110 §2 — this used to fall through silently. "Army: -" is the honest
@@ -532,6 +750,8 @@ namespace DeNelle.Village.Hero
                     return info.Slots > 0 ? info.Slots : 1;
                 };
                 int used = _army.SlotsUsed(slotOf);
+                _armyUsed = used;
+                _armyCap = _army.MaxArmySize;
                 return "Army: " + used + " / " + _army.MaxArmySize + " slots";
             }
             catch (Exception ex)

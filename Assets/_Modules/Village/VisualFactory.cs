@@ -660,20 +660,15 @@ namespace DeNelle.Village
                 $"(size {sz:F2}) → stood it to +Y so the flat face rests down.");
         }
 
-        // ── Tripo material fix (reflection — type lives in DeNelle.Core) ─────
-        private static System.Type _tripoFixerType;
-        private static bool _tripoLookedUp;
-
+        // ── Tripo material fix ──────────────────────────────────────────────
+        // WO-1511: TripoMaterialFixer lives in DeNelle.Core, which DeNelle.Village.asmdef
+        // already references — so the type is directly nameable and the cached
+        // Type.GetType lookup (plus its "type missing" null path) is gone. Behaviour is
+        // identical: add the component once, never twice.
         private static void TryAddTripoFixer(GameObject go)
         {
-            if (!_tripoLookedUp)
-            {
-                _tripoLookedUp = true;
-                _tripoFixerType = System.Type.GetType("DeNelle.Core.TripoMaterialFixer, DeNelle.Core")
-                               ?? System.Type.GetType("DeNelle.Core.TripoMaterialFixer");
-            }
-            if (_tripoFixerType != null && go.GetComponent(_tripoFixerType) == null)
-                go.AddComponent(_tripoFixerType);
+            if (go.GetComponent<DeNelle.Core.TripoMaterialFixer>() == null)
+                go.AddComponent<DeNelle.Core.TripoMaterialFixer>();
         }
     }
 }

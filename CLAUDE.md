@@ -171,7 +171,10 @@ NULs that poison a commit and break compilation.
 | `DeNelle.Editor` | `DeNelle.Editor` | VillageSceneBuilder, AnimatorSetup — editor-only |
 
 > ### ⚠ THE TABLE ABOVE IS A SUBSET, NOT THE MAP (corrected 2026-08-09, owner ruling on RULES.md C-6)
-> There are **19 `.asmdef` under `Assets/_Modules/`** plus `Assets/Data/DeNelle.Data.asmdef`.
+> ⛔ **DO NOT RESTATE THE COUNT HERE — COUNT THEM:** `find Assets/_Modules -name '*.asmdef' | wc -l`
+> (plus `Assets/Data/DeNelle.Data.asmdef`, which lives outside `_Modules/`). This line said **19** from
+> 2026-08-09 until 2026-09-06, when the command returned **25**. A hand-maintained count tracking a live
+> tree is duplicated state and fails exactly like the stale WO block (§2) and the retired table below.
 > **READ THE `.asmdef` — it is the authority on what may reference what.** The six rows above are a
 > convenience list of the ones you touch most; they are not the dependency graph.
 
@@ -184,13 +187,18 @@ NULs that poison a commit and break compilation.
 > Cross-module calls go through `CoreServices.Hud` / `CoreServices.Audio`, always with `?.`.
 
 **⚠ THE OLD RULE HERE — *"Village → Core only. HUD → Core only"* — WAS FALSE AND IS RETIRED.**
-`DeNelle.Village.asmdef` legitimately references `DeNelle.BattleATB`, `DeNelle.AI`,
-`DeNelle.Cosmetics`, `DeNelle.Data`, `DeNelle.Pets`, `DeNelle.Wallet` and `DeNelle.Audio` besides
-`DeNelle.Core`. A seat reading the old line literally would have rejected working code as a
-violation, or "fixed" references the project depends on. It was accurate when written and the project
-outgrew it — the same duplicated-state drift that produced the stale WO number block (§2) and the
-hardcoded repo root (§0). **Do not restore a hand-maintained dependency table here; point at the
-`.asmdef` instead.**
+The authority is the file: `Assets/_Modules/Village/DeNelle.Village.asmdef`, whose `references` array
+runs `:4-28`. Read there 2026-09-06, its DeNelle entries are `DeNelle.Core` (`:5`),
+`DeNelle.Commerce` (`:6`), `DeNelle.BattleATB` (`:7`), `DeNelle.AI` (`:8`), `DeNelle.Cosmetics` (`:9`),
+`DeNelle.Data` (`:10`), `DeNelle.Pets` (`:11`) and `DeNelle.Audio` (`:20`), alongside Unity and
+third-party assemblies. **That reading is dated, not an authority — open the file.**
+⛔ This paragraph named **`DeNelle.Wallet`** from 2026-08-09 until 2026-09-06 and that string is NOT in
+the file; the commerce/wallet-facing reference is `DeNelle.Commerce` (`:6`). A seat "restoring" the
+listed name would have added a reference to an assembly this module does not use — the copy failing in
+the same breath as the rule it was written to state. A seat reading the retired rule literally would
+instead have rejected working code as a violation. Same duplicated-state drift that produced the stale
+WO number block (§2) and the hardcoded repo root (§0). **Do not restore a hand-maintained dependency
+table here; point at the `.asmdef` instead.**
 
 ---
 
@@ -241,8 +249,13 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
     value, its widget id (`upgradeButton`) and its `hud-areas.json` row, which is what dissolves the
     8th-face problem entirely. It is now **always applicable in town**, not context-gated on a focused
     building.
-  - **Map LEFT the bar** and is a **tab inside Bag**, **feature-flagged OFF** (`FeatureFlags.MapTab`,
-    PlayerPrefs `ff.maptab`) because realm travel is a WO-827 stub and the areas do not connect yet.
+  - **Map LEFT the bar.** ⚠ **`FeatureFlags.MapTab` NO LONGER EXISTS — it was DELETED 2026-09-05
+    (WO-1396), read `Assets/_Modules/Core/FeatureFlags.cs:843-849`.** This line used to say Map was
+    "a tab inside Bag, feature-flagged OFF (`FeatureFlags.MapTab`, PlayerPrefs `ff.maptab`)"; that
+    flag gated a Bag-side door (`InventoryUIBuilder.OpenRealmMap`) that shipped OFF and was never
+    offered, so the map had a dormant second door and no live one. **The Realm Map's ONE public door
+    is now the Journey deck card** (`PlayerDeckWorkspace`, `PlayerDeckKind.Journey` -> `PanelId.RealmMap`),
+    and `PublicNavigationRetirementRegression` pins that the flag and the Bag route stay gone.
     `ActionBarButtonId.Map` stays **dormant at ordinal 4** — never renumber it, the face arrays are
     indexed by ordinal.
   - ⛔ **`HudActionBarModel.MaxVisibleFaces` IS `4`. STOP RESTATING IT HERE - READ THE CONSTANT.**
@@ -260,6 +273,14 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
     constant is **duplicated state**, and it fails exactly like §2's stale WO-number block, §5's
     retired dependency table and §16's copy-pasted R2 verify. The cure is not a better copy - it is
     deleting the copy. **Do not write a face count back into this file.**
+    ⚠ **BANNER 2026-09-06: THE FROZEN NOTE BELOW DESCRIBES A PATH NOTHING BINDS.** Measured today:
+    `HudKitController.cs:2978-2986` returns early whenever `_peacefulDockRoot != null`, disabling every
+    legacy bar face and never subscribing `HudActionBarModel` at all - so `ComputeMask` and its
+    conditional `Talk` bit do not drive what ships. The peaceful dock the player sees is built by
+    `HudKitController` and carries FIVE faces (BUILD / TALK / HERO / JOURNEY / MANAGE); TALK is a
+    permanent slot there, pinned only by a source-text lint at `HudActionBarRegression.cs:239`
+    (`BuildPeacefulDockSlot(1, "TALK")`). Do not act on the note below without reading
+    `WorkOrders/WORK_ORDER_1467_two_suites_pin_an_action_bar_model_nothing_binds.md`, which owns the fix.
     *(Frozen, because its reasoning is still true and only its number was wrong: the 2026-08-26
     correction established that the bar's membership is CONDITIONAL, not flat - `Talk` is added only
     `if (_source.TalkAvailable)` (`HudActionBarModel.ComputeMask`), which `TalkHudBridge.cs:69` sets
@@ -303,24 +324,65 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
   the PRIMARY input is deleted (`FirePrimary` / `FireRangedPrimary` / `ResolveRangedTarget` /
   `ResolvePrimaryFace`), so **the phone's one attack button never spends an arrow**. Primary is the
   melee sweep for every class.
+  - ⚠ **DISPUTED 2026-09-06 — WO-1504 is open and the owner has not ruled. Do NOT act on either side.**
+    The bullet above says the primary is the melee sweep for EVERY class; the code still DERIVES it per
+    class. `HeroAbilities.TryGetRangedPrimary`
+    (`Assets/_Modules/Village/Hero/HeroAbilities.cs:499-515`) returns TRUE when the locked Q is a
+    long-range `strike`/`drainshot`, and its own `FlowTrace.Once` message (`HeroAbilities.cs:507-513`)
+    reads *"the primary attack input fires THIS, and the melee sweep becomes the offhand verb."* It has
+    LIVE callers, not dead ones: `PlayerAttackController.cs:859-860` computes
+    `basicIsMelee = _abilities == null || !_abilities.TryGetRangedPrimary(EffectiveRange(), out _)`, and
+    `HeroTargetIndicator.cs:277` gates auto-acquire on the same call. That assignment is PINNED by
+    `Assets/Editor/Regression/PrimaryFallbackRegression.cs:388-390`, which FAILS if it is removed — so
+    the seam cannot simply be deleted to match the prose. Ticket:
+    `WorkOrders/WORK_ORDER_1504_ranger_primary_input_still_fires_quick_shot.md`. Until it is ruled, this
+    bullet is CONTESTED, not canon.
 
 ---
 
-## 8. Pipeline State Quick Reference
+## 8. Pipeline State Quick Reference — A POINTER TABLE, NOT A SNAPSHOT
 
-See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (PIPELINE_STATE.md lags). Key facts *(refreshed 2026-08-02)*:
-- Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only `Resources/PatriciaLight/tower2` kept
-- Home hub: **`Main_Castle_Overworld`** (merged world, one navmesh); **Village2** = raid target; `Village.unity`/`OuterWorld.unity` DELETED
+⛔ **NO LIVE NUMBER, VERSION, COUNT OR FLAG STATE MAY BE WRITTEN INTO THIS SECTION.** Converted
+2026-09-06 (WO-1481) from a dated "refreshed 2026-08-02" snapshot that had rotted where it stood: it
+named a save-schema version that `Assets/_Modules/Core/State/SaveSchema.cs:41` had already moved three
+bumps past, and it cited `RepoProps.cs:69` for the level ceiling while the const actually sits at
+`Assets/_Modules/Core/Catalog/RepoProps.cs:111`. (Both re-read at source 2026-09-06; the wrong values
+are deliberately not repeated here, because repeating one is how this section rotted.) **The copy is the bug, not the
+value inside it** — the identical duplicated-state failure §2, §5 and §16 each describe in their own
+words. Do not "refresh" a row below; read the authority and leave this file alone. Row shape matches
+`PIPELINE_STATE.md:15-22`, which already works this way.
+
+| Fact you want | Authority to read it from (each path opened 2026-09-06) |
+|---|---|
+| Everything current | the newest `CANON_GROUND_TRUTH_<date>.md` at repo root, plus `KEY_FACTS.md` |
+| Save schema version + the per-version changelog | the const at `Assets/_Modules/Core/State/SaveSchema.cs:41` — read the CONST, never the file's own header at `:11-18`, which records that it was itself two versions stale |
+| Structure / upgrade level ceiling | `RepoProps.MaxStructureLevel` (`Assets/_Modules/Core/Catalog/RepoProps.cs:111`) — the SINGLE ceiling; never re-hardcode one |
+| Storage container capacity ladder | `Assets/_Modules/Core/Economy/StorageCapsCatalog.cs` (with `TownBankCapacity.cs`, same folder) |
+| Queue depth cap vs. build concurrency | `BuildTimerConfig.queueDepthPerLine` (`Assets/_Modules/Core/Catalog/BuildTimerConfig.cs:269`) vs `freeBuildSlots` (`:231`) — DIFFERENT AXES, and `:249` says so in the code |
+| Whether wave rosters are authored or generated | `Assets/Resources/Data/Canonical/waves.json:14` (`_RETIRED_batchFields`) + `Assets/Data/Tests/WaveDataTest.cs` |
+| Feature flag defaults, and whether a flag still exists at all | `Assets/_Modules/Core/FeatureFlags.cs` — plus, for a RETIRED flag, the regression that pins its ABSENCE |
+| Assembly dependencies | the `.asmdef` files themselves (§5) |
+| Which gate marker proves which run | `Assets/Editor/Regression/DataRegression.cs:14-22` — it names each entry point and its own distinct marker |
+| Suite counts | never a doc: the `<n>/<n>` inside the marker, on a FRESH log |
+| Board / ticket status | `BOARD.html`, regenerated by `python tools/board_build.py` |
+| Next free WO number | the `CLI_LANES_WO_NUMBERS.md` banner rows (§2) |
+| Remote content paths / R2 | `Assets/AddressableAssetsData/AddressableAssetSettings.asset` (§16) |
+
+**Rulings that carry no live number, so they stay here as prose:**
+- Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only the art under `Assets/Resources/PatriciaLight/tower2/` was kept (directory listed present 2026-09-06)
+- Home hub: **`Assets/Scenes/Main_Castle_Overworld.unity`** (merged world, one navmesh); **Village2** = raid target. `Assets/Scenes/Village.unity` and `Assets/Scenes/OuterWorld.unity` are DELETED — both paths returned "No such file or directory" when listed 2026-09-06
 - **⛔ `RaidHeroSpawner` NEVER EXISTED — do not go looking for it** (WO-1109, 2026-08-16). The raid scenes never had a hero spawner class; the **emergency pill-hero was the NORMAL path**, not a fallback, and it carried **no abilities at all**. Raids now carry the real hero across. `git log -S"RaidHeroSpawner"` returns only the commits saying it never existed — a session that hunts for it loses a morning to a class that has never been in the repo.
-- **Storage containers climb to SIX levels** (WO-1108b, 2026-08-16): capacity at level = 1k/2k/4k/8k/16k/32k, so a maxed container takes that resource's store from **2000 base → 34000**. Costs double per step; wood+iron only (WO-947 — containers are regular structures); upgrade TIME is deliberately not authored (`StartUpgrade` derives tier as `targetLevel-2` and the existing curve yields 40s/2m/6m/18m/55m). ⛔ **`RepoProps.MaxStructureLevel = 6` (`Assets/_Modules/Core/Catalog/RepoProps.cs:69`) is the SINGLE ceiling** — it replaced **eight hardcoded 3s** (BuildModeController, StructureCardVM, three suites, an EditMode test, StorageCapsCatalog's fallback array). **Never re-hardcode a level ceiling.**
+- **Storage containers climb through the full structure ladder** (WO-1108b, 2026-08-16): each level multiplies that resource's cap and the cost doubles per step — read the ladder off `Assets/_Modules/Core/Economy/StorageCapsCatalog.cs` and the ceiling off `RepoProps.MaxStructureLevel` (`Assets/_Modules/Core/Catalog/RepoProps.cs:111`), never off this line. Wood+iron only (WO-947 — containers are regular structures); upgrade TIME is deliberately not authored (`StartUpgrade` derives the tier from the target level and reuses the existing curve). ⛔ **`RepoProps.MaxStructureLevel` is the SINGLE ceiling** — it replaced a scatter of hardcoded literals across BuildModeController, StructureCardVM, three suites, an EditMode test and StorageCapsCatalog's fallback array. **Never re-hardcode a level ceiling, and never copy its value into a doc** — this bullet cited `RepoProps.cs:69` until 2026-09-06, by which date the const had moved to `:111`.
 - Village wave loop: WIRED — **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters). **The WO-783 D1 ruling is CLOSED** (owner, 2026-07-30): both `WaveDataTest` cases were rewritten to assert the batches are EMPTY, so a re-add now FAILS. Any doc calling this "open" is stale.
-- Save schema **v38** — read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs:41`), never off a doc (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown; v37 = WO-911 the per-job PAID BASKET — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1), a pre-v37 job refunds ZERO and says so; **v38 = WO-934 the ARMY LOADOUT BANK** — `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout`, additive on the nested Army JSON, `MigrateToV38` runs `EnsureLoadouts` for empty slots); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
+- ⛔ **Save schema: DO NOT WRITE THE NUMBER HERE — read it off `SaveSchema.CurrentVersion`** (`Assets/_Modules/Core/State/SaveSchema.cs`, and read the const, not the file's own header comment, which has itself been two versions stale). This line said **v38** from 2026-08-06 until 2026-09-06, by which date the const had moved three bumps on; the const carries a full changelog for every version in its trailing comment, so there is nothing a copy here can add. History kept as prose, deliberately without a current number: WO-773 brought the Obsidian queue; WO-834 the `everBuiltStructureIds` blank-town baked standdown; WO-911 the per-job PAID BASKET (`paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`) — the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1), with a pre-basket job refunding ZERO and saying so; WO-934 the ARMY LOADOUT BANK (`ArmyStorage.loadouts`, 3 named composition presets, plus `activeLoadout`); WO-1235 the recipe unlock gate; WO-823 Phase E the first-raid soft gate. The **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
 - Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
 - Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs)
   **+ `R2_PARITY_OK` on any build that reaches a device or a store — the content-ship gate, §16.**
   **The markers are now DISTINCT per entry point (2026-08-02)** — `DataRegression.RunAll` emits
-  `REGRESSION_OK <n>/<n> suites` (101 registered suites + 26 inline groups), `RegressionSuite.RunAll`
-  emits `CHECKIN_SUITE_OK`, `SessionRegression.RunAll` emits `SESSION_GUARDS_OK`. Until today all three
+  `REGRESSION_OK <n>/<n> suites`, `RegressionSuite.RunAll` emits `CHECKIN_SUITE_OK`,
+  `SessionRegression.RunAll` emits `SESSION_GUARDS_OK` — the mapping is written down at
+  `Assets/Editor/Regression/DataRegression.cs:14-22`, read it there. ⛔ **The suite COUNT is not written
+  here** (this line carried one until 2026-09-06, one sentence before telling you not to). Until 08-02 all three
   printed the identical `REGRESSION_OK`, so a 22-case suite's pass read as the full suite's pass — which
   is exactly how the check-in gate ran the wrong one unnoticed. **Never restate the count here**; read it
   off the marker. (Also fixed today: `tools/regression/checkin_gate.ps1` did not PARSE under PowerShell
@@ -482,6 +544,16 @@ on a hypothesis wastes credits and owner time. The standing loop:
    loop, ~1/sec), `Once` (first hit), `Measure` (perf scope: `using var t = FlowTrace.
    Measure("Sys","what", warnAboveMs:16f)`). Every line is `[Flow:<system>]`-tagged and
    captured by the F8 `BreakCaptureHarness` (break-log.jsonl + Player.log).
+   **On a FRAME path, use the 4-arg `Measure` overload — it is the town/raid frame-cost instrument
+   (WO-1483, added 2026-09-06):** `using var _ = FlowTrace.Measure("Perf", "X.Update", 4f, 1f);`
+   (`Assets/_Modules/Core/Diagnostics/FlowTrace.cs:308`). It does NOT log on dispose — it accumulates
+   into a table and warns at most once per interval, because the 3-arg form on a per-frame site floods
+   the log and evicts the boot window out of the device logcat ring, destroying the evidence you
+   instrumented for (the reasoning is written at `FlowTrace.cs:293-300`; memory
+   `logcat-ring-buffer-destroys-evidence`). Live examples: `Assets/_Modules/Pets/PetHeroLeash.cs:266`
+   and `Assets/_Modules/Village/Buildings/Progression/ResourceCollectorService.cs:67`. The shape is
+   pinned by `Assets/Editor/Regression/FrameBudgetMeasureRegression.cs`. **Never fix a frame-cost
+   ticket before these scopes have NAMED the dominant cost in ms.**
 2. **Guard every risky object op.** Wrap parse / list-build / service-lookup / UI
    construction in `Guard.Try(...)` / `Guard.TryEach(...)` — one bad object logs (via
    `FlowTrace.Fail`) and is skipped, never silently blanks a screen. **No silent failures:**

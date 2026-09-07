@@ -112,6 +112,28 @@ namespace DeNelle.Village.UI
 
         /// <summary>&gt; 0 = fire Primary automatically after this many real seconds (softlock guard).</summary>
         public float AutoDismissSeconds;
+
+        /// <summary>
+        /// WO-1543 (owner ruling 2026-09-06: "Hold on touch, longer guard") - while true, any
+        /// player interaction RE-ARMS <see cref="AutoDismissSeconds"/> instead of the countdown
+        /// running blind to whether anyone is reading.
+        ///
+        /// <para>STOP - THE GUARD IS NOT REMOVED AND MUST NEVER BE. A player who walked away is still
+        /// returned home; this flag only teaches the timer to tell a reading player from an absent
+        /// one. RESTART, not cancel, was chosen deliberately: a cancel means one stray tap pins the
+        /// screen open forever, which re-opens the very softlock the guard exists to prevent
+        /// (WO-1543 section 3's own warning). Restart keeps the backstop alive while giving a
+        /// reading player unlimited time.</para>
+        ///
+        /// <para>DEFAULTS FALSE, and that is load-bearing: <see cref="EndStateView"/> serves the
+        /// arena, the dungeon, hero death, game over and the wave-clear banner as well as raids
+        /// (each with its own dismiss value - <see cref="FromBattleDefeat"/> 2.5s,
+        /// <see cref="FromHeroDeath"/> 6s, <see cref="FromGameOver"/> 0s,
+        /// <see cref="FromOutpostVictory"/> 4s). Opting in per template is what stops this ruling
+        /// from silently moving every other end state's timing (WO-1543 acceptance 4).</para>
+        /// </summary>
+        public bool HoldOnInteraction;
+
         public bool HoldWorld;
 
         // ── WO-969: the PENDING-TRANSITION HAND-BACK (owner F8 seq 2315) ──────────
@@ -414,6 +436,11 @@ namespace DeNelle.Village.UI
                 PrimaryRoute = "return-home",
                 Primary = onReturn,
                 AutoDismissSeconds = Mathf.Max(2f, autoReturnSeconds),
+                // WO-1543 - the RAID end states are the two that opt in. This screen carries the
+                // star result, up to five spoils rows, a companion-join line and, at a capped
+                // bank, "Some of the reward could not be paid out" - the one message a player
+                // must not miss, on the screen that used to leave by itself.
+                HoldOnInteraction = true,
             };
 
             // Loot breakdown (null Icon -> BuildSpoilRow resolves the concept icon from
@@ -453,6 +480,130 @@ namespace DeNelle.Village.UI
                 vm.UnlockLine = unlockLine;
                 vm.Subtitle = string.IsNullOrEmpty(vm.Subtitle) ? unlockLine : vm.Subtitle + "\n" + unlockLine;
             }
+            return vm;
+        }
+
+        // =====================================================================
+        //  WO-1561 - THE NON-VICTORY RAID EXIT. Retreat and clock-expiry.
+        // =====================================================================
+
+        /// <summary>Title on the screen a player sees when they call the assault off themselves.</summary>
+        public const string RetreatTitle = "Retreat";
+        /// <summary>Title on the screen a player sees when the raid clock runs out.</summary>
+        public const string TimeoutTitle = "Time!";
+        /// <summary>The exit label the retreat path passes; also the trace tag.</summary>
+        public const string RetreatReason = "retreat";
+        /// <summary>The exit label the clock-expiry path passes; also the trace tag.</summary>
+        public const string TimeoutReason = "timeout";
+        /// <summary>Stated in words when the town bank could not take everything the raid earned.</summary>
+        public const string RewardShortSentence = "Some of the reward could not be paid out.";
+
+        /// <summary>
+        /// WO-1561 - THE RESULT SCREEN A LOSING OR ABANDONED RAID NEVER HAD.
+        ///
+        /// <para><b>THE DEFECT THIS CLOSES.</b> <c>RaidDeployController.DoRetreat</c> settled the
+        /// score, paid the partial loot, reconciled the army and then called
+        /// <c>SceneRouter.GoCastle()</c> - with no screen at all. The clock-expiry exit funnels
+        /// into the same method. So a player who retreated, or simply ran out the clock, was
+        /// teleported into town having earned real loot and possibly a star
+        /// (<c>RaidScoring.cs</c> grants 1 at <c>destructionPct &gt;= 0.5f</c>) and was told NONE
+        /// of it. Nothing picked it up in town either: every reader of <c>RaidResult</c> is
+        /// raid-scene-side. The outcome was computed, banked, and discarded unread - and it is the
+        /// exit a new player is most likely to reach (memory retention-is-the-business-problem).</para>
+        ///
+        /// <para>STOP - <b>EVERY NUMBER HERE IS WHAT WAS BANKED, NEVER WHAT WAS PROMISED.</b> The
+        /// caller measures the wallet either side of the grant and hands the DELTA, exactly as
+        /// <c>RaidVictoryController.GrantLoot</c> does (the WO-978 contract). WO-1461 records the
+        /// live case this protects: the deploy card quoted ~1,800 wood and 25 arrived, because the
+        /// bank was full. When the wallet took less than the raid awarded,
+        /// <paramref name="rewardShort"/> puts <see cref="RewardShortSentence"/> on the screen in
+        /// WORDS - never a colour, never silence (the owner is red/green colourblind).</para>
+        ///
+        /// <para>NO NEW SCREEN: this is the same <see cref="EndStateView"/> template the victory
+        /// takes, so the two exits cannot drift apart in shape or timing. It carries
+        /// <see cref="HoldOnInteraction"/> for the same reason the victory does (WO-1543), and it
+        /// keeps a guard rather than <c>AutoDismissSeconds = 0f</c>: a player stranded after a
+        /// retreat is strictly worse than one who reads a screen too briefly.</para>
+        ///
+        /// <para>ACCOMMODATES WO-1526 (hero death capped at 2 stars) without deciding it - the
+        /// stars and razed % are passed IN from the settled <c>RaidResult</c>, so whatever that
+        /// lane settles is what this screen states.</para>
+        /// </summary>
+        /// <param name="reason"><see cref="RetreatReason"/> or <see cref="TimeoutReason"/>.</param>
+        /// <param name="onReturn">The route home (the caller owns it; this screen only reports).</param>
+        /// <param name="autoReturnSeconds">Anti-softlock guard, re-armed by interaction.</param>
+        /// <param name="stars">Settled stars 0..3; &lt; 0 hides the rating row.</param>
+        /// <param name="destructionPercent">Settled razed %, 0..100; &lt; 0 omits the sentence.</param>
+        /// <param name="elapsedSeconds">Settled clock; &lt; 0 hides the time row.</param>
+        /// <param name="credited">The MEASURED wallet delta - never the requested loot.</param>
+        /// <param name="rewardShort">True when the wallet took less than the raid awarded.</param>
+        /// <param name="troopsDeployed">Bodies committed to this raid (&lt; 0 = unknown, line omitted).</param>
+        /// <param name="troopsSurvived">Bodies that walked off the field (&lt; 0 = unknown).</param>
+        public static EndStateVM FromRaidRetreat(string reason, Action onReturn,
+            float autoReturnSeconds = 30f, int stars = -1, int destructionPercent = -1,
+            float elapsedSeconds = -1f, ResourceCost credited = default(ResourceCost),
+            bool rewardShort = false, int troopsDeployed = -1, int troopsSurvived = -1)
+        {
+            bool timedOut = string.Equals(reason, TimeoutReason, StringComparison.OrdinalIgnoreCase);
+
+            // The lead sentence names WHICH exit, because the two feel different and a player who
+            // ran out of clock did not choose to leave. Voice: plain, never scolding.
+            // KEPT SHORT DELIBERATELY. This subtitle can carry FOUR facts (the lead, the razed %,
+            // the wounded count and the bank-short caveat), and EndStateView compresses every band
+            // when the stack outgrows the well - the "body rows COMPRESSED to fit" line
+            // EndStateBodyFitRegression exists because of. A lead sentence that wraps would push
+            // the stack to five rendered lines on a phone for no added meaning.
+            string body = timedOut
+                ? "The clock ran out - your warband falls back."
+                : "You called the assault off.";
+            if (destructionPercent >= 0)
+                body += "\n" + destructionPercent + "% razed.";
+
+            // TROOPS LOST / WOUNDED, in words. RaidDeployController marks every deployed body that
+            // did not survive as WOUNDED (never deleted) with a difficulty-scaled recovery, so the
+            // honest word is "wounded", not "lost" - and a raid that lost nobody says so, because
+            // "0 wounded" is the reassurance a player who retreated early has earned.
+            if (troopsDeployed >= 0 && troopsSurvived >= 0)
+            {
+                int wounded = troopsDeployed - troopsSurvived;
+                if (wounded < 0) wounded = 0;
+                body += wounded == 0
+                    ? "\nEvery troop came home."
+                    : "\n" + wounded + (wounded == 1 ? " troop returns wounded." : " troops return wounded.");
+            }
+
+            if (rewardShort) body += "\n" + RewardShortSentence;
+
+            var vm = new EndStateVM
+            {
+                // Defeat, not Victory: the emblem and trace tag must not congratulate a fall-back.
+                Kind = EndStateKind.Defeat,
+                Title = timedOut ? TimeoutTitle : RetreatTitle,
+                Subtitle = body,
+                Stars = stars >= 0 ? Mathf.Clamp(stars, 0, 3) : -1,
+                TimeSeconds = elapsedSeconds >= 0f ? elapsedSeconds : -1f,
+                Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield),
+                PrimaryLabel = "Return to Castle",
+                PrimaryRoute = "return-home",
+                Primary = onReturn,
+                AutoDismissSeconds = Mathf.Max(2f, autoReturnSeconds),
+                HoldOnInteraction = true,
+            };
+
+            // SPOILS - the same five rows, the same order, the same AddSpoil suppression the
+            // victory screen uses. A retreat that banked nothing draws no rows and advertises
+            // nothing, which is the WO-978 honesty contract, not an oversight.
+            AddSpoil(vm, "Wood", credited.Wood);
+            AddSpoil(vm, "Iron", credited.Iron);
+            AddSpoil(vm, FoodSpoilLabel, credited.Food);
+            AddSpoil(vm, "Gold", credited.Coins);
+            AddSpoil(vm, "Crystals", credited.Crystals);
+
+            FlowTrace.Step("EndState",
+                "RAID NON-VICTORY RESULT composed (reason=" + (reason ?? "(null)") + "): stars=" + stars +
+                " razed=" + destructionPercent + "% spoilRows=" + vm.Spoils.Count +
+                " deployed=" + troopsDeployed + " survived=" + troopsSurvived +
+                " short=" + rewardShort + ". Before WO-1561 this exit showed NO screen at all.");
             return vm;
         }
 

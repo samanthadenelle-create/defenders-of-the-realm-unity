@@ -258,6 +258,33 @@ namespace DeNelle.Village
 
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
+
+        // ── Structure-probe CADENCE gate (WO-1450 + WO-1459 §2 suspect 3) ─────────────
+        // ProbeForStructure runs a forward SphereCast AND (flag-on, hero not near) an
+        // all-direction OverlapSphere on mask ~0 — EVERY LAYER. Until this gate it ran
+        // once PER FRAME for every enemy holding no target, which is the third named
+        // suspect behind the captured device floor:
+        //   LOW fps=11 ms=87.4 mem=427MB scene=RaidBase_raider_camp_small towers=0 enemies=13
+        // (WO-1459, 2026-09-06 device session, timeScale=1.00 — a real frame cost).
+        // Thirteen enemies x 2 physics queries x 60 fps is 1,560 all-layer queries a second.
+        //
+        // ⚠ THE GATE IS ON THE RETRY CADENCE ONLY — NOT ON SELECTION. It is consulted
+        // solely on the branch where _currentTarget is already null; a HELD target still
+        // drops the same frame it dies or flees, and ProbeForStructure's own logic
+        // (forward cast first, hero-primary suppression, CombatFactionRules.MayAttack)
+        // is untouched. A skipped frame takes the identical `_attackCooldown = 0f; return;`
+        // path a null probe result already took, so the observable behaviour on those
+        // frames is byte-for-byte what a failed probe produced.
+        private const float ProbeIntervalSeconds = 0.25f;   // <= 4 probes/sec/enemy
+        private float _nextProbeAt;
+
+        // WO-1450: the acquire trace fired on EVERY probe hit — 38,018 lines between
+        // 12:59:05 and 14:37:52 (~320/sec), each carrying a managed stack walk. The
+        // Android main ring is 256 KiB, so that one line evicted the boot window and
+        // every other trace in under two seconds (memory: logcat-ring-buffer-destroys-
+        // evidence). Holding the last acquired target's instance id lets the trace fire
+        // on a target CHANGE — the event anyone actually reads — instead of per hit.
+        private int _lastProbeTargetId;
         private bool _attackTokenHeld;
         private bool _contactCommitPending;
         private bool _contactCommitInterrupted;
@@ -1788,7 +1815,17 @@ namespace DeNelle.Village
         {
             // Drop a dead / destroyed target.
             if (_currentTarget != null && !_currentTarget.IsAlive)
+            {
+                // WO-1450 §2: PERMANENT drop-path trace. Three different lines assign
+                // _currentTarget = null and the capture could not tell them apart, so a
+                // re-acquisition thrash read as "the probe is noisy" with no way to name
+                // WHICH release fed it. Throttled per enemy — the cadence is the defect
+                // this ticket exists to fix, so the diagnostic must not reintroduce it.
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"drop-dead-{_enemyId}", 1f,
+                    $"{_enemyId}: target RELEASED — path=not-alive (IsAlive false)");
                 _currentTarget = null;
+                _lastProbeTargetId = 0;
+            }
 
             // DEF-224: drop a still-alive target that has MOVED out of reach (the
             // hero runs away). Without this the enemy would stay frozen in place
@@ -1802,24 +1839,66 @@ namespace DeNelle.Village
                 if (heldMb != null)
                 {
                     float dropSqr = (_contactProbeDistance + 1.5f) * (_contactProbeDistance + 1.5f);
-                    if ((heldMb.transform.position - transform.position).sqrMagnitude > dropSqr)
+                    float heldSqr = (heldMb.transform.position - transform.position).sqrMagnitude;
+                    if (heldSqr > dropSqr)
+                    {
+                        // WO-1450 §2: PERMANENT drop-path trace — names the DEF-224 distance
+                        // release and prints the measurement that fired it, so a future capture
+                        // proves whether a thrash is a target oscillating across the drop ring
+                        // (this line repeating) or a target dying (the not-alive line above).
+                        DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"drop-dist-{_enemyId}", 1f,
+                            $"{_enemyId}: target RELEASED — path=out-of-reach (DEF-224) " +
+                            $"dist={Mathf.Sqrt(heldSqr):F1}m > drop={(_contactProbeDistance + 1.5f):F1}m " +
+                            $"held='{heldMb.name}'");
                         _currentTarget = null;
+                        _lastProbeTargetId = 0;
+                    }
                 }
             }
 
             if (_currentTarget == null)
             {
+                // ── CADENCE GATE (WO-1450 / WO-1459 §2 suspect 3) ──────────────────
+                // Only the RETRY rate is limited. A skipped frame falls through the exact
+                // `_attackCooldown = 0f; return;` path a null probe already took, so this
+                // is behaviour-identical to a frame on which the probe found nothing —
+                // no change to selection order, the hero-primary rule or the faction rule.
+                if (Time.time < _nextProbeAt)
+                {
+                    _attackCooldown = 0f;
+                    return;
+                }
+                _nextProbeAt = Time.time + ProbeIntervalSeconds;
+
                 _currentTarget = ProbeForStructure();
 
                 // EnemyAggro observability: trace BOTH outcomes of structure acquisition so a
                 // headless run shows whether the forward-only SphereCast ever finds defenses /
                 // the Heart, or returns null (off-axis miss) leaving the enemy on a Heart-march.
                 if (_currentTarget == null)
+                {
+                    _lastProbeTargetId = 0;
                     DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"probe-fail-{_enemyId}", 1f,
                         $"{_enemyId}: ProbeForStructure null -> no structure target (Heart-march / roam only)");
+                }
                 else
-                    DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyAggro",
-                        $"{_enemyId}: ProbeForStructure hit '{(_currentTarget as MonoBehaviour)?.name}' -> stopping agent to attack");
+                {
+                    // WO-1450: this was FlowTrace.Step — unthrottled, once per frame per enemy,
+                    // 38,018 lines at ~320/sec with a managed stack walk each. It is now gated
+                    // TWICE: it fires only when the acquired target CHANGED (the event worth
+                    // reading — a re-acquire of the same wall is not news), and even then at
+                    // most 1/sec per enemy. The trace is KEPT, not stripped (CLAUDE.md §12:
+                    // instrumentation is permanent — the defect was the cadence, not the line).
+                    var hitMb = _currentTarget as MonoBehaviour;
+                    int hitId = hitMb != null ? hitMb.GetInstanceID() : 0;
+                    if (hitId != _lastProbeTargetId)
+                    {
+                        _lastProbeTargetId = hitId;
+                        DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"probe-hit-{_enemyId}", 1f,
+                            $"{_enemyId}: ProbeForStructure ACQUIRED '{(hitMb != null ? hitMb.name : "?")}' " +
+                            "-> stopping agent to attack (target CHANGE)");
+                    }
+                }
             }
 
             if (_currentTarget == null)
@@ -2968,6 +3047,11 @@ namespace DeNelle.Village
             _brainTarget           = null;
             _brainPositionOverride = null;
             _currentTarget         = null;
+            // WO-1450: a reused body probes on its FIRST live frame (0 is always <= Time.time)
+            // and its first acquire is a genuine CHANGE — never inherit the dead body's target
+            // id, which would swallow the acquire trace for the new one.
+            _nextProbeAt           = 0f;
+            _lastProbeTargetId     = 0;
 
             // Hero-aggro seam + the hero-only-duel battle-lock membership. _engagedLatched is
             // primarily released by OnDisable (which the pool triggers via SetActive(false)),
@@ -3137,7 +3221,15 @@ namespace DeNelle.Village
             // Y it died at (e.g. mid-air over a wall top). Done FIRST so all downstream
             // transform.position reads pick up the grounded position.
             SnapBodyToGround();
+            // WO-1450 §2: PERMANENT drop-path trace, third and last of the three
+            // `_currentTarget = null` sites. This one is TERMINAL — the enemy itself died,
+            // so it can never feed a re-acquisition thrash. Naming it anyway is the point:
+            // a capture that shows this line is proof the thrash is NOT coming from here,
+            // which is exactly the elimination a static read could not make.
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"drop-death-{_enemyId}", 1f,
+                $"{_enemyId}: target RELEASED — path=self-death (terminal, no re-acquire)");
             _currentTarget = null;
+            _lastProbeTargetId = 0;
             TargetManager.Unregister(this);   // drop from targeting the instant it dies
 
             // Drive death anim (latches Dead bool so last frame holds; see ActorAnimator + controllers).

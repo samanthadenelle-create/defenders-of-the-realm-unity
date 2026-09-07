@@ -801,8 +801,7 @@ namespace DeNelle.Village
         // resolved loadout's GameObject. Null when no hero is present (caller skips the preview).
         private GameObject ResolvePreviewBody()
         {
-            var hero = GameObject.FindWithTag("Player");
-            if (hero == null) hero = SafeFindByTag("HeroTarget");
+            var hero = ResolveHeroObject();   // WO-1513: tag "Player", then HeroLocomotion
             if (hero != null)
             {
                 var t = hero.transform.Find("HeroBody");

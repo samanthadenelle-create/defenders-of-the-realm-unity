@@ -1,6 +1,17 @@
 # WO-2005 — Reconcile Live BUILD Inventory and Add Complete Filters
 
-**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) *(was: READY)*
+> **PARTLY SUPERSEDED 2026-09-06 (WO-1534 Part B1). Body frozen per CLAUDE.md section 15 - do not rewrite it.**
+> The CIVIC chip is retired. `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` screen 2 draws FIVE chips,
+> and commit `32659c0f6` implemented that: `Assets/_Modules/Core/Catalog/BuildFilter.cs:57` reads "THERE
+> IS NO CIVIC CHIP. Do not add one back", and `:87-89` is `Chips = { All, Economy, Defense, Craft,
+> Storage }`. The six-filter line in this ticket and its RESULT was TRUE when written - `git show
+> a6bbc523d:Assets/_Modules/Core/Catalog/BuildFilter.cs` still carries `Civic` and six `Chips` entries -
+> and went stale five hours later under a legitimate owner reversal that nothing bannered until now.
+> **Everything else in this ticket stands:** the inventory reconciliation, the data-driven membership rule
+> and the five surviving filters are live. CIVIC's five rows were re-homed by what each building does
+> (`BuildFilter.cs:59-73`), not dropped.
+
+**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) - the CIVIC/six-filter acceptance is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6); see banner. *(was: READY)*
 
 **Priority:** P0  
 **Depends on:** WO-2002

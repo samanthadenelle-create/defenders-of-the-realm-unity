@@ -4,8 +4,16 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
 // READ-ONLY consumer of RumorBoardVM (strict MVVM): the View renders VM
-// projections and routes taps to Accept / NextPage / PrevPage; it never touches
+// projections and routes taps to Invoke / NextPage / PrevPage; it never touches
 // QuestService / QuestCatalog / DailyQuestService.
+//
+// WO-1521 (owner report 2026-09-06, "quests say one quest to claim but no idea how
+// or what to do to complete it"): a poster's ONE door now wears the face the VM
+// gives it - Claim / Go To / Accept - and every tap goes to RumorBoardVM.Invoke.
+// This View never branches on the row kind: a skin that picks the verb is how a
+// CLAIM face ends up starting a quest. The empty-state gate is the VM's IsQuiet
+// (the whole LIST) and no longer `shown == 0` (this PAGE), which is precisely how
+// "The board is quiet." painted while the Journey card said one was ready to claim.
 //
 // =============================================================================
 //  WHY THIS FILE WAS REBUILT RATHER THAN TUNED (WO-1192, owner-approved v3)
@@ -260,6 +268,7 @@ namespace DeNelle.Village.Hero
                 new Vector2(PanelAnchorMax, PanelAnchorMax),
                 Close, sortingOrder: 1000);
             MedievalUiSkin.ApplyShell(modal.chrome);
+            EnsureBackdrop(modal);
             ForceSimpleArtwork(modal.chrome != null ? modal.chrome.close : null);
             _ui = modal.canvas;
             var panel = modal.chrome != null ? modal.chrome.content : null;
@@ -370,6 +379,102 @@ namespace DeNelle.Village.Hero
                     if (rt != null && rt.anchorMin.y > 0.85f)
                         child.gameObject.SetActive(false);
                 }
+            }
+        }
+
+        // -- Backdrop (WO-1521 sec.4) ---------------------------------------------
+
+        /// <summary>Minimum alpha a backdrop must carry to actually hide the town behind it.
+        /// The kit authors 0.94 (ElarionUiKit.BuildObsidianPanel's withBackdrop block); anything
+        /// materially below that reads as "the town bleeds through", which is the owner's
+        /// report. Public so the oracle fixtures the SAME number the panel repairs against.</summary>
+        public const float BackdropAlphaFloor = 0.9f;
+
+        /// <summary>The kit's own object name for the full-screen backdrop image.</summary>
+        public const string BackdropObjectName = "Backdrop";
+
+        /// <summary>
+        /// PURE. Given what was actually found on the built hierarchy, says whether the backdrop
+        /// is doing its job. Pure so the oracle can drive every branch with a fixture instead of
+        /// a device capture - which is exactly what WO-1521 sec.4 was blocked on.
+        /// </summary>
+        /// <param name="present">A child named <see cref="BackdropObjectName"/> was found.</param>
+        /// <param name="activeInHierarchy">That object is actually being drawn.</param>
+        /// <param name="alpha">Its Image colour alpha (0 when it carries no Image at all).</param>
+        public static bool BackdropNeedsRepair(bool present, bool activeInHierarchy, float alpha) =>
+            !present || !activeInHierarchy || alpha < BackdropAlphaFloor;
+
+        /// <summary>
+        /// WO-1521 sec.4 - THE OWED HIERARCHY DUMP, TAKEN EVERY TIME THE BOARD OPENS.
+        ///
+        /// The ticket says the backdrop is ABSENT and the town bleeds through. Read at source,
+        /// it is BUILT: BuildObsidianModal -> BuildObsidianPanel(withBackdrop: true) authors a
+        /// full-rect 0.94-alpha "Backdrop" image, and MedievalUiSkin.ApplyShell never touches
+        /// chrome.backdrop. Naming a cause from that source read would be the inference-fix
+        /// CLAUDE.md sec.12 bans, so this does the other thing: it MEASURES the built object and
+        /// says what it found, every open, in the trace - present? drawn? what alpha? That line
+        /// is the evidence the next capture was going to have to produce by hand.
+        ///
+        /// And when the invariant is genuinely violated it REPAIRS it rather than shipping the
+        /// leak a second night. The repair is conditional by construction, so this can never
+        /// stack a second backdrop on top of the kit's own - the failure mode a blind "add a
+        /// backdrop" would have had.
+        /// </summary>
+        private static void EnsureBackdrop(ElarionUiKit.ObsidianModal modal)
+        {
+            if (modal == null || modal.canvas == null) return;
+            var root = modal.canvas.transform;
+
+            var found = modal.chrome != null && modal.chrome.backdrop != null
+                ? modal.chrome.backdrop.transform
+                : root.Find(BackdropObjectName);
+            var img = found != null ? found.GetComponent<Image>() : null;
+
+            bool present = found != null;
+            bool drawn = present && found.gameObject.activeInHierarchy;
+            float alpha = img != null ? img.color.a : 0f;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("RumorBoard",
+                "backdrop dump: present=" + present + " drawn=" + drawn +
+                " alpha=" + alpha.ToString("0.00") +
+                " image=" + (img != null) + " canvasChildren=" + root.childCount + ".");
+
+            if (!BackdropNeedsRepair(present, drawn, alpha)) return;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("RumorBoard",
+                "the modal backdrop is NOT hiding the town (present=" + present + " drawn=" + drawn +
+                " alpha=" + alpha.ToString("0.00") + ") - repairing it to the kit's own value. " +
+                "This warning IS the finding: the kit authors this backdrop at 0.94 and nothing " +
+                "in this panel removes it, so a run that prints this line names a seam no source " +
+                "read could (WO-1521 sec.4).");
+
+            if (img == null)
+            {
+                // Through the KIT primitive, never a hand-rolled Image: ElarionUiKit.AddImage is
+                // the same call BuildObsidianPanel's own withBackdrop block makes, so the repair
+                // and the original are one builder (and this View stays clear of the
+                // hand-rolled-uGUI law UiObsidianConformanceRegression arms).
+                var go = ElarionUiKit.AddImage(root, BackdropObjectName, Vector2.zero, Vector2.one,
+                                               new Color(0.02f, 0.015f, 0.012f, 0.94f), rounded: false);
+                if (go == null) return;
+                // Behind the panel chrome, in front of the scrim - the sibling index the kit's
+                // own backdrop occupies (it is added immediately before the panel).
+                go.transform.SetSiblingIndex(Mathf.Max(0, root.childCount - 2));
+                found = go.transform;
+                img = go.GetComponent<Image>();
+            }
+            if (found != null && !found.gameObject.activeSelf) found.gameObject.SetActive(true);
+            if (img != null)
+            {
+                var c = img.color;
+                // Alpha is the only channel this repairs. The ink stays whatever the kit chose,
+                // unless the image was never tinted at all (pure white default), in which case
+                // the kit's own backdrop ink is the honest value to fall back to.
+                bool untinted = c.r >= 1f && c.g >= 1f && c.b >= 1f;
+                img.color = untinted
+                    ? new Color(0.02f, 0.015f, 0.012f, 0.94f)
+                    : new Color(c.r, c.g, c.b, 0.94f);
+                img.raycastTarget = false;
             }
         }
 
@@ -548,7 +653,10 @@ namespace DeNelle.Village.Hero
 
             // An empty board says so, in words, in the space the posters would have used -
             // never a large dead-black region (the WO-866 lesson, kept).
-            if (shown == 0) BuildEmptyNote();
+            // STOP WO-1521 - THE GATE IS THE VM's `IsQuiet` (the whole LIST), NOT `shown` (this
+            // PAGE). It read `shown == 0` and that is how "The board is quiet." painted while the
+            // Journey card said one quest was ready to claim: an empty page is not an empty board.
+            if (_vm.IsQuiet) BuildEmptyNote();
 
             // NEW is read while the posters are being built and cleared immediately after, so
             // a rumor wears the chip exactly once.
@@ -628,7 +736,11 @@ namespace DeNelle.Village.Hero
             // band. It never clips a descender and it never runs into the hook.
             ElarionUiKit.FitBlock(titleLabel, ElarionUi.FontFloorMobile, 40f);
 
-            var hookLabel = ElarionUiKit.Label(body, _vm.HookFor(id), 0f, 1f,
+            // WO-1521: the hook band carries the row's OBJECTIVE. For an offer that IS the
+            // letter's hook (unchanged); for an ACTIVE quest it is the current stage's objective
+            // and for a CLAIMABLE daily it is the finished job. The band is the same fixed-pixel
+            // budget either way, so the layout law and its oracle are untouched.
+            var hookLabel = ElarionUiKit.Label(body, _vm.ObjectiveFor(id), 0f, 1f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
                 CardSideFrac, 1f - CardSideFrac);
             hookLabel.gameObject.name = "PosterHook";
@@ -678,10 +790,15 @@ namespace DeNelle.Village.Hero
             art.offsetMax = Vector2.zero;
             art.sizeDelta = new Vector2(0f, AcceptBandPx);
             art.anchoredPosition = new Vector2(0f, AcceptBottomPx);
-            var accept = ElarionUiKit.BuildObsidianButton(acceptHost.transform, "Accept",
+            // WO-1521 - ONE DOOR PER POSTER, ITS FACE AND ITS DESTINATION BOTH CHOSEN BY THE VM.
+            // The face is Claim / Go To / Accept and the tap goes to RumorBoardVM.Invoke, which
+            // owns the branch. STOP Do NOT re-branch on the row kind here: a View that decides which
+            // verb to call is how a CLAIM face ends up starting a quest.
+            var action = ElarionUiKit.BuildObsidianButton(acceptHost.transform, _vm.ActionLabelFor(questId),
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                Vector2.zero, Vector2.one, () => OnAccept(questId));
-            ApplyPosterButton(accept, primary: true);
+                Vector2.zero, Vector2.one, () => OnAction(questId));
+            action.gameObject.name = "PosterAction";
+            ApplyPosterButton(action, primary: true);
         }
 
         /// <summary>Hang a rect from its parent's TOP edge as a FIXED-PIXEL band.</summary>
@@ -821,6 +938,9 @@ namespace DeNelle.Village.Hero
                 case RumorBoardVM.RewardKind.Wood: return ElarionUiKit.CurrencyKind.Wood;
                 case RumorBoardVM.RewardKind.Iron: return ElarionUiKit.CurrencyKind.Iron;
                 case RumorBoardVM.RewardKind.Magic: return ElarionUiKit.CurrencyKind.Wisdom;
+                // WO-1521: a daily slot pays Wisdom directly, so the kind exists in its own right
+                // now. It lands on the SAME CurrencyKind as Magic - one concept, one icon.
+                case RumorBoardVM.RewardKind.Wisdom: return ElarionUiKit.CurrencyKind.Wisdom;
                 // Canon sec.7: the authored `food` slot IS Stone, and CurrencyKind.Food is the
                 // enum member that maps to the "stone" concept id.
                 default: return ElarionUiKit.CurrencyKind.Food;
@@ -837,6 +957,7 @@ namespace DeNelle.Village.Hero
                 case RumorBoardVM.RewardKind.Wood: return "Wood";
                 case RumorBoardVM.RewardKind.Iron: return "Iron";
                 case RumorBoardVM.RewardKind.Magic: return "Magic";
+                case RumorBoardVM.RewardKind.Wisdom: return "Wisdom";
                 default: return "Stone";
             }
         }
@@ -1039,12 +1160,19 @@ namespace DeNelle.Village.Hero
 
         // -- Commands ---------------------------------------------------------------
 
-        private void OnAccept(string id)
+        /// <summary>The ONE poster door. WO-1521: the VM's Invoke picks Claim / Go To / Accept
+        /// from the row's kind, so this View never has to know which. The status the VM writes is
+        /// toasted either way - a claim that credited nothing must SAY so, not fail quietly.</summary>
+        private void OnAction(string id)
         {
-            if (_vm == null) return;
-            _vm.Accept(id);   // StartQuest + status; the VM raises Changed -> Repaint
-            if (!string.IsNullOrEmpty(_vm.Status))
-                ElarionUiKit.ShowToast(_vm.Status, ElarionUiKit.ToastTone.Info);
+            var vm = _vm;
+            if (vm == null) return;
+            // GO TO closes the board, and Close() nulls _vm - so hold the VM in a local or the
+            // message the player most needs ("Tracking X - the objective is pinned to your HUD")
+            // is the one that never gets toasted. Dispose only unsubscribes; Status stays readable.
+            vm.Invoke(id);   // Claim / GoTo / Accept + status; the VM raises Changed -> Repaint
+            if (!string.IsNullOrEmpty(vm.Status))
+                ElarionUiKit.ShowToast(vm.Status, ElarionUiKit.ToastTone.Info);
         }
 
         // -- Helpers ----------------------------------------------------------------

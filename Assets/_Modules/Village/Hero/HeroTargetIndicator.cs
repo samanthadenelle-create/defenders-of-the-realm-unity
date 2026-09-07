@@ -392,6 +392,22 @@ namespace DeNelle.Village
         private static Texture2D _ringTex;
         private int _enemyMask;
 
+        // ── WO-1458 — the hero's OWN faction, named once. ────────────────────────────────────
+        // The reticle used to ask "is this candidate's Faction != Hostile?" at THREE separate
+        // sites (RebuildCandidates x2 + PickEnemyAtScreenPoint). That is the hand-copied
+        // predicate CombatFactionRules.cs opens by forbidding in capitals, and it is the same
+        // duplicated-state failure CLAUDE.md §2/§5/§8/§16 have each already paid for. All three
+        // now call CombatFactionRules.MayAttack(HeroFaction, d), which asks the question the
+        // right way round: not "is it flagged hostile?" but "may I, a Friendly actor, attack
+        // this?" — so a structure of the PLAYER'S OWN faction can never enter the hostile set,
+        // no matter which collider layer admitted it.
+        //
+        // Friendly is a CONSTANT here and that is verified, not assumed: HeroHealth.cs:1630
+        // declares `CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;` and
+        // CombatFaction (Core/Combat/IDamageable.cs:28) has exactly two members, so this is
+        // behaviour-identical to the three lines it replaces while collapsing them to one rule.
+        private const CombatFaction HeroFaction = CombatFaction.Friendly;
+
         private void Awake()
         {
             BuildReticle();
@@ -769,7 +785,8 @@ namespace DeNelle.Village
                 return null;
 
             var d = hit.collider != null ? hit.collider.GetComponentInParent<IDamageable>() : null;
-            if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) return null;
+            // WO-1458: MayAttack folds null + IsAlive + friend-or-foe into the ONE predicate.
+            if (!CombatFactionRules.MayAttack(HeroFaction, d)) return null;
             // Owner 2026-06-27: a MANUAL lock must also respect line-of-sight — no locking a foe
             // THROUGH a wall (the flagged bug). Previously WO-497/512 deliberately bypassed HasLoS;
             // now the same Structure-layer linecast that gates the AUTO scan gates the manual pick.
@@ -878,7 +895,8 @@ namespace DeNelle.Village
                     // Robust lookup (expert 2026-06-02): root first, then parent chain.
                     var d = e.GetComponent<IDamageable>();
                     if (d == null) d = e.GetComponentInParent<IDamageable>();
-                    if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                    // WO-1458: one predicate, not a fourth hand-copy of the faction comparison.
+                    if (!CombatFactionRules.MayAttack(HeroFaction, d)) continue;
                     if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                     if (!_candidates.Contains(d)) _candidates.Add(d);
                     TraceAdmission(d, e != null ? e.gameObject : null, "TargetManager registry");
@@ -894,7 +912,10 @@ namespace DeNelle.Village
                 var c = _hits[i];
                 if (c == null) continue;
                 var d = c.GetComponentInParent<IDamageable>();
-                if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                // WO-1458: the sweep's mask is deliberately WIDE (Enemy|Structure), so this is
+                // the line that keeps the player's own perimeter out of the hostile set. Layer
+                // decides what physics RETURNS; faction decides what combat ACCEPTS.
+                if (!CombatFactionRules.MayAttack(HeroFaction, d)) continue;
                 if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                 if (!_candidates.Contains(d)) _candidates.Add(d);
                 // WO-1047: pass the STRUCK COLLIDER's GameObject, not the damageable's — when the
@@ -950,7 +971,41 @@ namespace DeNelle.Village
                 return;
             }
 
-            // NOT an enemy. This is the WO-1047 suspect — dump everything about it.
+            // ── WO-1458 — CLASSIFY BY FACTION, NOT BY "does it carry an Enemy component?" ──────
+            // The WO-1047 classifier above asked only `GetComponentInParent<Enemy>() != null`, so
+            // EVERY structure fell through to the Warn below — including the ones a raid exists to
+            // let you break. Measured, not inferred: 320 `[hostile-admit] NON-ENEMY ADMITTED` lines
+            // in one device session, every one of them a `RaidBase_.../Wall_Outer_*` (WallSegment,
+            // Faction => SceneOwnership.IsEnemyOwned ? Hostile : Friendly, WallSegment.cs:219) or
+            // `RaidSpire/Crown` (RaidSpire.Faction => Hostile, RaidSpire.cs:217). Those are the
+            // raid's walls and its win-condition objective. Admitting them is the FEATURE.
+            //
+            // ⛔ AND THEIR LAYERS ARE NOT THE BUG EITHER — do not "fix" them:
+            //   * `RaidSpire/Crown` sits on `Enemy` because RaidSpire.EnsureHittable (:168-208)
+            //     PUTS it there on purpose; the hero's melee/ability sweep is masked to `Enemy`,
+            //     so relayering the crown makes the raid objective unkillable.
+            //   * `Wall_Outer_*` sits on `Structure` (RaidBaseGenerator.cs:1018-1019) and reaches
+            //     this sweep because Awake ORs `Structure` onto _enemyMask for WO-853; that layer
+            //     is also every tower's line-of-sight blocker mask.
+            // The layer answers "what does physics return?". Only faction answers "whose is it?".
+            //
+            // So a hostile structure now logs the same compact Step a real Enemy does — proof the
+            // reticle still acquires raid geometry — and the Warn below is reserved for what it was
+            // always FOR: something reaching the hostile set that the hero may NOT attack.
+            if (!CombatFactionRules.IsFriendlyFire(HeroFaction, d))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                    $"[hostile-admit] HOSTILE STRUCTURE '{go.name}' impl={implementor} "
+                    + $"faction={d.Faction} via {source}"
+                    + (viaDiffers ? $" (collider '{viaName}' != damageable owner)" : ""));
+                return;
+            }
+
+            // The hero's OWN faction, admitted to the HOSTILE set. This is the WO-1047 suspect and
+            // after WO-1458 it is also an INVARIANT BREACH: every admit site above now gates on
+            // CombatFactionRules.MayAttack(HeroFaction, d), which cannot pass a Friendly target.
+            // A line here therefore means a FOURTH, uncontrolled route into _candidates exists —
+            // dump everything about it.
             string mesh = "(no MeshFilter)";
             var mf = go.GetComponentInChildren<MeshFilter>();
             if (mf != null && mf.sharedMesh != null) mesh = mf.sharedMesh.name;

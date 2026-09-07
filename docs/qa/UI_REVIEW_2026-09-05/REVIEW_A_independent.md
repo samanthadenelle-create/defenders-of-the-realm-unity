@@ -145,7 +145,9 @@ Collections (`BuildCollections_2670x1200.png` 07:02); palette dock (`BuildPalett
 
 **Palette dock (stale).** Item cards "Lumber Mill - Harvests Wood... - NEED [160] [80] [120]"; `NEED` wraps `NEE / D` in every card; costs are red numbers - colour-only affordability. Re-capture before ticketing.
 
-**Ghost chips.** "Arcane Spire - 88 wood, 88 iron, 187 crystals" + "Not enough Wood" - words carry the block. Bottom-right: three unlabelled glyph buttons (check / rotate / X) against the owner's names-not-icons ruling.
+**Ghost chips.** "Arcane Spire - <cost basket>" + "Not enough Wood" - words carry the block. Bottom-right: three unlabelled glyph buttons (check / rotate / X) against the owner's names-not-icons ruling.
+
+> **CORRECTION 2026-09-06 (WO-1478), one line, body otherwise frozen:** the cost basket this review quoted from the ghost-chips frame was NOT game data - `Assets/Editor/UICaptureLaunch.cs` hardcoded a wood+iron+crystals string into the capture, a shape WO-947 forbids and the catalog has never held (the authored Arcane Spire row is **iron 360**). The icons-not-names finding stands; the numbers, and the "Not enough Wood" refusal reason attached to an iron-only row, were harness fiction.
 
 **Orient modal.** Clear. Preview is a grey untextured model.
 

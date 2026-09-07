@@ -20,10 +20,40 @@ $PingFile = Join-Path $Inbox 'PING.json'
 $AckFile  = Join-Path $Inbox 'ACK.json'
 $Latest   = Join-Path $Inbox 'LATEST_CAPTURE.md'
 
+# -- WO-1460 liveness ---------------------------------------------------------------------------
+# An empty inbox has TWO causes and they used to look identical: nothing went wrong, or the thing
+# that would have told us went quiet. On 2026-09-06 the device bridge ran all day and published
+# nothing after 13:42:43Z (its kind+message dedupe suppressed all 319 later signal entries,
+# including 2 possible_softlock and one of the owner's own FLAG presses) and NO_CAPTURE read
+# exactly the same as health. F8_DAEMON_STALE makes the difference visible on every poll.
+# It NEVER changes the exit code - NEW_CAPTURE/NO_CAPTURE stay the contract.
+$StaleSeconds = 90
+function Write-F8Liveness {
+    $hb = Get-F8Heartbeat $Inbox
+    if (-not $hb.Exists) {
+        Write-Host ("F8_DAEMON_STALE -1 producer=none reason=no-heartbeat-file - no F8 producer has ever beaten in this inbox. Start it: powershell -File .claude\skills\run-defenders\f8-watch-start.ps1")
+        return
+    }
+    foreach ($p in @($hb.Producers)) {
+        $age = [int]$p.ageSec
+        if ($age -lt 0 -or $age -gt $StaleSeconds) {
+            $liveTxt = 'process-dead'
+            if ($p.alive) { $liveTxt = 'process-alive-but-not-beating' }
+            Write-Host ("F8_DAEMON_STALE {0} producer={1} pid={2} {3} last={4} lastDeviceUtc={5} detail={6}" -f $age, $p.name, $p.pid, $liveTxt, $p.updatedUtc, $p.lastDeviceUtc, $p.detail)
+            Write-Host ("F8_DAEMON_STALE the {0} half of the section 14 chain is NOT proving itself alive. Captures may be going nowhere. Restart: powershell -File .claude\skills\run-defenders\f8-watch-start.ps1" -f $p.name)
+        } elseif (-not $Quiet) {
+            Write-Host ("F8_DAEMON_OK producer={0} pid={1} age={2}s lastDeviceUtc={3} detail={4}" -f $p.name, $p.pid, $age, $p.lastDeviceUtc, $p.detail)
+        }
+    }
+}
+
 if (-not (Test-Path $PingFile)) {
+    Write-F8Liveness
     if (-not $Quiet) { Write-Host 'NO_CAPTURE' }
     exit 1
 }
+
+Write-F8Liveness
 
 $ack     = Get-F8AckState $Inbox
 $pending = @(Get-F8Pending $Inbox)

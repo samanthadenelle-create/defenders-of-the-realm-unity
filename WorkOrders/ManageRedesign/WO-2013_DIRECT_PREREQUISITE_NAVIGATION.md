@@ -1,5 +1,7 @@
 # WO-2013 — Add Direct Navigation From Blockers to Their Prerequisites
 
+**Status:** DONE - landed in a6bbc523d (verified 2026-09-06)
+
 **Priority:** P0  
 **Depends on:** WO-2001, WO-2003
 

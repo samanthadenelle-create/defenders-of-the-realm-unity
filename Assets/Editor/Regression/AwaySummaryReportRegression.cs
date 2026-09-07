@@ -239,10 +239,20 @@ namespace DeNelle.Editor.Regression
                     else if (!IsAscii(got))
                         failures.Add($"case8 [away-text-h-m] FormatAwaySpan({row.seconds:0}) = '{got}' is not ASCII");
                 }
+                // WO-1499 (2026-09-06) -- PIN MOVED OFF THE WRONG SUBJECT. This compare used to
+                // demand "(STORAGE FULL)", so the suite was DEFENDING the defect: `wasCapped` is
+                // `window.ExceedsCap(OfflineCapHours)` (OfflineHarvestService:386) -- the AWAY
+                // WINDOW ceiling, never the bank. A player sent to upgrade storage saw no change,
+                // because the ceiling that bit was time. The suffix SURVIVES (a ceiling that bit
+                // must be said); only its subject is corrected. RED proof, logical: run this
+                // compare against the pre-WO-1499 `AwayTextFor` and it fails on the old literal --
+                // the two strings are disjoint. No hour number is pinned here on purpose; the
+                // ceiling is tiered in offline-storage.json.
                 string line = DeNelle.Village.UI.WelcomeBackPopup.AwayTextFor(45328.0, wasCapped: true);
-                if (line != "YOUR REALM WORKED FOR 12h 35m (STORAGE FULL)")
+                if (line != "YOUR REALM WORKED FOR 12h 35m (AWAY LIMIT REACHED)")
                     failures.Add($"case8 [away-text-h-m] capped summary line = '{line}', expected " +
-                                 "'YOUR REALM WORKED FOR 12h 35m (STORAGE FULL)' (the STORAGE FULL suffix must survive)");
+                                 "'YOUR REALM WORKED FOR 12h 35m (AWAY LIMIT REACHED)' -- the suffix must " +
+                                 "survive AND must name the away window, not storage (WO-1499)");
                 if (DeNelle.Village.UI.WelcomeBackPopup.AwayTextFor(45328.0, wasCapped: false) != "YOUR REALM WORKED FOR 12h 35m")
                     failures.Add("case8 [away-text-h-m] uncapped summary line is not 'YOUR REALM WORKED FOR 12h 35m'");
                 // The popup's own instance path must delegate, not keep a second formatter.

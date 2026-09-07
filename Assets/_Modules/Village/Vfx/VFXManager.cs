@@ -240,7 +240,28 @@ namespace DeNelle.Village
         //     handle, so the NEXT occurrence does not need the owner to notice it on screen.
         // This is instrumentation and it is PERMANENT (CLAUDE.md §12) — never fence it behind
         // DEVELOPMENT_BUILD, and never fork a second set alongside these two.
-        private int _activeLoops => _loopObjects.Count + _hovlLoopObjects.Count;
+        //
+        // WO-1473 — A REGISTERED LOOP IS NOT NECESSARILY A HELD SLOT.
+        // The release policy (see TickLoopReleasePolicy) can SUSPEND a loop: its particles are
+        // stopped-and-cleared while the host stays parented and pooled-to-nobody, so the effect
+        // costs no slot and can be resumed byte-identically when its owner comes back on camera.
+        // A suspended record therefore stays in its registry (so ReturnToPool's Remove still finds
+        // it on every existing return path, and no third collection can drift from these two) but
+        // must NOT be counted against the cap. Counting is a walk of two ≤32-entry dictionaries
+        // with a struct enumerator - no allocation - and it is DERIVED rather than cached on
+        // purpose: a cached "held" int is exactly the drift WO-1057 deleted from this class.
+        private int _activeLoops => CountHeld(_loopObjects) + CountHeld(_hovlLoopObjects);
+
+        /// <summary>Held (non-suspended) loops in one registry — the number that counts against
+        /// the cap. Registry.Count is the REGISTERED total and is deliberately not the same thing.</summary>
+        private static int CountHeld(Dictionary<GameObject, LoopRecord> registry)
+        {
+            if (registry == null || registry.Count == 0) return 0;
+            int held = 0;
+            foreach (var kv in registry)
+                if (kv.Value == null || !kv.Value.Suspended) held++;
+            return held;
+        }
 
         /// <summary>Identity of ONE live loop. Allocated once at loop start (never per frame) so a
         /// capture can name what is playing, who started it, and how long it has been running.
@@ -261,6 +282,12 @@ namespace DeNelle.Village
             public Vector3   StartPos;    // fallback for the dump when the host is already gone
             public bool      Warned;      // one-per-handle Warn latch (age or orphaned owner)
 
+            // ── WO-1473 release-policy state ──────────────────────────────────────────────
+            public bool      Suspended;      // particles stopped+cleared; holds NO slot; resumable
+            public float     SuspendedAt;    // realtime of the suspend, for the dump/audit lines
+            public float     OffscreenSince; // realtime the host was first judged off-camera;
+                                             // <0 means on-camera OR not judgeable (no camera)
+
             public string Key => string.IsNullOrEmpty(HovlKey) ? Type.ToString() : HovlKey;
         }
 
@@ -275,8 +302,11 @@ namespace DeNelle.Village
         // A loop still running this long after it started is reportable on its own. Generous on
         // purpose: real endless loops exist (the Heart aura, POI markers), so this is a "nothing
         // legitimate in a town session runs this long unnoticed" threshold, not a lifetime cap.
-        // It NEVER stops or reclaims anything — WO-1057 is the finding instrument, and loop
-        // release POLICY (timeout vs OnDisable/OnDestroy) belongs to the follow-up ticket.
+        // WO-1473: the audit still never stops anything — RELEASE is TickLoopReleasePolicy's job
+        // and this stays the oracle that proves the policy works. What changed is what it MEANS:
+        // age alone no longer reports (a five-minute aura in front of the camera is the feature),
+        // so this threshold is now only the "and it is ancient too" note on a line the policy
+        // failure already earned. See AuditRegistryAges.
         private const float STUCK_LOOP_AGE_SECONDS = 300f;
         private const float LOOP_AUDIT_INTERVAL    = 5f;   // the audit is NOT a per-frame cost
         // Rows printed per dump. The tail ring the F8 harvest reads keeps 80 lines total
@@ -285,6 +315,39 @@ namespace DeNelle.Village
         // the printed window and only the young tail is elided (and the elision is counted).
         private const int   LOOP_DUMP_MAX_ROWS     = 24;
         private float _nextLoopAudit;
+
+        // ── WO-1473 release policy ────────────────────────────────────────────
+        // Evidence (device log, 2026-09-06): 20 occurrences of
+        //   STUCK LOOP ArcaneTower_Aura owner='Arcane Spire'#N age=303s ... 14/24
+        // FOURTEEN of the twenty-four slots held by ambient tower auras, all past the report
+        // threshold, while the raid that followed pinned at 24/24 and dropped Damage_Ruin 31x.
+        // Every one of those auras was BEHAVING: ArcaneAura holds exactly one handle and stops
+        // it on OnDisable/OnDestroy/orphan. Nothing was leaked in the WO-1057 sense. The town
+        // simply grew more permanent ambient loops than the pool has slots, and WO-1057
+        // deliberately shipped the DETECTOR with no policy ("Reported only — release policy is
+        // the follow-up"). This is that follow-up.
+        //
+        // ⚠ THE RECONCILIATION WITH WO-889, stated here because a reader will reach for it:
+        // VfxAuraProximityCuller's header says nearest-N must NEVER cull tower/Heart/boss auras,
+        // and that still holds - a DISTANCE cull deletes information the player can still read
+        // (a far-away landmark is exactly when you want to see it). This policy is not a distance
+        // cull. It releases only what is OUTSIDE THE CAMERA FRUSTUM, i.e. what the player cannot
+        // see at all, and it RESUMES on re-entry. No information the player could read is
+        // deleted, so the two rules do not collide.
+        private const float OFFSCREEN_RELEASE_GRACE = 6f;    // off-camera this long -> suspend
+        private const float LOOP_POLICY_INTERVAL    = 0.5f;  // policy cadence (NOT per frame)
+        private const float LOOP_VISIBILITY_RADIUS  = 3f;    // AABB half-extent for the frustum test;
+                                                             // hysteresis on the LEAVE edge only, so a
+                                                             // loop at the screen edge cannot flicker
+        // See EnforceOwnerLoopCap for how this number is derived (3 proven + 1).
+        private const int   LOOPS_PER_OWNER_CAP     = 4;
+        private float _nextLoopPolicy;
+        private readonly List<LoopRecord> _loopPolicyScratch = new List<LoopRecord>();
+        // Its own list, not a share of the one above: EnforceOwnerLoopCap runs from RegisterLoop,
+        // and a scratch shared with a walker is one refactor away from being cleared mid-walk.
+        private readonly List<LoopRecord> _ownerCapScratch   = new List<LoopRecord>();
+        private readonly Plane[] _loopFrustum = new Plane[6];
+        private Camera _policyCamera;
         // Reused scratch — the per-frame prune and the capture-time sort must not allocate.
         private readonly List<GameObject> _loopPruneScratch = new List<GameObject>();
         private readonly List<LoopRecord> _loopDumpScratch  = new List<LoopRecord>();
@@ -1239,6 +1302,15 @@ namespace DeNelle.Village
 
             ReclaimDestroyedLoops();
 
+            // WO-1473: the release POLICY. Runs BEFORE the audit below on purpose — a loop the
+            // policy has just released or suspended must not also be reported as stuck in the
+            // same sweep. 0.5 s cadence, never per frame.
+            if (Time.realtimeSinceStartup >= _nextLoopPolicy)
+            {
+                _nextLoopPolicy = Time.realtimeSinceStartup + LOOP_POLICY_INTERVAL;
+                TickLoopReleasePolicy();
+            }
+
             // WO-1057: age/orphan audit. Deliberately NOT per-frame — it walks the registries on a
             // 5 s cadence and allocates nothing until it actually has something to report.
             if (Time.realtimeSinceStartup >= _nextLoopAudit)
@@ -1332,16 +1404,198 @@ namespace DeNelle.Village
                 StartedAt  = Time.realtimeSinceStartup,
                 StartPos   = host.transform.position,
                 Warned     = false,
+                // WO-1473: a brand-new loop is HELD and has never been judged off-camera. -1
+                // means "no off-camera streak running", which is not the same as "0 seconds".
+                Suspended      = false,
+                SuspendedAt    = 0f,
+                OffscreenSince = -1f,
             };
+
+            // WO-1473 — THE PER-OWNER AMBIENT CAP, asserted at the moment the slot is taken.
+            // A single owner accumulating loop records is the counter-leak SHAPE (the same host
+            // re-registering, or a driver that starts a second aura without stopping the first):
+            // it is invisible in a bare count and obvious here. The ceiling is derived, not
+            // picked: the largest legitimate simultaneous hold read at source is THREE on one
+            // structure - StructureDamageVisuals' Burn loop (Damage_Smolder/Fire/Ruin) plus its
+            // Beacon loop (Damage_CriticalBeacon) plus an ArcaneAura ambient ring - so the cap
+            // sits one above that. Anything past it is released OLDEST-KEPT / NEWEST-DROPPED,
+            // because the oldest record is the one the owner's own handle field still points at.
+            EnforceOwnerLoopCap(registry, ownerId);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── WO-1473: THE RELEASE POLICY — one policy in the pool, not per-effect
+        // ─────────────────────────────────────────────────────────────────────
+        //
+        // ## WHY SUSPEND AND NOT RETURN-TO-POOL
+        //
+        // The obvious "release" is ReturnToPool(host). It is WRONG here and the reason is not
+        // stylistic: every loop's caller still holds a live VFXHandle pointing at that host
+        // (ArcaneAura._handle, StructureDamageVisuals rec.Burn/rec.Beacon, ...). Hand the host
+        // back to the pool behind the caller's back and its later, entirely correct Stop() is a
+        // SECOND return of an instance the pool may already have handed to somebody else - one
+        // GameObject enqueued twice and simultaneously owned by two effects. That is a worse bug
+        // than the one being fixed, and it is precisely the class of defect WO-955 spent a day on.
+        //
+        // So the slot is released WITHOUT disturbing ownership: the host's particle systems are
+        // stopped-and-cleared, the record is marked Suspended, and _activeLoops (which is DERIVED,
+        // see CountHeld) stops counting it. The effect costs no slot, no simulation and no draw
+        // call; the handle stays valid; every existing return path (VFXHandle.Stop, ReturnToPool,
+        // ReturnHovlToPool, the destroyed-host reclaim) works unchanged because the record is
+        // still in the same registry it always was. Resume is PlayAllParticles on the same host.
+        //
+        // The one HARD release stays where WO-1057 put it: ReclaimDestroyedLoops, for a host Unity
+        // has actually destroyed. Nothing else in this class returns a host a caller still owns.
+        private void TickLoopReleasePolicy()
+        {
+            // Cache the camera across ticks; Camera.main is a tagged search. This mirrors
+            // VfxAuraProximityCuller.RankingOrigin, which is the established camera seam in
+            // this silo - a second way of finding the gameplay camera is a second thing to fix.
+            if (_policyCamera == null) _policyCamera = Camera.main;
+            bool cameraKnown = _policyCamera != null;
+            if (cameraKnown)
+                GeometryUtility.CalculateFrustumPlanes(_policyCamera, _loopFrustum);
+
+            _loopPolicyScratch.Clear();
+            foreach (var kv in _loopObjects)     if (kv.Value != null) _loopPolicyScratch.Add(kv.Value);
+            foreach (var kv in _hovlLoopObjects) if (kv.Value != null) _loopPolicyScratch.Add(kv.Value);
+            if (_loopPolicyScratch.Count == 0) return;
+
+            float now = Time.realtimeSinceStartup;
+            int cap = _maxActiveLoops;
+            int held = _activeLoops;
+
+            for (int i = 0; i < _loopPolicyScratch.Count; i++)
+            {
+                var rec = _loopPolicyScratch[i];
+                if (rec == null || rec.Host == null) continue;   // destroyed host: ReclaimDestroyedLoops owns it
+
+                // The colourblind low-HP tell is unrefusable at the cap (WO-1229) and is likewise
+                // never suspended here. One list, one predicate, in VfxLoopBudget - an id written
+                // inline at a second check site is the drift this repo keeps paying for.
+                bool exempt = VfxLoopBudget.IsAccessibilityLoop(rec.Type);
+
+                bool hadOwner       = !rec.Unparented;
+                bool ownerDestroyed = hadOwner && rec.Owner == null;
+                bool ownerActive    = !hadOwner || (rec.Owner != null && rec.Owner.gameObject.activeInHierarchy);
+
+                bool visible = true;
+                if (cameraKnown && !ownerDestroyed)
+                {
+                    var bounds = new Bounds(rec.Host.transform.position,
+                                            Vector3.one * (LOOP_VISIBILITY_RADIUS * 2f));
+                    visible = GeometryUtility.TestPlanesAABB(_loopFrustum, bounds);
+                }
+
+                // Off-camera STREAK clock. realtimeSinceStartup, not Time.time: captured sessions
+                // run at timeScale 0.28, and a grace measured in scaled seconds would be a
+                // different grace on every device.
+                if (visible || !cameraKnown) rec.OffscreenSince = -1f;
+                else if (rec.OffscreenSince < 0f) rec.OffscreenSince = now;
+                float offscreenFor = rec.OffscreenSince < 0f ? 0f : now - rec.OffscreenSince;
+
+                // Resume is budgeted: a town's worth of spires walking back on camera must not
+                // re-starve the pool the moment the player turns around.
+                bool slotAvailable = held < cap;
+
+                var action = VfxLoopReleasePolicy.Decide(
+                    suspended:      rec.Suspended,
+                    exempt:         exempt,
+                    ownerDestroyed: ownerDestroyed,
+                    ownerActive:    ownerActive,
+                    cameraKnown:    cameraKnown,
+                    visible:        visible,
+                    offscreenFor:   offscreenFor,
+                    grace:          OFFSCREEN_RELEASE_GRACE,
+                    slotAvailable:  slotAvailable);
+
+                switch (action)
+                {
+                    case VfxLoopReleasePolicy.LoopAction.Suspend:
+                        SuspendLoop(rec, now,
+                            ownerDestroyed ? "owner destroyed"
+                          : !ownerActive   ? "owner disabled"
+                          : "off camera " + offscreenFor.ToString("F0") + "s");
+                        held--;
+                        break;
+
+                    case VfxLoopReleasePolicy.LoopAction.Resume:
+                        ResumeLoop(rec, now);
+                        held++;
+                        break;
+                }
+            }
+
+            _loopPolicyScratch.Clear();
+        }
+
+        /// <summary>Release this loop's SLOT without touching its ownership: stop-and-clear the
+        /// host's particles and stop counting it. Permanent FlowTrace (CLAUDE.md §12) — every
+        /// release names the key, the owner, the reason and the age, because a suspended effect
+        /// is an effect the player stopped seeing and that must never be a silent event.</summary>
+        private void SuspendLoop(LoopRecord rec, float now, string reason)
+        {
+            if (rec == null || rec.Suspended || rec.Host == null) return;
+            rec.Suspended   = true;
+            rec.SuspendedAt = now;
+            foreach (var ps in rec.Host.GetComponentsInChildren<ParticleSystem>(true))
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            FlowTrace.Step("Vfx",
+                "LOOP RELEASED " + rec.Key + " owner='" + rec.OwnerName + "'#" + rec.OwnerId +
+                " age=" + (now - rec.StartedAt).ToString("F0") + "s reason=" + reason +
+                " — slot freed (now " + _activeLoops + "/" + _maxActiveLoops + "); the host is kept " +
+                "checked out so its owner's VFXHandle stays valid and it can resume in place.");
+        }
+
+        /// <summary>Put a suspended loop back on screen, on the same host, with the same handle.</summary>
+        private void ResumeLoop(LoopRecord rec, float now)
+        {
+            if (rec == null || !rec.Suspended || rec.Host == null) return;
+            rec.Suspended = false;
+            rec.OffscreenSince = -1f;
+            PlayAllParticles(rec.Host);
+            FlowTrace.Step("Vfx",
+                "LOOP RESUMED " + rec.Key + " owner='" + rec.OwnerName + "'#" + rec.OwnerId +
+                " after " + (now - rec.SuspendedAt).ToString("F0") + "s suspended — back on camera " +
+                "and a slot was free (now " + _activeLoops + "/" + _maxActiveLoops + ").");
+        }
+
+        /// <summary>WO-1473 — assert the per-owner ambient cap the moment a loop registers.
+        /// The ceiling is READ, not picked: the largest legitimate simultaneous hold on one owner
+        /// found at source is THREE (StructureDamageVisuals' Burn loop + its CriticalBeacon loop +
+        /// an ArcaneAura ambient ring), so <see cref="LOOPS_PER_OWNER_CAP"/> sits one above it.
+        /// Beyond that, the NEWEST records are suspended and the oldest kept — the oldest is the
+        /// one the owner's own handle field points at, so keeping it is what preserves the
+        /// feature while the accumulation stops costing slots.</summary>
+        private void EnforceOwnerLoopCap(Dictionary<GameObject, LoopRecord> registry, int ownerId)
+        {
+            if (registry == null || registry.Count <= LOOPS_PER_OWNER_CAP) return;
+
+            _ownerCapScratch.Clear();
+            foreach (var kv in registry)
+                if (kv.Value != null && kv.Value.OwnerId == ownerId && !kv.Value.Suspended)
+                    _ownerCapScratch.Add(kv.Value);
+
+            if (_ownerCapScratch.Count > LOOPS_PER_OWNER_CAP)
+            {
+                _ownerCapScratch.Sort((a, b) => a.StartedAt.CompareTo(b.StartedAt));   // oldest first
+                float now = Time.realtimeSinceStartup;
+                for (int i = LOOPS_PER_OWNER_CAP; i < _ownerCapScratch.Count; i++)
+                    SuspendLoop(_ownerCapScratch[i], now,
+                        "per-owner cap (" + _ownerCapScratch.Count + " held by one owner, cap " +
+                        LOOPS_PER_OWNER_CAP + ") — an owner accumulating loops is the counter-leak shape");
+            }
+            _ownerCapScratch.Clear();
         }
 
         /// <summary>Self-report a loop that has outlived its owner or a sane age — ONCE per handle,
         /// naming the owner. This is what turns the NEXT occurrence from "the owner noticed a stuck
         /// effect and pressed F8" into a line already sitting in the log (CLAUDE.md §14).
         /// <para/>
-        /// ⚠ Reports ONLY. It never stops, reclaims or reparents anything: whether a stranded loop
-        /// should time out, or be released from OnDisable/OnDestroy, is loop POLICY and belongs to
-        /// the follow-up ticket. A finder must not quietly set policy.</summary>
+        /// ⚠ Reports ONLY — still. Releasing is <see cref="TickLoopReleasePolicy"/>'s job (WO-1473),
+        /// and keeping the two apart is what lets this method be the ORACLE for that policy: every
+        /// line it prints is now a statement that the policy failed to act, not merely that a loop
+        /// is old. A detector that the fix silences by construction proves nothing.</summary>
         private void AuditLoopAges()
         {
             AuditRegistryAges(_loopObjects);
@@ -1359,21 +1613,37 @@ namespace DeNelle.Village
                 var rec = kv.Value;
                 if (rec == null || rec.Warned) continue;
 
+                // WO-1473 — STUCK now means "HELD WHEN THE POLICY SAYS IT SHOULD HAVE BEEN
+                // RELEASED", not merely "old". A suspended loop holds no slot, so it is not
+                // stuck; and a five-minute aura the player is LOOKING AT is the feature working,
+                // which is exactly what the WO-1057 age-only rule mis-reported 20 times in one
+                // session. Age alone was the right oracle while there was no policy - now that
+                // there is one, the oracle has to test the policy or it fails on the fix.
+                if (rec.Suspended) continue;
+
                 float age = now - rec.StartedAt;
-                // An orphan is reportable IMMEDIATELY (its owner is gone, so nothing can Stop() it);
-                // an old-but-owned loop waits out the generous age threshold.
                 bool orphaned = !rec.Unparented && rec.Owner == null;
-                if (!orphaned && age < STUCK_LOOP_AGE_SECONDS) continue;
+                // Off camera past the grace and STILL held => the policy tick did not run or did
+                // not act. That, and an orphan still holding a slot, are the two real defects.
+                bool offscreenPastGrace = rec.OffscreenSince >= 0f
+                                       && (now - rec.OffscreenSince) >= OFFSCREEN_RELEASE_GRACE;
+                if (!orphaned && !offscreenPastGrace) continue;
+                // A long-lived ON-CAMERA loop is legitimate; the age threshold survives only as
+                // the "this has been true for ages, say so louder" note in the line below.
 
                 rec.Warned = true;   // one per handle, forever — never a per-frame log storm
                 FlowTrace.Warn("Vfx",
                     "STUCK LOOP " + rec.Key + " owner='" + rec.OwnerName + "'#" + rec.OwnerId +
                     " age=" + age.ToString("F0") + "s " +
                     (orphaned
-                        ? "— ITS OWNER IS DESTROYED, so nothing can Stop() it: this slot is stranded for the session. "
-                        : "— older than the " + STUCK_LOOP_AGE_SECONDS + "s report threshold. ") +
+                        ? "— ITS OWNER IS DESTROYED and it is STILL HELD: the WO-1473 release policy should " +
+                          "have suspended it within " + LOOP_POLICY_INTERVAL + "s. "
+                        : "— OFF CAMERA for " + (now - rec.OffscreenSince).ToString("F0") + "s and STILL HELD: " +
+                          "past the " + OFFSCREEN_RELEASE_GRACE + "s release grace. ") +
+                    (age >= STUCK_LOOP_AGE_SECONDS ? "(Also older than the " + STUCK_LOOP_AGE_SECONDS +
+                        "s age threshold.) " : "") +
                     "Holding 1 of " + _maxActiveLoops + " loop slots (now " + _activeLoops + "/" + _maxActiveLoops +
-                    "). Reported only — release policy is the follow-up to WO-1057.");
+                    "). The policy exists (WO-1473) — if this line appears, the policy is not doing its job.");
             }
         }
 
@@ -1400,6 +1670,8 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Vfx",
                 "LOOPS " + _activeLoops + "/" + _maxActiveLoops +
+                " held, " + _loopDumpScratch.Count + " registered (the difference is WO-1473 " +
+                "SUSPENDED loops: released slot, host kept, resumes on camera re-entry)" +
                 " (live loop registry, oldest first" +
                 (shown < _loopDumpScratch.Count ? "; showing " + shown + " oldest" : "") + ")");
 
@@ -1415,6 +1687,8 @@ namespace DeNelle.Village
                     "  owner='" + rec.OwnerName + "'#" + rec.OwnerId +
                     "  age=" + (now - rec.StartedAt).ToString("F0") + "s" +
                     "  pos=(" + pos.x.ToString("F1") + ", " + pos.y.ToString("F1") + ", " + pos.z.ToString("F1") + ")" +
+                    (rec.Suspended ? "  [SUSPENDED " + (now - rec.SuspendedAt).ToString("F0") +
+                                     "s, holds no slot]" : "") +
                     (!rec.Unparented && rec.Owner == null ? "  <-- OWNER DESTROYED, nothing can Stop() it" : ""));
             }
             if (shown < _loopDumpScratch.Count)
@@ -2156,6 +2430,89 @@ namespace DeNelle.Village
             // slot exactly like an authored prefab does, so it must be named in the dump too.
             RegisterLoop(_loopObjects, host, type, null, parent);
             return host;
+        }
+    }
+
+    // =========================================================================
+    //  WO-1473 — THE LOOP RELEASE DECISION, as pure arithmetic
+    // =========================================================================
+    //
+    // Deliberately split out of VFXManager for the same reason VfxLoopBudget.WouldRefuseLoop is:
+    // a decision buried inside a MonoBehaviour tick can only be proven by playing the game, so it
+    // never gets an oracle and the next seat re-derives it from the symptom. This class owns no
+    // state, touches no Unity object and starts nothing — so VfxLoopFlagRegression can assert every
+    // branch of it headless, in the editor, in microseconds.
+    //
+    // The manager's job is to MEASURE (is the owner gone, is the host in the frustum, how long has
+    // the streak run, is a slot free) and then to ACT. Choosing is this class's job, and there is
+    // exactly one copy of the choice.
+    public static class VfxLoopReleasePolicy
+    {
+        /// <summary>What the pool should do with one live loop this tick.</summary>
+        public enum LoopAction
+        {
+            /// <summary>Leave it exactly as it is.</summary>
+            Keep,
+            /// <summary>Release its slot: stop-and-clear the particles, stop counting it, keep the
+            /// host checked out so the owner's VFXHandle stays valid.</summary>
+            Suspend,
+            /// <summary>Put a suspended loop back on screen, on the same host.</summary>
+            Resume,
+        }
+
+        /// <summary>
+        /// THE decision. Pure: same inputs, same answer, no Unity, no clock.
+        /// <para/>Order matters and is the specification:
+        /// <list type="number">
+        /// <item>an accessibility loop is never suspended and is always resumed (WO-1229 —
+        /// the colourblind low-HP tell is the one loop a player reads state from);</item>
+        /// <item>a loop whose owner is DESTROYED or DISABLED releases immediately — no grace,
+        /// because there is nothing left on screen for it to belong to;</item>
+        /// <item>otherwise a loop releases only after it has been off camera for the whole
+        /// grace, and comes back the moment it is visible again AND a slot is free;</item>
+        /// <item>with no camera to judge by (headless, boot, a scene between cameras) nothing
+        /// is ever suspended for visibility — an unjudgeable loop is kept, never guessed at.</item>
+        /// </list>
+        /// </summary>
+        /// <param name="suspended">Is this loop currently suspended (holding no slot)?</param>
+        /// <param name="exempt">Is it on VfxLoopBudget.AccessibilityLoops?</param>
+        /// <param name="ownerDestroyed">Had an owner, and that owner is now destroyed.</param>
+        /// <param name="ownerActive">Owner is active in the hierarchy (true when it never had one).</param>
+        /// <param name="cameraKnown">Was a camera available to judge visibility?</param>
+        /// <param name="visible">Host is inside the camera frustum (meaningless when !cameraKnown).</param>
+        /// <param name="offscreenFor">Seconds the off-camera streak has run (0 when on camera).</param>
+        /// <param name="grace">Seconds off camera before a release (VFXManager's OFFSCREEN_RELEASE_GRACE).</param>
+        /// <param name="slotAvailable">Is there loop-budget headroom for a resume right now?</param>
+        public static LoopAction Decide(bool suspended, bool exempt,
+                                        bool ownerDestroyed, bool ownerActive,
+                                        bool cameraKnown, bool visible,
+                                        float offscreenFor, float grace,
+                                        bool slotAvailable)
+        {
+            // 1. Accessibility: unsuspendable, and it jumps the resume queue (it is why
+            //    AccessibilityReserve exists — a slot is held open for exactly this).
+            if (exempt) return suspended ? LoopAction.Resume : LoopAction.Keep;
+
+            // 2. Nothing to belong to. A destroyed owner can never re-enable, so this is the
+            //    permanent case; a disabled one can, and Resume below picks it back up.
+            bool orphanedOrHidden = ownerDestroyed || !ownerActive;
+            if (orphanedOrHidden) return suspended ? LoopAction.Keep : LoopAction.Suspend;
+
+            // 3. Unjudgeable visibility is never a reason to release. (Headless AutoPilot runs
+            //    have no Camera.main, and a policy that suspended everything there would silently
+            //    change what every headless capture measures.)
+            if (!cameraKnown) return suspended && slotAvailable ? LoopAction.Resume : LoopAction.Keep;
+
+            // 4. Back on camera -> resume, budget permitting. Held at Keep when the pool is full,
+            //    so a town of returning spires cannot re-starve combat feedback the moment the
+            //    player turns around; the next tick with headroom picks it up.
+            if (visible) return suspended ? (slotAvailable ? LoopAction.Resume : LoopAction.Keep)
+                                          : LoopAction.Keep;
+
+            // 5. Off camera: release only after the FULL grace. The grace is the hysteresis —
+            //    a loop clipping the edge of the frustum must not flicker its slot every tick.
+            if (!suspended && offscreenFor >= grace) return LoopAction.Suspend;
+            return LoopAction.Keep;
         }
     }
 }

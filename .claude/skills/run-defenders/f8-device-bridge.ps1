@@ -100,6 +100,21 @@ function Write-Bridge([string]$Text) {
     Write-Host $Text
 }
 
+# WO-1460. Every pass stamps HEARTBEAT.json, INCLUDING the passes that publish nothing - those are
+# the dangerous ones. On 2026-09-06 this bridge polled healthily all day while its kind+message
+# dedupe suppressed 319 signal entries (2 possible_softlock and one of the owner's own FLAG
+# presses among them), and the inbox looked exactly like a dead daemon. reason= names WHY a pass
+# was quiet, so "no phone" / "no new signal" / "all deduped" are never again the same silence.
+function Beat-Bridge([string]$Reason, [string]$DevSerial, [string]$LastDeviceUtc, [string]$Detail) {
+    Write-F8Heartbeat $Inbox 'device' @{
+        reason        = $Reason
+        serial        = $DevSerial
+        lastDeviceUtc = $LastDeviceUtc
+        detail        = $Detail
+        pollSeconds   = $PollSeconds
+    }
+}
+
 # -- adb resolution ----------------------------------------------------------------------------
 function Resolve-Adb {
     $cands = @()
@@ -257,6 +272,7 @@ function Invoke-BridgePass {
     if (-not [string]::IsNullOrWhiteSpace($LogOverride)) {
         # test/fixture mode: no adb, no phone, same publish path.
         if (-not (Test-Path $LogOverride)) {
+            Beat-Bridge 'fixture-log-missing' 'fixture' '' 'fixture log path does not exist'
             Write-Bridge 'F8_DEVICE_BRIDGE noop reason=fixture-log-missing published=0'
             return 0
         }
@@ -267,6 +283,7 @@ function Invoke-BridgePass {
         $adb = Resolve-Adb
         if ([string]::IsNullOrWhiteSpace($adb)) {
             # Not an error: a machine with no Android SDK simply has no device half. Silent.
+            Beat-Bridge 'no-adb' '' '' 'adb.exe not resolvable on this machine - the device half cannot run'
             Write-Bridge 'F8_DEVICE_BRIDGE noop reason=no-adb published=0'
             return 0
         }
@@ -277,6 +294,7 @@ function Invoke-BridgePass {
         # name distinct from the parameter name.
         $devSerial = Get-AttachedSerial $adb $script:Serial
         if ([string]::IsNullOrWhiteSpace($devSerial)) {
+            Beat-Bridge 'no-device' '' '' 'no adb device in state device - phone unplugged, offline or unauthorized'
             Write-Bridge 'F8_DEVICE_BRIDGE noop reason=no-device published=0'
             return 0
         }
@@ -288,6 +306,7 @@ function Invoke-BridgePass {
         & $adb -s $devSerial pull -a "$DeviceDir/break-log.jsonl" $localLog 2>&1 | Out-Null
         if (-not (Test-Path $localLog)) {
             # The app may never have run on this phone, or storage is not readable. Not spam-worthy.
+            Beat-Bridge 'no-break-log' $devSerial '' 'adb pull produced no break-log.jsonl'
             Write-Bridge 'F8_DEVICE_BRIDGE noop reason=no-break-log published=0'
             return 0
         }
@@ -449,13 +468,19 @@ function Invoke-BridgePass {
     Save-DeviceState $state
 
     if ($published -gt 0) {
+        Beat-Bridge 'published' $devSerial $lastUtc ('published={0} dupSuppressed={1} offset={2}/{3}' -f $published, $skippedDup, $newOffset, $count)
         Write-Host ('F8_DEVICE_BRIDGE_OK device={0} published={1} dupSuppressed={2} offset={3}/{4}' -f $devSerial, $published, $skippedDup, $newOffset, $count)
         if ($deferred -gt 0) {
             Write-Host ('F8_DEVICE_BRIDGE deferred={0} line(s) past -MaxPublish {1} - they surface on the next pass, oldest first.' -f $deferred, $MaxPublish)
         }
         Write-Host 'F8 INBOX PING (device) - TRIAGE NOW: run f8-check-inbox.ps1'
     } else {
-        Write-Bridge ('F8_DEVICE_BRIDGE noop reason=no-new-signal device={0} published=0 offset={1}/{2} dupSuppressed={3}' -f $devSerial, $newOffset, $count, $skippedDup)
+        # NAME the silence. all-deduped is NOT the same as nothing-new: WO-1460's 319 suppressed
+        # entries read identically to a quiet phone until this reason was recorded.
+        $why = 'no-new-signal'
+        if ($skippedDup -gt 0) { $why = 'all-deduped' }
+        Beat-Bridge $why $devSerial $lastUtc ('published=0 dupSuppressed={0} offset={1}/{2}' -f $skippedDup, $newOffset, $count)
+        Write-Bridge ('F8_DEVICE_BRIDGE noop reason={0} device={1} published=0 offset={2}/{3} dupSuppressed={4}' -f $why, $devSerial, $newOffset, $count, $skippedDup)
     }
     return $published
 }
@@ -463,7 +488,11 @@ function Invoke-BridgePass {
 if ($Loop) {
     Write-Host ('[f8-device-bridge] armed poll={0}s dir={1}' -f $PollSeconds, $DeviceDir)
     while ($true) {
-        try { [void](Invoke-BridgePass) } catch { Write-F8Event $Inbox 'warn' ("device bridge pass failed: " + $_.Exception.Message) }
+        try { [void](Invoke-BridgePass) } catch {
+            Write-F8Event $Inbox 'warn' ("device bridge pass failed: " + $_.Exception.Message)
+            # survive and keep beating: a thrown pass must not read as a dead bridge (WO-1460)
+            Beat-Bridge 'pass-failed' '' '' $_.Exception.Message
+        }
         Start-Sleep -Seconds $PollSeconds
     }
 }

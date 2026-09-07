@@ -52,7 +52,11 @@ namespace DeNelle.Village
 {
     public sealed class ArmyMusterPanel : MonoBehaviour
     {
-        private static readonly ArmyComposition s_composition = new ArmyComposition { Name = "Raid Push" };
+        // WO-1512: the staged army USED to live here, as `private static readonly ArmyComposition
+        // s_composition` — the View owning the model, which is the §2 violation this file was
+        // flagged for. It now lives on ArmyMusterVM, and every verb below is a VM COMMAND. This
+        // panel paints the VM and routes taps; it decides no rule and mutates no game state.
+        private ArmyMusterVM _vm;
 
         private GameObject _ui;
         private RectTransform _listContent;
@@ -67,10 +71,6 @@ namespace DeNelle.Village
         private TextMeshProUGUI _musterCtaSub;
         private ElarionUiKit.CurrencyChipHandle[] _wallet;
         private PanelHandle _panelHandle;
-
-        private string _lastResultHeadline = "";
-        private string _lastResultDetail = "";
-        private int _activeSlot;
 
         private float _panelW = 1f;
         private float _panelH = 1f;
@@ -249,15 +249,14 @@ namespace DeNelle.Village
             FlowTrace.Step("Muster", "ArmyMusterPanel.Open - loadout bank + training order UI.");
             Close();
 
-            // Hydrate working set from the active saved slot (or seed a fun recipe).
-            var army = ArmyLoadoutService.Ensure();
-            _activeSlot = army != null ? army.ActiveLoadoutIndex : 0;
-            ArmyLoadoutService.LoadInto(_activeSlot, s_composition);
-            if (s_composition.TotalUnits <= 0 && string.IsNullOrEmpty(_lastResultHeadline))
+            // WO-1512: hydration is a VM command. The panel does not know what "the active slot"
+            // means, only that binding it is the first thing it does.
+            if (_vm == null)
             {
-                // First open with empty slot: stage Raid Push so the panel never feels blank.
-                ArmyLoadoutService.ApplyRecipe(s_composition, 0);
+                _vm = ArmyMusterVM.CreateDefault();
+                _vm.Changed += Rebuild;
             }
+            _vm.HydrateFromActiveSlot();
 
             _ui = ElarionUiKit.BuildModalCanvas("ArmyMusterPanelUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();
@@ -401,6 +400,7 @@ namespace DeNelle.Village
         {
             BarracksService.Changed -= Rebuild;
             ArmyMusterService.Mustered -= Rebuild;
+            if (_vm != null) { _vm.Changed -= Rebuild; _vm.Dispose(); _vm = null; }
         }
 
         // ── Zone plumbing ─────────────────────────────────────────────────────
@@ -467,105 +467,64 @@ namespace DeNelle.Village
 
         // ── Actions ───────────────────────────────────────────────────────────
 
-        private void OnMuster()
+        // WO-1512: every handler below is a THIN ROUTE — call the VM command, paint what it says.
+        // No transaction, no rule, no service call, no model mutation lives in this file any more.
+        // The VM returns a neutral MusterTone; mapping it to the kit's toast palette is the one
+        // presentation decision left, and it belongs here.
+
+        private static ElarionUiKit.ToastTone Toast(MusterTone tone)
         {
-            // Auto-save active slot so the training order never loses a staged plan.
-            ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
-
-            var report = ArmyMusterService.Muster(s_composition);
-            _lastResultHeadline = PlayerWords(report.Headline);
-            _lastResultDetail = PlayerWords(report.Detail);
-
-            var tone = report.Complete ? ElarionUiKit.ToastTone.Confirm
-                     : report.AnyQueued ? ElarionUiKit.ToastTone.Gold
-                     : ElarionUiKit.ToastTone.Danger;
-            ElarionUiKit.ShowToast(PlayerWords(report.Summary), tone, 3.2f);
-
-            foreach (var r in report.Rows)
-                if (r.Queued > 0) s_composition.Add(r.TroopId, -r.Queued);
-
-            // Keep the saved slot as the full plan; working set drops what queued.
-            Rebuild();
+            switch (tone)
+            {
+                case MusterTone.Good: return ElarionUiKit.ToastTone.Confirm;
+                case MusterTone.Warn: return ElarionUiKit.ToastTone.Gold;
+                case MusterTone.Bad:  return ElarionUiKit.ToastTone.Danger;
+                default:              return ElarionUiKit.ToastTone.Info;
+            }
         }
 
-        /// <summary>
-        /// OWNER RULING 2026-08-26 ("what dos muster army mean? Thats where im lost"): the word
-        /// "muster" is archaic jargon for what is a TRAINING ORDER, and it must not reach the
-        /// player. The rewrite happens HERE, at the presentation boundary, because ArmyMusterService
-        /// is the MODEL: its identifiers (ArmyMusterService.Muster, the "Muster" FlowTrace tag) are
-        /// live and a rename is a wide mechanical diff with zero player benefit — the ruling is
-        /// PLAYER-FACING STRINGS ONLY. ASCII in, ASCII out.
-        /// ⚠ ArmyMusterService.cs still AUTHORS the archaic word in three literals (lines 217, 332,
-        /// 338 at the time of writing); this maps them on the way to the screen.
-        /// </summary>
-        private static string PlayerWords(string s)
+        private void Say(MusterCommandResult result, float seconds = 0f)
         {
-            if (string.IsNullOrEmpty(s)) return s;
-            s = s.Replace("Nothing to muster", "Nothing to train");
-            s = s.Replace("Mustered", "Training ordered");
-            s = s.Replace("mustered", "training ordered");
-            s = s.Replace("Muster", "Train");
-            s = s.Replace("muster", "training");
-            return s;
+            if (string.IsNullOrEmpty(result.Message)) return;
+            if (seconds > 0f) ElarionUiKit.ShowToast(result.Message, Toast(result.Tone), seconds);
+            else ElarionUiKit.ShowToast(result.Message, Toast(result.Tone));
+        }
+
+        private void OnMuster()
+        {
+            if (_vm == null) return;
+            Say(_vm.Muster(), 3.2f);
         }
 
         private void OnSaveSlot()
         {
-            ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
-            ElarionUiKit.ShowToast(
-                "Saved '" + s_composition.Name + "' to slot " + (_activeSlot + 1) + ".",
-                ElarionUiKit.ToastTone.Confirm);
-            Rebuild();
+            if (_vm == null) return;
+            Say(_vm.SaveSlot());
         }
 
         private void OnSelectSlot(int index)
         {
-            if (index == _activeSlot)
-            {
-                // Re-tap reloads saved version (discard unsaved edits).
-                ArmyLoadoutService.LoadInto(index, s_composition);
-                ElarionUiKit.ShowToast("Reloaded " + ArmyLoadoutService.SlotName(index) + ".", ElarionUiKit.ToastTone.Info);
-            }
-            else
-            {
-                // Auto-save previous working set into the slot we leave (never lose work).
-                ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
-                _activeSlot = index;
-                ArmyLoadoutService.LoadInto(index, s_composition);
-                ElarionUiKit.ShowToast("Editing " + ArmyLoadoutService.SlotName(index) + ".", ElarionUiKit.ToastTone.Info);
-            }
-            Rebuild();
+            if (_vm == null) return;
+            Say(_vm.SelectSlot(index));
         }
 
         private void OnRecipe(int recipe)
         {
-            string msg = ArmyLoadoutService.ApplyRecipe(s_composition, recipe);
-            ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold);
-            Rebuild();
+            if (_vm == null) return;
+            Say(_vm.ApplyRecipe(recipe));
         }
 
         private void OnCycleName()
         {
-            // Fun: cycle default names so the player can "feel" ownership without a soft keyboard.
-            string[] names =
-            {
-                "Raid Push", "Wall Hold", "Siege Prep",
-                "Night Watch", "Quick Strike", "Last Stand", "New Army",
-            };
-            string cur = s_composition.Name ?? "";
-            int idx = 0;
-            for (int i = 0; i < names.Length; i++)
-                if (string.Equals(names[i], cur, System.StringComparison.OrdinalIgnoreCase))
-                { idx = (i + 1) % names.Length; break; }
-            s_composition.Name = names[idx];
-            Rebuild();
+            if (_vm == null) return;
+            Say(_vm.CycleName());
         }
 
         // ── Render ────────────────────────────────────────────────────────────
 
         private void Rebuild()
         {
-            if (_ui == null || _detailBody == null) return;
+            if (_ui == null || _detailBody == null || _vm == null) return;
             UpdateWallet();
             BuildTroopLadder();
             BuildCommandBands();
@@ -576,7 +535,7 @@ namespace DeNelle.Village
         private void UpdateWallet()
         {
             if (_wallet == null || _wallet.Length < 1) return;
-            _wallet[0]?.SetAmount(ArmyMusterService.GoldBalance());
+            _wallet[0]?.SetAmount(_vm.GoldBalance);
         }
 
         private void BuildTroopLadder()
@@ -586,12 +545,9 @@ namespace DeNelle.Village
 
             for (int i = host.childCount - 1; i >= 0; i--) Destroy(host.GetChild(i).gameObject);
 
-            var offered = new List<TroopDef>();
-            var all = TroopCatalog.All;
-            if (all != null)
-                foreach (var def in all)
-                    if (def != null && !string.IsNullOrEmpty(def.Id) && BarracksService.IsTroopUnlocked(def.Id))
-                        offered.Add(def);
+            // WO-1512: the unlock gate is a RULE and now lives in the VM; the panel just paints
+            // whatever roster it is handed.
+            var offered = _vm.OfferedTroops();
 
             if (offered.Count == 0)
             {
@@ -680,7 +636,7 @@ namespace DeNelle.Village
                 frameImg.raycastTarget = false;
             }
 
-            var count = ElarionUiKit.Label(countPlate.transform, s_composition.CountOf(id).ToString(),
+            var count = ElarionUiKit.Label(countPlate.transform, _vm.CountOf(id).ToString(),
                 0.06f, 0.94f, ElarionUi.Parchment, CountFontSize, TextAlignmentOptions.Center,
                 0.06f, 0.94f, bold: true);
             count.name = "CountLabel";
@@ -697,23 +653,10 @@ namespace DeNelle.Village
 
         private void Step(string troopId, int delta)
         {
-            // Honour maxOwned in the composer so the UI can't stage 2 catapults.
-            var def = TroopCatalog.Find(troopId);
-            if (def != null && def.MaxOwned > 0 && delta > 0)
-            {
-                int want = s_composition.CountOf(troopId) + delta;
-                if (want > def.MaxOwned)
-                {
-                    ElarionUiKit.ShowToast(
-                        "Only " + def.MaxOwned + "x " +
-                        (string.IsNullOrEmpty(def.DisplayName) ? troopId : def.DisplayName) +
-                        " in a loadout.",
-                        ElarionUiKit.ToastTone.Info);
-                    return;
-                }
-            }
-            s_composition.Add(troopId, delta);
-            Rebuild();
+            // WO-1512: the maxOwned ceiling ("you can't stage 2 catapults") is a RULE, decided in
+            // the VM. The panel routes the tap and voices the refusal.
+            if (_vm == null) return;
+            Say(_vm.Step(troopId, delta));
         }
 
         private static string PerUnitLine(TroopDef def)
@@ -744,11 +687,11 @@ namespace DeNelle.Village
             for (int i = _detailBody.childCount - 1; i >= 0; i--)
                 Destroy(_detailBody.GetChild(i).gameObject);
 
-            var preview = ArmyMusterService.Preview(s_composition);
+            var preview = _vm.Preview;
             var body = new System.Text.StringBuilder();
 
-            body.Append("STAGED: ").Append(s_composition.Name).Append("  (slot ")
-                .Append(_activeSlot + 1).Append(")\n");
+            body.Append("STAGED: ").Append(_vm.ArmyName).Append("  (slot ")
+                .Append(_vm.ActiveSlot + 1).Append(")\n");
 
             if (preview.TotalUnits <= 0)
             {
@@ -759,12 +702,11 @@ namespace DeNelle.Village
             }
             else
             {
-                foreach (var r in s_composition.Rows)
+                foreach (var r in _vm.Composition.Rows)
                 {
                     if (r == null || r.Count <= 0) continue;
-                    var def = TroopCatalog.Find(r.TroopId);
-                    string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : r.TroopId;
-                    body.Append("  ").Append(r.Count).Append("x ").Append(name).Append('\n');
+                    body.Append("  ").Append(r.Count).Append("x ")
+                        .Append(_vm.DisplayNameOf(r.TroopId)).Append('\n');
                 }
                 body.Append("\nCost: ").Append(preview.Cost).Append('\n');
                 body.Append("Time: ").Append(ArmyMusterPlanner.FormatDuration(preview.TotalSeconds))
@@ -779,10 +721,10 @@ namespace DeNelle.Village
                 body.Append("Fits now: ").Append(preview.WouldFit).Append(" of ")
                     .Append(preview.TotalUnits).Append(" (rest stays staged).\n");
 
-            if (!string.IsNullOrEmpty(_lastResultHeadline))
+            if (!string.IsNullOrEmpty(_vm.LastResultHeadline))
             {
-                body.Append("\nLAST TRAINING ORDER\n").Append(_lastResultHeadline).Append('\n');
-                if (!string.IsNullOrEmpty(_lastResultDetail)) body.Append(_lastResultDetail).Append('\n');
+                body.Append("\nLAST TRAINING ORDER\n").Append(_vm.LastResultHeadline).Append('\n');
+                if (!string.IsNullOrEmpty(_vm.LastResultDetail)) body.Append(_vm.LastResultDetail).Append('\n');
             }
 
             // OWNER RULING 2026-08-26 - the tip line, verbatim.
@@ -838,7 +780,7 @@ namespace DeNelle.Village
             for (int i = 0; i < selectors.Length; i++)
             {
                 int selection = i;
-                bool active = i < ArmyLoadoutService.SlotCount && i == _activeSlot;
+                bool active = i < _vm.SlotCount && i == _vm.ActiveSlot;
                 var kind = active ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
                 Rect r = ToLocal(selZone, Band(bands, selectorBands[i]));
                 // ACTIVE is a WORD, not a hue - greyscale-safe slot state. Single line on
@@ -847,7 +789,7 @@ namespace DeNelle.Village
                 string face = active ? selectors[i] + " *ACTIVE*" : selectors[i];
                 var button = ElarionUiKit.Button(_selectorHost, face, kind,
                     new Vector2(r.xMin, r.yMin), new Vector2(r.xMax, r.yMax),
-                    () => { if (selection < ArmyLoadoutService.SlotCount) OnSelectSlot(selection); else OnRecipe(3); });
+                    () => { if (selection < _vm.SlotCount) OnSelectSlot(selection); else OnRecipe(3); });
                 if (button != null) ElarionUiKit.ClampMinTouch(button);
             }
 
@@ -855,10 +797,10 @@ namespace DeNelle.Village
             Rect rSave = ToLocal(actZone, Band(bands, "Save"));
             Rect rCta = ToLocal(actZone, Band(bands, "Cta"));
 
-            var name = ElarionUiKit.Button(_actionHost, "Name: " + ShortName(s_composition.Name),
+            var name = ElarionUiKit.Button(_actionHost, "Name: " + ShortName(_vm.ArmyName),
                 ElarionUiKit.ButtonKind.Quiet, new Vector2(rName.xMin, rName.yMin),
                 new Vector2(rName.xMax, rName.yMax), OnCycleName);
-            var save = ElarionUiKit.Button(_actionHost, "Save slot " + (_activeSlot + 1),
+            var save = ElarionUiKit.Button(_actionHost, "Save slot " + (_vm.ActiveSlot + 1),
                 ElarionUiKit.ButtonKind.Gold, new Vector2(rSave.xMin, rSave.yMin),
                 new Vector2(rSave.xMax, rSave.yMax), OnSaveSlot);
             _musterCta = ElarionUiKit.Button(_actionHost, "Train Army", ElarionUiKit.ButtonKind.Confirm,
@@ -905,8 +847,8 @@ namespace DeNelle.Village
 
         private void UpdateCta()
         {
-            if (_musterCta == null) return;
-            var preview = ArmyMusterService.Preview(s_composition);
+            if (_musterCta == null || _vm == null) return;
+            var preview = _vm.Preview;
 
             // OWNER RULING 2026-08-26: the CTA reads "Train Army" on every state; the STATE lives
             // in the subline, so the button never becomes a sentence the player has to decode.

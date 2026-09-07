@@ -1,9 +1,12 @@
 // =============================================================================
 // RumorBoardVMTests (EditMode) - sec.2c permission gate for the rumor-board MVVM slice.
-// WO-1192 v3: the board OFFERS work only, so what is locked here is the AVAILABLE
-// bucketing, the prerequisite gate, Accept, the PAGING window (three at a time,
-// wrapping), the NEW flag, the reward-chip projection, and the one-line hook that
-// can no longer end mid-word.
+// WO-1192 v3 locked the AVAILABLE bucketing, the prerequisite gate, Accept, the
+// PAGING window (three at a time, wrapping), the NEW flag, the reward-chip
+// projection, and the one-line hook that can no longer end mid-word.
+// WO-1521 (owner report 2026-09-06) adds the half the board was missing: it is ONE
+// list of three row KINDS - CLAIMABLE dailies, ACTIVE story work, AVAILABLE offers -
+// with one verb per kind, and "The board is quiet." gated on that LIST being empty
+// rather than on the current PAGE. The board no longer OFFERS ONLY.
 // Uses a FAKE IRumorBoardBackend (no scene, no QuestService/QuestCatalog/GameState).
 // =============================================================================
 
@@ -35,8 +38,49 @@ namespace DeNelle.Tests.EditMode
             public void StartQuest(string id) { StartCalls++; Active.Add(id); Changed?.Invoke(); }
             public bool HasSeen(string id) => id != null && Seen.Contains(id);
             public void MarkSeen(string id) { if (id != null) Seen.Add(id); }
+
+            // -- WO-1521 seams -------------------------------------------------------
+            public List<DailyQuestInstance> DailyQuests = new List<DailyQuestInstance>();
+            public Dictionary<string, DailyQuestSlotReward> SlotRewards =
+                new Dictionary<string, DailyQuestSlotReward>();
+            public Dictionary<string, string> Objectives = new Dictionary<string, string>();
+            public HashSet<string> PanelDoors = new HashSet<string>();
+            /// <summary>When true a claim credits nothing - the WO-978 full-bank case.</summary>
+            public bool ClaimPaysNothing;
+            public int ClaimCalls;
+            public string TrackedId;
+
+            public IReadOnlyList<DailyQuestInstance> Dailies => DailyQuests;
+            public DailyQuestSlotReward DailyReward(string slot) =>
+                slot != null && SlotRewards.TryGetValue(slot, out var r) ? r : null;
+
+            public bool ClaimDaily(string dailyQuestId)
+            {
+                ClaimCalls++;
+                if (ClaimPaysNothing) return false;
+                foreach (var q in DailyQuests)
+                    if (q != null && q.Id == dailyQuestId)
+                    { q.ClaimedAtUnix = 1; Changed?.Invoke(); return true; }
+                return false;
+            }
+
+            public string ActiveObjective(string questId) =>
+                questId != null && Objectives.TryGetValue(questId, out var o) ? o : "";
+
+            public bool GoTo(string questId) => questId != null && PanelDoors.Contains(questId);
+            public void Track(string questId) { TrackedId = questId; }
+
             public event Action Changed;
         }
+
+        /// <summary>A finished daily whose reward was never latched - the exact state that made
+        /// the Journey card say "1 ready to claim" while the board said it was quiet.</summary>
+        private static DailyQuestInstance ClaimableDaily(string id, string slot, string label)
+            => new DailyQuestInstance
+            {
+                Id = id, TemplateId = id, Slot = slot, Target = 3, Progress = 3,
+                Completed = true, ClaimedAtUnix = 0, Label = label,
+            };
 
         private static QuestDef Q(string id, string title, string type = null, string objective = null)
         {
@@ -128,6 +172,9 @@ namespace DeNelle.Tests.EditMode
         {
             // THE DEFECT THIS LOCKS: accept the only rumor on the last page and the board is
             // left showing an empty page while rumors are still posted behind it.
+            // WO-1521 rewrite: ACCEPT no longer removes a row (the quest comes back as an ACTIVE
+            // row with a GO TO door), so the shrink that strands a page is now COMPLETION. The
+            // guard being locked is unchanged - a page index past the end walks back.
             var b = new FakeBackend();
             for (int i = 1; i <= 4; i++) b.Quests.Add(Q("q" + i, "Rumor " + i));
             using var vm = new RumorBoardVM(b, null);
@@ -135,10 +182,138 @@ namespace DeNelle.Tests.EditMode
             Assert.That(vm.PageIndex, Is.EqualTo(1));
             Assert.That(vm.PageQuests.Count, Is.EqualTo(1));
 
-            vm.Accept("q4");
+            b.Completed.Add("q4");
+            vm.Accept("q1");   // any backend change rebuilds the board
             Assert.That(vm.PageCount, Is.EqualTo(1));
             Assert.That(vm.PageIndex, Is.EqualTo(0));
             Assert.That(vm.PageQuests.Count, Is.EqualTo(3), "the board falls back to a page that exists");
+        }
+
+        // =====================================================================
+        //  WO-1521 - ONE LIST FEEDS THE BOARD AND THE COUNTER
+        // =====================================================================
+
+        [Test]
+        public void a_claimable_daily_is_a_board_row_with_an_objective_a_reward_and_a_claim_door()
+        {
+            // THE MEASURED CASE. Owner report 2026-09-06: "quests say one quest to claim but no
+            // idea how or what to do to complete it." One claimable daily in state; RED before
+            // this ticket, because the board's list was QuestCatalog only and could not see it.
+            var b = Seed();
+            b.DailyQuests.Add(ClaimableDaily("daily.combat@today", "combat", "Clear {target} waves"));
+            b.SlotRewards["combat"] = new DailyQuestSlotReward
+            { Slot = "combat", RewardCrystals = 40, RewardWisdom = 5 };
+
+            using var vm = new RumorBoardVM(b, null);
+
+            Assert.That(vm.IsQuiet, Is.False, "a claimable quest means the board is NOT quiet");
+            Assert.That(vm.ClaimableCount, Is.EqualTo(1));
+            Assert.That(vm.Rows[0].Id, Is.EqualTo("daily.combat@today"),
+                "a claim leads the board so the counter's tap lands on it, not three pages deep");
+            Assert.That(vm.KindOf("daily.combat@today"), Is.EqualTo(RumorBoardVM.BoardRowKind.Claimable));
+            Assert.That(vm.ActionLabelFor("daily.combat@today"), Is.EqualTo(RumorBoardVM.ClaimLabel));
+            Assert.That(vm.TypeFor("daily.combat@today"), Is.EqualTo("Daily"));
+
+            // It NAMES the objective - "{target}" resolved, never the raw token.
+            Assert.That(vm.ObjectiveFor("daily.combat@today"), Does.Contain("Clear 3 waves"));
+            Assert.That(vm.ObjectiveFor("daily.combat@today"), Does.Not.Contain("{target}"));
+
+            // And it shows what the reward IS.
+            var chips = vm.RewardChipsFor("daily.combat@today");
+            Assert.That(chips.Count, Is.EqualTo(2));
+            Assert.That(chips[0].Kind, Is.EqualTo(RumorBoardVM.RewardKind.Crystals));
+            Assert.That(chips[0].Amount, Is.EqualTo(40));
+            Assert.That(chips[1].Kind, Is.EqualTo(RumorBoardVM.RewardKind.Wisdom));
+
+            // The CLAIM door routes to the ONE payer, and the row leaves once it is paid.
+            vm.Invoke("daily.combat@today");
+            Assert.That(b.ClaimCalls, Is.EqualTo(1), "Invoke must route a Claimable row to the claim path");
+            Assert.That(vm.ClaimableCount, Is.EqualTo(0));
+            Assert.That(vm.Status, Does.Contain("Claimed"));
+        }
+
+        [Test]
+        public void the_board_and_the_counter_read_the_same_claimable_predicate()
+        {
+            // The disagreement itself: the counter counted Completed && ClaimedAtUnix == 0 over
+            // today's dailies. The board must count the SAME set - not a set of its own.
+            var b = Seed();
+            b.DailyQuests.Add(ClaimableDaily("d1", "combat", "A"));
+            b.DailyQuests.Add(ClaimableDaily("d2", "exploration", "B"));
+            var paid = ClaimableDaily("d3", "wildcard", "C");
+            paid.ClaimedAtUnix = 99;                       // already paid - not claimable
+            b.DailyQuests.Add(paid);
+            var unfinished = ClaimableDaily("d4", "wildcard", "D");
+            unfinished.Completed = false;                  // not finished - not claimable
+            b.DailyQuests.Add(unfinished);
+
+            using var vm = new RumorBoardVM(b, null);
+
+            int counterWouldSay = 0;
+            foreach (var q in b.DailyQuests) if (DailyQuestService.IsClaimable(q)) counterWouldSay++;
+
+            Assert.That(counterWouldSay, Is.EqualTo(2));
+            Assert.That(vm.ClaimableCount, Is.EqualTo(counterWouldSay),
+                "the board's claimable count IS the counter's number - one authority, not two lists");
+        }
+
+        [Test]
+        public void a_claim_that_credits_nothing_keeps_the_row_and_says_why()
+        {
+            // WO-978: a full town bank pays zero and does NOT latch. The row must survive and the
+            // player must be told - a door that silently does nothing is worse than no door.
+            var b = Seed();
+            b.DailyQuests.Add(ClaimableDaily("d1", "combat", "A"));
+            b.SlotRewards["combat"] = new DailyQuestSlotReward { Slot = "combat", RewardFood = 500 };
+            b.ClaimPaysNothing = true;
+
+            using var vm = new RumorBoardVM(b, null);
+            vm.Invoke("d1");
+
+            Assert.That(vm.ClaimableCount, Is.EqualTo(1), "an unpaid claim stays claimable");
+            Assert.That(vm.Status, Does.Contain("stores"), "the refusal names a reason the player can act on");
+        }
+
+        [Test]
+        public void an_active_quest_is_a_row_with_its_current_objective_and_a_go_to_door()
+        {
+            var b = Seed();                                     // q_active is ACTIVE in the seed
+            b.Objectives["q_active"] = "Speak to Brom at the market.";
+
+            using var vm = new RumorBoardVM(b, null);
+
+            Assert.That(vm.ActiveCount, Is.EqualTo(1));
+            Assert.That(vm.KindOf("q_active"), Is.EqualTo(RumorBoardVM.BoardRowKind.Active));
+            Assert.That(vm.ActionLabelFor("q_active"), Is.EqualTo(RumorBoardVM.GoToLabel));
+            Assert.That(vm.ObjectiveFor("q_active"), Is.EqualTo("Speak to Brom at the market."),
+                "the CURRENT beat, which is the half 'no idea what to do' was actually asking for");
+
+            var ids = new List<string>();
+            foreach (var r in vm.Rows) ids.Add(r.Id);
+            Assert.That(ids, Does.Contain("q_active"), "work underway is ON the board now");
+            Assert.That(ids, Does.Not.Contain("q_done"), "finished work still leaves it");
+
+            // No panel destination -> the honest fallback is to PIN it, never a dead button.
+            vm.Invoke("q_active");
+            Assert.That(b.TrackedId, Is.EqualTo("q_active"));
+            Assert.That(vm.Status, Does.Contain("Tracking"));
+        }
+
+        [Test]
+        public void the_quiet_copy_is_gated_on_the_whole_list_not_on_the_page()
+        {
+            // RED TODAY (WO-1521 acceptance): the View gated "The board is quiet." on the PAGE
+            // being empty. IsQuiet is the LIST, so the copy can never paint over real work.
+            var b = new FakeBackend();
+            using var empty = new RumorBoardVM(b, null);
+            Assert.That(empty.IsQuiet, Is.True, "nothing anywhere - the board really is quiet");
+
+            var withWork = new FakeBackend();
+            withWork.DailyQuests.Add(ClaimableDaily("d1", "combat", "A"));
+            using var vm = new RumorBoardVM(withWork, null);
+            Assert.That(vm.IsQuiet, Is.False);
+            vm.NextPage();
+            Assert.That(vm.IsQuiet, Is.False, "paging never makes a non-empty board 'quiet'");
         }
 
         [Test]

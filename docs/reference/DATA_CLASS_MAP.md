@@ -668,7 +668,7 @@ and `ActionBarButtonId` (`HudActionBarModel.cs:62-69` — the View's face arrays
 |---|---|
 | `deco_torch` (`type: Decoration`) | `Decoration` is in **no** `build-categories.json` row and `CatalogType.Decoration` appears in no runtime code (only a regression oracle, `Assets/Editor/Regression/CoreCatalogRegression.cs:84`). Yet it is priced as buildable — "the cheapest is deco_torch at 5 wood" (`Assets/_Modules/Core/Catalog/BuildTimerConfig.cs:121`). **Priced to build, unreachable from every palette.** |
 | `repair_default` (`type: Decoration`) | **Not a structure at all** — a price-table row read by `WallRepairController` (`Assets/_Modules/Village/Walls/WallRepairController.cs:532`, `:682`). `BuildCardArtRegression.cs:67` excludes it explicitly as "a repair-economy DATA row, not a building". `type: Decoration` here means "keep out of palettes", which is a third meaning for axis A. |
-| `Collector` (3 rows) + `Support` (2 rows) | fall to the generic default in `StructureCardVM.cs:223` — 5 of 29 rows show "A village structure." instead of authored copy |
+| ~~`Collector` (3 rows) + `Support` (2 rows)~~ | **SUPERSEDED 2026-09-06 (WO-1565).** The type-level fallback prose in `StructureCardVM.DescriptionFor` is DELETED; every buildable row now carries an authored `description` and an unauthored one FAILS `BuildEconomyRegression` `[structure-descriptions]` (`Assets/Editor/Regression/BuildEconomyRegression.cs:235`). No row shows "A village structure." from that seam any more. |
 
 ### 9.6 Code that has drifted from its cited source
 

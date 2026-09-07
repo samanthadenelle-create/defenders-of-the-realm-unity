@@ -1,6 +1,6 @@
 # WO-1499: the welcome-back header says "(STORAGE FULL)" when the subject is the 10-hour away-window ceiling
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** `Assets/_Modules/Village/Harvest/WelcomeBackPopup.cs` + `AwaySummaryReportRegression`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1499 -> 1500 in the same edit).

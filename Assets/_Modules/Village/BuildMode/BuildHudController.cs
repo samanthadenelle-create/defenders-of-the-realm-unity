@@ -565,9 +565,15 @@ namespace DeNelle.Village
                 FontStyles.Bold, TextAlignmentOptions.Center,
                 new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f));
             _placeName.raycastTarget = false;
-            // ONE LINE. The first capture wrapped "Arcane Spire - 88 wood, 88 iron, 187
-            // crystals" onto two lines and pushed it out of the pill. A long name shrinks to
-            // fit rather than escaping its own background.
+            // ONE LINE. The first capture wrapped a long name-plus-cost pill onto two lines
+            // and pushed it out of its own background. A long name shrinks to fit rather than
+            // escaping the plate.
+            // CORRECTION 2026-09-06 (WO-1478): this comment used to QUOTE the wrapping string
+            // verbatim. That string was a HARNESS STUB hardcoded in Assets/Editor/
+            // UICaptureLaunch.cs -- a wood+iron+crystals basket the catalog has never held (the
+            // authored Arcane Spire row is iron 360) and a shape WO-947 forbids. Quoting it here
+            // gave a fabricated basket a second home in runtime code, so the numbers are gone and
+            // only the geometry lesson -- which was always the real point -- remains.
             _placeName.textWrappingMode = TextWrappingModes.NoWrap;
             _placeName.enableAutoSizing = true;
             _placeName.fontSizeMin = 14f;

@@ -207,6 +207,20 @@ namespace DeNelle.Village
             return Physics.Linecast(fPos, target.WorldPosition, _structureMask, QueryTriggerInteraction.Ignore);
         }
 
+        /// <summary>
+        /// WO-1524 — the side these target scans strike FROM, handed to
+        /// <see cref="CombatFactionRules"/> so friend-or-foe is answered by the ONE authority
+        /// instead of the four inline <c>Faction != CombatFaction.Hostile</c> copies that used
+        /// to live in this file (that predicate's header forbids the copy).
+        ///
+        /// A LITERAL, and here it is uncontroversial: <see cref="TowerCombat"/> is the
+        /// player-tower firing brain and carries no faction of its own — the EnemyOwned
+        /// garrison path never runs through it. <see cref="CombatFaction"/> has exactly two
+        /// members (IDamageable.cs:28-34), so <c>MayAttack(Friendly, t)</c> is bit-for-bit the
+        /// old <c>t != null &amp;&amp; t.IsAlive &amp;&amp; t.Faction != Hostile</c>.
+        /// </summary>
+        private const CombatFaction ScanSide = CombatFaction.Friendly;
+
         private IDamageable FindNearestTarget(float range)
         {
             if (_wave == null) { ResolveWave(); if (_wave == null) return null; }
@@ -226,7 +240,9 @@ namespace DeNelle.Village
                 float sq = HorizontalSqr(enemy.transform.position, myPos);
                 if (sq > maxSq || sq >= bestSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // WO-1524: one authority. MayAttack folds null + IsAlive + faction. `dmg` is
+                // EnemyDamageable, which implements IDamageable only — no overload ambiguity.
+                if (!CombatFactionRules.MayAttack(ScanSide, dmg)) continue;
                 // Air/ground matrix: skip an enemy this tower's layer can't reach.
                 if (!CanHit(dmg)) continue;
                 // LoS gate: a wall between the tower and the enemy blocks the shot.
@@ -240,7 +256,9 @@ namespace DeNelle.Village
             // implements IDamageable directly. So the ground-roster scan above can never
             // see it. Consider it here through the Core seam (Village->Core is allowed).
             var boss = _wave?.LiveApexBoss;
-            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
+            // WO-1524: one authority — MayAttack folds the null + IsAlive + faction triple that
+            // was spelled out inline here. The (IDamageable) cast is kept from the original.
+            if (CombatFactionRules.MayAttack(ScanSide, (IDamageable)boss)
                 && CanHit(boss)   // air/ground matrix: the dragon flies — anti-air / both only
                 && !BlockedByWall((IDamageable)boss))   // LoS: don't shoot the boss through a wall
             {
@@ -280,7 +298,8 @@ namespace DeNelle.Village
                 float sq = HorizontalSqr(enemy.transform.position, myPos);
                 if (sq > maxSq) continue;
                 var dmg = enemy.GetComponent<EnemyDamageable>();
-                if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
+                // WO-1524: one authority (see FindNearestTarget) — null + IsAlive + faction.
+                if (!CombatFactionRules.MayAttack(ScanSide, dmg)) continue;
                 // Air/ground matrix: don't pick a target this tower can't actually hit.
                 if (!CanHit(dmg)) continue;
                 // LoS gate: a wall between the tower and the enemy blocks the shot.
@@ -291,7 +310,8 @@ namespace DeNelle.Village
             // WO-125 Bug 2 (mirror): also weigh the apex dragon for TrueAim's
             // highest-HP pick — it's the biggest health pool on the field by far.
             var boss = _wave?.LiveApexBoss;
-            if (boss != null && boss.IsAlive && ((IDamageable)boss).Faction == CombatFaction.Hostile
+            // WO-1524: one authority — MayAttack folds null + IsAlive + faction.
+            if (CombatFactionRules.MayAttack(ScanSide, (IDamageable)boss)
                 && CanHit(boss))   // air/ground matrix: anti-air / both only
             {
                 float bsq = HorizontalSqr(((IDamageable)boss).WorldPosition, myPos);

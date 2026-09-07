@@ -101,6 +101,76 @@ function Exit-F8Lock($m) {
     try { $m.Dispose() } catch { }
 }
 
+# -- heartbeat: WO-1460 -------------------------------------------------------------------------
+# WHY: on 2026-09-06 the device bridge ran all day, read every line of the phone's break-log, and
+# published NOTHING after 13:42:43Z because its kind+message dedupe suppressed all 319 later signal
+# entries. The inbox therefore looked IDENTICAL to a dead daemon. There was no way to tell "healthy
+# and quiet" from "stopped" - which is the exact blindness CLAUDE.md section 14 exists to end.
+# A heartbeat makes silence MEASURABLE: each producer stamps its own section every ~30s with its
+# pid, the last device/log line it has consumed, and why it published nothing.
+# HEARTBEAT.json is a SIBLING of PING.json on purpose - PING.json is the newest-capture VIEW and
+# its shape is a contract (f8-poll-rewake.ps1 parses .seq); liveness must not ride on it.
+function Write-F8Heartbeat([string]$Inbox, [string]$Producer, $Fields) {
+    $path = Join-Path $Inbox 'HEARTBEAT.json'
+    $m = Enter-F8Lock
+    try {
+        $obj = $null
+        if (Test-Path $path) { try { $obj = Get-Content $path -Raw | ConvertFrom-Json } catch { $obj = $null } }
+        $producers = @{}
+        if ($obj -and $obj.producers) {
+            foreach ($prop in $obj.producers.PSObject.Properties) {
+                if ([string]$prop.Name -eq $Producer) { continue }
+                $producers[[string]$prop.Name] = $prop.Value
+            }
+        }
+        $entry = @{ pid = $PID; updatedUtc = (Get-Date).ToUniversalTime().ToString('o') }
+        if ($Fields) { foreach ($k in @($Fields.Keys)) { $entry[[string]$k] = $Fields[$k] } }
+        $producers[$Producer] = $entry
+        $out = @{
+            note       = 'WO-1460 liveness only. Each producer stamps its own section every ~30s. Not triage state.'
+            updatedUtc = (Get-Date).ToUniversalTime().ToString('o')
+            producers  = $producers
+        }
+        Write-F8Text $path ($out | ConvertTo-Json -Depth 6)
+    } catch { } finally { Exit-F8Lock $m }
+}
+
+# Returns @{ Exists=bool; Producers=@( @{ name; pid; ageSec; updatedUtc; alive; detail; lastDeviceUtc } ) }
+function Get-F8Heartbeat([string]$Inbox) {
+    $path = Join-Path $Inbox 'HEARTBEAT.json'
+    $res = @{ Exists = $false; Producers = @() }
+    if (-not (Test-Path $path)) { return $res }
+    $obj = $null
+    try { $obj = Get-Content $path -Raw | ConvertFrom-Json } catch { return $res }
+    if (-not $obj -or -not $obj.producers) { return $res }
+    $res.Exists = $true
+    $now = (Get-Date).ToUniversalTime()
+    $list = @()
+    foreach ($prop in $obj.producers.PSObject.Properties) {
+        $v = $prop.Value
+        $age = -1
+        try { $age = [int]([Math]::Round(($now - ([datetime]::Parse([string]$v.updatedUtc)).ToUniversalTime()).TotalSeconds)) } catch { $age = -1 }
+        $procPid = 0
+        try { $procPid = [int]$v.pid } catch { $procPid = 0 }
+        $alive = $false
+        if ($procPid -gt 0) {
+            $p = Get-Process -Id $procPid -ErrorAction SilentlyContinue
+            if ($p) { $alive = $true }
+        }
+        $list += @{
+            name          = [string]$prop.Name
+            pid           = $procPid
+            ageSec        = $age
+            updatedUtc    = [string]$v.updatedUtc
+            alive         = $alive
+            detail        = [string]$v.detail
+            lastDeviceUtc = [string]$v.lastDeviceUtc
+        }
+    }
+    $res.Producers = @($list | Sort-Object { $_.name })
+    return $res
+}
+
 function Get-F8PingSeq([string]$Inbox) {
     $p = Get-F8Paths $Inbox
     if (-not (Test-Path $p.Ping)) { return 0 }

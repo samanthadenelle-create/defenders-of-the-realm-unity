@@ -80,6 +80,9 @@ namespace DeNelle.Editor
         // --- ALLOW-LIST — sanctioned files that read/push state by design (by file name). ---
         // The reflection *HudBridge PUSH seam (Village pushes INTO HUD) is sanctioned and matched
         // by the "HudBridge.cs" SUFFIX rule below (not enumerated). These are the non-suffix ones.
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - non-suffix files sanctioned to read/push state
+        // directly (dev-only overlays outside MVVM scope). Sanctioned-by-design is still a file
+        // list that rots on a rename or a promotion to shipped UI, so re-read every entry then.
         private static readonly Dictionary<string, string> AllowList = new Dictionary<string, string>
         {
             // Dev-only tools — reflected reads, not shipped player UI (out of MVVM scope, §3 leverage).
@@ -127,6 +130,48 @@ namespace DeNelle.Editor
 
         // Files ending with this suffix are the sanctioned reflection PUSH seam (Village -> HUD).
         private const string HudBridgeSuffix = "HudBridge.cs";
+
+        // =====================================================================
+        //  WO-1512 — ECONOMY MUTATION FROM A VIEW (the second oracle in this file)
+        // ---------------------------------------------------------------------
+        // The scan above catches a View that READS game state. It cannot catch a View that SPENDS
+        // or MINTS, because a spend routes through a service and so looks like ordinary delegation.
+        // That gap is what WO-1512 was raised on: ObsidianQueueHud invoked three spend verbs and
+        // decided the price and the ad gate for each; ArmyMusterPanel owned the staged army as a
+        // static field; RedeemCodePanel transacted against the promo backend. All three "routed
+        // through a service" and all three passed this gate.
+        //
+        // THE RULE: a file named *Panel.cs or *Hud.cs must not NAME an economy mutation verb. The
+        // verb belongs on a ViewModel or a service; the View routes a tap to a command and paints
+        // the answer. Naming, not calling, is the test on purpose — a source lint cannot resolve a
+        // call graph, and a View that so much as quotes a spend verb is already deciding when the
+        // player may be asked for money.
+        //
+        // ⛔ THE ALLOW-LIST ABOVE APPLIES HERE TOO. Dev-only overlays (AdminOverlay,
+        // OwnerDevToolsOverlay, ResourceDevTool) mint by design and are out of MVVM scope — their
+        // protection is compile-stripping (the WO-1512 #if narrowing), not this lint.
+        //
+        // RED RECIPE (how to prove this oracle is not hollow): put
+        // `svc.TryBuySlot(channel, out string failure)` back into ObsidianQueueHud.OnBuySlot.
+        private static readonly Regex[] EconomyMutationVerbs =
+        {
+            new Regex(@"\bGrantSpendable\w*\s*\(", RegexOptions.Compiled),
+            new Regex(@"\bAdd(Coins|Crystals|Gold|Wisdom)\s*\(", RegexOptions.Compiled),
+            new Regex(@"\bTry(BuySlot|InstantFinish|Spend\w*|Purchase\w*)\s*\(", RegexOptions.Compiled),
+            new Regex(@"\bSpend(Coins|Crystals|Gold|Resources)\s*\(", RegexOptions.Compiled),
+            new Regex(@"\bWatchAdToSkip\s*\(", RegexOptions.Compiled),
+            new Regex(@"\bRedeemAsync\s*\(", RegexOptions.Compiled),
+            // The training order is a GOLD SPEND (ArmyMusterService.Muster debits per unit queued),
+            // and it is the verb ArmyMusterPanel used to run against a composition it owned. Listed
+            // explicitly because nothing else in this list would have matched it — an oracle that
+            // cannot go red on one of the three files the WO was raised on is a hollow oracle.
+            new Regex(@"\bArmyMusterService\s*\.\s*Muster\s*\(", RegexOptions.Compiled),
+        };
+
+        /// <summary>The sanctioned receiver: a verb invoked on the View's ViewModel field is the
+        /// FIX, not the defect (see ScanEconomyMutations). Conventional, and deliberately narrow —
+        /// naming a service field `_vm` to dodge this lint is a knowing evasion, not a false pass.</summary>
+        private const string VmReceiver = "_vm.";
 
         // --- KNOWN BASELINE — the EXISTING offenders (tracked debt, non-failing). ---
         // SEED FROM THE FIRST REAL RUN (see header): starts empty; the run's reason lists every
@@ -228,12 +273,16 @@ namespace DeNelle.Editor
                     newOffenders.Add(rel + " -> " + string.Join(" ; ", hits.ToArray()));
             }
 
+            // WO-1512 — the economy-mutation half. Same file set, different question.
+            int spendScanned = ScanEconomyMutations(files, newOffenders);
+
             var resolved = new List<string>();
             foreach (var b in KnownBaseline)
                 if (!baselineHits.Contains(b)) resolved.Add(b);
 
             string summary = viewsScanned + " View file(s) scanned, " + vmRouted +
-                             " route through a ViewModel; " + baselineHits.Count +
+                             " route through a ViewModel; " + spendScanned +
+                             " *Panel/*Hud file(s) checked for economy mutation; " + baselineHits.Count +
                              " known-baseline offender(s) tracked as debt";
             if (resolved.Count > 0) summary += "; " + resolved.Count + " baseline file(s) resolved (refresh KnownBaseline)";
             if (notes.Count > 0) summary += " [notes: " + string.Join("; ", notes.ToArray()) + "]";
@@ -257,6 +306,77 @@ namespace DeNelle.Editor
                      " View(s) read game state without a ViewModel (report-only; flip HardFailOnNew to gate): " +
                      offenderList + " (" + summary + ")";
             return true;
+        }
+
+        /// <summary>
+        /// WO-1512 — source-lints every *Panel.cs / *Hud.cs under Assets/_Modules for an economy
+        /// MUTATION verb named in code (comment lines skipped, so the prose that explains the rule
+        /// is not itself a violation). Adds any hit to <paramref name="offenders"/>, which the
+        /// caller treats exactly like a NEW state-reading View: a HARD FAIL under HardFailOnNew.
+        /// Returns how many files were checked. Never throws.
+        /// </summary>
+        private static int ScanEconomyMutations(string[] files, List<string> offenders)
+        {
+            int scanned = 0;
+            if (files == null) return 0;
+
+            foreach (var path in files)
+            {
+                string fileName = Path.GetFileName(path);
+                string norm = path.Replace('\\', '/');
+
+                if (norm.IndexOf("/Tests/", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (norm.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+
+                // The subject is the WO's own wording: a *Panel / *Hud file. A ViewModel is not a
+                // View and is exactly where these verbs are supposed to live.
+                bool isViewFile = fileName.EndsWith("Panel.cs", StringComparison.OrdinalIgnoreCase) ||
+                                  fileName.EndsWith("Hud.cs", StringComparison.OrdinalIgnoreCase);
+                if (!isViewFile) continue;
+                if (AllowList.ContainsKey(fileName)) continue;
+                if (fileName.EndsWith(HudBridgeSuffix, StringComparison.OrdinalIgnoreCase)) continue;
+
+                string text;
+                try { text = File.ReadAllText(path); }
+                catch { continue; }
+
+                scanned++;
+
+                var hits = new List<string>();
+                var lines = text.Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string trimmed = lines[i].TrimStart();
+                    if (trimmed.StartsWith("//") || trimmed.StartsWith("*") || trimmed.StartsWith("/*")) continue;
+                    foreach (var rx in EconomyMutationVerbs)
+                    {
+                        var m = rx.Match(lines[i]);
+                        if (!m.Success) continue;
+                        // ROUTED-THROUGH-THE-VM EXEMPTION. `_vm.RedeemAsync(...)` is the fix, not the
+                        // defect — the whole point of WO-1512 is that a View calls its ViewModel and
+                        // the ViewModel owns the verb. Without this, the oracle would fail the very
+                        // shape it exists to require, and the only way to satisfy it would be to
+                        // rename the command away from the verb it performs.
+                        if (m.Index >= VmReceiver.Length &&
+                            string.CompareOrdinal(lines[i], m.Index - VmReceiver.Length,
+                                                  VmReceiver, 0, VmReceiver.Length) == 0)
+                            break;
+                        hits.Add((i + 1) + ":" + m.Value);
+                        break;
+                    }
+                }
+                if (hits.Count == 0) continue;
+
+                string rel = norm;
+                int idx = rel.IndexOf("Assets/", StringComparison.OrdinalIgnoreCase);
+                if (idx > 0) rel = rel.Substring(idx);
+
+                offenders.Add(rel + " MUTATES ECONOMY FROM A VIEW -> " + string.Join(" ; ", hits.ToArray()) +
+                              " (move the verb to a ViewModel command; the View routes the tap and paints " +
+                              "the answer - ARCHITECTURE_PRINCIPLES sections 1/2, WO-1512)");
+            }
+
+            return scanned;
         }
     }
 }

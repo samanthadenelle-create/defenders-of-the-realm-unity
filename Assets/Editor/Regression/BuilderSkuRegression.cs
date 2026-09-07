@@ -230,9 +230,14 @@ namespace DeNelle.Editor.Regression
             if (t.GetMethod("CanBuySlot", BindingFlags.Public | BindingFlags.Instance) == null)
                 failures.Add("[keep-both] BuildTimerService.CanBuySlot missing.");
 
-            string hud = ReadRepoFile(Path.Combine("Assets", "_Modules", "Village", "BuildMode", "ObsidianQueueHud.cs"));
-            if (hud != null && !hud.Contains("TryBuySlot"))
-                failures.Add("[keep-both] ObsidianQueueHud no longer names TryBuySlot -- crystal extra-slot lost its surface.");
+            // WO-1512: the work-queue surface's spend VERBS moved off the View onto its ViewModel
+            // (presentation never touches the objects). The subject of this pin is "the work-queue
+            // surface still offers the crystal extra slot", so it follows the seam to the VM. The
+            // View's +queue button is still what the player taps; it now routes through
+            // ObsidianQueueVM.BuySlot, which is what names TryBuySlot.
+            string queueVm = ReadRepoFile(Path.Combine("Assets", "_Modules", "Village", "BuildMode", "ObsidianQueueVM.cs"));
+            if (queueVm != null && !queueVm.Contains("TryBuySlot"))
+                failures.Add("[keep-both] ObsidianQueueVM no longer names TryBuySlot -- crystal extra-slot lost its surface.");
 
             string upgradeVm = ReadRepoFile(Path.Combine("Assets", "_Modules", "Village", "Buildings", "Progression", "BuildingUpgradeVM.cs"));
             if (upgradeVm != null && !upgradeVm.Contains("TryBuySlot"))

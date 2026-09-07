@@ -118,6 +118,55 @@ namespace DeNelle.Editor
         private const string DefaultScene = "Assets/Scenes/MainCastle_Hall.unity";
         private const string HeroStartName = "HeroStartPoint_PlayerSpawn";
 
+        // == STAGING (WO-1520) =================================================
+        //
+        // OWNER RULING 2026-09-06, verbatim: "battle for raids should start in some staging
+        // area outside of the attack range of everything so time starts on first engage. as
+        // soon as you spawn in you start dying without having even a second to deploy some
+        // troops."
+        //
+        // MEASURED BEFORE (raid-no-abilities-2026-09-06.log, 12:59:47): the carried hero was
+        // seated at [Flow:Hero] "re-homed carried hero (0.00, 0.08, -39.00) (seat=baked
+        // marker)" - i.e. HeroStartName at -(radius + 8) = -39 m on raider_camp_small
+        // (baseRadius 31). The outer turret band sits at radius - max(2.5, segW) ~ 28.4 m
+        // with a range cap of radius * 0.55 = 17.05 m, so its reach ends at ~45.4 m from the
+        // centre. -39 m is 6.4 m INSIDE that reach. The hero was under fire on frame one, and
+        // died at 45 s of a 180 s raid.
+        //
+        // SO: this builder now authors a SEPARATE staging marker whose distance is COMPUTED
+        // from the same numbers it used to place the threats, never picked by eye:
+        //   towerReach    = max over placed turrets of (|pos| + Range)      (PlaceTowers)
+        //   defenderReach = garrison ring + the AwarenessSensor radius      (see below)
+        //   staging       = max(towerReach, defenderReach) + StagingMargin
+        // and ASSERTS it. If the arena is too wide for the plane to hold a safe point, that
+        // is a FINDING about the layout (Debug.LogError, and the regression stays RED) - the
+        // assert is never softened. WO-1520 sec.3.
+        private const string StagingPointName = "RaidStagingPoint";
+
+        /// <summary>
+        /// Clear air between the staging marker and the furthest reach of ANY defender or
+        /// turret. Not a grace period (the owner explicitly refused a timer, WO-1520 sec.3) -
+        /// it is the slack that keeps a marker safe after a navmesh snap moves it a metre or
+        /// two, and after a defender takes one step outward.
+        /// </summary>
+        private const float StagingMargin = 6f;
+
+        /// <summary>
+        /// Keep the staging marker this far inside the RaidGround plane edge so it lands on
+        /// baked navmesh (RaidNavBake drops a 140 m plane; the very edge is not walkable).
+        /// </summary>
+        private const float StagingPlaneEdgeMargin = 4f;
+
+        /// <summary>
+        /// The defender perception radius the staging distance is computed against. MIRRORS
+        /// <c>AwarenessSensor._perceptionRadius</c> (Assets/_Modules/Village/Enemies/Perception/
+        /// AwarenessSensor.cs:82, default 20f) - a serialized private field an Editor script
+        /// cannot read without reflection. It is DUPLICATED STATE on purpose and therefore
+        /// PINNED: RaidStagingMarkerRegression re-reads that field's default out of the sensor
+        /// source and FAILS if the two ever disagree. Never bump one without the other.
+        /// </summary>
+        public const float DefenderPerceptionRadius = 20f;
+
         // Side index -> cardinal name, by the 90-degree-around-origin rot index (0=S,1=E,2=N,3=W).
         private static readonly string[] SideName = { "S", "E", "N", "W" };
 
@@ -323,6 +372,10 @@ namespace DeNelle.Editor
             heroStart.transform.SetParent(root, false);
             heroStart.transform.localPosition = new Vector3(0f, 0f, -(radius + 8f));
 
+            // -- STAGING (WO-1520). The point the hero seats at and troops deploy from,
+            //    PROVEN outside every turret's reach and every defender's awareness radius.
+            var staging = PlaceStagingMarker(root, def, radius, towerReport.MaxReach);
+
             Debug.Log(
                 $"[RaidBaseGenerator] '{root.name}' ({def.displayName}, {tier.Name}) BUILT: " +
                 $"radius {radius:F1}m (~{footprintPct:F0}% of the {MapHalfExtent * 2f:F0}m plane), " +
@@ -334,7 +387,120 @@ namespace DeNelle.Editor
                 $"(budget {tier.TowerDpsBudget:F0}, damage x{towerReport.DamageScale:F2}); " +
                 $"hero time-to-death {(towerReport.WorstDps > 0.01f ? (HeroBaseHp / towerReport.WorstDps).ToString("F1") : "inf")}s " +
                 $"@{HeroBaseHp:F0}HP / {(towerReport.WorstDps > 0.01f ? (HeroGearedHp / towerReport.WorstDps).ToString("F1") : "inf")}s " +
-                $"@{HeroGearedHp:F0}HP. BossSpawn @ -{bossOffset:F1}m, hero entry @ -{radius + 8f:F1}m.");
+                $"@{HeroGearedHp:F0}HP. BossSpawn @ -{bossOffset:F1}m, hero entry @ -{radius + 8f:F1}m, " +
+                $"STAGING @ {staging.Position} ({staging.Distance:F1}m out, {staging.Clearance:F1}m of clear air, " +
+                $"{(staging.Safe ? "SAFE" : "*** UNSAFE - see the error above ***")}).");
+        }
+
+        // =====================================================================
+        //  STAGING MARKER (WO-1520) - a PLACE outside everything's reach, not a timer.
+        // =====================================================================
+
+        /// <summary>What <see cref="PlaceStagingMarker"/> resolved, for the build log + the report.</summary>
+        private struct StagingReport
+        {
+            public Vector3 Position;
+            /// <summary>Distance from the arena centre to the marker.</summary>
+            public float Distance;
+            /// <summary>Required distance = max(tower reach, defender reach) + <see cref="StagingMargin"/>.</summary>
+            public float Required;
+            /// <summary>Metres between the marker and the nearest threat's outer edge (negative = inside it).</summary>
+            public float Clearance;
+            public float TowerReach;
+            public float DefenderReach;
+            public bool Safe;
+        }
+
+        /// <summary>
+        /// Author the staging marker at a point COMPUTED to sit outside every threat in this
+        /// base, and ASSERT it.
+        ///
+        /// <para>The two reaches:
+        /// <list type="bullet">
+        /// <item>TURRETS - <paramref name="towerMaxReach"/> is measured in PlaceTowers as
+        /// max(|position| + Range) over the turrets it actually placed, so it follows the
+        /// structures-catalog ranges and the arena's own range cap rather than a magic number.</item>
+        /// <item>DEFENDERS - RaidGarrisonSpawner seats its composition on a ring at
+        /// <c>max(2, baseRadius * 0.5)</c> (RaidGarrisonSpawner.cs:168) and every spawn carries an
+        /// AwarenessSensor with a <see cref="DefenderPerceptionRadius"/> scan, so the furthest a
+        /// defender can NOTICE anything is ring + radius. The boss sits further in, at BossSpawn.</item>
+        /// </list></para>
+        ///
+        /// <para>PLACEMENT: due south first (the outer ring's gate side, so the walk in is the
+        /// intended approach). A square 140 m plane holds more distance on its diagonal than on
+        /// its axis, so when the south axis cannot fit the required distance the marker moves to
+        /// the south-west diagonal, which is still on the baked ground. If even that cannot fit,
+        /// the marker is clamped to the furthest legal point and the shortfall is reported as a
+        /// <see cref="Debug.LogError"/> - a finding about the LAYOUT (the arena is too wide for
+        /// its plane), never a softened assert. WO-1520 sec.3.</para>
+        /// </summary>
+        private static StagingReport PlaceStagingMarker(Transform root, SceneConfigDef def,
+                                                        float radius, float towerMaxReach)
+        {
+            // Defenders: the spawner's own ring formula, then their perception radius on top.
+            float garrisonRing = Mathf.Max(2f, (def != null ? def.baseRadius : radius) * 0.5f);
+            garrisonRing = Mathf.Max(garrisonRing, radius * 0.5f);
+            float defenderReach = garrisonRing + DefenderPerceptionRadius;
+
+            float threatReach = Mathf.Max(towerMaxReach, defenderReach);
+            float required = threatReach + StagingMargin;
+
+            float axisBudget = MapHalfExtent - StagingPlaneEdgeMargin;              // straight south
+            float diagonalBudget = axisBudget * Mathf.Sqrt(2f);                     // south-west corner run
+
+            Vector3 pos;
+            float distance;
+            if (required <= axisBudget)
+            {
+                distance = required;
+                pos = new Vector3(0f, 0f, -distance);
+            }
+            else if (required <= diagonalBudget)
+            {
+                distance = required;
+                float leg = distance / Mathf.Sqrt(2f);
+                pos = new Vector3(-leg, 0f, -leg);
+                Debug.LogWarning($"[RaidBaseGenerator] '{(def != null ? def.id : root.name)}' needs {required:F1}m of " +
+                                 $"staging distance, which does not fit on the south axis ({axisBudget:F1}m budget) - " +
+                                 $"the marker moved to the SOUTH-WEST diagonal at {pos}. The arena is wide enough that " +
+                                 "the approach no longer lines up with the south gate; consider lowering baseRadius or " +
+                                 "the turret range cap.");
+            }
+            else
+            {
+                distance = diagonalBudget;
+                float leg = distance / Mathf.Sqrt(2f);
+                pos = new Vector3(-leg, 0f, -leg);
+                Debug.LogError($"[RaidBaseGenerator] STAGING ASSERT FAILED for '{(def != null ? def.id : root.name)}': " +
+                               $"a safe staging point needs {required:F1}m from the arena centre " +
+                               $"(turret reach {towerMaxReach:F1}m, defender reach {defenderReach:F1}m = ring " +
+                               $"{garrisonRing:F1}m + awareness {DefenderPerceptionRadius:F1}m, margin {StagingMargin:F1}m) " +
+                               $"but the {MapHalfExtent * 2f:F0}m RaidGround plane offers at most {diagonalBudget:F1}m. " +
+                               "The marker is clamped to that furthest legal point and the player WILL spawn under fire. " +
+                               "This is a finding about the BASE LAYOUT (baseRadius / turret range cap / RaidNavBake." +
+                               "GroundScale), not a number to soften - WO-1520 sec.3.");
+            }
+
+            var prior = root.Find(StagingPointName);
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+
+            var marker = new GameObject(StagingPointName);
+            marker.transform.SetParent(root, false);
+            marker.transform.localPosition = pos;
+            // Face the arena centre so anything that reads the marker's rotation (camera, the
+            // hero's landing pose) looks at the base rather than away from it.
+            marker.transform.localRotation = Quaternion.LookRotation((Vector3.zero - pos).normalized, Vector3.up);
+
+            return new StagingReport
+            {
+                Position = pos,
+                Distance = distance,
+                Required = required,
+                Clearance = distance - threatReach,
+                TowerReach = towerMaxReach,
+                DefenderReach = defenderReach,
+                Safe = distance >= threatReach,
+            };
         }
 
         // =====================================================================
@@ -451,6 +617,12 @@ namespace DeNelle.Editor
             public float WorstDps;
             public float DamageScale;
             public string TypeSummary;
+            /// <summary>
+            /// Furthest metre from the arena centre that ANY placed turret can shoot:
+            /// max over plans of (|Pos| + Range). WO-1520 computes the staging distance from
+            /// this instead of guessing a number.
+            /// </summary>
+            public float MaxReach;
         }
 
         /// <summary>One turret the builder is about to place (position + resolved stats).</summary>
@@ -584,6 +756,17 @@ namespace DeNelle.Editor
                 if (summary.Length > 0) summary.Append(", ");
                 summary.Append(kv.Value).Append('x').Append(kv.Key);
             }
+
+            // WO-1520: the furthest point any turret can reach, measured off the SAME plans
+            // that were just placed (position + resolved range) - the input to the staging
+            // distance. Computed here because this is the only place both are known.
+            float maxReach = 0f;
+            for (int i = 0; i < plans.Count; i++)
+            {
+                float reach = new Vector2(plans[i].Pos.x, plans[i].Pos.z).magnitude + plans[i].Range;
+                if (reach > maxReach) maxReach = reach;
+            }
+            report.MaxReach = maxReach;
 
             report.Placed = placed;
             report.WorstConcurrent = worstConcurrent;

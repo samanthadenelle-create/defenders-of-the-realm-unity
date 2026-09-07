@@ -191,9 +191,10 @@ namespace DeNelle.Village.UI
                 // named storage AND implied a reward had been taken away. Neither is true: the
                 // window cap means later hours never accrued, and nothing that DID accrue is
                 // ever discarded (see the proof block on OfflineHarvestService.BuildReturnRows).
-                // !! The header suffix "(STORAGE FULL)" in AwayTextFor carries the SAME wrong
-                // subject and is pinned by AwaySummaryReportRegression case8 (line 243), so it
-                // is left alone here rather than half-moved -- it needs its own pin move.
+                // WO-1499 (2026-09-06) -- THE HALF-MOVE IS NOW CLOSED. The header suffix in
+                // AwayTextFor said "(STORAGE FULL)" off this SAME `WasCapped` bit; it now reads
+                // "(AWAY LIMIT REACHED)" and the pin in AwaySummaryReportRegression case8 moved
+                // with it. Body line and header suffix finally name the one subject that is true.
                 var capped = ElarionUiKit.Label(body,
                     // No number here ON PURPOSE: the ceiling is OfflineHarvestService
                     // .OfflineCapHours, and a copy of it in this string is duplicated state that
@@ -676,11 +677,23 @@ namespace DeNelle.Village.UI
 
         private string AwayText() => AwayTextFor(_result.AwaySeconds, _result.WasCapped);
 
-        /// <summary>The whole summary line, exposed for the away-summary oracle.</summary>
+        /// <summary>
+        /// The whole summary line, exposed for the away-summary oracle.
+        /// <para>
+        /// WO-1499 (2026-09-06): the suffix names the AWAY WINDOW, not storage. `wasCapped` is
+        /// `window.ExceedsCap(OfflineCapHours)` (OfflineHarvestService:386) -- the away window hit
+        /// its ceiling, so later hours never accrued. It is not a bank-full signal, and the old
+        /// "(STORAGE FULL)" wording sent the player to upgrade storage for a ceiling that was TIME.
+        /// No hour number in the string ON PURPOSE (same reason as the body line above): the
+        /// ceiling is tiered in offline-storage.json, so a copy here is duplicated state.
+        /// A genuine bank-full state is said elsewhere in its own words --
+        /// OfflineHarvestService.ReturnRowDestiny emits "STORAGE FULL - STAYS PUT" per return row.
+        /// </para>
+        /// </summary>
         public static string AwayTextFor(double awaySeconds, bool wasCapped)
         {
             string span = FormatAwaySpan(awaySeconds);
-            return wasCapped ? $"YOUR REALM WORKED FOR {span} (STORAGE FULL)" : $"YOUR REALM WORKED FOR {span}";
+            return wasCapped ? $"YOUR REALM WORKED FOR {span} (AWAY LIMIT REACHED)" : $"YOUR REALM WORKED FOR {span}";
         }
 
         /// <summary>

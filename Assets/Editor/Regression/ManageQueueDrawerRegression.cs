@@ -256,11 +256,19 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[drawer-clear-of-card] the Troops drawer band is " + drawerPx + "px at 2670x1200, " +
                                  "under the " + need + "px a header and one verb row need - the first verb is " +
                                  "under the fold");
-                // Full-body mode: list zone 0.02-0.86 of a 0.82-well drawer must seat rail + header at rest.
-                float fullBodyList = 0.84f * (0.82f * wellRef) - 20f;   // 347
-                if (fullBodyList < rail + 8f + header)
-                    failures.Add("[drawer-clear-of-card] the full-body drawer list zone (" + fullBodyList +
-                                 "px) cannot seat the rail and the IN QUEUE header at rest - the header clips");
+                // ⛔ RETIRED 2026-09-06 (WO-1488), NOT DELETED, SO IT IS NOT RE-ADDED. This read
+                //     float fullBodyList = 0.84f * (0.82f * wellRef) - 20f;   // 347
+                //     if (fullBodyList < rail + 8f + header) ...
+                // and it asserted the full-body list could seat THE CARD RAIL. The rail was removed
+                // from the overlay in WO-1443 ("⛔ NO CARD RAIL IN THE OVERLAY"), and case 9 below
+                // now FAILS if it comes back - so this was demanding room for a control its own
+                // suite forbids. Worse, its three literals (0.84, 0.82, 533) were a THIRD copy of
+                // the drawer's rect: the panel authored -0.25..0.99 in one method and 0.02..0.84 in
+                // another, and the r24 log shows both (drawer=719px, drawer=475px). The rect is now
+                // ONE pair of constants and the [rows-inside-the-plate] case below reads them.
+                // `rail` is kept in scope above only so this note can name what it measured.
+                if (rail <= 0f)
+                    failures.Add("[drawer-clear-of-card] the rail height reference went missing");
             }
             if (!panel.Contains("DrawerModeListKeepPx = 10f + TroopWorkspacePx * (1f - TroopCtaY1)"))
                 failures.Add("[drawer-clear-of-card] DrawerModeListKeepPx is not derived from the card's CTA line - " +
@@ -378,11 +386,23 @@ namespace DeNelle.Editor.Regression
                                      "reserved for it inside the overlay holds nothing and costs the list a " +
                                      "whole row. Keep DrawerTitlePx at 0 and seat it with " +
                                      "SeatDrawerTitleOverlay");
-                    if (tabsPx <= 120f)
-                        failures.Add("[drawer-clear-of-card] the queue TAB band is " + tabsPx +
-                                     "px and must be LARGER than the 120px X it now contains. A band exactly " +
-                                     "its control's size leaves no margin and the X spills into its " +
-                                     "neighbours - measured once at 110x31px over 'RESEARCH 2/2'");
+                    // ⛔ RE-POINTED 2026-09-06 (WO-1488), WITH THE RULING, AND THE REASON IS KEPT
+                    // SO IT IS NOT MOVED BACK. It read
+                    //     if (tabsPx <= 120f) ... "must be LARGER than the 120px X it now contains"
+                    // which was correct only while the X lived in the tab band - and the capture
+                    // (ManageFlow_BUILD_queue_2670x1200.png, 18:39) shows exactly what that seat
+                    // cost: the X renders as a FOURTH TAB beside "RESEARCH 2/2", same row, same
+                    // face, same height. The X is now in the title overlay at the drawer's
+                    // top-right (mockup panel 8). The band keeps 132px because that is what its
+                    // FACES need, which the >= 112 case above already pins; asserting it against a
+                    // control that is no longer in it would forbid the fix.
+                    if (!panel.Contains("BuildObsidianButton(_drawerHeader, \"X\""))
+                        failures.Add("[drawer-clear-of-card] the queue overlay's X is not built into the TITLE " +
+                                     "OVERLAY. Seated in the tab band it reads as a fourth channel tab - a close " +
+                                     "control that looks like a channel is one the player taps to switch " +
+                                     "channels (measured 2026-09-06, beside 'RESEARCH 2/2')");
+                    if (panel.Contains("BuildObsidianButton(_drawerTabs, \"X\""))
+                        failures.Add("[drawer-clear-of-card] the X is back in the queue tab strip");
                     if (!panel.Contains("private void SeatDrawerTitleOverlay()"))
                         failures.Add("[drawer-clear-of-card] SeatDrawerTitleOverlay is gone. A zero-height " +
                                      "title zone does not free space, it DELETES the word: TMP culls a line " +
@@ -455,6 +475,101 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[queue-door-in-workspace] ComposeQueueDoor no longer publishes an unconditionally " +
                                  "visible QUEUE door. Gating it on queue contents is what strands it while idle - " +
                                  "the state the owner was actually in when she captured this screen");
+            }
+
+            // ── 11 [rows-inside-the-plate] — WO-1488, MEASURED ──────────────────────────────────
+            // ⛔ THE ROWS WERE SEATED ON THE DRAWER'S RECT AND THE PLAYER SEES THE PLATE.
+            // EVIDENCE, Builds/ui-capture/ManageFlow_BUILD_queue_2670x1200.png (18:39): row 2's
+            // title, its CANCEL and its progress bar all paint BELOW the gold frame. And the log
+            // from the same round says the list was healthy:
+            //     MANAGE_QUEUE_LIST seats 2 whole rows: 292px of 307px  (Builds, r24)
+            // Both are true. The whole-row trim measures the list against ITSELF and the list was
+            // never wrong - it was seated 12px above the drawer's rect floor (`_drawerListY0 =
+            // gap`) while frames/content-panel draws SLICED with a 96px 9-slice border
+            // (content-panel.png.meta: spriteBorder {96,96,96,96}), so the visible interior floor
+            // is ~96px higher. Two whole rows, ~84px of them outside the frame. THE RECT AND THE
+            // ART WERE DIFFERENT RECTS, which is why every existing case passed over it.
+            //
+            // ⚠ THE REFERENCE HEIGHT IS MEASURED, NOT ASSUMED. well = 579px, from the r24 line
+            // `MANAGE_QUEUE_BANDS drawer=475px` divided by the 0.82 span that then rendered. The
+            // old wellRef 533 in case 8 above is a DIFFERENT, older capture and is left alone;
+            // mixing them is how this file's numbers drift.
+            //
+            // RED MUTATIONS (each fails this case):
+            //   * put `_drawerListY0 = gap;` back in SetDrawerBands
+            //   * drop the `Mathf.Min(..., 1f - plate)` ceiling term
+            //   * raise DrawerOverlayY1 back to 0.84 (the X's overlay row stops fitting)
+            //   * set DrawerOverlayY0 negative (the drawer hangs over CLOSE through 96px of
+            //     transparent margin - a visible button the drawer's raycast swallows)
+            //   * restore `FitSingleLine(state, 0f, QueueLineFontPx)` (the 30px kit floor, which
+            //     is what ellipsised "11m 0s left (0% do...")
+            {
+                const float wellPx = 579f;               // MEASURED: r24 drawer=475px / 0.82 span
+                const float minTouch = 112f;             // ElarionUiKit.MinTouchPx
+                float y0 = ConstOf(panel, "DrawerOverlayY0"), y1 = ConstOf(panel, "DrawerOverlayY1");
+                float inset = ConstOf(panel, "DrawerPlateInsetPx");
+                float overlay = ConstOf(panel, "DrawerTitleOverlayPx");
+                float tabsBand = ConstOf(panel, "DrawerTabsPx");
+                float bandGap = ConstOf(panel, "DrawerBandGapPx");
+                float rowPx = ConstOf(panel, "RowHeightPx");
+                float stateFloor = ConstOf(panel, "QueueStateFontFloorPx");
+                if (y0 < 0f || y1 < 0f || inset < 0f || overlay < 0f || tabsBand < 0f ||
+                    bandGap < 0f || rowPx < 0f || stateFloor < 0f)
+                    failures.Add("[rows-inside-the-plate] could not read the overlay's rect / plate / timer " +
+                                 "constants off the source - a scoped assertion that cannot find its scope " +
+                                 "FAILS, it never passes vacuously");
+                else
+                {
+                    float drawerPx = (y1 - y0) * wellPx;
+                    // floor = the plate's inner edge; ceiling = the tab row's underside.
+                    float listPx = drawerPx - inset - tabsBand - 2f * bandGap;
+                    if (listPx < rowPx + 20f)
+                        failures.Add("[rows-inside-the-plate] the overlay's list band is " + listPx +
+                                     "px INSIDE THE PLATE at well=" + wellPx + " - under the " + (rowPx + 20f) +
+                                     "px one row plus scroll padding needs, so not one row is fully visible at " +
+                                     "rest. Grow the overlay; never push the band back over the frame art");
+                    float overlayRoom = (1f - y1) * wellPx;
+                    if (overlayRoom < overlay)
+                        failures.Add("[rows-inside-the-plate] the drawer's ceiling (" + y1 + ") leaves " +
+                                     overlayRoom + "px above it for a " + overlay + "px title overlay - the X " +
+                                     "spills out of the panel, or slides back into the tab strip where the " +
+                                     "capture caught it reading as a fourth tab");
+                    if (overlay < minTouch)
+                        failures.Add("[rows-inside-the-plate] the title overlay is " + overlay +
+                                     "px and cannot seat a MinTouchPx (" + minTouch + ") X. That is the exact " +
+                                     "reason the X was in the tab band at 56px");
+                    if (y0 < 0f)
+                        failures.Add("[rows-inside-the-plate] the overlay hangs below the well (" + y0 +
+                                     "). The plate's bottom " + inset + "px is TRANSPARENT margin, so the shared " +
+                                     "CLOSE renders through it while the drawer's raycast eats the tap");
+                    if (stateFloor < 20f || stateFloor > 26f)
+                        failures.Add("[rows-inside-the-plate] the queue timer's autosize floor is " + stateFloor +
+                                     "px. Below ElarionUiKit.FontHardFloor (20) the kit clamps it back up and the " +
+                                     "line ellipsises again; above ~26 the longest queued string " +
+                                     "(\"Queued - 3rd in line (12h 30m of work)\", ~24px) still clips");
+                }
+                if (panel.Contains("_drawerListY0 = gap"))
+                    failures.Add("[rows-inside-the-plate] the row band is seated off the drawer's RECT again " +
+                                 "(_drawerListY0 = gap). The player sees the sliced PLATE, whose interior is " +
+                                 inset + "px inside that rect - this is the 2026-09-06 row-2 overhang exactly");
+                if (!panel.Contains("_drawerListY0 = plate;") ||
+                    !panel.Contains("Mathf.Min(_drawerTabsY0 - gap, 1f - plate)"))
+                    failures.Add("[rows-inside-the-plate] the list band is not bounded by the plate on BOTH " +
+                                 "edges. A row can cross the frame's top as easily as its bottom");
+                if (!panel.Contains("plateSprite.border"))
+                    failures.Add("[rows-inside-the-plate] the plate inset is no longer MEASURED off the live " +
+                                 "sprite's 9-slice border. A copy of 96 in this file is a copy of a number that " +
+                                 "lives in content-panel.png.meta - the duplicated state this screen keeps " +
+                                 "paying for");
+                if (!panel.Contains("FitSingleLine(state, QueueStateFontFloorPx, QueueLineFontPx)"))
+                    failures.Add("[rows-inside-the-plate] the queue row's timer line is not fitted to its own " +
+                                 "floor. `0f` resolves to the kit's FontFloor (30) against a 32px max - two " +
+                                 "points of headroom, which is what truncated \"11m 0s left (0% do...\"");
+                if (Count(panel, "DrawerOverlayY0") < 3 || Count(panel, "DrawerOverlayY1") < 3)
+                    failures.Add("[rows-inside-the-plate] the overlay's rect is not read from the shared " +
+                                 "constants by BOTH writers. BuildQueueDrawer authored -0.25..0.99 and " +
+                                 "ApplyDrawerPlacement 0.02..0.84, and the r24 log carries both drawer heights " +
+                                 "(719px and 475px) - one rect, two numbers, and the estimate described neither");
             }
 
             reason = failures.Count == 0

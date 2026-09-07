@@ -6,8 +6,9 @@
 // DESTROYED by enemies is LOST — NO in-place repair, the object + its bound NPC
 // are removed, the player rebuilds fresh at FULL cost.
 //
-// STANDALONE oracle (deliberately NOT wired into DataRegression.RunAll — the
-// orchestrator wires the marker line noted in the WO report). Invoked via:
+// REGISTERED in DataRegression.RunAll (the [destroyed-structure] line) — this header
+// claimed the opposite until WO-1496 (2026-09-06) re-read the registry and found the
+// registration already there. Also invokable standalone via:
 //   run-unity-method.ps1 -Method DeNelle.Editor.DestroyedStructureRegression.RunStandalone
 //                        -LogName destroyed-structure.log
 // Contract mirrors the other suites: public static bool Run(out string reason);
@@ -56,13 +57,18 @@ namespace DeNelle.Editor
             var failures = new List<string>();
             var log = new StringBuilder();
             var created = new List<GameObject>();
+            // WO-1496: notes ride out on the REASON string, not just this log. Section C stands
+            // down in edit-mode batch, and until now it did so with a bare `return` into a local
+            // StringBuilder the caller never reads - so the suite reported a full green while one
+            // of its four probes had asserted nothing. The stand-down is now DECLARED.
+            var notes = new List<string>();
             log.AppendLine("=== DestroyedStructureRegression (WO-753): destroyed = lost, no repair, rebuild full-cost ===");
 
             try
             {
                 ProbeRepairNoOp(created, failures, log);
                 ProbeRepairAllExclusion(created, failures, log);
-                ProbeObjectRemoval(created, failures, log);
+                ProbeObjectRemoval(created, failures, log, notes);
                 ProbeRebuildCardState(failures, log);
             }
             catch (System.Exception ex)
@@ -75,7 +81,7 @@ namespace DeNelle.Editor
                     if (go != null) Object.DestroyImmediate(go);
             }
 
-            return Verdict(failures, log, out reason);
+            return Verdict(failures, log, notes, out reason);
         }
 
         // =====================================================================
@@ -200,13 +206,23 @@ namespace DeNelle.Editor
         // =====================================================================
         //  C. Object + bound vendor removed on death (Points 1/2) — PLAY MODE ONLY
         // =====================================================================
-        private static void ProbeObjectRemoval(List<GameObject> created, List<string> failures, StringBuilder log)
+        private static void ProbeObjectRemoval(List<GameObject> created, List<string> failures, StringBuilder log,
+                                               List<string> notes)
         {
             if (!Application.isPlaying)
             {
-                log.AppendLine("  ObjectRemoval: SKIPPED (edit-mode batch) — Destructible.NotifyBroken removal needs the " +
-                               "live PlacementGrid/GameStateService singletons (Awake runs only in play mode) and a runtime " +
-                               "Destroy. Drive from the AutoPilot/play harness to assert grid-free + record-drop + vendor despawn.");
+                // WO-1496: a DECLARED stand-down (RegressionOutcome.PartialSkip), not a prose line
+                // in a log the caller drops. The note is carried out on the reason string so the
+                // registered [destroyed-structure] line names the hole; the suite still counts
+                // green because its other three probes DID assert. PartialSkip is correct here
+                // rather than Skip: this is one section standing down, not the whole suite.
+                string note = DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[destroyed-structure] C. object + bound-vendor removal",
+                    "edit-mode batch — Destructible.NotifyBroken removal needs the live PlacementGrid/" +
+                    "GameStateService singletons (Awake runs only in play mode) and a runtime Destroy; " +
+                    "drive from the AutoPilot/play harness to assert grid-free + record-drop + vendor despawn");
+                log.AppendLine("  " + note);
+                if (notes != null) notes.Add(note);
                 return;
             }
 
@@ -345,13 +361,15 @@ namespace DeNelle.Editor
         // =====================================================================
         //  Verdict + markers
         // =====================================================================
-        private static bool Verdict(List<string> failures, StringBuilder log, out string reason)
+        private static bool Verdict(List<string> failures, StringBuilder log, List<string> notes, out string reason)
         {
             if (failures.Count == 0)
             {
                 reason = "DESTROYED STRUCTURE OK — Repair() no-ops on every destroyed tower/spire/collector/wall, " +
                          "the Repair-All exclusion predicates (IsBroken / DamageFraction>=DestroyedFraction) fire on destroyed structures, " +
                          "and the WO-843 rebuild-card state holds (twin-only => card buildable at full cost)";
+                if (notes != null && notes.Count > 0)
+                    reason += " || " + string.Join(" || ", notes.ToArray());
                 Debug.Log("DESTROYED_STRUCTURE_OK\n" + log);
                 return true;
             }

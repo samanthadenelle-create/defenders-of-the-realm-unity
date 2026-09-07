@@ -17,6 +17,7 @@
 // =============================================================================
 
 using UnityEngine;
+using DeNelle.Core.Diagnostics;   // WO-1530 — the PERMANENT [Flow:EnemyScale] spawn measurement
 // EnemyDef lives in the parent namespace DeNelle.Village, visible here because
 // DeNelle.Village.World.Camps nests under it.
 
@@ -144,6 +145,39 @@ namespace DeNelle.Village.World.Camps
                     Debug.LogWarning($"[GarrisonStatBlocks] Unknown recipe enemy id '{id}' — using a generic brute (EnemyFactory will model-map or capsule-fallback it).");
                     return BuildGenericDef(id, id, "troll", "brute", "charger", 220f, 2.0f, 11f, 1.6f, 2.2f, 26);
             }
+        }
+
+        // =====================================================================
+        // WO-1530 — THE ONE PERMANENT SPAWN MEASUREMENT. Every garrison/raid defender
+        // passes through here immediately before EnemyFactory.Build, so a single
+        // [Flow:EnemyScale] line names the WHOLE chain the player actually meets:
+        //
+        //   built   = BuildTypedDef/BuildTrollDef/BuildStonebellyDef output. ALREADY
+        //             carries GlobalDifficultyMult (x1.2) folded in by the builder —
+        //             it is NOT the authored literal, and is deliberately NOT divided
+        //             back out here (measure, never reconstruct).
+        //   lvl     = after ApplyLevelScale(def, level).
+        //   final   = after the caller's own folds (RaidGarrisonSpawner.FoldDifficulty,
+        //             the boss HP/damage multipliers). Read straight off the def that
+        //             is handed to EnemyFactory.
+        //
+        // PERMANENT instrumentation (CLAUDE.md §12) — flag it off, never strip it.
+        // =====================================================================
+        public static void TraceSpawnScale(string context, EnemyDef def, int level,
+            float builtHp, float builtDmg, float leveledHp, float leveledDmg)
+        {
+            if (def == null) return;
+            FlowTrace.Step("EnemyScale",
+                (string.IsNullOrEmpty(context) ? "spawn" : context) +
+                " id='" + def.Id + "' name='" + def.Name + "' lv=" + level +
+                " | hp built=" + builtHp.ToString("0.#") +
+                " -> lvl=" + leveledHp.ToString("0.#") +
+                " -> final=" + def.Hp.ToString("0.#") +
+                " | dmg built=" + builtDmg.ToString("0.##") +
+                " -> lvl=" + leveledDmg.ToString("0.##") +
+                " -> final=" + def.ContactDamage.ToString("0.##") +
+                " | built already includes GlobalDifficultyMult x" +
+                GlobalDifficultyMult.ToString("0.##"));
         }
 
         public static EnemyDef BuildGenericDef(string id, string display, string family, string role,

@@ -65,6 +65,32 @@ namespace DeNelle.Editor.Regression
                 new[] { "OnDisable", "OnDestroy" }),
             ("Assets/VfxParade/Runtime/VfxParadeRuntime.cs",             "vfx-parade-curation",
                 new[] { "OnEnable", "OnDisable", "OnDestroy" }),
+
+            // WO-1471 — the four player-paced modals WO-1360 §3 rows 14-17 deliberately LEFT on the
+            // bounded default because they dodged the ceiling with a per-frame WorldHold.Renew().
+            // That workaround was not enough: on the owner's device 'harvest-overflow-result' held
+            // the clock from 12:51:25.157 to 12:53:06.089 (101 s) inside the 152-line
+            // "WORLD CLOCK FROZEN timeScale=0.00 scene=Main_Castle_Overworld" run. Converted, and
+            // their Renew-every-frame Updates deleted — the enum replaces that pattern.
+            ("Assets/_Modules/Core/UI/HarvestOverflowModal.cs",          "harvest-overflow-result",
+                new[] { "OnDisable", "OnDestroy" }),
+            ("Assets/_Modules/Core/UI/FocusedModalHost.cs",              "focused-card-modal",
+                new[] { "OnDisable", "OnDestroy" }),
+            ("Assets/_Modules/Core/UI/ObsidianNavigationWorkspace.cs",   "obsidian-navigation-workspace",
+                new[] { "OnDisable", "OnDestroy" }),
+            ("Assets/_Modules/Village/Crafting/JewelerDiscoveryFtue.cs", "jeweler-discovery",
+                new[] { "OnDisable", "OnDestroy" }),
+        };
+
+        // WO-1471 — CASE 6's table. A PLAYER-PACED modal must never take the BOUNDED handle: the
+        // player decides when it ends, so age is not evidence of a leak. Each row is the reason
+        // token exactly as the shipping call site spells it.
+        private static readonly (string src, string token)[] PlayerPacedModals =
+        {
+            ("Assets/_Modules/Core/UI/HarvestOverflowModal.cs",          "\"harvest-overflow-result\""),
+            ("Assets/_Modules/Core/UI/FocusedModalHost.cs",              "HoldReason"),
+            ("Assets/_Modules/Core/UI/ObsidianNavigationWorkspace.cs",   "HoldReason"),
+            ("Assets/_Modules/Village/Crafting/JewelerDiscoveryFtue.cs", "\"jeweler-discovery\""),
         };
 
         public static bool Run(out string result)
@@ -78,6 +104,7 @@ namespace DeNelle.Editor.Regression
                 ADeadOwnerIsForceReleasedImmediately(failures, log);
                 ABoundedBeatIsUnaffected(failures, log);
                 EveryShippingCallSiteDeclaresARealProbe(failures, log);
+                APlayerPacedModalNeverTakesTheBoundedHandle(failures, log);
             }
             catch (Exception ex)
             {
@@ -356,6 +383,80 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == before)
                 log.AppendLine("  [call-site] all " + Owners.Length + " shipping player-owned holds declare " +
                                "a real liveness probe and step out on every exit path their host can take");
+        }
+
+        // ---------------------------------------------------------------------
+        //  CASE 6 — WO-1471. ⛔ A PLAYER-PACED MODAL MUST NOT TAKE THE BOUNDED
+        //  HANDLE. WO-1360 built the categorical distinction and then left four
+        //  player-paced modals on the bounded default because a per-frame
+        //  WorldHold.Renew() kept their deadline out of reach. That workaround
+        //  IS the pattern the enum replaced, and it did not hold: on the owner's
+        //  device 'harvest-overflow-result' pinned the clock for 101 s
+        //    12:51:25.157 ACQUIRE -> 12:53:06.089 RELEASE
+        //  inside a 36-minute run of
+        //    "WORLD CLOCK FROZEN timeScale=0.00  scene=Main_Castle_Overworld"  (x152).
+        //  The kind is asserted BOTH ways: the engine must actually mark the
+        //  harvest hold player-owned, and the source must not quietly revert.
+        // ---------------------------------------------------------------------
+        private static void APlayerPacedModalNeverTakesTheBoundedHandle(List<string> failures, StringBuilder log)
+        {
+            // (a) THE ENGINE. The harvest-overflow handle, taken the way the modal now takes it,
+            // reads as PLAYER-OWNED and is not force-released while its owner exists.
+            WorldHold.ResetForTests();
+            object modal = new object();
+            var hold = WorldHold.AcquirePlayerOwned("harvest-overflow-result", () => modal != null);
+            if (!hold.IsPlayerOwned)
+                failures.Add("[player-paced/harvest] the 'harvest-overflow-result' handle is NOT player-owned. " +
+                             "The player dismisses this modal at their own pace, so a ceiling on it is a " +
+                             "category error (WO-1360) - and the bounded default is what froze the owner's " +
+                             "overworld clock for 101s under an open HARVEST RESULT card (WO-1471).");
+            // Past the old 180s ceiling: a live owner must be untouched.
+            WorldHold.WatchdogTick(Time.unscaledTime + 300f);
+            if (WorldHold.Count != 1 || !Mathf.Approximately(Time.timeScale, 0f))
+                failures.Add("[player-paced/harvest] the harvest-overflow hold was force-released after 300s " +
+                             $"with its modal still alive (count {WorldHold.Count}, clock {Time.timeScale:0.00}). " +
+                             "A player reading a harvest result is not a leak.");
+            modal = null;   // and it still must not outlive its owner (Case 3's contract, here too).
+            WorldHold.WatchdogTick(Time.unscaledTime + 301f);
+            if (WorldHold.Count != 0)
+                failures.Add("[player-paced/harvest] the harvest-overflow hold survived the destruction of its " +
+                             "modal. Unbounded does not mean unkillable - the probe must end it.");
+            // Only if a failure above left it outstanding — a double Release would log a phantom
+            // RELEASE line into a trace the next reader would take at face value.
+            if (WorldHold.Count > 0) hold.Dispose();
+            WorldHold.ResetForTests();
+
+            // (b) THE SOURCE. No player-paced modal may drift back to WorldHold.Acquire(...), and
+            // none of them may reintroduce the per-frame Renew() that stood in for the enum.
+            foreach (var modalRow in PlayerPacedModals)
+            {
+                if (!File.Exists(modalRow.src))
+                {
+                    failures.Add($"[player-paced] {modalRow.src} is missing. If this modal moved, move its row " +
+                                 "in the SAME edit - an unlisted player-paced hold is an unaudited one.");
+                    continue;
+                }
+                string code = File.ReadAllText(modalRow.src);
+
+                if (code.IndexOf("WorldHold.Acquire(" + modalRow.token, StringComparison.Ordinal) >= 0)
+                    failures.Add($"[player-paced] {modalRow.src} takes the BOUNDED handle " +
+                                 $"WorldHold.Acquire({modalRow.token}). This modal is dismissed by the PLAYER, " +
+                                 "so the 180s ceiling can force-release it while the card is still on screen - " +
+                                 "the world then runs under a screen that says it is stopped (WO-1016 shape, " +
+                                 "measured again as WO-1471). Use AcquirePlayerOwned with a liveness probe.");
+
+                if (code.IndexOf("AcquirePlayerOwned", StringComparison.Ordinal) < 0)
+                    failures.Add($"[player-paced] {modalRow.src} no longer takes a player-owned hold at all.");
+
+                if (code.IndexOf("WorldHold.Renew(", StringComparison.Ordinal) >= 0)
+                    failures.Add($"[player-paced] {modalRow.src} still calls WorldHold.Renew() every frame. " +
+                                 "That was the WORKAROUND for the ceiling this hold no longer has (WO-1360 §3 " +
+                                 "note on rows 14-17); leaving it in preserves the shape the enum replaced and " +
+                                 "hides the next author's mistake. Delete the renew loop, not the probe.");
+            }
+
+            log.AppendLine("  [player-paced] the harvest-overflow handle is player-owned in the engine, and all " +
+                           PlayerPacedModals.Length + " player-paced modals ask for it by name with no renew loop");
         }
     }
 }

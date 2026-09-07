@@ -87,6 +87,15 @@
 //                   in-method block; the pairing rule was NOT weakened) -- and each
 //                   basket TOTAL matches the pinned Totals[]. A revert or a
 //                   stealth re-balance both trip here.
+//   8 [capture-basket] WO-1478 -- the SCREENSHOT HARNESS may not author a cost either.
+//                   No SetPlacingLabel( call in Assets/Editor/UICaptureLaunch.cs passes a
+//                   string literal containing a DIGIT. The ghost pill had a wood+iron+crystals
+//                   basket hardcoded into it -- one the catalog has never held (the
+//                   authored Arcane Spire row is iron 360) whose all-three shape case 1
+//                   forbids -- and because it lived in EDITOR code, every case above was
+//                   blind to it. It photographed a price the game cannot charge and both
+//                   independent UI reviewers quoted the fiction back as evidence. Red-proved
+//                   against an inline broken fixture before the live pass is believed.
 //
 // DELIBERATELY NOT DUPLICATED HERE: the structures-catalog dual-copy byte-equal
 // check (BuildEconomyRegression.CheckDualCopy) and cost-slot sanity / tier
@@ -322,6 +331,10 @@ namespace DeNelle.Editor.Regression
                 // purely because this oracle stopped at structures-catalog.json.
                 CaseBuildingTiersBaskets(failures, log);
                 CaseCsAuthoredBaskets(failures, log);
+                // WIDENED 2026-09-06 (WO-1478): the capture harness is a fourth cost-authoring
+                // file, and it is EDITOR code, so neither the data cases nor the _Modules lint
+                // could see the fabricated basket it painted into every ghost-pill PNG.
+                CaseCaptureHarnessLabels(failures, log);
             }
             catch (Exception ex)
             {
@@ -340,7 +353,10 @@ namespace DeNelle.Editor.Regression
                          "a cost basket naming wood + iron + crystals together. WIDENED 2026-08-27 (PROD-014 slice d): " +
                          "the crystals-for-repair carve-out is authored on '" + RepairRateRowId + "' ONLY at " +
                          "the ruled " + RuledCrystalsPerIron + " crystals/iron, the base repair price still " +
-                         "emits zero crystals, and an unauthored slot is NOT CONVERTIBLE rather than free.";
+                         "emits zero crystals, and an unauthored slot is NOT CONVERTIBLE rather than free. " +
+                         "WIDENED 2026-09-06 (WO-1478): no SetPlacingLabel call in the capture harness " +
+                         "(" + CaptureHarnessRelPath + ") hands the ghost pill a hardcoded cost literal, " +
+                         "red-proved against an inline broken fixture first.";
                 Debug.Log("COST_BASKET_OK\n" + log);
                 return true;
             }
@@ -559,6 +575,145 @@ namespace DeNelle.Editor.Regression
         {
             s = Regex.Replace(s, @"\s+", " ").Trim();
             return s.Length > 120 ? s.Substring(0, 120) + "..." : s;
+        }
+
+        // =====================================================================
+        //  CASE 8 [capture-basket] -- WO-1478: THE SCREENSHOT HARNESS AUTHORED A COST.
+        //
+        //  Assets/Editor/UICaptureLaunch.cs handed the build-mode ghost pill a hand-written
+        //  wood + iron + crystals cost string. Three separate things were wrong with it and only
+        //  the third is obvious:
+        //    (a) the catalog has NEVER held that basket -- the authored Arcane Spire row is
+        //        iron 360, nothing else;
+        //    (b) its SHAPE -- wood AND iron AND crystals in one basket -- is precisely what
+        //        case 1 forbids for a catalog row, so the harness was painting a basket the
+        //        game is structurally incapable of charging;
+        //    (c) it lived in EDITOR code, so every case above was blind to it. The data cases
+        //        read JSON; the [cs-basket] lint scopes Assets/_Modules. Nothing looked here.
+        //
+        //  The cost of that blind spot was not cosmetic. The fabricated line went into
+        //  BuildGhostChips_*.png, and BOTH independent UI reviewers (docs/qa/UI_REVIEW_
+        //  2026-09-05) quoted it back as evidence of what the player sees, which put it into
+        //  two work orders and a runtime docstring. A capture that paints numbers the game
+        //  does not use is not a capture of the game -- it manufactures consensus around a
+        //  number nobody ever measured, which is the exact failure CLAUDE.md section 11B exists to stop.
+        //
+        //  THE DISCRIMINATOR IS A DIGIT IN A STRING LITERAL, and it is chosen deliberately.
+        //  Flagging any literal argument would forbid the NAME argument too, which is a
+        //  legitimate label (and "Arcane Spire" holds no digit). A cost, a duration or a
+        //  count cannot be written without one. So: a SetPlacingLabel call whose arguments
+        //  contain a string literal carrying a digit is authoring a NUMBER into a capture,
+        //  and the harness must read that number from the live catalog instead.
+        //
+        //  Comments are stripped first, so the historical note in UICaptureLaunch.cs that
+        //  explains this very bug cannot trip the gate that documents it.
+        // =====================================================================
+        private const string CaptureHarnessRelPath = "Assets/Editor/UICaptureLaunch.cs";
+
+        private static readonly Regex PlacingLabelRx = new Regex(
+            @"SetPlacingLabel\s*\((?<args>[^;]*?)\)\s*;", RegexOptions.Compiled);
+
+        private static readonly Regex StringLiteralRx = new Regex(
+            @"@?""(?:[^""\\]|\\.)*""", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Every SetPlacingLabel site in <paramref name="code"/> that hands the pill a string
+        /// literal containing a digit, collapsed to one line each. Comments are stripped first.
+        /// Factored out so the case can RED-PROVE itself against an inline broken fixture --
+        /// a lint that has never been seen to fire is a lint nobody has tested.
+        /// </summary>
+        internal static List<string> FindHardcodedPlacingBaskets(string code)
+        {
+            var hits = new List<string>();
+            if (string.IsNullOrEmpty(code)) return hits;
+
+            string stripped = StripComments(code);
+            foreach (Match m in PlacingLabelRx.Matches(stripped))
+            {
+                string args = m.Groups["args"].Value;
+                if (string.IsNullOrEmpty(args)) continue;
+                foreach (Match lit in StringLiteralRx.Matches(args))
+                {
+                    if (!Regex.IsMatch(lit.Value, @"\d")) continue;
+                    hits.Add(Collapse(args));
+                    break;   // one finding per call site, however many literals it holds
+                }
+            }
+            return hits;
+        }
+
+        private static void CaseCaptureHarnessLabels(List<string> failures, StringBuilder log)
+        {
+            // ---- RED PROOF: the detector must SEE the shape it exists to catch. -------------
+            const string redFixture =
+                "void F() { hud.SetPlacingLabel(\"Ghost Row\", \"12 wood, 34 iron, 56 crystals\"); }";
+            int redHits = FindHardcodedPlacingBaskets(redFixture).Count;
+            if (redHits != 1)
+            {
+                failures.Add("[capture-basket] RED PROOF FAILED: a deliberately-broken fixture with a hardcoded " +
+                             "cost literal produced " + redHits + " finding(s), expected exactly 1. The detector " +
+                             "is not detecting, so its pass on the real harness proves nothing.");
+                return;
+            }
+
+            // ---- GREEN PROOF: the corrected shape must NOT fire, or the gate cries wolf. ----
+            const string greenFixture =
+                "void F() { hud.SetPlacingLabel(entry.displayName, " +
+                "StructureCardVM.PlacementSummaryFor(entry).CostWords); }";
+            int greenHits = FindHardcodedPlacingBaskets(greenFixture).Count;
+            if (greenHits != 0)
+            {
+                failures.Add("[capture-basket] GREEN PROOF FAILED: the CORRECT shape (label composed from the live " +
+                             "catalog row) produced " + greenHits + " finding(s), expected 0. A lint that flags " +
+                             "correct code gets muted, and a muted gate protects nothing.");
+                return;
+            }
+
+            // ---- COMMENT PROOF: the in-code history of this bug must not trip its own gate. -
+            const string commentFixture =
+                "// SetPlacingLabel(\"Ghost Row\", \"12 wood, 34 iron, 56 crystals\") was the bug.\n" +
+                "void F() { hud.SetPlacingLabel(entry.displayName, words); }";
+            int commentHits = FindHardcodedPlacingBaskets(commentFixture).Count;
+            if (commentHits != 0)
+            {
+                failures.Add("[capture-basket] COMMENT PROOF FAILED: a COMMENTED quotation of the old bad call " +
+                             "produced " + commentHits + " finding(s), expected 0 -- documented history would be " +
+                             "unwritable without disabling the gate.");
+                return;
+            }
+
+            // ---- The live harness. ----------------------------------------------------------
+            string path = Path.Combine(Application.dataPath, "Editor", "UICaptureLaunch.cs");
+            if (!File.Exists(path))
+            {
+                failures.Add("[capture-basket] " + CaptureHarnessRelPath + " not found at " + path + " -- the " +
+                             "capture-harness lint could not run, so a hardcoded cost painted into every UI PNG " +
+                             "would pass unseen. If the harness moved, MOVE THIS PATH; do not delete the case.");
+                return;
+            }
+
+            string src;
+            try { src = File.ReadAllText(path); }
+            catch (Exception ex)
+            {
+                failures.Add("[capture-basket] could not read " + CaptureHarnessRelPath + ": " + ex.Message);
+                return;
+            }
+
+            var hits = FindHardcodedPlacingBaskets(src);
+            foreach (string hit in hits)
+            {
+                failures.Add("[capture-basket] " + CaptureHarnessRelPath + " hands the build-mode ghost pill a " +
+                             "HARDCODED string literal carrying a number: \"" + hit + "\". A capture that paints " +
+                             "numbers the game does not use is not a capture of the game -- WO-1478's fabricated " +
+                             "\"wood + iron + crystals\" basket reached two work orders and two independent UI " +
+                             "reviews before anyone checked it against the catalog. Compose the label from the " +
+                             "live row instead: CatalogRegistry.Get(id) -> StructureCardVM.PlacementSummaryFor(" +
+                             "entry).CostWords (or CostFormat over BuildModeController.SoftcappedCostFor).");
+            }
+
+            log.AppendLine("  [capture-basket] red/green/comment proofs passed; linted " + CaptureHarnessRelPath +
+                           " -- " + hits.Count + " hardcoded SetPlacingLabel literal(s)");
         }
 
         // =====================================================================

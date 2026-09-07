@@ -95,6 +95,9 @@ namespace DeNelle.Editor.Regression
         //  blink_* rows already sidestep the mapper that way), which is a CONTENT
         //  decision for the owner - not something this lane invents.
         // ---------------------------------------------------------------------
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-861 for ranger_arrow_plain) - six
+        // catalog rows that paint the wrong silhouette because no sheet exists for their kind. The
+        // fix is an authored iconPath, an OWNER content decision; by the remove-by, ask or go red.
         private static readonly HashSet<string> KnownIconKindDebt =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {

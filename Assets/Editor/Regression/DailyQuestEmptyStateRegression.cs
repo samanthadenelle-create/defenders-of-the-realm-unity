@@ -37,6 +37,18 @@
 //                  touch floor, and the stack fits the measured well by a mile.
 //   5 [hygiene]    No non-ASCII inside any string literal of either file (tofu on
 //                  the shipped TMP font) and no embedded NUL (CLAUDE.md Sec.0).
+//   6 [claim-latch-persists]
+//                  WO-1521 P0, the DOUBLE GRANT. A LIVE fixture: today's set is
+//                  injected into a real DailyQuestService (no catalog, no RNG, no
+//                  scene), a handler stands in for DailyQuestRewardBridge and stamps
+//                  ClaimedAtUnix from inside QuestCompleted, Report() is called, and
+//                  the PERSISTED PlayerPrefs blob must carry a non-zero latch. It
+//                  cannot, unless Report saves AFTER its completion handlers run
+//                  (the trailing Save at DailyQuests.cs:324). Before that line, a
+//                  daily paid as the last act of a session reloaded as
+//                  Completed && ClaimedAtUnix == 0 - which IsClaimable calls
+//                  CLAIMABLE, and WO-1521 has now given that state a CLAIM button.
+//                  PlayerPrefs is snapshotted and restored around the case.
 //
 // SOURCE-LINT + reflection only: no scene, no play mode, so it runs in the headless
 // DataRegression batch. Never throws.
@@ -103,6 +115,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "view-once", () => Case3_ViewRendersItExactlyOnce(failures, notes));
                 Case(failures, "bands", () => Case4_FixedPixelBands(failures, notes));
                 Case(failures, "hygiene", () => Case5_AsciiAndNul(failures, notes));
+                Case(failures, "claim-latch-persists", () => Case6_ClaimLatchPersists(failures, notes));
             }
             catch (Exception ex)
             {
@@ -117,7 +130,9 @@ namespace DeNelle.Editor.Regression
                          "projects it rather than recomputing it, a live null-source VM produces it, and " +
                          "DailyQuestHud reads it once and renders it once in one chrome (no second " +
                          "column, no View-authored copy, no View-side emptiness test), on fixed-pixel " +
-                         "bands at/above a TMP line box" + noteStr;
+                         "bands at/above a TMP line box; and a completed daily's CLAIM LATCH " +
+                         "survives the save Report() takes, so it can never reload as claimable " +
+                         "a second time (WO-1521 P0)" + noteStr;
                 return true;
             }
             reason = "daily-quest-empty FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -410,6 +425,137 @@ namespace DeNelle.Editor.Regression
                 }
             }
             notes.Add("ASCII + NUL checked on both files");
+        }
+
+        // =====================================================================
+        //  CASE 6 - WO-1521 P0: the claim latch survives the save it was set in
+        // =====================================================================
+        /// <summary>
+        /// THE DOUBLE-GRANT PIN (found while building WO-1521's claim door).
+        ///
+        /// DailyQuestService.Report used to call its private Save() and then fire
+        /// QuestCompleted; DailyQuestRewardBridge.HandleQuestCompleted writes ClaimedAtUnix
+        /// from INSIDE that handler. Nothing saved afterwards, so a daily paid as the last act
+        /// of a session reloaded as Completed with ClaimedAtUnix == 0 - which
+        /// DailyQuestService.IsClaimable calls CLAIMABLE. Until WO-1521 that only made the
+        /// "N ready to claim" counter lie. The moment the rumor board gives that state a CLAIM
+        /// face, it is a DOUBLE GRANT.
+        ///
+        /// The fix in the tree is the trailing Save() at
+        /// Assets/_Modules/Core/Quests/DailyQuests.cs:324 (inside `if (justCompleted != null)`,
+        /// after the QuestCompleted loop).
+        ///
+        /// THIS IS A FIXTURE, NOT A LINT. It runs the real service: today's set is INJECTED
+        /// (so no catalog roll, no scene, no randomness), a handler stands in for the reward
+        /// bridge and stamps the latch, Report() is called, and the assertion is made against
+        /// the PERSISTED BLOB - the only thing a reload can see. With the pre-fix ordering the
+        /// blob's ClaimedAtUnix is 0 and this case is RED; that ordering cannot be re-run from
+        /// here, so it is stated, not claimed as executed (CLAUDE.md sec.11B).
+        ///
+        /// PlayerPrefs is snapshotted and restored, so running the gate never eats a real
+        /// save's daily quests.
+        /// </summary>
+        private static void Case6_ClaimLatchPersists(List<string> failures, List<string> notes)
+        {
+            const string tag = "[claim-latch-persists]";
+            const string prefKey = "dotr-daily-quests-v1";
+            const string templateId = "regression.claim-latch";
+
+            bool hadPref = PlayerPrefs.HasKey(prefKey);
+            string savedPref = hadPref ? PlayerPrefs.GetString(prefKey) : null;
+            GameObject host = null;
+            try
+            {
+                // Today's set, hand-built. EnsureToday returns immediately when _today already
+                // carries the local date, so nothing here touches the catalog or the RNG.
+                var quest = new DeNelle.Core.Quests.DailyQuestInstance
+                {
+                    Id = "regression-claim-latch",
+                    TemplateId = templateId,
+                    Slot = "wildcard",
+                    Target = 1,
+                    Progress = 0,
+                    Completed = false,
+                    ClaimedAtUnix = 0L,
+                    Label = "regression fixture",
+                };
+                var set = new DeNelle.Core.Quests.DailyQuestSet
+                {
+                    Date = DateTime.Now.ToString("yyyy-MM-dd"),
+                };
+                set.Quests.Add(quest);
+
+                host = new GameObject("RegressionDailyQuestService");
+                host.hideFlags = HideFlags.HideAndDontSave;
+                var svc = host.AddComponent<DeNelle.Core.Quests.DailyQuestService>();
+                if (svc == null)
+                {
+                    failures.Add(tag + " DailyQuestService could not be added as a component");
+                    return;
+                }
+
+                // _today is private BY DESIGN (the service owns its own roll). Injecting it is
+                // what keeps this fixture deterministic and catalog-free; if the field is ever
+                // renamed the guard says so rather than silently testing nothing.
+                var todayField = typeof(DeNelle.Core.Quests.DailyQuestService)
+                    .GetField("_today", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (todayField == null)
+                {
+                    failures.Add(tag + " DailyQuestService._today is gone - this fixture injected today's set " +
+                                 "through it; re-point the guard, the double-grant risk has not gone away");
+                    return;
+                }
+                todayField.SetValue(svc, set);
+
+                // Stand in for DailyQuestRewardBridge: latch the claim from inside the handler,
+                // which is the whole point - the latch is written AFTER Report's first Save().
+                bool handlerRan = false;
+                Action<DeNelle.Core.Quests.DailyQuestInstance> stamp = q =>
+                {
+                    handlerRan = true;
+                    if (q != null) q.ClaimedAtUnix = 1234567890L;
+                };
+                svc.QuestCompleted += stamp;
+                try { svc.Report(templateId, 1); }
+                finally { svc.QuestCompleted -= stamp; }
+
+                if (!handlerRan)
+                {
+                    failures.Add(tag + " Report() completed the fixture quest but QuestCompleted never fired - " +
+                                 "the reward bridge would never be paid, let alone latched");
+                    return;
+                }
+
+                string blob = PlayerPrefs.GetString(prefKey, string.Empty);
+                if (string.IsNullOrEmpty(blob))
+                {
+                    failures.Add(tag + " Report() persisted NOTHING - a completed daily did not reach PlayerPrefs");
+                    return;
+                }
+                var m = Regex.Match(blob, "\"ClaimedAtUnix\"\\s*:\\s*(-?\\d+)");
+                if (!m.Success)
+                {
+                    failures.Add(tag + " the persisted daily-quest blob carries no ClaimedAtUnix field - the " +
+                                 "claim latch is not save state, so it can never survive a reload: " + blob);
+                    return;
+                }
+                if (m.Groups[1].Value == "0")
+                    failures.Add(tag + " DOUBLE GRANT: the completion handler stamped ClaimedAtUnix but the " +
+                                 "PERSISTED set still reads 0, so this quest reloads as Completed && " +
+                                 "ClaimedAtUnix == 0 - which IsClaimable calls claimable, and the WO-1521 " +
+                                 "board now gives that state a CLAIM button. Report() must Save() AFTER the " +
+                                 "QuestCompleted handlers run (DailyQuests.cs:324), not before.");
+                else
+                    notes.Add("claim latch survives Report()'s save (persisted ClaimedAtUnix=" +
+                              m.Groups[1].Value + ")");
+            }
+            finally
+            {
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                if (hadPref) PlayerPrefs.SetString(prefKey, savedPref);
+                else PlayerPrefs.DeleteKey(prefKey);
+                PlayerPrefs.Save();
+            }
         }
 
         // =====================================================================

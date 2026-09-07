@@ -164,12 +164,30 @@ while ($true) {
     Start-Sleep -Seconds 5
 }
 
-# --- assert per-instance player.log landed (WO-1102) ---------------------------
-# A missing/empty player.log means that instance's Step-level FlowTrace evidence is
-# GONE - the exact silent loss this WO fixed. Warn LOUDLY by name; never silent.
+# --- assert every instance actually FINISHED A RUN (WO-1102 + WO-1496) ---------
+# WHAT THIS USED TO DO, AND WHY IT WAS NOT A GATE (WO-1496, 2026-09-06): it asserted
+# the per-instance player.log EXISTED and was non-empty, then WARNED. A file's
+# existence proves the process started and wrote one byte - it proves nothing about
+# whether the bot drove the game. An instance that crashed on the first frame leaves
+# a fat player.log full of the crash, and this loop called that OK. Then the script
+# exited on the EMITTER's exit code, which this repo's runners return 0 for on
+# refusals and FAILs alike (CLAUDE.md sec.8; memory gates-report-success-without-
+# proving-it). So the fleet could not fail.
+#
+# It now judges by the MARKER the bot itself emits on a run it completed:
+#   [Flow:Auto] AutoPilot complete            (AutoPilotDriver.cs:453, FlowTrace.Step)
+# AND by that run's own summary saying the run was not aborted:
+#   "aborted": false                          (AutoPilotDriver.WriteSummary -> RunSummary)
+# BOTH are required, and the second is the load-bearing half: a run that trips the
+# global cap or a critical phase sets _abortRun and STILL falls through to the
+# "AutoPilot complete" line (RunPhase yield-breaks each remaining phase rather than
+# ending the coroutine), so the marker ALONE would pass an aborted run.
 $plMissing = 0
+$markerMissing = 0
+$abortedRuns = 0
 for ($i = 0; $i -lt $Count; $i++) {
-    $pl = Join-Path (Join-Path $runsDir "$i") 'player.log'
+    $runDir = Join-Path $runsDir "$i"
+    $pl = Join-Path $runDir 'player.log'
     $ok = $false
     if (Test-Path $pl) {
         $item = Get-Item $pl -ErrorAction SilentlyContinue
@@ -178,12 +196,50 @@ for ($i = 0; $i -lt $Count; $i++) {
     if (-not $ok) {
         Write-Host "FLEET_PLAYERLOG_MISSING run=$i (expected non-empty '$pl' - Step-level trace lost for this instance)"
         $plMissing++
+        $markerMissing++
+        continue
+    }
+
+    # -Quiet + -SimpleMatch: the needle carries regex metacharacters ([ ]) and we want
+    # a literal match, not a character class. FlowTrace.Step pads the message, so the
+    # tag and the text are matched as two separate literals rather than one phrase.
+    $hasTag = Select-String -Path $pl -Pattern '[Flow:Auto]' -SimpleMatch -Quiet -ErrorAction SilentlyContinue
+    $hasDone = Select-String -Path $pl -Pattern 'AutoPilot complete' -SimpleMatch -Quiet -ErrorAction SilentlyContinue
+    if (-not ($hasTag -and $hasDone)) {
+        Write-Host "FLEET_MARKER_MISSING run=$i (no '[Flow:Auto] ... AutoPilot complete' in '$pl' - this instance never finished a run; a present log is not a finished run)"
+        $markerMissing++
+        continue
+    }
+
+    $sum = Join-Path $runDir 'autopilot-summary.json'
+    if (-not (Test-Path $sum)) {
+        Write-Host "FLEET_MARKER_MISSING run=$i (no '$sum' - the driver never wrote its summary, so 'complete' cannot be confirmed unaborted)"
+        $markerMissing++
+        continue
+    }
+    # FAIL CLOSED: require the POSITIVE proof '"aborted": false' (regex, so pretty-print
+    # spacing cannot decide the verdict). Testing for '"aborted": true' instead would pass
+    # every run whose spacing, casing or schema drifted - a gate that reports success
+    # without proving it, which is the defect this whole WO is about.
+    if (-not (Select-String -Path $sum -Pattern '"aborted"\s*:\s*false' -Quiet -ErrorAction SilentlyContinue)) {
+        Write-Host "FLEET_RUN_ABORTED run=$i (the aborted-false field is absent from '$sum' - the run ended early (global cap / critical phase), or the summary schema changed; either way this instance's coverage is NOT proven)"
+        $abortedRuns++
     }
 }
 if ($plMissing -eq 0) {
     Write-Host "[fleet] FLEET_PLAYERLOG_OK $Count/$Count per-instance player.log present and non-empty."
 } else {
     Write-Host "[fleet] WARNING: $plMissing/$Count instance(s) missing a usable player.log (see FLEET_PLAYERLOG_MISSING lines above)."
+}
+$fleetExit = 0
+if (($markerMissing -eq 0) -and ($abortedRuns -eq 0)) {
+    Write-Host "[fleet] FLEET_RUNS_OK $Count/$Count instance(s) emitted 'AutoPilot complete' with aborted=false."
+} else {
+    Write-Host "[fleet] FLEET_RUNS_FAIL $markerMissing/$Count without a completion marker, $abortedRuns/$Count not proven unaborted - the fleet's coverage is NOT what the count says."
+    # DEFERRED, NOT IMMEDIATE: the refusal is recorded here and applied after the
+    # aggregation below. Exiting at this line would suppress the ranked ticket list,
+    # which is precisely the evidence that explains WHY an instance never completed.
+    $fleetExit = 3
 }
 
 # --- aggregate every run's breaks into one ranked ticket list -----------------
@@ -192,6 +248,10 @@ if ($plMissing -eq 0) {
 # by distinct-run reproduction count.
 Write-Host "[fleet] aggregating -> AutoPilotTickets.Emit (this opens the editor in batchmode)"
 $runner = Join-Path $proj 'run-unity-method.ps1'
+# Stamped BEFORE the call: the marker must be judged on a FRESH log. A stale
+# autopilot-fleet-tickets.log from the previous fleet carries a perfectly good
+# AUTOPILOT_TICKETS_OK and reads exactly like a pass (SUNDAY_HOUSEKEEPING sec.3 rule 3).
+$emitStamp = Get-Date
 & powershell -ExecutionPolicy Bypass -File $runner `
     -Method 'DeNelle.Editor.AutoPilotTickets.Emit' `
     -LogName 'autopilot-fleet-tickets.log'
@@ -199,11 +259,38 @@ $emitExit = $LASTEXITCODE
 
 $ticketsMd = Join-Path $proj 'Builds\autopilot-tickets.md'
 $ticketsJson = Join-Path $proj 'Builds\autopilot-tickets.json'
-Write-Host "[fleet] emitter exit = $emitExit"
+$emitLog = Join-Path $proj 'Builds\autopilot-fleet-tickets.log'
+Write-Host "[fleet] emitter exit = $emitExit (NOT the verdict - this runner exits 0 on refusals and FAILs)"
 if (Test-Path $ticketsMd) {
     Write-Host "[fleet] ranked tickets -> $ticketsMd"
     Write-Host "[fleet]                  $ticketsJson"
 } else {
-    Write-Host "[fleet] WARNING: no ticket file produced - see Builds\autopilot-fleet-tickets.log"
+    Write-Host "[fleet] WARNING: no ticket file produced - see $emitLog"
 }
-exit $emitExit
+
+# --- the emitter's verdict is its MARKER on a FRESH log, never its exit code ---
+$emitOk = $false
+if (Test-Path $emitLog) {
+    $emitItem = Get-Item $emitLog -ErrorAction SilentlyContinue
+    if ($emitItem -and ($emitItem.LastWriteTime -ge $emitStamp)) {
+        if (Select-String -Path $emitLog -Pattern 'AUTOPILOT_TICKETS_OK' -SimpleMatch -Quiet -ErrorAction SilentlyContinue) {
+            $emitOk = $true
+        } else {
+            Write-Host "[fleet] FLEET_EMIT_FAIL no AUTOPILOT_TICKETS_OK in a fresh '$emitLog' - marker absence on a fresh log is a FAILURE, not an unknown."
+        }
+    } else {
+        Write-Host "[fleet] FLEET_EMIT_FAIL '$emitLog' is STALE (not written by this run) - the emitter produced nothing this fleet."
+    }
+} else {
+    Write-Host "[fleet] FLEET_EMIT_FAIL no '$emitLog' at all - the emitter never ran."
+}
+if (-not $emitOk) {
+    Write-Host "[fleet] REFUSING (exit 4). The aggregation is the fleet's only output; unproven, the run has none."
+    exit 4
+}
+Write-Host "[fleet] FLEET_EMIT_OK AUTOPILOT_TICKETS_OK on a fresh emitter log."
+if ($fleetExit -ne 0) {
+    Write-Host "[fleet] REFUSING (exit $fleetExit). The aggregation above is real, but the instances behind it are not all proven - read the FLEET_MARKER_MISSING / FLEET_RUN_ABORTED lines before trusting any count in it."
+    exit $fleetExit
+}
+exit 0

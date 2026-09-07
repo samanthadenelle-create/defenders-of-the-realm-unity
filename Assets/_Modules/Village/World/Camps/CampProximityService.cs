@@ -6,8 +6,8 @@
 //
 // Owns everything the claim prompt needs from the live scene so the View no longer
 // does it per-frame:
-//   * hero resolution (GameObject.FindWithTag "Player", or the undefined-tag-safe
-//     "HeroTarget" fallback) + Camera.main — cached.
+//   * hero resolution (GameObject.FindWithTag "Player", then a HeroLocomotion
+//     component lookup — WO-1513) + Camera.main — cached.
 //   * the nearest CLEARED-but-unclaimed camp within ClaimRange (the proximity /
 //     cleared / claimed reconciliation that used to live in CampPromptUI).
 //   * world -> screen projection for positioning the prompt button.
@@ -64,9 +64,11 @@ namespace DeNelle.Village.World.Camps
                 var p = GameObject.FindWithTag("Player");
                 if (p == null)
                 {
-                    // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-                    var ht = SafeFindWithTag("HeroTarget");
-                    if (ht != null) p = ht;
+                    // WO-1513: the old fallback read the "HeroTarget" tag, which
+                    // TagManager.asset has never declared — a permanently dead branch.
+                    // The hero definitively carries HeroLocomotion (CLAUDE.md §7).
+                    var loco = Object.FindFirstObjectByType<HeroLocomotion>();
+                    if (loco != null) p = loco.gameObject;
                 }
                 _hero = p != null ? p.transform : null;
             }
@@ -98,13 +100,6 @@ namespace DeNelle.Village.World.Camps
             if (sp.z < 0f) { screen = default; return false; }   // behind camera -> hide
             screen = new Vector2(sp.x, sp.y);
             return true;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
         }
 
         /// <summary>Wraps a live <see cref="ClaimableCamp"/> as the VM's narrow seam.</summary>

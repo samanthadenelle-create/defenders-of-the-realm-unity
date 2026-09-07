@@ -69,6 +69,32 @@ namespace DeNelle.Village
         // builder change; graceful — no loadout / no weapon / reach 0 leaves the fixed range.
         private GearLoadout _gear;
 
+        // WO-1503 — the hero's OWN side, read rather than assumed, mirroring Enemy.SelfFaction.
+        // HeroHealth declares it EXPLICITLY on the interface (HeroHealth.cs:1630 —
+        // `CombatFaction IDamageableStructure.Faction => CombatFaction.Friendly;`), so it is only
+        // reachable through an interface-typed reference; a plain GetComponent<HeroHealth>().Faction
+        // does not compile. Falls back to Friendly so a rig without HeroHealth still swings.
+        // Lazily resolved and CACHED, matching _gear above and Enemy's SelfFaction cache
+        // (Enemy.cs:3034) — the melee sweep reads this twice per collider per swing, and an
+        // uncached GetComponentInParent there is a per-frame allocation-free but non-trivial
+        // hierarchy walk. _selfResolved (not a null check) so a rig genuinely without the
+        // component does not re-walk every swing.
+        private IDamageableStructure _self;
+        private bool _selfResolved;
+
+        private CombatFaction HeroFaction
+        {
+            get
+            {
+                if (!_selfResolved)
+                {
+                    _self = GetComponentInParent<IDamageableStructure>();
+                    _selfResolved = true;
+                }
+                return _self != null ? _self.Faction : CombatFaction.Friendly;
+            }
+        }
+
         /// <summary>
         /// The melee reach to use this swing: the equipped weapon's reach when set (&gt; 0),
         /// otherwise the serialized fixed <see cref="_attackRange"/>. Preserves today's
@@ -685,8 +711,12 @@ namespace DeNelle.Village
             {
                 if (col == null) continue;
                 var damageable = col.GetComponentInParent<IDamageable>();
-                if (damageable == null || !damageable.IsAlive) continue;
-                if (damageable.Faction != CombatFaction.Hostile)      continue;
+                // WO-1503: route the friend-or-foe test through the ONE authority instead of the
+                // inline `Faction != CombatFaction.Hostile` copy that used to live here — the exact
+                // duplication CombatFactionRules' header forbids. MayAttack folds in null + IsAlive,
+                // so this single call is the whole guard. `damageable` is IDamageable-typed, which
+                // picks the IDamageable overload unambiguously (see that file's overload trap note).
+                if (!CombatFactionRules.MayAttack(HeroFaction, damageable)) continue;
 
                 // WO-449: reject a hit when a wall/structure blocks the swing's line-of-sight,
                 // so the hero standing against a wall can't damage an enemy on the far side.
@@ -724,8 +754,22 @@ namespace DeNelle.Village
                 // §12 outgoing-attack trace (2026-06-30): PROVE the melee swing LANDS as a hero-dealt
                 // hit — the counterpart to Enemy's "CombatFeedback Hit gated: dealtByHero=..." line. On
                 // the next felt-test this MUST read dealtByHero=True (was never emitted while suppressed).
+                // WO-1503 — NAME THE TARGET, not just its scene root. This line used to print
+                // ONLY `col.transform.root.name`, and in the hub that is ALWAYS "CastleHubRoot":
+                // WaveManager is a child of CastleHubRoot and spawns every wave enemy under
+                // WaveEnemies/CastleHubRoot (Main_Castle_Overworld.unity — WaveManager._enemyRoot
+                // 414338686 -> WaveEnemies -> CastleHubRoot; WaveManager.cs:664/2853 pass
+                // _enemyRoot as the spawn parent). So a correct hit on a wave enemy read as
+                // `hero MELEE hit 'CastleHubRoot'`, and it was triaged as the hero destroying its
+                // own castle. It never was: the hub root carries a Transform and NOTHING else
+                // (one m_Component, fileID 1385856591), so it holds no faction and cannot take a
+                // hit, and the guard above refuses every non-Hostile target regardless.
+                // Root stays (it locates the target in the hierarchy); identity leads.
+                var targetBehaviour = damageable as MonoBehaviour;
                 FlowTrace.Step("Combat",
-                    $"hero MELEE hit '{col.transform.root.name}' faction={damageable.Faction} " +
+                    $"hero MELEE hit '{(targetBehaviour != null ? targetBehaviour.name : "<non-MonoBehaviour>")}' " +
+                    $"({damageable.GetType().Name}) under root '{col.transform.root.name}' " +
+                    $"faction={damageable.Faction} attacker={HeroFaction} " +
                     $"dealtByHero=True amount={damage:F1} (perfect={isPerfect} riposte={riposte} crit={isCrit}).");
                 DamageElement weaponElement = ElementalDamageResolver.ParseElement(
                     _gear != null && _gear.EquippedWeapon != null ? _gear.EquippedWeapon.element : null);

@@ -1,6 +1,10 @@
 import io, os
+from pathlib import Path
 
-ROOT = r'D:\eoa'
+# CLAUDE.md sec.0 (owner ruling 2026-08-09): the repo root is MACHINE-DEPENDENT
+# (C:\eoa on one seat, D:\eoa on another) - resolve it from this script's own
+# location, never hardcode a drive letter. dev/tmp/<script>.py -> parents[2].
+ROOT = str(Path(__file__).resolve().parents[2])
 SRC = os.path.join(ROOT, 'WorkOrders', 'WORK_ORDER_1146_MON_monetization_activation_purchases_and_ads.md')
 lines = io.open(SRC, encoding='utf-8').read().split('\n')
 

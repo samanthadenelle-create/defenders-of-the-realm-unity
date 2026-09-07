@@ -1,6 +1,9 @@
 # Solana dApp Store update checklist — Echoes of Elarion
 
-**Authority date:** 2026-08-22
+**Authority date:** 2026-08-22. **Prefilled 2026-09-06** (docs lane — no Unity, no build,
+no git writes) against declared stamp `2026.09.07.358574`; see the *Prefill 2026-09-06*
+block above Gate A, and **Gate G** for the Google Play lane. Owner-only items are marked
+`OWNER:`; items waiting on a binary read `BUILD PENDING`.
 
 **Release posture:** update to the existing live dApp Store app
 
@@ -87,6 +90,47 @@ evidence record and reviewer copy.
 The Devnet mint and wallet above are internal test evidence, not store-listing copy.
 Devnet infrastructure readiness does not discharge the final APK/device matrix.
 
+## Prefill 2026-09-06 (docs lane) — measured state at HEAD
+
+Filled in without Unity, without a build, without git writes. Every value below was
+read at source this session. Nothing here supersedes the Gate A staleness banner.
+
+- **Declared build stamp:** `bundleVersion: 2026.09.07.358574` /
+  `AndroidBundleVersionCode: 358574` — `ProjectSettings/ProjectSettings.asset:148,177`.
+  Both exceed the live `2026.08.17.328845` / `328845`.
+- **Package (unchanged):** `com.denellestudios.echoesofelarion`.
+- **Release notes for this build:** `publishing/RELEASE_NOTES_2026-09-07.md`
+  (drafted 2026-09-06, awaiting owner approval).
+- **R2 hosted content — GREEN and it postdates the stamp.**
+  `Builds/r2-parity.log` (2026-09-06 20:24, UTF-16) ends
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`, preceded by
+  `R2_PARITY_TARGET_OK 92 object(s) verified` and
+  `R2_PRUNE_TARGET Android newest=catalog_2026.09.07.358574` — the catalog it verified
+  is this build's. `Builds/r2-push.log` (19:20) reads
+  `R2_PUSH_OK 0 uploaded (0.0 MB), 814 unchanged`. Sanctioned path: `tools\r2-ship.ps1`.
+- **Last GREEN compile gate:** `Builds/cg-quiet.log` (20:04) —
+  `COMPILE_GATE_OK :: scripts compiled clean`.
+- **Last GREEN regression:** `Builds/reg-final2.log` (18:50) —
+  `REGRESSION_OK 414/414 suites`.
+- ⛔ **THE TREE IS RED AS OF 20:54 AND NO SUBMISSION BUILD EXISTS.** Two fresher runs
+  went red after commits landed at 20:12–20:49:
+  - `Builds/reg-quiet.log` (20:07) — `REGRESSION_FAIL: 2 failure(s)`
+    (417/419 green): a UI-MVVM conformance violation in
+    `Assets/_Modules/Village/BuildMode/BuildPreviewModal.cs:252,253`, and a hollow-pass
+    marker fail at `NightMarketNoWalletRegression.cs:761`. ⚠ The wrapper printed
+    `VERDICT=PASS-UNASSERTED` for that same run because no `-ExpectMarker` was passed —
+    judge by the marker in the log, never the wrapper verdict.
+  - `Builds/cg-aab.log` (20:54) — `compileErrors=True`; `Builds/aab-build.console.log`
+    reads `COMPILE_RED`. Three errors, all in Editor regression files:
+    `ManageProgressiveDisclosureRegression.cs(228,41) CS0103 'ObsidianQueueState'`,
+    `ManageTroopsTrainDoorRegression.cs(247,17) CS0103 'CheckTroopDetailStats'`,
+    `ManageTroopsTrainDoorRegression.cs(286,17) CS0103 'CheckArmyFullIsSaidAndDoesNotTravel'`.
+- **Therefore every APK/AAB identity field is `BUILD PENDING`, not `OWNER:`.** The newest
+  APK log is `Builds/apk-build.log` (19:19) and the newest AAB record is
+  `Builds/aab-status.txt` (2026-09-04, `AAB_SIZE_OK`, 450.7 MiB on disk) — both predate the
+  358574 stamp, so neither is the submission candidate. Re-record Gate A in one pass
+  against whichever binary actually ships.
+
 ## Gate A — final build identity and provenance
 
 > ## STALE 2026-09-03 - THE IDENTITY FIELDS BELOW DESCRIBE THE WRONG APK. DO NOT SUBMIT AGAINST THEM.
@@ -122,7 +166,7 @@ Devnet infrastructure readiness does not discharge the final APK/device matrix.
 - [x] Both version values exceed the live release values (live observed `2026.08.17.328845` / `328845`; this build `2026.09.04.354266` / `354266`).
 - [x] `apksigner verify --print-certs` passes. Signer #1 DN `CN=DeNelle Studios, OU=Games, O=DeNelle Studios, L=NA, ST=NA, C=US`. (JAVA_HOME must be set to the Unity OpenJDK at `<UnityEditor>/Data/PlaybackEngines/AndroidPlayer/OpenJDK` - apksigner fails without it.)
 - [x] Signing certificate SHA-256: `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443`.
-- [ ] ⛔ Certificate matches the existing live dApp Store release - **CANNOT BE PROVEN FROM THIS REPO, and that is a gap in the record, not a pass.** The live release's certificate SHA-256 was never captured (this file still reads `PENDING` for it at the evidence table), so there is nothing to compare against. What IS true: this APK is signed by `dotr-release.keystore`, the keystore configured in `ProjectSettings.asset` (`androidUseCustomKeystore: 1`, alias `dotr`), which is the key this project has always used. The one cheap way to CLOSE it rather than assume it: install this APK over the LIVE store build on a device - Android refuses an update signed by a different key, so a successful in-place update IS the proof. Record the live value here once observed so this is never PENDING again.
+- [ ] `OWNER:` ⛔ Certificate matches the existing live dApp Store release - **CANNOT BE PROVEN FROM THIS REPO, and that is a gap in the record, not a pass.** The live release's certificate SHA-256 was never captured (this file still reads `PENDING` for it at the evidence table), so there is nothing to compare against. What IS true: this APK is signed by `dotr-release.keystore`, the keystore configured in `ProjectSettings.asset` (`androidUseCustomKeystore: 1`, alias `dotr`), which is the key this project has always used. The one cheap way to CLOSE it rather than assume it: install this APK over the LIVE store build on a device - Android refuses an update signed by a different key, so a successful in-place update IS the proof. Record the live value here once observed so this is never PENDING again.
 - [x] `aapt2 dump badging` confirms the preserved package ID and declared version: `package: name='com.denellestudios.echoesofelarion' versionCode='354266' versionName='2026.09.04.354266'`, `application-label:'Echoes of Elarion'`, `minSdkVersion:'26'`, `targetSdkVersion:'36'`.
 - [ ] APK is ARM64/IL2CPP and uses the intended production Android configuration.
 - [ ] No local-test defines, Development Build, Devnet endpoints/mint, mock provider,
@@ -132,7 +176,8 @@ Devnet infrastructure readiness does not discharge the final APK/device matrix.
 
 ## Gate B — final APK rewarded-ad device matrix
 
-Run these against the exact hash recorded in Gate A.
+`OWNER:` **Every item in this gate is a physical-device felt test.** No part of it can be
+prefilled or proven headless. Run them against the exact hash recorded in Gate A.
 
 - [ ] Consent choice is resolved before LevelPlay initialization.
 - [ ] Daily Chest completion grants the displayed reward exactly once.
@@ -150,6 +195,7 @@ Run these against the exact hash recorded in Gate A.
 
 ## Gate C — final APK SKR purchase device matrix
 
+`OWNER:` **Every item in this gate needs a real wallet approving a real transaction.**
 Complete a bounded canary before the production flip, then repeat the critical
 recipient/mint/amount assertions on the production-configured build.
 
@@ -176,25 +222,39 @@ recipient/mint/amount assertions on the production-configured build.
 - [ ] Portal field **In-App Purchases/Transactions** set to **Yes**.
 - [ ] Privacy URL set to https://echoes-of-elarion.vercel.app/privacy.
 - [ ] Terms/licence URL set to https://echoes-of-elarion.vercel.app/terms.
-- [ ] What’s New finalized from the tested build:
+- [ ] `OWNER:` What's New approved. ⚠ **The block quoted below is STALE** — it predates
+      three weeks of work and describes almost none of it. The drafted replacement,
+      grouped as Fixed / New / Balance with a per-claim commit table, is
+      `publishing/RELEASE_NOTES_2026-09-07.md` (2026-09-06). Paste the approved wording
+      here and delete the stale quote:
 
       > Expanded dungeon adventures, a redesigned inventory and skill experience,
       > optional rewarded bonuses, and wallet-approved SKR packs.
 
 - [ ] Reviewer instructions pasted from
       `publishing/SUBMISSION_READY_2026-08-22.md`.
-- [ ] Four clean landscape screenshots captured from the exact final APK:
+- [ ] `OWNER:` Four clean landscape screenshots captured from the exact final APK
+      (1920x1080 recommended; the floor is >=1080 px on BOTH axes —
+      `publishing/media/README.md`). None exist yet: `publishing/media/` is empty of
+      every required file.
   - [ ] Village rebuilding/defence
   - [ ] Dungeon exploration/combat
   - [ ] Optional rewarded-ad offer before playback
   - [ ] SKR pack confirmation before wallet handoff
 - [ ] Screenshots contain no debug overlays, test wallets, transaction signatures,
       Devnet labels, personal information, or placeholder content.
-- [ ] Confirm the existing portal icon and banner remain suitable for this update. If
-      either is replaced, the replacement meets `publishing/media/README.md` requirements.
+- [ ] `OWNER:` Confirm the existing portal icon and banner remain suitable for this
+      update. If either is replaced, the replacement meets `publishing/media/README.md`
+      (icon exactly 512x512, banner exactly 1200x600). Verified 2026-09-06:
+      `publishing/media/` contains only `README.md` — no `icon-512.png`, no
+      `banner-1200x600.png`, no screenshots. Replacements would have to be authored.
 - [ ] Listing description matches the monetized build and contains no stale claims.
 
 ## Gate E — submit the update
+
+`OWNER:` **Every item in this gate is the owner's, start to finish** — it needs the
+publisher account, the publisher wallet, and her approval of on-chain messages. No seat
+can prefill or execute any of it.
 
 - [ ] Sign into https://publish.solanamobile.com with the existing publisher account
       and existing publisher wallet.
@@ -222,6 +282,46 @@ recipient/mint/amount assertions on the production-configured build.
       `#dev-answers` support path.
 - [ ] After approval, install/update from the dApp Store on Seeker and rerun the
       purchase/ad smoke tests against the store-delivered binary.
+
+## Gate G — Google Play closed testing (added 2026-09-06)
+
+This checklist was written for the dApp Store only. The owner's second lane tonight is
+the newest build into Google Play testing, so it gets its own gate rather than being
+smuggled into Gate A.
+
+**Prefilled (no owner decision needed):**
+
+- Build script: `google-play-aab-build.ps1` (repo root — gate scripts live at the root,
+  not under `tools\`). Same `bundleVersion` / `AndroidBundleVersionCode` source as the
+  APK: `ProjectSettings/ProjectSettings.asset:148,177` → `2026.09.07.358574` / `358574`.
+- AAB output path: `Builds/Android/EchoesOfElarion-GooglePlay.aab`
+  (named in `Builds/aab-status.txt`).
+- Play's hard ceiling is 500,000,000 bytes for an AAB. The last measured bundle passed:
+  `AAB_SIZE_OK 469202267 (30797733 under 500000000)` — but that measurement is dated
+  2026-09-04 and is **not** this build. Re-measure.
+- R2 parity gate applies to this lane too: `Builds/r2-parity.log` is green and names
+  `catalog_2026.09.07.358574` (see the prefill block above). `distribute-android` and two
+  other chains now refuse a stale parity log.
+- Blocked by the same compile-RED recorded above — `aab-build.console.log` reads
+  `COMPILE_RED`, so no AAB was produced tonight.
+
+**Owner-only:**
+
+- [ ] `OWNER:` Play Console listing assets (icon, feature graphic, phone/tablet
+      screenshots) — separate set from the dApp Store media; specs are Play's, not the
+      ones in `publishing/media/README.md`.
+- [ ] `OWNER:` Play "What's new" text approved from
+      `publishing/RELEASE_NOTES_2026-09-07.md` (Play caps this field at 500 characters,
+      so the three blocks likely need her pick of which leads).
+- [ ] `OWNER:` Confirm the closed-test track, tester list, and that the 12-tester /
+      14-day requirement is satisfied or waived.
+- [ ] `OWNER:` Ruling on `publishing/config.yaml:174-177`. That comment block still
+      declares the app is **not** on Google Play and deliberately omits
+      `google_store_package`. Once a Play listing exists the omission becomes a false
+      declaration on the dApp Store side. **Not edited here** — it is her call whether
+      to add the package id now or after the Play listing goes live.
+- [ ] `OWNER:` Play App Signing / upload key confirmation — same certificate question as
+      the dApp Store item in Gate A, and equally unprovable from this repo.
 
 ## Final release record
 

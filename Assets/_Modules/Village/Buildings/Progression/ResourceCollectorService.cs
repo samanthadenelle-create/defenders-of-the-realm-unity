@@ -59,6 +59,13 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static List<PendingLine> PendingByResource()
         {
+            // WO-1483 frame budget. This service is static and has no Update of its own — its
+            // TICK is CollectorStatusPublisher.Update (0.5s cadence), which lands here via the
+            // registry sweep below. Measured HERE so the cost is attributed to the sweep, not
+            // to the publisher. Accumulating 4-arg overload — no per-tick log; PerfReporter
+            // rolls it up 1/s.
+            using var _perf = FlowTrace.Measure("Perf", "ResourceCollectorService.PendingByResource", 4f, 1f);
+
             var samples = new List<KeyValuePair<HarvestResource, double>>();
             foreach (var c in ResourceCollectorRegistry.All)
             {

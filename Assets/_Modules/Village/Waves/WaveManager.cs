@@ -1160,6 +1160,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483 frame budget. FIRST line so every early-return path is still timed.
+            // This EXTENDS the file's existing Measure (the "wave data load" scope, a one-shot
+            // LOAD cost) onto the FRAME path. Accumulating 4-arg overload — no per-frame log;
+            // PerfReporter rolls it up 1/s.
+            using var _perf = FlowTrace.Measure("Perf", "WaveManager.Update", 4f, 1f);
+
             // FTUE PER-TICK STAND-DOWN (F8 2026-08-05: "wave 1's enemies attacked me while I was
             // still paused on the tutorial screen" — captured cd29.9 -> cd6.8 with the tutorial
             // LIVE). The FTUE guard used to be checked at the DOOR only (BeginLoop /

@@ -101,6 +101,9 @@ namespace DeNelle.Editor
         // --- ALLOW-LIST — known-sanctioned raw-uGUI constructors (by file name) ---
         // Matched on Path.GetFileName so it's path-robust. Each carries WHY it is
         // sanctioned. These never count as offenders and never enter the baseline.
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-178) - the kit + style layer, which IS
+        // the sanctioned raw-uGUI constructor, plus the other named exceptions. WO-178 was cited
+        // with no date; re-read then that every file still exists and is still genuinely the kit.
         private static readonly Dictionary<string, string> AllowList = new Dictionary<string, string>
         {
             // THE KIT + STYLE LAYER — they ARE the sanctioned builders/primitives.

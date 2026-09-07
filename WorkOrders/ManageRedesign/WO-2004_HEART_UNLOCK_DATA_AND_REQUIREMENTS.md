@@ -1,5 +1,7 @@
 # WO-2004 — Define Data-Driven Heart Unlock Bundles and Upgrade Requirements
 
+**Status:** READY TO IMPLEMENT - state unproven 2026-09-06
+
 **Priority:** P0  
 **Depends on:** WO-2003
 

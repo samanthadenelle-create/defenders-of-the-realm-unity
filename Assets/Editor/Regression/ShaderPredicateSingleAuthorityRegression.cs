@@ -145,6 +145,9 @@ namespace DeNelle.Editor.Regression
         ///                               recovering it; they intentionally do not share the
         ///                               recovery authority.
         /// </summary>
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - eleven files still carrying an inline
+        // broken-shader test instead of routing through MagentaGuard.IsBrokenShader. The summary
+        // above names each one's consolidation status; by the remove-by, consolidate or go red.
         private static readonly HashSet<string> KnownInlineDebt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Assets/_Modules/Core/EnvironmentTreeMaterialFixer.cs",

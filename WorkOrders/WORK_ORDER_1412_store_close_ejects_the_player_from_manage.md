@@ -1,6 +1,7 @@
 # WO-1412: Manage -> store -> CLOSE lands on the HUD, ejecting the player from Manage; BUY BUILDER is unpriced and shows while a slot is free
 
 **Status:** IN PROGRESS - ABSORBED INTO WO-1418 lane D (Codex batch, BATCH_STATE PART 8 / 8.5 ruling 3: the sending tab rides the existing return-door arbiter); lands and flips with 1418. *(was: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review)*
+**Note 2026-09-06:** no diff hunk in the working tree carries a WO-1412 marker, and its parent WO-1418 is CLOSED - this ticket needs re-verification against WO-1418's landed diff before it can be closed.
 
 ## Evidence
 - Device walk (build 355952) - SEEN (`REVIEW_MERGED.md` row 11): `docs/qa/UI_REVIEW_2026-09-05/11-research-upgrade-door.png`

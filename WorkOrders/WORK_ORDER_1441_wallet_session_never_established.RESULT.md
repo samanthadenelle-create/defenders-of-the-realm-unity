@@ -74,3 +74,7 @@ so it is not by itself a refusal marker.
 
 Session life past 15 minutes depends on `TryRenewSessionAsync` plus the `signed_at` column on the live Neon DB,
 which is the owner-run repair (`tools/run-schema-repair.mjs`) - not this ticket's client scope.
+
+## 4. Device evidence 2026-09-06 20:48 (F8 seq 4686, build 358574)
+
+`[SolanaWalletProvider] SignMessage failed: authorization request failed` from `SignMessageBase58` during a LINK01 promo redeem in `Main_Castle_Overworld`; the screen read "We could not verify your account, so the code was NOT used. Sign in, then try again." Proves the interactive mint path runs on the post-fix build (acceptance 2 half-proven: the sheet was asked); the refusal came from the wallet app (MWA authorization), not from the game, so this is the WO-1420 attribution class. A minute earlier the same account was refused by the server per-player cap, which means a signature HAD verified then. Open: why the wallet refused the second authorization (owner cancelled vs Seed Vault refusal); the WO-1420 elapsed-time branch should name it in the device log.

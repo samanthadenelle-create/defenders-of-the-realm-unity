@@ -58,7 +58,13 @@ namespace DeNelle.Village.Crafting
             string scene = SceneManager.GetActiveScene().name ?? string.Empty;
             if (scene.IndexOf("Dungeon", System.StringComparison.OrdinalIgnoreCase) >= 0) return;
 
-            _hold = WorldHold.Acquire("jeweler-discovery");
+            // WO-1471: PLAYER-OWNED, not the bounded default. This FTUE card waits for the player
+            // to read it and press through, so elapsed time is not evidence of a leak. The probe
+            // reuses the SAME liveness expression PanelManager.Register is given below. The Acquire
+            // precedes the modal build, but TryPresent is synchronous, so no watchdog tick can
+            // observe _modal null (the probe is polled later, not evaluated here).
+            _hold = WorldHold.AcquirePlayerOwned("jeweler-discovery",
+                () => this != null && _modal != null && _modal.canvas != null);
             _modal = ElarionUiKit.BuildObsidianModal("JewelerDiscoveryUI", "JEWELER DISCOVERED",
                 ElarionUiKit.ModalArchetype.Compact, Close, sortingOrder: 31030);
             MedievalUiSkin.ApplyShell(_modal.chrome, compact: true);
@@ -90,7 +96,12 @@ namespace DeNelle.Village.Crafting
             Close();
         }
 
-        private void Update() { if (_hold != null) WorldHold.Renew(_hold); }
+        // WO-1471: the per-frame renew Update is DELETED - it was the workaround for
+        // the bounded ceiling, and a player-owned hold has no ceiling to outrun.
+        // WO-1360/WO-1471: with no ceiling the host's own lifecycle is the net, so this component
+        // steps out on BOTH exits. OnDisable already calls Close(); a destroyed host never receives
+        // OnDisable in every teardown order, so OnDestroy releases the hold and the card together.
+        private void OnDestroy() => Close();
 
         private void Close()
         {

@@ -192,6 +192,40 @@ pooling. `[DisallowMultipleComponent][RequireComponent(NavMeshAgent)][RequireCom
   STATIC cast-telegraph pair `CastStarted(Enemy,string,float)` / `CastEnded(Enemy)` (:1554-1556, P4
   HUD cast-bar seam; if the caster is destroyed mid-cast CastEnded never fires — subscribers must
   self-expire).
+- **DELTA 2026-09-06 (WO-1450 + WO-1459 S2 suspect 3)  -  the structure probe has a CADENCE GATE, and
+  the acquire trace is change-gated.** `ProbeForStructure` runs a forward `SphereCast` **and**
+  (flag-on, hero not near) an all-direction `OverlapSphere` **on mask `~0`  -  EVERY LAYER**. Until this
+  gate it ran **once per frame for every enemy holding no target**: measured device floor
+  `LOW fps=11 ms=87.4 mem=427MB scene=RaidBase_raider_camp_small towers=0 enemies=13` at
+  `timeScale=1.00`  -  13 enemies x 2 physics queries x 60 fps = **1,560 all-layer queries a second**.
+  `private const float ProbeIntervalSeconds = 0.25f` + `_nextProbeAt` (`Enemy.cs:261-278`) caps it at
+  **<= 4 probes/sec/enemy**.
+  - (!) **THE GATE IS ON THE RETRY CADENCE ONLY  -  NOT ON SELECTION.** It is consulted *solely* on the
+    branch where `_currentTarget` is already null; a **held target still drops the same frame it dies
+    or flees**, and `ProbeForStructure`'s own logic (forward cast first, hero-primary suppression,
+    `CombatFactionRules.MayAttack`) is untouched. A skipped frame takes the identical
+    `_attackCooldown = 0f; return;` path a null probe already took, so those frames are
+    **byte-for-byte** what a failed probe produced.
+  - **The acquire trace was evicting the evidence.** It was an unthrottled `FlowTrace.Step` firing on
+    every probe hit  -  **38,018 lines between 12:59:05 and 14:37:52 (~320/sec)**, each carrying a
+    managed stack walk, against a **256 KiB** Android main ring: it evicted the boot window and every
+    other trace in under two seconds (memory `logcat-ring-buffer-destroys-evidence`). It is now gated
+    **TWICE**  -  `_lastProbeTargetId` makes it fire only on a target **CHANGE** (a re-acquire of the
+    same wall is not news), and then at most **1/sec per enemy** via `FlowTrace.Throttle`. STOP: **The
+    trace is KEPT, not stripped** (CLAUDE.md S12)  -  the defect was the cadence, not the line.
+  - **THREE PERMANENT drop-path traces**, one per `_currentTarget = null` site, because a capture
+    could not previously tell them apart and a re-acquisition thrash read as "the probe is noisy":
+    `path=not-alive` (`:1818`), `path=out-of-reach (DEF-224)` (`:1848`  -  prints the measured
+    distance vs the drop ring, so a future capture proves whether a thrash is a target oscillating
+    across the ring or a target dying), and `path=self-death (terminal, no re-acquire)` (`:3224`).
+    The third can never feed a thrash; **naming it anyway is the point**  -  a capture showing it is
+    proof the thrash is NOT from there, exactly the elimination a static read could not make.
+  - `PrepareForReuse` resets `_nextProbeAt = 0f` **and** `_lastProbeTargetId = 0` (`:3050`)  -  a reused
+    body probes on its first live frame and its first acquire is a genuine CHANGE; inheriting the dead
+    body's target id would swallow it. Pinned by **`EnemyProbeCadenceRegression`**
+    (`[enemy-probe-cadence]`), which **declares itself a SOURCE LINT in every reason string**: it
+    cannot prove line counts or frame cost  -  that is a device capture  -  only that the guards are not
+    reverted by a later edit.
 - **DriveNav destination priority** (:1065-1139): (1) `_brainPositionOverride` (a live EnemyBrain
   decides here every frame) → (2) DEF-224 self-contained hero aggro (radius 7 m default, +2.5 m
   hysteresis, def.AggroRadius honored since WO-397 at :550) → (3) static `_brainTarget` tether →
@@ -464,6 +498,41 @@ into a `RaidBase_*` scene. The walk-to overworld raid is retired behind `ff.raid
   `ApplyUpgradeStats` re-bases HP/DPS/reach/aggro at the persisted upgrade level + carries
   `AbilityUnlock`s; `ApplyDamageMultiplier`/`ApplyHealthMultiplier` RE-BASE (never compound).
   Rally: idles walk to `TroopRally.Point`; a foe in range always wins. **WIRED/LIVE.**
+  - **DELTA 2026-09-06 (WO-1438/WO-1439)  -  `NearestHostile` no longer puts walls and defenders in
+    ONE nearest-wins bucket.** *Measured, not inferred* (`logs/debug/troop-ai-blind-2026-09-06.log`,
+    14:36, build `2026.09.06.358161`): `won='Wall_Outer_SS_11(WallSegment)' kind=struct dist=4.2m ...
+    accepted[unit=1,struct=17] ... preferStruct=False`. **`accepted[unit=1]` is the proving field**  - 
+    a LIVE defender was inside the sweep and a wall panel won anyway; the same archer then walked
+    SS_11 -> Watchtower -> SS_12 -> SS_7 -> SS_13 -> SS_6 -> SS_14, **outward along the ring**. Cause: when
+    `_preferStructures` was FALSE (every role except siege) a hostile STRUCTURE fell through to the
+    same `else` as a live defender. The loop now only **MEASURES**; the pick happens once, below it,
+    against **separated buckets** (`TroopController.cs`, `NearestHostile` at `:762`).
+  - (!) **THE UNIT PREFERENCE IS GATED ON REACHABILITY, NOT ABSOLUTE  -  and the reason is the steering
+    model.** This class steers with `_agent.Move(displacement)` (no `SetDestination`, no obstacle
+    avoidance) and its sweep sees a guard THROUGH an intact baked wall, so an unconditional "always
+    prefer the unit" pushes a footman into a navmesh edge and freezes it  -  strictly worse than
+    chewing the wall. A unit wins only when it is **already inside attack range** or a **complete,
+    non-detouring NavMesh route exists**. That is *"a breach is a route"* expressed in the selector:
+    the wall stands -> no route -> the wall stays the target; the hole opens -> the route completes ->
+    the defender wins. **No pathing rewrite  -  the route is read as a FILTER, never steered by.**
+    Constants: `RouteCheckInterval = 0.5f`, `RouteDetourFactor = 1.5f` (calibrated on the 09-06
+    capture, whose worst real route measured 8.1/7.1 = **1.14x**, the rest within 1.01x  -  so 1.5
+    clears every measured route and still rejects a lap of the ring); probe sample radii
+    `BreachSampleRadius = 0.6f` / `ReplacementSampleRadius = 2.5f` (`:136-156`).
+  - (!) **DO NOT CLEAR `_routeToUnitOpen` ON THE IN-RANGE BRANCH.** The code zeroes `_routeCheckAt`
+    instead, with the reason in-line: clearing would make the boundary FLICKER  -  the instant the
+    defender steps 0.1 m back out of range the refresh branch runs, the 0.5 s throttle returns early,
+    and the troop reads the just-cleared `false`, swinging at the wall for half a second on every
+    step-back in a brawl. That reads to the player as *"they didn't really fight"*.
+  - **`private const CombatFaction SelfFaction = CombatFaction.Friendly`** `:381`  -  this troop's side
+    declared ONCE. The explicit interface member (`IDamageableStructure.Faction`), the selection
+    filter and the struct/unit classifier all read it and hand it to **`CombatFactionRules.MayAttack`**
+     -  the sweep's old inline `dmg.Faction != CombatFaction.Hostile` is **gone** (see `core.md`
+    Combat/). The `[Flow:TroopAI]` RETARGET line now also carries the gate's own verdict:
+    `| preferUnit=<bool> route=<status>`  -  `preferUnit=False` with `route=PathPartial` beside a
+    struct win is the wall still standing; `preferUnit=True` the tick after a segment dies is the
+    breach being taken. **Both are one read.** Pinned by **`TroopTargetPreferenceRegression`**
+    (`[troop-target-preference]`, marker `TROOP_TARGET_PREF_OK`).
 - **TroopDeployer.cs** (107) — static spawn seam: `SpawnTroop(id,pos)` = TroopCatalog →
   TroopFactory → `TroopStatResolver.Effective(def, BarracksService.TroopLevel)` → Enemy-layer mask;
   `SpawnFromArmy(PlayerTroop,pos,stackIndex)` (:65) stamps `OwnedTroopId`, bakes veterancy ×
@@ -495,6 +564,24 @@ into a `RaidBase_*` scene. The walk-to overworld raid is retired behind `ff.raid
   (:114-130); deploys via `TroopDeployer.SpawnFromArmy`; retreat reconciles survivors vs wounded
   (recoverySeconds 120, :70) and exits via `SceneRouter.GoCastle`. Code-built uGUI, New Input
   System + Lean tap. **WIRED/LIVE.**
+  - **DELTA 2026-09-06 (WO-1463)  -  the rally flag was MAGENTA in the player's build, and `TintRenderer`
+    is retired.** `GameObject.CreatePrimitive` assigns Unity's built-in `Default-Material`, which has
+    **no URP variant**: fine in the editor, magenta error shader in a URP PLAYER build, and setting
+    `.color` on it changes nothing. Proof: `Logs/device/screens/owner-raid-ui-2026-09-06-143701.png`.
+    `BuildRallyFlag` now calls **`ApplyUrpMaterial`**, which goes through the project's ONE runtime
+    material authority  -  **`MagentaGuard.BuildUrpLitMaterial`** (resolves URP/Lit and, when the shader
+    was stripped from the build, BORROWS it off a live scene material rather than degrading to
+    Standard; `MagentaGuard.cs:814-869`). It **returns NULL rather than lying**, so the caller leaves
+    the renderer alone **and WARNS**  -  a silent fallthrough is what S12 forbids.
+  - STOP: **`MagentaGuard.ProtectPrimitiveArt(root, ...)` IS NOT OPTIONAL.** MagentaGuard's scene sweep
+    treats a built-in primitive mesh as a stray placeholder and **DISABLES** it
+    (`IsPrimitivePlaceholder`), so deliberate primitive art must register  -  otherwise the fix for the
+    magenta flag becomes an **invisible flag**. Pinned by `RaidSelectionLayoutRegression` case
+    `S8:no-bare-primitive`. Same pattern as `Editor/WallTools/RaidBaseGenerator.ApplyUrpMaterial` and
+    `Village/World/DungeonWorldPortalSpawner.BuildArch`.
+  - (!) **Neither tone is a new creative choice** (the owner is colourblind): the banner takes the kit's
+    canonical `ElarionUi.Gilt` (`Core/UI/ElarionUi.cs:60`), the pole keeps the dark-wood literal it
+    always shipped with. WO-1463 changed **HOW** the colour is applied, not **WHICH** colour it is.
 - **RaidScoring.cs** (328) — WO-771.6 V1 scorer: 180 s clock (:50), destruction % from
   RaidGarrisonSpawner alive/total, pure `ComputeStars` (cleared / boss down / under clock) + pure
   `ComputeLoot` (crystals/food scaled by stars + destruction), `OnTimeExpired` once; self-installs

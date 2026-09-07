@@ -1,6 +1,6 @@
 # WO-1511: reflection at seven sites where a direct reference exists, two of them same-assembly, plus one audio-seam bypass
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** PARTIALLY IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** Architecture. Straightforward mechanical replacement; pairs with WO-1510.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1511 -> 1512 in the same edit).

@@ -111,6 +111,9 @@ namespace DeNelle.Editor.Regression
         // Adding an entry is a deliberate act; that is the safety valve that keeps Case
         // 1/2 honest instead of noisy. Anything not here and not assigned = FAIL.
 
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - Enemy fields deliberately NOT reset on pool
+        // release (public events whose clearing would sever a pooled brain's wiring, per-BODY
+        // latches); re-read then against Enemy.cs in case a field was renamed or deleted.
         private static readonly Dictionary<string, string> EnemyExempt = new Dictionary<string, string>
         {
             // PUBLIC EVENTS - exempt DELIBERATELY, and the reasoning is the opposite of "harmless".
@@ -195,6 +198,9 @@ namespace DeNelle.Editor.Regression
             { "_typeVfxSetAuthored", "per-BODY latch of a serialized value; clearing it would discard authored art on reuse" },
         };
 
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - EnemyBrain fields deliberately NOT reset, same
+        // reasoning as EnemyExempt above (Awake-wired public events, per-BODY latches); re-read
+        // then against EnemyBrain.cs so a renamed field cannot hide behind a stale entry.
         private static readonly Dictionary<string, string> BrainExempt = new Dictionary<string, string>
         {
             // Public event, same reasoning as Enemy.Died above: EnemyBrain.Awake wires
@@ -246,6 +252,9 @@ namespace DeNelle.Editor.Regression
         //   EnemyOutpost.cs             - the outpost boss, identical to the raid-boss defect:
         //       a brain with no tactics falls to a chain that finds nothing in an outpost scene.
         //   EnemyFamilyTestSpawner.cs   - a dev-tools spawner; lowest impact, same shape.
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - three spawners that leave _tactics null, parked
+        // OUTSIDE the 2026-08-02 enemy-AI lane. Every entry says "ticket owed" in its own value and
+        // none has been minted; by the remove-by, mint them or delete the entries and go red.
         private static readonly Dictionary<string, string> RoleTacticsKnownGaps = new Dictionary<string, string>
         {
             { "OutpostEnemyGroupSpawner.cs", "dungeon group path - out of the 2026-08-02 lane, ticket owed" },

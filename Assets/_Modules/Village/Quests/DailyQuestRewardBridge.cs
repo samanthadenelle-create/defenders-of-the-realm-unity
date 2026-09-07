@@ -89,15 +89,24 @@ namespace DeNelle.Village.Quests
             var svc = DailyQuestService.Instance;
             if (svc == null) return;
             svc.QuestCompleted += HandleQuestCompleted;
+            // WO-1521 — the CLAIM face re-enters THIS payer, deliberately with the SAME handler.
+            // A second handler (or a second dispense method) would be a second claim path and a
+            // second place for the latch to be wrong; HandleQuestCompleted's ClaimedAtUnix guard
+            // and its _payingOut re-entrancy set already make a repeat call safe.
+            svc.ClaimRequested += HandleQuestCompleted;
             _hooked = true;
-            FlowTrace.Step("Economy", "DailyQuestRewardBridge subscribed to QuestCompleted");
+            FlowTrace.Step("Economy", "DailyQuestRewardBridge subscribed to QuestCompleted + ClaimRequested");
         }
 
         private void Unhook()
         {
             if (!_hooked) return;
             var svc = DailyQuestService.Instance;
-            if (svc != null) svc.QuestCompleted -= HandleQuestCompleted;
+            if (svc != null)
+            {
+                svc.QuestCompleted -= HandleQuestCompleted;
+                svc.ClaimRequested -= HandleQuestCompleted;
+            }
             _hooked = false;
         }
 

@@ -1,6 +1,6 @@
 # WO-1514: hardcoded repo roots survive in twelve scripts, after the 2026-08-09 machine-dependent ruling
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
+**Status:** PARTIALLY IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT)
 **Silo:** Tooling. Two untracked root scripts and ten under `dev/tmp/`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1514 -> 1515 in the same edit).

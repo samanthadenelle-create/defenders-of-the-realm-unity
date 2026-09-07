@@ -1,6 +1,6 @@
 # WO-1564: the research picker orphans a fifth school across a dead well, and the queue drawer prints raw internal ids
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Priority:** P2
 **Silo:** `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs` +
 `Assets/_Modules/Village/Buildings/BuildTimerService.cs`. Both halves live in the VM, so they are **one

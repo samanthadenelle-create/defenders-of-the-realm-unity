@@ -531,6 +531,98 @@ def check_capture_staleness(rows):
             r["capture_detail"] = "cited capture %s contains every target's newest commit" % sha[:12]
     return cited
 
+# ── BOARD_DRIFT: a READY ticket whose own named files have already moved (2026-09-06) ──
+#
+# On 2026-09-06 NINE tickets were found whose work had LANDED - the files they name were
+# committed days earlier - while their **Status:** line still read READY. The board is
+# derived from those lines (CLAUDE.md §2), so nine finished tickets sat in the owner's
+# to-do column and one of them was nearly re-dispatched to a second lane. Nothing in the
+# repo could see it: `--check` asks whether a status line is WELL-FORMED, never whether it
+# is still TRUE.
+#
+# This turns "is this READY ticket still really open?" into arithmetic: if a path the
+# ticket names under Assets/, api/ or tools/ has a commit NEWER than the ticket's mint
+# date, someone has been in that file since the ticket was written.
+#
+# ⚠ WARNING, NEVER A FAIL, and that is deliberate rather than timid. Drift is EVIDENCE,
+# not a verdict: a READY ticket legitimately names a file another lane touched for an
+# unrelated reason, and a ticket that cites a whole subsystem would fail the board every
+# day. It reports exactly like DUPLICATE_WO_NUMBERS and STALE_CAPTURE above - named, never
+# repaired, and outside the --check exit contract.
+#
+# ONE git call, not one per path. Measured 2026-09-06: 46 READY rows, and a per-path loop
+# over their cited paths would be hundreds of subprocess spawns in a build that runs at
+# session boot, in the check-in gate and in a hook (this single-pass form kept the whole
+# board build at 2 s) - so this walks the log ONCE, newest-first, windowed to the OLDEST mint
+# date in the set. First sighting of a path in that walk IS its newest commit; a path that
+# never appears has no commit inside the window and therefore cannot have drifted. Same
+# single-pass shape as git_added_dates() above, for the same reason.
+#
+# The path regex requires an extension so a bare directory ("under Assets/_Modules/HUD")
+# is not treated as a file, and strips the `File.cs:266-274` line suffix this repo writes
+# everywhere - an unstripped one resolves to no commit and would read as a silent miss.
+_DRIFT_PATH = re.compile(
+    r"(?<![A-Za-z0-9_/\\])(?:Assets|api|tools)[/\\][A-Za-z0-9_.\-/\\]*[A-Za-z0-9_\-][.][A-Za-z0-9]{1,6}")
+_DRIFT_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+
+def _drift_paths(text):
+    """Repo-relative paths a ticket names under Assets/ api/ tools/, de-duped, order kept."""
+    seen, out = set(), []
+    for raw in _DRIFT_PATH.findall(text):
+        p = raw.replace("\\", "/").rstrip(".,;:)*`'\"")
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+def ready_drift(rows):
+    """[(row, path, sha, commit_date, mint_date)] for READY tickets whose files moved."""
+    ready = [r for r in rows if r.get("is_wo") and r["bucket"] == "Ready"]
+    if not ready:
+        return []
+    targets = []
+    for r in ready:
+        # The date IN the status line wins when there is one (it is what the author wrote
+        # about THIS verdict); otherwise the row's resolved mint date - **Minted:** header,
+        # then the git add, then the file mtime.
+        m = _DRIFT_DATE.search(r.get("status", "") or "")
+        mint = m.group(1) if m else r.get("created")
+        if not mint:
+            continue
+        try:
+            text = open(os.path.join(WO_DIR, r["file"]), encoding="utf-8",
+                        errors="replace").read(60000)
+        except OSError:
+            continue
+        paths = _drift_paths(text)
+        if paths:
+            targets.append((r, mint, paths))
+    if not targets:
+        return []
+
+    since = min(t[1] for t in targets)
+    rc, out = _git(["log", "--since=" + since, "--no-renames", "--format=%x01%h %cs",
+                    "--name-only", "--", "Assets", "api", "tools"], timeout=180)
+    if rc != 0:
+        return []   # no git / not a repo: silence beats a fabricated verdict
+    newest = {}
+    cur = None
+    for line in out.splitlines():
+        if line.startswith("\x01"):
+            parts = line[1:].strip().split(None, 1)
+            cur = (parts[0], parts[1]) if len(parts) == 2 else None
+        elif line.strip() and cur:
+            newest.setdefault(line.strip(), cur)   # newest-first walk: first sighting wins
+
+    hits = []
+    for r, mint, paths in targets:
+        for p in paths:
+            if p in newest:
+                sha, cdate = newest[p]
+                if cdate > mint:   # day granularity, strictly after the mint
+                    hits.append((r, p, sha, cdate, mint))
+    return hits
+
 def resolve_created(text, base, mtime, added_dates):
     """(YYYY-MM-DD, is_estimate) per the priority order above."""
     m = _MINTED.search(text)
@@ -539,6 +631,56 @@ def resolve_created(text, base, mtime, added_dates):
     if base in added_dates:
         return added_dates[base], False
     return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d"), True
+
+# ── the RECURSIVE "does this work order have a status line at all?" sweep (WO-1492) ──────
+#
+# The row parser above globs `WorkOrders/*.md` ONLY - one flat level - and decides work-order
+# kind from the `WORK_ORDER_` prefix. Both assumptions failed at once on the ManageRedesign
+# program: seventeen tickets live in `WorkOrders/ManageRedesign/` and are named `WO-2001_*.md`,
+# so they were invisible to the board TWICE OVER (wrong directory, wrong filename shape) and
+# thirteen of them carried no `**Status:**` line at all. The largest lane in flight rendered as
+# nothing, and no marker said so - the exact failure docs/BOARD.md exists to prevent.
+#
+# This sweep is deliberately NARROW: it answers only "is a **Status:** line PRESENT", never what
+# the status means. Bucketing stays with classify_status on the rows the page renders, so this
+# cannot change how a single existing row is classified - it can only add a named defect.
+#
+# Top-level files the row parser already owns are skipped, so a missing status is reported once
+# (as Unlabeled) rather than twice under two different markers.
+_WO_DASH_FILENAME = re.compile(r"^WO-\d+[_\-]", re.IGNORECASE)
+
+def is_work_order_file(basename):
+    """Filename test for the recursive sweep: WORK_ORDER_*.md or WO-<n>_*.md, never a RESULT."""
+    if not basename.lower().endswith(".md"): return False
+    if basename.endswith(".RESULT.md"): return False
+    if _WO_COMPANION_KIND.match(basename): return False
+    return bool(_WO_DASH_FILENAME.match(basename)) or bool(_WO_FILENAME.match(basename))
+
+def missing_status_sweep():
+    """Every work-order file under WorkOrders/ (any depth) with no exact **Status:** line."""
+    out = []
+    wo_root = os.path.abspath(WO_DIR)
+    for dirpath, _dirnames, filenames in os.walk(WO_DIR):
+        flat = os.path.abspath(dirpath) == wo_root
+        for name in sorted(filenames):
+            if not is_work_order_file(name): continue
+            # Already parsed as a row above; a missing status there lands in Unlabeled.
+            if flat and is_work_order(name): continue
+            path = os.path.join(dirpath, name)
+            try:
+                text = open(path, encoding="utf-8", errors="replace").read(20000)
+            except OSError:
+                continue
+            if not _STATUS_EXACT.search(text):
+                # relpath raises across drives on Windows (EOA_WO_DIR can point at a temp dir
+                # on another volume, which is exactly how the self-check runs). A reporting
+                # path must never be the thing that crashes the board.
+                try:
+                    rel = os.path.relpath(path, ROOT)
+                except ValueError:
+                    rel = path
+                out.append(rel.replace("\\", "/"))
+    return sorted(out)
 
 def parse_wos():
     rows = []
@@ -1619,14 +1761,44 @@ def main():
     print(f"VALIDATIONS_OK {len(_validations)} recorded, {_vdone} validated, "
           f"preserved across rebuild - {_rel}")
 
+    # WO-1492: a work order with NO **Status:** line anywhere under WorkOrders/ is invisible to
+    # the board. Named, not just counted - the list is the to-do.
+    no_status = missing_status_sweep()
+    if no_status:
+        print(f"MISSING_STATUS_LINE {len(no_status)} work order(s) under WorkOrders/ carry no "
+              f"**Status:** line at all - they are invisible to the board. Fix the WO file:")
+        for p in no_status[:40]:
+            print("    " + p)
+        if len(no_status) > 40:
+            print(f"    ... and {len(no_status) - 40} more")
+
+    # 2026-09-06 (tooling lane): READY tickets whose named files have already been
+    # committed against. The
+    # marker prints on EVERY run, 0 included - absence is a failure signal in this repo
+    # (see the BOARD_CHECK_OK note above), and a warning you only get when it fires cannot
+    # be distinguished from a check that silently stopped running.
+    drift = ready_drift(rows)
+    for r, p, sha, cdate, mint in drift[:40]:
+        label = (f"PROD-{r['prod']:03d}" if r.get("prod") is not None
+                 else f"UI-{r['ui']:03d}" if r.get("ui") is not None
+                 else f"WO-{r['num']}" if r.get("num") is not None else r["file"])
+        print(f"READY_BUT_MOVED {label} {p} {sha} {cdate} (minted {mint})")
+    if len(drift) > 40:
+        print(f"    ... and {len(drift) - 40} more")
+    n_drift_wo = len({h[0]["file"] for h in drift})
+    print(f"BOARD_DRIFT {n_drift_wo} READY ticket(s) name a file committed after their mint "
+          f"date - WARNING, not a fail: verify the ticket is still open before dispatching it")
+
     problems = []
     if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
+    if no_status: problems.append(f"{len(no_status)} missing status line(s)")
     if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")
     if banner_errors: problems.append(f"{len(banner_errors)} banner parse error(s)")
     if problems:
         print("BOARD_CHECK_FAIL " + ", ".join(problems))
         return 1 if check else 0
-    print("BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable")
+    print("BOARD_CHECK_OK 0 unlabeled, 0 missing status lines, 0 status contradictions, "
+          "mint numbers readable")
     return 0
 
 if __name__ == "__main__":

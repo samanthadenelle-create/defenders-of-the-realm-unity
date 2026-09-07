@@ -188,6 +188,29 @@ namespace DeNelle.Cosmetics
             Refresh();
         }
 
+        /// <summary>
+        /// WO-1472 — the REAL "nobody bound this applier" detector, and the ONLY place that message
+        /// is now emitted.
+        /// <para>Start runs after the same-frame <see cref="Attach"/> has assigned
+        /// <see cref="category"/> (Attach: AddComponent → [OnEnable fires here] → category = … →
+        /// Refresh), so anything still unbound at THIS point was installed by something that never
+        /// called Attach or Bind — which is the gap the log line exists to catch. Keyed
+        /// once-per-host-name because an unbound applier re-Refreshes on every equip change and every
+        /// body rebuild, and the per-refresh Warn this replaces was itself feeding the logcat
+        /// ring-buffer eviction WO-1450 is about.</para>
+        /// </summary>
+        private void Start()
+        {
+            if (!string.IsNullOrEmpty(category)) return;
+
+            FlowTrace.Once("Cosmetics", $"cosmetic-applier-unbound-{name}",
+                $"'{name}' has no category bound — nothing to resolve. Whatever installed this " +
+                "CosmeticApplier never called Attach(host, category, appliesTo) or Bind(...). " +
+                "hero / pet / village are the only categories cosmetics.json ships (see " +
+                "ResourceFolderFor); a structure with no cosmetic axis is expected to carry NO " +
+                "applier at all — StructureFactory.AttachCosmeticSeam traces that choice separately.");
+        }
+
         private void OnDisable()
         {
             Unsubscribe();
@@ -249,7 +272,27 @@ namespace DeNelle.Cosmetics
 
             if (string.IsNullOrEmpty(category))
             {
-                FlowTrace.Warn("Cosmetics", $"Refresh: '{name}' has no category bound — nothing to resolve.");
+                // ── WO-1472 (2026-09-06): THIS BRANCH IS NOT A DEFECT, AND THE WARN THAT USED TO SIT
+                // ON THIS LINE WAS A FALSE POSITIVE. It produced 104 device-log lines across 25
+                // distinct names — the Archer Tower alone 24 times, plus the hero — and read as
+                // "a quarter of the cosmetic surface resolves to nothing".
+                //
+                // THE PROVING PATH (read it before restoring a Warn here):
+                //   Attach() calls AddComponent<CosmeticApplier>() on an ALREADY-ACTIVE host, and
+                //   Unity runs OnEnable SYNCHRONOUSLY inside AddComponent. OnEnable calls Refresh(),
+                //   so control lands HERE with `category` still null — ONE STATEMENT BEFORE Attach
+                //   assigns it and calls Refresh() again. Both callers pass a non-empty category
+                //   (HeroBodySwapper "hero"; StructureFactory.AttachCosmeticSeam "village"), and this
+                //   component's GUID sits on ZERO prefabs and ZERO scenes, so a PRE-BIND null is the
+                //   only way this branch is reached in a running game.
+                //   The logged NAME was the misleading part: StructureFactory names a structure root
+                //   `entry.displayName` ("Archer Tower"), never the catalog id — which is exactly why
+                //   the line read as a gap in the structure catalog rather than as attach ordering.
+                //
+                // THE DETECTOR IS KEPT, NOT SILENCED (WO-1472 §3). A genuinely unbound applier still
+                // says so — ONCE PER NAME — from Start() below, which runs AFTER the same-frame
+                // Attach has bound it, so only a REAL gap survives to log. The Enter() scope above
+                // still traces every pass through here for anyone reading the flow.
                 return;
             }
 

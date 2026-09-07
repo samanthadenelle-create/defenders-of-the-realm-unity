@@ -44,7 +44,7 @@
 // estimate from the settle payout's own formula; the VM owns the string, this View
 // paints it). The three gold pips are drawn only when vm.ShowStarPips (ratings vary
 // across camps - none are recorded today, so they are hidden). A camp whose garrison
-// exceeds the fieldable army carries vm.ArmyLockWordFor - "LOCKED - needs Army N" -
+// exceeds the fieldable army carries vm.ArmyWarnWordFor - "Outmatched - Army N advised" -
 // in the bottom-left band; the colour edge bar keeps the tier, the WORD carries the
 // state. The deployable-troop count is wired in OpenInternal (the one wiring site).
 //
@@ -456,14 +456,23 @@ namespace DeNelle.Village.Hero
             RaidSelectionVM.SceneAvailableProvider = DeNelle.Core.SceneRouter.IsSceneInBuild;
             // (c) WO-1402 - THE ARMY. Fieldable troop BODIES off the same GameState.Army the
             //     deploy screen lists (ArmyStorage.GetDeployable(), the source RaidDeployVM's
-            //     "you field N" counts), so the row's "LOCKED - needs Army N" and the scout
-            //     report's compare can never disagree. No state / no army -> Unknown (-1),
-            //     and the VM prints no lock word it cannot prove (headless never false-locks).
+            //     "you field N" counts), so the row's "Outmatched - Army N advised" and the
+            //     scout report's compare can never disagree. No state / no army -> Unknown (-1),
+            //     and the VM prints no advice it cannot prove (headless never false-warns).
             RaidSelectionVM.DeployableTroopsProvider = CountDeployableTroops;
             // (d) WO-1402 - BEST STARS PER CAMP: deliberately left NULL. No producer records a
             //     per-camp star rating in this tree (measured 2026-09-05, see the VM's doc), so
             //     the pips stay hidden by data. Wire it here, and only here, when one lands.
             RaidSelectionVM.BestStarsProvider = null;
+            // (e) WO-1562 - HAS THIS CAMP ALREADY BEEN CLEARED? The return leg of the raid loop
+            //     had NO memory: the clear was persisted by RaidClaimService.MarkClaimed from
+            //     the victory seam and then read by nothing, so a camp the player had already
+            //     broken looked exactly like one they had never fought.
+            //     STOP - NEVER A SECOND CLAIM PREDICATE. This points straight at the ONE claim
+            //     authority; no re-derivation from stars, cooldowns or victory counts, ever
+            //     (WO-1521: "ONE rule, TWO surfaces... the drift is the actual defect").
+            RaidSelectionVM.ClaimedProvider =
+                DeNelle.Village.World.Camps.RaidClaimService.IsClaimed;
             _vm = RaidSelectionVM.CreateDefault(Close);
 
             // Modal canvas + tap-outside scrim, both from the shared kit. Pin
@@ -933,8 +942,23 @@ namespace DeNelle.Village.Hero
             // "Clock:" ink anywhere in RaidSelection_2670x1200.png while the 22 pt scout line
             // beside it rendered). Every row on this card is RowFontPt now; the title is the
             // only larger one and it gets the only taller band.
+            // WO-1562 PART 2 - THE CLEARED MARKER TAKES THE CLOCK'S HALF OF THIS BAND, AND THE
+            // CHOICE IS RECORDED RATHER THAN MADE SILENTLY. Card real estate is contested (WO-1402
+            // already resized this card), and the clock band is the one band that DIFFERENTIATES
+            // NOTHING: every row reads the identical "Clock: 3:00" while difficulty, walls,
+            // defenders and spoils all vary. WO-1562's own note sanctions taking it ("If you need
+            // a band, take that one"). A cleared camp therefore trades a constant for a fact.
+            // The clock returns the moment a camp is un-cleared, so nothing is lost permanently.
+            //
+            // WORDS, NOT A TINT OR A GLYPH - the owner is red/green colourblind, and this sentence
+            // is unchanged in greyscale because it never had a hue to lose. The percentage is
+            // FORMATTED from RaidClaimService.RepeatClearLootMultiplier by the VM, never typed
+            // here: WO-1461 owns the economics and this row is DISCLOSURE ONLY.
+            string clearedWord = _vm.ClearedWordFor(id);
+            bool cleared = !string.IsNullOrEmpty(clearedWord);
             var timeLabel = ElarionUiKit.Label(card.transform,
-                "Clock: " + FormatTime(_vm.TargetTimeFor(id)), ScoutBandY0, ScoutBandY1,
+                cleared ? clearedWord : "Clock: " + FormatTime(_vm.TargetTimeFor(id)),
+                ScoutBandY0, ScoutBandY1,
                 ElarionUi.Parchment, RowFontPt, TMPro.TextAlignmentOptions.Left, showPips ? 0.22f : 0.05f, hasScout ? 0.54f : 0.95f);
             timeLabel.raycastTarget = false;
             ElarionUiKit.FitSingleLine(timeLabel);
@@ -970,8 +994,8 @@ namespace DeNelle.Village.Hero
             //
             // WO-1402 - THE BAND NOW HAS TWO COLUMNS, AND BOTH ARE WORDS THE VM OWNS.
             //   LOCK ROW (full width, left): the escalation lock sentence when locked; otherwise the army
-            //         word "LOCKED - needs Army N" when the camp's garrison exceeds what the
-            //         player can field (vm.ArmyLockWordFor); otherwise the loot-multiplier hint.
+            //         WARNING "Outmatched - Army N advised" when the camp's garrison exceeds what
+            //         the player can field (vm.ArmyWarnWordFor); otherwise the loot-multiplier hint.
             //         Precedence is deliberate: the door refuses on escalation first
             //         (OnCardTapped), so the row says the same thing the door will.
             //   BELOW (its own SpoilsBand, right-aligned): the SPOILS line (vm.SpoilsLineFor) on
@@ -990,16 +1014,27 @@ namespace DeNelle.Village.Hero
             // Full width right-aligned gives it ~1020 px at 1920x1080 - it cannot clip.
             string spoilsLine = _vm.SpoilsLineFor(id);
             bool hasSpoils = !string.IsNullOrEmpty(spoilsLine);
-            string armyWord = _vm.ArmyLockWordFor(id);
+            // WO-1542 (owner ruling 2026-09-06, "Warning, not a lock") - this word used to read
+            // "LOCKED - needs Army N" while the tap opened the deploy screen anyway under a lit
+            // BEGIN ASSAULT. It now reads "Outmatched - Army N advised": the same fact, from the
+            // same producer, without claiming a gate the door does not honour. The DOOR is
+            // UNCHANGED - OnCardTapped still refuses on exactly the escalation lock and Heartfire,
+            // and no readiness check was added anywhere (WO-1379 / HeartfireRegression PIN F).
+            string armyWord = _vm.ArmyWarnWordFor(id);
             string bottomLine = locked
                 ? lockCopy
                 : !string.IsNullOrEmpty(armyWord)
                     ? armyWord
                     : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
-            bool armyLocked = !locked && !string.IsNullOrEmpty(armyWord);
+            // WO-1542: an OUTMATCHED card keeps FULL BRIGHTNESS on purpose, and that is now the
+            // correct reading rather than the second half of the defect. `dimmed` is bound to the
+            // ESCALATION lock alone; dimming a camp the player may march on today would say
+            // "unavailable" about an open door. The warning carries its own weight instead - it
+            // is drawn BOLD in full Parchment, not the dim tone an unavailable row takes.
+            bool armyOutmatched = !locked && !string.IsNullOrEmpty(armyWord);
             var rewardLabel = ElarionUiKit.Label(card.transform,
                 bottomLine, LockBandY0, LockBandY1,
-                dimmed ? ElarionUi.ParchmentDim : armyLocked ? ElarionUi.Parchment : ElarionUi.Affordable,
+                dimmed ? ElarionUi.ParchmentDim : armyOutmatched ? ElarionUi.Parchment : ElarionUi.Affordable,
                 RowFontPt, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
             // Kit 1.14 fit-never-truncate: the longest lock sentence must never clip.
@@ -1020,7 +1055,8 @@ namespace DeNelle.Village.Hero
             DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                 "row '" + id + "' built: spoils=" + (hasSpoils ? "\"" + spoilsLine + "\"" : "<none>") +
                 " pips=" + (showPips ? "shown" : "hidden") +
-                " lock=" + (locked ? "escalation" : armyLocked ? "\"" + armyWord + "\"" : "none") +
+                " lock=" + (locked ? "escalation" : armyOutmatched ? "\"" + armyWord + "\"" : "none") +
+                " cleared=" + (cleared ? "\"" + clearedWord + "\"" : "no") +
                 " | bands px (card " + CardHeightPx.ToString("0") + "): title " +
                 BandPx(TitleBandY0, TitleBandY1).ToString("0") + "/" + NeedPx(TitleFontPt).ToString("0") +
                 ", scout " + BandPx(ScoutBandY0, ScoutBandY1).ToString("0") + "/" + NeedPx(RowFontPt).ToString("0") +

@@ -69,7 +69,11 @@ namespace DeNelle.Wallet
         private TextMeshProUGUI _status;
 
         private bool _busy;
-        private bool _subscribed;
+
+        // WO-1512: the promo SERVICE, the code normalisation and the redeem call moved to
+        // RedeemCodeVM. This panel binds the VM's two outcome events and paints; it never resolves
+        // PromoCodeService and never invokes a redeem. See RedeemCodeVM's header.
+        private RedeemCodeVM _vm;
 
         /// <summary>True while the overlay is on screen.</summary>
         public bool IsOpen => _root != null && _root.activeSelf;
@@ -115,35 +119,18 @@ namespace DeNelle.Wallet
 
         private void Subscribe()
         {
-            if (_subscribed) return;
-            var svc = ResolveService();
-            if (svc == null) return;                   // ResolveService self-reports
-            svc.OnRedeemed     += HandleRedeemed;
-            svc.OnRedeemFailed += HandleFailed;
-            _subscribed = true;
+            if (_vm == null)
+            {
+                _vm = RedeemCodeVM.CreateDefault();
+                _vm.Redeemed += HandleRedeemed;
+                _vm.Failed   += HandleFailed;
+            }
+            _vm.Attach();
         }
 
         private void Unsubscribe()
         {
-            if (!_subscribed) return;
-            var svc = PromoCodeService.Instance;
-            if (svc != null)
-            {
-                svc.OnRedeemed     -= HandleRedeemed;
-                svc.OnRedeemFailed -= HandleFailed;
-            }
-            _subscribed = false;
-        }
-
-        private static PromoCodeService ResolveService()
-        {
-            // The service self-bootstraps its own [PromoCodeService] GameObject (AddComponent runs
-            // Awake synchronously, so Instance is live on return).
-            PromoCodeService.EnsureExists();
-            var svc = PromoCodeService.Instance;
-            if (svc == null)
-                FlowTrace.Fail(Sys, "PromoCodeService.EnsureExists did not produce an Instance — the redeem button has nothing to call.");
-            return svc;
+            if (_vm != null) _vm.Detach();
         }
 
         // =====================================================================
@@ -259,45 +246,32 @@ namespace DeNelle.Wallet
         //  Submit
         // =====================================================================
 
+        // WO-1512: a THIN ROUTE. The VM normalises the entry, resolves the service, makes the call
+        // and reports the outcome on its events; this method chooses the words and the busy state.
         private async UniTask SubmitAsync()
         {
-            if (_busy) return;
-
-            // Uppercased client-side: the endpoint stores and compares uppercase, so a player typing
-            // lower case must not be told their real code does not exist.
-            string entered = _input != null ? _input.text : null;
-            entered = string.IsNullOrWhiteSpace(entered) ? string.Empty : entered.Trim().ToUpperInvariant();
-            if (_input != null) _input.text = entered;
-
-            if (entered.Length == 0)
-            {
-                SetStatus(PromoStrings.Get(PromoStrings.KeyErrEmpty));
-                return;
-            }
-
-            var svc = ResolveService();
-            if (svc == null)
-            {
-                SetStatus(PromoStrings.Get(PromoStrings.KeyErrUnknown));
-                return;
-            }
+            if (_busy || _vm == null) return;
 
             SetBusy(true);
             SetStatus(PromoStrings.Get(PromoStrings.KeyBusy));
-            try
+
+            // The VM hands back the code EXACTLY as submitted so the field shows what was sent.
+            var refusal = await _vm.RedeemAsync(
+                _input != null ? _input.text : null,
+                code => { if (_input != null) _input.text = code; });
+
+            SetBusy(false);
+
+            switch (refusal)
             {
-                // The service raises OnRedeemed / OnRedeemFailed; our handlers write the status line.
-                await svc.RedeemAsync(entered);
-            }
-            catch (Exception ex)
-            {
-                // No silent catch (§12). The exception TYPE is traced; the code never is.
-                FlowTrace.Fail(Sys, $"redeem OUTCOME=threw {ex.GetType().Name}: {ex.Message} (entry withheld by design).");
-                SetStatus(PromoStrings.Get(PromoStrings.KeyErrUnknown));
-            }
-            finally
-            {
-                SetBusy(false);
+                case RedeemCodeVM.RedeemRefusal.Empty:
+                    SetStatus(PromoStrings.Get(PromoStrings.KeyErrEmpty));
+                    break;
+                case RedeemCodeVM.RedeemRefusal.ServiceUnavailable:
+                    SetStatus(PromoStrings.Get(PromoStrings.KeyErrUnknown));
+                    break;
+                // None / AlreadyBusy: the outcome arrives on HandleRedeemed / HandleFailed, which
+                // own the status line from here. Writing one now would overwrite the real answer.
             }
         }
 

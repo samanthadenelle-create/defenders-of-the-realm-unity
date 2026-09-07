@@ -1,6 +1,6 @@
 # WO-1471: WORLD CLOCK FROZEN timeScale=0.00 fires 152 times on device in Main_Castle_Overworld
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT (instrument first)
+**Status:** PARTIALLY IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT (instrument first))
 **Silo:** `HeroOwner` / world-hold pause ownership. WO-988 covered only the HEADLESS variant and is DONE;
 this is the on-device one.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

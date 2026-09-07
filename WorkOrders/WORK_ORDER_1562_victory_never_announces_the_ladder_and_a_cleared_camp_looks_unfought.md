@@ -1,6 +1,6 @@
 # WO-1562: winning never says what it unlocked, and a cleared camp is indistinguishable from one you never fought
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Priority:** P1 — this is the return leg of the raid loop, and it has no memory.
 **Silo:** `Assets/_Modules/Village/World/Camps/RaidVictoryController.cs` +
 `Assets/_Modules/Village/Hero/RaidSelectionScreen.cs` + `RaidSelectionVM.cs`.

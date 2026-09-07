@@ -88,8 +88,23 @@ namespace DeNelle.Editor
             public bool Requested(MusicTrack t) => Tracks.Contains(t);
         }
 
+        // WO-1496: the STANDALONE entry point (menu + run-unity-method). It owns the
+        // process-exit decision; the registered `Run(out string)` below must NEVER exit,
+        // because inside DataRegression.RunAll an EditorApplication.Exit would kill the
+        // batch before the REGRESSION_OK marker is written -- a green-looking silence.
         [MenuItem("Defenders/QA/Run Arena Combat Oracle")]
         public static void Run()
+        {
+            bool ok = Run(out _);
+            if (Application.isBatchMode)
+                EditorApplication.Exit(ok ? 0 : 1);
+        }
+
+        /// <summary>
+        /// Registered-suite entry point (DataRegression.RunAll, WO-1496). Same body the
+        /// standalone path runs; returns the verdict instead of exiting the process.
+        /// </summary>
+        public static bool Run(out string reason)
         {
             var failures = new List<string>();
             var log = new StringBuilder();
@@ -252,16 +267,21 @@ namespace DeNelle.Editor
             {
                 log.AppendLine("ARENA_ORACLE_OK");
                 Debug.Log(log.ToString());
+                reason = "ARENA COMBAT OK -- win/loss resolve fired victory+defeat audio, the star/reward " +
+                         "math ran on the real resolve path, the win grant + summary totals were captured, " +
+                         "and the rarity swing-trail applied a non-steel colour (all from captured signals)";
             }
             else
             {
                 log.AppendLine($"ARENA_ORACLE_FAIL: {failures.Count} failure(s):");
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 Debug.LogError(log.ToString());
+                reason = $"ARENA COMBAT: {failures.Count} failure(s): " + string.Join(" | ", failures.ToArray());
             }
 
-            if (Application.isBatchMode)
-                EditorApplication.Exit(ok ? 0 : 1);
+            // Written as the explicit count test, not `return ok`: RegressionMarkerRegression
+            // RULE 4a proves a suite CAN go red by finding a real failing path in source.
+            return failures.Count == 0;
         }
 
         // =====================================================================

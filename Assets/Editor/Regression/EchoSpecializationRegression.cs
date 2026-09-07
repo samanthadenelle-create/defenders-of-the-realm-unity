@@ -607,11 +607,33 @@ namespace DeNelle.Editor
             float rBra = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Gold, 1);
             float rDor = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Iron, 1);
             float rMar = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Crystals, 1);
-            AssertClose(Fail, GetW(w, HarvestTarget.Food), rAld, "HarvestTargetWeights[Food]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Wood), rElo, "HarvestTargetWeights[Wood]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Gold), rCor + rBra, "HarvestTargetWeights[Gold]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Iron), rDor, "HarvestTargetWeights[Iron]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Crystals), rMar, "HarvestTargetWeights[Crystals]");
+            // WO-1474 (i) THE RATE-CLASS MOVE IS SPLIT-NEUTRAL. The three per-hour rates were
+            // private consts in EchoBonusCalculator (3600 / 900 / 4) until 2026-09-06; they are
+            // now authored in echoes-balance.json so the WO-1331 remote seam can reach them.
+            // Pin the AUTHORED values to the literals they replaced: if a retune moves them,
+            // this case fails loudly rather than the silo split drifting unnoticed.
+            AssertClose(Fail, EchoBalanceCatalog.CommonResourcePerHour, 3600f,
+                "harvestRatePerHour.common (WO-1474 moved the const into json; 5 every 5 seconds)");
+            AssertClose(Fail, EchoBalanceCatalog.GoldPerHour, 900f,
+                "harvestRatePerHour.gold (WO-1474 moved the const into json)");
+            AssertClose(Fail, EchoBalanceCatalog.CrystalPerHour, 4f,
+                "harvestRatePerHour.crystals (WO-1474 moved the const into json; 1 per 15 minutes)");
+
+            // WO-1474 (ii) THE PER-ECHO WEIGHT IS THE AUTHORED perEchoBaseRate. Before today
+            // HarvestTargetWeights returned the raw rate-class number and threw the roster entry
+            // away, so every authored row was dead. Each weight is now rate x BaseRateFor(id) --
+            // which is what makes the WO-830 Sec.3b crystals guard actually run.
+            float bAld = EchoBalanceCatalog.BaseRateFor("echo-frosthowl");
+            float bElo = EchoBalanceCatalog.BaseRateFor("echo-verdant-stag");
+            float bCor = EchoBalanceCatalog.BaseRateFor("echo-voidwing-raven");
+            float bBra = EchoBalanceCatalog.BaseRateFor("echo-stormcoil-serpent");
+            float bDor = EchoBalanceCatalog.BaseRateFor("echo-stonewarden-bear");
+            float bMar = EchoBalanceCatalog.BaseRateFor("echo-ember-phoenix");
+            AssertClose(Fail, GetW(w, HarvestTarget.Food), rAld * bAld, "HarvestTargetWeights[Food]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Wood), rElo * bElo, "HarvestTargetWeights[Wood]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Gold), rCor * bCor + rBra * bBra, "HarvestTargetWeights[Gold]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Iron), rDor * bDor, "HarvestTargetWeights[Iron]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Crystals), rMar * bMar, "HarvestTargetWeights[Crystals]");
             float crystalsW = GetW(w, HarvestTarget.Crystals);
             foreach (var t in new[] { HarvestTarget.Wood, HarvestTarget.Iron, HarvestTarget.Food, HarvestTarget.Gold })
                 if (crystalsW >= GetW(w, t))

@@ -186,6 +186,35 @@ namespace DeNelle.Village.UI
         // kit's FontFloor (30) — this shrinks TEXT to fit its authored band, never a CONTROL.
         private const float QueueNameFontPx = 36f;
         private const float QueueLineFontPx = 32f;  // == ElarionUi.FontMicro, an authored role
+
+        /// <summary>
+        /// ⭐ WO-1488 — THE STATE LINE'S OWN AUTOSIZE FLOOR, and it is deliberately below the kit's
+        /// FontFloor(30).
+        /// <para>THE DEFECT, measured: the capture reads
+        /// <c>"Building - 11m 0s left (0% do..."</c> on row 2 while row 1's
+        /// <c>"Building - 7m 0s left (0% done)"</c> renders whole. FitSingleLine WAS already on this
+        /// label — with <c>minSize: 0</c>, which the kit resolves to FontFloor(30) against a
+        /// maxSize of 32. Two points of shrink is not a fit; past it TMP ellipsises, which is what
+        /// the owner is looking at. So the timer was not un-fitted, it was fitted into a floor it
+        /// could not reach — and one extra character (11m vs 7m) is the whole difference.</para>
+        /// <para>THE ARITHMETIC: 30 chars fit at 30px, so a char costs ~1px of size. The longest
+        /// string this line ever carries is the queued form —
+        /// <c>"Queued - 3rd in line (12h 30m of work)"</c>, 38 chars — which needs ~24px. Hence 24,
+        /// not a rounder 26 that would still clip the worst case. It sits 4pt above the kit's
+        /// FontHardFloor(20), and its 27.8px line box still clears the 37.6px band.</para>
+        /// <para>⚠ THIS SHRINKS TEXT, NEVER A CONTROL — MinTouchPx and every CTA box are untouched
+        /// (the WO-1058 rule). And the line is the SECONDARY one: the row's name is 36px bold and
+        /// the progress bar carries the same fact for anyone who cannot read it, so the floor
+        /// trades a small line against a truncated one, which is the trade the kit's explicit
+        /// sub-floor parameter exists for.</para>
+        /// <para>⚠ RESIDUAL, stated rather than hidden: the authored FORMAT is the real length
+        /// problem and this lane cannot shorten it. The build-time string is ManageScreenVM's
+        /// (<c>QueueRowVM.StateText</c>, off-silo for WO-1488) and the panel's own Update() tick
+        /// re-authors the identical wording a second later, so the two must stay in step. If 24px
+        /// ever proves too small on a device, the fix is the shared format, not this number and
+        /// not the plate.</para>
+        /// </summary>
+        private const float QueueStateFontFloorPx = 24f;
         private const float QRowNameY0 = 0.679f, QRowNameY1 = 0.996f;
         private const float QRowStateY0 = 0.386f, QRowStateY1 = 0.671f;
         private const float QRowRefundY0 = 0.093f, QRowRefundY1 = 0.378f;
@@ -217,6 +246,65 @@ namespace DeNelle.Village.UI
         private const float TrainingNowRowPx = 88f;       // extra jobs, informational only - no control
         private const float TroopCtaY0 = 0.01f, TroopCtaY1 = 0.445f;   // 0.435 * 260 = 113.1px >= MinTouchPx
         private const float BandCtrlY0 = 0.03f, BandCtrlY1 = 0.97f;   // 0.94 * 120 = 112.8px >= MinTouchPx
+
+        // =====================================================================
+        //  ⭐ WO-1541 - THE ARMY CARD IS TALLER THAN THE OTHER THREE, ON PURPOSE.
+        // ---------------------------------------------------------------------
+        //  OWNER RULING 2026-09-06 (via the question tool), on the three-way collision this
+        //  file recorded earlier the same day: "RAISE THE CARD, TAPPABLE ROW."
+        //  The army/camp line grows into a full MinTouchPx(112) row carrying a chevron and
+        //  becomes the DOOR to the raid grid; the ARMY card grows past its 256px floor to pay
+        //  for it; NOTHING ELSE SHRINKS.
+        //
+        //  ⛔ WHY THIS IS A SEPARATE SET OF CONSTANTS AND NOT AN EDIT TO TroopCtaY0/Y1.
+        //  Those two are shared by FOUR card renderers - Buildings, Troops, Defense and
+        //  Research - and TroopWorkspacePx sizes all four workspaces. Widening them would
+        //  resize three screens this ruling never mentioned and invalidate the band arithmetic
+        //  each of those methods records in its own comment. The ARMY card gets its own ladder;
+        //  the other three are byte-for-byte untouched.
+        //
+        //  ⛔ AND THIS HONOURS WO-1422 RULING 3.10 RATHER THAN BREAKING IT. That ruling forbids
+        //  SQUEEZING a door in beside TRAIN + UPGRADE and says a third face "needs a taller
+        //  card, which is the Phase 2 unification WO". This IS the taller card. The door is
+        //  also NOT a third CTA face - it is its own row above the CTA band, so TRAIN and
+        //  UPGRADE keep their 113.1px each, unchanged.
+        //
+        //  ⛔ EVERY FRACTION BELOW IS DERIVED FROM PIXELS, NOT TYPED. The 2026-09-06 "bare
+        //  plate" RCA on this very card (see FillTroopCard) was caused by a hand-typed pair of
+        //  fractions resolving to an 18.2px band, under TMP's cull threshold. Stacking the
+        //  bands in px and dividing makes that class of defect arithmetic instead of luck: to
+        //  change a band, change ITS px constant and every fraction re-derives.
+        //
+        //  THE LADDER, bottom-up. Each band keeps EXACTLY the pixels it had at 260px; the only
+        //  growth is the army band, 26px -> 112px, and the card absorbs all 86px of it.
+        //      gap 2.6 | CTA 113.1 | gap 2.6 | fact 31.2 | gap 2.6 | desc 39.0
+        //              | gap 1.3 | ARMY DOOR 112.0 | gap 1.3 | name 40.3   = 346.0
+        // =====================================================================
+        private const float TroopArmyDoorRowPx = 112f;    // == ElarionUiKit.MinTouchPx, authored not clamped
+        private const float ArmyGapPx = 2.6f;             // 0.01 * 260, the card's original band gap
+        private const float ArmyTightGapPx = 1.3f;        // 0.005 * 260, the two original tight gaps
+        private const float ArmyCtaPx = 113.1f;           // 0.435 * 260 - TRAIN / UPGRADE, unchanged
+        private const float ArmyFactPx = 31.2f;           // 0.12  * 260 - the train fact + benefit row
+        private const float ArmyDescPx = 39.0f;           // 0.15  * 260 - description + status word
+        private const float ArmyNamePx = 40.3f;           // 0.155 * 260 - NAME + LEVEL n
+        /// <summary>The ARMY card's height. 260 + (112 - 26): the army band's growth, and nothing else.</summary>
+        private const float TroopCardPx = ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx +
+                                          ArmyDescPx + ArmyTightGapPx + TroopArmyDoorRowPx +
+                                          ArmyTightGapPx + ArmyNamePx;   // = 346
+        private const float ArmyCtaY0 = ArmyGapPx / TroopCardPx;
+        private const float ArmyCtaY1 = (ArmyGapPx + ArmyCtaPx) / TroopCardPx;
+        private const float ArmyFactY0 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx) / TroopCardPx;
+        private const float ArmyFactY1 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx) / TroopCardPx;
+        private const float ArmyDescY0 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx) / TroopCardPx;
+        private const float ArmyDescY1 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx +
+                                          ArmyDescPx) / TroopCardPx;
+        private const float ArmyDoorY0 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx +
+                                          ArmyDescPx + ArmyTightGapPx) / TroopCardPx;
+        private const float ArmyDoorY1 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx +
+                                          ArmyDescPx + ArmyTightGapPx + TroopArmyDoorRowPx) / TroopCardPx;
+        private const float ArmyNameY0 = (ArmyGapPx + ArmyCtaPx + ArmyGapPx + ArmyFactPx + ArmyGapPx +
+                                          ArmyDescPx + ArmyTightGapPx + TroopArmyDoorRowPx +
+                                          ArmyTightGapPx) / TroopCardPx;
 
         // =====================================================================
         //  WO-1393 (2026-09-05) - THE QUEUE DRAWER AS ITS OWN BAND ON THE TROOPS TAB.
@@ -353,15 +441,72 @@ namespace DeNelle.Village.UI
         // already is, costing the rows nothing. A band is for a control that sits IN it.
         private const float DrawerTitlePx = 0f;
         /// <summary>The title's own height, drawn ABOVE the drawer's ceiling (SeatDrawerTitleOverlay).
-        /// 56px clears the ~24px TMP cull floor with room; it is NOT part of the band sum.</summary>
-        private const float DrawerTitleOverlayPx = 56f;
+        /// <para>⭐ WO-1488 - IT NOW HOLDS THE X AS WELL, so it is sized to the TOUCH FLOOR rather
+        /// than to a line of text. It was 56px, which cleared the ~24px TMP cull floor for the word
+        /// QUEUE and nothing else; the X could not live here and so it lived in the TAB BAND, where
+        /// the capture shows it reading as a FOURTH TAB beside "RESEARCH 2/2"
+        /// (Builds/ui-capture/ManageFlow_BUILD_queue_2670x1200.png, 18:39). 116px seats a
+        /// MinTouchPx(112) square with a 2px gutter, and it is what the drawer's ceiling
+        /// (DrawerOverlayY1) is authored to leave free above itself. It is NOT part of the band
+        /// sum - it is drawn above the ceiling and costs the rows nothing.</para></summary>
+        private const float DrawerTitleOverlayPx = 116f;
 
-        // 132, not 120: this band now holds the overlay's X (a 120px square) in the column the tab
-        // row leaves free at TabsRightStop. A band that holds a control must be LARGER than it, not
-        // equal to it - at exactly 120 the arithmetic came out 119.99 and the X spilled by a hair.
-        // Its tab faces fill the band, so they are 132px >= MinTouchPx (112), authored not clamped.
+        // 132, not 120: the band's tab faces fill it, so they are 132px >= MinTouchPx (112),
+        // authored not clamped.
+        // ⚠ WO-1488: this band NO LONGER HOLDS THE X (it moved to the title overlay, see
+        // DrawerTitleOverlayPx). The size stays 132 because that is what the FACES need; the
+        // "larger than the 120px X it contains" reason is retired, not the number.
         private const float DrawerTabsPx = 132f;
         private const float DrawerBandGapPx = 12f;
+
+        // =====================================================================
+        //  WO-1488 — THE FULL-BODY OVERLAY'S OWN RECT, AUTHORED ONCE.
+        // ---------------------------------------------------------------------
+        // ⛔ TWO WRITERS SEAT THIS DRAWER AND THEY DISAGREED. BuildQueueDrawer authored
+        // -0.25..0.99 of the well and ApplyDrawerPlacement's else-branch re-seated it to
+        // 0.02..0.84 on the very next frame, so the build-time estimate handed to SetDrawerBands
+        // (1.24 * _wellPx) described a rect that never existed. MEASURED, off the r24 log:
+        //   MANAGE_QUEUE_BANDS drawer=719px   <- the build-time estimate, from the -0.25..0.99 pair
+        //   MANAGE_QUEUE_BANDS drawer=475px   <- what actually renders, from the 0.02..0.84 pair
+        // Two numbers for one rect is the duplicated-state defect this screen has now paid for
+        // four times (the 0.86 list literal, the band-table locals, the whole-row trim, this).
+        // ONE pair of constants, read by both writers and by the build-time estimate.
+        //
+        // THE CEILING IS 0.79, NOT 0.84, AND THE 0.05 IS THE X'S SEAT. The overlay title row is
+        // drawn ABOVE the ceiling, so the room above it is (1 - DrawerOverlayY1) * well. The well
+        // measures 579px (475 / 0.82, off the same log line), so 0.21 leaves 122px - enough for
+        // the 116px DrawerTitleOverlayPx row and the MinTouchPx(112) X inside it, with margin.
+        // At 0.84 the room was 93px and a compliant X could not be seated there AT ALL, which is
+        // the whole reason it was living in the tab row and reading as a fourth tab.
+        //
+        // ⛔ THE FLOOR STAYS INSIDE THE WELL. The authored -0.25 hung the drawer over the shared
+        // CLOSE band, and the plate's bottom 96px is TRANSPARENT MARGIN (DrawerPlateInsetPx), so
+        // CLOSE would render straight through it while the drawer's own raycast swallowed the tap:
+        // a visible button that does nothing. Buying rows with that is not buying them.
+        private const float DrawerOverlayY0 = 0.02f;
+        private const float DrawerOverlayY1 = 0.79f;
+
+        /// <summary>
+        /// ⭐ WO-1488 — THE ROW BAND IS DERIVED FROM THE PLATE, NOT FROM THE DRAWER'S RECT.
+        /// <para>THE DEFECT: <c>_drawerListY0</c> was <c>gap</c> — 12px above the drawer's rect
+        /// floor — while the plate the player SEES is <c>frames/content-panel</c> drawn SLICED, and
+        /// its 9-slice border is 96px (content-panel.png.meta: <c>spriteBorder {96,96,96,96}</c>).
+        /// The gold line lives inside that border, so the visible frame's interior floor is ~96px
+        /// above the rect floor and the list overhung it by ~84px. MEASURED, r24:
+        /// <c>MANAGE_QUEUE_LIST seats 2 whole rows: 292px of 307px</c> — the trim was correct and
+        /// the rows were whole; they were simply whole rows seated OUTSIDE the frame. That is
+        /// exactly what the capture shows: row 2's title, its CANCEL and its progress bar all
+        /// painted below the gold line.</para>
+        /// <para>⚠ A whole-row trim cannot catch this. It measures the list against itself; the
+        /// list was never wrong. The rect and the ART were different rects.</para>
+        /// <para>The value is a FALLBACK. <see cref="ResolveDrawerBands"/> re-reads it from the
+        /// live sprite so a re-authored frame moves it without a code edit.</para>
+        /// </summary>
+        private const float DrawerPlateInsetPx = 96f;
+
+        /// <summary>The measured plate inset in reference px — 0 in band mode, where the drawer
+        /// paints a FLAT plate with no sprite and therefore no frame art to stay inside of.</summary>
+        private float _drawerPlateInsetPx = DrawerPlateInsetPx;
 
         // The resolved seats, computed once from the MEASURED drawer height (SetDrawerBands) and
         // read by BOTH writers - BuildQueueDrawer and ApplyDrawerPlacement. Fields, not consts,
@@ -398,6 +543,33 @@ namespace DeNelle.Village.UI
             Canvas.ForceUpdateCanvases();
             float drawerPx = drawer.rect.height;
             if (drawerPx < 1f) return;                    // no layout yet: keep the estimate
+
+            // ⭐ WO-1488 — MEASURE THE PLATE, DO NOT ASSUME IT. The inset comes off the LIVE
+            // sprite's 9-slice border, so a re-authored frame moves the row band with it and this
+            // file never carries a copy of a number that lives in a .meta. Band mode paints a flat
+            // plate with no sprite at all (ApplyDrawerPlacement) - no frame art, no inset.
+            // Vector4 border is (left, bottom, right, top); the vertical pair is what bounds rows.
+            // Sliced art draws its border at sprite-px / pixelsPerUnit * pixelsPerUnitMultiplier,
+            // so the conversion is read from the Image rather than assumed to be 1:1.
+            var plateImage = _queueDrawer.GetComponent<Image>();
+            var plateSprite = plateImage != null ? plateImage.sprite : null;
+            if (plateSprite == null)
+            {
+                _drawerPlateInsetPx = 0f;
+            }
+            else
+            {
+                // content-panel.png imports at 100 PPU against the canvas's own 100 reference PPU,
+                // so a border pixel is a reference pixel; pixelsPerUnitMultiplier is the only thing
+                // that rescales it, and it divides.
+                float mult = Mathf.Max(0.0001f, plateImage.pixelsPerUnitMultiplier);
+                var b = plateSprite.border;
+                _drawerPlateInsetPx = Mathf.Max(b.y, b.w) / mult;
+            }
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_PLATE sprite=" +
+                (plateSprite != null ? plateSprite.name : "NONE (flat band plate)") +
+                " inset=" + _drawerPlateInsetPx.ToString("0") + "px - the row band is derived from " +
+                "THIS, not from the drawer's rect");
 
             SetDrawerBands(drawerPx);
 
@@ -478,12 +650,36 @@ namespace DeNelle.Village.UI
             _drawerTitleY0 = 1f - DrawerTitlePx / drawerPx;
             _drawerTabsY1 = _drawerTitleY0 - gap;
             _drawerTabsY0 = _drawerTabsY1 - DrawerTabsPx / drawerPx;
-            _drawerListY1 = _drawerTabsY0 - gap;
-            _drawerListY0 = gap;
 
+            // ⛔ WO-1488 — THE LIST IS BOUNDED BY THE PLATE, THEN BY THE TABS. Both, always, and
+            // in that order. The floor is the plate's inner edge (never `gap`, which measured the
+            // wrong rect); the ceiling is whichever of the tab row's underside and the plate's
+            // inner ceiling is LOWER, so a row can no more cross the frame's top than its bottom.
+            // The tabs deliberately sit OVER the frame's top margin — they read as tabs ON the
+            // panel — so on the live rect the tab term is the one that governs the ceiling.
+            float plate = Mathf.Max(0f, _drawerPlateInsetPx) / drawerPx;
+            _drawerListY0 = plate;
+            _drawerListY1 = Mathf.Min(_drawerTabsY0 - gap, 1f - plate);
+            if (_drawerListY1 <= _drawerListY0)
+            {
+                // Degenerate rather than silently inverted: an inverted band builds rows into a
+                // zero-height rect and reads on a capture as "the queue is empty".
+                FlowTrace.Fail("Manage", "the queue overlay's list band inverted at " +
+                    drawerPx.ToString("0") + "px (plate inset " + _drawerPlateInsetPx.ToString("0") +
+                    "px x2 + tabs " + DrawerTabsPx + " + gaps leave nothing) - the rows have no band");
+                _drawerListY1 = _drawerListY0;
+            }
+
+            float listPx = (_drawerListY1 - _drawerListY0) * drawerPx;
             FlowTrace.Step("Manage", "MANAGE_QUEUE_BANDS drawer=" + drawerPx.ToString("0") +
-                "px title=" + DrawerTitlePx + " tabs=" + DrawerTabsPx + " list=" +
-                ((_drawerListY1 - _drawerListY0) * drawerPx).ToString("0") + "px");
+                "px title=" + DrawerTitlePx + " tabs=" + DrawerTabsPx + " plateInset=" +
+                _drawerPlateInsetPx.ToString("0") + " list=" + listPx.ToString("0") + "px");
+            if (listPx < RowHeightPx + 20f)
+                FlowTrace.Warn("Manage", "the queue overlay's list band is " + listPx.ToString("0") +
+                    "px INSIDE THE PLATE - under the " + (RowHeightPx + 20f).ToString("0") +
+                    "px one row plus scroll padding needs. The rows still scroll, but none is fully " +
+                    "visible at rest. Grow the overlay (DrawerOverlayY0/Y1); do not push the band " +
+                    "back over the frame art");
         }
         private bool _drawerBandMode;             // true while the drawer is seated as a band
         private RectTransform _tabsHost;
@@ -1802,8 +1998,12 @@ namespace DeNelle.Village.UI
             // A modal that carries its own X does not need the panel's CLOSE visible underneath it,
             // and -0.25 of the well is ~121px against the ~202px of panel that sits below the well -
             // so it covers the Close band and still stops well inside the frame.
-            drawer.anchorMin = new Vector2(0.01f, -0.25f);
-            drawer.anchorMax = new Vector2(0.99f, 0.99f);
+            // ⛔ WO-1488: THE ONE PAIR OF CONSTANTS, here and in ApplyDrawerPlacement. The literals
+            // that used to sit on these two lines (-0.25 / 0.99) were overwritten by that method on
+            // the next frame, so the estimate below described a 719px drawer that never rendered
+            // while the real one measured 475px. See the DrawerOverlayY0/Y1 block.
+            drawer.anchorMin = new Vector2(0.01f, DrawerOverlayY0);
+            drawer.anchorMax = new Vector2(0.99f, DrawerOverlayY1);
 
             // A FIRST GUESS ONLY. ResolveDrawerBands re-runs this against the drawer's MEASURED
             // height once a layout pass has happened, and that pass is the authoritative one.
@@ -1813,7 +2013,10 @@ namespace DeNelle.Village.UI
             // replaced. The arithmetic is exact: 476 * (120/719) = 79.3.
             // The lesson is the QUEUE pill's, again: a size derived from a number I did not measure
             // is a guess wearing a px suffix.
-            SetDrawerBands(1.24f * _wellPx);
+            // ⭐ WO-1488: DERIVED FROM THE ANCHORS THAT ARE ACTUALLY USED, so the estimate and the
+            // rendered rect can no longer be two different drawers. (It stays an estimate -
+            // ResolveDrawerBands re-runs it against the measured height, which is authoritative.)
+            SetDrawerBands((DrawerOverlayY1 - DrawerOverlayY0) * _wellPx);
             drawer.offsetMin = drawer.offsetMax = Vector2.zero;
             var drawerImage = _queueDrawer.GetComponent<Image>();
             drawerImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
@@ -1880,13 +2083,18 @@ namespace DeNelle.Village.UI
             // promise a px floor anyway. Collapsing the anchors to the top-right corner and setting
             // sizeDelta gives exactly MinTouchPx + 8 on both axes at every drawer size, with no
             // measurement needed and nothing for ClampMinTouch to rescue.
-            const float ClosePx = 120f;   // ElarionUiKit.MinTouchPx (112) + 8px margin
-            // ⛔ THE X LIVES IN THE TAB BAND, in the column BuildQueueTabs leaves free at
-            // TabsRightStop (0.86). The title no longer has a band to hold it, and this one is
-            // 132px - larger than the 120px X - so the control that needed a home has the only band
-            // that was ever really there. The reserved column exists precisely because the X and the
-            // RESEARCH tab collided once; now it is the X's seat rather than dead space.
-            var close = ElarionUiKit.BuildObsidianButton(_drawerTabs, "X",
+            const float ClosePx = 112f;   // == ElarionUiKit.MinTouchPx, authored AT the floor
+            // ⛔ WO-1488 — THE X IS TOP-RIGHT, IN THE TITLE OVERLAY, NEVER IN THE TAB STRIP.
+            // MEASURED (Builds/ui-capture/ManageFlow_BUILD_queue_2670x1200.png, 18:39): seated in
+            // _drawerTabs it renders as a FOURTH TAB - same row, same obsidian face, same height,
+            // immediately right of "RESEARCH 2/2". A close control that looks like a channel is a
+            // control the player taps to switch channels, and mockup panel 8 draws it at the
+            // overlay's top-right corner, level with the word QUEUE.
+            // The seat that made this possible is DrawerTitleOverlayPx (116px, up from 56): the
+            // overlay row is now tall enough to hold a MinTouchPx square, which is precisely why
+            // the X was in the tab band before - at 56px it could not be seated here AT ALL.
+            // The zone bounds it on every side, so no fraction of a varying drawer is involved.
+            var close = ElarionUiKit.BuildObsidianButton(_drawerHeader, "X",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.9f, 0.9f), new Vector2(0.99f, 0.99f), ToggleQueueDrawer);
             if (close != null)
@@ -2050,8 +2258,13 @@ namespace DeNelle.Village.UI
             }
             else
             {
-                drawer.anchorMin = new Vector2(0.02f, 0.02f);
-                drawer.anchorMax = new Vector2(0.998f, 0.84f);
+                // ⛔ WO-1488: the SAME pair BuildQueueDrawer authors. These were 0.02/0.84 typed
+                // here and -0.25/0.99 typed there, and this writer runs last - so the estimate
+                // handed to SetDrawerBands was of a rect that never existed (719px vs a measured
+                // 475px). The ceiling is 0.79 now: the 0.05 it gives up is the room the X needs
+                // above the drawer, and 0.84 could not seat a MinTouchPx control there.
+                drawer.anchorMin = new Vector2(0.02f, DrawerOverlayY0);
+                drawer.anchorMax = new Vector2(0.998f, DrawerOverlayY1);
                 drawer.pivot = new Vector2(0.5f, 0.5f);
                 drawer.offsetMin = drawer.offsetMax = Vector2.zero;
                 if (image != null && image.sprite == null)
@@ -3598,8 +3811,11 @@ namespace DeNelle.Village.UI
                 "Verbs on screen: TRAIN 1 / UPGRADE TO L / OPEN QUEUE.",
                 _vm.TroopChoices.Count, selected.Id, selected.Unlocked, selected.TrainReady,
                 selected.UpgradeReady, selected.HasNextLevel, _vm.QueueRows.Count,
-                TroopWorkspacePx, TroopRailRowPx, TrainingNowBandPx, TrainingNowRowPx,
-                10f + TroopWorkspacePx + 8f + TrainingNowBandPx));
+                // WO-1541: the ARMY workspace is TroopCardPx(346) now, not TroopWorkspacePx(260) -
+                // the card grew to seat the 112px raid door row. The fold arithmetic is traced off
+                // the height that actually ships, or the measurement describes a card nobody paints.
+                TroopCardPx, TroopRailRowPx, TrainingNowBandPx, TrainingNowRowPx,
+                10f + TroopCardPx + 8f + TrainingNowBandPx));
         }
 
         // =====================================================================
@@ -3616,7 +3832,10 @@ namespace DeNelle.Village.UI
 
         private void AddTroopWorkspaceRow(TroopChoiceVM selected)
         {
-            var workspace = MakeRowHost("TroopSplitWorkspace", TroopWorkspacePx);
+            // WO-1541 owner ruling 2026-09-06 ("raise the card, tappable row"): the ARMY workspace
+            // is TroopCardPx(346), not TroopWorkspacePx(260) - the card GROWS to seat the 112px
+            // raid door row. Buildings / Defense / Research keep TroopWorkspacePx untouched.
+            var workspace = MakeRowHost("TroopSplitWorkspace", TroopCardPx);
 
             // ── RAIL: one row per troop def, vertical scroll, NO pager arrows (ruling #2) ──
             var railZone = MakeZone(workspace, "TroopSelectorRail", new Vector2(0f, 0f), new Vector2(0.26f, 1f));
@@ -3770,11 +3989,13 @@ namespace DeNelle.Village.UI
 
             // NAME band at title size + LEVEL n right-aligned, always on screen (it is the first
             // band of a row that starts at scroll 0 - the name can no longer scroll off the top).
+            // ⚠ WO-1541: the fractions are ArmyNameY0..1 now, DERIVED off TroopCardPx. In pixels the
+            // band is unchanged at 40.3px - the card grew, so the same pixels are a smaller fraction.
             var name = ElarionUiKit.Label(card, ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
-                0.845f, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
+                ArmyNameY0, 1.0f, ElarionUi.Gold, (int)ElarionUi.FontTitle,
                 TextAlignmentOptions.Left, 0.19f, 0.74f, bold: true);
             ElarionUiKit.FitSingleLine(name, 30f, 48f);
-            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, 0.845f, 1.0f, ElarionUi.Parchment,
+            var level = ElarionUiKit.Label(card, "LEVEL " + selected.Level, ArmyNameY0, 1.0f, ElarionUi.Parchment,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Right, 0.75f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(level, 26f, 36f);
             // WO-1422 ruling 3.10.1: the army summary gives up its right edge (x1 0.98 -> 0.72) so
@@ -3793,14 +4014,74 @@ namespace DeNelle.Village.UI
             // so nothing in an 18px band can ever render. The band is now 0.74-0.84 = 26px and the
             // NAME band gives up the 0.025 it can spare (it keeps 40.3px, well over the ~35px a
             // 30px title line needs). ⛔ Never re-shrink a text band below ~24px on this card.
-            var army = ElarionUiKit.Label(card, ManageScreenVM.Ascii(_vm.TroopArmySummaryText ?? ""),
-                0.74f, 0.84f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
-                TextAlignmentOptions.Left, 0.19f, 0.72f);
-            ElarionUiKit.FitSingleLine(army, 18f, 26f);
+            // ⭐ WO-1541 - THE MOST MOTIVATING SENTENCE ON THE CARD STOPS BEING RANKED LAST.
+            // It read "Army 8 / 10 - The Forsaken Camp fields 12" at ElarionUi.FontMicro (32) in
+            // ParchmentDim - and ElarionUi.cs:115 reserves FontMicro for "hotkey badge, rune
+            // strip", the SMALLEST authored role in the kit. The game named the player's enemy and
+            // counted their garrison in the type size it uses for a hotkey badge.
+            // It is now FontLabel, Parchment, bold - a role/weight/colour rank-up.
+            //
+            // ⭐⭐ WO-1541 RULING 2, OWNER 2026-09-06 (question tool), VERBATIM:
+            //     "RAISE THE CARD, TAPPABLE ROW."
+            // The band is no longer 0.74-0.84 (26px). It is ArmyDoorY0..ArmyDoorY1 = a full
+            // TroopArmyDoorRowPx(112) = ElarionUiKit.MinTouchPx row, and the whole row is the DOOR
+            // to the raid grid. ⛔ NOTHING SHRANK TO PAY FOR IT: the ARMY card grew from 260px to
+            // TroopCardPx(346), past its old 256px floor, and every other band keeps the exact
+            // pixels it had (see the band ladder on the constants). The ~24px band rule this
+            // comment block records holds trivially - the band QUADRUPLED.
+            //
+            // ⛔ THIS HONOURS WO-1422 RULING 3.10, IT DOES NOT OVERRULE IT. That ruling bans
+            // SQUEEZING a door in beside TRAIN + UPGRADE and says a third face "needs a taller
+            // card". This is the taller card, and the door is NOT a third CTA face - it is its own
+            // row above the CTA band, so both faces keep 113.1px untouched.
+            //
+            // ⛔ THE ROW IS AUTHORED TO THE TOUCH FLOOR, NOT LEFT TO ClampMinTouch. That was the
+            // whole reason the 26px seat was refused: the clamp would have grown the hit rect ~43px
+            // each way into the NAME and description bands - an invisible mis-tap surface.
+            // ClampMinTouch is still called, as every other face on this card does, but it has
+            // nothing left to rescue.
+            var armyRow = _vm.TroopArmyDoor != null
+                ? ElarionUiKit.BuildObsidianButton(card,
+                    ManageScreenVM.Ascii(_vm.TroopArmySummaryText ?? ""),
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.02f, ArmyDoorY0), new Vector2(0.98f, ArmyDoorY1),
+                    () => { Guard.Try("Manage", "army line raid door", () => _vm.TroopArmyDoor?.Invoke()); })
+                : null;
+            if (armyRow != null)
+            {
+                armyRow.gameObject.name = "TroopCta_RaidDoor";
+                MedievalUiSkin.ApplyButton(armyRow, true);
+                ElarionUiKit.ClampMinTouch(armyRow);
+                // ⛔ THE CHEVRON IS A SHAPE, NOT A HUE. The owner is red/green colourblind, so
+                // "this row is tappable" can never be carried by colour. ASCII ">" and not a
+                // unicode chevron: this project's fonts render non-ASCII as tofu (CLAUDE.md 7).
+                var chevron = ElarionUiKit.Label(armyRow.transform, ">", 0f, 1f, ElarionUi.Gold,
+                    (int)ElarionUi.FontTitle, TextAlignmentOptions.Right, 0.90f, 0.97f, bold: true);
+                ElarionUiKit.FitSingleLine(chevron, 26f, 40f);
+                if (chevron != null) chevron.raycastTarget = false;
+                FlowTrace.Step("Manage", "army line is a raid door: '" + _vm.TroopArmyDoorLabel +
+                    "' seated at " + (TroopArmyDoorRowPx).ToString("0") + "px (MinTouchPx " +
+                    ElarionUiKit.MinTouchPx.ToString("0") + ") on a " + TroopCardPx.ToString("0") +
+                    "px card - WO-1541 ruling 2, owner 2026-09-06");
+            }
+            else
+            {
+                // No published camp = no destination, so the row stays a LABEL. A live button that
+                // opens nothing is the defect the VM's null door exists to prevent.
+                var army = ElarionUiKit.Label(card, ManageScreenVM.Ascii(_vm.TroopArmySummaryText ?? ""),
+                    ArmyDoorY0, ArmyDoorY1, ElarionUi.Parchment, (int)ElarionUi.FontLabel,
+                    TextAlignmentOptions.Left, 0.19f, 0.72f, bold: true);
+                ElarionUiKit.FitSingleLine(army, ElarionUiKit.FontHardFloor, 40f);
+            }
             if (!string.IsNullOrEmpty(selected.StateWord))
             {
-                var troopBadge = ElarionUiKit.AddImage(card, "TroopStateBadge", new Vector2(0.74f, 0.74f),
-                    new Vector2(0.98f, 0.84f), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
+                // ⚠ WO-1541: the state badge rides the DOOR ROW's own band now, and it is built
+                // AFTER the row so it paints above it. Its raycastTarget is already false, so the
+                // whole row - badge included - stays one tap target.
+                // ⛔ x PULLED IN 0.98 -> 0.90 so it CANNOT overlap the chevron at 0.90-0.97. The
+                // badge is not shrunk in height: it gained the row's full 112px band.
+                var troopBadge = ElarionUiKit.AddImage(card, "TroopStateBadge", new Vector2(0.72f, ArmyDoorY0),
+                    new Vector2(0.90f, ArmyDoorY1), new Color(0.12f, 0.25f, 0.08f, 0.82f), rounded: false);
                 troopBadge.GetComponent<Image>().raycastTarget = false;
                 var troopState = ElarionUiKit.Label(troopBadge.transform, ManageScreenVM.Ascii(selected.StateWord), 0f, 1f,
                     ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.02f, 0.98f, bold: true);
@@ -3810,10 +4091,10 @@ namespace DeNelle.Village.UI
             // Description left, status WORD ("Available" / "Requires Barracks Tier 2") right, one
             // band - words carry the state; the old green/red tint pair was the same colour to a
             // red/green colourblind owner.
-            var desc = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Description ?? ""), 0.585f, 0.735f,
+            var desc = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Description ?? ""), ArmyDescY0, ArmyDescY1,
                 ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.19f, 0.70f);
             ElarionUiKit.FitSingleLine(desc, 22f, 30f);
-            var status = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), 0.585f, 0.735f,
+            var status = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), ArmyDescY0, ArmyDescY1,
                 ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Right, 0.71f, 0.98f, bold: true);
             ElarionUiKit.FitSingleLine(status, 22f, 30f);
 
@@ -3821,12 +4102,12 @@ namespace DeNelle.Village.UI
             {
                 // Ruling #8: selectable, dim, the requirement in words, ONE Gray non-interactable
                 // face, no Train / Upgrade buttons at all.
-                var fact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), 0.455f, 0.575f,
+                var fact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.Requirement ?? ""), ArmyFactY0, ArmyFactY1,
                     ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
                 ElarionUiKit.FitSingleLine(fact, 22f, 26f);
                 var lockedFace = ElarionUiKit.BuildObsidianButton(card, "LOCKED . TIER " + selected.LockTier,
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1), null);
+                    new Vector2(0.02f, ArmyCtaY0), new Vector2(0.48f, ArmyCtaY1), null);
                 if (lockedFace != null)
                 {
                     lockedFace.gameObject.name = "TroopCta_Locked";
@@ -3838,7 +4119,7 @@ namespace DeNelle.Village.UI
 
             // The fact SENTENCE (ruling #4) - composed by the VM, painted here, directly ABOVE the
             // TRAIN button it explains.
-            var trainFact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.TrainFactText ?? ""), 0.455f, 0.575f,
+            var trainFact = ElarionUiKit.Label(card, ManageScreenVM.Ascii(selected.TrainFactText ?? ""), ArmyFactY0, ArmyFactY1,
                 ElarionUi.Parchment, (int)ElarionUi.FontMicro, TextAlignmentOptions.Left, 0.02f, 0.49f, bold: true);
             ElarionUiKit.FitSingleLine(trainFact, 22f, 26f);
 
@@ -3853,7 +4134,7 @@ namespace DeNelle.Village.UI
             // upgrade benefit over UPGRADE (x 0.51-0.98). No font was shrunk to make it fit.
             var troopBenefit = ElarionUiKit.Label(card,
                 string.IsNullOrEmpty(selected.NextUnlockText) ? "" : "After upgrade: " + ManageScreenVM.Ascii(selected.NextUnlockText),
-                0.455f, 0.575f, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
+                ArmyFactY0, ArmyFactY1, ElarionUi.ParchmentDim, (int)ElarionUi.FontMicro,
                 TextAlignmentOptions.Left, 0.51f, 0.98f);
             ElarionUiKit.FitSingleLine(troopBenefit, ElarionUiKit.FontHardFloor, 26f);
 
@@ -3879,7 +4160,7 @@ namespace DeNelle.Village.UI
                 "TRAIN 1 " + ManageScreenVM.Ascii((selected.Name ?? "").ToUpperInvariant()),
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 trainOn ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, TroopCtaY0), new Vector2(0.48f, TroopCtaY1),
+                new Vector2(0.02f, ArmyCtaY0), new Vector2(0.48f, ArmyCtaY1),
                 () => { Guard.Try("Manage", "train one", () => trainRow?.Activate?.Invoke()); });
             if (train != null)
             {
@@ -3908,7 +4189,7 @@ namespace DeNelle.Village.UI
                 // ManageTroopsTrainDoorRegression case 7 asserts.
                 upgrade = BuildTwoLineCta(card, "UPGRADE TO L" + (selected.Level + 1), upgradeSub,
                     ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1),
+                    new Vector2(0.52f, ArmyCtaY0), new Vector2(0.98f, ArmyCtaY1),
                     () => { Guard.Try("Manage", "upgrade troop", () => upgradeRow?.Activate?.Invoke()); });
                 if (upgrade != null) upgrade.interactable = upgradeOn;
             }
@@ -3916,7 +4197,7 @@ namespace DeNelle.Village.UI
             {
                 upgrade = BuildTwoLineCta(card, "MAX LEVEL", selected.UpgradeStateText,
                     ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.52f, TroopCtaY0), new Vector2(0.98f, TroopCtaY1), null);
+                    new Vector2(0.52f, ArmyCtaY0), new Vector2(0.98f, ArmyCtaY1), null);
                 if (upgrade != null) upgrade.interactable = false;
             }
             if (upgrade != null)
@@ -4916,7 +5197,13 @@ namespace DeNelle.Village.UI
             // the X and now the tabs all stand down (ApplyDrawerPlacement). A fault that appears on
             // one tab of three is worth understanding before fixing - here it confirmed the X was
             // the collider rather than the tabs being mis-seated.
-            const float TabsRightStop = 0.86f;
+            // ⭐ WO-1488: THE RESERVED COLUMN IS GONE BECAUSE THE X IS GONE. The stop was 0.86 to
+            // hold a 120px X off the last tab; the X now lives in the title overlay at the drawer's
+            // top-right (BuildQueueDrawer), so 14% of the band was about to become dead space -
+            // and dead space beside three faces that must each clear MinTouchPx is exactly what
+            // this file keeps paying for. The collision the 0.86 fixed cannot recur: the two
+            // controls are no longer in the same zone.
+            const float TabsRightStop = 1.0f;
             var tabs = _vm.QueueTabs;
             if (tabs == null || tabs.Count == 0)
             {
@@ -5105,7 +5392,9 @@ namespace DeNelle.Village.UI
             var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), QRowStateY0, QRowStateY1,
                                            ElarionUi.ParchmentDim, (int)QueueLineFontPx,
                                            TextAlignmentOptions.Left, x0, 0.44f);
-            ElarionUiKit.FitSingleLine(state, 0f, QueueLineFontPx);
+            // WO-1488: the TIMER line, fitted to its own floor. `0f` here resolved to FontFloor(30)
+            // against a 32px max - two points of headroom - and the capture ellipsised at "(0% do...".
+            ElarionUiKit.FitSingleLine(state, QueueStateFontFloorPx, QueueLineFontPx);
 
             // The bar itself. Drawn only for a job with a known duration (Progress01 >= 0), and
             // deliberately NOT for a collapsed stack header, which stands for several jobs at

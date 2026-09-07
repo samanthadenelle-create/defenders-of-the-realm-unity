@@ -1,5 +1,10 @@
 import io, subprocess, os
-ROOT = r'D:\eoa'
+from pathlib import Path
+
+# CLAUDE.md sec.0 (owner ruling 2026-08-09): the repo root is MACHINE-DEPENDENT
+# (C:\eoa on one seat, D:\eoa on another) - resolve it from this script's own
+# location, never hardcode a drive letter. dev/tmp/<script>.py -> parents[2].
+ROOT = str(Path(__file__).resolve().parents[2])
 
 MSG = """fix(vfx): commit the mirror ASSETS the impact prefabs reference
 

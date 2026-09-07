@@ -50,7 +50,13 @@ namespace DeNelle.Core.UI
 
             _open = true;
             _canvas.SetActive(true);
-            _hold = WorldHold.Acquire(HoldReason + ":" + WorkspaceName);
+            // WO-1471: PLAYER-OWNED, not the bounded default. A card-led workspace is browsed and
+            // closed by the player, so a 180s ceiling would unfreeze the world underneath an open
+            // screen. The probe reuses the SAME expression PanelManager.Register is given below
+            // (() => _open) plus this component's own existence - "does its owner still exist",
+            // never "is this old" (WO-1369).
+            _hold = WorldHold.AcquirePlayerOwned(HoldReason + ":" + WorkspaceName,
+                () => this != null && _open);
             _panelHandle ??= PanelManager.Register(WorkspaceName, Close, () => _open);
             if (!PanelManager.NotifyOpened(_panelHandle))
             {
@@ -199,10 +205,9 @@ namespace DeNelle.Core.UI
             Guard.Try("Navigation", "render '" + WorkspaceName + "' page", () => RenderPage(page, _content));
         }
 
-        private void Update()
-        {
-            if (_open) WorldHold.Renew(_hold);
-        }
+        // WO-1471: the per-frame renew Update is DELETED - it was the workaround for
+        // the bounded ceiling, and a player-owned hold has no ceiling to outrun. Removing it also
+        // stops every workspace subclass paying for an Update that did nothing else.
 
         protected virtual void OnDisable() => Close();
         protected virtual void OnDestroy()

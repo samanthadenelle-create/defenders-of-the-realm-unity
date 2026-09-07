@@ -1,5 +1,7 @@
 # WO-2009 — Simplify Troop Detail, Training, and Upgrade Actions
 
+**Status:** IN PROGRESS - PARTIAL: the troop progression seam landed with the barracks merge in a6bbc523d (BarracksProgression.cs); the troop-detail train and upgrade acceptance is not verified at HEAD 2026-09-06.
+
 **Priority:** P0  
 **Depends on:** WO-2008, WO-2011
 

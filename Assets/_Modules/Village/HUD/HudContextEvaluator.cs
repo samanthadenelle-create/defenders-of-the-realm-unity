@@ -86,6 +86,11 @@ namespace DeNelle.Village.Hud
 
         protected override void Poll()
         {
+            // WO-1483 frame budget. FIRST line so every early-return path is still timed.
+            // Accumulating 4-arg overload — no per-tick log; PerfReporter rolls it up 1/s.
+            // Cadence is 0.20s (the HudProducer interval), so ~5 samples per roll-up.
+            using var _perf = FlowTrace.Measure("Perf", "HudContextEvaluator.Poll", 4f, 1f);
+
             string scene = SceneManager.GetActiveScene().name;
 
             // WO-1436: the scene's OWN declaration. Constant for the whole time the player

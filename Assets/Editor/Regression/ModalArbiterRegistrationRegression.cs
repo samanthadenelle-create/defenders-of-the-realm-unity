@@ -63,6 +63,9 @@ namespace DeNelle.Editor
         private static readonly Regex ExplicitSortArg = new Regex(@"sortingOrder\s*:\s*(\d{1,6})", RegexOptions.Compiled);
 
         // The kit builders themselves DEFINE these APIs (default sortingOrder = 31000) -- not consumers.
+        // WO-1495 2026-09-06 remove-by 2026-12-06 - the kit/manager files that DEFINE the modal
+        // build APIs rather than consume them. A file list rots when a kit partial is renamed or
+        // split, so re-read then that all seven still exist and still define the API.
         private static readonly HashSet<string> AllowList = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "ElarionUiKit.cs", "ElarionUiKitObsidian.cs", "ElarionUiKitNameplate.cs",

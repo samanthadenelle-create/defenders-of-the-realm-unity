@@ -190,6 +190,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "wall-layer", () => Case3_WallStaysOnStructureLayer(failures, notes, created));
                 Case(failures, "wall-collapse", () => Case4_WallCollapseDropsColliders(failures, notes, created));
                 Case(failures, "tower-seam-split", () => Case5_TowerSeamSplit(failures, notes, created));
+                Case(failures, "tag-literals-declared", () => Case6_TagLiteralsAreDeclared(failures, notes));
             }
             catch (Exception ex)
             {
@@ -209,7 +210,8 @@ namespace DeNelle.Editor.Regression
                          "still land on layer Structure so towers cannot shoot through them, a wall driven to 100 " +
                          "damage drops its solid colliders through BOTH damage seams, and DefenseTower still answers " +
                          "IsAlive two different ways (player seam = liveness, enemy seam = liveness AND PlayerOwned) " +
-                         "with the paired ApplyContactDamage ownership gate intact" + noteStr;
+                         "with the paired ApplyContactDamage ownership gate intact, and every tag literal handed to " +
+                         "a *WithTag/*ByTag finder is a tag the project actually declares" + noteStr;
                 return true;
             }
 
@@ -692,6 +694,202 @@ namespace DeNelle.Editor.Regression
                 if (p.Name.EndsWith(".Faction", StringComparison.Ordinal)) return p;
 
             return null;
+        }
+
+        // =====================================================================
+        //  CASE 6 [tag-literals-declared] - WO-1513.
+        //  Every string literal handed to a *WithTag / *ByTag finder names a tag
+        //  the project actually DECLARES.
+        //
+        //  WHY THIS IS A GATE AND NOT A LINT: GameObject.FindGameObjectsWithTag
+        //  THROWS on an undeclared tag, and that is exactly how WO-1038 shipped -
+        //  CastleDefensePlansService read a "SpawnPoint" tag that TagManager.asset
+        //  has never declared, every scan died on that line, and the drop never
+        //  spawned (owner F8 seq 2434-2442). The repo's answer was to wrap those
+        //  reads in try/catch, which converts the throw into something WORSE: a
+        //  branch that is silently, permanently dead while still READING as a live
+        //  alternative to whoever next debugs targeting. WO-1513 found seventeen of
+        //  them across three tags ("HeroTarget", "PetTarget", "ScreenFlash").
+        //  This case is the thing that would have caught the original.
+        //
+        //  THE ALLOWED SET IS READ FROM THE PROJECT, NOT FROM A LIST HERE -
+        //  InternalEditorUtility.tags is TagManager.asset's own `tags:` block plus
+        //  Unity's built-ins (Untagged/Respawn/Finish/EditorOnly/MainCamera/Player/
+        //  GameController). A hand-copied four-name list in this file would be the
+        //  duplicated state CLAUDE.md sec.2/sec.5/sec.8 keeps being bitten by.
+        //
+        //  PENDING SITES: the sites this suite cannot demand fixed yet are named in
+        //  s_pendingTagSites, and that list CANNOT GO STALE - a row whose site no
+        //  longer reads the tag FAILS the case and demands its own deletion.
+        // =====================================================================
+        private static readonly (string File, string Tag, string Why)[] s_pendingTagSites =
+        {
+            // WO-1513 explicitly excluded these from the edit lane. EnemyBrain is a
+            // do-not-touch file for that ticket; AwarenessSensor is owned by another
+            // lane. Both read "PetTarget", which TagManager.asset does not declare -
+            // so pet acquisition through the tag has never worked, on either path.
+            ("Village/Enemies/EnemyBrain.cs",             "PetTarget", "WO-1513 do-not-touch file"),
+            ("Village/Enemies/Perception/AwarenessSensor.cs", "PetTarget", "WO-1513 owned by another lane"),
+        };
+
+        private static void Case6_TagLiteralsAreDeclared(List<string> failures, List<string> notes)
+        {
+            var declared = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var t in UnityEditorInternal.InternalEditorUtility.tags)
+                if (!string.IsNullOrEmpty(t)) declared.Add(t);
+
+            if (declared.Count == 0)
+            {
+                notes.Add("tag-literals-declared: InternalEditorUtility.tags came back EMPTY - the case was skipped " +
+                          "rather than false-red every tag read in the project");
+                return;
+            }
+
+            string root = Application.dataPath;
+            if (!Directory.Exists(root))
+            {
+                // FAIL, not a note. This ran under the editor, so Application.dataPath IS the
+                // open project's Assets/ folder - its absence is a broken gate, not an option
+                // (same reading as the TownBankCap "!Directory.Exists(modules)" ledger row).
+                // The old `notes.Add(... case skipped); return;` reported GREEN while checking
+                // zero tag literals, which is the hollow pass this rule exists to catch.
+                failures.Add("tag-literals-declared: Application.dataPath does not exist as a directory (" +
+                             root + ") - the tag-literal sweep read NOTHING, so no tag read in the project " +
+                             "was verified. That is a broken harness, not a skippable case.");
+                return;
+            }
+
+            // A pending row may legitimately match MORE THAN ONCE (EnemyBrain reads
+            // "PetTarget" on two lines), so matches are MARKED, never consumed - a
+            // consume-on-first-match would fail the second read of the same site.
+            var pendingSeen = new bool[s_pendingTagSites.Length];
+            var offenders = new List<string>();
+
+            // \w* so the guarded wrappers are caught too: the repo's dead reads hide
+            // behind SafeFindWithTag / SafeFindByTag / TryFindByTag, not behind the
+            // three raw UnityEngine names. Matching only the raw names would miss
+            // fifteen of the seventeen sites WO-1513 opened.
+            var finder = new Regex(@"\b\w*(?:WithTag|ByTag)\s*\(\s*""([^""\r\n]*)""", RegexOptions.Compiled);
+            string selfFile = "StructureTargetableRegression.cs";
+
+            foreach (var path in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                // This suite's own failure strings quote the offending tag names.
+                if (Path.GetFileName(path) == selfFile) continue;
+
+                string src = ReadOrEmpty(path);
+                if (src.Length == 0) continue;
+                string code = StripCommentsPreservingLines(src);
+
+                foreach (Match m in finder.Matches(code))
+                {
+                    string tag = m.Groups[1].Value;
+                    if (declared.Contains(tag)) continue;
+
+                    int line = code.Substring(0, m.Index).Split('\n').Length;
+                    string rel = path.Replace('\\', '/');
+                    int cut = rel.IndexOf("/Assets/", StringComparison.Ordinal);
+                    if (cut >= 0) rel = rel.Substring(cut + 1);
+
+                    int pi = -1;
+                    for (int k = 0; k < s_pendingTagSites.Length; k++)
+                    {
+                        if (rel.EndsWith(s_pendingTagSites[k].File, StringComparison.Ordinal) &&
+                            s_pendingTagSites[k].Tag == tag) { pi = k; break; }
+                    }
+                    if (pi >= 0)
+                    {
+                        pendingSeen[pi] = true;
+                        notes.Add("tag-literals-declared PENDING " + rel + ":" + line + " reads undeclared tag \"" +
+                                  tag + "\" (" + s_pendingTagSites[pi].Why + ")");
+                        continue;
+                    }
+
+                    offenders.Add(rel + ":" + line + " -> " + m.Value.Trim());
+                }
+            }
+
+            if (offenders.Count > 0)
+            {
+                failures.Add("[tag-literals-declared] " + offenders.Count + " tag read(s) name a tag the project does " +
+                             "NOT declare: " + string.Join(" ; ", offenders) + ". ProjectSettings/TagManager.asset " +
+                             "declares only [" + string.Join(", ", new List<string>(declared).ToArray()) + "]. " +
+                             "FindWithTag/FindGameObjectsWithTag THROW on an undeclared tag (WO-1038), and wrapping " +
+                             "the read in try/catch does not fix it - it makes the branch permanently dead while it " +
+                             "still reads as a live alternative (WO-1513). Resolve the hero by component " +
+                             "(FindFirstObjectByType<HeroLocomotion>(), CLAUDE.md sec.7), or delete the branch. Do NOT " +
+                             "silence this by declaring the tag: an undeclared tag that throws is a better state than " +
+                             "a declared tag nothing ever sets.");
+            }
+
+            for (int i = 0; i < s_pendingTagSites.Length; i++)
+            {
+                if (pendingSeen[i]) continue;
+                failures.Add("[tag-literals-declared] the pending row " + s_pendingTagSites[i].File + " / \"" +
+                             s_pendingTagSites[i].Tag + "\" no longer matches any tag read - the site was cleaned. " +
+                             "DELETE that row from s_pendingTagSites in this file. The row exists only so a site " +
+                             "another lane owns cannot go stale unnoticed; a row outliving its site is the " +
+                             "duplicated state this whole suite family exists to prevent.");
+            }
+        }
+
+        /// <summary>
+        /// Blanks out // and /* */ comments while leaving every newline in place (so
+        /// match offsets still give real line numbers) and without touching string,
+        /// verbatim-string or char literals. A naive comment strip would maul a
+        /// literal containing "//" and, worse, a COMMENT quoting a tag read would be
+        /// scanned as code - TowerLoopDevHarness.cs:114 quotes
+        /// GameObject.FindWithTag("HeroTarget") in prose describing the bug it fixed.
+        /// </summary>
+        private static string StripCommentsPreservingLines(string src)
+        {
+            var sb = new System.Text.StringBuilder(src.Length);
+            int i = 0, n = src.Length;
+            while (i < n)
+            {
+                char c = src[i];
+
+                if (c == '/' && i + 1 < n && src[i + 1] == '/')
+                {
+                    while (i < n && src[i] != '\n') { sb.Append(' '); i++; }
+                    continue;
+                }
+                if (c == '/' && i + 1 < n && src[i + 1] == '*')
+                {
+                    sb.Append("  "); i += 2;
+                    while (i < n && !(src[i] == '*' && i + 1 < n && src[i + 1] == '/'))
+                    { sb.Append(src[i] == '\n' ? '\n' : ' '); i++; }
+                    if (i < n) { sb.Append("  "); i += 2; }
+                    continue;
+                }
+                if (c == '@' && i + 1 < n && src[i + 1] == '"')
+                {
+                    sb.Append(c).Append('"'); i += 2;
+                    while (i < n)
+                    {
+                        if (src[i] == '"' && i + 1 < n && src[i + 1] == '"') { sb.Append("\"\""); i += 2; continue; }
+                        if (src[i] == '"') { sb.Append('"'); i++; break; }
+                        sb.Append(src[i]); i++;
+                    }
+                    continue;
+                }
+                if (c == '"' || c == '\'')
+                {
+                    char quote = c;
+                    sb.Append(c); i++;
+                    while (i < n)
+                    {
+                        if (src[i] == '\\' && i + 1 < n) { sb.Append(src[i]).Append(src[i + 1]); i += 2; continue; }
+                        sb.Append(src[i]);
+                        if (src[i] == quote || src[i] == '\n') { i++; break; }
+                        i++;
+                    }
+                    continue;
+                }
+
+                sb.Append(c); i++;
+            }
+            return sb.ToString();
         }
 
         /// <summary>filename-without-extension -> full path, for every .cs under Assets/_Modules.</summary>

@@ -156,6 +156,9 @@ namespace DeNelle.Editor
         // DELETE the entry in the same change that resolves the finding, as
         // WO-1430 did with all three.
         // ---------------------------------------------------------------------
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-1430) - legitimately doorless panel
+        // types. MEASURED EMPTY on 2026-09-06: WO-1430 resolved all three and deleted them, which
+        // is the shape this block wants; the remove-by forces a re-read if entries come back.
         private static readonly HashSet<string> Allowlist = new HashSet<string>(StringComparer.Ordinal)
         {
         };

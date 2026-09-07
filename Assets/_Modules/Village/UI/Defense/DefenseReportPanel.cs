@@ -3,9 +3,16 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.UI
 //
-// A DUMB SKIN over DefenseReportLedger. Master-detail on the FrameQuest grammar,
-// exactly like GameGuidePanel: the dark left well carries the report LIST, the
-// parchment right well carries the SELECTED report's detail.
+// A DUMB SKIN over DefenseReportLedger. Master-detail on the FrameQuest grammar:
+// the dark left well carries the report LIST, the right well carries the SELECTED
+// report's detail.
+//
+// ⛔ BOTH WELLS ARE OBSIDIAN. THE DETAIL SIDE IS NOT PARCHMENT (WO-1515, 2026-09-06).
+//    FrameQuest is a twoToneBody frame, so the kit paints TwoToneParchmentFill under
+//    bodyRight; this screen covers BOTH zones with its own opaque plate and colours its
+//    ink for dark (`_onParchment == false`). Ink choice and surface are ONE decision --
+//    change one and you must change the other, or you ship the tan slab again. See
+//    StyleObsidianWell for the RCA. Pinned by DefenseReportLayoutRegression.
 //
 // CONSTRUCTION LAW (non-negotiable here as everywhere):
 //   • UXML DOES NOT WORK IN BUILDS — code-built uGUI via ElarionUiKit only.
@@ -47,9 +54,33 @@ namespace DeNelle.Village.UI
     [DisallowMultipleComponent]
     public sealed class DefenseReportPanel : MonoBehaviour
     {
-        private const float ListRowPx = 132f;   // >= MinTouchPx (112) with room for two text lines
+        // ── The list row band is DERIVED, never a hand-typed number (WO-1515) ────
+        // The old fixed 132px band carried a TWO-LINE label ("HELD\nHollow Host - 6h ago").
+        // FitSingleLine is a WIDTH fit: it never shrinks to make a hard "\n" fit vertically, so
+        // the second line overflowed its band and painted across the NEXT row's gold bezel --
+        // exactly what the owner's 20:03 frame shows. The row is ONE fitted line now, and the
+        // band is computed from the font it actually renders at, so the two can never disagree.
+        private const float RowFontMax = 44f;          // one line, comfortably under FontBody
+        private const float RowFontMin = 30f;          // FitSingleLine clamps up to the kit floor
+        private const float RowLineBoxMul = 1.25f;     // TMP line box ~1.25em
+        private const float RowPadPx = 26f;            // bezel inset, top + bottom
+
+        /// <summary>DERIVED row band: one line box at <see cref="RowFontMax"/> plus the bezel
+        /// inset, floored at the kit touch minimum. Never a literal.</summary>
+        private static readonly float ListRowPx =
+            Mathf.Max(ElarionUiKit.MinTouchPx, RowFontMax * RowLineBoxMul + RowPadPx);
+
+        /// <summary>Gap between two row bands. PITCH = <see cref="ListRowPx"/> + this, and the
+        /// layout oracle asserts the pitch clears the rendered line box at every capture aspect.</summary>
+        private const float ListRowGapPx = 10f;
+
         private const float MapPlatePx = 420f;  // fixed band for the diagram (the scroll column
                                                 // does not control child height -- §1.14 kit rule)
+
+        /// <summary>The well plate. FULLY opaque on purpose -- see <see cref="StyleObsidianWell"/>.
+        /// ElarionUiKit.ObsidianFill is a=0.98, which lets 2% of whatever is behind it through;
+        /// behind the DETAIL well the kit paints TwoToneParchmentFill, so 2% of tan is 2% too much.</summary>
+        private static readonly Color WellFill = new Color(0.02f, 0.02f, 0.025f, 1f);
 
         private GameObject _ui;
         private RectTransform _listContent;
@@ -89,8 +120,20 @@ namespace DeNelle.Village.UI
             Close();
 
             _rows = DefenseReportLedger.NewestFirst();
-            if (_rows.Count > 0 && string.IsNullOrEmpty(_selectedId))
+            // WO-1515 sec.2B/2D - THE CHIP'S OWN DOOR HAS TO CLEAR THE CHIP.
+            // Select() (the row tap) was the ONLY caller of MarkRead, so a player who opened
+            // this screen through the new HUD chip, read the report it landed on, and closed
+            // it again would have found the chip still there - a door that cannot be answered.
+            // The landing record is therefore selected AND marked read here. Re-select the
+            // newest whenever the remembered id is gone (trimmed by MaxRetained) or a newer
+            // report has landed unread since the last open; otherwise the panel keeps the
+            // player's last choice, which is what the row tap is for.
+            if (_rows.Count > 0 &&
+                (string.IsNullOrEmpty(_selectedId) || DefenseReportLedger.TryGet(_selectedId) == null || !_rows[0].Read))
                 _selectedId = _rows[0].Id;
+
+            if (!string.IsNullOrEmpty(_selectedId) && DefenseReportLedger.MarkRead(_selectedId))
+                _rows = DefenseReportLedger.NewestFirst();   // the [NEW] tag on that row is stale now
 
             BuildChrome();
             Render();
@@ -139,8 +182,10 @@ namespace DeNelle.Village.UI
             StyleObsidianWell(detailZone, "ReportDetailWell");
             _onParchment = false;
 
-            _listContent = ElarionUiKit.MakeScrollZone(listZone, spacing: 8f, padding: 8).content;
-            _detailContent = ElarionUiKit.MakeScrollZone(detailZone, spacing: 12f, padding: 16).content;
+            // Padding clears the bezel drawn by StyleObsidianWell so no line of text is ever
+            // laid across the gold border; spacing IS the row gap the derived pitch is built from.
+            _listContent = ElarionUiKit.MakeScrollZone(listZone, spacing: ListRowGapPx, padding: 22).content;
+            _detailContent = ElarionUiKit.MakeScrollZone(detailZone, spacing: 12f, padding: 28).content;
         }
 
         // ── Render ───────────────────────────────────────────────────────────────
@@ -179,7 +224,9 @@ namespace DeNelle.Village.UI
 
                 // The row label carries EVERY state in words: verdict, who, when, unread.
                 // A greyscale capture of this list loses nothing.
-                string label = OutcomeWord(r.Outcome) + "\n" + Safe(r.Attacker.DisplayName, "Unknown force")
+                // ⛔ ONE LINE. No "\n" -- a hard break survives NoWrap, so a two-line label
+                //    overflows the derived band and paints over the next row (WO-1515).
+                string label = OutcomeWord(r.Outcome) + "  -  " + Safe(r.Attacker.DisplayName, "Unknown force")
                              + "  -  " + RelativeTime(r.EndedAtUnixMs)
                              + (r.Read ? string.Empty : "  [NEW]");
 
@@ -188,12 +235,21 @@ namespace DeNelle.Village.UI
                 var le = host.GetComponent<LayoutElement>();
                 le.preferredHeight = ListRowPx;
                 le.minHeight = ListRowPx;
+                le.flexibleHeight = 0f;   // the band is the band; the column may not stretch it
 
-                ElarionUiKit.BuildObsidianButton(host.transform, label,
+                var rowBtn = ElarionUiKit.BuildObsidianButton(host.transform, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     Vector2.zero, Vector2.one, () => Select(id));
+
+                // Armed EXPLICITLY at this screen's own font band rather than left to the kit
+                // default, so the band above and the type below are derived from one number.
+                if (rowBtn != null)
+                {
+                    var caption = rowBtn.GetComponentInChildren<TextMeshProUGUI>(true);
+                    if (caption != null) ElarionUiKit.FitSingleLine(caption, RowFontMin, RowFontMax);
+                }
             }
         }
 
@@ -502,15 +558,12 @@ namespace DeNelle.Village.UI
 
         // ── Copy helpers (every state is a SENTENCE — colourblind law) ───────────
 
-        private static string OutcomeWord(DefenseOutcome o)
-        {
-            switch (o)
-            {
-                case DefenseOutcome.Overrun: return "OVERRUN";
-                case DefenseOutcome.Breached: return "BREACHED";
-                default: return "HELD";
-            }
-        }
+        /// <summary>WO-1515 door lane: the switch MOVED to Core
+        /// (DeNelle.Core.HudModel.DefenseReportChipModel.OutcomeWord). The HUD chip says the same
+        /// word as this list and this heading, and two copies of a three-case switch is exactly
+        /// how those three surfaces start disagreeing. This stays as the panel's local name.</summary>
+        private static string OutcomeWord(DefenseOutcome o) =>
+            DeNelle.Core.HudModel.DefenseReportChipModel.OutcomeWord(o);
 
         private static string OutcomeSentence(DefenseOutcome o)
         {
@@ -638,19 +691,59 @@ namespace DeNelle.Village.UI
             return go.transform;
         }
 
+        /// <summary>
+        /// ⭐ THE PLATE AND THE BEZEL ARE TWO IMAGES, AND THAT SEPARATION IS THE WHOLE FIX.
+        ///
+        /// <para>RCA (owner device frame Logs/device/screens/owner-defense-report-20260906-200350.png,
+        /// build 2026.09.07.358574): the DETAIL pane rendered as a flat TAN slab with near-invisible
+        /// grey text. The old body of this method built ONE image, seeded it with ObsidianFill, and
+        /// then OVERWROTE that fill -- `img.sprite = frame; img.color = Color.white` -- turning the
+        /// plate into the bezel. `card-frame-empty` is a hollow border with a TRANSPARENT centre, so
+        /// nothing dark was left. Behind the detail zone the kit paints
+        /// `ZoneBacking(layout.bodyRight, TwoToneParchmentFill)` (ElarionUiKit, the FrameQuest
+        /// twoToneBody branch) -- that tan read straight through the hole, under text this panel had
+        /// already coloured for a DARK surface (`_onParchment == false` -> Gilt / Parchment /
+        /// ParchmentDim). Light ink on tan is the unreadable pane in the frame.</para>
+        ///
+        /// <para>The LEFT well took the identical call and looked fine, which is the proof: its
+        /// backing is the kit's dark TwoToneWellFill, so the same hole exposed black. One code path,
+        /// two surfaces, one broken -- the fill was never doing the work it was credited with.</para>
+        ///
+        /// <para>So: an OPAQUE plate first, the bezel as its own later sibling on top. A future edit
+        /// cannot collapse them back into one image without deleting a line that says why.</para>
+        /// </summary>
         private static void StyleObsidianWell(Transform zone, string name)
         {
             if (zone == null) return;
-            var go = ElarionUiKit.AddImage(zone, name, Vector2.zero, Vector2.one,
-                ElarionUiKit.ObsidianFill, rounded: true);
-            var img = go != null ? go.GetComponent<Image>() : null;
-            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
-            if (img != null && frame != null)
+
+            // 1. THE PLATE — opaque obsidian, no sprite swap, ever.
+            var plate = ElarionUiKit.AddImage(zone, name, Vector2.zero, Vector2.one,
+                WellFill, rounded: true);
+            var plateImg = plate != null ? plate.GetComponent<Image>() : null;
+            if (plateImg != null)
             {
-                img.sprite = frame;
-                img.type = Image.Type.Simple;
-                img.color = Color.white;
-                img.raycastTarget = false;
+                plateImg.color = WellFill;   // survives ApplyRounded seeding a sprite
+                plateImg.raycastTarget = false;
+            }
+
+            // 2. THE BEZEL — decoration, drawn over the plate. Absent art is not a failure:
+            //    the well is already a complete dark surface without it.
+            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
+            if (frame == null)
+            {
+                FlowTrace.Warn("Siege", "report well '" + name
+                    + "' has no card-frame-empty bezel art; the obsidian plate stands alone.");
+                return;
+            }
+            var bezel = ElarionUiKit.AddImage(zone, name + "Bezel", Vector2.zero, Vector2.one,
+                Color.white, rounded: false);
+            var bezelImg = bezel != null ? bezel.GetComponent<Image>() : null;
+            if (bezelImg != null)
+            {
+                bezelImg.sprite = frame;
+                bezelImg.type = Image.Type.Simple;
+                bezelImg.color = Color.white;
+                bezelImg.raycastTarget = false;
             }
         }
 

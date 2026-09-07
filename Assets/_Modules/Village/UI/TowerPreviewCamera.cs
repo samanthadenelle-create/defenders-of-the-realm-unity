@@ -78,10 +78,25 @@ namespace DeNelle.Village
 
             _previewLayer = ResolvePreviewLayer();
 
+            // WO-1451 FIX — antiAliasing was 2 here while the camera below sets
+            // allowMSAA = false, so the camera rendered ONE sample into a TWO-sample
+            // target. Device log 2026-09-06 13:25:34-13:27:58, 130 pairs under
+            // TowerPreviewCamera:Begin:
+            //   [BREAK] error: RenderPass: Attachment 0 was created with 1 samples but
+            //                  2 samples were requested.
+            //   [BREAK] error: EndRenderPass: Not inside a Renderpass
+            //
+            // ⚠ THE DISCRIMINATING INVARIANT IS "RT == CAMERA", NOT "RT == PIPELINE".
+            // PartyShopPanelMvvm.cs:1461-1464 recorded the SAME error string from the
+            // OPPOSITE mismatch (RT at the default 1, camera still asking the URP asset's
+            // m_MSAA:2) and fixed it by turning the camera's MSAA off. Following the URP
+            // asset here would set this RT back to 2 and leave the camera at 1.
+            // An offscreen preview needs no MSAA, so 1 is also the cheaper frame.
+            // Working sibling with the same pairing: TalentNodeVfxRig.cs:139 + :235.
             _rt = new RenderTexture(textureSize, textureSize, 16, RenderTextureFormat.ARGB32)
             {
                 name             = "TowerPreviewRT",
-                antiAliasing     = 2,
+                antiAliasing     = 1,
                 useMipMap        = false,
                 autoGenerateMips = false,
             };
@@ -129,6 +144,14 @@ namespace DeNelle.Village
             _cam.nearClipPlane   = 0.05f;
             _cam.farClipPlane    = 5000f;
             _cam.allowMSAA       = false;
+
+            // WO-1451 — state BOTH halves of the sample-count contract on every Begin, so
+            // the next RenderPass break is one grep away instead of a code-read. Permanent
+            // per CLAUDE.md §12 (instrumentation is never stripped, only flagged off).
+            FlowTrace.Step("Orient", "tower-preview rt/cam samples: rt.antiAliasing=" +
+                (_rt != null ? _rt.antiAliasing : -1) + " cam.allowMSAA=" + _cam.allowMSAA +
+                " (they MUST agree: allowMSAA=false requires antiAliasing=1)");
+
             // CRITICAL: disable so URP does not try (and skip) to auto-render an
             // off-screen Base camera. We render() it manually each frame instead.
             _cam.enabled         = false;

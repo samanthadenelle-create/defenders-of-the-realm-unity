@@ -1,6 +1,6 @@
 # WO-1517: the train/army screens never say the queue is full, the army is full, or whether a troop can be upgraded
 
-**Status:** READY TO IMPLEMENT - owner ruling, 2026-09-06 20:10
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
 **Silo:** Manage 2000-block - `ManageScreenVM` army/troop VMs + `ManageWorkspacePanel` troop detail
 (WO-2008 / 2009).
 **LANDS AFTER** tonight's `ManageScreenVM.cs` commit (the WO-1405 lane).

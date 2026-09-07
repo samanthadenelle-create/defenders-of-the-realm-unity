@@ -45,6 +45,17 @@
 //                  single appearance owner (WO-1108 Lane B) and PetDeployer.DespawnEcho
 //                  stays the one despawn path; the Guide lane adds a VOICE, not a body.
 //   9 [hygiene]    No embedded NUL in the touched sources (CLAUDE.md sec.0/1).
+//  10 [tappable]   The Guide picker, WHEREVER it is, has a real tappable height.
+//                  (!) THIS GROUP WAS MISSING FROM THIS LIST until 2026-09-06 - the map
+//                  ran 1..9 while Run() called ten checks, so the one case a lane was
+//                  most likely to trip was the one the header did not mention.
+//                  (!) RETARGETED 2026-09-06 (owner ruling 20:24, WO-1519 section 2B:
+//                  "Remove it from the deploy screen"). The picker's absence from
+//                  RaidDeployScreen is now the REQUIRED state; the case then proves the
+//                  SELECTION API survived instead, and records that WO-1380's "Guide
+//                  selection EXISTS" acceptance is OWED a new home. Group 7's scope
+//                  fence is untouched - see the case body for why those are different
+//                  things.
 //
 // Every source-lint here reads CODE ONLY (comment lines dropped, trailing // comments
 // dropped, string-literal CONTENTS blanked) -- the same reader EchoWorldPresenceRegression
@@ -428,9 +439,39 @@ namespace DeNelle.Editor.Regression
             int cb = src.IndexOf("OnCycleGuide);", StringComparison.Ordinal);
             if (cb < 0)
             {
-                failures.Add(Tag + " RaidDeployScreen.cs no longer builds a Guide picker button " +
-                             "(no 'OnCycleGuide);' call site). Guide selection must EXIST - WO-1380 " +
-                             "acceptance.");
+                // =============================================================
+                //  RETARGETED 2026-09-06 BY AN OWNER RULING, NOT BY CONVENIENCE.
+                // =============================================================
+                // This case used to FAIL here: "Guide selection must EXIST - WO-1380
+                // acceptance". On 2026-09-06 at 20:24 the owner ruled, of the block on her
+                // own deploy frame: "Remove it from the deploy screen." (WO-1519 section 2B,
+                // after asking "what is the Echo Guide even bringing to the table?"). So the
+                // picker's ABSENCE FROM THIS SCREEN is now the required state, and a case
+                // that reds on it would be reporting the ruling as a regression.
+                //
+                // (!!) WHAT IS *NOT* WEAKENED, and must not be: this case is the [tappable]
+                // HEIGHT pin, NOT the scope fence. Group 7 [no-effect] - "a Guide grants no
+                // stat, no yield and no combat effect" - is untouched by this lane and stays
+                // the ruling nobody may soften. WO-1519 section 2B says so in as many words.
+                //
+                // (!) AND THE COST IS RECORDED RATHER THAN HIDDEN: WO-1380's acceptance
+                // "Guide selection EXISTS" is now OWED. Section 2B says selection "can live
+                // on the Echoes screen instead"; that screen was not built in the WO-1519
+                // lane, so until it is, the player keeps whatever Guide the service defaults
+                // to (Corvin, pinned by group 6 [default]). This branch therefore proves the
+                // SELECTION API survived the surface's removal - if EchoGuideService.SelectGuide
+                // itself went away, the feature really would have been cut, and that IS a
+                // failure.
+                string svc = ReadCode(ServiceSrc);
+                if (svc == null)
+                    failures.Add(Tag + " the Guide picker has left RaidDeployScreen (owner ruling " +
+                                 "2026-09-06 20:24, WO-1519 section 2B) AND EchoGuideService.cs cannot be " +
+                                 "read - that is a feature cut, not a surface removal.");
+                else if (svc.IndexOf("SelectGuide", StringComparison.Ordinal) < 0)
+                    failures.Add(Tag + " the Guide picker has left RaidDeployScreen per WO-1519 section 2B, " +
+                                 "but EchoGuideService no longer exposes SelectGuide either - selection has " +
+                                 "no API left, so it cannot be re-homed on the Echoes screen. Section 2B " +
+                                 "removes ONE SURFACE; the service stays.");
                 return;
             }
 

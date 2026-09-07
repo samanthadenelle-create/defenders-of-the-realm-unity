@@ -1151,6 +1151,9 @@ namespace DeNelle.Editor
         /// <summary>Directories whose Time.timeScale writes are deliberately NOT ours to convert.
         /// EXPLICIT, per WO-1353 §4: a lint with accidental exemptions becomes noise everyone
         /// learns to skip, and then the one write that matters is invisible.</summary>
+        // WO-1495 2026-09-06 remove-by 2026-12-06 (origin WO-1353) - vendor-pack demo directories
+        // whose Time.timeScale writes we deliberately do not own; re-read then in case a pack was
+        // dropped or its demo scripts were deleted, which would leave a dead exemption behind.
         private static readonly string[] WorldClockLintExemptDirs =
         {
             // VENDOR PACK DEMO SCRIPTS. Converting third-party demo code means re-doing the work on

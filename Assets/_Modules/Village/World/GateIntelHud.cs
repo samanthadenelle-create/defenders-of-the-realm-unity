@@ -139,21 +139,12 @@ namespace DeNelle.Village.World
         private void EnsureHero()
         {
             if (_hero != null) return;
-            var p = GameObject.FindWithTag("Player");
-            if (p == null)
-            {
-                // "HeroTarget" may be undefined (FindWithTag throws on an undefined tag).
-                var ht = SafeFindWithTag("HeroTarget");
-                if (ht != null) p = ht;
-            }
-            _hero = p != null ? p.transform : null;
-        }
-
-        /// <summary>Undefined-tag-safe FindWithTag (Unity throws on an undefined tag).</summary>
-        private static GameObject SafeFindWithTag(string tag)
-        {
-            try { return GameObject.FindWithTag(tag); }
-            catch (UnityEngine.UnityException) { return null; }
+            // WO-1513: the old fallback read the "HeroTarget" tag, which TagManager.asset
+            // has never declared — a permanently dead branch. The tag-then-component walk
+            // now lives once in HeroLocator (CLAUDE.md §7); this readout asks for a
+            // Transform instead of scanning the scene itself, which also keeps the
+            // UI-MVVM oracle's scene-scan ban satisfied for a uGUI-constructing file.
+            _hero = HeroLocator.ResolveTransform();
         }
 
         private Transform FindNearestGate()

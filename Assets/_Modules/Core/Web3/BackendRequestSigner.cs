@@ -76,6 +76,13 @@ namespace DeNelle.Core.Web3
         // becomes a 401 the player experiences as a failed purchase.
         private static readonly TimeSpan SessionSkew = TimeSpan.FromSeconds(60);
 
+        // WO-1454: TRANSIENT renewal failures keep the token and back off instead of destroying it.
+        // These two are the backoff ONLY - they never gate the credential itself.
+        private const double RenewBackoffBaseSeconds = 5;
+        private const int    RenewBackoffMaxSteps    = 5;   // 5,10,20,40,80s ceiling
+        private static int      _renewFailureStreak;
+        private static DateTime _renewBackoffUntilUtc = DateTime.MinValue;
+
         private static bool SessionUsable(string wallet)
             => !string.IsNullOrEmpty(_sessionToken)
             && string.Equals(_sessionWallet, wallet, StringComparison.Ordinal)
@@ -99,6 +106,9 @@ namespace DeNelle.Core.Web3
             _sessionToken = null;
             _sessionWallet = null;
             _sessionExpiresUtc = DateTime.MinValue;
+            // WO-1454: the backoff belongs to the token that just went away. A new wallet must not
+            // inherit the previous one's penalty box.
+            ClearRenewalBackoff();
         }
 
         /// <summary>
@@ -532,11 +542,17 @@ namespace DeNelle.Core.Web3
         /// the session, which is the same outage as why=missing with a slower fuse.
         /// </para>
         /// <para>
-        /// ⚠ FAIL-CLOSED, AND IT DROPS THE DEAD TOKEN. A refused renewal means the chain is over
-        /// (expired past the server's absolute cap, revoked, or the schema is behind). Clearing the
-        /// cached token turns the next <c>why</c> into <c>missing</c>, which is HONEST and also stops
-        /// this retrying a doomed renewal on every authed call. The player then re-signs on their
-        /// next explicit connect or purchase — never silently, never unauthenticated.
+        /// ⚠ IT DROPS THE TOKEN ONLY ON A REAL REFUSAL — 401/403 (WO-1454). A refusal means the
+        /// chain is over (past the server's absolute cap, or revoked); clearing then turns the next
+        /// <c>why</c> into <c>missing</c>, which is HONEST, and the player re-signs on their next
+        /// explicit connect or purchase — never silently, never unauthenticated.
+        /// </para>
+        /// <para>
+        /// ⛔ EVERYTHING ELSE KEEPS THE TOKEN. This method used to clear on ANY non-Success result,
+        /// so a single 500/503/timeout — the server saying "try again" — permanently darkened cloud
+        /// save for that install, because save passes <c>allowMint:false</c> and nothing re-mints.
+        /// Transient failures now back off (<see cref="ScheduleRenewalRetry"/>) and leave the
+        /// credential exactly where it was. See <see cref="IsCredentialRefusal"/>.
         /// </para>
         /// </summary>
         private static async UniTask<bool> TryRenewSessionAsync(string wallet, string caller)
@@ -544,6 +560,17 @@ namespace DeNelle.Core.Web3
             if (string.IsNullOrEmpty(_sessionToken) || string.IsNullOrEmpty(wallet)) return false;
 
             string scene = CurrentSceneName();
+
+            // WO-1454: a transient failure left the token in place on purpose; do not re-present it
+            // to an unwell server on every authed call. The token stays valid either way.
+            if (DateTime.UtcNow < _renewBackoffUntilUtc)
+            {
+                FlowTrace.Warn("Wallet",
+                    $"RenewSessionAsync action=keep reason=backoff streak={_renewFailureStreak} - skipping the " +
+                    $"attempt for another {(int)(_renewBackoffUntilUtc - DateTime.UtcNow).TotalSeconds}s after a " +
+                    $"transient failure; the token is UNTOUCHED. scene={scene} caller={caller}");
+                return false;
+            }
             FlowTrace.Step("Wallet", $"RenewSessionAsync (no signature required) scene={scene} caller={caller}");
 
             using var req = new UnityWebRequest(SessionUrl, UnityWebRequest.kHttpVerbPOST);
@@ -561,18 +588,37 @@ namespace DeNelle.Core.Web3
                 // A transport failure is NOT proof the session is dead — the player may simply be
                 // in a tunnel. Keep the token and let the next call try again; only a real refusal
                 // from the server (below) clears it.
+                ScheduleRenewalRetry();
                 FlowTrace.Warn("Wallet",
-                    $"RenewSessionAsync threw ({req.responseCode}/{e.GetType().Name}) - keeping the token; " +
-                    $"this may be transport, not expiry. scene={scene} caller={caller}");
+                    $"RenewSessionAsync action=keep status={req.responseCode} threw={e.GetType().Name} - a " +
+                    $"transport failure is NOT proof the session is dead (the player may simply be in a " +
+                    $"tunnel); the token is KEPT. scene={scene} caller={caller}");
                 return false;
             }
 
             if (req.result != UnityWebRequest.Result.Success)
             {
+                // ⛔ WO-1454: THE STATUS DECIDES, NOT THE MERE FACT OF FAILURE. This used to clear
+                // on ANY non-Success result, so one 500 or 503 - the server saying "try again",
+                // which is the opposite of "you are not who you say" - destroyed a still-valid
+                // token. Save passes allowMint:false, so nothing re-minted it: from that instant
+                // every save reported why=missing PERMANENTLY, until the player re-authenticated
+                // by hand. A transient server hiccup must never cost the session.
+                if (IsCredentialRefusal(req.responseCode))
+                {
+                    FlowTrace.Warn("Wallet",
+                        $"RenewSessionAsync action=clear status={req.responseCode} - the server REFUSED the " +
+                        $"credential (401/403), so the chain is genuinely over; the next authed call reads " +
+                        $"why=missing until something mints. scene={scene} caller={caller}");
+                    ClearSession();
+                    return false;
+                }
+
+                ScheduleRenewalRetry();
                 FlowTrace.Warn("Wallet",
-                    $"RenewSessionAsync refused (http {req.responseCode}) - dropping the dead session; " +
-                    $"the next authed call will read why=missing until something mints. scene={scene} caller={caller}");
-                ClearSession();
+                    $"RenewSessionAsync action=keep status={req.responseCode} result={req.result} - transient " +
+                    $"(5xx / timeout / transport), NOT a refusal; the token is KEPT and the next attempt is " +
+                    $"backed off {(int)(_renewBackoffUntilUtc - DateTime.UtcNow).TotalSeconds}s. scene={scene} caller={caller}");
                 return false;
             }
 
@@ -581,8 +627,13 @@ namespace DeNelle.Core.Web3
                 var res = JsonConvert.DeserializeObject<SessionResponse>(req.downloadHandler.text);
                 if (res == null || !res.Ok || string.IsNullOrEmpty(res.Token))
                 {
-                    FlowTrace.Warn("Wallet", $"RenewSessionAsync empty token scene={scene} caller={caller}");
-                    ClearSession();
+                    // WO-1454: a 2xx that carries no token is NOT a refusal - our server only ever
+                    // returns 200 WITH a token (api/auth/session.js:119-126); a bodyless 200 is far
+                    // more likely a captive portal or proxy than the server revoking anything. Keep.
+                    ScheduleRenewalRetry();
+                    FlowTrace.Warn("Wallet",
+                        $"RenewSessionAsync action=keep status={req.responseCode} reason=empty-token - a 2xx " +
+                        $"with no token is not a credential refusal. scene={scene} caller={caller}");
                     return false;
                 }
 
@@ -595,16 +646,56 @@ namespace DeNelle.Core.Web3
                     ? parsed
                     : DateTime.UtcNow.AddSeconds(res.TtlSeconds > 0 ? res.TtlSeconds : 60);
 
+                ClearRenewalBackoff();
                 FlowTrace.Step("Wallet",
                     $"RenewSessionAsync held - session extended with NO wallet prompt. scene={scene} caller={caller}");
                 return true;
             }
             catch (Exception ex)
             {
-                FlowTrace.Warn("Wallet", $"RenewSessionAsync parse {ex.GetType().Name} scene={scene} caller={caller}");
-                ClearSession();
+                // WO-1454: a body we could not parse proves nothing about the credential.
+                ScheduleRenewalRetry();
+                FlowTrace.Warn("Wallet",
+                    $"RenewSessionAsync action=keep status={req.responseCode} parse={ex.GetType().Name} - an " +
+                    $"unreadable body is not a refusal. scene={scene} caller={caller}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// WO-1454. The ONLY statuses that mean "you are not who you say" and therefore justify
+        /// destroying a cached session.
+        /// <para>
+        /// ⛔ 5xx IS NOT ON THIS LIST AND MUST NEVER BE ADDED. `api/auth/session.js:104` returns
+        /// **500 SERVER_ERROR** when the renewal query itself throws - e.g. while the `signed_at`
+        /// column is missing from a database that has not had `api/schema.sql` applied. That is a
+        /// DEPLOYMENT state, not a verdict on the player's credential, and clearing on it turns a
+        /// server hiccup into a permanent cloud-save outage for that install (save passes
+        /// allowMint:false, so nothing re-mints). The refusals the server actually issues are
+        /// `quietFail(res, 401, ...)` for a wrong-wallet or absolute-cap token (`:117`, `:135`).
+        /// </para>
+        /// </summary>
+        private static bool IsCredentialRefusal(long status)
+        {
+            return status == 401 || status == 403;
+        }
+
+        /// <summary>Back off after a TRANSIENT renewal failure so a kept token is not re-presented
+        /// on every authed call while the server is unwell (WO-1454). Never clears anything.</summary>
+        private static void ScheduleRenewalRetry()
+        {
+            _renewFailureStreak = _renewFailureStreak < RenewBackoffMaxSteps
+                ? _renewFailureStreak + 1
+                : RenewBackoffMaxSteps;
+            double seconds = RenewBackoffBaseSeconds * Math.Pow(2, _renewFailureStreak - 1);
+            _renewBackoffUntilUtc = DateTime.UtcNow.AddSeconds(seconds);
+        }
+
+        /// <summary>Clears the transient-failure backoff after a renewal succeeds (WO-1454).</summary>
+        private static void ClearRenewalBackoff()
+        {
+            _renewFailureStreak = 0;
+            _renewBackoffUntilUtc = DateTime.MinValue;
         }
 
         private static bool IsPurchaseRoute(UnityWebRequest req)

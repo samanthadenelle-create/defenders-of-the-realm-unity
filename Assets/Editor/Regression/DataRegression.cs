@@ -162,12 +162,12 @@ namespace DeNelle.Editor
             CheckNpcModels(failures, log);
 
             // --- ASSET-MOVE MANIFEST (Addressables migration, 2026-08-17) ----------
-            // The generated manifest is the single source of truth for what moved out of Resources
-            // and where it went. Registered HERE, not left as a menu item, because the whole point
-            // is that a stale manifest FAILS A GATE rather than silently blanking a building — and
-            // a suite that only runs when someone remembers is exactly the stale-second-source-of-
-            // truth problem it exists to prevent. No-ops when no migration has run.
-            DeNelle.Editor.Regression.AssetMoveManifestRegression.Verify(failures, log);
+            // MOVED INSIDE THE FENCE (WO-1496, 2026-09-06). The call used to sit HERE, and the
+            // reasoning that put it here was right about the wrong thing: registering it stopped
+            // it being a menu item nobody runs, but ABOVE the START FENCE it ran UNCOUNTED - its
+            // [move-manifest] line was absorbed into the pre-fence baseline and no `.Run(out`
+            // call-site existed for the pinned denominator. It is now a registered suite line
+            // like every other, below the fence. Do not re-add a call here.
 
             // --- BUILDINGS (buildings.json -> BuildingCatalog) ---------------------
             // Load through the real loader; assert non-zero + non-empty id/displayName.
@@ -583,6 +583,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-ui suite", () => { if (!RaidDeployUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-ui] " + r); });
             // --- WO-1403 raid deploy at zero troops: TRAIN TROOPS primary, one Manage door, spoils line shares WO-1402's producer ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-zero-army suite", () => { if (!RaidDeployZeroArmyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-zero-army] " + r); });
+            // WO-1519 - the raid deploy screen's MEASURED layout (band table, enemy card, spoils chips, army band; Echo Guide gone). Registered by the lead 2026-09-06.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-layout suite", () => { if (!DeNelle.Editor.Regression.RaidDeployLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-layout] " + r); });
             // --- WO-766 wallet provider: Android-only SOLANA_SDK define + real-provider selection + transfer confinement ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
             // WO-1255: a Play AAB is impossible to emit until source isolation is proven, then
@@ -640,6 +642,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
             // --- WO-866 rumor board layout: every filter tab fits the list well at the touch floor (the clipped "Gear"), the tab band is X-bounded by the list column so the detail pane cannot cross it, and the detail stack + a two-line body fits the pane (the -11px culled body) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "rumor-board-layout suite", () => { if (!DeNelle.Editor.Regression.RumorBoardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[rumor-board-layout] " + r); });
+            // --- WO-1515 defense report layout: the detail well is an OPAQUE obsidian plate with the bezel as a SEPARATE image (the one-image version took the hollow frame sprite and let the kit's TwoToneParchmentFill read through it - the owner's tan slab under light ink), every detail ink clears 4.5:1 on that plate, and the list row band is derived from the row font with a one-line fitted label (the two-line label that painted over the next row's bezel) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "defense-report-layout suite", () => { if (!DeNelle.Editor.Regression.DefenseReportLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[defense-report-layout] " + r); });
             // --- WO-878 build menu layout: every band that carries a button is at the kit touch floor (so ClampMinTouch cannot grow it into a neighbour - the root verbs, "< Back" and the Upgrade CTA all overlapped), the ladder fits the derived body at every capture aspect, and the cost/preview/CTA strings are the VM's ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buildmenu-layout suite", () => { if (!DeNelle.Editor.Regression.BuildMenuLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buildmenu-layout] " + r); });
             // --- WO-880 tower manager: the VM reads the SAME stat source the game builds from (the catalog repo block StructureFactory copies onto DefenseTower), every catalog tower row resolves to non-zero rng/dmg, a stat-less row says "(building)"/"(no stats)" instead of a fabricated "rng 0, dmg 0", and the list well is an exact whole number of row pitches (the half-clipped third row) ---
@@ -677,6 +681,9 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dynamic-difficulty suite", () => { if (!DeNelle.Editor.Regression.DynamicDifficultyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dynamic-difficulty] " + r); });
             // --- raid arena shape: footprint is a real fraction of the plane (the 2.4% square can never return), the spire is reachable by the HERO's seam, navmesh present ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-arena-shape suite", () => { if (!DeNelle.Editor.Regression.RaidArenaShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-arena-shape] " + r); });
+            // WO-1520 — the raid STAGING area: the marker is measured against every turret's reach and every
+            // defender's awareness radius, and the 180s clock cannot advance before first engagement.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-staging suite", () => { if (!DeNelle.Editor.Regression.RaidStagingMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-staging] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "reset-full-clear suite", () => { if (!DeNelle.Editor.Regression.ResetToNewGameFullClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[reset-full-clear] " + r); });
             // WO-1371 — the OTHER axis. reset-full-clear sweeps GameState FIELDS and says in its own
             // comments that a PlayerPrefs store "is not one"; this sweeps those stores, which is where
@@ -684,6 +691,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "newgame-pref-sweep suite", () => { if (!DeNelle.Editor.Regression.NewGamePrefStoreSweepRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[newgame-pref-sweep] " + r); });
             // WO-1370 — the HARVEST RESULT modal's copy (name beside its own figure, loss named, agreement).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-result-copy suite", () => { if (!DeNelle.Editor.Regression.HarvestResultCopyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-result-copy] " + r); });
+            // WO-1525 - the HARVEST RESULT modal's SHAPE (three rows, a bar, one action each; VM-composed). Registered by the lead 2026-09-06.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-result-shape suite", () => { if (!DeNelle.Editor.Regression.HarvestResultShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-result-shape] " + r); });
 
             // WO-1369 (P0 freeze) + WO-952 - registered by the lead 2026-09-04. The implementing
             // agent authored these three and was rate-limited before registering them; the
@@ -1516,6 +1525,11 @@ namespace DeNelle.Editor
             //     three legal literals summing to a card that overdrew itself.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-runtime-layout suite", () => { if (!DeNelle.Editor.Regression.NightMarketRuntimeLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-runtime-layout] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-format-source suite", () => { if (!DeNelle.Editor.Regression.CostFormatSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-format-source] " + r); });
+            // --- WO-1511: reflection into DeNelle.Core from an assembly whose OWN .asmdef already
+            //     references Core. Seven such sites existed; each carried a "type missing" null path
+            //     that could never fire. The oracle reads the .asmdef rather than an allowlist, so it
+            //     cannot go stale, and it never touches the SANCTIONED HUD->Village seam (§5). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "core-reflection-source suite", () => { if (!DeNelle.Editor.Regression.CoreReflectionSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[core-reflection-source] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cathedral-mage-hp suite", () => { if (!DeNelle.Editor.Regression.CathedralMageHpRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cathedral-mage-hp] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-harvest-assignment suite", () => { if (!DeNelle.Editor.Regression.EchoHarvestAssignmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-harvest-assignment] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
@@ -1640,15 +1654,100 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "deck-return-door suite", () => { if (!DeNelle.Editor.Regression.DeckReturnDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[deck-return-door] " + r); });
             // WO-1397: the Cosmetic Shop is reachable - a Hero-deck "Wardrobe" card routes to the
             // already-registered PanelId.CosmeticShop; the deck grid derives its rows from the card
-            // count (2x3 for five cards) so no card lands under the purpose line.
+            // count (2x3 for five cards) so no card lands under the purpose line. WO-1523: that
+            // fifth card is now CONDITIONAL - with no cosmetic unlocked the deck is four cards on
+            // its original 2x2 grid, and cases G/H pin the hide/show + NEW rule.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cosmetic-shop-reach suite", () => { if (!DeNelle.Editor.Regression.CosmeticShopReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cosmetic-shop-reach] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-row-benefit suite", () => { if (!DeNelle.Editor.Regression.ManageRowBenefitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-row-benefit] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-no-wallet suite", () => { if (!DeNelle.Editor.Regression.NightMarketNoWalletRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-no-wallet] " + r); });
-            // WO-1451 (2026-09-06): registered per this file's fencing rule. Pins that the tower
+            // WO-1451 (2026-09-06): registered by the WO-1451 lane at the committer's explicit
+            // dispatch instruction - a deliberate EXCEPTION to the fencing note above, not
+            // compliance with it. The fencing rule normally keeps the authoring lane out of this
+            // file and leaves registration to the committer. Pins that the tower
             // preview's RenderTexture and its camera agree on sample count - HEAD rendered 1 sample
             // (allowMSAA=false) into a 2-sample RT and threw 260 [BREAK]s in 144 seconds under
             // TowerPreviewCamera:Begin. The invariant is RT == CAMERA, never RT == the URP asset.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "preview-rt-samples suite", () => { if (!DeNelle.Editor.Regression.PreviewRenderTextureSamplesRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[preview-rt-samples] " + r); });
+
+            // WO-1450 + WO-1459 sec.2 suspect 3 (2026-09-06): registered per this file's fencing
+            // rule. Pins the SHAPE of two guards in Enemy.cs - the structure-acquire trace is a
+            // change-gated Throttle (it was a Step: 38,018 device lines at ~320/sec, evicting the
+            // 256 KiB Android ring in under two seconds) and the probe itself is cadence-gated
+            // (a SphereCast + an all-layer OverlapSphere had been running per frame per enemy).
+            // It is a SOURCE LINT and says so in every reason string - the line count and the
+            // frame cost are proven by a device capture, never by this suite.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-probe-cadence suite", () => { if (!DeNelle.Editor.Regression.EnemyProbeCadenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-probe-cadence] " + r); });
+
+            // WO-1483 + WO-1459 (2026-09-06): registered per this file's fencing rule. Pins that
+            // every named town frame-path tick carries a FlowTrace.Measure scope IN ITS OWN BODY,
+            // that each uses the ACCUMULATING 4-arg overload (the 3-arg one logs per dispose -
+            // ~400 lines/sec across the sites, which evicts the Android ring), and that
+            // PerfReporter still emits the 1s "frame budget:" roll-up on its own timer. It is a
+            // SOURCE LINT and says so in every reason string - the ms numbers come from a
+            // headless + device capture, never from this suite.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "frame-budget-measure suite", () => { if (!DeNelle.Editor.Regression.FrameBudgetMeasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[frame-budget-measure] " + r); });
+
+            // WO-1447 + WO-1448 (2026-09-06): registered by the implementing lane at the
+            // committer's explicit dispatch instruction. Pins what a cloud LOAD restores (the
+            // WHOLE row through MigrateForImport + ApplyPersisted, not the retired seven-field
+            // copy list that left a reinstalled player with currencies on a blank town) and
+            // WHEN it is allowed to overwrite local state (strictly newer only - every scene
+            // enter used to write a possibly-stale server row over freshly spent resources).
+            // Third arm: a row bound to a different wallet is refused, fail closed.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cloud-load-restore suite", () => { if (!DeNelle.Editor.Regression.CloudLoadRestoreRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cloud-load-restore] " + r); });
+
+            // =====================================================================
+            //  WO-1496 (2026-09-06) - SEVEN SUITE FILES THAT EXISTED AND RAN NOWHERE
+            // =====================================================================
+            // Each of the seven below sat in Assets/Editor/Regression with no entry point
+            // calling it. An unregistered suite is worse than no suite: the file reads as
+            // coverage in every audit, and asserts nothing on every run. Four of them
+            // (arena-combat, blank-start-census, combat-foundation, gear-addressable-group)
+            // exposed only a void Run() and so were invisible even to RegressionMarkerRegression
+            // RULE 2, whose scope is `public static bool Run(out string)`; they were given that
+            // contract in this WO, with the process-exit and marker printing left behind in the
+            // standalone entry point (an EditorApplication.Exit inside RunAll would kill the
+            // batch before REGRESSION_OK is written).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "repair-probe suite", () => { if (!DeNelle.Editor.RepairProbeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[repair-probe] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "combat-foundation suite", () => { if (!DeNelle.Editor.CombatFoundationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[combat-foundation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "arena-combat suite", () => { if (!DeNelle.Editor.ArenaCombatOracle.Run(out var r)) failures.Add(r); else log.AppendLine("[arena-combat] " + r); });
+            // ⚠ DUPLICATE ASSERTION, REPORTED NOT COLLAPSED (WO-1496): CheckGearAddressableGroup
+            // in THIS file (the [gear-addressable-group] line above) is an inline copy of the same
+            // regex, the same asset and the same rule as GearAddressableGroupRegression. Two
+            // sources of truth for one invariant is the disease this repo keeps paying for, but
+            // collapsing them is a decision about another suite's file, so the oracle is
+            // registered under its OWN tag and the duplication is ticketed for the lead.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-addressable-group-oracle suite", () => { if (!DeNelle.Editor.GearAddressableGroupRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-addressable-group-oracle] " + r); });
+            // MOVED, NOT ADDED (WO-1496): this call sat at line ~170, ABOVE the START FENCE. It
+            // ran on every batch, but uncounted - its [move-manifest] line landed in the
+            // pre-fence baseline and it exposed no `.Run(out` call-site for the denominator to
+            // pin, so a throw inside it would have been silent in exactly the way the fence
+            // exists to prevent. Same suite, same body; it is now shaped and counted like one.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "move-manifest suite", () => { if (!DeNelle.Editor.Regression.AssetMoveManifestRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[move-manifest] " + r); });
+            // ⚠ EXPECTED TO GO RED, AND THAT RED IS THE FINDING - DO NOT WEAKEN THE SUITE.
+            // Its header held it standalone (`regression-registry: standalone`) until the orc art
+            // landed. It has: Orc_Berserker.mat + textures/Orc_Berserker/ and
+            // Materials/orcnecromancer_basecolor.mat are on disk, and Orc_Shaman is no longer
+            // referenced by enemies.json. What remains is enemies.json:400 `"modelKey":
+            // "OgreMage"` - no OgreMage mesh and no OgreMage art exists anywhere under
+            // Assets/EnemyContent. That row is already sanctioned as art-pending, but in a LOCAL
+            // HashSet inside a different suite (EnemyResolverRegression.cs:221
+            // artPendingModelKeys), which this suite has no view of. The two honest resolutions
+            // are to ticket the OgreMage row, or to hoist the art-pending declaration into one
+            // shared source both suites read. Adding an exemption HERE is neither (WO-1496 sec.3).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-art-coverage suite", () => { if (!DeNelle.Editor.EnemyArtCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-art-coverage] " + r); });
+            // LAST LINE ABOVE THE END FENCE, DELIBERATELY: this suite opens
+            // Main_Castle_Overworld in Single mode, so any suite registered after it would
+            // census a different world than the one it was written against.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "blank-start-census suite", () => { if (!DeNelle.Editor.BlankStartCensusRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[blank-start-census] " + r); });
+
+            // WO-1495 (2026-09-06): the exemption ratchet. Every allowlist/exemption/known-debt
+            // collection under Assets/Editor/Regression must carry a WO pointer, an origin date
+            // and an unexpired remove-by in the five lines above its declaration - because an
+            // exemption with no owner and no expiry keeps a suite green forever on the exact
+            // content it was written to cover. Four definitional blocks are excluded BY SHAPE and
+            // named in the suite, not by an opt-out token anyone could paste over real debt.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "allowlist-expiry suite", () => { if (!DeNelle.Editor.Regression.AllowlistExpiryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[allowlist-expiry] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
@@ -2259,6 +2358,195 @@ namespace DeNelle.Editor
                                  "everything, which would stop enemies hitting the hero.");
                 else
                     log.AppendLine("  CASE G forward opposing-faction: acquired OK");
+
+                // =============================================================
+                //  WO-1503 — CASE H/I: the HERO's melee is bound by the same one
+                //  authority. D-G prove an ENEMY refuses its own side; nothing pinned
+                //  the reciprocal, and that gap is what let a work order be minted
+                //  claiming the hero was chewing through its own hub root.
+                //
+                //  It never was. Proven from source, not inferred:
+                //    * CastleHubRoot has ONE component, a Transform (Main_Castle_Overworld.unity,
+                //      GameObject fileID 1385856591) -> no IDamageable, no faction, not a target.
+                //    * Every wave enemy is parented under WaveEnemies -> CastleHubRoot
+                //      (WaveManager._enemyRoot fileID 414338686), so `transform.root.name` is
+                //      "CastleHubRoot" for EVERY hostile in the hub. The old trace printed only
+                //      that root, so a correct kill read as an attack on the castle.
+                //  PlayerAttackController now names the target AND calls MayAttack; these two
+                //  cases pin the refusal so the reciprocal can never regress unnoticed.
+                //
+                //  ⛔ RED PROOF, stated per case because they go red on DIFFERENT edits:
+                //    * CASE H fails if CombatFactionRules.Decide regresses — change it to admit a
+                //      same-faction target (e.g. return `alive` alone) and MayAttack(Friendly,
+                //      Friendly-and-alive) returns true.
+                //    * CASE I fails if the rule becomes a blanket refusal (e.g. return false
+                //      unconditionally) — it pins that H is FACTION-specific, not a broken
+                //      predicate that would also stop the hero breaking an enemy wall in a raid.
+                //    * CASE J (the source pin) fails if PlayerAttackController stops calling the
+                //      authority — restore the old inline `damageable.Faction !=
+                //      CombatFaction.Hostile` guard and J goes red. H and I would stay GREEN
+                //      through that revert, because they call the rule directly and never touch
+                //      the melee path; without J this block would pin the rule and claim to pin
+                //      the caller. That gap is the whole reason J exists.
+                // =============================================================
+                const DeNelle.Core.Combat.CombatFaction heroSide = DeNelle.Core.Combat.CombatFaction.Friendly;   // HeroHealth.cs:1630
+
+                var ownedGo = new GameObject("OraclePlayerStructure");
+                created.Add(ownedGo);
+                var owned = ownedGo.AddComponent<OracleStructure>();
+                owned.Side = heroSide;    // a player-owned town structure (hub root, wall, tower)
+                owned.Alive = true;
+
+                // CASE H — hero strike on a player-owned structure -> REFUSED by the one rule.
+                DeNelle.Core.Combat.IDamageableStructure ownedAsStruct = owned;
+                if (DeNelle.Core.Combat.CombatFactionRules.MayAttack(heroSide, ownedAsStruct))
+                    failures.Add("WO-1503 CASE H (hero vs player-owned structure): CombatFactionRules.MayAttack " +
+                                 $"({heroSide}, {owned.Side} structure) returned TRUE — the hero may damage its own " +
+                                 "town. PlayerAttackController's melee guard calls this exact predicate.");
+                else
+                    log.AppendLine("  CASE H hero vs player-owned structure: refused OK");
+
+                if (!DeNelle.Core.Combat.CombatFactionRules.IsFriendlyFire(heroSide, ownedAsStruct))
+                    failures.Add("WO-1503 CASE H (friendly-fire classification): IsFriendlyFire" +
+                                 $"({heroSide}, {owned.Side} structure) returned FALSE — the instrumentation can no " +
+                                 "longer name same-faction as the rejection reason.");
+                else
+                    log.AppendLine("  CASE H friendly-fire classification: same-faction named OK");
+
+                // CASE I — the SAME stand-in flipped Hostile must still be attackable, so H is
+                // proven to be a faction gate and not a broken predicate refusing everything.
+                owned.Side = DeNelle.Core.Combat.CombatFaction.Hostile;
+                if (!DeNelle.Core.Combat.CombatFactionRules.MayAttack(heroSide, ownedAsStruct))
+                    failures.Add("WO-1503 CASE I (hero vs hostile structure): MayAttack" +
+                                 $"({heroSide}, Hostile structure) returned FALSE — the hero's melee now refuses " +
+                                 "EVERY structure, which would stop the player breaking enemy walls in a raid.");
+                else
+                    log.AppendLine("  CASE I hero vs hostile structure: attackable OK");
+
+                // CASE J — the CALLER pin. H and I prove the rule; only this proves the hero's
+                // melee is bound BY it. Source-text pin, the same shape sibling suites already
+                // use on this exact file (CombatCastCaravanMarkRegression:228,
+                // PrimaryFallbackRegression Case4_FallbackIsFree).
+                string pacPath = System.IO.Path.Combine(Application.dataPath,
+                    "_Modules/Village/Enemies/PlayerAttackController.cs");
+                if (!System.IO.File.Exists(pacPath))
+                {
+                    failures.Add("WO-1503 CASE J: PlayerAttackController.cs not found at " + pacPath +
+                                 " (moved?) — the hero's melee guard could not be pinned to the faction authority.");
+                }
+                else
+                {
+                    string pacSrc = System.IO.File.ReadAllText(pacPath);
+                    if (pacSrc.IndexOf("CombatFactionRules.MayAttack(HeroFaction, damageable)",
+                                       System.StringComparison.Ordinal) < 0)
+                        failures.Add("WO-1503 CASE J: PlayerAttackController's melee sweep no longer calls " +
+                                     "CombatFactionRules.MayAttack(HeroFaction, damageable). The hero's friend-or-foe " +
+                                     "test has left the ONE authority — a second answer on faction is exactly what " +
+                                     "CombatFactionRules exists to prevent (see its header).");
+                    else
+                        log.AppendLine("  CASE J melee guard calls the faction authority: OK");
+
+                    // The inline copy this replaced must not come back alongside it. Comments
+                    // quoting it are legitimate (the WO-1503 note does); a live statement is not.
+                    if (System.Text.RegularExpressions.Regex.IsMatch(
+                            pacSrc, @"^(?!\s*//).*damageable\.Faction\s*!=\s*CombatFaction\.Hostile",
+                            System.Text.RegularExpressions.RegexOptions.Multiline))
+                        failures.Add("WO-1503 CASE J: the inline `damageable.Faction != CombatFaction.Hostile` " +
+                                     "predicate is back in PlayerAttackController. One rule, called everywhere — " +
+                                     "a hand-copy is the duplicated-state failure this repo has paid for repeatedly.");
+                    else
+                        log.AppendLine("  CASE J no inline faction copy in the melee path: OK");
+                }
+
+                // =============================================================
+                //  WO-1524 — CASE K: the SAME caller pin, widened past the melee lane.
+                //
+                //  CASE J pins ONE file. That is exactly how the gap it closed was allowed to
+                //  exist: WO-1438's own header claimed Pet was "the REMAINING copy" (singular),
+                //  WO-1503 counted them and found THIRTEEN across five more files, and a
+                //  hand-maintained census in a comment is duplicated state by construction
+                //  (CLAUDE.md §2/§5/§8/§16). So this case does not carry a list of line
+                //  numbers - it re-derives the answer from the files themselves, every run.
+                //
+                //  Converted by WO-1524 (verified at source that date):
+                //    Pets/Pet.cs:556,635 · Buildings/ArcaneTower.cs:386,397 ·
+                //    Buildings/DefenseTower.cs:717,730 · Buildings/TowerCombat.cs:229,243,283,294 ·
+                //    Hero/HeroAbilities.cs:3097,3125
+                //  Those numbers are provenance, NOT a check - the check below is line-agnostic.
+                //
+                //  ⛔ RED PROOF: restore any one of them (e.g. put
+                //  `if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;`
+                //  back into Pet.NearestHostile) and (a) goes red naming that file and line.
+                //  Delete a CombatFactionRules call instead and (b) goes red. The two halves fail
+                //  on DIFFERENT edits on purpose: (a) alone would pass a file that had deleted the
+                //  guard outright, and (b) alone would pass a file that called the authority AND
+                //  kept a second inline answer beside it - which is precisely the divergence
+                //  WO-1503 found inside PlayerAttackController (melee routed, ability lane not).
+                //
+                //  Comments quoting the retired predicate stay legal - every converted file
+                //  documents what it replaced, and the ^(?!\s*//) guard skips // and /// lines.
+                // =============================================================
+                string[] factionCallers =
+                {
+                    "_Modules/Pets/Pet.cs",
+                    "_Modules/Village/Buildings/ArcaneTower.cs",
+                    "_Modules/Village/Buildings/DefenseTower.cs",
+                    "_Modules/Village/Buildings/TowerCombat.cs",
+                    "_Modules/Village/Hero/HeroAbilities.cs",
+                };
+                foreach (string rel in factionCallers)
+                {
+                    string abs = System.IO.Path.Combine(Application.dataPath, rel);
+                    if (!System.IO.File.Exists(abs))
+                    {
+                        failures.Add($"WO-1524 CASE K: {rel} not found at {abs} (moved/renamed?) — a " +
+                                     "faction call site could not be pinned to the one authority.");
+                        continue;
+                    }
+
+                    string src = System.IO.File.ReadAllText(abs);
+
+                    // (a) NO live inline second answer. Any non-comment line comparing a
+                    //     .Faction against a CombatFaction member is a hand-copy of the one
+                    //     predicate. Line number is reported so the fix is one jump away.
+                    var inline = System.Text.RegularExpressions.Regex.Matches(
+                        src, @"^(?!\s*//).*\.Faction\s*(?:!=|==)\s*CombatFaction\.",
+                        System.Text.RegularExpressions.RegexOptions.Multiline);
+                    if (inline.Count > 0)
+                    {
+                        var where = new System.Text.StringBuilder();
+                        foreach (System.Text.RegularExpressions.Match m in inline)
+                        {
+                            int line = 1;
+                            for (int ci = 0; ci < m.Index && ci < src.Length; ci++)
+                                if (src[ci] == '\n') line++;
+                            if (where.Length > 0) where.Append(", ");
+                            where.Append(rel).Append(':').Append(line);
+                        }
+                        failures.Add($"WO-1524 CASE K (inline faction copy): {inline.Count} live " +
+                                     $"`Faction != / == CombatFaction.*` comparison(s) at {where} — a SECOND " +
+                                     "authority on friend-or-foe. Route it through " +
+                                     "CombatFactionRules.MayAttack / IsFriendlyFire (Core/Combat/" +
+                                     "CombatFactionRules.cs, whose header forbids exactly this copy). " +
+                                     "If a site genuinely needs different behaviour, that belongs in the " +
+                                     "rule as a named case, never as inline code.");
+                    }
+                    else
+                    {
+                        log.AppendLine($"  CASE K no inline faction copy in {rel}: OK");
+                    }
+
+                    // (b) …AND the authority is actually CALLED. Without this half, deleting the
+                    //     guard outright would read as a pass.
+                    if (src.IndexOf("CombatFactionRules.", System.StringComparison.Ordinal) < 0)
+                        failures.Add($"WO-1524 CASE K (authority uncalled): {rel} no longer calls " +
+                                     "CombatFactionRules at all. Its target selection either lost its " +
+                                     "friend-or-foe test entirely (pets/towers/hero abilities would " +
+                                     "engage their own side — the WO-1439 defect) or answered it some " +
+                                     "other way. One rule, called everywhere.");
+                    else
+                        log.AppendLine($"  CASE K {rel} calls the faction authority: OK");
+                }
             }
             catch (System.Exception ex)
             {

@@ -17,11 +17,17 @@
 //      config facts (walls/gates/garrison/boss), and NEVER surfaces
 //      rewardMultiplier / shardDropChance (cosmetic-only fields the loot math
 //      ignores — RAID_BATTLEFIELD_ANATOMY_2026-08-02: showing them would lie).
-//   4. WO-1385 (2026-09-04) BAND CONTRACT [deploy-bands-disjoint] - the right
-//      column's three bands (SCOUT / ECHO GUIDE / ENEMY BASE) are literal
-//      constants in RaidDeployScreen.cs and stack strictly, with a gap, never
-//      intersecting. Owner's Seeker screenshot: the guide block was drawn over
-//      the ENEMY BASE tail and CHANGE over the Echo name.
+//   4. BAND CONTRACT [deploy-bands-disjoint] - every band in
+//      RaidDeployScreen.BandsFor() stacks strictly, with a gap, never intersecting
+//      a neighbour IN ITS OWN COLUMN, on BOTH chrome paths; and no Echo Guide band
+//      is in the table (owner ruling 2026-09-06 20:24, WO-1519 section 2B).
+//      (!) REWRITTEN 2026-09-06. WO-1385 authored this case as a REGEX over the
+//      source text ("private const float GuideBandY0 = <literal>f;"). That reads a
+//      constant NAME, so a rename blinds it silently while it still prints OK -
+//      and WO-1519 then DELETED two of the six constants it named. It now reads
+//      the LIVE table the builders lay out from, which cannot go stale that way.
+//      The PIXEL law (a band tall enough that TMP does not cull its line) is
+//      measured on a live canvas by RaidDeployLayoutRegression, not here.
 //   5. WO-1385 (2026-09-04) DEPLOY-BAR CONTRACT [deploy-bar-kit-button] - BEGIN
 //      ASSAULT is the kit's primary button (BuildObsidianButton, Yellow) and the
 //      raw flat "DeployGlow" AddImage slab is gone. Owner, verbatim: "yuck".
@@ -236,65 +242,96 @@ namespace DeNelle.Editor
                 notes.Add("ScoutReport contract holds (walls/garrison/boss honest, no cosmetic reward fields, safe null-def fallback)");
         }
 
-        // -- 4. WO-1385 BAND CONTRACT [deploy-bands-disjoint] (source-lint) ------
-        // This suite has no headless screen build (source-lint + pure VM only), so the
-        // pin reads the literal band constants the View lays the right column from and
-        // asserts the geometry that the owner's 2026-09-04 screenshot violated:
-        //   0 <= ScoutY0 < ScoutY1 < GuideY0 < GuideY1 < EnemyY0 < EnemyY1 <= 1
-        // with a real gap (>= 0.005) between neighbouring bands. RED if any two bands
-        // touch or cross (e.g. GuideBandY1 set back to 0.600 above a 0.44 scout top).
+        // -- 4. BAND CONTRACT [deploy-bands-disjoint] ---------------------------
+        // WO-1385 (2026-09-04) wrote this case as a REGEX over RaidDeployScreen.cs, reading
+        // "private const float GuideBandY0 = <literal>f;" out of the source text. WO-1519
+        // (2026-09-06) rewrites it against the LIVE band table, and the reason is the same
+        // duplicated-state lesson CLAUDE.md sec.2 / sec.5 / sec.16 each tell in their own
+        // words: a regex on a constant NAME stops judging anything the moment the constant is
+        // renamed, SILENTLY, while this suite goes on printing OK. That is not hypothetical -
+        // WO-1519 deleted GuideBandY0/Y1 outright (the owner's 20:24 ruling took the ECHO
+        // GUIDE block off this screen), and the old case would have failed with "could not
+        // read the literal" rather than telling anyone whether the layout was sound.
+        //
+        // RaidDeployScreen.BandsFor(bool) is now the authority - the same table the builders
+        // lay out from - so this case judges what actually ships and moves with a rename.
+        // It asserts the geometry RULE (in-range, ordered, gapped, one stack per column) on
+        // BOTH chrome paths. The PIXEL law (a band tall enough that TMP does not cull its
+        // line) is measured on a live canvas by RaidDeployLayoutRegression; this stays the
+        // cheap source-level pin that needs no canvas.
         const string DeployScreenRel = "_Modules/Village/Hero/RaidDeployScreen.cs";
 
         static void CheckDeployBandsDisjoint(List<string> failures, List<string> notes)
         {
             const string Tag = "[deploy-bands-disjoint]";
             int before = failures.Count;
-            string path = Path.Combine(Application.dataPath, DeployScreenRel);
-            if (!File.Exists(path)) { failures.Add(Tag + " RaidDeployScreen.cs not found at " + path); return; }
-            string text;
-            try { text = File.ReadAllText(path); }
-            catch (Exception ex) { failures.Add(Tag + " RaidDeployScreen.cs unreadable (" + ex.Message + ")"); return; }
 
-            string[] names = { "ScoutBandY0", "ScoutBandY1", "GuideBandY0", "GuideBandY1", "EnemyBandY0", "EnemyBandY1" };
-            var vals = new float[names.Length];
-            for (int i = 0; i < names.Length; i++)
+            foreach (var hasSubHeader in new[] { true, false })
             {
-                if (!TryReadConstFloat(text, names[i], out vals[i]))
+                string path = hasSubHeader ? "frame" : "procedural";
+                var bands = RaidDeployScreen.BandsFor(hasSubHeader);
+                if (bands == null || bands.Length == 0)
                 {
-                    failures.Add(Tag + " could not read 'private const float " + names[i] + " = <literal>f;' from " +
-                                 "RaidDeployScreen.cs - the band constants must stay literal so this oracle can judge them");
+                    failures.Add(Tag + " RaidDeployScreen.BandsFor(" + hasSubHeader + ") returned no bands - " +
+                                 "the deploy body has no authored layout at all on the " + path + " chrome");
                     return;
+                }
+
+                for (int i = 0; i < bands.Length; i++)
+                {
+                    var b = bands[i];
+                    if (b.Y0 < 0f)
+                        failures.Add(Tag + " (" + path + ") band '" + b.Name + "' starts at " + b.Y0 +
+                                     " - below the body bottom");
+                    if (b.Y1 > 1f)
+                        failures.Add(Tag + " (" + path + ") band '" + b.Name + "' tops out at " + b.Y1 +
+                                     " - above the body top");
+                    if (b.Y1 <= b.Y0)
+                        failures.Add(Tag + " (" + path + ") band '" + b.Name + "' is inverted or zero-height (" +
+                                     b.Y0 + ".." + b.Y1 + ")");
+
+                    for (int j = i + 1; j < bands.Length; j++)
+                    {
+                        var c = bands[j];
+                        // The two columns are INDEPENDENT stacks (WO-1519): a left band and a
+                        // right band at the same height is the layout, not a collision.
+                        if (c.Column != b.Column) continue;
+                        bool intersects = b.Y0 < c.Y1 - 0.0001f && c.Y0 < b.Y1 - 0.0001f;
+                        if (intersects)
+                            failures.Add(Tag + " (" + path + ") '" + b.Name + "' (" + b.Y0 + ".." + b.Y1 +
+                                         ") and '" + c.Name + "' (" + c.Y0 + ".." + c.Y1 + ") INTERSECT in the " +
+                                         b.Column + " column - two elements own the same pixels. (WO-1385: the " +
+                                         "owner's screenshot had three right-column elements in one band. " +
+                                         "WO-1464: the army line printed across the hero portraits.)");
+                        else
+                        {
+                            // Neighbours must be SEPARATED, not merely non-overlapping: a shared
+                            // edge puts one row's descenders in the next row's ascenders.
+                            float gap = c.Y0 >= b.Y1 ? c.Y0 - b.Y1 : b.Y0 - c.Y1;
+                            bool adjacent = Mathf.Abs(gap) < 0.030f;
+                            if (adjacent && gap < 0.004f)
+                                failures.Add(Tag + " (" + path + ") '" + b.Name + "' and '" + c.Name +
+                                             "' are adjacent with a gap of " + gap.ToString("0.####") +
+                                             " - neighbouring bands need a real gap, not a shared edge");
+                        }
+                    }
                 }
             }
 
-            if (vals[0] < 0f) failures.Add(Tag + " ScoutBandY0=" + vals[0] + " is below the body bottom");
-            if (vals[5] > 1f) failures.Add(Tag + " EnemyBandY1=" + vals[5] + " is above the body top");
-            for (int i = 0; i + 1 < names.Length; i++)
-            {
-                if (vals[i + 1] <= vals[i])
-                    failures.Add(Tag + " " + names[i + 1] + "=" + vals[i + 1] + " is not above " + names[i] + "=" + vals[i] +
-                                 " - the right-column bands intersect (WO-1385: ENEMY BASE / ECHO GUIDE / SCOUT REPORT " +
-                                 "each own a vertical band; the owner's screenshot had three elements in one)");
-            }
-            // The gaps BETWEEN bands (scout->guide, guide->enemy) must be real, not zero.
-            if (vals[2] - vals[1] < 0.005f)
-                failures.Add(Tag + " SCOUT top " + vals[1] + " and GUIDE bottom " + vals[2] + " have no gap");
-            if (vals[4] - vals[3] < 0.005f)
-                failures.Add(Tag + " GUIDE top " + vals[3] + " and ENEMY bottom " + vals[4] + " have no gap");
+            // The ruling this lane landed, pinned where the old GUIDE band constant used to be
+            // read: there is no guide band in the table any more, and re-adding one would have
+            // to be a deliberate edit to BandsFor rather than a quiet const.
+            foreach (var b in RaidDeployScreen.BandsFor(true))
+                if (b.Name.IndexOf("guide", StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add(Tag + " an Echo Guide band is back in RaidDeployScreen.BandsFor ('" + b.Name +
+                                 "') - owner ruling 2026-09-06 20:24 (WO-1519 section 2B) took it off this screen");
 
             if (failures.Count == before)
-                notes.Add("right-column bands disjoint (scout " + vals[0] + "-" + vals[1] + " / guide " + vals[2] + "-" +
-                          vals[3] + " / enemy " + vals[4] + "-" + vals[5] + ")");
-        }
-
-        static bool TryReadConstFloat(string text, string name, out float value)
-        {
-            value = 0f;
-            var m = System.Text.RegularExpressions.Regex.Match(text,
-                @"private\s+const\s+float\s+" + name + @"\s*=\s*([0-9]*\.?[0-9]+)f?\s*;");
-            if (!m.Success) return false;
-            return float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out value);
+            {
+                var names = new List<string>();
+                foreach (var b in RaidDeployScreen.BandsFor(true)) names.Add(b.Name);
+                notes.Add("body bands disjoint per column on both chrome paths (" + string.Join("/", names.ToArray()) + ")");
+            }
         }
 
         // -- 5. WO-1385 DEPLOY-BAR CONTRACT [deploy-bar-kit-button] (source-lint) -

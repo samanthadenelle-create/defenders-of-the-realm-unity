@@ -64,6 +64,37 @@ save is neither.
   deep link, no return leg. It cost this triage a wrong first hypothesis; the trap is documented at
   the method.
 
+### WO-1454 (same day, later)  -  `TryRenewSessionAsync` now CLASSIFIES the failure instead of counting any failure as a refusal
+
+> STOP: **THE STATUS DECIDES, NOT THE MERE FACT OF FAILURE.** As shipped that morning,
+> `TryRenewSessionAsync` called `ClearSession()` on **any** non-`Success` result, on an empty-token
+> 2xx, and on a parse exception. **Save passes `allowMint:false` and nothing else re-mints**, so a
+> single 500/503/timeout  -  the server saying *"try again"*, which is the opposite of *"you are not
+> who you say"*  -  **permanently darkened cloud save for that install** until the player
+> re-authenticated by hand. The 500 was not hypothetical: `api/auth/session.js:104` returns
+> `SERVER_ERROR` when the renewal query throws, e.g. while the `signed_at` column is missing from a
+> database that has not had `api/schema.sql` applied  -  a DEPLOYMENT state, not a verdict on the
+> player's credential. Read at source: `Assets/_Modules/Core/Web3/BackendRequestSigner.cs:558-700`.
+
+- **`IsCredentialRefusal(long status)`** `:678`  -  **`401 || 403` and nothing else.** STOP: **5xx IS NOT
+  ON THIS LIST AND MUST NEVER BE ADDED**; the server's real refusals are its
+  `quietFail(res, 401, ...)` for a wrong-wallet or absolute-cap token (`api/auth/session.js:117,:135`).
+  Only this branch calls `ClearSession()`, which turns the next `why` into `missing`  -  honest, and
+  the player re-signs on their next explicit connect or purchase.
+- **Everything else KEEPS the token and backs off.** Transport throw, non-`Success` result, a 2xx
+  carrying no token (far more likely a captive portal or proxy than a revocation  -  our server only
+  ever returns 200 *with* a token), and an unparseable body all call **`ScheduleRenewalRetry()`**
+  `:685` and return `false`.
+- **Backoff constants** `:81-84`: `RenewBackoffBaseSeconds = 5`, `RenewBackoffMaxSteps = 5` ->
+  5/10/20/40/80 s ceiling, held in `_renewFailureStreak` + `_renewBackoffUntilUtc`. (!) **These gate
+  the RETRY CADENCE ONLY  -  they never gate the credential itself.** A renewal attempt inside the
+  backoff window returns early with `action=keep reason=backoff` and **the token is untouched**;
+  a successful renewal calls **`ClearRenewalBackoff()`** `:695`.
+- `ClearSession()` `:104` now also clears the backoff  -  the penalty box belonged to the token that
+  just went away, and a new wallet must not inherit it.
+- **Every branch traces with an `action=` verb** (`action=keep` / `action=clear`) plus `status=`,
+  so one capture line names the decision. That grammar is the thing to grep for in a device log.
+
 ---
 
 ## DELTA 2026-08-30 — WO-1282 Lane A: the store SPLIT into `DeNelle.Commerce` (rail-neutral) + `DeNelle.Wallet` (the Solana rail)

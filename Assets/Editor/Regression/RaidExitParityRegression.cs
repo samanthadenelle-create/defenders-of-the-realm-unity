@@ -113,7 +113,11 @@ namespace DeNelle.Editor.Regression
                     fails.Add("SettlePartialLoot does not call GrantRetreatLoot(...) - the loot is computed and then never paid");
             }
 
-            string retreatBody = Body(ctrl, @"void\s+DoRetreat\s*\(\s*\)");
+            // WO-1561 widened the signature to DoRetreat(string reason) so the timeout exit can
+            // name itself on the shared result screen. The pattern follows it rather than
+            // matching an empty-bodied forwarder - a lint that locks onto the wrong overload
+            // passes while every assertion below it silently stops applying.
+            string retreatBody = Body(ctrl, @"void\s+DoRetreat\s*\(");
             if (string.IsNullOrEmpty(retreatBody))
                 fails.Add("could not locate DoRetreat's body in RaidDeployController");
             else
@@ -124,6 +128,47 @@ namespace DeNelle.Editor.Regression
                 if (retreatBody.Contains("Finalize("))
                     fails.Add("DoRetreat calls Finalize(...) directly again - a second settlement path means " +
                               "retreat and death can pay differently, which is the exact bug WO-1110 closed");
+
+                // -------------------------------------------------------------
+                //  WO-1561 - A NON-VICTORY EXIT MAY NOT ROUTE TO TOWN IN SILENCE
+                // -------------------------------------------------------------
+                // THE DEFECT, MEASURED ON THE PRE-CHANGE TREE: DoRetreat ended
+                // `SetStatus("Retreating to the castle..."); SceneRouter.GoCastle();`
+                // and grep -c "EndStateVM\.|EndStateView.Show" on the whole file
+                // returned 1 - a COMMENT. The clock-expiry exit funnels here too, and
+                // nothing in town picked the outcome up either (every reader of
+                // RaidResult is raid-scene-side), so the result was computed, BANKED
+                // and discarded unread. A WIN got the full treatment; the exit a new
+                // player is most likely to finish got no screen at all.
+                //
+                // The pin is a PAIR, because either half alone still leaves the hole:
+                // the exit must SHOW a result, and it must not ALSO leave by itself.
+                if (!retreatBody.Contains("ShowNonVictoryResult(") &&
+                    !retreatBody.Contains("EndStateView.Show"))
+                    fails.Add("DoRetreat routes home without showing an end state - the retreat/timeout exit " +
+                              "settles the score, pays the loot, reconciles the army and then tells the player " +
+                              "NOTHING: not razed %, not stars, not the spoils it just banked, not which troops " +
+                              "came home wounded (WO-1561, P0)");
+                if (Regex.IsMatch(retreatBody, @"SceneRouter\s*\.\s*GoCastle"))
+                    fails.Add("DoRetreat calls SceneRouter.GoCastle directly again - the route home belongs to the " +
+                              "result screen's primary action (and its re-armable guard), or the screen is shown " +
+                              "and instantly abandoned by a scene load underneath it (WO-1561 / WO-1543)");
+            }
+
+            // The result screen exists and reports what was BANKED, not what was awarded. WO-1461
+            // records the live case: the deploy card quoted ~1,800 wood and 25 arrived, because
+            // the bank was full. A screen fed the REQUESTED loot would restate that lie.
+            string showBody = Body(ctrl, @"void\s+ShowNonVictoryResult\s*\(");
+            if (!string.IsNullOrEmpty(showBody))
+            {
+                if (!showBody.Contains("EndStateView.Show"))
+                    fails.Add("RaidDeployController.ShowNonVictoryResult never calls EndStateView.Show - the " +
+                              "non-victory result is composed and then dropped");
+                if (!showBody.Contains("_retreatCredited"))
+                    fails.Add("RaidDeployController.ShowNonVictoryResult does not feed the MEASURED credit " +
+                              "(_retreatCredited) to the screen. It must report what the wallet actually took, " +
+                              "never the loot that was awarded - at a capped town bank those differ, and the " +
+                              "screen is what the player believes (WO-978 / WO-1461)");
             }
 
             // Hero death: it must settle loot, and settle it BEFORE the army reconcile,

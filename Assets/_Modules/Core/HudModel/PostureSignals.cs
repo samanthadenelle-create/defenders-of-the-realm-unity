@@ -346,5 +346,48 @@ namespace DeNelle.Core.HudModel
             FlowTrace.Step("HudKit", "raid camps open -> " + count);
             RaidOpenCampCountChanged?.Invoke();
         }
+
+        // -- WO-1541: THE NEXT CAMP, NAMED. ONE PRODUCER, TWO READERS -----------
+        // Owner ruling 2026-09-06 ("named camp + door", WO-1534 section D ruling 1): the raid
+        // authority publishes ONE "next camp" fact and every surface READS it.
+        //
+        // ⛔ WHY THIS PROPERTY EXISTS AT ALL, and it is not "the Journey deck needed a name".
+        // The deck reads RaidOpenCampCount above and keeps doing so - its copy is deliberately
+        // NOT being redesigned (WO-1541 section 4). The defect was on the OTHER surface:
+        // ManageScreenVM.BuildTroopArmySummary CONSTRUCTED ITS OWN RaidSelectionVM and walked the
+        // raid catalog a SECOND time to decide which camp is next. Two independent derivations of
+        // one fact is the duplicated-state class this repo keeps paying for
+        // (PlayerDeckWorkspace.cs:719-723: "a second check would drift from the first, and the
+        // drift is the actual defect"). RaidOpenCampCount could not absorb that walk because it
+        // publishes only a COUNT and never a NAME - so the authority gains the fact instead of
+        // the consumer keeping its own copy.
+        //
+        // ⚠ NOT AN ASSEMBLY FIX. ManageScreenVM lives in DeNelle.Village and may construct a
+        // RaidSelectionVM legally; it broke the ONE-PRODUCER rule, not the boundary. Do not
+        // "restore" the walk on the grounds that it compiled.
+        //
+        // Null / 0 is the "not published" sentinel, exactly as ArmyFillCap == 0 is - so a
+        // headless or pre-publish frame shows no camp clause rather than a fabricated one.
+
+        /// <summary>Display name of the next raidable camp. Null until published.</summary>
+        public static string RaidNextCampName { get; private set; }
+        /// <summary>Garrison the next camp fields. 0 until published (= "unknown", never "empty").</summary>
+        public static int RaidNextCampGarrison { get; private set; }
+        /// <summary>Raised when either next-camp field changes.</summary>
+        public static event Action RaidNextCampChanged;
+
+        /// <summary>Producer-only (Village BuildTimerService.PublishArmyStatus). Change-only.</summary>
+        public static void SetRaidNextCamp(string campName, int garrison)
+        {
+            if (string.IsNullOrWhiteSpace(campName)) campName = null;
+            if (garrison < 0) garrison = 0;
+            if (string.Equals(RaidNextCampName, campName, StringComparison.Ordinal) &&
+                RaidNextCampGarrison == garrison) return;
+            RaidNextCampName = campName;
+            RaidNextCampGarrison = garrison;
+            FlowTrace.Step("HudKit", "raid next camp -> " +
+                (campName == null ? "(none published)" : campName + " fields " + garrison));
+            RaidNextCampChanged?.Invoke();
+        }
     }
 }

@@ -1,6 +1,6 @@
 # WO-1476: a VFX rises over the town along Y and must be removed or turned off
 
-**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT (identify from a capture FIRST)
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate (was: IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT (identify from a capture FIRST))
 **Silo:** VFX + the town scene's effect manifest.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1476 -> 1477 in the same edit).

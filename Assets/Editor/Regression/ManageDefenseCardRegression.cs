@@ -33,6 +33,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Jobs;
+using DeNelle.Core.Manage;   // ManageArt.BuildingPortraitKey - the ONE portrait-key producer
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Village.Buildings.Progression;
@@ -46,7 +47,10 @@ namespace DeNelle.Editor
     {
         private const string PanelPath = "Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs";
         private const string VmPath = "Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs";
-        private const string PortraitRoot = "Assets/Resources/Portraits";
+        // ⛔ PortraitRoot ("Assets/Resources/Portraits") WAS HERE AND IS DELETED. It named the MIXED
+        // ROOT folder the retired display-name slugs addressed. Every path this suite checks is now
+        // built from ManageArt.BuildingPortraitKey, so the folder is the producer's to decide and
+        // there is nothing here to keep in sync with it.
 
         // The fixture ids and cells. Declared once so the assertions and the log
         // agree, and so the "first instance at the LOWEST level" claim is provable
@@ -363,13 +367,43 @@ namespace DeNelle.Editor
                                  "the next art gap would leave no evidence.");
             }
 
-            // The level suffix itself is produced in the VM, and that producer is
-            // SHARED with Buildings - so it is pinned where it lives, not guessed
-            // at from the panel. ManageScreenVM.ResolveBuildingPortraitKey (:1143-1155).
-            if (!vm.Contains("(level >= 2 ? \"-\" + level : \"\")"))
-                failures.Add("[defense-art-tiers-reachable] ManageScreenVM.ResolveBuildingPortraitKey no longer emits " +
-                             "the \"-<level>\" suffix, so PortraitKey can never name archer-tower-2 and every Defense " +
-                             "card paints its level-1 art forever.");
+            // ⭐ RE-POINTED 2026-09-06, WITH the change that moved the producer - not deleted.
+            //
+            // This pin used to require the "-<level>" suffix inside
+            // ManageScreenVM.ResolveBuildingPortraitKey. That method IS GONE, and deliberately: it
+            // composed "Portraits/<display-name-slug>[-N]" against the MIXED ROOT folder, a SECOND
+            // producer of a key ManageArt.BuildingPortraitKey already owned from the catalog ID
+            // against Portraits/Buildings/. MEASURED cause of the blank tan ovals on
+            // ManageFlow_BUILD_gridtop_2670x1200.png (Wooden Palisade, Crystal Mine): the slug keys
+            // 'Portraits/wooden-palisade' and 'Portraits/crystal-mine-2' exist nowhere.
+            //
+            // ⛔ WHAT THIS CASE DEFENDS IS UNCHANGED - a Defense card must be able to name its TIER
+            // sheet, or every card paints its level-1 art forever. Only the SEAM moved, so the pin
+            // moved with it: the suffix now has to come out of ManageArt, and the VM has to be
+            // ASKING ManageArt rather than spelling a key itself.
+            // ⛔ SCAN COMMENT-STRIPPED SOURCE, NOT RAW. MEASURED 2026-09-07
+            // (Builds/reg-wave3g.log): the absence pin below fired on the VM's OWN do-not-
+            // reintroduce notes at ManageScreenVM.cs:1701 and :2045 - the comments written to stop
+            // the slug composer coming back were read AS the composer coming back. A source pin
+            // that a comment can flip is not a pin, and it fails BOTH ways: prose could equally
+            // satisfy a required-substring check on a call that no longer exists.
+            // All three pins in this block therefore read `vmCode`. StripComments is quote-aware,
+            // so a string literal mentioning the identifier still counts as code.
+            string vmCode = StripComments(vm);
+
+            if (!ManageArtEmitsTierSuffix())
+                failures.Add("[defense-art-tiers-reachable] ManageArt.BuildingPortraitKey no longer appends " +
+                             "\"-<level>\" for level >= 2, so PortraitKey can never name a tier sheet and every " +
+                             "Defense card paints its level-1 art forever.");
+            if (!vmCode.Contains("ManageArt.BuildingPortraitKey"))
+                failures.Add("[defense-art-tiers-reachable] ManageScreenVM no longer calls " +
+                             "ManageArt.BuildingPortraitKey - the defence PortraitKey is being spelled somewhere " +
+                             "else again, which is the duplicated-state defect that blanked Wooden Palisade and " +
+                             "Crystal Mine.");
+            if (vmCode.Contains("ResolveBuildingPortraitKey"))
+                failures.Add("[defense-art-tiers-reachable] the retired slug composer " +
+                             "ManageScreenVM.ResolveBuildingPortraitKey is back. It addresses the MIXED ROOT " +
+                             "folder; ManageArt.BuildingPortraitKey and Portraits/Buildings/ are the one producer.");
 
             // -------------------------------------------------------------
             // CASE 8  [touch-floor]
@@ -419,38 +453,117 @@ namespace DeNelle.Editor
         // =====================================================================
         private static void CheckDefenseTierPortraitCoverage(List<string> failures, StringBuilder log)
         {
-            // REVERT RECIPE (RED): delete any listed portrait or its .meta.
-            // Three-tier ladders whose portraits are authored as <key>, <key>-2, <key>-3.
-            string[] tiered = { "archer-tower", "ballista", "catapult", "arcane-spire", "wizard-tower" };
-            // Alias targets BuildPaletteUI.ResolveEntryArtPublic reaches (ruling 3.8).
-            string[] flat = { "Sky_Ballista", "Wooden_Wall", "Stone_Wall", "Iron_Wall",
-                              "Crystal_Mines", "Healing_Caravan", "storage_wood", "storage_iron", "storage_food" };
+            // ⭐ RE-POINTED 2026-09-06 FROM DISPLAY-NAME SLUGS IN THE ROOT FOLDER TO CATALOG IDS
+            //    UNDER Portraits/Buildings/ - the folder ManageArt.BuildingPortraitKey addresses.
+            //
+            // The old list enumerated "archer-tower", "ballista", "catapult", "arcane-spire",
+            // "wizard-tower" x 3 levels against Assets/Resources/Portraits. Those stems are the
+            // retired DISPLAY-NAME spelling; the shipped key is the catalog ID
+            // (tower_ground_archer, tower_ballista, ...). Checking the old stems proved a folder
+            // the game no longer reads.
+            //
+            // ⛔ THE PATH IS BUILT BY THE SEAM ITSELF, NOT RETYPED. RequirePortrait now takes the
+            // key ManageArt.BuildingPortraitKey returns, so this case cannot drift from the
+            // producer the way the old list did - if the folder or the suffix rule ever changes,
+            // this coverage check follows it automatically.
+            //
+            // REVERT RECIPE (RED): delete any listed portrait or its .meta, or point
+            // ManageArt.BuildingPortraitFolder back at "Portraits/".
+            string[] tiered = { "tower_ground_archer", "tower_ballista", "tower_catapult",
+                                "tower_arcane_spire", "tower_siege_tower" };
+            // Non-laddered defence/economy ids, base sheet only.
+            string[] flat = { "wall_wood", "wall_stone", "mine_crystal", "healing_caravan",
+                              "lumberyard", "foundry", "silo" };
             int checkedCount = 0;
+
+            // ⛔ THE RETIRED DISPLAY-NAME STEM, PER ID. This is a MISPLACEMENT DETECTOR and nothing
+            // else: it is never used to build a load key, never handed to Resources, and never
+            // consulted by shipped code - so it is not a second producer. It answers exactly one
+            // question, "does this tier sheet exist somewhere under the OLD spelling", which is the
+            // difference between art that is MISPLACED (a real defect, and the one this case is
+            // shaped around) and art that was never commissioned (not a defect at all).
+            // ⚠ tower_siege_tower has NO entry on purpose. structures-catalog.json names it
+            // "Sky Ballista (Anti-Air)", so its slug would be sky-ballista - which has never
+            // existed at any tier under any spelling. wizard-tower-*.png in the root folder is
+            // UNRELATED legacy art and is NOT this tower's sheet; treating it as one would have
+            // demanded a move that silently swapped in the wrong picture.
+            var retiredStem = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "tower_ground_archer", "archer-tower" },
+                { "tower_ballista",      "ballista" },
+                { "tower_catapult",      "catapult" },
+                { "tower_arcane_spire",  "arcane-spire" },
+            };
 
             for (int i = 0; i < tiered.Length; i++)
             {
-                for (int level = 1; level <= 3; level++)
+                string id = tiered[i];
+                // The BASE sheet is unconditionally required - every defence type must be able to
+                // paint itself at level 1.
+                checkedCount += RequirePortrait(ManageArt.BuildingPortraitKey(id, 1), failures);
+
+                for (int level = 2; level <= 3; level++)
                 {
-                    string suffix = level == 1 ? "" : "-" + level;
-                    checkedCount += RequirePortrait(tiered[i] + suffix, failures);
+                    string key = ManageArt.BuildingPortraitKey(id, level);
+                    if (PortraitExists(key)) { checkedCount++; continue; }
+
+                    // Not under the id spelling. Is it anywhere ELSE? If so it is MISPLACED, which
+                    // is the defect class - the card asks for the id key and paints the placeholder
+                    // while the picture sits in the root folder under its retired name.
+                    string stem;
+                    bool legacyExists = retiredStem.TryGetValue(id, out stem) &&
+                                        (PortraitExists("Portraits/" + stem + "-" + level) ||
+                                         PortraitExists(ManageArt.BuildingPortraitFolder + stem + "-" + level));
+                    if (legacyExists)
+                    {
+                        checkedCount++;
+                        failures.Add("[defense-art-tiers-reachable] tier sheet for '" + id + "' level " + level +
+                                     " exists under the RETIRED spelling '" + stem + "-" + level + "' but not at '" +
+                                     key + "', which is the key ManageArt.BuildingPortraitKey composes. The card " +
+                                     "asks for the id spelling and paints the placeholder disc. MOVE the file - do " +
+                                     "not add a second key producer to reach it.");
+                    }
+                    else
+                    {
+                        // ⛔ NOT A FAILURE. No sheet exists at this tier under ANY spelling, so
+                        // nothing is misplaced and nothing regressed - the art was never
+                        // commissioned. Failing here would demand a picture that has never existed
+                        // and would block the gate on an art ask. It is NAMED instead, and carried
+                        // as an art ask in WO-1567 section 5.
+                        log.AppendLine("  ART ASK (not a failure): no sheet for " + key +
+                                       " under any spelling - tier " + level + " of '" + id +
+                                       "' is uncommissioned art, so that card paints its base sheet.");
+                    }
                 }
             }
-            for (int i = 0; i < flat.Length; i++) checkedCount += RequirePortrait(flat[i], failures);
+            for (int i = 0; i < flat.Length; i++)
+                checkedCount += RequirePortrait(ManageArt.BuildingPortraitKey(flat[i], 1), failures);
 
             log.AppendLine("defense portrait coverage=" + checkedCount + "/" + (tiered.Length * 3 + flat.Length) +
-                           " files verified on disk");
+                           " files verified on disk under " + ManageArt.BuildingPortraitFolder);
         }
 
         /// <summary>Resources.Load is EXTENSION-AGNOSTIC, and this folder is mixed
         /// (Healing_Caravan.jpg and storage_food.jpg sit beside archer-tower.png,
         /// measured 2026-09-06). So the pin is on the STEM: exactly one of the
         /// importable extensions must exist, with its .meta.</summary>
-        private static int RequirePortrait(string fileStem, List<string> failures)
+        /// <param name="resourceKey">A Resources-relative key as
+        /// <see cref="ManageArt.BuildingPortraitKey"/> returns it, e.g.
+        /// "Portraits/Buildings/tower_catapult-3". ⛔ Take the key from the SEAM - retyping a
+        /// folder here is how the old slug list ended up proving a folder the game stopped
+        /// reading.</param>
+        private static int RequirePortrait(string resourceKey, List<string> failures)
         {
+            if (string.IsNullOrEmpty(resourceKey))
+            {
+                failures.Add("[defense-art-tiers-reachable] ManageArt.BuildingPortraitKey returned an EMPTY key - " +
+                             "the one producer cannot name this portrait at all.");
+                return 1;
+            }
             string[] extensions = { ".png", ".jpg", ".jpeg" };
             for (int i = 0; i < extensions.Length; i++)
             {
-                string relative = PortraitRoot + "/" + fileStem + extensions[i];
+                string relative = "Assets/Resources/" + resourceKey + extensions[i];
                 string full = Path.Combine(Directory.GetCurrentDirectory(),
                     relative.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(full)) continue;
@@ -459,9 +572,47 @@ namespace DeNelle.Editor
                                  ".meta - Unity will not import it, so Resources.Load returns null at runtime.");
                 return 1;
             }
-            failures.Add("[defense-art-tiers-reachable] no Resources/Portraits/" + fileStem +
-                         ".{png,jpg,jpeg} on disk - DefenseSprite's probe chain points at art that is not there.");
+            // (falls through to the not-on-disk failure below)
+            failures.Add("[defense-art-tiers-reachable] no Assets/Resources/" + resourceKey +
+                         ".{png,jpg,jpeg} on disk. This is the key ManageArt.BuildingPortraitKey composes, so the " +
+                         "Defense card asks for it and paints the placeholder disc. If the sheet exists under the " +
+                         "retired display-name spelling in Assets/Resources/Portraits/, it needs MOVING to the id " +
+                         "spelling - not a second key producer.");
             return 1;
+        }
+
+        /// <summary>
+        /// True when a sheet exists on disk for this Resources key under any importable extension.
+        /// <para>Resources.Load is extension-agnostic and this project's portrait folders are mixed
+        /// (Healing_Caravan.jpg sits beside archer-tower.png, measured 2026-09-06), so the probe is
+        /// on the STEM. Existence only - the .meta requirement stays in
+        /// <see cref="RequirePortrait"/>, which is the one that reports.</para>
+        /// </summary>
+        private static bool PortraitExists(string resourceKey)
+        {
+            if (string.IsNullOrEmpty(resourceKey)) return false;
+            string[] extensions = { ".png", ".jpg", ".jpeg" };
+            for (int i = 0; i < extensions.Length; i++)
+            {
+                string full = Path.Combine(Directory.GetCurrentDirectory(),
+                    ("Assets/Resources/" + resourceKey + extensions[i]).Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(full)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The tier suffix rule, asked of the ONE producer rather than pattern-matched out of its
+        /// source. <see cref="ManageArt.BuildingPortraitKey"/> must leave level 1 unsuffixed and
+        /// append "-N" from level 2 up, or no Defense card can ever name its tier sheet.
+        /// </summary>
+        private static bool ManageArtEmitsTierSuffix()
+        {
+            string baseKey = ManageArt.BuildingPortraitKey("probe_id", 1);
+            string tierKey = ManageArt.BuildingPortraitKey("probe_id", 3);
+            return !string.IsNullOrEmpty(baseKey) && !string.IsNullOrEmpty(tierKey) &&
+                   baseKey.EndsWith("probe_id", StringComparison.Ordinal) &&
+                   tierKey.EndsWith("probe_id-3", StringComparison.Ordinal);
         }
 
         // =====================================================================
@@ -515,6 +666,59 @@ namespace DeNelle.Editor
             int end = source.IndexOf("\n        private ", start + signature.Length, StringComparison.Ordinal);
             if (end < 0) end = source.IndexOf("\n        public ", start + signature.Length, StringComparison.Ordinal);
             return end < 0 ? source.Substring(start) : source.Substring(start, end - start);
+        }
+
+        /// <summary>
+        /// Comments blanked, string and char literals KEPT - mirrored from
+        /// <c>DefenseReportLayoutRegression.StripComments</c>, which was added the same night for
+        /// exactly this failure.
+        ///
+        /// <para>⛔ WHY NOT <see cref="StripLineComments"/>: that one cuts at the first "//" on a
+        /// line, so it also truncates code whose STRING contains "//" and it never handles a
+        /// block comment. A pin that a comment can flip is not a pin - and it fails both ways: an
+        /// absence check reds on the tombstone that records the retirement (measured
+        /// 2026-09-07, Builds/reg-wave3g.log, on ManageScreenVM.cs:1701 and :2045), and a
+        /// required-substring check can be satisfied by prose describing a call that is gone.
+        /// Blanking rather than deleting keeps every offset and line number intact, so a failure
+        /// message can still name a real position.</para>
+        /// </summary>
+        private static string StripComments(string src)
+        {
+            if (string.IsNullOrEmpty(src)) return src ?? string.Empty;
+            var buf = src.ToCharArray();
+            int i = 0, n = src.Length;
+            while (i < n)
+            {
+                char c = src[i];
+                if (c == '/' && i + 1 < n && src[i + 1] == '/')
+                {
+                    while (i < n && src[i] != '\n') { buf[i] = ' '; i++; }
+                }
+                else if (c == '/' && i + 1 < n && src[i + 1] == '*')
+                {
+                    while (i < n && !(src[i] == '*' && i + 1 < n && src[i + 1] == '/'))
+                    {
+                        if (src[i] != '\n') buf[i] = ' ';
+                        i++;
+                    }
+                    if (i < n) { buf[i] = ' '; i++; }
+                    if (i < n) { buf[i] = ' '; i++; }
+                }
+                else if (c == '"' || c == '\'')
+                {
+                    char quote = c;
+                    i++;                       // keep the opening quote
+                    while (i < n && src[i] != quote)
+                    {
+                        if (src[i] == '\\' && i + 1 < n) { i += 2; continue; }
+                        if (src[i] == '\n') break;
+                        i++;
+                    }
+                    if (i < n && src[i] == quote) i++;
+                }
+                else i++;
+            }
+            return new string(buf);
         }
 
         /// <summary>Everything from "//" to end of line removed, line by line. Used only so a

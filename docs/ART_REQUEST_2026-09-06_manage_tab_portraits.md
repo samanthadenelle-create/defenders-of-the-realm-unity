@@ -131,8 +131,13 @@ why section 7 exists.
 ## 7. BUILD TILE GRID - the exact missing set (added 2026-09-06, portrait lane)
 
 Measured this session against the tree, not inferred. Pinned by
-`Assets/Editor/Regression/ManagePortraitCoverageRegression.cs`, whose dated exemption list holds exactly the ids below
-and **FAILS the moment one of them starts resolving**, so a delivered file forces its own line out of this document.
+`Assets/Editor/Regression/ManagePortraitCoverageRegression.cs`, whose dated exemption list held exactly the ids that
+were in 7b and **FAILS the moment one of them starts resolving**, so a delivered file forces its own line out of this
+document.
+
+> ## ✅ CLOSED 2026-09-06 - all 20 files were delivered and the list is now EMPTY. See 7b.
+> The mechanism did exactly what it was built to do: the suite went RED on all twenty
+> (`Builds/reg-wave3b.log:9525-9544`) the first run after the art landed. **7c is still open** - two rulings, not art.
 
 ### 7a. FIXED IN CODE, NOT AN ART REQUEST - the 20 tier keys
 
@@ -160,43 +165,27 @@ could never expire and would have become permanent silent skips. Keyed off the c
 filename the artist writes: **drop the PNG in and the suite FAILS as stale until its line is deleted from this
 document.** The list cannot rot.
 
-### 7b. THE ART REQUEST - 20 files, exact filenames
+### 7b. ✅ THE ART REQUEST IS CLOSED - all 20 files were delivered on 2026-09-06
 
-Author each as `Assets/Resources/Portraits/Buildings/<filename>`, 1024x1024 PNG, matching the look of the 27 files
-already in that folder (round-medallion friendly, readable at 112 px and at ~150 px).
+**This section held a 20-row table of filenames to author. Every one of them landed, so the table is gone - that is
+the mechanism working, not a lost record.**
 
-| # | Filename to author | Building, as the player sees it | Sheet A tile |
-|---|---|---|---|
-| 1 | `healing_caravan.png` | Healing Caravan | `building-healing-caravan` |
-| 2 | `pet-house.png` | Echo Hollow | `building-echo-hollow` |
-| 3 | `workshop.png` | Crafting Station | `building-crafting-station` |
-| 4 | `market.png` | Store | `building-store` |
-| 5 | `collector_farm.png` | **Quarry** | `building-quarry` |
-| 6 | `collector_forge.png` | **Iron Mine** | `building-iron-mine` |
-| 7 | `collector_lumbermill.png` | **Lumber Mill** | `building-lumber-mill` |
-| 8 | `lumberyard.png` | Lumberyard (wood store) | `building-lumberyard` |
-| 9 | `silo.png` | Stoneyard (stone store) | `building-stoneyard` |
-| 10 | `foundry.png` | Foundry (iron store) | `building-foundry` |
-| 11 | `mine_crystal.png` | Crystal Mine | `building-crystal-mine` |
-| 12 | `jeweler.png` | Jeweler | `building-jeweler` |
-| 13 | `tower_ground_archer.png` | Archer Tower | `building-archer-tower` |
-| 14 | `tower_ballista.png` | Ballista | `building-ballista` |
-| 15 | `tower_arcane_spire.png` | Arcane Spire | `building-arcane-spire` |
-| 16 | `tower_catapult.png` | Catapult | `building-catapult` |
-| 17 | `tower_siege_tower.png` | Sky Ballista (Anti-Air) | `building-sky-ballista` |
-| 18 | `wall_wood.png` | Wooden Palisade | `building-wooden-palisade` |
-| 19 | `wall_stone.png` | Stone Wall | `building-stone-wall` |
-| 20 | `gate_stone.png` | Stone Gate | `building-stone-gate` |
+- **Delivered by commit `ad808ecf3`** (the Manage art conformance pack): 20 building portraits + `heart`, 1024x1024
+  RGBA, under `Assets/Resources/Portraits/Buildings/`, each named by its **catalog id**.
+- **Proven by the oracle, not by the filesystem.** The next run of `ManagePortraitCoverageRegression` failed on all
+  twenty at once - `[exemption-still-accurate] ... is listed as a missing-art exemption but it now RESOLVES` for each
+  id, `Builds/reg-wave3b.log:9525-9544`. That failure is the *forced expiry* this section promised: a delivered PNG
+  pushes its own row out of the document.
+- **The exemption list in that suite is now empty**, and its doc-comment carries the same dated note. The list and the
+  ctor stay in place so the next undelivered id fails loudly instead of painting a blank tile.
+- **The three id/name traps were honoured on delivery** - `collector_farm` = **Quarry**, `collector_forge` = **Iron
+  Mine**, `collector_lumbermill` = **Lumber Mill**; these are *catalog* ids and the pre-existing `farm.png` /
+  `forge.png` / `lumbermill.png` are *ladder* ids, a different namespace that merely overlaps. Kept here because the
+  same trap will bite the next person who adds a collector.
+- **`arcane-tower` (Cathedral of Magic), `armorer`, `barracks`, `forge` (Weaponsmith)** were never part of the ask -
+  they already had art under their own catalog id.
 
-**Already covered - do NOT draw these four.** `arcane-tower` (Cathedral of Magic), `armorer`, `barracks`, `forge`
-(Weaponsmith) each already have art under their own catalog id in that folder, tiers and all. Sheet A draws a tile for
-them; it is not needed.
-
-⛔ **Rows 5-7 are the ones that will produce wrong files if skimmed.** `collector_farm`, `collector_forge` and
-`collector_lumbermill` are **catalog ids**; the existing `farm.png`, `forge.png`, `lumbermill.png` are named for
-**ladder ids**, which are a different namespace that happens to overlap. They are NOT the same picture and the display
-names prove it - `collector_farm` is the **Quarry**, not a farm, and `collector_forge` is the **Iron Mine**, not a
-forge.
+⚠ **7c below is still OPEN.** Delivering the files answered the art question; it did not answer either ruling.
 
 ### 7c. TWO THINGS THAT NEED A RULING, NOT ART
 

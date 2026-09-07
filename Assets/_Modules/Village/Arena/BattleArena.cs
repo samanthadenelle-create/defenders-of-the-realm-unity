@@ -3088,15 +3088,17 @@ namespace DeNelle.Village.Arena
             // pays more. Guarded to a sane floor so a bad value never zeroes the reward.
             float mult = Mathf.Max(1f, rewardMult);
 
-            // 1) XP — unchanged grant path (HeroProgression via reflection); the count term is
-            // now KILLS. §12 trace prints base/mult/final so the formula change is provable.
+            // 1) XP — unchanged grant path; the count term is KILLS. §12 trace prints
+            // base/mult/final so the formula change is provable.
+            // WO-1511: HeroProgression lives in THIS assembly (DeNelle.Village, this file's
+            // namespace DeNelle.Village.Arena is a child of it) — the old Type.GetType/
+            // GetMethod("AddXp") round trip named a type the compiler could already see.
             int xpBase = 20 + 8 * paidKills + 4 * threat;
             int xp = Mathf.RoundToInt(xpBase * mult);
-            var prog = GameObject.FindAnyObjectByType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
+            var prog = GameObject.FindAnyObjectByType<HeroProgression>();
             if (prog != null)
             {
-                var add = prog.GetType().GetMethod("AddXp", new[] { typeof(float) });
-                add?.Invoke(prog, new object[] { (float)xp });
+                prog.AddXp((float)xp);
             }
             summary.Xp = xp + Mathf.Max(0, streamXp);
             // WO-1104: report the coin stream + the kill count the payout was computed from.

@@ -36,6 +36,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using DeNelle.Core.Catalog;
@@ -91,6 +92,10 @@ namespace DeNelle.Editor.Regression
         private static void CheckLiveModel(List<string> failures, StringBuilder log)
         {
             GameStateService prior = GameStateService.Instance;
+            // The WO-1518 case navigates, and OpenSchool persists the last-used tab. A regression
+            // run never moves a developer's editor state.
+            bool hadTabPref = PlayerPrefs.HasKey(ManageScreenVM.LastTabPrefKey);
+            int priorTabPref = PlayerPrefs.GetInt(ManageScreenVM.LastTabPrefKey, 0);
             GameObject host = null;
             GameState fixture = null;
             try
@@ -262,13 +267,176 @@ namespace DeNelle.Editor.Regression
                                      "troop-upgrades.json lost its ability lines (WO-1389/WO-1405).");
                 }
                 ScanForCoordinate(vm, "Troops", failures, log);
+
+                // ── WO-1518: SHORT names WHAT, LOCKED names WHY and offers the tap ──
+                // Runs LAST because it EMPTIES the purse, which no earlier case may see.
+                CheckResearchRowsSayWhatAndWhy(vm, fixture, failures, log);
             }
             finally
             {
                 SetGssInstance(prior);
                 if (host != null) UnityEngine.Object.DestroyImmediate(host);
                 if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                if (hadTabPref) PlayerPrefs.SetInt(ManageScreenVM.LastTabPrefKey, priorTabPref);
+                else PlayerPrefs.DeleteKey(ManageScreenVM.LastTabPrefKey);
             }
+        }
+
+        // =====================================================================
+        //  WO-1518 - [research-short-names-what] / [research-locked-names-why]
+        // ---------------------------------------------------------------------
+        //  Owner rulings 2026-09-06 20:12, verbatim:
+        //      "see screen, short doesnt help, i need to know waht im short"
+        //      "if locked what is blocking and link to it"
+        //  and at 20:19, on the door that already worked:
+        //      "the logic is there on some if i click takes me there but should tell them that"
+        //  Evidence: Logs/device/screens/owner-screen-20260906-201242.png, the Armorer school -
+        //  "Reinforced Plating / Troop health +5% / [green arrow] SHORT" and two rows reading a
+        //  bare "LOCKED" with a padlock, naming no blocker and announcing no navigation.
+        //
+        //  ⚠ THE PURSE IS EMPTIED HERE, deliberately and last. The fixture above is deliberately
+        //  rich ("every gate wide open"), and a rich purse can never produce a SHORT row - so a
+        //  case written against it would assert nothing about the very word the ruling is about.
+        //
+        //  RED PROOF: put `item.BadgeText = c.Ready ? "READY" : "SHORT";` back in
+        //  ManageScreenVM.ComposeResearchItem -> [research-short-names-what] fires. Put
+        //  `item.BadgeText = "LOCKED";` back (dropping the tap word and the NextRungLine join) ->
+        //  [research-locked-names-why] fires on both halves.
+        // =====================================================================
+        private static void CheckResearchRowsSayWhatAndWhy(ManageScreenVM vm, GameState fixture,
+            List<string> failures, StringBuilder log)
+        {
+            // ⚠ AvailableTabIds is refreshed ONLY by the navigation writers - EnterTab /
+            // OpenDefaultScreen / ComposeWorkspace (ManageScreenVM.RefreshAvailableTabs). Every case
+            // above drives the LEGACY pair SelectTab + Rebuild, which fills VisibleTabs and never
+            // touches _availableTabs - so without this call the list is still EMPTY here and
+            // RESEARCH reads "not available" on a fixture that places two perk-authoring ladder
+            // buildings. EnterTab is also the screen this case wants: the RESEARCH grid, which is
+            // where the player's own route into OpenSchool below starts.
+            vm.EnterTab(DeNelle.Core.Manage.ManageTabId.Research);
+
+            if (!vm.AvailableTabIds.Contains(DeNelle.Core.Manage.ManageTabId.Research))
+            {
+                // FAIL, not a skip: the fixture places two ladder buildings that author perks.
+                failures.Add("[research-locked-names-why] the RESEARCH tab is not available on a fixture that " +
+                             "places a forge and a lumbermill, so no perk row could be composed and WO-1518's " +
+                             "rulings are unmeasured.");
+                return;
+            }
+
+            // Empty the purse so an AVAILABLE perk is genuinely unaffordable.
+            fixture.Wood = 0;
+            fixture.Iron = 0;
+            var broke = fixture.Resources;
+            broke.Food = 0;
+            broke.Coins = 0;
+            broke.Crystals = 0;
+            fixture.Resources = broke;
+
+            var schools = new List<string>();
+            for (int i = 0; i < vm.ResearchChoices.Count; i++)
+            {
+                var c = vm.ResearchChoices[i];
+                if (c != null && !string.IsNullOrEmpty(c.BuildingId) && !schools.Contains(c.BuildingId))
+                    schools.Add(c.BuildingId);
+            }
+            if (schools.Count == 0)
+            {
+                failures.Add("[research-locked-names-why] the fixture produced no research school, so nothing " +
+                             "below asserts anything. FAIL, not a skip.");
+                return;
+            }
+
+            int shortRows = 0, lockedRows = 0, measured = 0;
+            for (int s = 0; s < schools.Count; s++)
+            {
+                vm.OpenSchool(schools[s], null);
+                var ws = vm.ComposeWorkspace();
+                if (ws == null || ws.Tabs == null || ws.Tabs.Count == 0) continue;
+                int index = Mathf.Clamp(ws.ActiveTabIndex, 0, ws.Tabs.Count - 1);
+                var tiles = ws.Tabs[index].Tiles;
+                if (tiles == null) continue;
+
+                for (int t = 0; t < tiles.Count; t++)
+                {
+                    var tile = tiles[t];
+                    if (tile == null) { failures.Add("[research-locked-names-why] a null perk tile."); continue; }
+                    measured++;
+                    string word = tile.StateText ?? string.Empty;
+                    log.AppendLine("  perk " + schools[s] + ":" + tile.Id + " state='" + word +
+                                   "' sub='" + tile.Subtitle + "' medallion='" + tile.StateIconKey + "'");
+
+                    if (tile.VisualState == DeNelle.Core.Manage.ManageTileVisualState.Locked)
+                    {
+                        lockedRows++;
+                        // The face must SAY WHAT THE TAP WILL DO. Activate is already wired on
+                        // every locked perk (ManageScreenVM.ComposeResearchItem routes it to the
+                        // school's own BUILD card), and a row that navigates without announcing it
+                        // is the whole of the 20:19 note.
+                        if (word.IndexOf("TAP", StringComparison.OrdinalIgnoreCase) < 0)
+                            failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' reads \"" + word +
+                                         "\" - it carries a door (Activate is wired) and no tap affordance, so it " +
+                                         "teleports the player somewhere with no warning (owner, 20:19).");
+                        // ...and the row must NAME THE BLOCKER, which is the 20:12 ruling. The
+                        // sentence rides the row's SECOND LINE because the state column is a
+                        // quarter of the row wide and would cull it - see ComposeResearchItem.
+                        var choice = FindPerk(vm, schools[s], tile.Id);
+                        string blocker = choice != null ? choice.LockReason : null;
+                        if (!string.IsNullOrWhiteSpace(blocker) &&
+                            (string.IsNullOrEmpty(tile.Subtitle) ||
+                             tile.Subtitle.IndexOf(blocker, StringComparison.Ordinal) < 0))
+                            failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' has the blocker \"" +
+                                         blocker + "\" composed on ResearchChoiceVM.LockReason and its row paints \"" +
+                                         tile.Subtitle + "\" - the reason reaches no face, which is exactly the " +
+                                         "composed-but-unpainted defect (WO-1518 section 1).");
+                        continue;
+                    }
+
+                    if (word.StartsWith("SHORT", StringComparison.Ordinal))
+                    {
+                        shortRows++;
+                        if (!HasDigit(word))
+                            failures.Add("[research-short-names-what] perk '" + tile.Id + "' reads \"" + word +
+                                         "\" - a bare SHORT names neither the resource nor the amount. Owner, " +
+                                         "20:12: \"short doesnt help, i need to know waht im short\".");
+                        // WO-1518 section 2 last bullet: "The green arrow badge on a SHORT row
+                        // states nothing; remove it."
+                        if (!string.IsNullOrEmpty(tile.StateIconKey))
+                            failures.Add("[research-short-names-what] perk '" + tile.Id + "' reads \"" + word +
+                                         "\" and still carries the status medallion '" + tile.StateIconKey +
+                                         "' - the green up-arrow on a row the player cannot afford states nothing.");
+                    }
+                }
+            }
+
+            log.AppendLine("  WO-1518: measured " + measured + " perk tile(s), " + shortRows + " SHORT, " +
+                           lockedRows + " LOCKED (purse emptied)");
+            if (measured == 0)
+                failures.Add("[research-short-names-what] no perk tile was composed at all, so both WO-1518 cases " +
+                             "passed on an empty grid. FAIL, not a skip.");
+            else if (shortRows == 0 && lockedRows == 0)
+                failures.Add("[research-short-names-what] with an EMPTY purse the fixture produced neither a SHORT " +
+                             "row nor a LOCKED one across " + measured + " perk tile(s). Both of the owner's 20:12 " +
+                             "rulings are therefore unmeasured - FAIL, not a skip.");
+        }
+
+        private static ResearchChoiceVM FindPerk(ManageScreenVM vm, string buildingId, string perkId)
+        {
+            for (int i = 0; i < vm.ResearchChoices.Count; i++)
+            {
+                var c = vm.ResearchChoices[i];
+                if (c == null) continue;
+                if (!string.Equals(c.PerkId, perkId, StringComparison.Ordinal)) continue;
+                if (!string.Equals(c.BuildingId, buildingId, StringComparison.OrdinalIgnoreCase)) continue;
+                return c;
+            }
+            return null;
+        }
+
+        private static bool HasDigit(string s)
+        {
+            for (int i = 0; i < s.Length; i++) if (char.IsDigit(s[i])) return true;
+            return false;
         }
 
         /// <summary>

@@ -1,6 +1,32 @@
 # WO-1541: Manage names the camp you are training for, renders it as a label, and composes that copy in a second producer
 
-**Status:** READY TO IMPLEMENT — **owner ruling 2026-09-06: "Named camp + door."** (was: BLOCKED)
+**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
+<!-- was: READY TO IMPLEMENT (owner: "Named camp + door."), then IN PROGRESS with the DOOR BLOCKED
+     on a seat ruling. Both are CLOSED by the 4.1 ruling below - the door is built. -->
+
+## 4.1 SEAT RULING - owner, 2026-09-06 (question tool). CLOSES acceptance 3.
+
+> **"RAISE THE CARD, TAPPABLE ROW."**
+
+Ruled after this lane measured a three-way collision and refused to pick a seat unilaterally
+(CLAUDE.md §11B.B): ruling 2 above wanted a door, **WO-1422 ruling 3.10** (recorded in
+`ManageScreenPanel.cs`) forbids squeezing a third face beside TRAIN + UPGRADE, and
+`ElarionUiKit.MinTouchPx` (112) refused the 26 px army band. The ruling takes the option WO-1422 3.10
+itself names - *"a third face needs a taller card"*:
+
+1. The army line **grows into a full 112 px row** (`MinTouchPx`) carrying a **chevron**, and the
+   whole row is the **door to the raid grid**.
+2. The **ARMY card grows above its 256 px floor** to pay for it - `TroopCardPx` = **346 px**.
+3. **Nothing else shrinks.** Every other band keeps the exact pixels it had, so WO-1422 3.10's
+   "never squeeze" is honoured *because the card grew*, and the ~24 px band rule holds trivially
+   (the band quadrupled). The door is **not** a third CTA face - it is its own row above the CTA
+   band, and TRAIN + UPGRADE keep 113.1 px each.
+4. The door opens the raid grid through **`RaidEntryGate.RequestOpen`** - the exact call the Journey
+   deck's Raids card makes (`PlayerDeckWorkspace.cs:746`). **No new `PanelId`.**
+
+⚠ Scope note kept from the blocked round: `TroopCtaY0/Y1` and `TroopWorkspacePx` are shared by the
+Buildings, Defense and Research cards, so the ARMY card gets **its own derived band ladder**
+(`Army*Y0/Y1` off `TroopCardPx`) and those three screens are byte-for-byte untouched.
 **Priority:** P1
 **Silo:** `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs` + `ManageScreenPanel.cs` +
 `Assets/_Modules/Core/HudModel/PostureSignals.cs` (+ `JourneyDeckSubtitleVM.cs` as the reader).

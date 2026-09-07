@@ -101,6 +101,40 @@
 //   whole cards seated 2              (her frame: 2 full cards and a 0.66 peek)
 //   kit Close band top 0.2054 > 0.20  -> the well overlapped the shared Close by 4.6 ref px
 //
+// =============================================================================
+//  ADDENDUM 2026-09-06 - WO-1462 / WO-1463: THE SUITE NOW COVERS THE FAMILY
+// =============================================================================
+// Nothing above is rewritten; the 09-06 measurement is frozen. What follows is new.
+//
+// The selection door was fixed and pinned (S4) while the DEPLOY door carried the
+// identical defect one file away, uncovered by anything. An oracle scoped to one
+// screen certified the family it did not measure - so two SIBLING cases are added:
+//
+//   S7  WO-1462 - RaidDeployScreen.cs took `withBackdrop: false`, the same three-
+//       transparent-layers shape as R3/S4. RED PROOF, by inspection of the tree this
+//       was written against (an edit-only lane; no Unity run is claimed):
+//       `git show HEAD:Assets/_Modules/Village/Hero/RaidDeployScreen.cs` line 145 reads
+//       `..., Close, withBackdrop: false,` - in CODE, not in a comment, so the case's
+//       stripped-source Contains() fires. RED at HEAD.
+//
+//   S8  WO-1463 - RaidDeployController.cs built the rally flag from two bare
+//       GameObject.CreatePrimitive calls (:639 pole, :648 banner) and "coloured" them
+//       by writing renderer.material.color on Unity's built-in Default-Material, which
+//       has no URP variant. RED PROOF, same inspection: at HEAD that file contains TWO
+//       `CreatePrimitive(` and ZERO `sharedMaterial` / `.material =`, so both of S8's
+//       positional windows are empty and both fail; `material.color =` is present, and
+//       `ProtectPrimitiveArt` is absent. RED at HEAD on three counts.
+//
+// MUTATIONS ADDED TO THE LEDGER:
+//   M7. Pass `withBackdrop: false` on the DEPLOY screen                 -> S7.
+//   M8. Add a CreatePrimitive to RaidDeployController with no material  -> S8 (and
+//       dropping ProtectPrimitiveArt reds S8 too - a correct material on a marker the
+//       guard's sweep has disabled is still an invisible marker).
+//
+// S8 is deliberately POSITIONAL rather than file-wide: a "the helper is called
+// somewhere" check goes green on a file holding one fixed primitive and one bare one,
+// which is the exact shape the next edit adds.
+//
 // Contract mirrors the other suites - Run(out string reason): true = pass.
 // Orchestrator registration (DataRegression.RunAll), covenant style:
 //   if (!RaidSelectionLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-selection-layout] " + r);
@@ -121,6 +155,14 @@ namespace DeNelle.Editor.Regression
     {
         private const string ScreenRel = "_Modules/Village/Hero/RaidSelectionScreen.cs";
         private const string VmRel     = "_Modules/Village/Hero/RaidSelectionVM.cs";
+
+        // WO-1462 / WO-1463 — THE SIBLING DOORS IN THE SAME RAID MODAL FAMILY.
+        // WO-1442 fixed the transparent-panel defect on the SELECTION screen and this suite
+        // pinned it there (S4). The DEPLOY screen carried the identical `withBackdrop: false`
+        // call the whole time and no suite looked at it, which is exactly how the same defect
+        // shipped twice one door apart. The oracle now covers the FAMILY, not one screen.
+        private const string DeployRel     = "_Modules/Village/Hero/RaidDeployScreen.cs";
+        private const string DeployCtrlRel = "_Modules/Village/Troops/RaidDeployController.cs";
 
         private const float Eps = 0.5f;
 
@@ -191,6 +233,20 @@ namespace DeNelle.Editor.Regression
             string screenSrc = StripComments(File.ReadAllText(screenPath));
             string vmSrc     = StripComments(File.ReadAllText(vmPath));
 
+            // WO-1462 / WO-1463 — the two SIBLING files. Absence is a NAMED failure, never a
+            // silent skip: an oracle that quietly stops measuring a file that moved is how the
+            // deploy door went uncovered in the first place.
+            string deployPath     = Path.Combine(Application.dataPath, DeployRel.Replace('/', Path.DirectorySeparatorChar));
+            string deployCtrlPath = Path.Combine(Application.dataPath, DeployCtrlRel.Replace('/', Path.DirectorySeparatorChar));
+            string deploySrc     = File.Exists(deployPath)     ? StripComments(File.ReadAllText(deployPath))     : null;
+            string deployCtrlSrc = File.Exists(deployCtrlPath) ? StripComments(File.ReadAllText(deployCtrlPath)) : null;
+            if (deploySrc == null)
+                failures.Add("[fixture] MISSING " + DeployRel + " - the sibling raid modal this suite now covers " +
+                             "is not on disk; S7 cannot be evaluated.");
+            if (deployCtrlSrc == null)
+                failures.Add("[fixture] MISSING " + DeployCtrlRel + " - the in-raid deploy controller this suite " +
+                             "now lints for bare primitives is not on disk; S8 cannot be evaluated.");
+
             try
             {
                 foreach (var s in Surfaces)
@@ -213,6 +269,12 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "S4:opaque-backdrop",  () => CaseOpaqueBackdrop(screenSrc, failures, log));
                 Case(failures, "S5:count-caption",    () => CaseCountCaption(screenSrc, vmSrc, failures, log));
                 Case(failures, "S6:lock-copy",        () => CaseLockCopyVerbatim(vmSrc, failures, log));
+                if (deploySrc != null)
+                    Case(failures, "S7:deploy-opaque-backdrop",
+                         () => CaseDeployOpaqueBackdrop(deploySrc, failures, log));
+                if (deployCtrlSrc != null)
+                    Case(failures, "S8:no-bare-primitive",
+                         () => CaseNoBarePrimitive(deployCtrlSrc, failures, log));
                 Case(failures, "words",               () => CaseCaptionWords(failures, log));
             }
             catch (Exception ex)
@@ -228,7 +290,9 @@ namespace DeNelle.Editor.Regression
                          "inside the scrolling content at the one pitch (" + RaidSelectionScreen.RowPitchPx.ToString("0") +
                          " ref px), the capacity is a pure floor of the well (never the camp count), " +
                          "the caption band clears the blank-text law, and the three WO-1442 defects " +
-                         "(action-button skin on a row, a typed well, a transparent panel) are all absent" + noteStr;
+                         "(action-button skin on a row, a typed well, a transparent panel) are all absent, " +
+                         "and the SIBLING raid doors hold too: RaidDeployScreen takes the kit backdrop and " +
+                         "RaidDeployController creates no bare primitive without an explicit URP material" + noteStr;
                 Debug.Log("RAID_SELECTION_LAYOUT_OK\n" + log);
                 return true;
             }
@@ -614,6 +678,126 @@ namespace DeNelle.Editor.Regression
                              "Every refusal on this screen names what unlocks it, because the owner is " +
                              "red/green colourblind and the words ARE the signal.");
             if (failures.Count == before) log.AppendLine(tag + " the lock copy is intact, verbatim.");
+        }
+
+        // =====================================================================
+        //  S7 - WO-1462: the SIBLING deploy door has an opaque layer too.
+        // =====================================================================
+        // RED PROOF, by inspection of the tree this was written against (edit-only lane - no
+        // Unity run is claimed): `git show HEAD:Assets/_Modules/Village/Hero/RaidDeployScreen.cs`
+        // line 145 reads `..., Close, withBackdrop: false,` - a live call argument, not a comment,
+        // so it survives StripComments and this case is RED at HEAD, for the same
+        // three-transparent-layers reason S4 documents. It is the FAMILY guard: S4 covers the
+        // selection door, S7 the deploy door, so a fix on one can no longer leave the other.
+        private static void CaseDeployOpaqueBackdrop(string src, List<string> failures, StringBuilder log)
+        {
+            const string tag = "[S7:deploy-opaque-backdrop]";
+            int before = failures.Count;
+
+            if (src.Contains("withBackdrop: false") || src.Contains("withBackdrop:false"))
+                failures.Add(tag + " RaidDeployScreen passes withBackdrop: false. This panel has no other opaque " +
+                             "layer either - chrome.content is built at alpha 0, ApplyShell re-asserts that, and " +
+                             "modal-frame-16x9 is alpha 0 at every interior sample - so the town reads straight " +
+                             "through the deploy screen, as it did on 2026-09-06.");
+
+            // A BESPOKE OPAQUE QUAD IS NOT THE CURE (WO-1462 section 3). The kit's named
+            // Backdrop is the ONE authority for this layer; a hand-painted plate on this screen
+            // would pass a naive "is it opaque" check while re-splitting ownership in two.
+            if (src.Contains("\"DeployBackdrop\"") || src.Contains("\"Backdrop\""))
+                failures.Add(tag + " RaidDeployScreen paints its own backdrop plate. FrameCore already owns the " +
+                             "backdrop (ElarionUiKit.cs:568,573-579); a second one is a second authority.");
+
+            // And it must still be going through the shared factory at all - if the frame call
+            // itself were swapped out, the default this case relies on would not exist.
+            if (!src.Contains("BuildObsidianPanel"))
+                failures.Add(tag + " RaidDeployScreen no longer builds through ElarionUiKit.BuildObsidianPanel, so " +
+                             "there is no kit default backdrop for it to inherit.");
+
+            if (failures.Count == before)
+                log.AppendLine(tag + " the deploy door takes the kit's 0.94-alpha Backdrop by default, like its sibling.");
+        }
+
+        // =====================================================================
+        //  S8 - WO-1463: no BARE primitive in the in-raid deploy controller.
+        // =====================================================================
+        // GameObject.CreatePrimitive assigns Unity's built-in Default-Material, which has no
+        // URP variant and renders MAGENTA in a player build; setting .color on it does nothing.
+        //
+        // RED PROOF (measured by inspection of the tree this suite was written against, not
+        // asserted): `git show HEAD:Assets/_Modules/Village/Troops/RaidDeployController.cs`
+        // contains TWO CreatePrimitive calls, at :639 (the pole) and :648 (the banner), and
+        // ZERO occurrences of `sharedMaterial` or `.material =` anywhere in the file - the only
+        // thing following each primitive was TintRenderer, i.e. a tint ON the built-in default.
+        // So both windows below are empty of an assignment and this case is RED at HEAD.
+        //
+        // THE LINT IS POSITIONAL ON PURPOSE. A file-wide "the helper is called at least once"
+        // check passes on a file with one fixed primitive and one bare one - which is precisely
+        // the shape a later edit adds. Each CreatePrimitive must be followed by a material
+        // assignment BEFORE the next CreatePrimitive or the enclosing return.
+        //
+        // Scope note carried from WO-1463 section 2: the ticket asks for this lint "anywhere
+        // under _Modules". This suite is scoped to the file the WO's evidence names; the
+        // repo-wide sweep is a separate, larger ticket and is recorded as such in the RESULT.
+        private static void CaseNoBarePrimitive(string src, List<string> failures, StringBuilder log)
+        {
+            const string tag = "[S8:no-bare-primitive]";
+            const string Prim = "CreatePrimitive(";
+
+            int found = 0, bare = 0;
+            int i = src.IndexOf(Prim, StringComparison.Ordinal);
+            while (i >= 0)
+            {
+                found++;
+                int next = src.IndexOf(Prim, i + Prim.Length, StringComparison.Ordinal);
+                int ret  = src.IndexOf("return ", i + Prim.Length, StringComparison.Ordinal);
+
+                // The window ends at whichever boundary comes first; if neither exists, the
+                // rest of the file. A primitive built at the very end with no return still gets
+                // a window, so it cannot escape by being last.
+                int end = src.Length;
+                if (next >= 0) end = Math.Min(end, next);
+                if (ret  >= 0) end = Math.Min(end, ret);
+
+                string window = src.Substring(i, end - i);
+                bool assigned = window.Contains("sharedMaterial") ||
+                                window.Contains(".material =") ||
+                                window.Contains(".material=") ||
+                                window.Contains("ApplyUrpMaterial") ||
+                                window.Contains("BuildUrpLitMaterial") ||
+                                window.Contains("ResolveUrpLitShader");
+                if (!assigned)
+                {
+                    bare++;
+                    failures.Add(tag + " a GameObject.CreatePrimitive in RaidDeployController is not given an " +
+                                 "explicit URP material before the next primitive or the return. CreatePrimitive " +
+                                 "assigns the built-in Default-Material, which has no URP variant and renders " +
+                                 "MAGENTA in a player build - and tinting it via renderer.material.color does " +
+                                 "nothing, which is exactly how the rally flag shipped as a magenta block on " +
+                                 "2026-09-06. Route it through MagentaGuard.BuildUrpLitMaterial and assign " +
+                                 "sharedMaterial (see RaidBaseGenerator.ApplyUrpMaterial).");
+                }
+                i = next;
+            }
+
+            // Deliberate primitive art must ALSO register with the guard, or the sweep classes
+            // it as a stray placeholder and DISABLES it - a fixed material on a hidden object.
+            if (found > 0 && !src.Contains("ProtectPrimitiveArt"))
+                failures.Add(tag + " RaidDeployController builds primitive art but never calls " +
+                             "MagentaGuard.ProtectPrimitiveArt, so MagentaGuard's sweep will treat the marker as " +
+                             "a stray placeholder and disable it (MagentaGuard.IsPrimitivePlaceholder).");
+
+            // And the defect's own mechanism, named: a tint on whatever material is already
+            // there is not a fix, it is the bug.
+            if (src.Contains("material.color ="))
+                failures.Add(tag + " RaidDeployController still writes renderer.material.color. On the built-in " +
+                             "Default-Material that is a no-op under URP; the colour must ride a material the " +
+                             "code created from a URP shader.");
+
+            if (bare == 0 && found > 0)
+                log.AppendLine(tag + " " + found + " primitive(s), each given an explicit URP material and the " +
+                               "subtree registered with MagentaGuard.");
+            else if (found == 0)
+                log.AppendLine(tag + " no CreatePrimitive in RaidDeployController - nothing to lint.");
         }
 
         // =====================================================================

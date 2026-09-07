@@ -7,7 +7,7 @@
 // instance drives every camp. MVVM (Silo G): this View reads NO game state — it
 // binds a CampPromptVM and delegates all scene reads to CampProximityService:
 //   * Each frame CampProximityService finds the nearest CLEARED-but-unclaimed camp
-//     within ClaimRange of the hero (tag "Player" or "HeroTarget"); the VM projects
+//     within ClaimRange of the hero (tag "Player", then HeroLocomotion); the VM projects
 //     whether to show the world-space "Claim" prompt. Tap it -> vm.ClaimCurrent().
 //   * On claim, the VM opens the build menu; the View paints the code-built pick-a-
 //     building menu (Watchtower / Lumber Outpost / Farm Outpost). Tap -> vm.Build(type).

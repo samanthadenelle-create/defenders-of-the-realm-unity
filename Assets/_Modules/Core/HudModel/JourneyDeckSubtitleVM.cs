@@ -38,11 +38,14 @@ namespace DeNelle.Core.HudModel
                 var quests = QuestService.Instance;
                 if (quests != null) active = quests.ActiveQuestIds().Count;
 
+                // WO-1521 - READ THE ONE AUTHORITY, never a second copy of the predicate.
+                // This used to inline `quest.Completed && quest.ClaimedAtUnix == 0` over
+                // today's set. That copy is why this card could say "1 ready to claim" while
+                // Brom's Rumor Board said "The board is quiet": two surfaces, two lists, no
+                // shared fact. DailyQuestService.ClaimableCount is now the single count and
+                // RumorBoardVM projects a row from the SAME predicate.
                 var daily = DailyQuestService.Instance;
-                var today = daily != null ? daily.Today : null;
-                if (today != null && today.Quests != null)
-                    foreach (var quest in today.Quests)
-                        if (quest != null && quest.Completed && quest.ClaimedAtUnix == 0) ready++;
+                if (daily != null) ready = daily.ClaimableCount;
 
                 used = PostureSignals.ArmyFillUsed;
                 cap = PostureSignals.ArmyFillCap;

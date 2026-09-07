@@ -5,6 +5,8 @@
 #   powershell -File tools\r2-ship.ps1                 # push + verify ALL targets, BLOCKS on failure
 #   powershell -File tools\r2-ship.ps1 -WarnOnly       # push + verify, warns instead of failing
 #   powershell -File tools\r2-ship.ps1 -VerifyOnly     # prove only, upload nothing
+#   powershell -File tools\r2-ship.ps1 -Prune          # + LIST stale generations (deletes NOTHING)
+#   powershell -File tools\r2-ship.ps1 -Prune -Confirm # + actually delete them, after a green verify
 #
 # (-Target is retained so old callers keep binding, but since PROD-021 it narrows
 #  NOTHING: the push is always the ServerData PARENT and the verify always covers
@@ -73,6 +75,17 @@
 # vouch for a broken one. The two commands genuinely take different arguments; that
 # asymmetry is why they are hard-coded here exactly once.
 #
+# STOP -Prune IS LOCAL ONLY, AND THAT IS WHY IT IS SAFE (WO-1486). ServerData/Android
+# had never been pruned: 466 files, 597 MB, 168 catalog generations back to 2026-08-18,
+# because bundle names are content-hashed so every build ADDS a set and none is ever
+# retired. -Prune removes local generations the newest catalog does not name. It does
+# NOT touch the bucket: cmd_push in tools/r2_sync.py walks the local tree and calls
+# put_object per file - it never enumerates remote keys for deletion (the only
+# delete_object in that file is the CORS probe cleanup, line 161). So an installed APK
+# that requests an older baked catalog keeps resolving from R2 after a local prune. The
+# cost of a prune is only the local rollback set, which is why deleting demands BOTH
+# -Confirm and a green verify, and why the default is a dry run.
+#
 # STOP JUDGE BY THE MARKER, NEVER THE EXIT CODE. The runners in this repo exit 0 on
 # refusals and FAILs (memory: gates-report-success-without-proving-it). Marker
 # absence on a fresh log is a FAILURE, not an unknown.
@@ -92,7 +105,14 @@ param(
     [switch]$WarnOnly,
     # Prove only - upload nothing. Use when you know the push already happened and
     # you want the proof without the transfer.
-    [switch]$VerifyOnly
+    [switch]$VerifyOnly,
+    # WO-1486. List every file under ServerData/<target>/ that the NEWEST catalog of
+    # that target does not name. DRY RUN BY DEFAULT - -Prune alone deletes NOTHING; it
+    # prints the plan and the R2_PRUNE_PLAN line. Deletion needs -Prune -Confirm AND a
+    # green verify (see the STOP note below).
+    [switch]$Prune,
+    # Arms the deletion. Meaningless without -Prune.
+    [switch]$Confirm
 )
 
 $ErrorActionPreference = 'Stop'
@@ -208,6 +228,93 @@ foreach ($t in $targets) {
 }
 
 $ok = ($failed.Count -eq 0) -and ($passed.Count -gt 0)
+
+# ---- 3. PRUNE (WO-1486) - dry run unless -Confirm, and never before a green verify --
+# Computing the plan is a read-only walk, so it prints whenever -Prune is set: a plan
+# you cannot see is a plan you cannot review. DELETING is gated on -Confirm AND $ok,
+# because a prune that ran on a FAILED push would destroy the rollback set for content
+# the bucket does not hold. The plan is folded into $allLines BEFORE the parity log is
+# written, so the log's timestamp still postdates every byte under ServerData/ and
+# .githooks/pre-push (which compares file mtimes) stays satisfiable.
+if ($Prune) {
+    # Latin1 (28591) - .NET Framework 4.x has no Encoding::Latin1 property. It maps every
+    # byte 0-255 to one char, so a byte-for-byte substring search is exact for the ASCII
+    # filenames we look for, with no decoding loss on binary catalog data.
+    $latin1     = [System.Text.Encoding]::GetEncoding(28591)
+    $pruneList  = New-Object System.Collections.Generic.List[System.IO.FileInfo]
+    $pruneLines = New-Object System.Collections.Generic.List[string]
+
+    foreach ($t in $targets) {
+        $dir  = $t.FullName
+        $name = $t.Name
+        # Newest generation = the lexical maximum catalog stem. The stem is
+        # catalog_<yyyy.MM.dd>.<6-digit build>, so lexical order IS build order (verified
+        # 2026-09-06: every catalog under all three targets uses a 6-digit build number).
+        $stems = @(Get-ChildItem -Path $dir -Filter 'catalog_*' -File |
+                   ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.Name) } |
+                   Sort-Object -Unique)
+        if ($stems.Count -eq 0) { continue }
+        $newestStem = $stems[$stems.Count - 1]
+        $newestBin  = Join-Path $dir "$newestStem.bin"
+        if (-not (Test-Path $newestBin)) {
+            $pruneLines.Add("R2_PRUNE_SKIP target=$name - newest catalog stem $newestStem has no .bin; refusing to guess a keep set")
+            continue
+        }
+
+        $catalogText = $latin1.GetString([System.IO.File]::ReadAllBytes($newestBin))
+        $keptCount   = 0
+        $targetFiles = @(Get-ChildItem -Path $dir -File)
+        foreach ($f in $targetFiles) {
+            $keep = $false
+            # Keep the newest generation's own catalog files (.bin/.hash/.json share the stem).
+            if ([System.IO.Path]::GetFileNameWithoutExtension($f.Name) -eq $newestStem) {
+                $keep = $true
+            }
+            # Keep anything the newest catalog names. Ordinal IndexOf, never -match: a
+            # bundle filename is not a regex and '.' would match anything.
+            elseif ($catalogText.IndexOf($f.Name, [System.StringComparison]::Ordinal) -ge 0) {
+                $keep = $true
+            }
+            if ($keep) { $keptCount++ } else { $pruneList.Add($f) }
+        }
+        $staleHere = $targetFiles.Count - $keptCount
+        $line = "R2_PRUNE_TARGET $name newest=$newestStem keep=$keptCount stale=$staleHere of $($targetFiles.Count) file(s)"
+        $pruneLines.Add($line)
+        Write-Host "  $line" -ForegroundColor Cyan
+    }
+
+    $pruneBytes = 0
+    foreach ($f in $pruneList) { $pruneBytes += $f.Length }
+    $pruneMB    = [math]::Round($pruneBytes / 1MB, 1)
+    $planLine   = "R2_PRUNE_PLAN $($pruneList.Count) file(s) $pruneMB MB"
+    $pruneLines.Add($planLine)
+
+    if ($Prune -and $Confirm -and $ok) {
+        $removed = 0
+        $failedDel = 0
+        foreach ($f in $pruneList) {
+            try {
+                Remove-Item -LiteralPath $f.FullName -Force
+                $removed++
+            } catch {
+                $failedDel++
+                $pruneLines.Add("R2_PRUNE_ERROR $($f.FullName) - $($_.Exception.Message)")
+            }
+        }
+        $doneLine = "R2_PRUNE_DONE removed=$removed failed=$failedDel freed=$pruneMB MB"
+        $pruneLines.Add($doneLine)
+        Write-Host "  $doneLine" -ForegroundColor Green
+    } elseif ($Confirm -and -not $ok) {
+        $pruneLines.Add("R2_PRUNE_SKIPPED verify failed - the rollback set is the only copy of content the bucket may not hold")
+        Write-Host "  R2_PRUNE_SKIPPED verify failed - nothing deleted." -ForegroundColor Yellow
+    } else {
+        $pruneLines.Add("R2_PRUNE_DRYRUN nothing deleted - rerun with -Prune -Confirm after a green verify")
+        Write-Host "  R2_PRUNE_DRYRUN nothing deleted - rerun with -Prune -Confirm after a green verify." -ForegroundColor Yellow
+    }
+
+    Write-Host "  $planLine" -ForegroundColor Green
+    foreach ($l in $pruneLines) { $allLines.Add($l) }
+}
 
 if ($ok) {
     # The one and only place the literal aggregate marker is ever written. It names

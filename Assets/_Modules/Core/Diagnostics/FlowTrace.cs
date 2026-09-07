@@ -289,6 +289,145 @@ namespace DeNelle.Core.Diagnostics
             }
         }
 
+        // --- per-FRAME performance timing (WO-1483 / WO-1459) -----------------------
+        // The 3-arg Measure above logs ONE LINE PER DISPOSE. On a frame path (7 sites x
+        // 60 fps ~= 400 lines/s) that IS the spam — and on a device it evicts the boot
+        // window out of the logcat ring, destroying the very evidence we instrumented
+        // for (memory: logcat-ring-buffer-destroys-evidence). So the frame path gets its
+        // OWN overload that does NOT log on dispose: it ACCUMULATES into a table, warns
+        // at most once per `everySeconds` when a single pass blows its budget, and lets
+        // PerfReporter roll the table up into ONE [Flow:Perf] "frame budget" line/sec.
+        //
+        // USAGE (first line of an Update/tick, so early returns are covered too):
+        //   using var _ = FlowTrace.Measure("Perf", "HeroLocomotion.Update", 4f, 1f);
+        //
+        // Timing uses Stopwatch ticks, NOT Time.realtimeSinceStartup: that float loses
+        // ~1ms of resolution after a few hours of uptime, which is useless against a 4ms
+        // budget. Keys are the caller's string LITERAL (interned) — never build a key
+        // string in the hot path.
+        public static FrameScope Measure(string system, string what, float warnAboveMs, float everySeconds)
+        {
+            return new FrameScope(system, what, warnAboveMs, everySeconds);
+        }
+
+        /// <summary>One accumulated frame-path scope: total/worst/count over the roll-up window.</summary>
+        public struct FrameSample
+        {
+            public string Sys;
+            public string What;
+            public double SumMs;
+            public double MaxMs;
+            public int Count;
+        }
+
+        private sealed class FrameAccum
+        {
+            public string Sys;
+            public string What;
+            public double SumMs;
+            public double MaxMs;
+            public int Count;
+            public float LastWarnAt;
+        }
+
+        private static readonly Dictionary<string, FrameAccum> s_frameAccum =
+            new Dictionary<string, FrameAccum>(32);
+        private static readonly object s_frameLock = new object();
+        private static readonly double s_msPerTick =
+            1000.0 / System.Diagnostics.Stopwatch.Frequency;
+
+        private static void RecordFrameSample(string system, string what, double ms,
+                                              float warnAboveMs, float everySeconds)
+        {
+            bool warn = false;
+            lock (s_frameLock)
+            {
+                if (!s_frameAccum.TryGetValue(what, out var acc))
+                {
+                    acc = new FrameAccum { Sys = system, What = what, LastWarnAt = float.NegativeInfinity };
+                    s_frameAccum[what] = acc;
+                }
+                acc.SumMs += ms;
+                acc.Count++;
+                if (ms > acc.MaxMs) acc.MaxMs = ms;
+
+                if (warnAboveMs > 0f && ms > warnAboveMs)
+                {
+                    float now = Time.realtimeSinceStartup;
+                    if (everySeconds <= 0f || now - acc.LastWarnAt >= everySeconds)
+                    {
+                        acc.LastWarnAt = now;
+                        warn = true;
+                    }
+                }
+            }
+            // Emit OUTSIDE the lock — the sink can be arbitrarily slow (WebTrace POSTs).
+            if (warn)
+                Sink.Warn($"[Flow:{system}] {what} took {ms:F1}ms (over {warnAboveMs:F0}ms frame budget)");
+        }
+
+        /// <summary>
+        /// Drain the accumulated frame-path table into <paramref name="into"/> (cleared first)
+        /// and reset it for the next window. Called by PerfReporter's 1s roll-up; safe to call
+        /// from anywhere. Returns the number of scopes drained.
+        /// </summary>
+        public static int SnapshotAndResetFrameSamples(List<FrameSample> into)
+        {
+            if (into == null) return 0;
+            into.Clear();
+            lock (s_frameLock)
+            {
+                foreach (var kv in s_frameAccum)
+                {
+                    var a = kv.Value;
+                    if (a.Count <= 0) continue;
+                    into.Add(new FrameSample
+                    {
+                        Sys = a.Sys,
+                        What   = a.What,
+                        SumMs  = a.SumMs,
+                        MaxMs  = a.MaxMs,
+                        Count  = a.Count,
+                    });
+                    a.SumMs = 0.0;
+                    a.MaxMs = 0.0;
+                    a.Count = 0;
+                }
+            }
+            return into.Count;
+        }
+
+        /// <summary>
+        /// Disposable timing scope returned by the 4-arg <see cref="Measure(string,string,float,float)"/>.
+        /// Accumulates instead of logging — see the comment block above. Readonly struct, no heap alloc.
+        /// </summary>
+        public readonly struct FrameScope : System.IDisposable
+        {
+            private readonly string _system;
+            private readonly string _what;
+            private readonly float  _warnAboveMs;
+            private readonly float  _everySeconds;
+            private readonly long   _startTicks;
+            private readonly bool   _active;
+
+            internal FrameScope(string system, string what, float warnAboveMs, float everySeconds)
+            {
+                _system       = system;
+                _what         = what;
+                _warnAboveMs  = warnAboveMs;
+                _everySeconds = everySeconds;
+                _active       = Enabled;
+                _startTicks   = _active ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+            }
+
+            public void Dispose()
+            {
+                if (!_active) return;
+                double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - _startTicks) * s_msPerTick;
+                RecordFrameSample(_system, _what, ms, _warnAboveMs, _everySeconds);
+            }
+        }
+
         // --- Enter: ride the thread all the way down --------------------------------
         // A scoped enter/exit trace that follows the execution thread down through every
         // layer. Each nested Enter indents deeper, so one run shows the WHOLE call path and

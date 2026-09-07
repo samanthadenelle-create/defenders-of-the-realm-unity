@@ -1,5 +1,15 @@
 > # THIS FILE IS A FROZEN HISTORICAL LEDGER. IT IS NOT A LIVE STATE DOC.
-> ## Read `CANON_GROUND_TRUTH_2026-09-03.md` (repo root) for current reality.
+> ## Read `CANON_GROUND_TRUTH_2026-09-06.md` (repo root) for current reality.
+> ### 2026-09-06 - re-stamped in the SAME change as the anchor (CLAUDE.md section 15).
+> The live anchor is now the **2026-09-06 Sunday-sweep** anchor; every number on it was read at
+> source that day and anything unprovable from the repo says "NOT PROVEN" rather than being tidied
+> into a fact. The sequenced remediation that comes out of it is
+> **`docs/GET_WELL_PLAN_2026-09-06.md`** - read that for what is being worked and in what order;
+> its inputs are `docs/READY_RCA_2026-09-06.md` and `docs/GROWTH_RCA_2026-09-06.md`.
+> *(The 09-03 pointer this replaces is kept immediately below as history, per section 15 - a dated
+> pointer is banner-fixed, never rewritten.)*
+>
+> *(was: read `CANON_GROUND_TRUTH_2026-09-03.md` for current reality.)*
 > *(Re-stamped 2026-09-03. This line read `CANON_GROUND_TRUTH_2026-08-21.md` while the 08-23, 09-02
 > and 09-03 anchors landed - the same stale-pointer failure `KEY_FACTS.md` warns about. Session
 > narrative: `docs/HANDOVER_2026-09-03_production_build.md`.)*
@@ -24,8 +34,12 @@
 >
 > **The schema trap, restated because this file steps in it four times:** the body states the save
 > schema in the 08-06, 08-02, and older blocks (v37 / v36 / v35 / v30 / v29 / v28). **Every one of
-> those is frozen history and none of them is current.** Verified 2026-08-21 at source:
-> `SaveSchema.CurrentVersion = 38` (v38 = WO-934 army loadout bank). Read the const.
+> those is frozen history and none of them is current.** ⛔ **AND SO WAS THE ANSWER THAT USED TO SIT
+> HERE.** This line read *"Verified 2026-08-21 at source: `SaveSchema.CurrentVersion = 38`"* and was
+> itself three bumps stale by 2026-09-06 - a fifth copy of the number in a paragraph whose whole point
+> is that copies rot. **There is no current number in this file. Run the authority:**
+> `SaveSchema.CurrentVersion` in `Assets/_Modules/Core/State/SaveSchema.cs` (the const, not the file's
+> header comment, which has also been stale). Its trailing comment carries the changelog for every bump.
 >
 > ---
 >

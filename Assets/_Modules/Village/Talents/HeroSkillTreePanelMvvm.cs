@@ -62,6 +62,9 @@ namespace DeNelle.Village.Talents
         // Spend popup (owner 2026-08-15): shown on node tap; Confirm spends, Cancel dismisses.
         // Chrome is BuildObsidianPanel (common kit frame + gold border) — never a bare plate.
         private GameObject _popupRoot;
+        /// <summary>The popup's gold-trim CARD (chrome.root). Held so WO-1522 can re-anchor it
+        /// BESIDE the selected node instead of over the middle of the tree.</summary>
+        private RectTransform _popupCard;
         private GameObject _popupConfirmRing;
         private TMPro.TextMeshProUGUI _popupName;
         private TMPro.TextMeshProUGUI _popupDesc;
@@ -263,6 +266,21 @@ namespace DeNelle.Village.Talents
         public const float PopupAnchorY0 = 0.10f;
         /// <inheritdoc cref="PopupAnchorY0"/>
         public const float PopupAnchorY1 = 0.90f;
+
+        /// <summary>WO-1522 - the popup card's TWO seats, LEFT and RIGHT of the workspace.
+        /// The card used to be pinned at x 0.24..0.76: dead centre, over the tree, and in
+        /// owner-screen-20260906-202355.png it covers the node the player just tapped, so the
+        /// thing being decided about is hidden behind the decision. It is now anchored to the
+        /// half OPPOSITE the selected node (RenderSpendPopup -> AnchorPopupBesideNode).
+        /// Width is 0.48 (was 0.52); the two seats do not overlap, which is what makes
+        /// "never covers the node" a property of the anchors rather than of luck.</summary>
+        public const float PopupSideLeftX0 = 0.02f;
+        /// <inheritdoc cref="PopupSideLeftX0"/>
+        public const float PopupSideLeftX1 = 0.50f;
+        /// <inheritdoc cref="PopupSideLeftX0"/>
+        public const float PopupSideRightX0 = 0.50f;
+        /// <inheritdoc cref="PopupSideLeftX0"/>
+        public const float PopupSideRightX1 = 0.98f;
 
         /// <summary>MEASURED from the art, not guessed: content-panel.png (1672x941, 9-slice
         /// border 96) has 94 fully transparent rows above its gold border, so its 96 px TOP
@@ -467,6 +485,50 @@ namespace DeNelle.Village.Talents
         public const float TrackNameBandPx = 76f;
         public const float TrackNoteBandPx = 38f;
 
+        // =====================================================================
+        //  WO-1522 - THE ELEVATION LADDER ("the loadout screen feels very flat")
+        // =====================================================================
+        // The owner is red/green colourblind, so DEPTH IS NOT A HUE HERE. It is carried by the
+        // three things that survive a greyscale capture: LUMINANCE (each tier is a measurably
+        // different grey), SIZE (the focus plate is NodeFocusPx against NodeSizePx), and
+        // POSITION (recessed well in the middle, raised rail along the floor).
+        //
+        // The screen used to have exactly ONE surface: the graph viewport painted a near-black
+        // slab with no edge, the loadout slots floated straight on the panel's own frame fill,
+        // and the wisdom plate was the only thing with a border. Content at three depths, one
+        // apparent plane - which is "flat" precisely.
+        //
+        // TWO AUTHORED SURFACES, NOT THREE, and that is deliberate. The middle tier - the ground
+        // both of these sit on - is the frame's own textured centre, which MedievalUiSkin
+        // .ApplyShell reveals by clearing the legacy opaque inner fill to alpha 0. Authoring a
+        // third plate for it would either be invisible (the graph viewport covers that rect
+        // entirely) or would re-cover the very art ApplyShell uncovers. A constant for a surface
+        // nobody can see is a hollow assertion, so there isn't one.
+        //
+        // STOP: these are PUBLIC and they are the ONE authority for the ladder:
+        // SkillsPanelLayoutRegression [elevation] reads them and asserts the Rec.709 luma gap, so
+        // a future edit that quietly moves the two tiers together fails the gate instead of
+        // shipping a flat screen again. Do not re-hardcode either at a call site.
+
+        /// <summary>The RECESSED graph well. The darkest surface on the screen: content sits
+        /// INSIDE it, so it reads as a hole in the panel rather than a sheet on top of it.</summary>
+        public static readonly Color WellSurface = new Color(0.018f, 0.016f, 0.022f, 1f);
+
+        /// <summary>The RAISED loadout shelf, along the screen's floor - the lightest surface, so
+        /// the assigned-skills strip reads as a shelf carrying the medallions rather than four
+        /// buttons adrift on the background.</summary>
+        public static readonly Color RaisedSurface = new Color(0.115f, 0.105f, 0.125f, 1f);
+
+        /// <summary>The minimum Rec.709 luma step between two ADJACENT rungs. The well and the
+        /// shelf are two rungs apart (the frame's own centre is between them), so the suite
+        /// asserts twice this between them. Below it the ladder stops being visible in a
+        /// greyscale capture, which is the only test that matters for this owner.</summary>
+        public const float ElevationLumaStep = 0.02f;
+
+        /// <summary>Bezel inset, ref px: how far the well's gold edge is drawn outside the
+        /// plate it frames. An edge is what turns a dark rectangle into a recess.</summary>
+        public const float WellBezelInsetPx = 6f;
+
         // ── The only FRACTIONS left in the layout: the column split and the in-tile text
         // insets. Both are WIDTHS, never a text band's height -- the class of failure the
         // fixed-pixel law exists to stop is a band too short for its own line box.
@@ -619,6 +681,8 @@ namespace DeNelle.Village.Talents
             _popupRoot.SetActive(show);
             if (!show) return;
 
+            AnchorPopupBesideNode();
+
             if (_popupName != null) _popupName.text = _vm.SelectedNodeName;
             // The compact nested shell deliberately suppresses its outer title band at
             // short landscape heights. Keep the selected talent's identity inside the
@@ -651,6 +715,57 @@ namespace DeNelle.Village.Talents
                 _popupCancelBtn.interactable = true;
                 SetButtonAlpha(_popupCancelBtn, 1f);
             }
+        }
+
+        /// <summary>
+        /// WO-1522 - seat the learn dialog BESIDE the selected node, never over it.
+        ///
+        /// The node's plate is measured in the POPUP ROOT's own local space (not in graph-content
+        /// space), because the graph SCROLLS: a node's content coordinate says nothing about where
+        /// it currently sits on screen. Whichever half of the workspace the plate is in, the card
+        /// takes the OTHER half - and the two seats are disjoint by construction
+        /// (PopupSideLeftX1 == PopupSideRightX0), so "does not cover the node" follows from the
+        /// anchors rather than from a measurement that could drift.
+        ///
+        /// A node whose seat cannot be resolved (rebuild race, id not on screen) falls back to the
+        /// RIGHT seat and says so in the trace - never to the retired centre, which is the seat
+        /// that guarantees an overlap.
+        /// </summary>
+        private void AnchorPopupBesideNode()
+        {
+            if (_popupCard == null || _popupRoot == null) return;
+            var rootRt = (RectTransform)_popupRoot.transform;
+
+            bool resolved = false;
+            float nodeFrac = 1f;
+            string id = _vm != null ? _vm.SelectedNodeId : "";
+            if (_graphContent != null && !string.IsNullOrEmpty(id))
+            {
+                var seat = _graphContent.Find("Node_" + id) as RectTransform;
+                float width = rootRt.rect.width;
+                if (seat != null && width > 1f)
+                {
+                    Vector3 world = seat.TransformPoint(seat.rect.center);
+                    Vector2 local = rootRt.InverseTransformPoint(world);
+                    nodeFrac = Mathf.Clamp01((local.x - rootRt.rect.xMin) / width);
+                    resolved = true;
+                }
+            }
+
+            // Node on the LEFT half -> card on the RIGHT, and vice versa.
+            bool cardRight = !resolved || nodeFrac < 0.5f;
+            float x0 = cardRight ? PopupSideRightX0 : PopupSideLeftX0;
+            float x1 = cardRight ? PopupSideRightX1 : PopupSideLeftX1;
+            if (Mathf.Approximately(_popupCard.anchorMin.x, x0)) return;   // already seated
+
+            _popupCard.anchorMin = new Vector2(x0, PopupAnchorY0);
+            _popupCard.anchorMax = new Vector2(x1, PopupAnchorY1);
+            _popupCard.offsetMin = Vector2.zero;
+            _popupCard.offsetMax = Vector2.zero;
+            FlowTrace.Step("SkillTree", "learn dialog seated " + (cardRight ? "RIGHT" : "LEFT") +
+                                        " (x " + x0.ToString("F2") + ".." + x1.ToString("F2") +
+                                        ") beside node '" + id + "' at frac " +
+                                        (resolved ? nodeFrac.ToString("F2") : "UNRESOLVED-default-right"));
         }
 
         /// <summary>
@@ -1556,9 +1671,16 @@ namespace DeNelle.Village.Talents
             // Type is stated in WORDS, not inferred from colour (the colourblind carrier), and it
             // rides the SAME plate as the name on its own line. Assigned actives name the same
             // numbered seat shown in the persistent quick-swap rail.
-            string typeBadge = node.Kind == SkillNodeKind.Skill
-                ? (node.EquippedSlot > 0 ? "SLOT " + node.EquippedSlot : "ACTIVE")
-                : "PASSIVE";
+            // WO-1522: an INERT node (no runtime consumer) states COMING on the SAME word band
+            // every other node uses. A word, on the plate, in the capture - so the player never
+            // has to open the node to learn it grants nothing, and the cue survives greyscale.
+            // The reason it is inert is a FlowTrace line, never a label (HeroSkillTreeVM
+            // .DeadNodePlayerLine): the authoring note is not player copy.
+            string typeBadge = inert
+                ? "COMING"
+                : node.Kind == SkillNodeKind.Skill
+                    ? (node.EquippedSlot > 0 ? "SLOT " + node.EquippedSlot : "ACTIVE")
+                    : "PASSIVE";
             BuildNodeNamePlate(go.transform, node.Name, typeBadge,
                 node.Kind == SkillNodeKind.Skill ? ElarionUi.Gilt : ElarionUi.Parchment, locked);
 
@@ -1796,8 +1918,17 @@ namespace DeNelle.Village.Talents
             // BOTTOM-LEFT: the only quadrant no other plate element claims. The rank pip owns
             // the top band (y 0.72-0.96), the cost pip and the padlock own bottom-RIGHT
             // (x 0.68-0.98), and the art well is 0.14-0.86. Position is half the cue.
-            hr.anchorMin = new Vector2(0.03f, 0.03f);
-            hr.anchorMax = new Vector2(0.48f, 0.27f);
+            // WO-1522 - THE BAND WAS TOO NARROW FOR ITS OWN WORD. Device frame
+            // owner-screen-20260906-202355.png shows this badge reading "N..." on the top node.
+            // Arithmetic: the old band x 0.03..0.48 is 0.45 of a ~136 ref-px plate = 61 px, less
+            // the label's own 0.08..0.92 inset = ~51 px of text width. FitSingleLine CLAMPS its
+            // minSize UP to FontHardFloor (20) - the `0f` passed below can never resolve lower -
+            // and "NEXT" bold at 20 px with characterSpacing 1 needs ~55 px. So it ellipsised at
+            // the floor, exactly as designed, on a band that could not hold the word.
+            // The cost pip starts at x 0.68, so 0.02..0.64 is free and is what is taken here;
+            // the spacing is dropped to 0 because letter-spacing was buying nothing but width.
+            hr.anchorMin = new Vector2(0.02f, 0.03f);
+            hr.anchorMax = new Vector2(0.64f, 0.27f);
             hr.offsetMin = Vector2.zero; hr.offsetMax = Vector2.zero;
 
             var disc = new GameObject("Disc", typeof(Image));
@@ -1812,9 +1943,11 @@ namespace DeNelle.Village.Talents
 
             var label = ElarionUiKit.Label(host.transform, "NEXT", 0.08f, 0.92f,
                 NextMarkerInk, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
-                0.08f, 0.92f, spacing: 1f, bold: true);
+                0.04f, 0.96f, spacing: 0f, bold: true);
             label.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(label, 0f, ElarionUi.FontMicro);
+            // Floor stated EXPLICITLY rather than via 0f, so the arithmetic above is checkable
+            // against the constant it actually resolves to.
+            ElarionUiKit.FitSingleLine(label, ElarionUiKit.FontHardFloor, ElarionUi.FontMicro);
         }
 
         /// <summary>Tiny padlock in the corner — locked is "dim art + small glyph", not a wall of UI.</summary>
@@ -2127,7 +2260,19 @@ namespace DeNelle.Village.Talents
             // growing the rail can never put a node plate over the hint again.
             graphWell.offsetMin = new Vector2(graphWell.offsetMin.x, GraphWellFloorPx);
             graphWell.offsetMax = new Vector2(graphWell.offsetMax.x, -(WisdomBandPx + BandGapPx));
+            // WO-1522 - NO GROUND PLATE IS BUILT HERE, and the reason is measured, not stylistic:
+            // BuildScrollGraph's viewport fills this same rect with an OPAQUE WellSurface image, so
+            // a plate under it would be 100% occluded - paint the player never sees. The ground
+            // this well is recessed into is the frame's own textured centre, which
+            // MedievalUiSkin.ApplyShell deliberately reveals (it clears the legacy opaque inner
+            // fill to alpha 0); covering that again would undo the shell.
             BuildScrollGraph(graphWell);
+            // ...and the EDGE. A dark rectangle with no border is indistinguishable from the
+            // panel behind it; the bezel is what makes the well read as a hole. Built AFTER the
+            // scroll so it draws on top of the viewport's own slab, raycast off so it never eats
+            // a drag (the scroll surface underneath owns every gesture).
+            BuildElevationPlate(graphWell, "GraphWellBezel", Color.white, bezel: true,
+                                inflatePx: WellBezelInsetPx);
 
             BuildQuickSwapBar(panel);
 
@@ -2204,13 +2349,15 @@ namespace DeNelle.Village.Talents
             var chrome = ElarionUiKit.BuildObsidianPanel(
                 _popupRoot.transform,
                 "Talent",
-                new Vector2(0.24f, PopupAnchorY0), new Vector2(0.76f, PopupAnchorY1),
+                // Built on the RIGHT seat; RenderSpendPopup re-anchors per selection.
+                new Vector2(PopupSideRightX0, PopupAnchorY0), new Vector2(PopupSideRightX1, PopupAnchorY1),
                 () => { if (_vm != null) _vm.ClearSelection(); },
                 headerX0: 0.14f, headerX1: 0.86f,
                 withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore,
                 medallionIcon: "talent");
             MedievalUiSkin.ApplyShell(chrome, compact: true);
+            _popupCard = chrome.root != null ? (RectTransform)chrome.root.transform : null;
             // Nested popup: Cancel is the labeled dismiss; hide the shared bottom Close
             // so we don't stack two "leave" affordances under the buttons.
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
@@ -2353,6 +2500,56 @@ namespace DeNelle.Village.Talents
         }
 
         /// <summary>
+        /// WO-1522 - ONE builder for every surface in the elevation ladder, so the three tiers
+        /// can never be authored three different ways.
+        ///
+        /// <paramref name="bezel"/> true builds the kit's hollow gold border sprite instead of a
+        /// fill. STOP: PLATE AND BEZEL ARE NEVER THE SAME IMAGE - that collapse is verbatim the
+        /// WO-1515 tan-slab defect: card-frame-empty has a TRANSPARENT CENTRE, so an image that
+        /// takes both the fill colour and the frame sprite ends up with no surface at all and
+        /// whatever is behind it reads straight through.
+        ///
+        /// Every plate is raycast OFF. Depth is presentation; it must not take a single tap away
+        /// from the scroll surface or the slots it sits behind.
+        /// </summary>
+        private static void BuildElevationPlate(Transform host, string name, Color fill,
+                                                bool bezel, float inflatePx)
+        {
+            if (host == null) return;
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(host, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(-inflatePx, -inflatePx);
+            rt.offsetMax = new Vector2(inflatePx, inflatePx);
+            var img = go.GetComponent<Image>();
+            if (bezel)
+            {
+                var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
+                if (frame != null)
+                {
+                    img.sprite = frame;
+                    img.type = Image.Type.Sliced;
+                    img.color = Color.white;
+                }
+                else
+                {
+                    // No art: say so rather than painting a white slab over the graph.
+                    FlowTrace.Warn("SkillTree", "WO-1522: card-frame-empty did not load - the graph " +
+                                                "well ships with NO edge, so it reads as one flat black " +
+                                                "rectangle again.");
+                    go.SetActive(false);
+                }
+            }
+            else
+            {
+                ElarionUiKit.ApplyRounded(img);
+                img.color = fill;
+            }
+            img.raycastTarget = false;
+        }
+
+        /// <summary>
         /// WO-1401. The rail host + its hint, as ONE static builder so the regression suite
         /// measures THIS construction and not a copy of it. Two fixed-px bands inside a
         /// <see cref="QuickSwapRailPx"/>-tall rail: the hint owns the TOP
@@ -2363,6 +2560,23 @@ namespace DeNelle.Village.Talents
         /// </summary>
         public static RectTransform BuildQuickSwapRailHost(Transform panel, out TMPro.TextMeshProUGUI hint)
         {
+            // WO-1522 - THE RAISED SHELF (elevation tier 2). Its own object, a SIBLING of the
+            // rail and an earlier one, so the layout group never tries to lay the plate out as a
+            // slot and the medallions always draw on top of it. Before this the four slots sat
+            // straight on the panel frame with nothing behind them, which is half of why the
+            // screen read flat: the loadout was not a place, it was four loose buttons.
+            var shelf = new GameObject("QuickSwapShelf", typeof(RectTransform));
+            shelf.transform.SetParent(panel, false);
+            var shelfRt = (RectTransform)shelf.transform;
+            shelfRt.anchorMin = new Vector2(0.02f, 0f);
+            shelfRt.anchorMax = new Vector2(0.98f, 0f);
+            shelfRt.pivot = new Vector2(0.5f, 0f);
+            shelfRt.offsetMin = new Vector2(0f, QuickSwapRailBottomPx);
+            shelfRt.offsetMax = new Vector2(0f, QuickSwapRailBottomPx + QuickSwapRailPx);
+            BuildElevationPlate(shelfRt, "QuickSwapShelfPlate", RaisedSurface, bezel: false, inflatePx: 0f);
+            BuildElevationPlate(shelfRt, "QuickSwapShelfBezel", Color.white, bezel: true,
+                                inflatePx: WellBezelInsetPx);
+
             var rail = new GameObject("QuickSwapRail", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             rail.transform.SetParent(panel, false);
             var host = rail.GetComponent<RectTransform>();
@@ -2435,10 +2649,22 @@ namespace DeNelle.Village.Talents
             }
             if (_quickSwapStatus != null) _quickSwapStatus.text = _vm.QuickSwapStatus;
 
-            var slots = _vm.QuickSlots;
+            // WO-1522 - the rail leads with the class's LOCKED BASIC (Q), then the three
+            // swappable seats. Canon (CLAUDE.md sec.7): Q is locked, W/E/R swap. The rail
+            // previously showed only the three, so nothing on the screen said which ability the
+            // player can never change - or that a fourth exists at all.
+            // COLOURBLIND LAW: locked is carried by the WORD "LOCKED" under the medallion and by
+            // the padlock-corner shape, never by a tint. Both seats keep the same bezel art.
+            var slots = new List<LoadoutSlotVM>(_vm.QuickSlots.Count + 1);
+            var lockedBasic = _vm.LockedBasic;
+            bool hasLocked = !lockedBasic.IsEmpty;
+            if (hasLocked) slots.Add(lockedBasic);
+            slots.AddRange(_vm.QuickSlots);
+
             for (int i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
+                bool isLockedBasic = hasLocked && i == 0;
                 string label = slot.IsEmpty ? slot.SlotKey + "\nEMPTY" : string.Empty;
                 var btn = ElarionUiKit.BuildObsidianButton(_quickSwapHost, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -2492,11 +2718,36 @@ namespace DeNelle.Village.Talents
                         TMPro.TextAlignmentOptions.Center, .68f, .94f, bold: true);
                     slotBadge.raycastTarget = false;
                     ElarionUiKit.FitSingleLine(slotBadge, 14f, 18f);
+
+                    if (isLockedBasic)
+                    {
+                        // The word, not a hue. It rides the OPPOSITE top corner from the "Q"
+                        // badge so the two never share a band, and it is stated on every paint -
+                        // a locked seat that looks like a swappable one is the defect.
+                        var lockWord = ElarionUiKit.Label(btn.transform, "LOCKED",
+                            .68f, .94f, ElarionUi.ParchmentDim, 12,
+                            TMPro.TextAlignmentOptions.Center, .04f, .62f, bold: true);
+                        lockWord.raycastTarget = false;
+                        ElarionUiKit.FitSingleLine(lockWord, 0f, 12f);
+                    }
+                    // WO-1522 - "ARCANE B..." in owner-screen-20260906-202355.png. The old call
+                    // was FitSingleLine(name, 10f, 14f): FitSingleLine clamps minSize UP to
+                    // FontHardFloor (20), then clamps min DOWN to max, so 10..14 collapsed to a
+                    // FIXED 14 px with NO shrink range at all - and 14 px bold across the
+                    // .08..0.92 inset of a 112 px slot is ~93 px of text width, while
+                    // "ARCANE BLADE" needs ~96. It could only ellipsize.
+                    // Two lines is the fix the WO asks for: FitBlock WRAPS, and the band is
+                    // opened to .02..0.30 so two line boxes seat inside it.
                     var name = ElarionUiKit.Label(btn.transform, slot.AbilityName.ToUpperInvariant(),
-                        .02f, .22f, ElarionUi.Parchment, 14,
-                        TMPro.TextAlignmentOptions.Center, .08f, .92f, bold: true);
+                        .00f, .30f, ElarionUi.Parchment, 13,
+                        TMPro.TextAlignmentOptions.Center, .02f, .98f, bold: true);
                     name.raycastTarget = false;
-                    ElarionUiKit.FitSingleLine(name, 10f, 14f);
+                    name.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                    // Height budget, stated: the band is 0.30 x QuickSwapSlotBandPx(112) = 33.6 px;
+                    // two 13 px line boxes at the kit's 1.25 multiplier are 32.5 px. FitBlock
+                    // truncates SILENTLY, so the band - not the wrap flag - has to be the thing
+                    // that is right (the WO-1342 lesson, same shape).
+                    ElarionUiKit.FitBlock(name, 0f, 13f);
                 }
             }
         }
@@ -2523,7 +2774,9 @@ namespace DeNelle.Village.Talents
             var vImg = viewportGo.GetComponent<Image>();
             // Calm dark canvas (Obsidian demo): near-black slab, no busy grid lines.
             // Opaque so it overrides the frame fill; raycastable so drag-scroll still works.
-            vImg.color = new Color(0.018f, 0.016f, 0.022f, 1f);
+            // WO-1522: the literal moved to the ELEVATION LADDER (WellSurface) - this is tier 0,
+            // the recessed one, and the suite asserts its luma gap against the other two.
+            vImg.color = WellSurface;
 
             var contentGo = new GameObject("GraphContent", typeof(RectTransform));
             contentGo.transform.SetParent(viewportGo.transform, false);
@@ -2658,6 +2911,7 @@ namespace DeNelle.Village.Talents
             _headerLabel = null;
             _wisdomLabel = null;
             _popupRoot = null;
+            _popupCard = null;
             _popupConfirmRing = null;
             _popupName = null;
             _popupDesc = null;

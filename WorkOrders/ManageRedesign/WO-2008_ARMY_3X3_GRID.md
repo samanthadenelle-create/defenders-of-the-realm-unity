@@ -1,5 +1,7 @@
 # WO-2008 — Replace Troop Rail With 3×3 ARMY Grid
 
+**Status:** DONE - landed in bb51b8b9c (verified 2026-09-06)
+
 **Priority:** P0  
 **Depends on:** WO-2002
 

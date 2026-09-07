@@ -168,7 +168,7 @@ NOT a damage model — never reads HP (:27-29).
 
 | Class | File (lines) | Responsibility |
 |---|---|---|
-| **WallSegment** | WallSegment.cs (231) | One perimeter section; `IDamageableStructure`. Tier 1-3 with toughness `{1, 1.6, 2.56}` — incoming contact damage DIVIDED by it (:57-65). `Configure()` by VillageController; BuildMode-placed walls attach a bare WallSegment (no Configure) — the Structure layer comes from `BaseLayoutLoader.Spawn:325-334`. **Height (2026-08-06):** `wall_wood`/`wall_stone` stay at `heightMul` **1.0** (4.0 m) — DELIBERATELY unchanged by the `d42e2817` cadence pass; see §4 DELTA (lowering narrows, which opens PATHABLE GAPS in already-saved wall runs). |
+| **WallSegment** | WallSegment.cs (231) | One perimeter section; `IDamageableStructure`. STOP: **THE "Tier 1-3 / `{1, 1.6, 2.56}` table" IS RETIRED (WO-1480, 2026-09-06)  -  the toughness is now DERIVED and the ceiling is READ, not restated.** The literal array `{ 1f, 1f, 1.6f, 2.56f }` defined a divisor for tiers **1..3 only**, and paired with `SetTier`'s literal 1..3 clamp it was a **NINTH hardcoded structure ceiling**  -  WO-1108b replaced eight of them with `RepoProps.MaxStructureLevel` and **missed this one**, so a level-4 wall could silently take level-3 damage reduction. Now: **`public static int MaxTier => RepoProps.MaxStructureLevel`** (`:158`) is the hard bound the clamp may never exceed  -  a row still opts in with its own `repo.maxLevel` (`wall_wood` authors 2 today)  -  and **`public static float ToughnessFor(int tier)`** (`:167`) returns `Mathf.Pow(TierToughnessStep, t-1)` with `TierToughnessStep = 1.6f` (`:106`), **reproducing the old numbers EXACTLY at the tiers that existed** (x1 / x1.6 / x2.56) while keeping every level the ceiling now admits defined. STOP: **Never re-hardcode a level ceiling here or anywhere.** Incoming contact damage is DIVIDED by the result (:57-65). `Configure()` by VillageController; BuildMode-placed walls attach a bare WallSegment (no Configure)  -  the Structure layer comes from `BaseLayoutLoader.Spawn:325-334`. **Height (2026-08-06):** `wall_wood`/`wall_stone` stay at `heightMul` **1.0** (4.0 m)  -  DELIBERATELY unchanged by the `d42e2817` cadence pass; see S4 DELTA (lowering narrows, which opens PATHABLE GAPS in already-saved wall runs). |
 | **WallTierData** | WallTierData.cs (215) | The CoC wall ladder DATA only: naming Wood→Iron→Reinforced Steel, per-tier mesh prefab path (**placeholders, owner meshes pending**), upgrade cost (Iron, then Iron+Crystals). Durability deliberately NOT duplicated — `ToughnessFor()` reads WallSegment's table (header :6-20). **Height is NOT here either** — the per-row `heightMul` in `structures-catalog.json` owns it, and the wall rows are the one group the 2026-08-05 cadence ruling left unauthored (§4 DELTA, `d42e2817`). |
 | **WallRepairController** | WallRepairController.cs (1057) | The player repair LOOP (scan→select→modal prompt→confirm). **Repair cost ruling 2026-07-11:** damage-fraction × the structure's own BUILD cost in its own materials; Crystals never spent on repair (header :13-22). Spends via EconomyService.TrySpend + the GameState Wood/Iron mirror (GrantSpendable both-sides pattern). HUD cross-wired by reflection (module isolation). NOTE: "destroyed = rebuild at full build cost" here predates WO-753 — a destroyed structure is now REMOVED by Destructible, so the repair loop only ever sees damaged-but-standing structures. |
 | Support | RepairTarget (290), RepairHighlight (285), HubRepairAffordance (341), WallRepairHudBridge (242), WallRepairStrings (75), WallLayout (402) | Selection wrapper, amber/violet highlights, hub affordance, HUD bridge, strings, square-ring layout math. |
@@ -498,6 +498,90 @@ returning player's first reason to tap was to spend (`REVIEW_MERGED.md` row 7).
   at 1200 — under half `MinTouchPx` 112; 0.21 gives ~127px at 1200 / ~114px at 1080) and the door
   face fills the plate 0..1, because insetting it gives the measurement back. They are drawn
   BEFORE the mend/collector lines so the actionable row survives a full body.
+- Pinned by **`WelcomeBackDoorsRegression`** (`Assets/Editor/Regression/WelcomeBackDoorsRegression.cs`,
+  348L)  -  **oracle-drivable with no canvas, no scene and no PlayMode**, which is the whole reason the
+  decision lives in the VM. Cases: `[two-rows-with-doors]`, `[nothing-means-nothing]`,
+  `[manage-tab-is-real]`, `[raid-door-routes]`, `[ready-needs-all-three]`,
+  `[popup-routes-through-the-router]`, `[collect-first-then-route]`, `[rows-are-ascii]`,
+  `[trace-line]`. Its header records the MEASURED red on the pre-change tree:
+  `grep -c "BuildObsidianButton" WelcomeBackPopup.cs` = **1**, `WelcomeBackDoorsVM` did not exist, and
+  `PanelRouter` was referenced nowhere under `Village/Harvest/`.
+
+---
+
+## DELTA 2026-09-06  -  WO-1411 (the build flow says what it costs) + WO-1405 (Manage rows say what they buy)
+
+### `StructureCardVM`  -  two NEW static seams, both MODEL-SIDE by ruling
+
+`Assets/_Modules/Village/BuildMode/StructureCardVM.cs`. The merged UI review (row 10) measured eight
+category cards where **no card said what was affordable**: the player opens a door, reads five prices
+they cannot pay, and backs out having spent taps to learn nothing.
+
+- **`static int AffordableCount(CardCollectionDefinition)`** (`:200`)  -  a **FOLD over the two
+  authorities that already decide what one card says**, never a new rule:
+  `BuildCollectionBrowser.IsCollectionItemVisible` (the ONE offer authority, so the count can never
+  include a row the browser would not draw) and this VM's own `Affordable`/`Locked` (the SAME
+  projection the item card renders). STOP: **A second predicate here is exactly how a door promises two
+  builds and opens onto five "Unaffordable" cards.** Built singletons are excluded  -  a structure whose
+  one allowed instance already stands is not a build choice, however affordable.
+- **`static string AffordabilityWords(int)`** (`:322`)  -  `"nothing affordable yet"` / `"1 you can
+  build now"` / `"N you can build now"`. **Never a bare number and never a colour** (colourblind law);
+  "nothing affordable yet" says the door is still worth remembering rather than reading as an error.
+- **`readonly struct PlacementSummary` + `static PlacementSummaryFor(CatalogEntry)`** (`:271`,`:285`)  - 
+  `CostWords` / `Seconds` / `CrewWords` / `Line`. (!) **This widens the VM's game-state read,
+  deliberately and in one place**  -  the class header's "the sole game-state read stays in
+  `CreateForEntry`" is now **two** seams, both HERE in the model. That is the **RULING, not a
+  preference**: the `[ui-mvvm]` conformance oracle failed `BuildPreviewModal` for reading
+  `GameStateService` directly (canon 9  -  a View never touches game state, derived text is model work).
+  The View now paints ONE string it is handed.
+- STOP: **NOT ONE NUMBER IS INVENTED OR RE-DERIVED**  -  each term comes from the seam that already owns it,
+  so the line cannot quote a price or a wait the placement then contradicts:
+  - **COST** = `FreeBuildAvailable` + **`SoftcappedCostFor`** (the softcapped value  -  what the ghost
+    actually charges), spelled by the ONE shared `CostFormat`. While the first-build freebie is live
+    the price slot shows **NOTHING** (owner ruling WO-1010 D20, the same rule the collection card obeys).
+  - **TIME** = tier from **`CostFor`** (the INTRINSIC weight  -  a freebie does not make a build instant
+    and the softcap surcharge does not stretch the timer) -> the config curve -> `GraceAdjustedDurationMs`
+    under `GraceReasonFor`: **the exact three steps `BuildModeController` runs at commit.** Quoting the
+    raw curve would print minutes over a build the FTUE finishes in seconds; a hardcoded duration would
+    be a guess wearing a suffix. `0` = unknown, and the term is **omitted rather than a fiction quoted**.
+  - **CREW** = free Builder slots (`SlotCount(Builder)` minus its active jobs), in **WORDS**
+    ("Builder free" / "Builders busy - joins the queue")  -  a bare `0 / 2` leaves the player to work out
+    whether that is good news.
+  - (!) **ASCII separator `" . "`**: a typed middle-dot renders as **tofu** on the shipped TMP atlas.
+- Pinned by **`BuildAffordabilityWordsRegression`** (marker `BUILD_AFFORDABILITY_WORDS_OK`), **minted
+  RED against commit `949e848a0`**  -  each pin names the exact fact absent there.
+
+### `ManageScreenVM.CompassSideOf`  -  WHERE a placement stands, in WORDS
+
+`Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs:1122` (WO-1405). The measured defect
+(`docs/qa/UI_REVIEW_2026-09-05/04-manage-defense.png`, device build 355952) was a row reading
+**`"Arcane Spire - grid 5, 16 - L1 -> L2 / Iron 540"`**  -  a **developer grid coordinate on a player
+screen**. Rows now read `"north side"` / `"east side"` / `"town center"`. **Never a coordinate**
+(owner ruling S2 #5, written to the default NO).
+
+- (!) **THE AXES ARE READ OFF `PlacementGrid`, NOT ASSUMED.** `+Z` is north and `+X` is east because
+  `PlacementGrid.CellToWorld` maps `cell.y` to world Z and the grid grows **NORTH ONLY** as
+  `gridHeight` increases. **A cell index alone cannot answer this**  -  the same cell number means a
+  different side on a grid with a different origin, which is precisely why the coordinate was
+  meaningless on screen. The Heart of Elarion stands at world `(0,0,0)`, so the placement's world XZ
+  **is** its offset from the Heart.
+- (!) **`grid.origin == Vector3.zero` is the NOT-YET-INITIALISED sentinel `Awake` itself tests for** and
+  is treated as such  -  reading it as a real origin would put the whole grid north-east of the Heart and
+  call **every** placement "north".
+- **HEADLESS-PURE**: with no scene in a regression run it falls back to the SHIPPED defaults
+  (`cellSize 3`, south edge `-45`, X centred  -  the same numbers `PlacementGrid.Awake` seeds). It
+  **never returns `""` and never throws**, so a row cannot silently lose its location clause. Within
+  one cell of the Heart on BOTH axes there is no honest side to name -> `"town center"`.
+- *(US spelling flagged, not decided silently: there is no player-facing precedent for the word
+  anywhere in the corpus  -  measured  -  and the only in-repo spelling is US.)*
+- (!) The `AfterUpgradeText`-missing warning beside it is **HONEST ABOUT ITSELF**: today `after` is
+  composed unconditionally, so that branch is **UNREACHABLE**. It is a NET for the day the sentence is
+  re-sourced from an authored field  -  **do not read its silence as evidence of anything.**
+- Pinned by **`ManageRowBenefitRegression`** (marker `MANAGE_ROW_BENEFIT_OK`), a LIVE half driving
+  `ManageScreenVM` off a GameState fixture plus a SOURCE half for the one contract no fixture can
+  observe. Cases include `[location-is-words]`, `[no-developer-coordinate]`,
+  `[coordinate-literal-retired]`, `[defense-row-names-a-benefit]`, `[building-row-names-a-benefit]`,
+  `[research-row-names-a-benefit]`, `[troop-upgrade-names-an-effect]`.
 - Copy law: the ready line says **"Heartfire n / n lit"**, never "full" — `PostureSignals`
   names it `HeartfireLit` precisely so a pool-fullness metaphor cannot creep toward the currency
   `HeartfireCharges.cs` forbids. (`HeartfireRegression`'s currency-lint is scoped to
