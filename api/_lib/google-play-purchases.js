@@ -31,6 +31,10 @@ const PRODUCT_TYPES = Object.freeze({
     'bloomtide-bundle': 'non_consumable', 'echo-patron-pack': 'non_consumable',
     'hero-wardrobe-pack': 'non_consumable', 'realm-defender-bundle': 'non_consumable',
     'builders-cache': 'non_consumable', 'permanent-builder': 'non_consumable',
+    // WO-1449. Derived from contents, never from the name: packs.json `builders-hour`
+    // carries cosmetics: [] and convenience kind 'temporary-builder' (a six-hour crew),
+    // NOT 'permanent-builder' - so it is repurchasable, i.e. consumable.
+    'builders-hour': 'consumable',
 });
 
 const PurchaseState = Object.freeze({

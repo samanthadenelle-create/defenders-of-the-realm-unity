@@ -52,7 +52,9 @@ test('product type is explicit and determines consume versus acknowledge', () =>
     assert.equal(play.finalizationAction('consumable'), 'consume');
     assert.equal(play.finalizationAction('non_consumable'), 'acknowledge');
     assert.equal(play.finalizationAction('bogus'), null);
-    assert.equal(Object.keys(play.PRODUCT_TYPES).length, 26);
+    // 27 since WO-1449 added 'builders-hour'. The count is a canary that a SKU was added
+    // here without a matching row on the other rails; the mirror suites prove the contents.
+    assert.equal(Object.keys(play.PRODUCT_TYPES).length, 27);
 });
 
 test('only PURCHASED, unconsumed, account-bound proof becomes VERIFIED', () => {

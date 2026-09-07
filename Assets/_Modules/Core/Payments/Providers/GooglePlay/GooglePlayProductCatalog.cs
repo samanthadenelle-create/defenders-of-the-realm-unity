@@ -22,7 +22,11 @@ namespace DeNelle.Core.Payments.Providers
             "impulse-iron-small", "impulse-iron-medium", "impulse-iron-large",
             "impulse-stone-small", "impulse-stone-medium", "impulse-stone-large",
             "impulse-crystals-small", "impulse-crystals-medium", "impulse-crystals-large",
-            "permanent-builder"
+            "permanent-builder",
+            // WO-1449: the $1.99 first-buy micro. Deliberately NOT in s_nonConsumable -
+            // its only convenience is 'temporary-builder' (six hours), so it is consumable
+            // and repurchasable. Mirrors api/_lib/google-play-purchases.js PRODUCT_TYPES.
+            "builders-hour"
         };
 
         // Must remain byte-for-byte equivalent in meaning to
