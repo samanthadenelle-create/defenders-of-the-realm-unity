@@ -627,6 +627,12 @@ namespace DeNelle.Village
             return null;
         }
 
+        // WO-1536: one entry per (id + rejected modelKey) that has already been reported, so the
+        // escalated FlowTrace.Fail below fires ONCE per bad row instead of once per spawned body.
+        // Fully qualified - this file deliberately carries no System.Collections.Generic using.
+        private static readonly System.Collections.Generic.HashSet<string> s_rejectedDataKeys =
+            new System.Collections.Generic.HashSet<string>();
+
         /// <summary>Enemy id/role → skeleton model. Grouped by family (Hollow/Skeleton Legion,
         /// Orc Warband, Troll/Stonebelly, etc.) with class variety (Tank=brute/golem,
         /// DPS=rogue/warrior, Healer=mage/shaman). Basic strategy in EnemyBrain (DPS
@@ -662,9 +668,15 @@ namespace DeNelle.Village
             //
             // BEHAVIOUR-PRESERVING as seeded (verified row-by-row against the 19 enemies.json
             // rows on 2026-08-14): every row whose key IS committed already agreed with the
-            // switch, and the one row that disagrees ('ogre' -> "OgreMage") is rejected by the
-            // registry gate and keeps its documented Orc_Shaman stand-in. Deliberate: the
-            // first commit changes no pixel, it only moves who decides.
+            // switch. WO-1536 (2026-09-07) closed the ONE row that did not: 'ogre' asked for
+            // "OgreMage", which is not in the tree (deleted 0cec81a78, 2026-07-01), so the
+            // registry gate rejected it and the ogre silently wore the Orc_Shaman stand-in.
+            // "OgreMage" is NOT in the tree today (verified 2026-09-07): it lived at
+            // Assets/Resources/Enemies/OgreMage.fbx from fc13eb2f1 (2026-06-09) and was DELETED
+            // in 0cec81a78 (2026-07-01, 'size cuts' - 24.9 MB, see WebGLSizePass408.cs). It is
+            // not gitignored, so it is a RE-IMPORT ask, not a missing commission. The row now
+            // NAMES Orc_Shaman, so the data states what the game renders and the reject path
+            // below is dead for every shipped row.
             if (EnemyResolver.TryResolveDataModel(id, def != null ? def.ModelKey : null,
                                                   out string dataModel, out string dataReject))
             {
@@ -674,11 +686,28 @@ namespace DeNelle.Village
             }
             // §1.4b: a rejected/absent data key NEVER logs a hollow "model load failed" — the
             // reason names the id, the key it tried, and why the code table won instead. Only
-            // an actually-present-but-rejected key is a Warn; "no row" is the normal case for a
-            // synthesised def and stays out of the warning channel.
+            // an actually-present-but-rejected key is reported; "no row" is the normal case for
+            // a synthesised def and stays out of the failure channel.
+            //
+            // WO-1536 (2026-09-07) - CHANNEL ESCALATED, STAND-IN KEPT. This used to be
+            // FlowTrace.Once, which routes to Sink.Info: the ogre wore the wrong body for
+            // months and the only detector was an INFO line nobody read. A row naming a key
+            // that is not committed is a DATA DEFECT, so it is now FlowTrace.Fail (Sink.Error)
+            // and it names the id. The stand-in return is deliberately KEPT (WO-1536 sec.3): a
+            // wrong body beats a null one - the defect was the silence, not the fallback.
+            // Deduped through s_rejectedDataKeys because a wave of the same bad id would
+            // otherwise burst the error channel and evict the boot window from the device
+            // logcat ring (memory `logcat-ring-buffer-destroys-evidence`). FlowTrace has no
+            // once-shaped Fail overload, hence the local set.
             if (def != null && !string.IsNullOrEmpty(def.ModelKey))
-                FlowTrace.Once("Enemy", $"data-model-reject-{id}-{def.ModelKey}",
-                    "ModelForEnemy: " + dataReject);
+            {
+                string rejectKey = id + "/" + def.ModelKey;
+                bool first;
+                lock (s_rejectedDataKeys) first = s_rejectedDataKeys.Add(rejectKey);
+                if (first)
+                    FlowTrace.Fail("Enemy",
+                        $"ModelForEnemy: DATA DEFECT on enemy id '{id}' - " + dataReject);
+            }
 
             switch (id)
             {
@@ -739,7 +768,7 @@ namespace DeNelle.Village
                 case "blink-orc-boss":    return "Blink/Blink_Orc_Boss";    // boss (own 22-clip set)
 
                 // ── BRUTES / OGRES / BOSSES ──────────────────────────────────────
-                // STAND-INS (no Troll.fbx / OgreMage.fbx in Resources/Enemies — those render
+                // STAND-INS (no Troll.fbx / no ogre mesh in Resources/Enemies - those render
                 // as tinted capsules): reuse EXISTING OrcWarband-rig orc models until real
                 // Tripo troll/ogre art lands. troll → big Orc_Berserker, ogre → Orc_Shaman.
                 // Both go through the OrcWarband SetFallbackTint path below, so the tint block
@@ -755,8 +784,13 @@ namespace DeNelle.Village
                 case "troll-mage":       return "Troll_Mage";        // DPS caster
                 case "troll-shaman":     return "Troll_Mage";        // healer / buffer
                 case "troll-overlord":   return "Troll_Overlord";    // camp boss
-                case "ogre":             return "Orc_Shaman";        // STAND-IN: ogre brute (was "OgreMage" — missing)
-                case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster (was "OgreMage" — missing)
+                // WO-1536 (2026-09-07): 'ogre' now NAMES Orc_Shaman in enemies.json, so the data
+                // path above serves it and this case is the fallback only for a synthesised def.
+                // 'ogre-mage' has NO enemies.json row at all - it is a code-only id, so this case
+                // is its sole resolution. Both stay Orc_Shaman: the real ogre mesh is an ART ASK
+                // (see the modelKey note in enemies.json), not a key anything may reference yet.
+                case "ogre":             return "Orc_Shaman";        // ogre brute - matches the data row
+                case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster, no row, art pending
                 case "demon":            return "Demon";             // demon
                 // Apex flyer. The licensed Asset-Store dragon (product 71047, source at
                 // Assets/Dragon) ships as Resources/Enemies/Boss_Dragon.prefab, built by
@@ -775,7 +809,7 @@ namespace DeNelle.Village
             {
                 case "orc":   return def != null && def.Role == "caster" ? "Orc_Shaman" : "Orc_Berserker";
                 case "troll": return "Troll";          // real mesh as of 2026-08-09 (stand-in retired)
-                case "ogre":  return "Orc_Shaman";      // STAND-IN (no OgreMage.fbx) — tinted grey below
+                case "ogre":  return "Orc_Shaman";      // ogre family - real ogre art is an ART ASK (WO-1536)
                 case "demon":
                 case "cult":  return "Demon";
                 case "dragon": return "Boss_Dragon";

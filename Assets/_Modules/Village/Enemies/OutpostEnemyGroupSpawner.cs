@@ -690,7 +690,11 @@ namespace DeNelle.Village
                     return new EnemyDef
                     {
                         Id = "ogre", Name = "Ogre", DisplayName = "Ogre",
-                        Family = "troll", Role = "brute", ModelKey = "OgreMage", Ai = "charger",
+                        // WO-1536 (2026-09-07): was "OgreMage", whose mesh was deleted in 0cec81a78.
+                        // This synthesised def mirrors the enemies.json 'ogre' row, which now names
+                        // Orc_Shaman - the body every ogre has actually worn. Left as "OgreMage" it
+                        // would trip the escalated FlowTrace.Fail in EnemyFactory on every outpost.
+                        Family = "troll", Role = "brute", ModelKey = "Orc_Shaman", Ai = "charger",
                         Hp = 280f, MoveSpeed = 2.0f, ContactDamage = 12f, AttackInterval = 1.6f, Height = 2.4f,
                         XpReward = 42, CoinReward = 22,
                     };

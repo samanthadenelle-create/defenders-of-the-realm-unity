@@ -214,11 +214,18 @@ namespace DeNelle.Editor
             //     said another, and nothing failed. For each of the 19 rows either
             //       (a) the modelKey is committed -> ModelForEnemy MUST return exactly it
             //           (data is the authority), or
-            //       (b) it is NOT committed -> the row is knowingly art-pending, and the code
-            //           stand-in it falls back to must still load a real body.
-            //     Case (b) is listed by name so a new un-imported key can never sneak in
-            //     silently — adding one now REQUIRES touching this list.
-            var artPendingModelKeys = new HashSet<string> { "OgreMage" };  // no OgreMage.fbx in Resources/Enemies
+            //       (b) it is NOT committed -> FAIL. There is no longer an art-pending escape.
+            //
+            //     WO-1536 (2026-09-07) DELETED THE `artPendingModelKeys` EXEMPTION. It held
+            //     exactly one entry, "OgreMage", for months; that sanctioned exemption is
+            //     precisely what let the ogre wear the wrong body while both this suite and
+            //     EnemyArtCoverageRegression stayed quiet about the row (the coverage suite had
+            //     no view of the exemption at all, so the two suites disagreed about whether the
+            //     row was fine). The row now names Orc_Shaman and ZERO rows name an uncommitted
+            //     key, so the exemption has nothing left to cover and is gone rather than
+            //     emptied - an allowlist with no members is still a door. This makes case (b)
+            //     the durable half WO-1536 sec.2 asked for: EVERY modelKey in enemies.json must be
+            //     in EnemyResolver.CommittedModels, with no per-key opt-out.
             foreach (var e in catalog.Enemies)
             {
                 if (e == null || string.IsNullOrEmpty(e.Id)) continue;
@@ -240,16 +247,14 @@ namespace DeNelle.Editor
                                      $"'{e.ModelKey}' (a committed mesh) but EnemyFactory.ModelForEnemy returned " +
                                      $"'{model}' — a code table is overriding the data authority (WO-954).");
                 }
-                else if (!artPendingModelKeys.Contains(e.ModelKey))
-                {
-                    failures.Add($"enemies.json row '{e.Id}' names modelKey '{e.ModelKey}', which is neither a " +
-                                 "committed mesh (EnemyResolver.CommittedModels) nor a declared art-pending key — " +
-                                 "import the art and register it, fix the typo, or add it to artPendingModelKeys " +
-                                 "with a note.");
-                }
                 else
                 {
-                    log.AppendLine($"  [art-pending] row '{e.Id}' wants '{e.ModelKey}' (not imported) -> stand-in '{model}'");
+                    failures.Add($"enemies.json row '{e.Id}' names modelKey '{e.ModelKey}', which is NOT a committed " +
+                                 "mesh (EnemyResolver.CommittedModels). EnemyFactory rejects it and substitutes " +
+                                 $"'{model}', so this row would ship a body the data does not name - the WO-1536 " +
+                                 "defect class. FIX: import the art into Assets/Resources/Enemies and add the key to " +
+                                 "CommittedModels, or point the row at the model the game actually renders. There is " +
+                                 "deliberately NO art-pending exemption list to add it to (WO-1536).");
                 }
             }
 

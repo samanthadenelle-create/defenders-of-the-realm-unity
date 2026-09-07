@@ -1744,17 +1744,20 @@ namespace DeNelle.Editor
             // pin, so a throw inside it would have been silent in exactly the way the fence
             // exists to prevent. Same suite, same body; it is now shaped and counted like one.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "move-manifest suite", () => { if (!DeNelle.Editor.Regression.AssetMoveManifestRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[move-manifest] " + r); });
-            // ⚠ EXPECTED TO GO RED, AND THAT RED IS THE FINDING - DO NOT WEAKEN THE SUITE.
-            // Its header held it standalone (`regression-registry: standalone`) until the orc art
-            // landed. It has: Orc_Berserker.mat + textures/Orc_Berserker/ and
-            // Materials/orcnecromancer_basecolor.mat are on disk, and Orc_Shaman is no longer
-            // referenced by enemies.json. What remains is enemies.json:400 `"modelKey":
-            // "OgreMage"` - no OgreMage mesh and no OgreMage art exists anywhere under
-            // Assets/EnemyContent. That row is already sanctioned as art-pending, but in a LOCAL
-            // HashSet inside a different suite (EnemyResolverRegression.cs:221
-            // artPendingModelKeys), which this suite has no view of. The two honest resolutions
-            // are to ticket the OgreMage row, or to hoist the art-pending declaration into one
-            // shared source both suites read. Adding an exemption HERE is neither (WO-1496 sec.3).
+            // (!) DO NOT WEAKEN THIS SUITE. Its header held it standalone until the orc art landed.
+            // WAS RED ON [every-model-has-art] until WO-1536 (2026-09-07): enemies.json:400 said
+            // `"modelKey": "OgreMage"` and that mesh is not in the tree - it lived at
+            // Assets/Resources/Enemies/OgreMage.fbx and was deleted in 0cec81a78 (2026-07-01,
+            // size cuts). WO-1496 named the two honest resolutions - ticket the row, or
+            // hoist the art-pending declaration into one shared source - and WO-1536 took a third
+            // that removes the split entirely: the row was corrected AT THE DATA AUTHORITY to
+            // Orc_Shaman (the body every ogre already wore), and the art-pending HashSet in
+            // EnemyResolverRegression was DELETED, so no exemption exists that this suite cannot
+            // see. An exemption added HERE would still be neither (WO-1496 sec.3).
+            // (!) STILL RED as of Builds/reg-wave5c.log on its SECOND case, [binding-and-sentinel]:
+            // 7 FBX under Assets/EnemyContent carry no '.tripo-extracted' sentinel. That is a
+            // separate defect in a separate lane - WO-1536 does not touch it, and REGRESSION_OK
+            // stays blocked until it is closed by whoever owns the Tripo import binding.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-art-coverage suite", () => { if (!DeNelle.Editor.EnemyArtCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-art-coverage] " + r); });
             // WO-1540: the flag-hygiene pin. A dummy "suite" inside it sets a feature flag and
             // does NOT restore it; the oracle asserts the snapshot NAMES that key as drift and

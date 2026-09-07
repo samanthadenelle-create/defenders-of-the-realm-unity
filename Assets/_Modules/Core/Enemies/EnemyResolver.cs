@@ -80,10 +80,14 @@ namespace DeNelle.Core.Enemies
         // row naming art that was never imported can never silently degrade a spawn to a
         // tinted capsule — it is REJECTED, and the caller says so by name (§1.4b).
         //
-        // PROVING ROW: enemies.json's `ogre` row asks for modelKey "OgreMage", and there is
-        // NO OgreMage.fbx in Resources/Enemies. Without this gate a data-first resolve would
-        // return "OgreMage" and the ogre would spawn as an untextured capsule; with it the
-        // key is rejected by name and EnemyFactory's documented Orc_Shaman stand-in is used.
+        // PROVING ROW (HISTORICAL, CLOSED BY WO-1536 on 2026-09-07): enemies.json's `ogre` row
+        // asked for modelKey "OgreMage" and there was NO OgreMage.fbx in Resources/Enemies.
+        // Without this gate a data-first resolve would have returned "OgreMage" and the ogre
+        // would have spawned as an untextured capsule; with it the key was rejected by name and
+        // EnemyFactory's Orc_Shaman stand-in was used - but only at INFO level, so the wrong
+        // body shipped unnoticed for months. The row now NAMES Orc_Shaman, the reject path in
+        // EnemyFactory is a FlowTrace.Fail, and NO enemies.json row names an uncommitted key.
+        // Keep the gate: it is the thing that stopped a capsule reaching the player.
         //
         // Keep in sync with Assets/Resources/Enemies (EnemyResolverRegression check 11
         // Resources.Loads every name below and FAILS on a missing one, so this set cannot

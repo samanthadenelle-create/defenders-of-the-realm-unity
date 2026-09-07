@@ -13,10 +13,14 @@
 // 2026-09-06 against the tree: Orc_Berserker.mat + EnemyContent/textures/Orc_Berserker/
 // and Materials/orcnecromancer_basecolor.mat exist on disk, and Orc_Shaman is no
 // longer referenced by enemies.json at all. The named blocker was the orc import and
-// the orc import has landed. What remains — enemies.json:400 "modelKey": "OgreMage",
-// a key with no mesh and no art — is a DIFFERENT defect, already sanctioned as
-// art-pending in a local HashSet this suite cannot see (EnemyResolverRegression.cs:221),
-// and it is ticketed rather than exempted here. THE 2026-08-20 WARNING BELOW STILL
+// the orc import has landed. What remained - enemies.json:400 "modelKey": "OgreMage",
+// a key whose mesh was deleted in 0cec81a78 - was a DIFFERENT defect, sanctioned as art-pending in
+// a local HashSet this suite could not see, which is exactly why the two suites
+// disagreed about that row. WO-1536 (2026-09-07) CLOSED IT AT THE DATA AUTHORITY: the
+// row now names Orc_Shaman (the body the ogre has always actually worn, bound via
+// Orc_Shaman.fbx externalObjects -> Orc_Shaman.mat -> OrcTex/Orc_Mage_basecolor.jpg),
+// and the art-pending HashSet was DELETED rather than emptied, so there is no longer
+// any exemption this suite cannot see. THE 2026-08-20 WARNING BELOW STILL
 // BINDS: if this suite reds, land the art or change what the row references. Never
 // relax the file. A suite edited until it passes is not an oracle.
 //
@@ -59,9 +63,11 @@
 // exists and something must still bind it", and the reason line says so per model.
 //
 // ⚠ THIS SUITE IS EXPECTED TO FAIL TODAY, AND MUST NOT BE WEAKENED TO GO GREEN.
-// At the time of writing four models referenced by enemies.json have NO art in the
-// project under any tier: OgreMage (which has no mesh either), Orc_Berserker,
-// Orc_Necromancer and Orc_Shaman. Another lane is importing orc replacements. The
+// At the time of writing four models referenced by enemies.json had NO art in the
+// project under any tier: OgreMage (whose mesh had been deleted too), Orc_Berserker,
+// Orc_Necromancer and Orc_Shaman. All four are resolved as of WO-1536 (2026-09-07):
+// the orc art landed, and the OgreMage reference is gone from the data. Another lane
+// is importing orc replacements. The
 // correct resolutions are to land the art or to change what those rows reference —
 // never to relax this file. A suite edited until it passes is not an oracle.
 //
@@ -81,21 +87,40 @@
 //                         EnemyFactory.ResolveBasecolor loses it, this suite's tier-3
 //                         probe and the game's would silently disagree, and a body
 //                         that passes here would render untextured in play.
-//   4 [binding-and-sentinel] WO-1509, 2026-09-06. Two FILE-LEVEL facts, asked without
-//                         AssetDatabase so they are true in a FRESH CLONE and in a
-//                         headless run before any import has happened:
-//                           (a) every *.fbx directly under the enemy content root has its
-//                               sibling ".tripo-extracted" sentinel. WITHOUT ONE,
+//   4 [binding-and-sentinel] WO-1509, 2026-09-06; RULE NARROWED WO-1536, 2026-09-07.
+//                         Mostly FILE-LEVEL facts, so they are true in a FRESH CLONE and in a
+//                         headless run before any import has happened. The one exception is
+//                         (a2) below, which reuses this suite's own basecolor resolver:
+//                           (a1) every *.fbx directly under the enemy content root THAT
+//                               DECLARES ONE OR MORE MATERIAL ENTRIES IN ITS .fbx.meta
+//                               externalObjects TABLE has its sibling ".tripo-extracted"
+//                               sentinel. WITHOUT ONE,
 //                               TripoAssetPostprocessor.OnPreprocessModel force-sets
 //                               materialLocation=External + materialName=BasedOnTextureName
 //                               on EVERY import, which makes the importer IGNORE the
 //                               externalObjects remap table and resolve materials BY
-//                               TEXTURE NAME instead (.gitignore:629-635). That is not a
+//                               TEXTURE NAME instead (see the "*.tripo-extracted -- UN-IGNORED"
+//                               block in .gitignore). That is not a
 //                               theory: on 2026-09-06 the device logged
 //                               "NO ALBEDO on 'Orc_Berserker(Clone)' ... material=
 //                               'tripo_mat_f84a1f82_Pbr (URP)'" — a search-by-name hit —
 //                               while Orc_Berserker.fbx.meta's remap table pointed at
 //                               Orc_Berserker.mat the whole time. The sentinel IS the state.
+//                           (a2) an FBX whose externalObjects table is ABSENT or EMPTY is NOT
+//                               asked for a sentinel, because there is nothing for one to
+//                               protect: TripoAssetPostprocessor.cs's early-return exists to
+//                               preserve an AUTHORED remap, and a sentinel over an empty table
+//                               would pin the importer onto the remap path and guarantee a
+//                               white body -- the WO-1509 defect, manufactured by its own gate.
+//                               Such an FBX is instead required to RESOLVE A BASECOLOR, via
+//                               this suite's own ResolveArt (tier 1 = the importer's binding,
+//                               then own .fbm / atlas / pack). WO-1536, 2026-09-07: before this
+//                               narrowing the case redded seven legacy FBX on the missing
+//                               sentinel ALONE while the same run logged "bindings ok", and the
+//                               only fix it suggested -- add the sentinels -- would have broken
+//                               four bodies that bind correctly by name today.
+//                           (a3) an FBX whose .fbx.meta cannot be read is named and FAILS.
+//                               Unproven remap state is never a pass.
 //                           (b) every enemy-family .mat under that root — a .mat whose stem
 //                               is a modelKey, or <modelKey>_Body — carries a NON-ZERO guid
 //                               on its _BaseMap. "m_Texture: {fileID: 0}" is the exact byte
@@ -259,9 +284,17 @@ namespace DeNelle.Editor
             }
 
             // ── 4 [binding-and-sentinel] ─────────────────────────────────────
-            // WO-1509, 2026-09-06. Pure File/Directory work: no AssetDatabase, so this case
-            // answers the same in a fresh clone, in batchmode, and before the first import.
-            var noSentinel = new List<string>();
+            // WO-1509, 2026-09-06. RULE NARROWED by WO-1536, 2026-09-07: the sentinel is
+            // demanded only of an FBX that HAS a remap table to protect. See CASES header.
+            // The sentinel sweep, the .fbx.meta read and the .mat sweep are pure File/Directory
+            // work, so they answer the same in a fresh clone, in batchmode and before the first
+            // import. The ONE AssetDatabase touch is the remap-less branch, which delegates to
+            // ResolveArt -- whose tier 1 IS the importer's own binding, and which is the only
+            // thing that can answer "does this body resolve a basecolor" for an FBX that has no
+            // remap table in the first place.
+            var noSentinel = new List<string>();   // remap PRESENT, sentinel MISSING
+            var noMeta     = new List<string>();   // .fbx.meta missing or unreadable
+            var noArt      = new List<string>();   // remap-less AND no basecolor at any tier
             var unbound    = new List<string>();
             if (!Directory.Exists(ContentRoot))
             {
@@ -273,24 +306,74 @@ namespace DeNelle.Editor
             {
                 foreach (string fbx in Directory.GetFiles(ContentRoot, "*.fbx"))
                 {
-                    if (!File.Exists(fbx + MarkerSuffix))
-                        noSentinel.Add(Path.GetFileName(fbx));
+                    string fbxName = Path.GetFileName(fbx);
+                    bool metaOk;
+                    int remaps = CountMaterialRemaps(fbx + ".meta", out metaOk);
+                    if (!metaOk)
+                    {
+                        // Unreadable meta == UNPROVEN remap state. Never a silent pass:
+                        // defaulting to "remap-less" here is how the whole case gets skipped
+                        // by deleting one file.
+                        noMeta.Add(fbxName);
+                        continue;
+                    }
+
+                    if (remaps > 0)
+                    {
+                        // A remap table EXISTS, so the postprocessor's force-set has something
+                        // real to destroy. This is the only shape the sentinel protects.
+                        if (!File.Exists(fbx + MarkerSuffix))
+                            noSentinel.Add(fbxName + " (" + remaps + " material remap(s))");
+                        continue;
+                    }
+
+                    // Remap-less: there is nothing for a sentinel to protect, so demanding one
+                    // would be worse than useless -- adding it flips this FBX onto the remap
+                    // path with an EMPTY table, which is the WO-1509 white-body defect itself.
+                    // Ask the question that actually matters instead: does a basecolor resolve?
+                    string where;
+                    if (ResolveArt(Path.GetFileNameWithoutExtension(fbx), out where) == null)
+                        noArt.Add(fbxName + " (" + where + ")");
                 }
+
+                if (noMeta.Count > 0)
+                {
+                    noMeta.Sort(StringComparer.Ordinal);
+                    failures.Add("[binding-and-sentinel] " + noMeta.Count + " FBX under '" + ContentRoot +
+                                 "' have a MISSING or UNREADABLE '.fbx.meta', so this case cannot tell " +
+                                 "whether they carry an externalObjects material remap. Unproven is not " +
+                                 "a pass: " + string.Join(", ", noMeta));
+                }
+
                 if (noSentinel.Count > 0)
                 {
                     noSentinel.Sort(StringComparer.Ordinal);
                     failures.Add("[binding-and-sentinel] " + noSentinel.Count + " FBX under '" + ContentRoot +
-                                 "' have NO '" + MarkerSuffix + "' sentinel, so TripoAssetPostprocessor." +
-                                 "OnPreprocessModel force-sets materialLocation=External + materialName=" +
-                                 "BasedOnTextureName on every import of each — which IGNORES that FBX's own " +
-                                 "externalObjects remap table and binds materials BY TEXTURE NAME instead " +
-                                 "(.gitignore:629-635; WO-1509 device capture). Add the sentinel beside the " +
-                                 "FBX and TRACK it — ignoring it makes the fix local-only and the defect " +
-                                 "returns silently on a fresh clone: " + string.Join(", ", noSentinel));
+                                 "' DECLARE an externalObjects material remap but have NO '" + MarkerSuffix +
+                                 "' sentinel, so TripoAssetPostprocessor.OnPreprocessModel force-sets " +
+                                 "materialLocation=External + materialName=BasedOnTextureName on every " +
+                                 "import of each -- which IGNORES that remap table and binds materials BY " +
+                                 "TEXTURE NAME instead (see the '*.tripo-extracted -- UN-IGNORED' block in " +
+                                 ".gitignore; WO-1509 device capture). Add the sentinel beside the FBX and " +
+                                 "TRACK it -- ignoring it makes the fix local-only and the defect returns " +
+                                 "silently on a fresh clone: " + string.Join(", ", noSentinel));
                 }
-                else
+
+                if (noArt.Count > 0)
                 {
-                    log.Append("[binding-and-sentinel] sentinels ok; ");
+                    noArt.Sort(StringComparer.Ordinal);
+                    failures.Add("[binding-and-sentinel] " + noArt.Count + " FBX under '" + ContentRoot +
+                                 "' declare NO externalObjects material remap AND resolve no basecolor at " +
+                                 "any tier. The sentinel is IRRELEVANT to these -- do not reach for one, " +
+                                 "and do NOT add one: with an empty remap table the sentinel would pin the " +
+                                 "importer onto the remap path and guarantee a white body (WO-1509). Land " +
+                                 "the art, bind it, or retire the FBX: " + string.Join("; ", noArt));
+                }
+
+                if (noMeta.Count == 0 && noSentinel.Count == 0 && noArt.Count == 0)
+                {
+                    log.Append("[binding-and-sentinel] sentinels ok (remap-bearing FBX carry one; ")
+                       .Append("remap-less FBX resolve a basecolor); ");
                 }
 
                 // Enemy-family materials only: a .mat whose stem is a modelKey or <modelKey>_Body.
@@ -434,6 +517,73 @@ namespace DeNelle.Editor
         private static IEnumerable<string> NameCandidates(string model)
         {
             return EnemyArtPaths.NameAliases(model);
+        }
+
+        /// <summary>
+        /// WO-1536, 2026-09-07: how many MATERIAL entries an FBX's importer meta declares in its
+        /// externalObjects remap table. Read as TEXT so the answer is the same in a fresh clone.
+        /// <para>This is the discriminator Case 4 turns on. A remap table is state an author
+        /// created and the postprocessor can destroy, so it needs the sentinel. NO remap table is
+        /// not a lesser version of that -- it is a different shape entirely, with nothing to
+        /// protect, and adding a sentinel to it is actively harmful: the sentinel pins the
+        /// importer onto the remap path with an EMPTY table, which is the white-body defect
+        /// WO-1509 was opened for. So the sentinel is demanded here and ONLY here.</para>
+        /// <para>Two serialised shapes exist and both are handled: the inline-empty
+        /// "externalObjects: {}" and the list form, whose entries carry a
+        /// "type: UnityEngine:Material" line. NOTE THE COLON -- Unity writes
+        /// "UnityEngine:Material", not "UnityEngine.Material"; matching the dotted spelling finds
+        /// nothing, reads every FBX as remap-less, and silently deletes this case.</para>
+        /// <para>The scan is BOUNDED to the externalObjects block -- from its own line to the next
+        /// line indented two spaces or less (in practice "  materials:") -- so a Material type
+        /// mentioned anywhere else in the meta cannot be miscounted as a remap.</para>
+        /// </summary>
+        private static int CountMaterialRemaps(string metaPath, out bool readable)
+        {
+            readable = false;
+            string[] lines;
+            try { lines = File.ReadAllLines(metaPath); }
+            catch { return 0; }
+            readable = true;
+
+            const string Head = "externalObjects:";
+            const string MatType = "type: UnityEngine:Material";
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string trimmed = lines[i].Trim();
+                if (!trimmed.StartsWith(Head, StringComparison.Ordinal)) continue;
+
+                // "externalObjects: {}" -- declared and EMPTY. Nothing to protect.
+                if (trimmed.Length > Head.Length &&
+                    trimmed.Substring(Head.Length).Trim() == "{}") return 0;
+
+                int headIndent = Indent(lines[i]);
+                int count = 0;
+                for (int j = i + 1; j < lines.Length; j++)
+                {
+                    string body = lines[j].Trim();
+                    if (body.Length == 0) continue;
+                    // WARNING: A YAML SEQUENCE ITEM SITS AT THE SAME INDENT AS ITS KEY. Unity writes
+                    // "  externalObjects:" and then "  - first:" -- both at two spaces. A plain
+                    // "indent <= headIndent ends the block" test therefore terminates on the
+                    // FIRST entry and reports every remap-bearing FBX as remap-less, which is
+                    // this case deleting itself. The block ends at the next line that is at or
+                    // left of the key AND is not one of its entries (in practice "  materials:").
+                    if (Indent(lines[j]) <= headIndent &&
+                        !body.StartsWith("- ", StringComparison.Ordinal)) break;
+                    if (body == MatType) count++;
+                }
+                return count;
+            }
+            return 0;   // no externalObjects key at all == no remap table
+        }
+
+        /// <summary>Leading-space count of a YAML line.</summary>
+        private static int Indent(string line)
+        {
+            int n = 0;
+            while (n < line.Length && line[n] == ' ') n++;
+            return n;
         }
 
         /// <summary>
