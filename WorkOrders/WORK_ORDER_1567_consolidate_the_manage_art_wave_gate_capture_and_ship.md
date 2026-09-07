@@ -65,6 +65,33 @@ before believing any gate result.** A gate over a half-written tree is not a ver
 
 ## 3. THE SEQUENCE TO RUN — in this order, each judged by its MARKER on a FRESH log
 
+> ## ⛔ ONE SEAT FIRES UNITY WHILE LANES ARE OPEN. Owner directive, 2026-09-06.
+> Verbatim: *"Only this seat should fire Unity while lanes are open, or every result is a gate over a
+> half-written tree."*
+>
+> **Forged by this file's own evidence.** The gate at **22:36:09** was overtaken by edits at **22:37:20**
+> and **22:37:32**; a second gate at **22:38:42**, fired without waiting for quiescence, returned **72**
+> errors where the first returned **6** — none of the difference meaningful, all of it mid-save. **Two
+> Unity runs, zero verdicts, and a round of analysis spent on breakage that was simply in flight.**
+>
+> **The rule:** while lanes are open, the coordinating seat runs the chain. Any other seat **hands the
+> sequence over** rather than running it. Whoever does run it **proves quiescence first** — no `.cs`
+> mtime newer than the run start — and states that proof beside the result.
+
+### ⭐ THE FULL ORDER (owner, 2026-09-06), once the last two lanes report
+
+`catalog fallback regen` -> `compile` -> `regression` (**portrait coverage green BY NAME**) ->
+`Manage flow capture` (**PNGs opened**) -> `commit by path with statuses flipped` -> `tester APK` ->
+`install` -> `AAB`.
+
+⚠ **`catalog fallback regen` comes FIRST and is easy to skip** — it emits its own marker
+(`CATALOG_FALLBACK_GEN_OK`, seen on the WO-2003/2005 RESULTs). The generated
+`CatalogFallbackData.g.cs` embeds catalog rows, so a regen after the art wave keeps the generated copy and
+the canonical JSON in step.
+⚠ **Statuses flip in the SAME commit as the work** (CLAUDE.md §2) — the board is derived from them, and a
+gate commit that carries a lane without flipping it is the `gate-commit-must-flip-every-lane-it-carries`
+failure. Cross-check every READY ticket against the diff before committing.
+
 ⛔ **Gate scripts live at the REPO ROOT, not `tools/`** (memory `gate-scripts-live-at-repo-root`).
 ⛔ **Judge by MARKER + log freshness + size. NEVER the exit code** (CLAUDE.md §8).
 
