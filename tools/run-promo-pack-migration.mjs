@@ -1,81 +1,34 @@
 #!/usr/bin/env node
-// WO-1258 additive Neon rollout: table/column -> seed -> foreign keys -> prove shape.
-// Never logs DATABASE_URL, promo codes, player ids, or pack contents.
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Client } from '@neondatabase/serverless';
+// =============================================================================
+// RETIRED 2026-09-07 (WO-1505). THIS IS A SHIM. IT APPLIES NOTHING.
+// -----------------------------------------------------------------------------
+// It used to apply a HAND-KEPT list - 20260828_0005_db_promo_packs.sql and
+// 20260828_0006_db_promo_pack_fks.sql (WO-1258) - and, between the two, SEED the
+// packs table from Assets/Resources/Data/Canonical/packs.json.
+//
+// The migrations now run through the one derived, ledger-recorded runner:
+//     node tools/run-migrations.mjs
+//
+// SEEDING IS A SEPARATE CONCERN AND HAS A SEPARATE TOOL. tools/seed-promo-packs.mjs
+// emits the same INSERT ... ON CONFLICT (sku) DO NOTHING statements as SQL, from the
+// same canonical packs.json, and never connects to anything. That is deliberate: a
+// migration runner that also writes catalog ROWS is two jobs in one file, and the row
+// job is what made this runner's file list feel load-bearing. The dangling-FK
+// pre-check this script ran is not lost either - 0006's ADD CONSTRAINT fails on
+// dangling rows, and run-migrations.mjs rolls that file back with no ledger row.
+// =============================================================================
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-function fail(message) { console.error('PROMO_PACK_MIGRATION_FAIL: ' + message); process.exit(16); }
-
-function resolveDatabaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  try {
-    const env = readFileSync(join(root, '.env.local'), 'utf8');
-    const match = env.match(/^\s*DATABASE_URL\s*=\s*(.*)$/m);
-    if (!match) return '';
-    let value = match[1].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    return value;
-  } catch { return ''; }
-}
-
-const url = resolveDatabaseUrl();
-if (!url) fail('DATABASE_URL is unavailable; nothing was changed.');
-
-const migration1 = readFileSync(join(root, 'api/migrations/20260828_0005_db_promo_packs.sql'), 'utf8');
-const migration2 = readFileSync(join(root, 'api/migrations/20260828_0006_db_promo_pack_fks.sql'), 'utf8');
-for (const body of [migration1, migration2]) {
-  if (/^\s*(DROP|DELETE|TRUNCATE)\b/im.test(body)) fail('tracked migration contains a destructive statement; nothing was changed.');
-}
-const catalog = JSON.parse(readFileSync(join(root, 'Assets/Resources/Data/Canonical/packs.json'), 'utf8'));
-if (!Array.isArray(catalog.packs) || catalog.packs.length === 0) fail('canonical pack seed is empty; nothing was changed.');
-
-const client = new Client(url);
-client.on('error', e => fail('database connection failed: ' + (e?.message || e?.type || 'unknown')));
-await client.connect();
-try {
-  await client.query(migration1);
-  console.log('PROMO_PACK_STAGE_1_OK table + snapshot column present');
-
-  await client.query('BEGIN');
-  try {
-    for (const pack of catalog.packs) {
-      if (!pack?.sku || !pack?.name || !pack?.contents) throw new Error('canonical pack is missing sku/name/contents');
-      await client.query(
-        `INSERT INTO packs (sku,name,contents,active,store_visible)
-         VALUES ($1,$2,$3::jsonb,TRUE,$4)
-         ON CONFLICT (sku) DO NOTHING`,
-        [String(pack.sku), String(pack.name), JSON.stringify(pack.contents), pack.storeVisible === true]);
-    }
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  }
-
-  const dangling = await client.query(`
-    SELECT count(*)::int AS n
-      FROM promo_codes pc
-     WHERE (pc.reward_pack_sku IS NOT NULL AND NOT EXISTS (SELECT 1 FROM packs p WHERE p.sku=pc.reward_pack_sku))
-        OR (pc.tier1_pack_sku IS NOT NULL AND NOT EXISTS (SELECT 1 FROM packs p WHERE p.sku=pc.tier1_pack_sku))
-        OR (pc.tier2_pack_sku IS NOT NULL AND NOT EXISTS (SELECT 1 FROM packs p WHERE p.sku=pc.tier2_pack_sku))`);
-  if (Number(dangling.rows[0]?.n) !== 0) fail('existing promo rows reference unknown pack SKUs; FK stage was not applied.');
-
-  await client.query(migration2);
-  const shape = await client.query(`
-    SELECT
-      to_regclass('public.packs') IS NOT NULL AS has_packs,
-      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='promo_redemptions' AND column_name='contents') AS has_contents,
-      (SELECT count(*)::int FROM packs) AS pack_count,
-      (SELECT count(*)::int FROM pg_constraint WHERE conname IN
-        ('promo_codes_reward_pack_sku_fk','promo_codes_tier1_pack_sku_fk','promo_codes_tier2_pack_sku_fk')) AS fk_count`);
-  const row = shape.rows[0];
-  if (!row?.has_packs || !row?.has_contents || Number(row?.pack_count) < catalog.packs.length || Number(row?.fk_count) !== 3)
-    fail('post-migration shape proof failed.');
-  console.log(`PROMO_PACK_MIGRATION_OK packs=${row.pack_count} foreignKeys=${row.fk_count} (promo rows unchanged)`);
-} finally {
-  await client.end().catch(() => {});
-}
+console.error(
+    'RUNNER_RETIRED: tools/run-promo-pack-migration.mjs applies nothing and reads nothing.\n' +
+    '  It hardcoded migrations 0005 and 0006. A hand-kept list is the WO-1505 defect:\n' +
+    '  a migration on disk that no array names is NEVER applied, and nothing reports it.\n' +
+    '\n' +
+    '  use run-migrations.mjs - one runner, derived from api/migrations/, ledger-recorded:\n' +
+    '      node tools/run-migrations.mjs\n' +
+    '  For the packs catalog seed, generate the SQL with:\n' +
+    '      node tools/seed-promo-packs.mjs\n' +
+    '\n' +
+    '  READ THE HEADER OF tools/run-migrations.mjs FIRST. A database with no ledger yet\n' +
+    '  needs a --baseline run before the ordinary one, and the header says exactly why.\n' +
+    '  Nothing was connected to and nothing was changed by this invocation.');
+process.exit(16);

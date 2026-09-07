@@ -1,66 +1,27 @@
 #!/usr/bin/env node
-// WO-1276 additive/default-unpublished showcase rollout. Never prints database
-// credentials, wallets, public ids, snapshots, or player data.
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Client } from '@neondatabase/serverless';
+// =============================================================================
+// RETIRED 2026-09-07 (WO-1505). THIS IS A SHIM. IT APPLIES NOTHING.
+// -----------------------------------------------------------------------------
+// It used to apply a HAND-KEPT pair - 20260829_0009_public_town_showcases.sql and
+// 20260829_0011_public_town_snapshot_profile.sql (WO-1276) - SKIPPING 0010, which
+// sits between them and which a different bespoke runner owned. That interleaving
+// is the clearest picture of why nine runners could not be trusted between them to
+// cover the directory: neither one applied the whole range it spanned.
+//
+// api/migrations/ is applied in filename order, whole, by:
+//     node tools/run-migrations.mjs
+// =============================================================================
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const migrationPaths = [
-  join(root, 'api/migrations/20260829_0009_public_town_showcases.sql'),
-  join(root, 'api/migrations/20260829_0011_public_town_snapshot_profile.sql'),
-];
-function fail(message) { console.error('TOWN_SHOWCASE_MIGRATION_FAIL: ' + message); process.exit(16); }
-function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  try {
-    const match = readFileSync(join(root, '.env.local'), 'utf8').match(/^\s*DATABASE_URL\s*=\s*(.*)$/m);
-    if (!match) return '';
-    let value = match[1].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    return value;
-  } catch { return ''; }
-}
-
-const url = databaseUrl();
-if (!url) fail('DATABASE_URL is unavailable; nothing was changed.');
-const migrations = migrationPaths.map(path => readFileSync(path, 'utf8'));
-for (const migration of migrations) {
-  // Constraint replacement in 0011 widens schema_version from v1 to v1/v2 and
-  // is intentionally allowed; destructive data/schema operations remain barred.
-  if (/^\s*(DROP\s+(TABLE|SCHEMA|DATABASE)|DELETE|TRUNCATE|ALTER\s+TABLE[^;]+DROP\s+COLUMN)\b/im.test(migration))
-    fail('tracked migration contains a destructive data/schema statement; nothing was changed.');
-}
-
-const expected = new Map([
-  ['public_town_showcases', 7],
-  // 0009 creates 7 columns, 0010 adds the contest provenance column, and
-  // 0011 adds the ten bounded public-profile fields.
-  ['public_town_snapshot_versions', 18],
-]);
-const client = new Client(url);
-client.on('error', error => fail('database connection failed: ' + (error?.message || 'unknown')));
-await client.connect();
-try {
-  for (const migration of migrations) await client.query(migration);
-  const proof = await client.query(`
-    SELECT table_name, count(*)::int AS column_count
-      FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = ANY($1::text[])
-     GROUP BY table_name ORDER BY table_name`, [[...expected.keys()]]);
-  const actual = new Map(proof.rows.map(row => [row.table_name, Number(row.column_count)]));
-  for (const [table, columns] of expected) {
-    if (actual.get(table) !== columns) fail(`post-migration shape proof failed for ${table}.`);
-  }
-  const state = await client.query(`
-    SELECT
-      (SELECT count(*)::int FROM public_town_showcases) AS directory_rows,
-      (SELECT count(*)::int FROM public_town_showcases WHERE published) AS published_rows,
-      (SELECT count(*)::int FROM public_town_snapshot_versions) AS snapshot_rows`);
-  const row = state.rows[0];
-  console.log(`TOWN_SHOWCASE_MIGRATION_OK tables=2 schema=v2 directory_rows=${row.directory_rows} published_rows=${row.published_rows} snapshot_rows=${row.snapshot_rows}`);
-} finally {
-  await client.end().catch(() => {});
-}
+console.error(
+    'RUNNER_RETIRED: tools/run-town-showcase-migration.mjs applies nothing and reads nothing.\n' +
+    '  It hardcoded migrations 0009 and 0011, skipping 0010 between them. A hand-kept\n' +
+    '  list is the WO-1505 defect: a migration on disk that no array names is NEVER\n' +
+    '  applied, and nothing reports it.\n' +
+    '\n' +
+    '  use run-migrations.mjs - one runner, derived from api/migrations/, ledger-recorded:\n' +
+    '      node tools/run-migrations.mjs\n' +
+    '\n' +
+    '  READ THE HEADER OF tools/run-migrations.mjs FIRST. A database with no ledger yet\n' +
+    '  needs a --baseline run before the ordinary one, and the header says exactly why.\n' +
+    '  Nothing was connected to and nothing was changed by this invocation.');
+process.exit(16);

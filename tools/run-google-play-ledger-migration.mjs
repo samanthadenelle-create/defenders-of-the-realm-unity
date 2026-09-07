@@ -1,50 +1,26 @@
 #!/usr/bin/env node
-// WO-1255 additive/default-off ledger rollout. Never prints database credentials,
-// purchase tokens, player ids, orders, or product data.
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Client } from '@neondatabase/serverless';
+// =============================================================================
+// RETIRED 2026-09-07 (WO-1505). THIS IS A SHIM. IT APPLIES NOTHING.
+// -----------------------------------------------------------------------------
+// It used to apply one hardcoded file - 20260828_0007_google_play_purchase_state.sql
+// (WO-1255) - and prove it with a column/index count against google_play_purchases.
+//
+// The apply now runs through the one derived, ledger-recorded runner. The shape
+// proof it did by hand is not the loss it looks like: run-migrations.mjs proves
+// every run with a ledger shape query plus tools/wo1440-alter-column-sweep.mjs,
+// which checks EVERY column named by api/schema.sql and api/migrations/ against the
+// live database rather than the four tables one feature happened to care about.
+// =============================================================================
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const migrationPath = join(root, 'api/migrations/20260828_0007_google_play_purchase_state.sql');
-function fail(message) { console.error('GOOGLE_PLAY_LEDGER_MIGRATION_FAIL: ' + message); process.exit(16); }
-function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  try {
-    const match = readFileSync(join(root, '.env.local'), 'utf8')
-      .match(/^\s*DATABASE_URL\s*=\s*(.*)$/m);
-    if (!match) return '';
-    let value = match[1].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    return value;
-  } catch { return ''; }
-}
-
-const url = databaseUrl();
-if (!url) fail('DATABASE_URL is unavailable; nothing was changed.');
-const migration = readFileSync(migrationPath, 'utf8');
-if (/^\s*(DROP|DELETE|TRUNCATE|ALTER\s+TABLE[^;]+DROP)\b/im.test(migration))
-  fail('tracked migration contains a destructive statement; nothing was changed.');
-
-const client = new Client(url);
-client.on('error', error => fail('database connection failed: ' + (error?.message || 'unknown')));
-await client.connect();
-try {
-  await client.query(migration);
-  const proof = await client.query(`
-    SELECT
-      to_regclass('public.google_play_purchases') IS NOT NULL AS has_table,
-      (SELECT count(*)::int FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='google_play_purchases') AS column_count,
-      (SELECT count(*)::int FROM pg_indexes
-        WHERE schemaname='public' AND tablename='google_play_purchases') AS index_count,
-      (SELECT count(*)::int FROM google_play_purchases) AS row_count`);
-  const row = proof.rows[0];
-  if (!row?.has_table || Number(row.column_count) !== 16 || Number(row.index_count) < 3)
-    fail('post-migration shape proof failed.');
-  console.log(`GOOGLE_PLAY_LEDGER_MIGRATION_OK columns=${row.column_count} indexes=${row.index_count} rows=${row.row_count} rail=disabled`);
-} finally {
-  await client.end().catch(() => {});
-}
+console.error(
+    'RUNNER_RETIRED: tools/run-google-play-ledger-migration.mjs applies nothing and reads nothing.\n' +
+    '  It hardcoded migration 0007. A hand-kept list is the WO-1505 defect:\n' +
+    '  a migration on disk that no array names is NEVER applied, and nothing reports it.\n' +
+    '\n' +
+    '  use run-migrations.mjs - one runner, derived from api/migrations/, ledger-recorded:\n' +
+    '      node tools/run-migrations.mjs\n' +
+    '\n' +
+    '  READ THE HEADER OF tools/run-migrations.mjs FIRST. A database with no ledger yet\n' +
+    '  needs a --baseline run before the ordinary one, and the header says exactly why.\n' +
+    '  Nothing was connected to and nothing was changed by this invocation.');
+process.exit(16);

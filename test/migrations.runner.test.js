@@ -105,6 +105,88 @@ test('the WO-1446 migration exists, sorts after 0019, and carries EXACTLY the sc
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 1b. EVERY .sql IS REACHABLE, AND THE NINE BESPOKE RUNNERS ARE SHIMS (WO-1505)
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('⛔ EVERY .sql in api/migrations/ is reachable by the one runner - no orphans', async () => {
+    const { listMigrations } = await runner();
+    const reachable = new Set(listMigrations(MIGRATIONS_DIR));
+    const onDisk = fs.readdirSync(MIGRATIONS_DIR).filter(f => f.toLowerCase().endsWith('.sql')).sort();
+
+    const unreachable = onDisk.filter(f => !reachable.has(f));
+    assert.deepEqual(unreachable, [],
+        'A migration on disk that the runner cannot see is the WO-1505 defect itself: it is never\n' +
+        'applied and nothing says so. That is how auth_sessions.identity_kind 500d every wallet\n' +
+        'session for a week (WO-1440 RESULT §7c).');
+
+    // The four that NINE hand-written runners between them never named. Spelled out
+    // by number, because these are the specific files the ticket was raised for - if
+    // one is ever renamed, this must go red rather than quietly pass on a new name.
+    for (const nnnn of ['_0003_', '_0004_', '_0017_', '_0018_']) {
+        assert.ok(onDisk.some(f => f.includes(nnnn) && reachable.has(f)),
+            `migration ${nnnn.replace(/_/g, '')} had NO application path before WO-1505; it must be reachable now`);
+    }
+});
+
+// The retired runners, DERIVED from the directory - deliberately not a hand-kept
+// array, since a hand-kept array is the thing this ticket deletes. Every
+// tools/run-*.mjs except the one real runner must be a refusal shim, so a future
+// run-<feature>-migration.mjs that quietly applies its own list goes red here.
+const TOOLS_DIR = path.join(REPO, 'tools');
+const RETIRED_RUNNERS = fs.readdirSync(TOOLS_DIR)
+    .filter(f => /^run-.*\.mjs$/.test(f) && f !== 'run-migrations.mjs')
+    .sort();
+
+function spawnOffline(file) {
+    const env = { ...process.env };
+    delete env.DATABASE_URL;              // deleted, not set to undefined - spawn stringifies
+    const r = require('node:child_process').spawnSync(process.execPath, [path.join(TOOLS_DIR, file)],
+        { cwd: REPO, env, encoding: 'utf8' });
+    return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+test('⛔ every retired tools/run-*.mjs REFUSES and names the one runner', () => {
+    assert.ok(RETIRED_RUNNERS.length >= 7,
+        `expected the seven retired bespoke runners, saw ${RETIRED_RUNNERS.length}: ${RETIRED_RUNNERS}`);
+
+    for (const file of RETIRED_RUNNERS) {
+        const { code, out } = spawnOffline(file);
+        assert.equal(code, 16, `${file} must exit 16. Exit 0 is how this repo's gates report success ` +
+            'without proving anything (memory: gates-report-success-without-proving-it).');
+        assert.match(out, /use run-migrations\.mjs/,
+            `${file} must tell the reader where the one runner is, in those words`);
+        assert.match(out, /RUNNER_RETIRED/, `${file} must say plainly that it is retired`);
+    }
+});
+
+test('⛔ a retired runner touches NOTHING - no driver, no env, no file read', () => {
+    for (const file of RETIRED_RUNNERS) {
+        const src = fs.readFileSync(path.join(TOOLS_DIR, file), 'utf8');
+        const code = src.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+        assert.ok(!/@neondatabase\/serverless/.test(code),
+            `${file} must not import a database driver - a shim that can still connect is not retired`);
+        assert.ok(!/process\.env\.DATABASE_URL/.test(code),
+            `${file} must not read DATABASE_URL`);
+        assert.ok(!/\.env\.local/.test(code),
+            `${file} must not read .env.local - two of the old runners took the URL from there`);
+        assert.ok(!/readFileSync|readdirSync/.test(code),
+            `${file} must not read migration files - it applies nothing`);
+    }
+});
+
+test('the one runner refuses offline too, and dies BEFORE importing the driver', () => {
+    const env = { ...process.env };
+    delete env.DATABASE_URL;
+    const r = require('node:child_process').spawnSync(
+        process.execPath, [path.join(TOOLS_DIR, 'run-migrations.mjs')], { cwd: REPO, env, encoding: 'utf8' });
+    const out = (r.stdout || '') + (r.stderr || '');
+    assert.equal(r.status, 16, 'no DATABASE_URL is a refusal, and a refusal exits 16');
+    assert.match(out, /MIGRATIONS_FAIL/, 'and it prints the FAIL marker, never a success line');
+    assert.match(out, /DATABASE_URL is not set/, 'naming the actual missing thing');
+    assert.ok(!/MIGRATIONS_OK/.test(out), 'a refused run must never print the success marker');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2. THE ADDITIVE-ONLY AUDIT
 // ═══════════════════════════════════════════════════════════════════════════
 

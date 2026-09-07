@@ -10,11 +10,14 @@
 //                node tools/run-migrations.mjs
 //
 // -----------------------------------------------------------------------------
-// ⛔ WHY THIS EXISTS: tools/run-schema-repair.mjs HARDCODES ITS FILE LIST, and the
-//    list is TWO entries long while api/migrations/ holds twenty files. That is the
-//    same duplicated-state failure CLAUDE.md records four scars from (the stale WO
-//    number block, the hardcoded repo root, the retired assembly table, the "six
-//    faces" bar): a fact written twice, and the copy rots. The rot here is not
+// ⛔ WHY THIS EXISTS: NINE bespoke runners each HARDCODED THEIR OWN FILE LIST -
+//    tools/run-schema-repair.mjs named two files, run-play-policy-migrations.mjs
+//    three, and between all nine of them four migrations (0003, 0004, 0017, 0018)
+//    were named by NOBODY. (The seven tools/run-*.mjs of them are now refusal shims
+//    that point back here, WO-1505.) That is the same duplicated-state failure
+//    CLAUDE.md records four scars from (the stale WO number block, the hardcoded
+//    repo root, the retired assembly table, the "six faces" bar): a fact written
+//    twice, and the copy rots. The rot here is not
 //    cosmetic - a migration that exists on disk and is absent from the hand-kept
 //    array is NEVER APPLIED, and nothing says so. That is exactly how
 //    auth_sessions.identity_kind sat unapplied for a week while the deployed
@@ -29,7 +32,7 @@
 //    EXISTS` against a wrong-shaped table reports success while doing nothing at
 //    all - the bug_reports repair reported success three times and changed nothing.
 //    So this script does not stop at "the migration ran". It runs a SHAPE QUERY
-//    afterwards, exactly as run-schema-repair.mjs does, and judges by markers:
+//    afterwards, as the retired run-schema-repair.mjs did, and judges by markers:
 //
 //        MIGRATIONS_OK applied=N skipped=M     <- the only success line
 //        MIGRATIONS_FAIL <why>                 <- everything else, exit 16
@@ -48,7 +51,7 @@
 // ⚠ ONE NARROW EXEMPTION, MEASURED NOT ASSUMED: four migrations already in this repo
 //   (0010, 0011, 0012, 0017) drop-and-recreate a CHECK CONSTRAINT or an immutability
 //   TRIGGER, because Postgres has no `ADD CONSTRAINT IF NOT EXISTS` and an idempotent
-//   author has no other move. A literal DROP ban would refuse four of the twenty files
+//   author has no other move. A literal DROP ban would refuse those four files
 //   forever - a runner that can never run. So a DROP of a CONSTRAINT or TRIGGER passes
 //   ONLY when the SAME FILE recreates the SAME NAME; an unpaired one is still refused,
 //   and no pairing whatsoever exempts a DROP TABLE / DROP COLUMN / DROP INDEX / DELETE
@@ -56,9 +59,9 @@
 //
 // ⛔⛔ THE FIRST RUN AGAINST PRODUCTION NEEDS --baseline FIRST. READ THIS.
 //
-//    The ledger does not exist on prod yet, so a plain first run would treat ALL
-//    twenty files as "to apply" - including the nineteen the owner has already
-//    applied by hand. Most of them are idempotent and would be harmless no-ops.
+//    The ledger does not exist on prod yet, so a plain first run would treat EVERY
+//    file on disk as "to apply" - including the ones the owner has already applied
+//    by hand. Most of them are idempotent and would be harmless no-ops.
 //    TWO ARE NOT, and this was MEASURED, not assumed (test/migrations.runner.test.js
 //    pins it):
 //
@@ -68,13 +71,23 @@
 //      20260829_0011_public_town_snapshot_profile.sql : ten BARE `ADD CONSTRAINT`
 //          with no DROP IF EXISTS and no pg_constraint guard -> 42710.
 //
-//    Because 0020 sorts LAST, a plain first run would die at 0004 and signed_at -
-//    the whole point of this ticket - would never be applied. So:
+//    Because 0004 sorts EARLY, a plain first run would die there and signed_at (0020) -
+//    the whole point of WO-1446 - would never be applied. So:
 //
-//      1) node tools/run-migrations.mjs --baseline 20260906_0019_promo_guest_redeem_ip_budget.sql
-//         Records the already-applied files in the ledger and APPLIES NOTHING.
+//      1) node tools/run-migrations.mjs --baseline <the last file already on the database>
+//         Records those files in the ledger and APPLIES NOTHING. Read the list the run
+//         prints and name the file deliberately; do not copy a filename out of a doc.
 //      2) node tools/run-migrations.mjs
-//         Applies only 20260906_0020, then runs both proofs.
+//         Applies everything after it, then runs both proofs.
+//
+//    ⚠ AND BEFORE STEP 1, KNOW WHAT YOU ARE ASSERTING. Four migrations - 0003
+//      (patronage_benefactors), 0004 (promo_reward_tiers), 0017 (pi_payments) and
+//      0018 (client_tunables) - were named by NO runner that ever existed (WO-1505).
+//      Whether prod has them is UNPROVEN from this machine. Baselining PAST them
+//      records them as applied and they will then never run. If they are in fact
+//      absent, baseline through 0002 instead and let the rest apply - which costs
+//      the 0004 / 0011 re-run hazard above, and that trade is the owner's call, not
+//      a default this file may pick.
 //
 //    --baseline is an ASSERTION BY THE OWNER that those files are already on the
 //    database. It is deliberately not automatic and deliberately not the default:
@@ -183,8 +196,9 @@ const TX_KEYWORDS = /^(BEGIN|COMMIT|ROLLBACK|START\s+TRANSACTION|BEGIN\s+TRANSAC
  * Remove the file's OWN top-level BEGIN;/COMMIT; so the runner can wrap the file
  * AND its ledger row in ONE transaction.
  *
- * ⛔ THIS IS NOT COSMETIC. Eleven of the twenty migrations open with `BEGIN;` and
- *    close with `COMMIT;` (run-schema-repair.mjs:79 relies on it). If the runner
+ * ⛔ THIS IS NOT COSMETIC. Most of the migrations open with `BEGIN;` and
+ *    close with `COMMIT;` (the retired bespoke runners sent each file whole and
+ *    relied on exactly that). If the runner
  *    wrapped such a file untouched, the file's inner COMMIT would END the outer
  *    transaction and the ledger INSERT would land in AUTOCOMMIT afterwards - so a
  *    crash between them records a migration that did not fully apply, or applies

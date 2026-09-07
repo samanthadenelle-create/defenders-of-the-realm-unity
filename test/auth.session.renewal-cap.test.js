@@ -78,13 +78,44 @@ test('renewal ROTATES: the old token is revoked so one chain means one live toke
         'the spent token is no longer revoked - renewal accumulates live bearer tokens');
 });
 
-test('the endpoint routes to renewal on the ABSENCE of a nonce, never on a client flag', () => {
+test('the endpoint routes to renewal on the ABSENCE of a VERIFIABLE signature, never on a client flag', () => {
     // A caller must not be able to SELECT the cheaper check for itself; that is the
     // shape of most auth bypasses. It reaches renewal only by having nothing else.
-    assert.match(sessionSrc, /if\s*\(\s*sessionHeader\s*&&\s*!nonceHeader\s*\)/,
-        'renewal is no longer gated on the absence of signature material');
+    //
+    // ⛔ AMENDED 2026-09-07 (WO-1452). This assertion used to pin the literal
+    // `sessionHeader && !nonceHeader`, and that gate WAS the defect: a junk X-Nonce
+    // skipped renewal, verifyWallet's session rail then authenticated the bearer token
+    // without ever checking the nonce, and the mint reset the chain origin. The
+    // PROPERTY this test exists for - renewal is not client-selectable - is unchanged;
+    // what changed is that the gate now turns on whether a signature can VERIFY, which
+    // takes both halves of the signature material to even attempt.
+    assert.match(sessionSrc, /if\s*\(\s*sessionHeader\s*&&\s*!offersSignature\s*\)/,
+        'renewal is no longer gated on the absence of verifiable signature material');
+    assert.match(sessionSrc, /const offersSignature = !!\(nonceHeader && signatureHeader\)/,
+        'a lone X-Nonce counts as signature material again - WO-1452 is re-opened');
     assert.doesNotMatch(sessionSrc, /body\s*\.\s*renew|headers\['x-renew'\]/,
         'renewal became client-selectable - a caller must never choose its own auth path');
+});
+
+test('a request offering signature material has its session token WITHHELD from verifyWallet', () => {
+    // ⛔ WO-1452, the half a widened condition does not fix. verifyWallet tries the session
+    // rail FIRST, so passing both a session token and signature material means the signature
+    // is never verified and the nonce never burned - the request authenticates as a bearer
+    // token and then MINTS, stamping a new chain origin. Withholding the token is what makes
+    // the verification real, and it is what a junk `X-Signature` can no longer dodge.
+    assert.match(sessionSrc, /delete verifyHeaders\['x-session'\]/,
+        'the session token is passed to verifyWallet alongside signature material again');
+    assert.match(sessionSrc, /verifyWallet\(sql,\s*verifyHeaders,\s*null,\s*wallet\)/,
+        'verifyWallet is back to reading the raw headers - the session rail short-circuits again');
+});
+
+test('nothing that authenticated by BEARER TOKEN may reach the mint', () => {
+    // The backstop: a mint stamps a fresh signed_at, so a session-verified request that mints
+    // has just reset its own cap. wallet-auth must say WHICH credential verified, positively.
+    assert.match(walletAuthSrc, /mode: 'wallet',\s*via: 'signature'/,
+        'verifyWallet no longer distinguishes a verified signature from a presented token');
+    assert.match(sessionSrc, /auth\.via === 'session'[\s\S]{0,400}tryRenew\(\)/,
+        'a session-verified request can reach issueSession again - the WO-1452 bypass returns');
 });
 
 test('a CAPPED refusal does NOT fall through to the path that would have allowed it', () => {
@@ -95,8 +126,14 @@ test('a CAPPED refusal does NOT fall through to the path that would have allowed
     const capIndex = sessionSrc.indexOf('absolute_cap === true');
     assert.ok(capIndex > 0, 'the absolute-cap branch is gone from the endpoint');
     const afterCap = sessionSrc.slice(capIndex, capIndex + 400);
-    assert.match(afterCap, /return quietFail\(res,\s*401/,
+    // WO-1452 moved the renewal block into a `tryRenew` helper, so the refusal is now
+    // "answer 401 AND tell the caller to stop" rather than a bare `return quietFail`.
+    // Both halves are asserted: writing the 401 without returning true would fall through
+    // to verifyWallet exactly as before, which is the failure this test names.
+    assert.match(afterCap, /quietFail\(res,\s*401/,
         'a chain past its absolute life falls through to verifyWallet, which would renew it anyway');
+    assert.match(afterCap, /quietFail\(res,\s*401[\s\S]{0,120}return true;/,
+        'the capped refusal no longer stops the handler - control continues to the mint path');
 });
 
 test('a SCHEMA-missing refusal DOES fall through, so a lagging DB cannot cause an outage', () => {
