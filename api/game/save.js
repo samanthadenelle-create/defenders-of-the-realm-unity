@@ -48,10 +48,10 @@
 const { neon } = require('@neondatabase/serverless');
 const { decode } = require('@msgpack/msgpack');
 const {
-    AuthCode, authenticate, isGuestId, isPlayId,
+    AuthCode, authenticate, isGuestId,
     GUEST_MAX_BODY_BYTES, WALLET_MAX_BODY_BYTES,
 } = require('../_lib/wallet-auth');
-const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
+const { applyCors, newRef, quietFail, readBodyExact, bodyBytesDetail } = require('../_lib/http');
 const { logAuthReject, logApiEvent } = require('../_lib/audit');
 // WO-1243 operator kill switches. Fail-OPEN by ruling — see _lib/maintenance.js.
 const {
@@ -209,37 +209,32 @@ async function handler(req, res) {
         return quietFail(res, 400, AuthCode.PAYLOAD_TOO_LARGE, ref);
     }
 
-    // A wallet signature is over the EXACT raw bytes. If the runtime already
-    // parsed and we had to re-serialise, verification is IMPOSSIBLE — say that
-    // precisely instead of emitting a lying AUTH_BAD_SIGNATURE.
+    // ⛔ THE RAW-BODY REFUSAL IS RETIRED HERE (WO-1453, 2026-09-06). It used to read:
     //
-    // ⛔ BUT A SESSION DOES NOT SIGN THE BODY, AND THIS GUARD DID NOT KNOW THAT (fixed
-    // 2026-08-24). WO-1157 added the session rail: wallet-auth.js verifyWallet() accepts an
-    // `x-session` bearer and returns `via:'session'` WITHOUT EVER TOUCHING `payload` — its own
-    // comment says "A valid session is proof of the same fact the signature proves". This guard
-    // predates that rail and rejected BEFORE authenticate() ever ran, so a session-authed save was
-    // refused for lacking raw bytes it never needed.
+    //     if (!exactBytes && !isGuestId(id) && !isPlayId(id) && !hasSessionHeader)
+    //         -> 500 SERVER_ERROR, detail { reason: 'raw_body_unavailable_bodyparser_active' }
     //
-    // ⚠ THE COST WAS TOTAL AND SILENT: every wallet-authed save 500ed in production. Checked
-    // 2026-08-24 — `player_data` held 21 rows and EVERY ONE was `guest-local-*`. Not one save has
-    // ever been written under a wallet identity. It looked survivable only because the guest id is
-    // derived from the device, so the player's town quietly persisted under the wrong key while the
-    // identity their PURCHASES bind to had nothing behind it.
+    // ⚠ ITS COST HAS ALREADY BEEN PAID TWICE, WHICH IS WHY IT IS GONE RATHER THAN SCOPED
+    // A THIRD TIME:
+    //   1. 2026-08-24 — it did not know WO-1157's session rail existed (verifyWallet accepts
+    //      an `x-session` bearer and returns via:'session' WITHOUT EVER TOUCHING `payload`),
+    //      so EVERY wallet-authed save 500ed in production. `player_data` held 21 rows and
+    //      every one was `guest-local-*`; not one save had ever been written under a wallet
+    //      identity. It hid because the guest id is derived from the device, so the town
+    //      persisted under the wrong key while the identity purchases bind to had nothing
+    //      behind it. Scoping it to the signature path was the fix. WO-1282 PIN-1b then
+    //      widened the same scoping to `play-` ids for the same reason.
+    //   2. 2026-09-06 — the SCOPED guard still 500ed the signature rail itself, proven on
+    //      prod in WORK_ORDER_1440_..._blocker.RESULT.md:225-252 with a cryptographically
+    //      valid signature over the exact bytes. Vercel's Node 24 runtime parses `req.body`
+    //      regardless of `config.api.bodyParser`, so `exact` is effectively always false in
+    //      production. Twice now the guard has refused a request that was entitled to pass.
     //
-    // The guard still stands for the signature path, which genuinely cannot verify without exact
-    // bytes. It is now scoped to requests that will actually use that path.
-    // WO-1282 PIN-1b: a `play-` id NEVER uses the signature path either — the Google
-    // Play rail authenticates by session token only (see wallet-auth.authenticate). Left
-    // out of this guard it would 500 on a body the rail does not need, which is the same
-    // shape of bug the session rail hit above.
-    const hasSessionHeader = !!(req.headers && req.headers['x-session']);
-    if (!exactBytes && !isGuestId(String(playerId)) && !isPlayId(String(playerId)) && !hasSessionHeader) {
-        await logAuthReject(sql, req, {
-            code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
-            detail: { reason: 'raw_body_unavailable_bodyparser_active' },
-        });
-        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
-    }
+    // We now PROCEED and TAG. See _lib/http.bodyBytesDetail for why that cannot create a
+    // false accept: sha256(payload) is bound into the signed message, so a wrong
+    // reconstruction fails CLOSED as a 401. The guard's one real value — the diagnosis —
+    // survives as a detail tag on the reject row below, through ONE shared helper rather
+    // than the copy-paste that let these endpoints drift apart in the first place.
 
     // ── AUTH GATE ──────────────────────────────────────────────────────────
     let auth;
@@ -251,7 +246,11 @@ async function handler(req, res) {
     }
     if (!auth.ok) {
         await logAuthReject(sql, req, {
-            code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
+            code: auth.code, ref, identity: auth.identity, mode: auth.mode,
+            // WO-1453: when the runtime parsed the body out from under us, say so ON THE
+            // REJECT ROW. An AUTH_BAD_SIGNATURE carrying bytes:'reconstructed' is worth a
+            // second look; one without it is simply a bad signature.
+            detail: Object.assign({}, auth.detail, bodyBytesDetail(exactBytes)),
         });
         // 400 for a shape/argument problem, 401 for a genuine authorization
         // refusal — the client can retry the second (fetch a fresh nonce) and

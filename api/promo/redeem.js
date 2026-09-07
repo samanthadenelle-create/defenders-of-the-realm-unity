@@ -122,8 +122,8 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { AuthCode, authenticatePromoRedeem, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
-const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
+const { AuthCode, authenticatePromoRedeem, WALLET_MAX_BODY_BYTES } = require('../_lib/wallet-auth');
+const { applyCors, newRef, quietFail, readBodyExact, bodyBytesDetail } = require('../_lib/http');
 const { logAuthReject, logApiEvent, hashIp } = require('../_lib/audit');
 // WO-1456: the UPSERT below used to live in THIS file. It moved to _lib/ip-budget.js
 // the moment /api/auth/nonce needed the same gate — one limiter, one table, one
@@ -249,23 +249,27 @@ async function handler(req, res) {
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 
-    // A signature can only be verified against the ORIGINAL bytes. If the runtime
-    // parsed the body out from under us, say so precisely instead of emitting a
-    // lying AUTH_BAD_SIGNATURE (see _lib/http.readBodyExact).
-    // ⛔ SCOPED TO THE SIGNATURE PATH (2026-08-24). A session bearer does NOT sign the body:
-    // wallet-auth.js verifyWallet() accepts `x-session` and returns via:'session' without ever
-    // reading `payload`. This guard predates WO-1157's session rail and rejected BEFORE
-    // authenticate() ran, so a session-authed call was refused for lacking bytes it never needed.
-    // Same defect fixed in api/game/save.js, where it had silently 500ed EVERY wallet save in
-    // production — all 21 rows in player_data were guest rows.
-    const hasSessionHeader = !!(req.headers && req.headers['x-session']);
-    if (!exactBytes && !isGuestId(playerId) && !hasSessionHeader) {
-        await logAuthReject(sql, req, {
-            code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
-            detail: { reason: 'raw_body_unavailable_bodyparser_active' },
-        });
-        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
-    }
+    // ⛔ THE RAW-BODY REFUSAL IS RETIRED HERE (WO-1453, 2026-09-06). It used to read:
+    //
+    //     if (!exactBytes && !isGuestId(playerId) && !hasSessionHeader) -> 500 SERVER_ERROR
+    //         detail { reason: 'raw_body_unavailable_bodyparser_active' }
+    //
+    // and it 500ed a wallet holder presenting a VALID signature over the exact bytes —
+    // proven against production in WORK_ORDER_1440_..._blocker.RESULT.md:225-252
+    // ("RAIL 1 (signature) -> HTTP 500"). Vercel's Node 24 runtime parses `req.body`
+    // regardless of `config.api.bodyParser`, so `exact` is effectively always false in
+    // production and the signature rail — the ONLY rail a fresh device has, since it holds
+    // no session yet — could never succeed.
+    //
+    // We now PROCEED and TAG. See _lib/http.bodyBytesDetail for why that cannot create a
+    // false accept: sha256(payload) is bound into the signed message, so a wrong
+    // reconstruction fails CLOSED as a 401. The guard's one real value — the diagnosis —
+    // survives as a detail tag on the reject row below, so a reconstruction artefact stays
+    // distinguishable from a plainly bad signature.
+    //
+    // (The 2026-08-24 session-rail scoping this replaces was itself a partial fix of the
+    // same over-refusal: a session bearer does not sign the body at all. Both are gone now,
+    // through ONE helper rather than a fourth copy-paste.)
 
     // ── AUTH GATE — WALLET RAIL, PLUS THE ONE SCOPED GUEST EXCEPTION ───────
     // authenticatePromoRedeem, NOT authenticateGranting: the owner's 2026-09-06
@@ -285,7 +289,11 @@ async function handler(req, res) {
         // player (a stable code + ref; the client maps 401/400 to its one calm
         // "we couldn't confirm your identity" sentence — never raw JSON).
         await logAuthReject(sql, req, {
-            code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
+            code: auth.code, ref, identity: auth.identity, mode: auth.mode,
+            // WO-1453: when the runtime parsed the body out from under us, say so ON THE
+            // REJECT ROW. An AUTH_BAD_SIGNATURE carrying bytes:'reconstructed' is worth a
+            // second look; one without it is simply a bad signature.
+            detail: Object.assign({}, auth.detail, bodyBytesDetail(exactBytes)),
         });
         const status = (auth.code === AuthCode.PLAYER_ID_BAD_SHAPE ||
                         auth.code === AuthCode.PLAYER_ID_MISSING ||
