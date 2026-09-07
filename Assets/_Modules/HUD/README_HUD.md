@@ -1,4 +1,18 @@
-> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` (single-Knight overworld BattleArena; ATB flat/separate).
+> ⛔ **EVERY FILE THIS DOCUMENT DESCRIBES IS DELETED. HUD-001 IS RETIRED — DO NOT GO LOOKING FOR IT**
+> (WO-1482, verified 2026-09-07: `find Assets -name HUDManager.cs -o -name VirtualDPadLean.cs` returns
+> NOTHING). ⚠ **The two files have DIFFERENT histories, and the difference matters:**
+> `VirtualDPadLean.cs` was real and was deleted (253 lines) by commit **`925464df7`** *"feat(hud):
+> Blink Obsidian HUD kit — total presentation rebuild on the posture tree"* (2026-07-03), while
+> **`HUDManager.cs` WAS NEVER COMMITTED AT ALL** — `git log --all --diff-filter=D -- '*HUDManager.cs'`
+> returns NOTHING, i.e. there is no delete to find because there was never an add. This README has
+> described a file that never entered the tree since the day it was written; `GAP_AUDIT_2026-07-18.md:46`
+> caught it ("described in READMEs but **doesn't exist**") and the READMEs were never corrected.
+> **Do not go looking for a commit that removed it.** **The live HUD is
+> `Assets/_Modules/HUD/Kit/HudKitController.cs`** — see `docs/MASTER_CATALOG/hud.md`. This file is kept
+> as history per CLAUDE.md §15 and its body is NOT rewritten; treat every filename, wiring note and
+> acceptance item below as describing code that no longer exists. **Do not greenfield from it.**
+>
+> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: the one root `CANON_GROUND_TRUTH_*.md` with no `SUPERSEDED` banner (the `2026-06-26` file this line used to name is now at `docs/_archive/root/`).
 
 # Dark Fantasy Mobile HUD (HUD-001) — README
 

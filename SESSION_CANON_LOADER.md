@@ -1,9 +1,15 @@
 # DeNelle Studios - Session Canon Loader
 
-> **THE LIVE ANCHOR IS THE NEWEST `CANON_GROUND_TRUTH_<date>.md` BY DATE - never a filename copied
-> into a doc.** Find it: `ls CANON_GROUND_TRUTH_*.md | sort | tail -1` (PowerShell:
-> `Get-ChildItem CANON_GROUND_TRUTH_*.md | Sort-Object Name | Select-Object -Last 1`). Read it first,
-> then this file. Per CLAUDE.md section 15 that anchor WINS over this file on any conflict. This file
+> **THE LIVE ANCHOR IS THE ONE ROOT `CANON_GROUND_TRUTH_<date>.md` WITHOUT A `SUPERSEDED` BANNER -
+> never a filename copied into a doc.** That is the rule; newest-by-date is only the usual way it
+> comes out. Find it: `ls CANON_GROUND_TRUTH_*.md | sort | tail -1` (PowerShell:
+> `Get-ChildItem CANON_GROUND_TRUTH_*.md | Sort-Object Name | Select-Object -Last 1`), then confirm
+> its first lines carry no `SUPERSEDED` banner. Read it first, then this file.
+>
+> ⚠ **Root holds TWO of these files and only ONE is the anchor (WO-1482, 2026-09-07).**
+> `CANON_GROUND_TRUTH_2026-07-22.md` is kept at root as the deep **module** anchor many docs cite; it
+> is bannered `SUPERSEDED` and is history, not guidance. Sorting by date happens to skip it today, but
+> **judge by the banner, not by the sort.** The 19 older anchors live under `docs/_archive/root/`. Per CLAUDE.md section 15 that anchor WINS over this file on any conflict. This file
 > holds only rules and pointers: **it states no numbers, no versions, no branch names, by design.**
 
 *(The stacked dated banners that used to sit here are history, moved verbatim to
@@ -75,7 +81,7 @@ Reading this file is not doing it. The full boot route is `START_HERE.md`, execu
 
 | What you need | Where it actually lives |
 |---|---|
-| Reality anchor | newest `CANON_GROUND_TRUTH_*.md` by date (`ls CANON_GROUND_TRUTH_*.md \| sort \| tail -1`) |
+| Reality anchor | the one ROOT `CANON_GROUND_TRUTH_*.md` with no `SUPERSEDED` banner (`ls CANON_GROUND_TRUTH_*.md \| sort \| tail -1`, then check its banner); archived ones are in `docs/_archive/root/` |
 | Branch, HEAD, unpushed count | `git status -sb`, `git rev-list --count origin/<branch>..HEAD` |
 | Build stamp (`bundleVersion`, `AndroidBundleVersionCode`) | `ProjectSettings/ProjectSettings.asset` |
 | Live public store release | `publishing/SUBMIT_CHECKLIST.md` (read at source; it is not the tester build) |

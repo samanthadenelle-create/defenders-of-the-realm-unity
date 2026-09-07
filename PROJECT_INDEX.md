@@ -4,9 +4,13 @@
 >
 > **Branch is `feat/synty-art-retheme`** - read it off `git status`, never off a doc. ⛔ **This line
 > said "pushed" and that was WRONG; a push state is never stated from a doc. Measure it:
-> `git rev-list --count origin/<branch>..HEAD`.** The
-> single live anchor is **`CANON_GROUND_TRUTH_2026-09-06.md`** (re-stamped 2026-09-06 in the same
-> change as the anchor - it named the 09-03 one until then); the sequenced remediation off it is
+> `git rev-list --count origin/<branch>..HEAD`.** A non-zero ahead-count is the NORMAL state here -
+> commit local, push only after the owner retests or a regression proves it - never by itself a defect.
+> ⛔ **The single live anchor is THE ONE ROOT `CANON_GROUND_TRUTH_*.md` WITHOUT A `SUPERSEDED` BANNER**
+> (WO-1482, 2026-09-07: root now holds only that file plus the bannered `CANON_GROUND_TRUTH_2026-07-22.md`
+> deep module anchor; the other 19 moved to `docs/_archive/root/`). This line named a date until then and
+> had already been re-stamped late four times in four anchors - a filename copied here is duplicated
+> state, so the date is deliberately gone. The sequenced remediation off it is
 > **`docs/GET_WELL_PLAN_2026-09-06.md`**, whose inputs are `docs/READY_RCA_2026-09-06.md` and
 > `docs/GROWTH_RCA_2026-09-06.md`. The 09-03 session narrative is
 > **`docs/HANDOVER_2026-09-03_production_build.md`**. The banner beneath this one still says branch

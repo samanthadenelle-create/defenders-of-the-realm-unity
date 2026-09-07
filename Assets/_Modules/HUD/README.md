@@ -1,4 +1,17 @@
-> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: `CANON_GROUND_TRUTH_2026-06-26.md` (single-Knight overworld BattleArena; ATB flat/separate).
+> ⛔ **THE "Rich Dark Fantasy Battle HUD (HUD-001)" SECTION BELOW DESCRIBES DELETED FILES** (WO-1482,
+> verified 2026-09-07: `find Assets -name HUDManager.cs -o -name VirtualDPadLean.cs` returns NOTHING).
+> ⚠ Their histories DIFFER: `VirtualDPadLean.cs` was real and was deleted (253 lines) by commit
+> **`925464df7`** (2026-07-03, *"Blink Obsidian HUD kit — total presentation rebuild on the posture
+> tree"*), but **`HUDManager.cs` WAS NEVER COMMITTED** — `git log --all --diff-filter=D --
+> '*HUDManager.cs'` returns nothing, because there was never an add. `GAP_AUDIT_2026-07-18.md:46`
+> flagged that in July and the fix never reached this file. **The live HUD is
+> `Kit/HudKitController.cs`** (`docs/MASTER_CATALOG/hud.md`); `README_HUD.md`, listed below as a live
+> deliverable, is history-only for the same reason. Body kept unrewritten per CLAUDE.md §15.
+> ⚠ The ONE rule in this file that is still binding and enforced: **`DeNelle.HUD` never references
+> `DeNelle.Village`** (CLAUDE.md §5) — the reflection notes below are evidence of that rule, not of a
+> live HUD.
+>
+> ⚠ **SUPERSEDED — Defend-the-Tower / PatriciaLight was REMOVED 2026-06-09; not a live system.** Kept for history. Live reality: the one root `CANON_GROUND_TRUTH_*.md` with no `SUPERSEDED` banner (the `2026-06-26` file this line used to name is now at `docs/_archive/root/`).
 
 # HUD — `DeNelle.HUD`
 

@@ -10,12 +10,26 @@
 > violation - "keep exactly ONE current" - and it is FLAGGED here, not fixed, because pruning anchors is
 > out of this file's lane. The NEWEST date is the anchor; the other twenty are history.)*
 >
+> **✅ THAT FLAG IS NOW PAID (WO-1482, 2026-09-07).** The 19 superseded anchors were archived to
+> `docs/_archive/root/` with `git mv`. **The repo root now holds exactly TWO** `CANON_GROUND_TRUTH_*.md`:
+> the live one, and `CANON_GROUND_TRUTH_2026-07-22.md`, which is kept at root deliberately as the deep
+> **module** anchor many docs still cite as an authority - it carries a `SUPERSEDED` banner and is NOT
+> the live anchor. ⛔ **The live anchor is the one root file WITHOUT a `SUPERSEDED` banner** - that is
+> the rule, and its date is deliberately not restated in this paragraph. A doc naming an older date is
+> frozen history; look for it under `docs/_archive/root/`.
+>
 > ### 2026-09-06 21:05 - the Sunday sweep, measured tonight. Every line names where it was read.
 > **TREE AND BUILD**
-> - **Branch `feat/synty-art-retheme`, 118 commits UNPUSHED** - `git status -sb` reads
->   `[ahead 118]`, `git rev-list --count origin/feat/synty-art-retheme..HEAD` = **118**, both run
->   2026-09-06 ~21:00. The 09-06 anchor's **103** was read earlier the same evening and both are true
->   at their timestamps. **Never state a push count from a doc - re-run the command.**
+> - ⛔ **BRANCH AND PUSH-STATE ARE NOT WRITTEN HERE, AND NO NUMBER MAY BE ADDED (WO-1482).** Read the
+>   branch off `git status -sb`; read the ahead-count off
+>   `git rev-list --count origin/<branch>..HEAD`. A non-zero ahead-count is the NORMAL state - the
+>   cadence is commit local, push only after the owner retests (felt/gameplay) or a regression proves
+>   it (data/logic) - so it is never by itself a defect.
+>   *(This row used to state **118 commits UNPUSHED**, measured 2026-09-06 ~21:00, and noted the 09-06
+>   anchor's **103** from earlier the same evening. Both were true at their timestamps and both were
+>   stale within a day. Two numbers disagreeing in one paragraph, each correctly measured, is the
+>   proof that the number was never the fact - the command is. The numbers are deleted rather than
+>   refreshed; a fresher copy drifts the same way.)*
 > - **Tester build on the Seeker = `2026.09.07.358574`.** `ProjectSettings/ProjectSettings.asset:148`
 >   `bundleVersion: 2026.09.07.358574`, `:177` `AndroidBundleVersionCode: 358574`, read at source
 >   tonight. The Seeker install itself is the lead's `adb dumpsys` reading; **it is not re-provable

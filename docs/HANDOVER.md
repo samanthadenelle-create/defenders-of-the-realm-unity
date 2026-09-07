@@ -2,9 +2,17 @@
 
 > ## >> SESSION HANDOVER - 2026-09-06 - START HERE <<
 >
-> **Live anchor: `CANON_GROUND_TRUTH_2026-09-06.md` (repo root).** Branch `feat/synty-art-retheme`.
-> **117 commits unpushed** - measured, not quoted: `git rev-list --count origin/feat/synty-art-retheme..HEAD`
-> = 117. Every banner below this block is history, kept, not guidance.
+> **Live anchor: `CANON_GROUND_TRUTH_2026-09-06.md` (repo root)** - the ONE unbannered ground truth;
+> every other root `CANON_GROUND_TRUTH_*.md` carries a `SUPERSEDED` banner and is frozen history.
+> ⛔ **NO PUSH-STATE NUMBER IS WRITTEN HERE, AND NONE MAY BE ADDED (WO-1482).** Measure it:
+> `git rev-list --count origin/<branch>..HEAD` for the branch `git status -sb` names. This line read
+> **"117 commits unpushed ... = 117"** until 2026-09-07, by which date the count had moved on again -
+> and it is not the first push-state number in this file to rot where it stood (see the 09-03 block's
+> `103 unpushed on 2026-09-06`, and the 08-03 block's `43 commits ahead`, both frozen below).
+> **The count is not the fact; the command is.** The standing cadence is unchanged:
+> commit local, push only after the owner retests (felt/gameplay) or a regression proves it
+> (data/logic) - so a non-zero ahead-count is the NORMAL state here, never by itself a defect.
+> Every banner below this block is history, kept, not guidance.
 >
 > ### 2026-09-07 - THE "ALL NINE SCREENS MATCH" CLAIM WAS FALSE. READ THIS BEFORE ANY MANAGE WORK.
 >
@@ -103,10 +111,13 @@
 > 5. **Hand to the owner for the Easy-camp retest per WO-1520's acceptance criteria.** She felt-verifies
 >    and closes; the CLI does not close.
 
-> ## > REFRESHED 2026-09-03 - read `docs/HANDOVER_2026-09-03_production_build.md` FIRST
+> ## ⚠ (previous) REFRESHED 2026-09-03 - SUPERSEDED 2026-09-06 - read `CANON_GROUND_TRUTH_2026-09-06.md` FIRST
 >
 > **The live anchor is `CANON_GROUND_TRUTH_2026-09-03.md` (repo root).** The 09-02 banner below is
 > history now, kept, not guidance.
+> *(⚠ That anchor line is FROZEN 09-03 text and is no longer true: `CANON_GROUND_TRUTH_2026-09-03.md`
+> carries a SUPERSEDED banner. The live anchor is named in the top block of this file. Body left
+> unrewritten per CLAUDE.md §15.)*
 >
 > **`2026.09.04.354315` IS THE PRODUCTION CANDIDATE.** On her Seeker; gates green on fresh logs -
 > `COMPILE_GATE_OK` (`Builds/compile-gate.log` 20:10), `REGRESSION_OK 358/358 suites -- 358 green,
@@ -137,7 +148,7 @@
 > pinned by `HudLabelFitRegression` Case 0 and `SessionShapeRegression`. The code and the suites are
 > the authority; that line had already been corrected once, on 2026-08-26.
 
-> ## ▶ REFRESHED 2026-09-02 — read `CANON_GROUND_TRUTH_2026-09-02.md` FIRST
+> ## ⚠ (previous) REFRESHED 2026-09-02 — SUPERSEDED 2026-09-06 — read `CANON_GROUND_TRUTH_2026-09-06.md` FIRST
 >
 > The **★★ SESSION HANDOVER — 2026-09-02 ★★** block below is the current one. Every banner and block
 > beneath it is history, kept, not guidance.

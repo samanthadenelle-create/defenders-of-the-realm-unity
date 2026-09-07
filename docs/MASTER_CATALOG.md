@@ -1,6 +1,15 @@
 # MASTER CATALOG — Project Index
 
 > # DELTA 2026-09-06  -  read this FIRST; it supersedes every dated block below it
+>
+> **Live anchor = the ONE root `CANON_GROUND_TRUTH_*.md` WITHOUT a `SUPERSEDED` banner.** ⛔ Its date
+> is deliberately not typed here (WO-1482): every dated block further down this file names a *then*-live
+> anchor, and each of those names went stale where it stood - `:96` still says 08-21, `:140` says 08-16,
+> `:207`/`:219`/`:246` say 08-06. Those are FROZEN history, not competing pointers.
+> ⛔ **BRANCH AND PUSH-STATE ARE NEVER WRITTEN IN THIS FILE.** Run `git status -sb` for the branch and
+> `git rev-list --count origin/<branch>..HEAD` for the ahead-count. A non-zero ahead-count is normal -
+> the cadence is commit local, push only after the owner retests or a regression proves it.
+>
 > Scope: the commits `949e848a0..HEAD` plus the working tree at the time of writing. Every entry
 > below was re-verified by opening the `.cs` file, never a comment digest, and each cites the file
 > it was read from. Nothing here restates a number the code already owns.

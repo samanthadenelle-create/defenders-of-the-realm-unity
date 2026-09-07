@@ -1831,7 +1831,30 @@ def main():
     print(f"BOARD_DRIFT {n_drift_wo} READY ticket(s) name a file committed after their mint "
           f"date - WARNING, not a fail: verify the ticket is still open before dispatching it")
 
+    # -- WO-1482: exactly ONE live canon anchor at the repo root -------------------------
+    # The live anchor is defined by its BANNER, not by its date: a root CANON_GROUND_TRUTH_*.md
+    # whose first six lines carry no SUPERSEDED marker is live. Root legitimately holds two files
+    # today (the live one + the bannered 2026-07-22 deep-module anchor), so this counts banners,
+    # never files. Zero live anchors is ALSO a fail: an over-eager banner pass would otherwise read
+    # as clean to a count-only check. The archived set lives in docs/_archive/root/.
+    anchors = sorted(glob.glob(os.path.join(ROOT, "CANON_GROUND_TRUTH_*.md")))
+    live_anchors = []
+    for a in anchors:
+        try:
+            with open(a, encoding="utf-8", errors="replace") as fh:
+                head = "".join([next(fh, "") for _ in range(6)])
+        except OSError:
+            head = ""
+        if "SUPERSEDED" not in head:
+            live_anchors.append(os.path.basename(a))
+    if len(live_anchors) == 1:
+        print(f"ANCHOR_OK live canon anchor = {live_anchors[0]} (root holds {len(anchors)})")
+    else:
+        print(f"ANCHOR_FAIL {len(live_anchors)} root CANON_GROUND_TRUTH file(s) lack a SUPERSEDED "
+              f"banner (need exactly 1): {', '.join(live_anchors) or 'none'}")
+
     problems = []
+    if len(live_anchors) != 1: problems.append(f"{len(live_anchors)} live canon anchor(s) (need 1)")
     if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
     if no_status: problems.append(f"{len(no_status)} missing status line(s)")
     if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")

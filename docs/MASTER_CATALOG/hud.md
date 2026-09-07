@@ -48,10 +48,17 @@ Scope: `Assets/_Modules/HUD/**` (asmdef `DeNelle.HUD`) + its hard seams:
 
 ## 1. Kit/ — the live HUD
 
-### Kit/HudKitController.cs (5,298 lines as of 2026-09-06  -  THE HUD)
+### Kit/HudKitController.cs  -  THE HUD
 
-> The count above is from `wc -l` on 2026-09-06. It read **1,836** until then, understating the file by
-> a factor of nearly three; re-measure it rather than quoting this line.
+> ⛔ **NO LINE COUNT IS WRITTEN HERE, AND NONE MAY BE ADDED (WO-1482).** Run
+> `wc -l Assets/_Modules/HUD/Kit/HudKitController.cs`. This heading carried **1,836** for weeks -
+> understating the file by nearly a factor of three - was then "corrected" to **5,298 as of 2026-09-06**,
+> and **that correction was wrong the moment it was written**: the commit that wrote it (`d6511b8e5`)
+> carries the file at **5,698** lines (`git show d6511b8e5:Assets/_Modules/HUD/Kit/HudKitController.cs
+> | wc -l`, run 2026-09-07), which is also what HEAD and the worktree return today. So a count here has
+> now been wrong TWICE - once by rotting, once at birth. A
+> block (CLAUDE.md §2) and the retired assembly table (§5). **The cure is not a fresher number - it is
+> deleting the number.**
 `DeNelle.HUD.Kit.HudKitController`, sealed MonoBehaviour. Built once per gameplay scene
 by `VillageHudController.Start` via `HudKitController.Create(owner)` (`:132-148`):
 creates `HudAreasHost`, adds a `PostureEvaluator`, loads `HudAreasConfig`, resolves

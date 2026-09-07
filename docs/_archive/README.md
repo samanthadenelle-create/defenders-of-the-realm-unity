@@ -14,7 +14,11 @@ Dated snapshots and completed one-offs that are no longer live canon:
 - Overnight / morning / shift-change reports, session handovers & resumes
 - Dated backlog reconciliations, queue-health, board-status, PM boards
 - Completed dated RCA / audit / triage / census / ledger docs
-- Superseded `CANON_GROUND_TRUTH_*` (the **newest** stays at repo root)
+- Superseded `CANON_GROUND_TRUTH_*` → `root/`. **The live one stays at repo root: it is the ONE root
+  `CANON_GROUND_TRUTH_*.md` with no `SUPERSEDED` banner.** ⚠ One exception is deliberate —
+  `CANON_GROUND_TRUTH_2026-07-22.md` also stays at root as the deep **module** anchor many docs cite;
+  it IS bannered, so the banner rule still identifies the live one. (WO-1482, 2026-09-07: 19 anchors
+  moved here in that pass.)
 - Playtest cards & checklists from past sessions
 - The retired `SESSION_START_HERE.md` (self-flagged RETIRED)
 
@@ -25,7 +29,9 @@ Dated snapshots and completed one-offs that are no longer live canon:
 ## What is NOT here
 The load-bearing canon set (read every session) stayed exactly where it was:
 `START_HERE.md`, `KEY_FACTS.md`, `SESSION_CANON_LOADER.md`, `CLAUDE.md`, `PREFLIGHT_GATE.md`,
-`SAMANTHA.md`, `PROJECT_INDEX.md`, the newest `CANON_GROUND_TRUTH_2026-07-12.md`,
+`SAMANTHA.md`, `PROJECT_INDEX.md`, the live `CANON_GROUND_TRUTH_*.md` (⛔ **do not type its date here** —
+this line said `2026-07-12` from that cleanup until 2026-09-07, roughly two months and nineteen anchors
+stale; identify it by the absent `SUPERSEDED` banner),
 `PIPELINE_STATE.md`, `CLI_LANES_WO_NUMBERS.md`, `MASTER_PIPELINES_BACKLOG_2026-06-06.md`
 (WO-numbering authority), and the `docs/` architecture / catalog / SME hubs.
 
