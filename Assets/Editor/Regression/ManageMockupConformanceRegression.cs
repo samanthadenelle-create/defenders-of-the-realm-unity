@@ -1137,6 +1137,8 @@ namespace DeNelle.Editor
                              "the 'dead well beneath' the owner named on owner-screen-20260907-005358.png. " +
                              "A scrolling grid must still start at its first row.");
 
+            CheckPickerDeadBand(workspace, tileGap, tileCap, wellPx, failures);
+
             // ---- PANEL 7: the tree rows take the band the painting left ---------------------
             float paintX1 = ParseConstF(workspace, "ListPaintingX1");
             float paintGap = ParseConstF(workspace, "ListPaintingGapF");
@@ -1205,6 +1207,70 @@ namespace DeNelle.Editor
                              fill.ToString("0.##") + ", under the 0.95 floor. The owner's criterion zero is " +
                              "that the picture FILLS the screen; tiles in the top half of a full-bleed " +
                              "panel fail it however correct every element inside them is.");
+        }
+
+        /// <summary>
+        /// WO-1490 - THE RESEARCH PICKER'S DEAD BAND IS MEASURED, AND THE INSTRUMENT THAT
+        /// REPORTS IT TELLS THE TRUTH.
+        ///
+        /// <para>⛔ THE DEFECT THIS CLOSES IS IN THE MEASUREMENT, NOT THE LAYOUT. Measured on
+        /// <c>Builds/cap-manage-wave5c.log</c>: <c>MANAGE_GRID tiles=5 want=5x1 cell=359px
+        /// band=1835x758 rowsFit=2 shown=10 hidden=0 gridW=1835 fillW=1 fillH=0.96</c> - and the
+        /// frame it was written from, <c>ManageFlow_RESEARCH_gridtop_2670x1200.png</c>, shows ONE
+        /// 359px row of tiles centred in a 758px well with roughly half of it black. The line said
+        /// 0.96 because it divided the rows that WOULD FIT (two) by the band, not the rows that
+        /// EXIST (one). WO-1490's whole acceptance is a dead-band threshold, so the number the
+        /// ticket is judged by was reading 0.96 on a 0.47 screen.</para>
+        ///
+        /// <para>⭐ AND THE SURPLUS ITSELF IS NOT A DEFECT HERE, WHICH IS WHY THIS CASE DOES NOT
+        /// ASSERT A FILL FLOOR. Five square tiles share the well's WIDTH, so the cell can never be
+        /// taller than <c>bandW/5</c> however tall the well grows - at the reference well that is
+        /// 359px against 758px and no layout can spend the other 399px without either stretching
+        /// the tiles into portraits the art was never drawn for or dropping to four across, which
+        /// the mockup does not draw. The renderer splits the surplus above and below (mockup panel
+        /// 6) and the case above pins that. What this case pins is that the ONLY thing allowed to
+        /// shrink the cell is that square ceiling: if the resolved height falls under the cell's
+        /// own width, some OTHER cap has come back - which is precisely how
+        /// <c>MaxTileHeightPx</c>(190) once painted 190px of tile into the same 758px well.</para>
+        ///
+        /// <para>RED RECIPE, both halves: (a) put <c>rowsPx</c> back into the <c>fillH</c> term;
+        /// (b) restore an absolute <c>cellH = Mathf.Min(cellH, MaxTileHeightPx)</c> ceiling.</para>
+        /// </summary>
+        private static void CheckPickerDeadBand(string workspace, float tileGap, float tileCap,
+                                                float bandH, List<string> failures)
+        {
+            if (!Has(workspace, "\" fillH=\" + (seatedPx / Mathf.Max(1f, bandH)).ToString(\"0.##\")"))
+                failures.Add("[research-picker-dead-band] MANAGE_GRID's fillH is divided out of `rowsPx` " +
+                             "again - the rows that WOULD FIT, not the rows of content that exist. On the " +
+                             "research picker that reports fillH=0.96 for one 359px row in a 758px band " +
+                             "(Builds/cap-manage-wave5c.log beside " +
+                             "ManageFlow_RESEARCH_gridtop_2670x1200.png, which is half black). The dead " +
+                             "band is the number this ticket is judged by; an instrument that overstates " +
+                             "it by 2x retires the ticket on paper.");
+            if (!Has(workspace, "MANAGE_GRID_DEAD_BAND"))
+                failures.Add("[research-picker-dead-band] the grid no longer names its unused band as a " +
+                             "number. Every dead-band ticket in this program so far was opened off a PNG " +
+                             "somebody eyeballed; the log line is what makes the next one arithmetic.");
+
+            // The renderer's own order, for ONE row of five at the reference well.
+            const int columns = 5;
+            float bandW = RefWellWidthPx;
+            float cellW = (bandW - (columns - 1) * tileGap) / columns;
+            float cellH = bandH;                                   // (bandH - 0 gaps) / 1 row
+            float cellWCap = cellH * 2.3f;
+            if (cellW > cellWCap) cellW = cellWCap;
+            cellH = Mathf.Min(cellH, Mathf.Max(tileCap, cellW));   // the square ceiling
+            float deadF = 1f - (cellH / Mathf.Max(1f, bandH));
+
+            if (cellH < cellW - 1f)
+                failures.Add("[research-picker-dead-band] the picker's one row resolves a " +
+                             cellW.ToString("0") + "x" + cellH.ToString("0") + "px cell - SHORTER than it " +
+                             "is wide, so " + (deadF * 100f).ToString("0") + "% of the " +
+                             bandH.ToString("0") + "px band is dead for a reason other than the square " +
+                             "ceiling. The only sanctioned governor on a one-row grid is the cell's own " +
+                             "WIDTH; an absolute MaxTileHeightPx(" + tileCap.ToString("0") + ") ceiling is " +
+                             "what painted 190px of tile into this well on the owner's device " +
+                             "(owner-screen-20260907-005358.png).");
         }
 
         /// <summary>

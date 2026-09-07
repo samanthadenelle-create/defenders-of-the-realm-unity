@@ -714,8 +714,35 @@ namespace DeNelle.Core.Manage
                 // ⭐ THE FILL FRACTIONS, so "the tiles fill the band" is a measurement and not a
                 // claim. fillH is the one that was wrong: 390/580 = 0.67 on BUILD before the
                 // ceiling was re-derived from the cell's own width.
+                // ⛔ WO-1490 - fillH IS SEATED PIXELS OVER THE BAND, NEVER `rowsPx`. `rowsPx` is
+                // how many rows WOULD FIT, which on a grid with fewer rows of CONTENT than of
+                // room is not a picture of anything. MEASURED on Builds/cap-manage-wave5c.log,
+                // the research picker: `tiles=5 want=5x1 cell=359px band=1835x758 rowsFit=2 ...
+                // fillH=0.96` - one 359px row of tiles in a 758px well, i.e. 0.47 of the band
+                // painted, reported as 0.96 because TWO rows fit. That is the instrument
+                // contradicting the frame (ManageFlow_RESEARCH_gridtop_2670x1200.png shows the
+                // row centred with roughly half the well black), and it is the exact number
+                // WO-1490's "45% dead band" is judged by. An instrument that reads 0.96 on a
+                // 0.47 screen is worse than no instrument: it retires the ticket on paper.
                 " fillW=" + (gridW / Mathf.Max(1f, bandW)).ToString("0.##") +
-                " fillH=" + (rowsPx / Mathf.Max(1f, bandH)).ToString("0.##"));
+                " fillH=" + (seatedPx / Mathf.Max(1f, bandH)).ToString("0.##") +
+                " rowsSeated=" + seatedRows);
+            // ⭐ WO-1490 - THE DEAD BAND IS NAMED AS A NUMBER, EVERY TIME, ON EVERY GRID.
+            // ⛔ IT IS A `Step`, NOT A `Warn`, AND THAT IS DELIBERATE. On the research picker the
+            // surplus is FORCED: five square tiles share the band's width, so the cell can never
+            // be taller than bandW/5 however the well grows, and ~370px of a 758px band is
+            // unusable by construction (the centring above splits it above and below, which is
+            // what mockup panel 6 draws). Warning on a geometry that cannot be otherwise would
+            // train the next seat to ignore the line. What matters is that the number is IN the
+            // log, so nobody has to infer the dead band from a PNG again.
+            float deadBandF = 1f - (seatedPx / Mathf.Max(1f, bandH));
+            if (deadBandF > 0.02f)
+                FlowTrace.Step("Manage", "MANAGE_GRID_DEAD_BAND " + (deadBandF * 100f).ToString("0") +
+                    "% of the " + bandH.ToString("0") + "px band carries no tile - " +
+                    seatedRows + " row(s) of content at " + cell.ToString("0") + "px in a well " +
+                    "that fits " + wholeRows + ". On a one-row grid this is FORCED (the cell may " +
+                    "not be taller than the width the columns share) and the surplus is split " +
+                    "above and below; on a multi-row grid it is a defect");
             // ⚠ TWO DIFFERENT THINGS, AND THE OLD MESSAGE CONFLATED THEM.
             // It called ANY off-screen tile a "WELL SHORTFALL", which made the BUILD screen report
             // a failure while it was doing exactly what the mockup asks: panel 2 draws TEN tiles,
