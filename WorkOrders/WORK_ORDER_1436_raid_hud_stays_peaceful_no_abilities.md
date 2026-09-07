@@ -1,6 +1,6 @@
 # WO-1436: P0 - the raid HUD stays in PEACEFUL posture, so the hero has no ability buttons and cannot fight
 
-**Status:** READY TO IMPLEMENT - **P0, the raid core loop is unplayable.**
+**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - AC1/AC2/AC4 landed in `5bc5025f5` (WO-1437), re-verified at source 2026-09-06 (see RESULT); AC3 tappable-faces capture still owed
 **Silo:** HUD context/posture + the raid scene bootstrap. Disjoint from WO-1435 (rail geometry) and from
 the Manage 2000-block.
 **Source:** owner felt-test 2026-09-06 on build **2026.09.06.358161**, verbatim:

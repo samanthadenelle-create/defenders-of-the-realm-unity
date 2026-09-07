@@ -1,6 +1,6 @@
 # WO-1439: raid defenders spend the raid attacking their OWN spire - structures carry no faction
 
-**Status:** READY TO IMPLEMENT - **P0 for the raid loop.** This is the larger half of the owner's
+**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` (see RESULT); captured raid run for AC3 still owed. Was P0 for the raid loop, the larger half of the owner's
 *"the AI didnt really fight either"*.
 **Silo:** `EnemyBrain` / `Enemy` target selection + `IDamageableStructure`. **Disjoint from WO-1438**
 (which owns `TroopController`, the ATTACKER side) and from WO-1436/1437 (HUD, lifecycle).
