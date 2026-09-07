@@ -27,11 +27,31 @@
 //     steps the pen by - for the string as AUTHORED IN canon-strings.json. Add a
 //     word to a canon string, or regenerate a role font with a wider face, and the
 //     number moves and this suite fails. Nothing here counts characters.
-//   * THE BOX IS PINNED BY SOURCE LINT, NOT ASSUMED. Every box width below is
-//     derived from a literal this suite also asserts is still present in the file
-//     that authors it (HudKitController is DeNelle.HUD, which this assembly does
-//     NOT reference - the SessionShapeRegression assembly note). Narrow a chip or
-//     a slot and the lint fails rather than the oracle silently following it down.
+//   * THE BOX IS PART MEASURED, PART SOURCE LINT - and Case 0 says which is which
+//     per box, because "measured" is a claim, not a mood.
+//       - MEASURED off a live object: the ActionBar and Status zone fractions are
+//         read back from a real HudAreasHost (Create -> Mount(area) -> anchors),
+//         so a mount that moves reds this suite even though every source literal
+//         that authored it is untouched. Un-instantiable => NAMED PartialSkip.
+//       - TYPED PIN (a real cross-assembly read, not text): HudKitController's
+//         public WaveBandHeightPx and ElarionUiKit's MinTouchPx/FontFloor. Rename
+//         or retype one and this file does not compile.
+//       - SOURCE LINT: RailChipWidthPx / RailChipHeightPx / BarGap. Those three
+//         are declared `private const` in HudKitController (grep the names; no line
+//         numbers here on purpose — copied ones rot) and there
+//         is no InternalsVisibleTo for DeNelle.EditorRegression, so a typed read
+//         is impossible from here. Narrow a chip and the lint fails rather than
+//         the oracle silently following it down. Making these measured needs a
+//         probe hook in HudKitController - that is a HudKitController lane, and
+//         until it exists this file says LINT and does not pretend otherwise.
+//     ⛔ CORRECTED 2026-09-07 (WO-1494). This paragraph used to justify the lint
+//     with "HudKitController is DeNelle.HUD, which this assembly does NOT
+//     reference". THAT IS FALSE: DeNelle.EditorRegression.asmdef lists DeNelle.HUD
+//     (second row), which is why the mount read above is possible at all. The same
+//     false sentence sat in HudUiRegression and in Case 0 and is corrected in both.
+//     The REAL limits are member ACCESSIBILITY (above) and the fact that batchmode
+//     runs no layout pass, so anything needing a laid-out rect must force one or
+//     degrade to a named skip - never to a pass.
 //   * TWO ASPECTS, BOTH LANDSCAPE. 2670x1200 (the capture) and 1920x1080. A label
 //     that fits at one width can still cut at another, which is the whole reason
 //     the WO demanded it.
@@ -129,13 +149,19 @@ namespace DeNelle.Editor.Regression
         private const float RailChipHeightPx = 112f;
         /// <summary>ElarionUiKit.BuildObsidianButton insets its label to x 0.04..0.96.</summary>
         private const float ButtonLabelInset = 0.92f;
-        /// <summary>HudAreasHost: ActionBar spans x 0.270..0.730 of the canvas.</summary>
+        /// <summary>HudAreasHost: ActionBar spans x 0.270..0.730 of the canvas.
+        /// ⭐ WO-1494: VERIFIED AGAINST A LIVE MOUNT — Case 0's MeasureZoneMounts instantiates a
+        /// real HudAreasHost and reds if the built HudArea.ActionBar disagrees with this. It is a
+        /// declared expectation checked against an object, no longer an unchecked copy.</summary>
         private const float ActionBarZoneFrac = 0.730f - 0.270f;
-        /// <summary>HudKitController.BarGap.</summary>
+        /// <summary>HudKitController.BarGap. SOURCE LINT ONLY — `private const` over there
+        /// in HudKitController with no InternalsVisibleTo, so it cannot be read typed.</summary>
         private const float BarGap = 0.01f;
-        /// <summary>HudAreasHost: Status spans x 0.340..0.660 (the wave band inherits its width).</summary>
+        /// <summary>HudAreasHost: Status spans x 0.340..0.660 (the wave band inherits its width).
+        /// ⭐ WO-1494: VERIFIED AGAINST A LIVE MOUNT, same as ActionBarZoneFrac above.</summary>
         private const float StatusZoneFrac = 0.660f - 0.340f;
-        /// <summary>HudKitController.WaveBandHeightPx.</summary>
+        /// <summary>HudKitController.WaveBandHeightPx. TYPED PIN — the member is `public const`,
+        /// so Case 0 compares this against the real one across the assembly boundary.</summary>
         private const float WaveBandHeightPx = 128f;
         /// <summary>The wave CTA's band inside it (y 0.03..0.93).</summary>
         private const float WaveCtaBandFrac = 0.93f - 0.03f;
@@ -190,10 +216,18 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "HUD LABEL FIT OK - every authored chip/face line MEASURES inside its own box " +
-                         "at the 30px legibility floor at both landscape aspects (real glyph advances, " +
-                         "not a character count), the wave block owns a band the compass cannot enter " +
-                         "and a CTA clear of the touch floor, and TIER UP is a capped screen stamp" + noteStr;
+                // ⚠ The verdict states WHAT WAS MEASURED and WHAT WAS ONLY LINTED (WO-1494).
+                // "OK" over an unqualified claim of measurement is how a text match came to read
+                // as a rendered pass; a reader of a green log must be able to tell them apart
+                // without opening this file.
+                reason = "HUD LABEL FIT OK - MEASURED: every authored chip/face line's width from the real " +
+                         "TMP glyph advances, inside its box at the 30px legibility floor at both landscape " +
+                         "aspects (not a character count), and the ActionBar/Status zone fractions read back " +
+                         "off a live HudAreasHost. TYPED PINS: HudKitController.WaveBandHeightPx, " +
+                         "ElarionUiKit.MinTouchPx/FontFloor. SOURCE LINT ONLY (not measured): the rail-chip " +
+                         "220x112 box and BarGap, which are private consts unreadable from this assembly. " +
+                         "NOT CLAIMED: no laid-out rect, and no two live rects proven disjoint on a canvas - " +
+                         "that stays RunCaptureHeadless plus eyes-on" + noteStr;
                 return true;
             }
             reason = "hud-label-fit FAIL x" + failures.Count + ": " +
@@ -242,6 +276,12 @@ namespace DeNelle.Editor.Regression
         // The pin is a source lint: if someone narrows a chip, re-divides the bar, or
         // drops the wave band, this fails LOUDLY instead of the oracle quietly following
         // the layout down.
+        // ⭐ WO-1494 (2026-09-07) - THE TWO ZONE FRACTIONS ARE NOW MEASURED, NOT COPIED.
+        // ActionBarZoneFrac and StatusZoneFrac used to be literals typed into this file from
+        // HudAreasHost. MeasureZoneMounts below instantiates a REAL HudAreasHost and reads the
+        // mounts back, so moving a mount reds this suite with every source literal intact - which
+        // is exactly what a lint cannot do. The three HudKitController box literals stay lint and
+        // the header says so: they are `private const` and there is no InternalsVisibleTo here.
         // ⛔ CORRECTED 2026-09-06 (WO-1465/1466/1468). The sentence that used to justify the
         // lint — "DeNelle.EditorRegression cannot reference DeNelle.HUD" — IS FALSE:
         // Assets/Editor/Regression/DeNelle.EditorRegression.asmdef lists "DeNelle.HUD" in its
@@ -271,6 +311,18 @@ namespace DeNelle.Editor.Regression
             RequireLiteral(failures, src, "WaveBandHeightPx = 128f",
                 "the wave block's own fixed-pixel band");
 
+            // TYPED PIN, not a lint: WaveBandHeightPx is `public const` on HudKitController, so
+            // this reads the REAL member across the assembly boundary. Rename it and this file
+            // stops compiling; retune it and this fails naming both numbers. (The three literals
+            // above cannot be read this way - they are private, see the header.)
+            if (Mathf.Abs(DeNelle.HUD.Kit.HudKitController.WaveBandHeightPx - WaveBandHeightPx) > 0.01f)
+                failures.Add("[boxes-pinned] HudKitController.WaveBandHeightPx is " +
+                             DeNelle.HUD.Kit.HudKitController.WaveBandHeightPx + ", but Case 4 measures the " +
+                             "wave lines against " + WaveBandHeightPx + " - the band moved and this suite " +
+                             "would have kept fitting labels into a box that no longer exists");
+
+            MeasureZoneMounts(failures, notes);
+
             // The kit's own inset + floors, read from Core (a real reference, not a lint).
             if (Mathf.Abs(ElarionUiKit.MinTouchPx - 112f) > 0.01f)
                 failures.Add("[boxes-pinned] ElarionUiKit.MinTouchPx is " + ElarionUiKit.MinTouchPx +
@@ -279,10 +331,14 @@ namespace DeNelle.Editor.Regression
             if (Mathf.Abs(ElarionUiKit.FontFloor - 30f) > 0.01f)
                 notes.Add("FontFloor is " + ElarionUiKit.FontFloor + " (was 30 when these boxes were fitted)");
 
-            if (HudActionBarModel.MaxVisibleFaces != 4)
-                failures.Add("[boxes-pinned] HudActionBarModel.MaxVisibleFaces is " +
-                             HudActionBarModel.MaxVisibleFaces + ", not 4 - adaptive peaceful HUD is locked " +
-                             "to Build/Hero/Journey/Manage");
+            // ⚠ WO-1467 - THE MaxVisibleFaces PIN THAT SAT HERE IS RETIRED. It failed unless the
+            // constant equalled a literal, and its message claimed the constant described "the
+            // adaptive peaceful HUD". It never did: HudKitController.BindActionBar returns early
+            // whenever the adaptive peaceful dock exists, so HudActionBarModel is not subscribed on
+            // the shipping path and does not size a single medallion the player touches. A pin on
+            // an unbound path is worse than no pin - it reads as coverage.
+            // The dock is now MEASURED: HudActionBarRegression.CheckMeasuredPeacefulDock builds it
+            // live and asserts the faces it finds. Do not re-add a literal here.
 
             // The two widgets that collided are STILL both authored into one area, which is why the
             // wave block has to buy its own band rather than trust two fraction stacks to agree.
@@ -300,6 +356,118 @@ namespace DeNelle.Editor.Regression
                     : "compass + waveBlock no longer share the status area (the WO-1144 hang may now be " +
                       "belt-and-braces)");
             }
+        }
+
+        // =====================================================================
+        //  MEASURED: the zone fractions come off a LIVE HudAreasHost (WO-1494)
+        // =====================================================================
+        // WHY THIS IS NOT THE BANNED SHAPE. The banned shape recomputes a fit from the same
+        // constants the layout used. This does the opposite: it builds the real mount table the
+        // HUD builds (HudAreasHost.Create -> Build() -> Add(HudArea.*, ...)) and reads the anchors
+        // back off the instantiated RectTransforms, then compares them with the fractions Cases 3
+        // and 4 divide their boxes by. Move HudArea.ActionBar or HudArea.Status - in HudAreasHost,
+        // or in HudLayoutBands, or by any future route - and this REDS while every literal in
+        // HudKitController.cs and in this file stays byte-identical. That is the class of defect
+        // a source lint structurally cannot see, and it is the WO-1494 conversion for this suite.
+        //
+        // ANCHORS, NOT LAID-OUT RECTS - deliberate. Batchmode runs no layout pass, so sizeDelta /
+        // rect would be noise; anchorMin/anchorMax are authored screen fractions and are correct
+        // the moment Build() returns. (HudUiRegression's [gear-drawer-clearance] reads the same
+        // mounts the same way and is the precedent.)
+        //
+        // RED, one line: in HudAreasHost.Build, change
+        //     Add(HudArea.Status, new Vector2(0.340f, 0.845f), new Vector2(0.660f, 0.990f));
+        // to 0.400f/0.600f. Every RequireLiteral in this file stays green; this fails with
+        // "the LIVE HudArea.Status mount spans x 0.400..0.600 (width 0.200), but Case 4 ...".
+        private static void MeasureZoneMounts(List<string> failures, List<string> notes)
+        {
+            const string Section = "boxes-pinned zone mounts";
+            DeNelle.HUD.Kit.HudAreasHost host = null;
+            try
+            {
+                try { host = DeNelle.HUD.Kit.HudAreasHost.Create(null); }
+                catch (Exception ex)
+                {
+                    // HARNESS-CAPABILITY-ABSENT. A named PartialSkip, never a silent pass: the
+                    // caller has to be able to subtract what was not proven this run.
+                    notes.Add(RegressionOutcome.PartialSkip(Section,
+                        "HudAreasHost could not be instantiated headlessly (" + ex.GetType().Name +
+                        ": " + ex.Message + ") - the ActionBar/Status zone fractions were NOT " +
+                        "measured this run and remain unverified copies"));
+                    return;
+                }
+                if (host == null)
+                {
+                    // NOT a capability gap: Create news a GameObject, Builds and returns
+                    // unconditionally (HudAreasHost.Create), and the throwing path is already
+                    // caught above (see HudAreasHost.Create — read the method, not a line number).
+                    // A null here means the HUD's own mount factory produced nothing, and every
+                    // box below it is unproven.
+                    failures.Add("[boxes-pinned] HudAreasHost.Create(null) returned NULL without throwing - " +
+                                 "there is no legitimate shape for this, and the ActionBar/Status zone " +
+                                 "fractions this suite divides its boxes by are UNPROVEN, not correct");
+                    return;
+                }
+
+                RequireMountWidth(failures, notes, host, DeNelle.HUD.Kit.HudArea.ActionBar,
+                    ActionBarZoneFrac, "Case 3 divides the action bar into per-face slots across it");
+                RequireMountWidth(failures, notes, host, DeNelle.HUD.Kit.HudArea.Status,
+                    StatusZoneFrac, "Case 4 fits the wave lines and the Start Now CTA inside it");
+
+                // The one authority HudAreasHost publishes as a const is checked typed as well, so
+                // the mount read and the const cannot drift apart unnoticed.
+                float published = DeNelle.HUD.Kit.HudAreasHost.ActionBarMaxX -
+                                  DeNelle.HUD.Kit.HudAreasHost.ActionBarMinX;
+                if (Mathf.Abs(published - ActionBarZoneFrac) > 0.0005f)
+                    failures.Add("[boxes-pinned] HudAreasHost.ActionBarMinX..MaxX publishes a width of " +
+                                 published.ToString("0.000") + ", but this suite measures faces against " +
+                                 ActionBarZoneFrac.ToString("0.000"));
+            }
+            catch (Exception ex)
+            {
+                // Reading anchors off a built host is plain object access. A throw here is the
+                // product defect this exists to catch, not a stand-down.
+                failures.Add("[boxes-pinned] measuring the live HUD area mounts THREW " +
+                             ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                if (host != null) UnityEngine.Object.DestroyImmediate(host.gameObject);
+            }
+        }
+
+        private static void RequireMountWidth(List<string> failures, List<string> notes,
+            DeNelle.HUD.Kit.HudAreasHost host, DeNelle.HUD.Kit.HudArea area,
+            float expected, string whatUsesIt)
+        {
+            var rt = host.Mount(area);
+            if (rt == null)
+            {
+                failures.Add("[boxes-pinned] the HUD has no live mount for HudArea." + area +
+                             " - " + whatUsesIt + ", against a zone that does not exist");
+                return;
+            }
+            float x0 = rt.anchorMin.x, x1 = rt.anchorMax.x;
+            float width = x1 - x0;
+            if (width <= 0f)
+            {
+                failures.Add("[boxes-pinned] the LIVE HudArea." + area + " mount spans x " +
+                             x0.ToString("0.000") + ".." + x1.ToString("0.000") +
+                             " - a zero/inverted width, so " + whatUsesIt + " against nothing");
+                return;
+            }
+            if (Mathf.Abs(width - expected) > 0.0005f)
+            {
+                failures.Add("[boxes-pinned] the LIVE HudArea." + area + " mount spans x " +
+                             x0.ToString("0.000") + ".." + x1.ToString("0.000") + " (width " +
+                             width.ToString("0.000") + "), but this suite measures against " +
+                             expected.ToString("0.000") + ". " + whatUsesIt + ", so every fit " +
+                             "verdict for that widget is against a box the HUD no longer builds. " +
+                             "MEASURED off the instantiated mount - no source literal moved.");
+                return;
+            }
+            notes.Add("measured HudArea." + area + " mount x " + x0.ToString("0.000") + ".." +
+                      x1.ToString("0.000") + " off a live HudAreasHost");
         }
 
         // =====================================================================

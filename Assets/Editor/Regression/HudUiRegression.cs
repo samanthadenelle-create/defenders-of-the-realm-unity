@@ -61,8 +61,43 @@
 //      measured through UiSurfaceProbe AFTER layout settles. Hollow "handler ran" /
 //      "opener live=True" is a FAIL. Inactive or zero-size stack is a FAIL.
 //
-// SOURCE-LINT family (same as UiObsidianConformanceRegression / CompileGate's
-// NUL scan): reads .cs text + asset folders, runs no PlayMode, never throws.
+// ⚠ WHAT EACH CHECK ACTUALLY DOES (WO-1494, 2026-09-07 — classified by reading every
+// body, not by trusting this header, which used to call the whole file "SOURCE-LINT
+// family" flat. That was true when it was written and is now false in BOTH directions:
+// two checks instantiate real HUD objects, and several of the prose descriptions above
+// are written in the RUNTIME's voice — they say what the code under test is supposed to
+// DO, and the check only proves the code saying so is still there).
+//
+//   MEASURED (a real object/asset in, its real answer read back — each verified by
+//   reading the body, 2026-09-07, not by trusting the prose above it):
+//     3  kit conformance — `typeof(ElarionUiKit).GetMethods(...)` over the live type
+//                      (:470-473), plus the font oracle on the rarity glyphs.
+//     5a safe-area corner — SafeAreaInset.TopRightScreenRect / .EdgeMarginPx, the real
+//                      math, run at three surfaces (:623, :650).
+//     9  gear-drawer clearance   — HudAreasHost.Create() instantiated, mount anchors read
+//                      back, intersected against the drawer band the kit resolves.
+//    10  stack-badge containment — the badge and medallion rects read off built objects;
+//                      degenerate rects are a NAMED skip, never a pass.
+//
+//   HYBRID (a text scan FINDS the candidates; a real artefact returns the VERDICT):
+//     1  tofu        — the scan for suspect glyphs is text; the verdict on each one is
+//                      the shipped TMP font asset's own HasCharacter (with fallbacks and
+//                      the dynamic-atlas source face).
+//     4  Resources paths — the paths are Regexed out of source, then resolved against
+//                      the real asset folders on disk.
+//     6  combat-HUD composition — 6a reads each atlas page's REAL pixel size out of the
+//                      PNG header (TryReadPngSize, :766) and its spriteMode out of the
+//                      .meta; the rest of the case is source text over the kit files.
+//                      No frame is rendered and no rect is laid out.
+//
+//   SOURCE LINT (text match / brace-matched method bodies over .cs; proves a call site,
+//   guard or literal is present, absent or ordered — cannot see the built tree):
+//     2  UIDocument fence, 5b PiSignInController routing, 7 resource-rail raise (it pins
+//     that the runtime's UiSurfaceProbe verify still EXISTS — the probe measures at
+//     runtime, this check does not), 8 harvest-chip clearance (authored-anchor
+//     ARITHMETIC on source-parsed values, as its own banner says).
+//
+// Runs no PlayMode. Never throws.
 // Marker: HUDUI_OK (Debug.Log) / HUDUI_FAIL (Debug.LogError → break-log.jsonl).
 //
 // FALSE-POSITIVE MITIGATIONS (deliberate, documented):
@@ -261,10 +296,17 @@ namespace DeNelle.Editor
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join(" ; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths, " +
-                         "safe-area corner, combat-hud composition, resource-rail raise, " +
-                         "harvest-chip clearance, gear-drawer clearance, stack-badge containment " +
-                         "all green" + noteStr;
+                // ⚠ WO-1494: the verdict names WHICH checks measured and which only read text.
+                // A flat "all green" over a mixed suite is how a text match came to read as a
+                // rendered pass; the classification lives in the marker line so a green log is
+                // self-describing without opening this file.
+                reason = "HUDUI_OK — MEASURED (real object in, real answer back): kit conformance by " +
+                         "reflection, safe-area math, gear-drawer clearance and stack-badge containment " +
+                         "off a live HudAreasHost. HYBRID (text finds it, a real artefact judges it): " +
+                         "tofu glyphs vs the shipped font, Resources paths vs disk, atlas-page pixel " +
+                         "sizes vs the PNG headers. SOURCE LINT (text only, cannot see the built tree): " +
+                         "UIDocument fence, PiSignIn routing, resource-rail raise, harvest-chip " +
+                         "clearance (authored-anchor arithmetic). All green" + noteStr;
                 Debug.Log(reason);
                 return true;
             }
