@@ -441,6 +441,11 @@ namespace DeNelle.Village.UI
         /// <summary>The host height the pair above was derived from, kept so BuildHubHeartDoor can
         /// state the chip's resolved px in the trace rather than assert them.</summary>
         private float _hubHeartHostH;
+        /// <summary>⭐ WO-1597 - THE ONE ANSWER TO "does the hub draw a HEART chip". Written ONLY by
+        /// BuildLauncher, from <c>ManageScreenVM.HeartUpgradeAvailable</c>, in the same breath as
+        /// the card band it complements; read by BuildHubHeartDoor. Two writers deciding this in
+        /// two places is how the chip ended up seated inside all three cards.</summary>
+        private bool _hubHeartShown;
 
         /// <summary>
         /// ⭐ THE MANAGE PANEL FILLS THE SCREEN. Owner ruling 2026-09-07 01:14, verbatim:
@@ -484,13 +489,18 @@ namespace DeNelle.Village.UI
         /// mockup's own side margin is proportional to (~3% of the panel on both edges).</summary>
         private const float HubSideInsetF = 0.03f;
         /// <summary>
-        /// The card's width:height, MEASURED off docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png
-        /// panel 1: each card is roughly 145 x 160 px in that sheet, i.e. slightly TALLER than it
-        /// is wide. Without it the three cards stretch to a third of the band's width each and read
-        /// as wide plaques rather than the portrait cards she drew; with it the row centres itself
-        /// and keeps the drawn shape at any well height.
+        /// The card's width:height, MEASURED off the owner's mockup. Without it the three cards
+        /// stretch to a third of the band's width each and read as wide plaques rather than the
+        /// portrait cards she drew; with it the row centres itself and keeps the drawn shape at any
+        /// well height.
+        /// <para>⭐ RE-MEASURED 2026-09-07 (WO-1597) off the DEDICATED panel she sent,
+        /// <c>docs/mockups/manage/MANAGE_MOCKUP_panel1_hub.png</c> (464x287): the BUILD card runs
+        /// x 33..165 by y 53..222, i.e. 132 x 169 = 0.781. The retired 145/160 (0.906) came off the
+        /// eight-screen contact sheet, where panel 1 is a sixth of the width and a card is ~30px
+        /// wide - a rounding error there is a whole ratio here. The dedicated panel is the better
+        /// ruler and it is the one the owner is judging against (ruling 29).</para>
         /// </summary>
-        private const float HubCardAspect = 145f / 160f;
+        private const float HubCardAspect = 132f / 169f;
         /// <summary>
         /// The art well's share of the card's height - the top block in panel 1, above the name and
         /// the description.
@@ -1338,6 +1348,32 @@ namespace DeNelle.Village.UI
             // WO-1491: held so ApplyScreenVisibility can show CLOSE on the hub and hide it on the
             // seven screens the mockup draws without one. Never re-found by name at paint time.
             _chromeClose = chrome.close;
+            // ⭐ WO-1597 - CLOSE READS AS A LIVE BUTTON, BECAUSE IT IS ONE.
+            // ⛔ IT WAS NEVER DISABLED. The ticket calls it "a dimmed, non-interactive plate" and the
+            // owner's frame does read that way, but the CONTROL is fully wired: ObsidianCloseButton
+            // hands it the SAME `exitRoute` delegate the scrim and the constant X take, so the only
+            // defect is CONTRAST - the kit seats it Style1/Gray with a grey label on a near-black
+            // panel, and MANAGE_MOCKUP_panel1_hub.png draws a plain plate with a light CLOSE on it.
+            // Fixing the appearance rather than rebuilding the button keeps the one-delegate
+            // guarantee intact; a second close path is what WO-1491 spent a round removing.
+            // ⚠ A DEAD-LOOKING BUTTON IS A REAL DEFECT, not a cosmetic one: the player reads it as
+            // broken and stops trusting the screen's other affordances. Colour is not the channel
+            // here (the owner is red/green colourblind) - LUMINANCE is, and that is what moves.
+            if (_chromeClose != null)
+            {
+                _chromeClose.interactable = true;
+                var closeLabel = _chromeClose.GetComponentInChildren<TMP_Text>(true);
+                if (closeLabel != null)
+                {
+                    closeLabel.text = "CLOSE";
+                    closeLabel.color = ElarionUi.Parchment;
+                }
+                ElarionUiKit.GoldPerimeter((RectTransform)_chromeClose.transform);
+                FlowTrace.Step("Manage", "MANAGE_HUB_CLOSE the shared CLOSE is live and legible - " +
+                    "interactable, label 'CLOSE' at Parchment with a gold perimeter, routed through " +
+                    "the same exitRoute delegate as the constant X (WO-1597; it was never disabled, " +
+                    "only unreadable)");
+            }
 
             // The approved Manage modal is one continuous obsidian field. FrameCore is
             // border-heavy and its transparent centre exposed the world around the troop
@@ -1997,7 +2033,19 @@ namespace DeNelle.Village.UI
             // reclaim came back small (a fallback frame with no layout, for instance).
             float closeReserve = Mathf.Max(HubCloseBandPx, _hubCloseReservePx);
             float bottomF = Mathf.Clamp01((closeReserve + HubBandGapPx) / hostH);
-            float topF = Mathf.Clamp01(1f - (HubTitleBandPx + HubBandGapPx) / hostH);
+            // ⭐ WO-1597 - THE HEART BAND IS RESERVED ONLY WHEN THE CHIP IS DRAWN.
+            // ⛔ THE PREDICATE IS READ ONCE, HERE, AND HANDED TO BOTH WRITERS. The band and the chip
+            // used to be decided in two places on two different frames (this method at chrome time,
+            // BuildHubHeartDoor inside the render), which is the two-writers-one-state shape this
+            // file has now paid for four times - the dead subtree, the title rect, the drawer band
+            // and the chip's own 0.70-0.83 seat. `_hubHeartShown` is the single answer.
+            // MEASURED CONSEQUENCE, and it is why the cards were half-height on the owner's frame:
+            // a ~583px host was giving 112px + 24px to a chip she does not want and 140px + 24px to
+            // CLOSE - 300px, more than half the host, to chrome. With the chip stood down the card
+            // band takes those 136px back and the cards fill the rest of the band outright.
+            _hubHeartShown = DeNelle.Village.UI.ManageScreenVM.HeartUpgradeAvailable;
+            float heartBandPx = _hubHeartShown ? HubTitleBandPx + HubBandGapPx : 0f;
+            float topF = Mathf.Clamp01(1f - heartBandPx / hostH);
             if (topF <= bottomF) { bottomF = 0.05f; topF = 0.95f; }
             _hubHeartY0 = Mathf.Clamp01(1f - HubTitleBandPx / hostH);
             _hubHeartHostH = hostH;
@@ -2039,7 +2087,23 @@ namespace DeNelle.Village.UI
                 ", mockup " + HubCardAspect.ToString("0.##") + ") filling " +
                 fillW.ToString("0.##") + " of the host's width and " + fillH.ToString("0.##") +
                 " of its height; close reserve " + closeReserve.ToString("0") + "px, heart band " +
-                HubTitleBandPx.ToString("0") + "px");
+                heartBandPx.ToString("0") + "px (chip " + (_hubHeartShown ? "SHOWN" : "hidden") +
+                " - HeartProgression.State is " +
+                DeNelle.Village.Buildings.Progression.HeartProgression.State + ")");
+            // ⭐ THE CARD'S SHARE OF ITS OWN BAND, REPORTED. WO-1597's acceptance is "the cards fill
+            // the band"; a source oracle cannot measure a rect, so the NUMBER is printed here and
+            // judged on the capture. cellH IS the band height by construction, so anything under 1.0
+            // means the GridLayoutGroup overrode the cell - which is the only way this can regress.
+            float bandFill = height / Mathf.Max(1f, grid.rect.height - layout.padding.vertical);
+            if (bandFill < 0.9f)
+                FlowTrace.Warn("Manage", "MANAGE_HUB_CARD_FILL the hub card takes " +
+                    bandFill.ToString("0.##") + " of its band's height, under the 0.9 floor WO-1597 " +
+                    "sets. The cards are not filling the band and the screen reads as a strip of " +
+                    "plaques in an empty well, which is the owner's 2026-09-07 10:21 frame");
+            else
+                FlowTrace.Step("Manage", "MANAGE_HUB_CARD_FILL card " + height.ToString("0") +
+                    "px of a " + (grid.rect.height - layout.padding.vertical).ToString("0") +
+                    "px band = " + bandFill.ToString("0.##") + " (floor 0.9)");
             // ⛔ THE DESCRIPTION'S BAND IS CHECKED IN PX, NOT ASSUMED. Two lines at
             // ElarionUi.FontFloorMobile is the floor FitBlock cannot go under; if the card is too
             // short to hold them the sentence is CUT, which is the exact defect on the owner's
@@ -2153,13 +2217,27 @@ namespace DeNelle.Village.UI
                 // REALIGNED TO THE DECK rather than re-pointed away: 36f / Center / 30f-40f /
                 // 24f-30f are the deck's proven numbers, they are legible at the hub's card width,
                 // and Manage stays the reference. If these ever need to move, MOVE BOTH FILES.
-                // ⭐ THE FRAMED, EMPTY ART WELL - mockup panel 1's top block, with no picture in it.
-                // ⛔ EMPTY ON PURPOSE, AND THE FRAME IS WHAT MAKES IT READ AS PENDING RATHER THAN
-                // BROKEN. See ManageArt.HubArtBuild: the three portrait illustrations she drew do
-                // not exist on disk, and the retired landscape strips letterbox to two thirds
-                // black inside a tall card. A bordered well with nothing in it says "a picture goes
-                // here"; a black two-thirds says "this screen is broken".
-                BuildHubArtWell(card.transform);
+                // ⭐ WO-1597 - THE CARD IS ONE FRAMED PLATE, AND THE TITLE AND COPY LIVE INSIDE IT.
+                // MEASURED off the owner's device frame (screen-20260907-1021-manage-hub.png,
+                // 2670x1200): the card's RECT runs y 299..667 (art well, title band and description
+                // band all inside it), but the ornate button art only paints y 310..565 - it is a
+                // wider-than-tall sprite drawn preserveAspect, so in a PORTRAIT card it can only
+                // ever cover a centred horizontal slice. The description therefore rendered on bare
+                // black BELOW the plate, which is the "title under each card" the ticket reports and
+                // is not what MANAGE_MOCKUP_panel1_hub.png draws: her card is one plate containing
+                // the painting, the name and the line of copy.
+                // ⛔ THE PLATE IS DRAWN, NOT A SPRITE, FOR THE REASON BuildHubArtWell ALREADY
+                // RECORDS: the kit's frame PNGs declare a zero spriteBorder, so nothing here can be
+                // 9-sliced to an arbitrary aspect, and preserveAspect is what produced the defect in
+                // the first place. A flat fill plus ElarionUiKit.GoldPerimeter fills the card rect
+                // EXACTLY at any aspect and is the same border cue the grid tile and the art well
+                // already use.
+                BuildHubCardPlate(card.transform, available);
+                // ⭐ THE ART WELL - mockup panel 1's top block, now WITH A PICTURE IN IT.
+                // ⛔ NEVER A BLANK WELL (WO-1597). ManageArt.LoadHubArt paints the owed painting
+                // first and a resolving stand-in portrait second, so the geometry is identical the
+                // day the three illustrations land and nothing here has to move.
+                BuildHubArtWell(card.transform, i, available);
 
                 var face = card.GetComponentInChildren<TMP_Text>();
                 if (face != null)
@@ -2205,29 +2283,75 @@ namespace DeNelle.Village.UI
             // a real shortfall against the mockup that somebody has to close - it is simply not a
             // code defect, and saying which is the whole point of naming it.
             FlowTrace.Once("Manage", "hub-art-ask",
-                "the three hub cards paint a FRAMED, EMPTY art well: mockup panel 1 draws a " +
-                "portrait illustration filling each card and none of the three files exists. " +
-                "OWED, by Resources key: " + string.Join(", ", ManageArt.HubArtKeys) + " (folder " +
-                ManageArt.UiFolder + "). The retired landscape strips under " +
-                "UI/ElarionMedieval/cards/ are NOT a substitute - preserveAspect leaves two thirds " +
-                "of a tall card black, which reads as broken rather than as art pending.");
+                "the three hub cards are painting STAND-IN portraits, not the illustrations mockup " +
+                "panel 1 draws. OWED, by Resources key: " + string.Join(", ", ManageArt.HubArtKeys) +
+                " (folder " + ManageArt.UiFolder + "). Standing in until they land, in card order: " +
+                string.Join(", ", ManageArt.HubArtStandIns) + " - each 1024x1024, so nothing " +
+                "letterboxes. The moment a hub key resolves it WINS with no code change " +
+                "(ManageArt.LoadHubArt: painting first, stand-in second). The retired landscape " +
+                "strips under UI/ElarionMedieval/cards/ are still NOT a substitute - preserveAspect " +
+                "leaves two thirds of a tall card black, which reads as broken rather than pending.");
 
             // The Heart's door lives on the hub now, not in the chrome row - see BuildHeartFace.
-            // ⛔ AND THE HEART CHIP STAYS. CAPTURE_LOOP_GOAL.md:130 gates its removal on the Heart
-            // keeping a door SOMEWHERE ELSE, and it does not have one: HeartSurfaceRegression
-            // (:118-123) pins THIS hub face as the Heart's surface. Removing it to match the mockup
-            // would ship the WO-1430 defect the gate exists to prevent - a panel with no door.
+            // ⛔ SUPERSEDED 2026-09-07 BY AN OWNER RULING (WO-1597). The note here read "AND THE
+            // HEART CHIP STAYS ... removing it to match the mockup would ship the WO-1430 defect".
+            // Owner, verbatim, on the device frame: "there is no reason to have heart on this set of
+            // manage screens unless for an upgrade". The chip is now CONDITIONAL, not removed - it
+            // is drawn as the UPGRADE VERB while an upgrade is due and stood down otherwise, so the
+            // door exists in every state where there is something behind it. This CALL is
+            // unconditional and must stay: HeartSurfaceRegression pins it, and the decision belongs
+            // inside BuildHubHeartDoor where the band that complements it is already known.
             BuildHeartFace();
         }
 
         /// <summary>
-        /// The hub card's ART WELL - a bordered rectangle with NOTHING IN IT (mockup panel 1,
-        /// WO-1567 panel row 1).
-        /// <para>⛔ THE EMPTINESS IS THE FEATURE. The three illustrations do not exist
-        /// (<see cref="ManageArt.HubArtBuild"/>), and the two dishonest alternatives were both
-        /// tried and both rejected: the retired landscape strips letterbox to two thirds black
-        /// inside a tall card, and a bare text card gives the eye nothing to land on. A drawn
-        /// FRAME with an empty centre reads as "a picture belongs here", which is exactly true.</para>
+        /// ⭐ THE HUB CARD'S FRAMED PLATE - the whole card rect, so the painting, the name AND the
+        /// line of copy sit INSIDE one plate exactly as
+        /// <c>docs/mockups/manage/MANAGE_MOCKUP_panel1_hub.png</c> draws them.
+        /// <para>⛔ IT EXISTS BECAUSE THE KIT'S BUTTON ART CANNOT COVER A PORTRAIT CARD. MEASURED on
+        /// the owner's frame (screen-20260907-1021-manage-hub.png): the card rect is y 299..667 and
+        /// the ornate plate paints y 310..565 - a landscape sprite drawn preserveAspect can only
+        /// ever fill a centred horizontal slice of a taller rect, so the description rendered on
+        /// bare black beneath it. Nothing about the BUTTON is replaced: it keeps its click, its
+        /// touch floor and its name. Only the visible plate is this method's.</para>
+        /// <para>⚠ DRAWN, NOT A SPRITE, for the reason the art well below already records - the
+        /// kit's frame PNGs declare a zero <c>spriteBorder</c>, so they cannot be 9-sliced to an
+        /// arbitrary aspect, and preserveAspect is the defect itself.</para>
+        /// </summary>
+        private static void BuildHubCardPlate(Transform card, bool available)
+        {
+            if (card == null) return;
+            var plateGo = new GameObject("HubCardPlate", typeof(RectTransform), typeof(Image));
+            var rt = (RectTransform)plateGo.transform;
+            rt.SetParent(card, false);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            rt.SetAsFirstSibling();          // behind the art well, the name and the copy
+            var img = plateGo.GetComponent<Image>();
+            img.sprite = null;
+            img.type = Image.Type.Simple;
+            img.preserveAspect = false;
+            // The mockup's plate is a near-black field a shade lighter than the panel behind it, so
+            // the card reads as a raised object rather than a hole. A locked card sits darker still.
+            img.color = available
+                ? new Color(0.075f, 0.068f, 0.060f, 1f)
+                : new Color(0.045f, 0.042f, 0.040f, 1f);
+            img.raycastTarget = false;       // the CARD is the tap target, not its own backing
+            ElarionUiKit.GoldPerimeter(rt);
+        }
+
+        /// <summary>
+        /// The hub card's ART WELL - the top block of mockup panel 1's card, with the painting in
+        /// it.
+        /// <para>⛔ THE EMPTINESS IS RETIRED (WO-1597, 2026-09-07). This note read "THE EMPTINESS IS
+        /// THE FEATURE ... a drawn FRAME with an empty centre reads as 'a picture belongs here'".
+        /// On the owner's device it did not: three dark rectangles with nothing in them read as a
+        /// broken screen, which is the same verdict the landscape strips earned, and it is what her
+        /// 10:21 frame shows. <see cref="ManageArt.LoadHubArt"/> now paints the OWED painting first
+        /// and a resolving stand-in portrait second - never nothing. The art ask is unchanged and is
+        /// still announced by key in RenderLauncherCards; what changed is what the player sees while
+        /// it is open.</para>
         /// <para>⚠ THE FRAME IS DRAWN, NOT A SPRITE - corrected 2026-09-07 (WO-1567 round 25). This
         /// note used to say "the frame sprite is the tile frame, reused ... a border with a
         /// hollow-enough centre", and that was the defect: MEASURED,
@@ -2239,11 +2363,12 @@ namespace DeNelle.Village.UI
         /// had no border to slice. A flat plate plus <c>ElarionUiKit.GoldPerimeter</c> fills the
         /// zone exactly at any card aspect and is the same border cue the grid tile and the list row
         /// already use for selection.</para>
-        /// <para>Nothing here loads a hub key: LoadSprite would log a miss per card per rebuild, and
-        /// the single art-ask line in RenderLauncherCards says it once, by key, which is the useful
-        /// form.</para>
+        /// <para>⚠ THE MISS IS STILL CHEAP. <c>ManageArt.LoadSprite</c> caches MISSES as well as
+        /// hits and announces each key exactly once per session, so loading the three owed hub keys
+        /// on every rebuild costs three dictionary lookups, not three log lines a frame. That is
+        /// what makes "painting first, stand-in second" affordable in a render path.</para>
         /// </summary>
-        private static void BuildHubArtWell(Transform card)
+        private static void BuildHubArtWell(Transform card, int cardIndex, bool available)
         {
             if (card == null) return;
             var wellGo = new GameObject("HubArtWell", typeof(RectTransform), typeof(Image));
@@ -2264,12 +2389,45 @@ namespace DeNelle.Village.UI
             rt.anchorMax = new Vector2(0.95f, 0.97f);
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             var img = wellGo.GetComponent<Image>();
-            img.sprite = null;
             img.type = Image.Type.Simple;
-            img.preserveAspect = false;
-            img.color = new Color(0.04f, 0.035f, 0.03f, 0.85f);
             img.raycastTarget = false;                   // the CARD is the tap target, not the well
+            // ⛔ PAINTING FIRST, STAND-IN SECOND, NEVER NOTHING (WO-1597). The key order lives in
+            // ManageArt.LoadHubArt so the View does not decide what art a card gets - it binds what
+            // the art table resolves, and the day the three illustrations land they win here with
+            // no edit and no layout change.
+            string resolvedKey;
+            var art = ManageArt.LoadHubArt(cardIndex, out resolvedKey);
+            if (art != null)
+            {
+                img.sprite = art;
+                // preserveAspect, because the stand-ins are 1024x1024 squares and the well is not
+                // square. A square painting in a near-square well letterboxes by a few percent; the
+                // alternative, stretching, distorts a building - and the retired landscape strips
+                // are exactly why nothing here stretches to fill.
+                img.preserveAspect = true;
+                img.color = available ? Color.white : new Color(0.55f, 0.55f, 0.55f, 1f);
+            }
+            else
+            {
+                // ⚠ BOTH KEYS MISSED. LoadSprite has already named each one; the well falls back to
+                // the framed dark plate rather than a white box, and SAYS SO - a fallback that does
+                // not log is the silent failure CLAUDE.md section 12 forbids.
+                img.sprite = null;
+                img.preserveAspect = false;
+                img.color = new Color(0.04f, 0.035f, 0.03f, 0.85f);
+                FlowTrace.Once("Manage", "hub-art-well-blank-" + cardIndex,
+                    "hub card " + cardIndex + " has NO art: neither the owed painting nor its " +
+                    "stand-in resolved, so the well is a framed empty plate. This is the state " +
+                    "WO-1597 exists to end - check that Resources/" +
+                    (cardIndex < ManageArt.HubArtStandIns.Length
+                        ? ManageArt.HubArtStandIns[cardIndex] : "?") + " is still on disk");
+            }
             ElarionUiKit.GoldPerimeter(rt);
+            FlowTrace.Once("Manage", "hub-art-key-" + cardIndex,
+                "hub card " + cardIndex + " paints '" + (resolvedKey ?? "<none>") + "'" +
+                (resolvedKey != null && cardIndex < ManageArt.HubArtKeys.Length &&
+                 resolvedKey == ManageArt.HubArtKeys[cardIndex]
+                    ? " - the OWED PAINTING has landed" : " - STAND-IN (the painting is still owed)"));
         }
 
         private void BuildLauncherSummaries()
@@ -3475,11 +3633,23 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// The HEART face - the one always-present door onto <see cref="PanelId.Heart"/>.
-        /// <para>The face carries the LIVE level ("HEART L1"), so the player can read their realm
-        /// progression without opening anything, and the word matches the CTA on every gated card
-        /// ("UPGRADE THE HEART"). ⚠ The level number is read from the model, never cached here -
-        /// duplicated state is what produced the stale-copy family this program exists to kill.</para>
+        /// The HEART face - the hub's door onto <see cref="PanelId.Heart"/>, drawn ONLY while an
+        /// upgrade is due.
+        /// <para>⛔ "ALWAYS-PRESENT" IS RETIRED, AND SO IS THE LEVEL BADGE (WO-1597, owner
+        /// 2026-09-07): <i>"there is no reason to have heart on this set of manage screens unless
+        /// for an upgrade"</i>. The face used to read "HEART L3" unconditionally - a level badge on
+        /// a screen the mockup draws without one. It is now the UPGRADE VERB, gated on
+        /// <c>ManageScreenVM.HeartUpgradeAvailable</c>, and absent otherwise.</para>
+        /// <para>⚠ WHAT THAT COSTS, RECORDED RATHER THAN GLOSSED: at MAX Heart Level the hub has no
+        /// Heart door. That is correct - there is nothing behind it to do - but it does mean this is
+        /// no longer an UNCONDITIONAL route, which is the property HeartSurfaceRegression's
+        /// [heart-has-a-door] case was written to defend. The remaining routes are the gated CTAs:
+        /// <c>ManageScreenVM.OpenHeartPanel</c> opens PanelId.Heart from every Heart-gated card, and
+        /// those exist precisely while something is still gated. If the owner wants the door back at
+        /// max, the change is the predicate in the VM and nothing here moves.</para>
+        /// <para>⚠ The level and the cost are read from the model at build time and never cached
+        /// here - duplicated state is what produced the stale-copy family this program exists to
+        /// kill.</para>
         /// </summary>
         private void BuildHeartFace()
         {
@@ -3505,10 +3675,12 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// The Heart's door, on the HUB. Small, under the three cards, carrying the LIVE level.
-        /// <para>⚠ The level is read from <c>HeartProgression.Level</c> at build time and never
-        /// cached here - a second copy of a live number is the duplicated state this file keeps
-        /// paying for. The face is rebuilt with the hub, so the number cannot go stale.</para>
+        /// The Heart's door, on the HUB - the UPGRADE VERB, in the header band, and ONLY while an
+        /// upgrade is due.
+        /// <para>⚠ The verb and its price are read from <c>ManageScreenVM</c> (which reads
+        /// <c>HeartProgression</c>) at build time and never cached here - a second copy of a live
+        /// number is the duplicated state this file keeps paying for. The face is rebuilt with the
+        /// hub, so nothing can go stale.</para>
         /// </summary>
         private void BuildHubHeartDoor()
         {
@@ -3520,6 +3692,24 @@ namespace DeNelle.Village.UI
                 var child = _launcherHost.GetChild(i);
                 if (child == null || child.name != "ManageHeartFace") continue;
                 if (Application.isPlaying) Destroy(child.gameObject); else DestroyImmediate(child.gameObject);
+            }
+            // ⭐ WO-1597 - NO UPGRADE DUE, NO CHIP. The destroy loop above has already run, so a
+            // chip built on a previous render (when an upgrade WAS due) is gone rather than left
+            // behind stale - the removal is a real removal, not a SetActive.
+            // ⛔ READ THE FLAG, NOT THE PREDICATE. _hubHeartShown was written by BuildLauncher in
+            // the same breath as the card band. Re-reading ManageScreenVM.HeartUpgradeAvailable here
+            // would put the two decisions on two different frames, and a wallet spend between them
+            // would leave a 136px hole above the cards or a chip overprinting them.
+            if (!_hubHeartShown)
+            {
+                FlowTrace.Step("Manage", "MANAGE_HUB_HEART chip STOOD DOWN - " +
+                    "HeartProgression.State is " +
+                    DeNelle.Village.Buildings.Progression.HeartProgression.State +
+                    " (Heart Level " + DeNelle.Village.Buildings.Progression.HeartProgression.Level +
+                    " of " + DeNelle.Village.Buildings.Progression.HeartProgression.MaxLevel +
+                    "), so no upgrade is due and mockup panel 1 draws no chip. The card band takes " +
+                    "its " + (HubTitleBandPx + HubBandGapPx).ToString("0") + "px back");
+                return;
             }
             // ⭐ WO-1567 ROUND 25 - THE CHIP IS IN THE HUB'S HEADER BAND, AT THE TOUCH FLOOR.
             // ⛔ THE SEAT IT REPLACES IS THE CAUSE OF SEVEN OF THE ELEVEN NON-QUEUE ORACLE FAILURES.
@@ -3539,10 +3729,19 @@ namespace DeNelle.Village.UI
             // ⛔ AND IT STAYS ON THE HUB. HeartSurfaceRegression:118-139 pins that the door is
             // BuildHubHeartDoor's, named ManageHeartFace, and is NOT in the chrome row - the mockup
             // keeps that row for the back arrow, the centred title and the queue pill.
+            // ⛔ THE FACE IS THE UPGRADE VERB, AND THE MODEL COMPOSES IT (canon section 9). The View
+            // binds a string it did not write, so the chip and the Heart's own CTA cannot drift into
+            // two vocabularies - which is the WO-1443 "HEART ..." family all over again.
+            // ⚠ WIDENED FROM 0.24 TO 0.30 FOR A STATED REASON: the retired face was "HEART L3" (8
+            // characters) and this one is 13. The recorded failure mode of this exact control is a
+            // label truncating inside a plate authored for a shorter word (three rounds, ~177px), and
+            // the cure that worked on the QUEUE pill was room, never a smaller font - a band under
+            // ~24px renders BLANK rather than small.
+            string verb = DeNelle.Village.UI.ManageScreenVM.HeartUpgradeFace;
             var heart = ElarionUiKit.BuildObsidianButton(_launcherHost,
-                "HEART L" + DeNelle.Village.Buildings.Progression.HeartProgression.Level,
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, _hubHeartY0), new Vector2(0.24f, 1f), OpenHeartSurface);
+                verb,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.02f, _hubHeartY0), new Vector2(0.30f, 1f), OpenHeartSurface);
             if (heart == null)
             {
                 FlowTrace.Fail("Manage", "the HEART face failed to build - the direct route to " +
@@ -3550,12 +3749,35 @@ namespace DeNelle.Village.UI
                 return;
             }
             heart.gameObject.name = "ManageHeartFace";
-            MedievalUiSkin.ApplyButton(heart, false);
+            MedievalUiSkin.ApplyButton(heart, true);
             ElarionUiKit.ClampMinTouch(heart);
+            // ⭐ THE PRICE, ON ITS OWN LINE INSIDE THE PLATE. The band is MinTouchPx (112) tall, so
+            // two lines at ElarionUi.FontFloorMobile (30) plus leading fit with room; a single line
+            // carrying verb AND cost does not, at this width, and would ellipsise the verb.
+            // The verb yields the top ~62% of the plate rather than staying centred across the whole
+            // face - done on the LABEL's own rect, so the button art and its touch box are untouched.
+            string price = DeNelle.Village.UI.ManageScreenVM.HeartUpgradeCost;
+            var verbLabel = heart.GetComponentInChildren<TMP_Text>(true);
+            if (verbLabel != null && !string.IsNullOrEmpty(price))
+            {
+                var vrt = verbLabel.rectTransform;
+                vrt.anchorMin = new Vector2(vrt.anchorMin.x, 0.38f);
+                vrt.anchorMax = new Vector2(vrt.anchorMax.x, 0.98f);
+                vrt.offsetMin = vrt.offsetMax = Vector2.zero;
+                var cost = ElarionUiKit.Label(heart.transform, price, 0.06f, 0.36f,
+                    ElarionUi.Parchment, (int)ElarionUi.FontLabel,
+                    TextAlignmentOptions.Center, 0.06f, 0.94f);
+                if (cost != null)
+                {
+                    cost.raycastTarget = false;          // the BUTTON takes the tap, never the price
+                    ElarionUiKit.FitSingleLine(cost, ElarionUi.FontFloorMobile, 32f);
+                }
+            }
             FlowTrace.Step("Manage", "MANAGE_HUB_HEART band " + _hubHeartY0.ToString("0.###") +
                 "..1.0 of a " + _hubHeartHostH.ToString("0") + "px host = " +
                 ((1f - _hubHeartY0) * _hubHeartHostH).ToString("0") + "px tall (floor " +
-                ElarionUiKit.MinTouchPx.ToString("0") + ") - the header band, clear of every card");
+                ElarionUiKit.MinTouchPx.ToString("0") + ") - the header band, clear of every card; " +
+                "face='" + verb + "' price='" + (price ?? "-") + "'");
         }
 
         /// <summary>Open the Heart surface. Closes Manage first (PanelManager holds one exclusive

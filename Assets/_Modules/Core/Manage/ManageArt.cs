@@ -126,8 +126,17 @@ namespace DeNelle.Core.Manage
         /// <c>Assets/Resources/UI/ElarionMedieval/cards/*.png</c> are 1963x789 strips drawn for the
         /// retired wide 2x2 seat; preserveAspect-ing one into a tall card letterboxes two thirds of
         /// it black, which reads as BROKEN rather than as art-pending. The hub therefore paints a
-        /// FRAMED, EMPTY well and names the three missing keys through FlowTrace once per session
+        /// FRAMED well and names the three missing keys through FlowTrace once per session
         /// (ManageScreenPanel.RenderLauncherCards).</para>
+        /// <para>⚠ SUPERSEDED IN PART 2026-09-07 (WO-1597). The well is no longer EMPTY while the
+        /// paintings are owed. Owner, on the device frame: the three cards read as dark plates with
+        /// nothing in them. A framed empty well reads as art-pending only to the person who knows
+        /// there is an art ask; to the player it reads as broken, which is the same verdict the
+        /// landscape strips earned. <see cref="HubArtStandIns"/> now backs each key with a portrait
+        /// that RESOLVES TODAY, and <see cref="LoadHubArt"/> paints the painting the moment it
+        /// lands. The art ask is unchanged and is still announced by key - what changed is what the
+        /// player sees while it is open (CLAUDE.md section 12: a fallback that is named is not a
+        /// silent one).</para>
         /// </summary>
         public const string HubArtBuild = UiFolder + "hub-build";
         public const string HubArtArmy = UiFolder + "hub-army";
@@ -135,6 +144,57 @@ namespace DeNelle.Core.Manage
 
         /// <summary>The three hub keys in card order, for the art-ask trace and its oracle.</summary>
         public static readonly string[] HubArtKeys = { HubArtBuild, HubArtArmy, HubArtResearch };
+
+        /// <summary>
+        /// ⭐ THE STAND-IN BEHIND EACH HUB KEY - art that RESOLVES TODAY, in card order
+        /// (WO-1597, owner's device frame 2026-09-07 10:21).
+        ///
+        /// <para>⛔ NEVER A BLANK WELL. The three are each destination's own emblem, drawn from the
+        /// ONE painting family the Manage screens already use
+        /// (<see cref="BuildingPortraitFolder"/>, 1024x1024 squares - verified on disk 2026-09-07,
+        /// so nothing here letterboxes the way the retired 1963x789 landscape strips did):
+        ///   BUILD    -> lumbermill   (the building mockup panel 3 details, and BUILD's own first row)
+        ///   ARMY     -> barracks     (the building that gates every troop - owner ruling 21)
+        ///   RESEARCH -> arcane-tower (the Cathedral of Magic, the research home in panels 6 and 7)
+        /// </para>
+        /// <para>⚠ THESE ARE THE OWNER'S TO SWAP. They are named in WO-1597's RESULT for exactly
+        /// that reason; changing one is a one-line edit here and nothing else moves.</para>
+        /// <para>⚠ LEVEL 1 ON PURPOSE: the unsuffixed key is the one <see cref="BuildingPortraitKey"/>
+        /// produces for level 1, so a stand-in never depends on how far the player has upgraded the
+        /// real building.</para>
+        /// </summary>
+        public static readonly string[] HubArtStandIns =
+        {
+            BuildingPortraitFolder + "lumbermill",
+            BuildingPortraitFolder + "barracks",
+            BuildingPortraitFolder + "arcane-tower"
+        };
+
+        /// <summary>
+        /// The sprite a hub card paints, in card order: the OWED PAINTING FIRST, then the stand-in.
+        ///
+        /// <para>⛔ KEY ORDER IS THE WHOLE CONTRACT. The moment
+        /// <c>Resources/UI/ElarionMedieval/hub-build.png</c> et al. land, they win with no code
+        /// change and no layout change - the well's geometry is the same either way. Until then the
+        /// card shows a real building rather than a hole.</para>
+        /// <para><paramref name="resolvedKey"/> reports WHICH of the two answered, so the caller's
+        /// trace can say "stand-in" rather than the reader having to infer it. A null return means
+        /// BOTH missed, and <see cref="LoadSprite"/> has already announced each miss by key.</para>
+        /// </summary>
+        public static Sprite LoadHubArt(int cardIndex, out string resolvedKey)
+        {
+            resolvedKey = null;
+            if (cardIndex < 0 || cardIndex >= HubArtKeys.Length) return null;
+
+            string painting = HubArtKeys[cardIndex];
+            var art = LoadSprite(painting);
+            if (art != null) { resolvedKey = painting; return art; }
+
+            string standIn = cardIndex < HubArtStandIns.Length ? HubArtStandIns[cardIndex] : null;
+            art = LoadSprite(standIn);
+            if (art != null) { resolvedKey = standIn; return art; }
+            return null;
+        }
 
         // ── Status medallions (256px), one per canon-7 state ──────────────────
         public const string StatusAvailable = "RpgUi/manage/status-available";

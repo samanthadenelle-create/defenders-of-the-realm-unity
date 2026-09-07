@@ -554,6 +554,58 @@ namespace DeNelle.Village.UI
         /// so a fresh-town player can discover the defensive build route.</summary>
         public readonly List<ManageTab> VisibleTabs = new List<ManageTab>(4);
 
+        // ── THE HUB'S HEART CHIP - one predicate, one producer (WO-1597) ─────────────────
+        /// <summary>
+        /// ⭐ TRUE ONLY WHILE A HEART UPGRADE IS ACTUALLY DUE. This is the whole reason the hub
+        /// draws a HEART chip at all.
+        ///
+        /// <para>Owner, 2026-09-07 on the device frame, verbatim: <i>"there is no reason to have
+        /// heart on this set of manage screens unless for an upgrade"</i>. Mockup panel 1 draws no
+        /// chip; the chip earns its place only when it is a DOOR TO A PENDING UPGRADE, and then it
+        /// says so in the upgrade verb rather than badging a level.</para>
+        ///
+        /// <para>⛔ READ FROM THE ONE PRODUCER, NOT RECOMPOSED. <c>HeartProgression.State</c> is the
+        /// same expression the Heart's own detail surface binds (HeartPanel), so the chip and the
+        /// screen it opens can never disagree. Rebuilding it here as
+        /// <c>!IsMax &amp;&amp; Crystals &gt;= NextCost()</c> would be a second copy of a live
+        /// predicate - the duplicated state CLAUDE.md sections 2/5/8/16 keep paying for.</para>
+        ///
+        /// <para>⚠ WHY <c>!= Max</c> AND NOT <c>== Ready</c>, STATED SO IT IS NOT "CORRECTED" BLIND.
+        /// The three states are Max / MissingCrystals / Ready. An upgrade EXISTS in two of them; in
+        /// <c>Ready</c> it is also affordable right now. Gating the chip on affordability would
+        /// hide the goal from the player who is saving for it AND would strand the Heart's only hub
+        /// door behind a wallet balance. MEASURED 2026-09-07: <c>heart-progression.json</c> authors
+        /// <c>maxLevel: 3</c> and the owner's frame reads HEART L3, so she is at MAX - which is why
+        /// her frame must show NO chip either way, and this predicate is the one that also keeps
+        /// the door while there is something to spend on. If the owner wants the stricter rule, the
+        /// change is <c>== HeartActionState.Ready</c> here and nothing else moves.</para>
+        /// </summary>
+        public static bool HeartUpgradeAvailable =>
+            DeNelle.Village.Buildings.Progression.HeartProgression.State
+                != DeNelle.Village.Buildings.Progression.HeartActionState.Max;
+
+        /// <summary>
+        /// The chip's FACE while <see cref="HeartUpgradeAvailable"/> - the upgrade VERB, never a
+        /// level badge. Composed here because the model owns the words (canon section 9); the View
+        /// binds a string it did not write.
+        /// <para>⚠ The cost is the producer's own <c>NextCost()</c>, compacted through the shared
+        /// formatter, so no number is typed and none can go stale.</para>
+        /// </summary>
+        public static string HeartUpgradeFace =>
+            HeartUpgradeAvailable
+                ? "UPGRADE HEART"
+                : null;
+
+        /// <summary>The cost line under the chip's verb ("750 Crystals"), or null at max. Second
+        /// line rather than a longer face: "HEART ..." truncating at ~177px is this control's
+        /// recorded failure mode (three rounds, WO-1443), and a wider face is not available in the
+        /// hub's header band.</summary>
+        public static string HeartUpgradeCost =>
+            HeartUpgradeAvailable
+                ? DeNelle.Core.UI.ElarionUi.CompactNumber(
+                      DeNelle.Village.Buildings.Progression.HeartProgression.NextCost()) + " Crystals"
+                : null;
+
         /// <summary>Last command's player-facing message (ASCII), or null. The View toasts it.</summary>
         public string Notice { get; private set; }
 

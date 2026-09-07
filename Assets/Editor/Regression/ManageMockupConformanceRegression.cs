@@ -36,6 +36,10 @@ namespace DeNelle.Editor
         private const string ProjectionPath = "Assets/_Modules/Core/Manage/ManageVmProjection.cs";
         private const string ContractPath = "Assets/_Modules/Core/Manage/ManageViewContract.cs";
         private const string CapturePath = "Assets/Editor/UICaptureLaunch.cs";
+        private const string ArtPath = "Assets/_Modules/Core/Manage/ManageArt.cs";
+        /// <summary>Where a Resources key resolves from on disk, for the ONE case in this suite that
+        /// opens a file rather than reading source. See CheckHubArt.</summary>
+        private const string ResourcesRoot = "Assets/Resources/";
 
         public static bool Run(out string reason)
         {
@@ -47,11 +51,14 @@ namespace DeNelle.Editor
             string projection = ReadOrFail(ProjectionPath, failures);
             string contract = ReadOrFail(ContractPath, failures);
             string capture = ReadOrFail(CapturePath, failures);
+            string art = ReadOrFail(ArtPath, failures);
 
             if (failures.Count == 0)
             {
                 CheckFullScreen(panel, workspace, failures);
                 CheckHub(panel, failures);
+                CheckHubHeartChip(panel, vm, failures);
+                CheckHubArt(panel, art, failures);
                 CheckTiles(workspace, vm, projection, contract, failures);
                 CheckDetail(workspace, vm, failures);
                 CheckResearchPicker(vm, failures);
@@ -240,16 +247,221 @@ namespace DeNelle.Editor
                              "Resources key. An art gap that is not named is an art gap nobody closes " +
                              "(CLAUDE.md section 12: never a silent fallback).");
 
-            // ⛔ THE HEART DOOR STAYS ON THE HUB.
-            // CAPTURE_LOOP_GOAL.md:130 gates removing the HEART chip on the Heart keeping a door
-            // somewhere else. It has none: HeartSurfaceRegression:118-123 pins THIS face.
+            // ⛔ THE HEART DOOR STAYS ON THE HUB - the CALL is unconditional even though the CHIP
+            // is not (WO-1597; the decision lives inside BuildHubHeartDoor, and CheckHubHeartChip
+            // below pins THAT). HeartSurfaceRegression:118-123 pins this same call.
             // RED RECIPE: delete the BuildHeartFace() call from RenderLauncherCards.
             if (!Has(panel, "BuildHeartFace()"))
-                failures.Add("[hub-keeps-the-heart-door] the hub no longer builds the Heart face. The mockup " +
-                             "has no HEART chip, but CAPTURE_LOOP_GOAL.md:130 gates its removal on an " +
-                             "unconditional Heart door existing ELSEWHERE and none does - " +
-                             "HeartSurfaceRegression pins the hub face as the Heart's surface. Removing it " +
-                             "ships the WO-1430 defect: a panel with no door.");
+                failures.Add("[hub-keeps-the-heart-door] the hub no longer builds the Heart face. " +
+                             "HeartSurfaceRegression pins the hub as the Heart's surface, and deleting the " +
+                             "CALL - rather than letting its own predicate stand the chip down - ships the " +
+                             "WO-1430 defect: a panel with no door in any state.");
+
+            // ⭐ WO-1597 - THE CARD FILLS ITS BAND, AND THE FILL IS A NUMBER ON THE CAPTURE.
+            // ⚠ A SOURCE ORACLE CANNOT MEASURE A RECT, AND THIS CASE DOES NOT PRETEND TO. What it
+            // pins is the two things that CAN be read from source and that are the only ways the
+            // fill regresses: the cell's HEIGHT is the band's height (not an aspect-derived number),
+            // and the resolved fraction is PRINTED so MANAGE_FLOW_MAP_OK's frames carry the
+            // measurement. The 0.9 floor itself is enforced at runtime by the warn.
+            // RED RECIPE: `layout.cellSize = new Vector2(cellW, height * 0.5f);`
+            if (!Has(panel, "layout.cellSize = new Vector2(cellW, height)"))
+                failures.Add("[hub-cards-fill-the-band] the hub cell's HEIGHT is no longer the card band's " +
+                             "height. The owner's frame (screen-20260907-1021-manage-hub.png) shows three " +
+                             "cards filling about half the well with the rest black; mockup panel 1 fills " +
+                             "the band. Clamp the WIDTH to the aspect - never the height.");
+            if (!Has(panel, "MANAGE_HUB_CARD_FILL"))
+                failures.Add("[hub-cards-fill-the-band] the card's share of its band is no longer printed. " +
+                             "WO-1597's acceptance is 'the cards fill the band', and a claim with no number " +
+                             "behind it is what ruling 29 exists to stop (CLAUDE.md section 11B).");
+
+            // ⭐ WO-1597 - THE CARD IS ONE PLATE, AND THE NAME AND COPY ARE INSIDE IT.
+            // MEASURED: the kit's ornate button art is a landscape sprite drawn preserveAspect, so
+            // on a portrait card it paints a centred slice (y 310..565 of a 299..667 card on the
+            // owner's frame) and the description rendered on bare black BELOW it.
+            // RED RECIPE: delete the BuildHubCardPlate call from RenderLauncherCards.
+            if (!Has(panel, "BuildHubCardPlate(card.transform"))
+                failures.Add("[hub-card-one-plate] the hub card no longer draws its own full-rect plate, so " +
+                             "the title and the description fall outside the visible card again - the kit's " +
+                             "button art cannot cover a portrait rect. MANAGE_MOCKUP_panel1_hub.png draws " +
+                             "ONE plate holding the painting, the name and the line of copy.");
+
+            // ⭐ THE QUEUE PILL'S RED COUNT BADGE - drawn on every mockup panel, and ONLY when
+            // there is something to count. RED RECIPE: delete the `if (jobs <= 0) return;` guard.
+            if (!Has(panel, "BuildQueueCountBadge(_queueDrawerToggle.transform)") ||
+                !Has(panel, "if (jobs <= 0) return;"))
+                failures.Add("[hub-queue-badge] the QUEUE pill has lost its count badge, or the badge no " +
+                             "longer stands down at zero. Every mockup panel draws a red disc with the number " +
+                             "of jobs in flight; a '0' badge is a notification that nothing happened, and a " +
+                             "badge with no number is a coloured dot the owner cannot read (she is " +
+                             "red/green colourblind - the DIGIT is the channel, not the hue).");
+        }
+
+        // ── PANEL 1 - the HEART chip, which is conditional (WO-1597) ─────────
+        /// <summary>
+        /// ⛔ THE CHIP IS A DOOR TO A PENDING UPGRADE, NOT A LEVEL BADGE.
+        /// <para>Owner, 2026-09-07 on screen-20260907-1021-manage-hub.png, verbatim: <i>"there is no
+        /// reason to have heart on this set of manage screens unless for an upgrade"</i>. The frame
+        /// carried a permanent "HEART L3" plate that mockup panel 1 does not draw, and it was
+        /// costing the card band MinTouchPx + a gap on every render.</para>
+        /// </summary>
+        private static void CheckHubHeartChip(string panel, string vm, List<string> failures)
+        {
+            // ⛔ THE PREDICATE IS THE MODEL'S, READ FROM THE ONE PRODUCER.
+            // RED RECIPE: `public static bool HeartUpgradeAvailable => true;`
+            if (!Has(vm, "HeartProgression.State") || !Has(vm, "HeartActionState.Max"))
+                failures.Add("[hub-heart-chip-conditional] ManageScreenVM no longer composes the chip's " +
+                             "predicate from HeartProgression.State. Rebuilding it from Crystals and " +
+                             "NextCost() here would be a SECOND copy of a live predicate, which is the " +
+                             "duplicated state CLAUDE.md sections 2/5/8/16 keep paying for - and the chip " +
+                             "and the surface it opens would be free to disagree.");
+            if (!Has(vm, "public static bool HeartUpgradeAvailable"))
+                failures.Add("[hub-heart-chip-conditional] ManageScreenVM.HeartUpgradeAvailable is gone. The " +
+                             "View must not decide whether a door is warranted (canon section 9) - it binds " +
+                             "the model's answer.");
+
+            // ⛔ AND THE VIEW OBEYS IT, ONCE, THROUGH THE FLAG THE BAND WAS DERIVED FROM.
+            // RED RECIPE: delete the `if (!_hubHeartShown)` early return from BuildHubHeartDoor.
+            if (!Has(panel, "_hubHeartShown = DeNelle.Village.UI.ManageScreenVM.HeartUpgradeAvailable"))
+                failures.Add("[hub-heart-chip-conditional] the hub's card band no longer reads the chip " +
+                             "predicate. The band and the chip MUST be decided in the same breath: they were " +
+                             "computed in two places on two different frames once before, and the chip ended " +
+                             "up seated inside all three cards (Builds/cap-manage-wave4.log, seven of the " +
+                             "eleven non-queue oracle failures).");
+            if (!Has(panel, "if (!_hubHeartShown)"))
+                failures.Add("[hub-heart-chip-conditional] BuildHubHeartDoor builds the chip unconditionally " +
+                             "again. Mockup panel 1 draws no chip, and the owner's ruling is that it belongs " +
+                             "there ONLY when an upgrade is due.");
+
+            // ⛔ AND WHEN IT IS THERE, IT IS THE VERB - not "HEART L<n>".
+            // RED RECIPE: put `"HEART L" + HeartProgression.Level` back as the chip's face.
+            if (Has(panel, "\"HEART L\" + DeNelle.Village.Buildings.Progression.HeartProgression.Level"))
+                failures.Add("[hub-heart-chip-verb] the chip is a LEVEL BADGE again. The owner's ruling makes " +
+                             "it the upgrade DOOR, so its face is the upgrade verb and its price - a badge " +
+                             "states a number nobody asked for and offers nothing to do.");
+            if (!Has(vm, "\"UPGRADE HEART\""))
+                failures.Add("[hub-heart-chip-verb] ManageScreenVM no longer composes the chip's upgrade verb. " +
+                             "The words are the model's (canon section 9) so the chip and every gated card's " +
+                             "'UPGRADE THE HEART' CTA cannot drift into two vocabularies.");
+        }
+
+        // ── PANEL 1 - the card art wells, which are never blank (WO-1597) ────
+        /// <summary>
+        /// ⛔ NEVER A BLANK WELL. This is the one case in this suite that OPENS FILES, and it is
+        /// deliberate: the stand-in's whole promise is that it RESOLVES TODAY, and a source lint
+        /// cannot tell you whether a PNG is on disk. A stand-in that has been deleted or renamed
+        /// puts the screen straight back to the owner's 10:21 frame - three dark rectangles.
+        /// </summary>
+        private static void CheckHubArt(string panel, string art, List<string> failures)
+        {
+            // ⛔ THE WELL BINDS THE ART TABLE, NOT A LITERAL KEY.
+            // RED RECIPE: replace the LoadHubArt call in BuildHubArtWell with `img.sprite = null;`.
+            if (!Has(panel, "ManageArt.LoadHubArt(cardIndex, out resolvedKey)"))
+                failures.Add("[hub-art-well-painted] the hub art well no longer resolves a sprite through " +
+                             "ManageArt.LoadHubArt. Mockup panel 1 fills each card with a painting; the " +
+                             "owner's frame (screen-20260907-1021-manage-hub.png) shows three empty dark " +
+                             "plates, and a framed empty well reads as BROKEN to everyone who does not " +
+                             "already know there is an art ask.");
+            if (!Has(art, "public static readonly string[] HubArtStandIns") ||
+                !Has(art, "public static Sprite LoadHubArt("))
+                failures.Add("[hub-art-well-painted] ManageArt has lost its hub stand-in table or its loader, " +
+                             "so the View would have to pick art for itself - which is the decision canon " +
+                             "section 9 keeps out of the View.");
+
+            // ⛔ THE PAINTING OWNS THE TOP OF THE CARD. MEASURED off
+            // docs/mockups/manage/MANAGE_MOCKUP_panel1_hub.png: the BUILD card runs y 53..222 and
+            // its illustration y 57..170, i.e. about 0.66 of the card, with the name and the line of
+            // copy sharing the rest. RED RECIPE: `private const float HubArtWellF = 0.30f;`
+            float wellF = ParseConstF(panel, "HubArtWellF");
+            if (float.IsNaN(wellF))
+                failures.Add("[hub-art-well-painted] HubArtWellF is gone - the art zone's share of the card " +
+                             "is back to a fraction typed at its call site, and the title and description " +
+                             "bands are DERIVED from it, so all three would drift independently.");
+            else if (wellF < 0.55f)
+                failures.Add("[hub-art-well-painted] the hub card's art zone is " + wellF.ToString("0.##") +
+                             " of the card, under the 0.55 floor. Mockup panel 1 gives the painting about " +
+                             "two thirds of the card; a smaller well turns the picture into a thumbnail " +
+                             "over a block of text, which is the opposite of what she drew.");
+
+            // ⛔ KEY ORDER: THE OWED PAINTING WINS THE DAY IT LANDS.
+            // RED RECIPE: swap the two LoadSprite calls inside LoadHubArt.
+            string loader = BodyOf(art, "public static Sprite LoadHubArt(");
+            if (loader == null)
+                failures.Add("[hub-art-key-order] cannot read ManageArt.LoadHubArt's body - this case cannot " +
+                             "silently pass because the method was renamed.");
+            else
+            {
+                int painting = loader.IndexOf("HubArtKeys[cardIndex]", StringComparison.Ordinal);
+                int standIn = loader.IndexOf("HubArtStandIns[cardIndex]", StringComparison.Ordinal);
+                if (painting < 0 || standIn < 0 || painting > standIn)
+                    failures.Add("[hub-art-key-order] LoadHubArt no longer tries the OWED PAINTING before the " +
+                                 "stand-in. The whole contract of the stand-in is that it is temporary: the " +
+                                 "day hub-build/hub-army/hub-research land they must win with no code change " +
+                                 "and no layout change.");
+            }
+
+            // ⛔ AND EVERY STAND-IN IS ACTUALLY ON DISK. Read out of the source table so a swap by
+            // the owner is picked up automatically - this case must never carry its own copy of the
+            // three keys (that copy is the failure this repo names in CLAUDE.md sections 2/5/16).
+            // RED RECIPE: point one stand-in at a key with no file.
+            var standIns = StringLiteralsAfter(art, "public static readonly string[] HubArtStandIns");
+            if (standIns.Count != 3)
+                failures.Add("[hub-art-standins-exist] expected THREE hub stand-in keys (one per card), read " +
+                             standIns.Count + " out of ManageArt.HubArtStandIns.");
+            for (int i = 0; i < standIns.Count; i++)
+            {
+                string key = standIns[i];
+                if (File.Exists(ResourcesRoot + key + ".png") ||
+                    File.Exists(ResourcesRoot + key + ".jpg")) continue;
+                failures.Add("[hub-art-standins-exist] hub stand-in '" + key + "' does not resolve - no " +
+                             ResourcesRoot + key + ".png or .jpg on disk. The stand-in exists precisely so a " +
+                             "hub card is NEVER blank; a stand-in that misses puts the screen back to the " +
+                             "owner's 2026-09-07 10:21 frame and nothing would say so until she looked.");
+            }
+        }
+
+        /// <summary>
+        /// The double-quoted string literals in the initializer that follows <paramref name="anchor"/>,
+        /// up to its closing brace. Used so a case reads the SOURCE's own table rather than carrying
+        /// a second copy of it.
+        /// </summary>
+        private static List<string> StringLiteralsAfter(string body, string anchor)
+        {
+            var found = new List<string>();
+            int at = body.IndexOf(anchor, StringComparison.Ordinal);
+            if (at < 0) return found;
+            int open = body.IndexOf('{', at);
+            int close = open >= 0 ? body.IndexOf('}', open) : -1;
+            if (open < 0 || close < 0) return found;
+            string block = body.Substring(open, close - open);
+            int i = 0;
+            while (true)
+            {
+                int q0 = block.IndexOf('"', i);
+                if (q0 < 0) break;
+                int q1 = block.IndexOf('"', q0 + 1);
+                if (q1 < 0) break;
+                found.Add(block.Substring(q0 + 1, q1 - q0 - 1));
+                i = q1 + 1;
+            }
+            // The table is authored as `BuildingPortraitFolder + "lumbermill"`, so each row's literal
+            // is the LEAF. Re-join it with the folder const the same way the source does, read out of
+            // the source rather than typed here.
+            string folder = FirstLiteralAfter(body, "public const string BuildingPortraitFolder");
+            if (!string.IsNullOrEmpty(folder))
+                for (int k = 0; k < found.Count; k++)
+                    if (found[k].IndexOf('/') < 0) found[k] = folder + found[k];
+            return found;
+        }
+
+        /// <summary>The first double-quoted literal after <paramref name="anchor"/>, or null.</summary>
+        private static string FirstLiteralAfter(string body, string anchor)
+        {
+            int at = body.IndexOf(anchor, StringComparison.Ordinal);
+            if (at < 0) return null;
+            int q0 = body.IndexOf('"', at);
+            if (q0 < 0) return null;
+            int q1 = body.IndexOf('"', q0 + 1);
+            return q1 < 0 ? null : body.Substring(q0 + 1, q1 - q0 - 1);
         }
 
         // ── PANEL 2 / 4 - the grid tiles ─────────────────────────────────────
@@ -508,6 +720,21 @@ namespace DeNelle.Editor
                              "mockup draws it on panel 1 ONLY; panels 2 and 4-8 carry the back arrow, and the " +
                              "owner's walk found CLOSE on five screens that already have a way out. Two exits " +
                              "on one panel teach neither.");
+
+            // ⛔ AND ON THE HUB IT READS AS A LIVE BUTTON (WO-1597).
+            // ⚠ IT WAS NEVER DISABLED - the ticket's "ghost, non-interactive plate" is a CONTRAST
+            // fault, not a wiring one: ObsidianCloseButton hands it the same exitRoute delegate the
+            // scrim and the constant X take. This case pins the fix that was actually needed, and
+            // pins it as APPEARANCE so nobody "repairs" it by building a second close path - which
+            // is what WO-1491 spent a round removing.
+            // RED RECIPE: delete the `_chromeClose.interactable = true;` block from BuildChrome.
+            if (!Has(panel, "_chromeClose.interactable = true"))
+                failures.Add("[chrome-close-is-live] the hub's CLOSE is no longer asserted live and legible. " +
+                             "On the owner's frame (screen-20260907-1021-manage-hub.png) it renders as a " +
+                             "dimmed plate under the cards and reads as a broken button - a dead-looking " +
+                             "control is a real defect, because the player stops trusting the screen's other " +
+                             "affordances. MANAGE_MOCKUP_panel1_hub.png draws a plain plate with a light " +
+                             "CLOSE on it, and LUMINANCE is the channel (the owner is red/green colourblind).");
 
             // ⛔ THE TITLE JOINS WITH A HYPHEN, AS DRAWN.
             // RED RECIPE: put `return "MANAGE / " + TabWordOf(nav.Tab);` back.
@@ -804,7 +1031,12 @@ namespace DeNelle.Editor
                              "and that one seat produced SEVEN oracle failures: the sub-touch band, three " +
                              "BUTTONS OVERLAP and three BUTTON OVER TEXT, each naming ManageHeartFace " +
                              "against a ManageCard_*.");
-            if (!Has(panel, "new Vector2(0.02f, _hubHeartY0), new Vector2(0.24f, 1f), OpenHeartSurface"))
+            // ⚠ THE RIGHT EDGE MOVED 0.24 -> 0.30 ON 2026-09-07 (WO-1597) AND THAT IS THE POINT OF
+            // THE CHANGE, not an accident: the face went from "HEART L3" (8 characters) to the
+            // upgrade verb (13). This control's recorded failure mode is a label truncating inside a
+            // plate authored for a shorter word - "HEART ..." at ~177px, three rounds - and the cure
+            // that worked on the QUEUE pill was ROOM, never a smaller font.
+            if (!Has(panel, "new Vector2(0.02f, _hubHeartY0), new Vector2(0.30f, 1f), OpenHeartSurface"))
                 failures.Add("[hub-heart-band-at-the-floor] the HEART chip is not seated in the hub's " +
                              "header band off the MEASURED _hubHeartY0. Its old band (0.70-0.83) was typed " +
                              "against a card band that had since become derived, so it sat INSIDE all " +
@@ -814,14 +1046,32 @@ namespace DeNelle.Editor
                              "thing that keeps the heart band and the card band disjoint by construction; " +
                              "without it they share an edge and the overlap oracle fires again.");
 
-            float hubCardBandPx = wellPx - (closeReservePx + hubGap) - (heartBandPx + hubGap);
+            // ⭐ WO-1597 - TWO BANDS NOW, BECAUSE THE HEART CHIP IS CONDITIONAL. The screen the
+            // owner sees, and the one mockup panel 1 draws, is the NO-CHIP one; the chip appears
+            // only while a Heart upgrade is due. Both are checked, with different floors, because
+            // both ship - and the shipped default is the one that has to be generous.
+            float hubCardBandPx = wellPx - (closeReservePx + hubGap);            // the mockup's state
+            float hubCardBandChipPx = hubCardBandPx - (heartBandPx + hubGap);    // upgrade due
             float hubFill = hubCardBandPx / Mathf.Max(1f, wellPx);
-            if (hubFill < 0.50f)
+            float hubFillChip = hubCardBandChipPx / Mathf.Max(1f, wellPx);
+            // ⛔ THE FLOOR ROSE FROM 0.50 TO 0.70, AND THE 136px THE CHIP GAVE BACK IS EXACTLY WHY.
+            // MEASURED on the owner's frame (screen-20260907-1021-manage-hub.png): three cards over
+            // about half the well with the rest black, beside a mockup that fills it. At the
+            // reference surface the chip's band plus its gutter was 136px of a 758px well - 18% of
+            // the screen held for a control she asked to have removed.
+            if (hubFill < 0.70f)
                 failures.Add("[hub-cards-fill-the-well] the hub's card band is " +
                              hubCardBandPx.ToString("0") + "px of a " + wellPx.ToString("0") +
-                             "px well = " + hubFill.ToString("0.##") + " - under the 0.50 floor. Mockup " +
+                             "px well = " + hubFill.ToString("0.##") + " - under the 0.70 floor. Mockup " +
                              "panel 1 draws three TALL cards filling the well between the title and CLOSE; " +
                              "the reservations above and below them have eaten it.");
+            // With the chip up the band is necessarily smaller, but it may never fall back to the
+            // shape the owner rejected. RED RECIPE: reserve the heart band unconditionally again.
+            if (hubFillChip < 0.50f)
+                failures.Add("[hub-cards-fill-the-well] with the HEART chip up the card band is " +
+                             hubCardBandChipPx.ToString("0") + "px = " + hubFillChip.ToString("0.##") +
+                             " of the well, under the 0.50 floor. The chip is allowed to cost the cards " +
+                             "one touch-floor band and a gutter, and nothing more.");
 
             // The card's SHAPE, which is what made them read as small plaques. cellW is clamped to
             // HubCardAspect x the band height and the row centres in what is left (BuildLauncher).
