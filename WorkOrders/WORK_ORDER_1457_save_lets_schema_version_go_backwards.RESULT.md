@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-09-07 (CLI):** the ABSENT-version arm described below (refuse as malformed, `SCHEMA_VERSION_MISSING`) is RETIRED. It refused every client in the field - no shipped build sent the field - and took production cloud saves down from 07:53 on 2026-09-07 (owner's Seeker: six drain failures, each a 400). An absent version is now ACCEPTED with the stored version left untouched (`SCHEMA_VERSION_ABSENT` note, audit row); the DOWNGRADE refusal and the GREATEST() upsert stand. The client sends the version from the next build (WO-1587). The schema's `DEFAULT 10` for a brand-new row is the open residual.
+
 # WO-1457 RESULT - schema_version cannot regress; downgrade and absent are named refusals
 
 **Status:** FIXED. All four acceptance criteria met locally. Not yet deployed - the vercel --prod push is

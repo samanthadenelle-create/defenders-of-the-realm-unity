@@ -187,7 +187,18 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-twentieth pass): main line next free = **1588**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-twenty-third pass): main line next free = **1597**.
+> *(CLI minted **1596** first Rough Stone is a log line, owner wants a full-screen fanfare - her words 09:46. Bumped 1596 -> 1597 in this SAME edit.)*
+> *(COLLISION 09:3x-09:4x: two seats minted **1588-1591** on the MAIN line in the same minutes - the
+> Grok/UI seat's raid felt pack, and the CLI's three device tickets. First-on-disk-and-referenced wins:
+> the CLI's **1588** locked dungeon port slab + em-dash prompt (F8 seq 4699), **1589** chest opens with
+> no toast, **1590** kill grants bank 0 Stone were dispatched to lanes and banner-bumped first. The raid
+> pack is RENUMBERED, bodies re-pointed: **1592** program spine, **1593** KayKit bases/walls/towers,
+> **1594** countdown + stars lit then snuffed, **1595** AI beyond rush. Bumped to **1596** in this SAME
+> edit. Other seats: mint from YOUR reserved block, never the main line - this is the sixth collision.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI / Grok): main line next free = **1592** (the colliding row).
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-twentieth pass): main line next free = **1588**.
 > *(CLI minted **1587** offline queue drain fails 6x while the session renews, no why= line - from the owner's device log 2026-09-07 08:01-08:29. Bumped 1587 -> 1588 in this SAME edit.)*
 > *(CLI minted **1584** store sell screen blank icon/row/selection, **1585** attacks report plate overlap, **1586** army rebalance demands gold after the WO-1387 ruling - all from the owner's Seeker screenshots and words 2026-09-07 morning. Bumped 1584 -> 1587 in this SAME edit.)*
 > *(Owner ruling lane off her 08:5x message - *"everytime i play now im forced to authenticate ... I
