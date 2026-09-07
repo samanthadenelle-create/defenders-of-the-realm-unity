@@ -54,6 +54,30 @@ fall through to a neutral hammer icon, which is the blank/plain tile you photogr
 > The sheets show `building_archertower.png`, `bld_archertower.png` and `building-archer-tower.png` for
 > what the game calls `tower_ground_archer`. **Use the left-hand column below and nothing else.**
 
+### 1.1b ⭐ UPDATE 2026-09-06 — **20 OF THE 21 ARE ALREADY DESIGNED ON YOUR CONTACT SHEET. DO NOT
+RE-DESIGN THEM.**
+
+The owner re-sent the Manage UI asset sheets. Cross-referencing them against §1.2: **20 of the 21
+buildings already exist as artwork** on the sheet — `building_archertower`, `building_ballista`,
+`building_skyballista`, `building_catapult`, `building_arcanespire`, `building_palisade`,
+`building_stonewall`, `building_stonegate`, `building_healingcaravan`, `building_lumbermill`,
+`building_quarry`, `building_ironmine`, `building_crystalmine`, `building_store`,
+`building_echohollow`, `building_lumberyard`, `building_foundry`, `building_stoneyard`,
+`building_crafting`, `building_jeweler`.
+
+**So this is an EXPORT job, not a design job.** What is needed is each of those 20 tiles delivered as
+**its own file**, at **1024 × 1024, RGBA, transparent**, **renamed to the catalog id in §1.2**. The art
+direction is settled; only the packaging is missing.
+
+⚠ **The ONE that appears genuinely absent from the sheet is `mill.png`** (displayName **Mill**, role
+`gristmill` — a grain/wind mill, distinct from the sawmill that is `collector_lumbermill`). That one may
+need creating. ⚠ **I have not proven it is absent** — the sheet is low-resolution and I could be reading a
+tile wrong. Check the sheet before commissioning it.
+
+⛔ **A contact sheet cannot be used directly.** Slicing a sheet gives a small, resampled tile with the
+sheet's own background baked around it. Each file must come out of the generator individually with a
+transparent background.
+
 ### 1.2 THE 21 FILES
 
 | # | **Filename (exact)** | Shown as | Filter | What it is |
