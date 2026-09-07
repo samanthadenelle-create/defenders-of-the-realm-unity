@@ -133,7 +133,32 @@ screenshots + icon, `publishing/media/` still empty), the orc caster art
 
 ---
 
-## Build identity - STORE APK (afternoon), measured 2026-09-07 13:3x from the artifact
+## Build identity - STORE APK (evening) - THE SUBMISSION FILE, measured 2026-09-07 14:3x
+
+Supersedes the afternoon 359664 file below (its code and the tester's 359651 are BURNED in the dApp
+Store portal by the owner's first upload attempts - a burned code cannot be deleted, the next file must
+be strictly higher). This build carries the evening gate on top of the afternoon wave: WO-1600..1604
+(Jeweler card off the Title, Skills tree band + fit, biome drop seating, pursuit pulse attribution + the
+dead-hero stamp guard, atmosphere timeline traces).
+
+- Source: branch `feat/synty-art-retheme` at `3a93f288e` (pushed to origin 14:31); gate COMPILE_GATE_OK cg-wave11 + REGRESSION_OK 456/456 reg-wave11 14:19
+- File: `Builds/Android/store/EchoesOfElarion-store-2026.09.07.359722.apk`, 462,914,127 bytes (copied aside; the default APK path is overwritten by the tester build that followed)
+- Built WITHOUT the tester define: `[apk] STORE-shaped build (no TESTER_BUILD define) - defines: ''` (Builds/apk-store-0907eve.console.log)
+- `aapt2 dump badging`: `package: name='com.denellestudios.echoesofelarion' versionCode='359722' versionName='2026.09.07.359722'`, `native-code: 'arm64-v8a'`
+- SHA-256: `A0A96EF36F3E70AA9CB024A26A2ABE5980E9A18844BE8DE43627C934D6422329`
+- `apksigner verify -v --print-certs`: `Verifies`; certificate SHA-256 `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443`
+- R2 parity on this build: `R2_PARITY_OK` (Builds/overnight-apk-status.txt 14:3x); pre-push hook passed on the push at 14:31
+- Burned codes in the portal (do not reuse, do not upload): 359651 (tester), 359664 (afternoon store)
+- Play AAB: not re-cut this evening; `EchoesOfElarion-GooglePlay-2026.09.07.359670.aab` predates WO-1600..1604 - cut a fresh AAB before a Play upload
+- WebGL / Vercel: HELD (owner ruling 13:5x)
+
+## Added to the What's New by the evening gate (fold into the text above if you paste after 14:30)
+
+> The Jeweler's discovery card no longer appears over the title screen. The Skills tree fits its
+> panel with its frame around the tree, not through it. Biome road drops land where they said they
+> would, or tell you the road is not walkable yet.
+
+## (superseded) Build identity - STORE APK (afternoon), measured 2026-09-07 13:3x from the artifact
 
 This SUPERSEDES the 09:26 store APK (`2026.09.07.359419`) recorded below it: the afternoon wave
 (commits 70812668e..cdc3ac66d, gate COMPILE_GATE_OK cg-wave10h + REGRESSION_OK 454/454 reg-wave10d)
