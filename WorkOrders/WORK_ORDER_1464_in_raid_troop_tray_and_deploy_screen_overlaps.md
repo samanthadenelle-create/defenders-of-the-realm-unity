@@ -1,6 +1,6 @@
 # WO-1464: the in-raid troop tray is unreadable and three raid bands overlap the HUD beneath them
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-07 uncommitted, awaiting gate
 **Silo:** `Assets/_Modules/Village/Troops/RaidDeployController.cs` (in-raid tray + top band) and
 `RaidDeployScreen`. Pairs with WO-1462 (same screen, different defect).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

@@ -70,6 +70,7 @@ namespace DeNelle.Editor
                 Case2_SiegeStillPrefersStructures(failures, log);
                 Case3_UnreachableUnitDoesNotPinTheTroop(failures, log);
                 Case4_FactionRuleReachesTheBodyContract(failures, log);
+                Case5_DestroyedTowerIsNotAProbeTarget(failures, log);
             }
             catch (Exception ex)
             {
@@ -194,6 +195,89 @@ namespace DeNelle.Editor
 
             if (failures.Count == before)
                 log.AppendLine("[case4] CombatFactionRules answers on IDamageable, null/dead/own-side all refused OK");
+        }
+
+        // -- Case 5 -- WO-1569: the felled tower the probe kept reading after Unity destroyed it.
+        //
+        // MEASURED, device capture build 2026.09.07.358872, scene RaidBase_raider_camp_small,
+        // F8 seq 4688 (troop-footman) and 4689 (troop-archer), same instant:
+        //   [Flow:TroopAI] breach-probe id=troop-footman FAILED: NullReferenceException
+        //     at UnityEngine.Component.get_transform ()
+        //     at DeNelle.Village.DefenseTower.get_WorldPosition ()
+        //     at DeNelle.Village.TroopController+<>c__DisplayClass119_0.<TraceBreachProbe>b__0 ()
+        //     at DeNelle.Core.Diagnostics.Guard.Try (...)  at TroopController.Update ()
+        //
+        // RED PROOF, stated honestly (CLAUDE.md 11B) and reasoned, not executed - the Unity lock
+        // belongs to the CLI lead, matching this suite's own convention for case 1. At HEAD~,
+        // TroopController had no IsLiveTarget and DefenseTower.WorldPosition was the bare
+        // `transform.position`, so assertion (b) had no symbol to call and assertion (c) threw
+        // the NullReferenceException in the capture above. Both are structural, not probabilistic.
+        //
+        // The three assertions are one argument:
+        //   (a) the interface null check STILL passes on a destroyed component - that is the trap,
+        //       and pinning it stops a future seat "simplifying" IsLiveTarget back to `!= null`;
+        //   (b) IsLiveTarget answers correctly, so the troop's foeValid goes false and it
+        //       RE-SELECTS instead of aiming at a corpse;
+        //   (c) WorldPosition survives the read anyway, so no caller outside the guard can be
+        //       taken down by a tower that died a frame earlier.
+        private static void Case5_DestroyedTowerIsNotAProbeTarget(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+            GameObject go = null;
+            try
+            {
+                go = new GameObject("wo1569-felled-tower");
+                go.transform.position = new Vector3(7f, 0f, -3f);
+                var tower = go.AddComponent<DefenseTower>();
+                IDamageable target = tower;
+
+                Vector3 alivePos = target.WorldPosition;
+                if (!TroopController.IsLiveTarget(target))
+                    failures.Add("case5: IsLiveTarget said a LIVE tower was not a live target - " +
+                                 "the guard is over-eager and would blind every breach probe");
+                if (alivePos != go.transform.position)
+                    failures.Add("case5: a live tower's WorldPosition did not equal its transform " +
+                                 "position - the destroy-safe cache changed the live answer");
+
+                UnityEngine.Object.DestroyImmediate(go);
+                go = null;
+
+                // (a) THE TRAP. An interface-typed reference to a destroyed component is NOT
+                // managed-null, which is why `dmg != null` was never a sufficient check.
+                if (ReferenceEquals(target, null))
+                    failures.Add("case5a: the destroyed tower went managed-null, so this case no " +
+                                 "longer reproduces the WO-1569 trap and proves nothing");
+
+                // (b) THE FIX, on the live predicate the selector itself calls.
+                if (TroopController.IsLiveTarget(target))
+                    failures.Add("case5b: IsLiveTarget accepted a DESTROYED tower - the troop " +
+                                 "would keep it as its cached foe instead of re-selecting, and the " +
+                                 "breach probe would read WorldPosition off a corpse (F8 seq 4688)");
+
+                // (c) THE SAFETY NET, on the exact property in the captured stack.
+                try
+                {
+                    Vector3 deadPos = target.WorldPosition;
+                    if (deadPos != alivePos)
+                        failures.Add("case5c: a destroyed tower's WorldPosition returned " +
+                                     deadPos + " instead of its last live position " + alivePos);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("case5c: reading WorldPosition on a DESTROYED tower threw " +
+                                 ex.GetType().Name + " - this IS the captured defect " +
+                                 "(F8 seq 4688/4689, build 2026.09.07.358872)");
+                }
+            }
+            finally
+            {
+                if (go != null) UnityEngine.Object.DestroyImmediate(go);
+            }
+
+            if (failures.Count == before)
+                log.AppendLine("[case5] destroyed tower: interface null check still passes, " +
+                               "IsLiveTarget refuses it, WorldPosition returns the last live " +
+                               "position without throwing OK");
         }
 
         /// <summary>

@@ -29,6 +29,7 @@
 using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -67,6 +68,17 @@ namespace DeNelle.Village
         // Cached applied look (rarity-driven, via WeaponVfxMap) — also the test-seam return value.
         private Color _trailColor = WeaponVfxMap.SteelColor;
         private float _trailStartWidth = WeaponVfxMap.CommonWidth;
+
+        // WO-1538: per-INSTANCE dedupe for the permanent apply trace below. Deliberately NOT
+        // FlowTrace.Once/Throttle with a static key: those are process-wide, so an earlier
+        // actor's trail (or an earlier scene) would consume the key and the fire-point line
+        // would never emit again in that process -- which is how a headless oracle installing
+        // its own sink mid-run reads a live seam as dead. Per-instance state means the FIRST
+        // apply on every controller always speaks, a weapon swap speaks again, and the
+        // per-swing repeats stay silent.
+        private bool   _hasTracedApply;
+        private string _tracedRarity;
+        private Color  _tracedColor;
 
         private void Awake()
         {
@@ -250,6 +262,25 @@ namespace DeNelle.Village
                 new[] { new GradientColorKey(head, 0f), new GradientColorKey(_trailColor, 0.35f), new GradientColorKey(_trailColor, 1f) },
                 new[] { new GradientAlphaKey(_trailColor.a, 0f), new GradientAlphaKey(0f, 1f) });
             _trail.colorGradient = grad;
+
+            // PERMANENT FIRE-POINT INSTRUMENTATION (CLAUDE.md S12 -- never strip this).
+            // Emitted AFTER the gradient reaches the renderer, so the line proves the trail was
+            // actually TINTED, not merely that a colour was resolved. ArenaCombatOracle asserts
+            // this exact text ("TRAIL color=" ... "rarity=<raw> applied"), so nothing may be
+            // inserted between the rarity value and " applied". WO-1538: the line was dropped
+            // when the trail moved off PlayerAttackController.EnsureSwingTrail onto this
+            // component, and the oracle had been red ever since with the VFX working fine.
+            string rarity = (w != null && !string.IsNullOrEmpty(w.rarity)) ? w.rarity : "none";
+            if (!_hasTracedApply || rarity != _tracedRarity || _tracedColor != _trailColor)
+            {
+                FlowTrace.Step("WeaponTrail",
+                    $"TRAIL color=({_trailColor.r:0.00},{_trailColor.g:0.00},{_trailColor.b:0.00},{_trailColor.a:0.00}) " +
+                    $"width={_trailStartWidth:0.00} weapon='{(w != null ? w.id : "<none>")}' actor='{name}' " +
+                    $"rarity={rarity} applied");
+                _hasTracedApply = true;
+                _tracedRarity = rarity;
+                _tracedColor = _trailColor;
+            }
         }
 
         // ---------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # WO-1405 RESULT - Manage rows name what the upgrade buys, and the grid coordinate is retired
 
-**Status:** IMPLEMENTED AND SUITE-GREEN IN A PRE-COMMIT RUN. Capture and Seeker felt-verify still owed.
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 3 (BUILDING DETAIL) not yet passed (2026-09-07); code landed the Defense half 2026-09-06; the rest uncommitted. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED AND SUITE-GREEN IN A PRE-COMMIT RUN. Capture and Seeker felt-verify still owed.)*
 **Commit:** `eb161dc98` (2026-09-06 20:10), the seven-gated-lanes commit. No uncommitted remainder belongs to
 this ticket - `ManageScreenVM.cs` and `ManageScreenPanel.cs` DO carry uncommitted edits, but their markers are
 WO-1488 / WO-1517 / WO-1518 / WO-1516 / WO-1387, not WO-1405.

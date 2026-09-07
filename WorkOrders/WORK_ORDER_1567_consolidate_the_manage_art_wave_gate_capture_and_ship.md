@@ -206,9 +206,53 @@ Do not migrate these to Addressables without a fresh ruling.
    **Owed: two sheets, `tower_siege_tower-2` and `tower_siege_tower-3`, drawn to match
    `Sky_Ballista` / `tower_siege_tower`.**
 
+5. **ART ASK — the three HUB CARD illustrations (mockup panel 1). Added 2026-09-07.**
+
+   Mockup panel 1 draws a portrait-shaped illustration filling each of the three hub cards: a
+   BUILDING on BUILD, a HELMET on ARMY, a BOOK on RESEARCH. **None of the three exists.** The art
+   wave delivered 36 UI files into `Assets/Resources/UI/ElarionMedieval/Manage/` (§1) and they are
+   frames, filter chips, resource glyphs and stat glyphs — no hub illustration among them.
+
+   **Owed, by Resources key** (declared at `ManageArt.HubArtBuild/HubArtArmy/HubArtResearch`, and
+   listed together in `ManageArt.HubArtKeys` so the trace and its oracle read one source):
+   - `UI/ElarionMedieval/Manage/hub-build`
+   - `UI/ElarionMedieval/Manage/hub-army`
+   - `UI/ElarionMedieval/Manage/hub-research`
+
+   **Shape: PORTRAIT, roughly 145:160 — the card's own aspect** (`ManageScreenPanel.HubCardAspect`,
+   measured off the mockup sheet), filling the top ~46% of the card (`HubArtWellF`).
+
+   ⛔ **THE RETIRED LANDSCAPE STRIPS ARE NOT A SUBSTITUTE, AND THIS HAS BEEN TRIED.**
+   `Assets/Resources/UI/ElarionMedieval/cards/*.png` are 1963×789 strips drawn for the retired wide
+   2×2 seat; preserveAspect-ing one into a tall card letterboxes two thirds of it black, which reads
+   as BROKEN rather than as art-pending. `cards/troops.png` — the UNLOCKED army card — has never
+   existed at all; only `cards/troops-locked.png` does.
+
+   **Consequence today, and it is deliberate:** each card paints a FRAMED, EMPTY well and the three
+   missing keys are named once per session through `FlowTrace.Once("Manage", "hub-art-ask", ...)`.
+   A bordered empty well says "a picture belongs here"; a black two-thirds says the screen is broken.
+
 ---
 
 ## 6. ACCEPTANCE
+
+### 6.0 THE ONLY ACCEPTANCE THAT CLOSES A MANAGE SCREEN - owner ruling 2026-09-07
+
+**Owner, 01:10:** *"fix the board so those tickets dont say done and update the goal to be screenshots
+proving these match"* - **01:12:** *"95% coverage in size font style context images"* ... *"thats the
+minimum threshold to pass"* - **01:14:** *"i expect these images to fill the screen, not 60% of it"*
+
+- **The acceptance is a DEVICE SCREENSHOT placed beside its mockup panel and judged a match BY THE
+  OWNER.** Items 1-4 below are evidence toward that judgement. **They can never mark a ticket done.**
+- **A Manage ticket moves to DONE only when the owner says the frame matches.** Until then its status
+  reads `AWAITING OWNER MATCH` and the board buckets it **Verify**, not Done and not Fixed.
+- **CRITERION ZERO: the panel FILLS the screen** (full bleed inside the safe area, not a 60%-width
+  plate over the town). Judged first; it multiplies every other axis. Section 4a's plate measurement
+  (x 0.18-0.82 = 64% of the canvas) is the defect it names.
+- **THE FIVE AXES AND THE FLOOR:** at least **95% matched** on **SIZE**, **FONT**, **STYLE**,
+  **CONTEXT** and **IMAGES**, judged by the owner. Under 95% on any axis is a FAIL.
+- Nine-row scorecard with one column per axis, and the full ruling:
+  `WorkOrders/ManageRedesign/CAPTURE_LOOP_GOAL.md` (top block) and `OWNER_RULINGS_LOCKED.md` ruling 29.
 
 1. `COMPILE_GATE_OK` on a fresh log, over a **quiescent** tree.
 2. `REGRESSION_OK <n>/<n>` with **`ManagePortraitCoverageRegression` green** — the Unity proof that
@@ -216,6 +260,37 @@ Do not migrate these to Addressables without a fresh ruling.
 3. `MANAGE_FLOW_MAP_OK`, no missing or duplicate frames, and **the PNGs opened and looked at**.
 4. The panel-by-panel comparison recorded against WO-1566 §2 / `CAPTURE_LOOP_GOAL.md` §3 — each row ticked
    from a frame, or marked BLOCKED with the reason named.
+
+### 4a. THE PANEL-BY-PANEL COMPARISON — device build 358872, 2026-09-07
+
+**PASS THRESHOLD (owner, 2026-09-07): 95% match on SIZE, FONT, STYLE, CONTEXT, IMAGES.**
+
+⛔ **AXIS 1 ON EVERY ROW, AND IT IS THE ONE THAT MULTIPLIES ALL THE OTHERS: DOES THE PANEL FILL THE
+SCREEN?** Owner ruling 2026-09-07 01:14, verbatim: ***"i expect these images to fill the screen, not
+60% of it"***. Every frame below was taken through a plate at **x 0.18–0.82 = 64% of the canvas**,
+with the town visible around it, while every mockup panel is full-frame. Fixed FIRST and everything
+else re-derived from it: `ManageScreenPanel.ManagePanelInsetF = 0.02f` (96% of the safe area on both
+axes), with the retired reasoning superseded in place at the `BuildObsidianPanel` call site. The
+problem that band was solving is real and now solved one layer down — `ManageWorkspacePanel.MaxTileAspect`
+clamps a cell's WIDTH to the mockup's drawn tile shape and the row centres, so a full-width band gives
+even side margins instead of bars.
+
+⚠ **EVERY ROW BELOW IS A SOURCE-LEVEL FIX, NOT A TICKED CAPTURE.** No Unity run was in this lane's
+scope, so nothing here is proven on a frame yet. The evidence for each DEFECT is the owner's own
+device capture, named per row; the evidence for each FIX will be the next `MANAGE_FLOW_MAP_OK`.
+
+| # | Panel | Frame the defect was measured on | What was wrong | What changed |
+|---|---|---|---|---|
+| 1 | MANAGE hub | `owner-screen-20260907-004724.png` | cards ~2.2:1 against the mockup's 0.9:1; all three descriptions ellipsised ("Construct and upgrade yo…"); no art on any card | card band derived from `HubTitleBandPx`/`HubCloseBandPx`/`HubBandGapPx` instead of two typed fractions; cell clamped to `HubCardAspect` (145:160, measured off the sheet) and the row centred; description now `FitBlock` at `ElarionUi.FontFloorMobile` over a two-line band; a framed EMPTY art well per card. **HEART L1 KEPT** — `CAPTURE_LOOP_GOAL.md:130` gates its removal on a Heart door existing elsewhere and `HeartSurfaceRegression.cs:118-123` pins this face as the only one. **ART ASK: `hub-build`, `hub-army`, `hub-research` under `UI/ElarionMedieval/Manage/` (§5 item 5).** |
+| 2 | MANAGE / BUILD grid | `owner-screen-20260907-004825.png` | round medallion + ring on every tile; "SHORT 28…" / "SHORT 72…" ellipsised state words | square edge-to-edge portrait via `SquarePortrait` (envelope-crop, no ring); tile paints the model's CLOSED word (`ManageTileVM.StateWord`, composed by `ApplyBuildBadge` beside WO-1518's full sentence — the row and the detail card keep the amounts); the two opaque frames no longer paint under a full-bleed portrait, the two hollow ones ride over it |
+| 3 | LUMBER MILL detail | `owner-screen-20260907-004903.png` | "2600 970" naming no resource; "UPGRADE . STONE 2600 GOL…" clipped mid-word; description doubled by a " . " joiner; circular art | cost row draws the model's `Label` word beside the amount **and** a delivered glyph (`CostIconFor`, which was returning `null` for every row); CTA reads the verb only; description, promotion note and level/state each on their own row; captioned cost band ("Upgrade Cost") with the clock on its own line; promoted stat value BOLD, not green; square art at `artFrac` 0.42. ⚠ **STONE/GOLD are correct live words and ruling 22's charge — nothing in the basket changed.** |
+| 4 | MANAGE / ARMY grid | `owner-screen-20260907-005136.png` | same medallion shape; locked troops at full brightness | same square tile treatment; **locked tiles dimmed by a luminance multiply (0.42), never a hue shift** — and never the only cue, the word LOCKED and the padlock stay |
+| 5 | ARCHER detail | `owner-screen-20260907-005222.png` | "TRAIN . 1M 0S" on the button; promotion note glued to the description; "Level 5 . UPGRADING" | face reads **"TRAIN 1 ARCHER"**; duration moved out of the stats table into the clock band ("Train Time"); `AuxiliaryText` on its own row; level on its own line with the state as a BADGE plate. ⛔ **DELIBERATE DIVERGENCE: no "550 gold" train cost.** Training is FREE — owner ruling WO-1387, *"training free … just time"*, and `FillTrainFacts` sets `TrainCostText = ""` for that reason. Inventing a price to fill the mockup's band would be a charge the game does not make. |
+| 6 | OUTRIDER, locked | `owner-screen-20260907-005311.png` | requirement joined to the description with " . " | requirement is its own **padlock row** (the shape channel for locked). **DELIBERATE DIVERGENCE KEPT: the live `VIEW BARRACKS` door beats the mockup's inert LOCKED plate** — WO-1518's door ruling applied to troops |
+| 7 | MANAGE / RESEARCH picker | `owner-screen-20260907-005358.png` | `ceil(sqrt(4))` → four short wide tiles in a 2×2 over a 60%-black well; tiles painting the retired 1963×789 landscape strips through an oval mask | `columns = Clamp(count, 1, 5)`, one row while they fit; a single-row grid may grow its cell to SQUARE (the `MaxTileHeightPx` cap yields to the cell width when `rows == 1 && columns > 1`); school portrait bound through `ManageArt.BuildingPortraitKey(BuildingId, 1)` — the last caller of the retired strips. "N READY / N LOCKED" kept |
+| 8 | LUMBER MILL research tree | `owner-screen-20260907-010151.png` | No school painting beside the rows; requirement glued into the benefit line and truncated; perk medallions leak a baked caption | **DONE AT SOURCE 2026-09-07, UNGATED.** (a) `ManageTabVM.HeaderArtKey` (model-composed off `ManageArt.BuildingPortraitKey`, the ONE producer) + `ManageWorkspacePanel.BuildListPainting` carve the left 40% of the well for the school and hand the rows the rest — every measurement below it resolves against the band the rows actually get. (b) The model-side `" . "` join in `ComposeResearchItem` is **deleted**; the blocker rides the new `ManageTileVM.RequirementText` and `BuildListRow` paints it as its own **padlock row**, while the WO-1518 door word stays on `StateText` where the composer derives it from a real route (no second copy). (c) The medallion is CROPPED to the framed picture — MEASURED on `Lumber_Mill_T1_Improved_Logging.jpg` (786x1177): the frame runs y 155..800 and everything under y~840 is the perk's NAME in gold, which the row already typesets. `ManageArt.IsCaptionedPerkIcon` + `PerkIconU0..V1` own the test and the rect; `ManageWorkspacePanel.CroppedIcon` seats it by ANCHORS, so it needs no layout pass. (d) The inline RESEARCH face + its price were already built by `BuildListRow`; a researchable perk is now **seeded and pinned** — `ManageProgressiveDisclosureRegression` gets `Resources.Coins` in its fixture and a measured case `[research-row-offers-its-action]`. Pinned by `ManageMockupConformanceRegression.CheckResearchTree`. |
+| 9 | QUEUE drawer | `owner-screen-20260907-010257.png`, `-010356.png` | rows clipped top and bottom, "CANC…", the crystal cost colliding with SPEED UP, no active-tab state, and the RESEARCH tab telling her to "tap TRAIN" | **DONE AT SOURCE 2026-09-07, UNGATED — `WorkOrders/WORK_ORDER_1488_*.RESULT.md` is the record.** ⚠ **AND THE ROOT CAUSE IN THIS ROW NEEDED ONE CORRECTION:** `DrawerModeListKeepPx` is read only on the BAND path, and `ApplyDrawerPlacement` takes the OVERLAY path on every Manage screen (`band` requires `!WorkspaceActive`, and the WO-2001 workspace owns the well) — her frames prove it, since the title/X/tabs are overlay-only chrome. The pin was holding a constant for a shape nothing renders. It is **re-pointed** to measure the DERIVED row height (`_queueRowPx`, off the measured list band, clamped into `[MinTouchPx, RowHeightPx]` against a `QueueRowsVisibleTarget` of 5) and to pin no row clipping. Also: drawer floor 0.02 -> 0 (fills to the CLOSE band), row thumbnails, full-word CANCEL beside a compact `MinTouchPx` Ad chip (kept and CITED — WO-911:84-85 + `BuildTimerService.cs:1160` rule ad-skip per channel, and `ObsidianQueueVM.cs:208` is the per-row gate), active line plate by weight+underline, and a per-channel empty state off ONE `QueueChannelVerb` table. ⛔ **READ THE RESULT's section 4:** five rows DO NOT fit the ~205px list band (they need ~612px) — the code seats what fits and WARNS in px rather than shrinking rows under the touch floor. The next lever is the CLOSE-band reservation, now dead space on non-hub screens after WO-1491. |
+| 3b | LUMBER MILL detail — the current -> next TABLE | `owner-screen-20260907-004903.png` | Mockup panel 3 draws "Production 120 / hour -> 180 / hour" and "Storage 2,000 -> 3,000"; the card drew ONE prose row | **PARTLY DONE — STORAGE WIRED, PRODUCTION HANDED BACK.** `ManageScreenVM.BuildingStatRows` composes the Storage pair from `TownBankCapacity.CapacityAtLevel(repo.storageCapacity, level)` — already the single authority for a container's ceiling at a placed level (`TownBankCapacity.cs:424`, folding `StorageCapsCatalog`'s ladder) — called at the LIVE level and the next rung, into `ManageStatVM.DeltaText`. ⛔ **PRODUCTION IS NOT WIRED AND THAT IS A REPORTED HANDBACK, NOT AN OMISSION.** There is no single producer for output-per-hour at level N: the shape lives PRIVATELY in `ResourceCollector.ThroughputScale` (`ResourceCollector.cs:943-959`) and folds LIVE state plus the echo multiplier, so it answers a different question from a catalog preview. `StructureCardVM.UpgradeStats` cannot stand in either — that projection is fixed at level 1 by contract (`CurrentLevel => 1`, "Upgrade to Lv 2") and carries DPS/Range only, so a placed Level 2 mill would be shown its Level 1 -> 2 pair. **Owed: one public producer on `ResourceBuildingProgression` with `ThroughputScale` re-pointed at it** — a `Village/Buildings/Progression` edit, outside the Manage silo. |
 5. APK built and installed **through the sanctioned scripts**.
 6. **Push only on the owner's word** (CLAUDE.md §11). Commit local, by explicit path, sole committer.
 

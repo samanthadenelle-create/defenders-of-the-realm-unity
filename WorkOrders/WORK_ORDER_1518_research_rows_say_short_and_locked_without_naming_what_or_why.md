@@ -1,6 +1,6 @@
 # WO-1518: research rows say SHORT without naming what, and LOCKED without naming the blocker or linking to it
 
-**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 8 (RESEARCH tree) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
 **Silo:** Manage 2000-block research - `ManageScreenVM` research choice VM + `ManageWorkspacePanel` research
 rows (WO-2010 area).
 **LANDS AFTER** tonight's `ManageScreenVM.cs` commits (the WO-1405 / 1516 / 1517 lane).

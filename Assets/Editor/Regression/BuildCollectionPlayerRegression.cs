@@ -92,13 +92,24 @@ namespace DeNelle.Editor.Regression
                 return Fail("progression-locked collection entries are not hidden-before/unhidden-after authoritative unlock", out reason);
             if (!browser.Contains("CollectionHasVisibleItems(c)") ||
                 !browser.Contains("var entry = CatalogRegistry.Get(item.ItemId)") ||
-                !browser.Contains("if (entry == null) continue") ||
+                // WO-1572: was `if (entry == null) continue` -- the predicate now tallies each
+                // skip reason for its FlowTrace, so the bare statement became a braced block.
+                // Same contract: a row with no catalog entry cannot make a category navigable.
+                !browser.Contains("if (entry == null) { missingEntry++; continue; }") ||
                 browser.Contains("CollectionHasVisibleItems(c, EconomyService"))
                 return Fail("category projection does not hide empty-after-eligibility categories or incorrectly hides unlocked unaffordable goals", out reason);
-            if (!browser.Contains("StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry)") ||
+            // WO-1572 RE-POINTED 2026-09-07. This pin used to require the TWIN-COUNTING
+            // predicate `StructureSingleton.IsBuilt(entry)` in both browser sites, which is
+            // exactly the defect: an ACTIVE BAKED TWIN made a singleton read "built", and
+            // build-realm + build-trade (every item authors a bakedTwin) vanished from the
+            // root. The finite-category contract is unchanged - only its AUTHORITY moves to
+            // IsPlayerBuilt, the same query BuildModeController.IsSingletonBuilt has asked
+            // since WO-843. RED against the fixed file if IsBuilt is ever restored here.
+            if (!browser.Contains("StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsPlayerBuilt(entry)") ||
+                browser.Contains("StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry)") ||
                 !browser.Contains("StructureSingleton.SingletonReleased += OnFiniteCapacityChanged") ||
-                !browser.Contains("return true; // repeatable entries remain visible"))
-                return Fail("finite category does not hide at final placement/restore on removal, or repeatable categories are incorrectly removed", out reason);
+                !browser.Contains("offered++; // repeatable entries remain visible"))
+                return Fail("finite category does not hide at final PLAYER placement/restore on removal, counts a baked twin as built, or repeatable categories are incorrectly removed", out reason);
             if (!browser.Contains("SetArtworkOrFallback") || !browser.Contains("Image coming soon") ||
                 !browser.Contains("image.color = new Color(.10f, .11f, .14f, 1f)"))
                 return Fail("missing collection art can regress to a white/blank image slot", out reason);

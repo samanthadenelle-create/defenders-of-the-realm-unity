@@ -429,7 +429,27 @@ namespace DeNelle.Village.UI
                     "stay where they are on COLLECT (never burned), only the sentence is unlisted.");
                 return;
             }
-            AddMendLine(body, ref y, footer, ElarionUi.Gold);
+            // !! THE FOOTER GETS ITS OWN, TALLER BAND - IT IS A SENTENCE, NOT A LINE.
+            // Owner frame 2026-09-07 01:13 (Logs/device/screens/owner-harvest-20260907-011321.png)
+            // ends mid-word: "...Spend, or upgrade stora". AddMendLine seats every line in a
+            // 0.09-tall band and fits with FitBlock, which WRAPS then TRUNCATES - correct behaviour
+            // (it can never shorten a reassurance into a lie) applied to a box only one line high.
+            // The mend lines that share AddMendLine are short and still fit; this one is the only
+            // full sentence on the screen, so it takes a two-line band of its own rather than
+            // shrinking every other line to suit it.
+            AddFooterSentence(body, ref y, footer);
+        }
+
+        /// <summary>Two lines of room for the one full sentence on this screen. Same fit helper as
+        /// <see cref="AddMendLine"/> (wrap-then-truncate, never an ellipsis), twice the height.</summary>
+        private static void AddFooterSentence(Transform body, ref float y, string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            const float h = 0.19f;
+            var label = ElarionUiKit.Label(body, text, y - h, y, ElarionUi.Gold,
+                ElarionUi.FontMicro, TextAlignmentOptions.Top, 0.07f, 0.93f, bold: true);
+            ElarionUiKit.FitBlock(label, 24f, ElarionUi.FontMicro);
+            y -= h + 0.01f;
         }
 
         // =====================================================================

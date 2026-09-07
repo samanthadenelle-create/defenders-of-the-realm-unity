@@ -1,6 +1,6 @@
 # WO-1563 RESULT - the grid tile states its state, in words
 
-**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate. Edit-only lane: no Unity run, no
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 2 (BUILDINGS grid) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate. Edit-only lane: no Unity run, no)*
 gate, no commit. Every line was read at source this session (CLAUDE.md section 11B).
 
 ## WHAT LANDED - `Assets/_Modules/Core/Manage/ManageWorkspacePanel.cs`, `BuildTile` only

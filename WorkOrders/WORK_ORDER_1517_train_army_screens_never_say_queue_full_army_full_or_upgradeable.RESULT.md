@@ -1,6 +1,6 @@
 # WO-1517 RESULT - the train/army screens now say queue full, army full, and upgradeable
 
-**Status:** IMPLEMENTED - 2026-09-06, uncommitted, awaiting the Unity gate.
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 5 (TROOP DETAIL), 6 (TROOP DETAIL locked) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06, uncommitted, awaiting the Unity gate.)*
 **Lane:** edit-only. Files: `ManageScreenVM.cs`, `ManageTroopsTrainDoorRegression.cs`. The renderer
 needed no change - every face used here already exists in `ManageScreenPanel`.
 

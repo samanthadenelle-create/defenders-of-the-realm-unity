@@ -48,6 +48,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DeNelle.Dungeons.RoomForge;
 
 namespace DeNelle.Editor
 {
@@ -180,6 +181,118 @@ namespace DeNelle.Editor
             }
 
             Debug.Log(log + $"DUNGEON_CAPTURE_OK {written}");
+        }
+
+        // -- WO-1568: photograph THE DOOR, closed and open ------------------------
+        // The baked scenes cannot show a door. This class opens them in EDIT mode and
+        // never enters Play (see the header), so RoomSocket.Start / CommonDungeonDoor.Start
+        // never run and the leaf physically does not exist in any saved .unity - which is
+        // why every existing Builds/dungeon-capture PNG shows a doorway hole and no door.
+        //
+        // So this entry point builds the door through the SAME static seam the game builds
+        // it with (CommonDungeonDoor.BuildDoorVisual), inside a throwaway in-memory scene,
+        // against the two flanking half-walls the composed rooms actually leave around a
+        // door gap (DefaultDungeonRoomsBuilder.BuildWallWithGap shape, all dimensions read
+        // from RoomForgeCanon). Nothing is opened from disk and nothing is saved, so this
+        // touches no .unity file and cannot trip the shared-tree bake corruption rule.
+        //
+        // clearFlags stays Skybox on purpose: if the lintel ever fails to close the
+        // letterbox above the closed leaf, the sky shows through it in the CLOSED frame
+        // and the defect is visible rather than argued about.
+        //
+        // INVOKE:
+        //   powershell -File .\run-unity-method.ps1 `
+        //     -Method DeNelle.Editor.DungeonSceneCapture.CaptureDoor -LogName dungeon-door-capture.log
+        // OUTPUT: Builds/dungeon-capture/door_closed.png, door_open.png
+        // MARKER: DUNGEON_DOOR_CAPTURE_OK <n>
+        public static void CaptureDoor()
+        {
+            var log = new StringBuilder();
+            log.AppendLine("=== DungeonSceneCapture.CaptureDoor: WO-1568 framed doorway, closed + open ===");
+            Directory.CreateDirectory(OutFolder);
+
+            var blanks = new List<string>();
+            int written = 0;
+
+            try
+            {
+                // DefaultGameObjects, not EmptyScene: an unlit scene renders a flat frame and
+                // the blank detector would (correctly) refuse it.
+                EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+
+                var stage = new GameObject("~DoorStage");
+                BuildMockWall(stage.transform);
+
+                float half = RoomForgeCanon.DoorGap * 0.5f;
+                // Head-on, at hero eye height, far enough back to hold both jambs and the lintel.
+                var camPos = new Vector3(0f, 1.75f, -5.6f);
+                var camRot = Quaternion.identity;
+
+                foreach (bool open in new[] { false, true })
+                {
+                    var socket = new GameObject(open ? "~DoorSocket_Open" : "~DoorSocket_Closed");
+                    socket.transform.SetParent(stage.transform, false);
+                    var visual = CommonDungeonDoor.BuildDoorVisual(socket.transform, half, open);
+                    log.AppendLine($"  [{(open ? "open" : "closed")}] leaf='{visual.LeafSource}' " +
+                                   $"width={visual.LeafWidth:0.##}m top={visual.LeafTop:0.##}m");
+
+                    string outPath = Path.Combine(OutFolder, open ? "door_open.png" : "door_closed.png");
+                    if (!RenderTo(outPath, camPos, camRot, 52f, out string verdict))
+                        blanks.Add($"{Path.GetFileName(outPath)} ({verdict})");
+                    else
+                        written++;
+                    log.AppendLine($"    -> {Path.GetFileName(outPath)}  {verdict}");
+
+                    UnityEngine.Object.DestroyImmediate(socket);
+                }
+
+                UnityEngine.Object.DestroyImmediate(stage);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(log + $"DUNGEON_DOOR_CAPTURE_FAIL: threw {ex.GetType().Name}: {ex.Message}");
+                return;
+            }
+
+            if (blanks.Count > 0)
+            {
+                Debug.LogError(log + $"DUNGEON_DOOR_CAPTURE_FAIL: {blanks.Count} blank frame(s): " +
+                                     string.Join(", ", blanks));
+                return;
+            }
+
+            Debug.Log(log + $"DUNGEON_DOOR_CAPTURE_OK {written}");
+        }
+
+        /// <summary>
+        /// The two flanking half-walls plus a floor slab - the shape BuildWallWithGap leaves
+        /// around a door socket. Dimensions READ from RoomForgeCanon, never re-typed.
+        /// </summary>
+        private static void BuildMockWall(Transform parent)
+        {
+            float h = RoomForgeCanon.WallHeight;
+            float t = RoomForgeCanon.WallThickness;
+            float half = RoomForgeCanon.DoorGap * 0.5f;
+            const float side = 4f;
+
+            AddSlab(parent, "Mock_Floor", new Vector3(0f, -RoomForgeCanon.FloorSlabThickness * 0.5f, 0f),
+                    new Vector3(14f, RoomForgeCanon.FloorSlabThickness, 10f), new Color(0.30f, 0.29f, 0.27f));
+            AddSlab(parent, "Mock_Wall_L", new Vector3(-(half + side * 0.5f), h * 0.5f, 0f),
+                    new Vector3(side, h, t), new Color(0.38f, 0.37f, 0.35f));
+            AddSlab(parent, "Mock_Wall_R", new Vector3(half + side * 0.5f, h * 0.5f, 0f),
+                    new Vector3(side, h, t), new Color(0.38f, 0.37f, 0.35f));
+        }
+
+        private static void AddSlab(Transform parent, string name, Vector3 pos, Vector3 scale, Color c)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = scale;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            var rend = go.GetComponent<Renderer>();
+            if (shader != null && rend != null) rend.sharedMaterial = new Material(shader) { color = c };
         }
 
         private static string Fmt(Color c) =>

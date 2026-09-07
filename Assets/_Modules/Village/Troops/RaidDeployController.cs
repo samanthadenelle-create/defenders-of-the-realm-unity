@@ -105,6 +105,10 @@ namespace DeNelle.Village
             public string DefId;
             public Button Button;
             public TMPro.TextMeshProUGUI CountLabel;
+            /// <summary>The tile's NAME label, captured at construction (WO-1464). Held rather
+            /// than re-found, so a refresh can never restyle the count badge by mistake -
+            /// GetComponentInChildren returns whichever text child happens to be first.</summary>
+            public TMPro.TextMeshProUGUI NameLabel;
         }
 
         // =====================================================================
@@ -1318,8 +1322,30 @@ namespace DeNelle.Village
         private const float DeployBarHeight = 0.150f;
         /// <summary>Status-line height as a screen fraction (was 0.205 - 0.165).</summary>
         private const float DeployStatusHeight = 0.040f;
-        /// <summary>Left/right edges of both bands (unchanged).</summary>
-        private const float DeployBandMinX = 0.02f, DeployBandMaxX = 0.98f;
+        // ── WO-1464: THE LEFT EDGE IS THE STICK'S RIGHT EDGE, AND IT IS NOT A LITERAL ────
+        //
+        // ⛔ THE DEFECT THIS CLOSES, MEASURED ON THE OWNER'S DEVICE (build 358872,
+        // Logs/device/screens/owner-screen-20260907-004502.png, 2670x1200, mid-raid at 1:13):
+        // this bar ran x 0.020-0.980 and the movement stick's mount is x 0.010-0.270, y
+        // 0.030-0.330. WO-1436 lifted the bar clear of the ability row's Y band and that fix is
+        // correct and stays - but the stick reaches HIGHER than the ability row does, so a strip
+        // seated on BottomOverlayFloorY (0.160) still crosses it. In the capture the stick's ring
+        // is visible peeking out from under the tray slab. The stick is the game's only locomotion
+        // control on a phone; covering it does not degrade the HUD, it removes movement.
+        //
+        // The edge is HudLayoutBands.BottomOverlayLeftX - shared data in DeNelle.Core, for the
+        // same reason the floor is: DeNelle.Village may not reference DeNelle.HUD (CLAUDE.md §5),
+        // and a matching literal on each side is the duplicated-state failure CLAUDE.md documents
+        // four times over. Do NOT re-introduce an x literal here.
+
+        /// <summary>Left edge of both bands - the movement stick's right edge plus the one shared
+        /// clearance gap. Never a literal (see the block above).</summary>
+        private static float DeployBandMinX
+        {
+            get { return HudLayoutBands.BottomOverlayLeftX; }
+        }
+        /// <summary>Right edge of both bands (unchanged).</summary>
+        private const float DeployBandMaxX = 0.98f;
 
         /// <summary>The deploy bar's screen band, seated immediately above the reserved thumb
         /// band. Exposed so the oracle can assert the exclusion from the AUTHORED anchors on both
@@ -1372,7 +1398,10 @@ namespace DeNelle.Village
                 "deploy HUD seated above the reserved thumb band: bar y " +
                 barBand.yMin.ToString("F3") + ".." + barBand.yMax.ToString("F3") +
                 ", floor " + HudLayoutBands.BottomOverlayFloorY.ToString("F3") +
-                " (ability row tops out at " + HudLayoutBands.ThumbActionRowMaxY.ToString("F3") + ").");
+                " (ability row tops out at " + HudLayoutBands.ThumbActionRowMaxY.ToString("F3") +
+                "), and clear of the movement stick: bar x starts at " +
+                barBand.xMin.ToString("F3") + ", stick right edge " +
+                HudLayoutBands.MoveClusterMount.xMax.ToString("F3") + " (WO-1464).");
 
             // Status line just above the bar.
             var statusBand = DeployStatusBand;
@@ -1387,6 +1416,15 @@ namespace DeNelle.Village
             _status.color = ElarionUi.Parchment;
             _status.alignment = TMPro.TextAlignmentOptions.Center;
             _status.raycastTarget = false;
+            // ⚠ WO-1464: EXPLICIT MIN, AND THE REASON IS ARITHMETIC. DeployStatusHeight is 0.040
+            // of screen = 38.62 reference px at the owner's device, against
+            // RaidSelectionScreen.NeedPx(FontFloor 30) = 38.58 - a 0.04 px margin. Fitting this
+            // line at the default floor would put it one rounding error from TMP culling the
+            // whole sentence, and the band is WO-1436's shared constant, not this file's to
+            // widen. The sentence ALSO lost 27% of its width when the bar moved off the stick
+            // (x 0.02-0.98 -> 0.28-0.98), so leaving it unfitted is not an option either.
+            // Floor at FontHardFloor: NeedPx(20) = 26.8, which always seats.
+            ElarionUiKit.FitSingleLine(_status, ElarionUiKit.FontHardFloor, ElarionUi.FontLabel);
 
             BuildTrayTiles(bar.transform);
 
@@ -1420,9 +1458,10 @@ namespace DeNelle.Village
 
             if (defIds.Count == 0)
             {
-                ElarionUiKit.Label(bar, "No troops to deploy — train at the Barracks first.",
+                var empty = ElarionUiKit.Label(bar, "No troops to deploy - train at the Barracks first.",
                     0.18f, 0.82f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                     TMPro.TextAlignmentOptions.Left, 0.03f, 0.68f);
+                ElarionUiKit.FitSingleLine(empty);
                 return;
             }
 
@@ -1440,20 +1479,42 @@ namespace DeNelle.Village
                 var btn = ElarionUiKit.Button(bar, label, ElarionUiKit.ButtonKind.Gold,
                     new Vector2(x0, 0.18f), new Vector2(x1, 0.82f), () => ArmTile(defId));
 
-                // A small count badge in the tile's top-right corner.
+                // Captured BEFORE the badge is parented under the button, so this is the name
+                // label and can never resolve to the count (WO-1464).
+                var nameLabel = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+                if (nameLabel != null) ElarionUiKit.FitSingleLine(nameLabel);
+
+                // ── WO-1464: THE COUNT BADGE, READABLE BY LUMINANCE ─────────────────
+                // ⛔ It was ElarionUi.Ink (0.137, 0.098, 0.055 - near-black) painted on the
+                // obsidian tile's DARK face, hard against the frame's ornate top-right corner
+                // and with no fit. In the owner's capture (owner-screen-20260907-004502.png)
+                // the "x0" badges are illegible at 2670x1200. The kit's own answer for a label
+                // on this face is ObsidianButtonLabelColor -> ElarionUi.Parchment; the badge
+                // takes Gilt, which is brighter still and reads as an accent WITHOUT depending
+                // on hue (the owner is colourblind - legibility is luminance, size and position).
+                // It also moves OFF the corner filigree into the tile's lower-right interior.
                 var countGo = new GameObject("Count", typeof(TMPro.TextMeshProUGUI));
                 countGo.transform.SetParent(btn.transform, false);
                 var cr = countGo.GetComponent<RectTransform>();
-                cr.anchorMin = new Vector2(0.55f, 0.5f);
-                cr.anchorMax = new Vector2(0.97f, 0.97f);
+                // ⚠ THE BAND IS SIZED, NOT EYEBALLED. The tile resolves to 0.64 x 0.150 of screen
+                // = 92.7 reference px at the owner's 2670x1200. A 0.32-tall badge is 29.7 px,
+                // UNDER RaidSelectionScreen.NeedPx(FontFloor) = 38.6 - and TMP Ellipsis culls a
+                // line it cannot seat, so a badge made "readable" in a band that thin would have
+                // rendered BLANK. 0.48 of the tile = 44.5 px seats the floor with room. (Same
+                // measurement the WO-1519 lane's [seat] case exists for.)
+                cr.anchorMin = new Vector2(0.62f, 0.26f);
+                cr.anchorMax = new Vector2(0.93f, 0.74f);
                 cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
                 var ct = countGo.GetComponent<TMPro.TextMeshProUGUI>();
                 ct.fontSize = ElarionUi.FontLabel;
-                ct.color = ElarionUi.Ink;
-                ct.alignment = TMPro.TextAlignmentOptions.TopRight;
+                ct.color = ElarionUi.Gilt;
+                ct.fontStyle = TMPro.FontStyles.Bold;
+                ct.alignment = TMPro.TextAlignmentOptions.Right;
                 ct.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(ct);
 
-                _tiles.Add(new TrayTile { DefId = defId, Button = btn, CountLabel = ct });
+                _tiles.Add(new TrayTile { DefId = defId, Button = btn, CountLabel = ct,
+                                          NameLabel = nameLabel });
             }
         }
 
@@ -1479,10 +1540,32 @@ namespace DeNelle.Village
                 if (tile.Button != null)
                 {
                     tile.Button.interactable = remaining > 0;
-                    // Tint the armed tile's frame brighter via the label colour as a cheap cue.
-                    var lbl = tile.Button.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+
+                    // ── WO-1464: THE ARMED CUE IS A MARKER, NOT A HUE ───────────────────
+                    // ⛔ THIS LINE WAS THE UNREADABLE-TRAY DEFECT ITSELF. The kit already
+                    // paints an obsidian button's label in ObsidianButtonLabelColor
+                    // (ElarionUi.Parchment) against its dark face - Rally ON and RETREAT read
+                    // perfectly in the owner's capture for exactly that reason. This method
+                    // then OVERWROTE the tile labels with ElarionUi.Ink (near-black on
+                    // near-black), which is why FOOTMAN and ARCHER were the only two unreadable
+                    // controls on the screen. The fix is to STOP OVERRIDING, not to pick a
+                    // different colour: the kit is the one contrast authority.
+                    //
+                    // The armed/idle distinction was also hue-only (Affordable green vs Ink),
+                    // which the owner cannot see. It is now a SHAPE cue - the armed tile's name
+                    // is bracketed - with brightness (Gilt vs Parchment) as a secondary, never
+                    // the sole, signal.
+                    var lbl = tile.NameLabel;
                     if (lbl != null)
-                        lbl.color = (tile.DefId == _armedDefId) ? ElarionUi.Affordable : ElarionUi.Ink;
+                    {
+                        bool armed = tile.DefId == _armedDefId;
+                        string name = DisplayName(tile.DefId);
+                        lbl.text = armed ? "[ " + name + " ]" : name;
+                        lbl.color = armed ? ElarionUi.Gilt : ElarionUi.Parchment;
+                        // FitSingleLine is armed once at construction (BuildTrayTiles); TMP
+                        // auto-sizing then re-fits the bracketed form on its own. Re-arming the
+                        // fit guard every 10Hz refresh would stack components on the label.
+                    }
                 }
             }
         }

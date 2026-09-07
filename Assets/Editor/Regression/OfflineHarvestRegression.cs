@@ -317,6 +317,53 @@ namespace DeNelle.Editor
                                      "('Storage nearly full - N <res> will wait') is back - it repeats the row's own " +
                                      "integer and is what the owner called 'way too much here' (2026-09-06)");
                 }
+
+                // =====================================================================
+                //  Case 6 [new-game-claims-nothing] (WO-1414) -- THE FRESH-SAVE FIXTURE.
+                // ---------------------------------------------------------------------
+                //  OWNER FELT-TEST, 2026-09-05 09:57 and again 2026-09-06: START NEW, and the
+                //  welcome-back popup opened on a brand-new town reading "YOUR REALM WORKED FOR
+                //  8h 22m" with WOOD +11520 / IRON +6912 / STONE +15000. 8h22m was the wall time
+                //  since the PREVIOUS save's session. A second New Game reported 1h 56m.
+                //
+                //  THE TWO PERSISTED INVARIANTS, asserted here against the SAME defaults a new
+                //  save is built from, so a seat that reintroduces either mutation goes red in
+                //  editmode instead of on the owner's device:
+                //    1. LastHarvestClaimMs == 0. GameStateService.ResetToNewGame:1304 sets it, and
+                //       the coordinator's fresh-clock arm (OfflineClaimCoordinator.cs:281-293)
+                //       then yields a ZERO window and fans out to NOBODY -- which is exactly the
+                //       "first window is 0 s and no popup" the ticket asks for. Case 1 above
+                //       already proves the arm; this case proves the VALUE it keys off.
+                //    2. EverBuiltStructureIds is EMPTY. ResetToNewGame:1354 clears it. A surviving
+                //       ledger is what paid the phantom farm/lumbermill HELD ticks on a town that
+                //       has neither building (ResourceBuildingHarvester.cs:257).
+                //
+                //  AND THE GATE ITSELF: a result carrying nothing must not open the screen. That
+                //  is the term the popup and OnClaimCompleted now share
+                //  (OfflineHarvestResult.HasSummaryContent), so one assertion covers both.
+                //  RED BY: restoring a non-zero LastHarvestClaimMs default, seeding the ledger on
+                //  a blank founding, or adding a term to HasSummaryContent that is true at zero.
+                // =====================================================================
+                var fresh = new GameState();
+                if (fresh.LastHarvestClaimMs != 0)
+                    failures.Add($"case6 [new-game-claims-nothing] a fresh GameState carries LastHarvestClaimMs=" +
+                                 $"{fresh.LastHarvestClaimMs:0} -- the coordinator's fresh-clock arm keys off <= 0, so a " +
+                                 "non-zero default hands a brand-new town the PREVIOUS save's away window (owner device " +
+                                 "2026-09-05: 'YOUR REALM WORKED FOR 8h 22m' on START NEW)");
+                if (fresh.EverBuiltStructureIds != null && fresh.EverBuiltStructureIds.Count != 0)
+                    failures.Add($"case6 [new-game-claims-nothing] a fresh GameState carries " +
+                                 $"{fresh.EverBuiltStructureIds.Count} ever-built id(s) -- the harvest tick pays a " +
+                                 "building the new town does not have and HOLDS the units forever");
+                if (fresh.HasEverBuilt("farm") || fresh.HasEverBuilt("lumbermill"))
+                    failures.Add("case6 [new-game-claims-nothing] a fresh GameState already claims farm/lumbermill were " +
+                                 "ever built -- these are the exact two ids the owner's device logged HELD every 10s");
+
+                var nothing = new OfflineHarvestResult { AwaySeconds = 0.0 };
+                if (nothing.HasSummaryContent)
+                    failures.Add("case6 [new-game-claims-nothing] an EMPTY away result still opens the welcome-back " +
+                                 "reveal gate -- a brand-new town would be shown a report with nothing in it");
+                if (nothing.Total != 0)
+                    failures.Add($"case6 [new-game-claims-nothing] an empty away result reports Total={nothing.Total}");
             }
             catch (System.Exception ex)
             {
@@ -341,7 +388,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "OFFLINE HARVEST OK — fresh-seed + 10h cap clamp + backwards-clock guard hold; " +
-                         "clock always advances (no re-claimable window)";
+                         "clock always advances (no re-claimable window); a NEW GAME carries a zero away clock " +
+                         "and an empty ever-built ledger and claims nothing (WO-1414)";
                 return true;
             }
             reason = $"OFFLINE HARVEST FAIL x{failures.Count}: " + string.Join(" | ", failures);

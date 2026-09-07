@@ -205,6 +205,27 @@ namespace DeNelle.Core.Manage
         /// <summary>ASCII state word ("UPGRADING", "QUEUE FULL", "MAX"). Never derived from the enum.</summary>
         public string StateText;
 
+        /// <summary>
+        /// ⭐ THE TILE'S CLOSED STATE WORD - the SHORT form, for a grid CELL.
+        /// Mockup panel 2 puts exactly one closed word on a tile: READY / NOT BUILT / SHORT /
+        /// LOCKED / UPGRADING / MAX / QUEUE FULL.
+        ///
+        /// <para>⛔ THIS IS A SECOND FACE OF ONE FACT, NOT A SECOND FACT. WO-1518 (owner ruling
+        /// 2026-09-06 20:12, <i>"short doesnt help, i need to know waht im short"</i>) made
+        /// <see cref="StateText"/> carry the amounts - "SHORT 280 STONE, 720 GOLD". That is right
+        /// where there is room for it: the research LIST ROW's state column and the DETAIL card.
+        /// It is wrong on a grid tile, where the measured result was "SHORT 28..." and "SHORT 72..."
+        /// (Logs/device/screens/owner-screen-20260907-004825.png) - an ellipsised state word is the
+        /// same defect class as no state word at all.</para>
+        ///
+        /// <para>⛔ THE MODEL COMPOSES BOTH. The View must never truncate, split or re-word
+        /// StateText to get here - that would be the View deriving state (canon 9), and it would
+        /// go stale the first time a composer authored a new word. The grid renderer paints THIS;
+        /// the row renderer and the detail card paint StateText. Null falls back to StateText, so
+        /// a composer that has nothing shorter to say simply says the same thing twice.</para>
+        /// </summary>
+        public string StateWord;
+
         /// <summary>Resources key for the status medallion. Supplied by the projection.</summary>
         public string StateIconKey;
 
@@ -234,6 +255,28 @@ namespace DeNelle.Core.Manage
         /// list row would put a navigate button where the mockup draws a padlock.</para>
         /// </summary>
         public ManageActionVM RowAction = ManageActionVM.Hidden;
+
+        /// <summary>
+        /// ⭐ THE PADLOCK ROW'S SENTENCE - "Requires Lumber Mill Tier 3" (mockup panel 7).
+        /// Null on every row that is not locked, which is what makes the row COLLAPSE to two
+        /// lines instead of reserving an empty band.
+        ///
+        /// <para>⛔ IT EXISTS BECAUSE THE TWO FACTS WERE BEING GLUED INTO ONE LINE, AND THE GLUE
+        /// WAS THE DEFECT. <c>ManageScreenVM.ComposeResearchItem</c> wrote
+        /// <c>NextRungLine + " . " + LockReason</c>, so the owner's capture
+        /// (Logs/device/screens/owner-screen-20260907-010151.png) reads
+        /// <i>"Wood +8%, offline bucket +8% . Upgrade the building to Tier 3 f..."</i> - a benefit
+        /// and a requirement separated by a floating period, with the requirement truncated away.
+        /// The mockup draws them as TWO CHANNELS: the effect under the name, the requirement on
+        /// its own line beside a padlock. Two facts, two rows.</para>
+        ///
+        /// <para>⚠ THE WO-1518 DOOR AFFORDANCE IS NOT HERE AND MUST NOT BE COPIED HERE. The word
+        /// that says the row is tappable ("LOCKED - TAP") stays on <see cref="StateText"/>, where
+        /// the composer derives it from whether a route actually exists. A second copy of it on
+        /// this line would be the duplicated state this contract's siblings keep paying for, and
+        /// it would go stale the first time a locked row has no door.</para>
+        /// </summary>
+        public string RequirementText;
     }
 
     // ── The selected-item region ──────────────────────────────────────────────
@@ -271,6 +314,29 @@ namespace DeNelle.Core.Manage
         public IReadOnlyList<ManageStatVM> Stats = Array.Empty<ManageStatVM>();
         /// <summary>What it costs (question 4). Affordability is decided model-side.</summary>
         public IReadOnlyList<ManageCostVM> Costs = Array.Empty<ManageCostVM>();
+
+        /// <summary>
+        /// The caption over the cost band - "Upgrade Cost" (mockup panel 3) or "Train Cost"
+        /// (panel 5). Model-supplied ASCII, because WHICH verb is being paid for is a model fact;
+        /// a View that chose the word from the tab would be deriving it (canon 9). Null draws no
+        /// caption, which is what a card with no costs wants.
+        /// </summary>
+        public string CostCaption;
+
+        /// <summary>
+        /// ⭐ HOW LONG IT TAKES, ON ITS OWN LINE - the clock in mockup panels 3 and 5.
+        /// <para>⛔ IT IS DELIBERATELY NOT A <see cref="ManageCostVM"/>. A cost row carries an
+        /// <c>Affordable</c> verdict measured against a bank; a duration has no bank and cannot be
+        /// afforded or not, so putting it in the basket would either invent a verdict or force
+        /// every reader to special-case one row. Two channels, one each.</para>
+        /// <para>⚠ IT IS ALSO NOT A SECOND COPY OF THE STAT ROW. Where the stats table already
+        /// carries "Upgrade time", the composer supplies this INSTEAD, not as well - the owner's
+        /// Lumber Mill capture is the reason the rule is written down.</para>
+        /// </summary>
+        public string TimeText;
+
+        /// <summary>Resources key for the clock glyph beside <see cref="TimeText"/>.</summary>
+        public string TimeIconKey;
 
         /// <summary>What can I do now (question 5).</summary>
         public ManageActionVM PrimaryAction;
@@ -436,6 +502,21 @@ namespace DeNelle.Core.Manage
 
         /// <summary>ASCII sentence when <see cref="Tiles"/> is empty. Model-supplied - the View invents no copy.</summary>
         public string EmptyText;
+
+        /// <summary>
+        /// ⭐ THE SCREEN'S OWN PAINTING - mockup panel 7 draws the SCHOOL (a cathedral, a lumber
+        /// mill) filling the left ~40% of the well with the perk rows stacked beside it.
+        /// Null on every screen the mockup draws without one, and a null costs the rows nothing:
+        /// the renderer only carves the left column when a key is supplied.
+        ///
+        /// <para>⛔ THE KEY IS THE MODEL'S, FROM <c>ManageArt.BuildingPortraitKey(id, level)</c> -
+        /// the SAME producer the BUILD grid and the research PICKER already use. The retired
+        /// display-name slug (<c>Portraits/&lt;slug&gt;</c>) is what painted the 1963x789 landscape
+        /// strips through an oval mask on the owner's device, and WO-1567 section 5 item 3 records
+        /// that it was a SECOND key producer, not missing art. There is one producer; this field
+        /// carries its output.</para>
+        /// </summary>
+        public string HeaderArtKey;
 
         public ManageSelectionVM Selection;
         public ManageActivityVM Activity;

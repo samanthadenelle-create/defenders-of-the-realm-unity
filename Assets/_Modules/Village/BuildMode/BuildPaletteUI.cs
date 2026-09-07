@@ -347,6 +347,15 @@ namespace DeNelle.Village
                 () => OnManagePlacedRequested?.Invoke());
         }
 
+        /// <summary>
+        /// WO-1571 - forward a DIRECT placement pick to the collection browser, which honours it
+        /// through its own Place/Done seam (so OnEntrySelected -> BuildModeController.Arm still
+        /// runs, unchanged). Returns false when the browser is absent or the row is not offered;
+        /// the caller then leaves the ordinary root standing.
+        /// </summary>
+        public bool PlaceById(string id) =>
+            _collectionBrowser != null && _collectionBrowser.PlaceById(id);
+
         public void Hide()
         {
             _collectionBrowser?.Close();

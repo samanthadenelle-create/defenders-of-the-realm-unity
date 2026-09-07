@@ -50,6 +50,32 @@ placeholder art, do not substitute a similar building's portrait, and do not qui
 
 ## 2. PER-PANEL ACCEPTANCE
 
+### 2.0 WHO CLOSES A PANEL - owner ruling 2026-09-07 (binding, supersedes any seat-read sign-off)
+
+**Owner, 2026-09-07 01:10:** *"fix the board so those tickets dont say done and update the goal to be
+screenshots proving these match"*
+**Owner, 2026-09-07 01:12:** *"95% coverage in size font style context images"* ... *"thats the minimum
+threshold to pass"*
+**Owner, 2026-09-07 01:14:** *"i expect these images to fill the screen, not 60% of it"*
+
+- **The acceptance for every Manage screen is a DEVICE SCREENSHOT placed beside its mockup panel and
+  judged a match BY THE OWNER.** The tick-list below is how a lane decides it is ready to be looked at;
+  it is not the verdict.
+- **Headless captures and seat-read comparisons are EVIDENCE TOWARD that judgement and can NEVER mark a
+  ticket done.** `949e848a0` declared all nine screens matched on exactly that evidence, after
+  twenty-four rounds, and the owner's own walk that night matched none of them.
+- **A Manage ticket may only move to DONE when the owner says the frame matches.** Until then its
+  `**Status:**` reads `AWAITING OWNER MATCH` and the board buckets it **Verify**.
+- **CRITERION ZERO, judged before every row below: DOES THE PANEL FILL THE SCREEN?** Full bleed inside
+  the safe area, like the mockup. Not a 60%-width plate over the town. It multiplies every other axis -
+  a correctly proportioned element inside a 64% plate is still the wrong size on the device.
+- **THE FIVE AXES, 95% FLOOR:** the owner must judge the frame at least **95% matched** on **SIZE**,
+  **FONT**, **STYLE**, **CONTEXT** (what is on screen and where) and **IMAGES** (the art present and its
+  treatment). **Under 95% on any axis is a FAIL, whatever the headless capture says.**
+- Current state, nine rows with one column per axis:
+  `WorkOrders/ManageRedesign/CAPTURE_LOOP_GOAL.md` (the ruling block at the top). Full ruling:
+  `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md` ruling 29.
+
 **How to use this:** put the fresh capture beside the mockup panel and tick each row only from what the
 PNG proves. **Any unticked row = another pass.** No partial credit (owner, verbatim: *"If it's not, take
 another pass"*).

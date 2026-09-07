@@ -941,20 +941,29 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         private double ThroughputScale()
         {
-            var def = ResourceBuildingProgression.Find(_buildingId);
-            var l1 = def?.LevelDef(1);
-            if (l1 == null) return 1.0;
-
-            double baseInterval = Mathf.Max(0.5f, l1.HarvestInterval);
-            double basePerHour = l1.YieldPerTick * Mathf.Max(0f, l1.YieldSizeMultiplier) * (3600.0 / baseInterval);
+            // RE-POINTED 2026-09-07 (WO-1567 panel row 3). The per-hour formula that used to be
+            // written out HERE is now ResourceBuildingProgression.ProductionPerHour - the ONE
+            // producer - because the Manage detail card has to state the same number and a second
+            // copy of a live formula is the failure CLAUDE.md sections 2/5/8/16 each record in
+            // their own words. This method's JOB is unchanged: it is the RATIO of what the
+            // collector makes now to what it made at the authored level-1 baseline.
+            //
+            // The two calls below are the SAME reads this method made inline before:
+            //   base : level 1, no perk mult, no echo - the authored reference repo.capacity was
+            //          written against, so perks/echoes move the numerator only.
+            //   now  : the live level, ModifierService.ProductionMultFor (what
+            //          ResourceBuildingState.CurrentEffectiveYield folds in) and the echo mult.
+            // Floored at 1.0 so capacity can never shrink below its authored base.
+            double basePerHour = ResourceBuildingProgression.ProductionPerHour(_buildingId, 1, 1f, 1.0);
             if (basePerHour <= 0.0) return 1.0;
 
-            int yieldNow = ResourceBuildingState.CurrentEffectiveYield(_buildingId);
-            float intervalNow = ResourceBuildingState.CurrentHarvestInterval(_buildingId);
-            if (yieldNow <= 0 || intervalNow <= 0f) return 1.0;
+            double nowPerHour = ResourceBuildingProgression.ProductionPerHour(
+                _buildingId,
+                ResourceBuildingState.GetLevel(_buildingId),
+                DeNelle.Core.State.ModifierService.ProductionMultFor(_buildingId),
+                ResourceBuildingHarvester.EchoHarvestMultiplier());
+            if (nowPerHour <= 0.0) return 1.0;
 
-            double nowPerHour = yieldNow * (3600.0 / intervalNow)
-                              * ResourceBuildingHarvester.EchoHarvestMultiplier();
             return System.Math.Max(1.0, nowPerHour / basePerHour);
         }
 

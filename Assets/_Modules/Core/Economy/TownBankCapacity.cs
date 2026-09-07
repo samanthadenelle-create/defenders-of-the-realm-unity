@@ -429,6 +429,26 @@ namespace DeNelle.Core.Economy
         }
 
         /// <summary>
+        /// A CATALOG ROW's capacity at a placed level - the overload a caller that holds a
+        /// <see cref="DeNelle.Core.Catalog.RepoProps"/> should use. 0 for a null row or a row that
+        /// is not a container, so a caller can ask unconditionally.
+        /// -------------------------------------------------------------------------------
+        /// Added 2026-09-07 for the same reason <see cref="IsStorageContainer(DeNelle.Core.Catalog.RepoProps)"/>
+        /// was: the Manage building card needs a container's ceiling at its placed level and at the
+        /// next rung, and the only way to reach the int overload above is to write
+        /// <c>repo.storageCapacity</c> at the call site - which the [one-reader] guard in
+        /// TownBankCapRegression correctly FAILS (Builds/reg-wave4a.log). Routing the field read
+        /// back inside this file keeps the raw seam read in exactly ONE place while letting callers
+        /// ask the question they actually have. This is not a second capacity formula: it forwards
+        /// to the int overload above, which stays the single ladder.
+        /// </summary>
+        public static int CapacityAtLevel(DeNelle.Core.Catalog.RepoProps repo, int level)
+        {
+            if (repo == null) return 0;
+            return CapacityAtLevel(repo.storageCapacity, level);
+        }
+
+        /// <summary>
         /// The town bank ceiling for a resource = baseCap + every BUILT container of that resource,
         /// scaled by its placed level. int.MaxValue when the resource is uncapped.
         /// </summary>

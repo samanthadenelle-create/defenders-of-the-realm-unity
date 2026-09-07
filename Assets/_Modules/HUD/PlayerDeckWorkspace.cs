@@ -352,7 +352,19 @@ namespace DeNelle.HUD
                 (int)ElarionUi.FontMicro, TextAlignmentOptions.Center,
                 TextPlateX0(illustratedCard != null), 0.96f);
             purpose.gameObject.name = "DeckCardPurpose_" + spec.Title;
-            ElarionUiKit.FitSingleLine(purpose, 24f, 30f);
+            // THE DECK FOLLOWS MANAGE (owner ruling: Manage is the card standard;
+            // HudLabelFitRegression case 6c reads the floors OUT of ManageScreenPanel and requires
+            // this call to equal them). Manage's hub card description moved from a single-line fit
+            // to FitBlock on 2026-09-07 because the owner's device showed all three descriptions
+            // ellipsised mid-word (owner-screen-20260907-004724.png), and this label carries the
+            // SAME defect class - case 6d already records "Choose the abilities equipped for
+            // bat..." on this exact line.
+            // NOTE - THE FLOOR WENT UP, NOT DOWN: 24f -> ElarionUi.FontFloorMobile (30f). FitBlock
+            // wraps into the band rather than shrinking toward a floor and then ellipsising, and
+            // this label's band is 0.26-0.52 of the plate - a genuinely multi-line seat, so
+            // wrapping has somewhere to go. Truncation, if it ever happens, is VISIBLE at the end
+            // of a line instead of three dots that look deliberate.
+            ElarionUiKit.FitBlock(purpose, ElarionUi.FontFloorMobile, 34f);
         }
 
         /// <summary>

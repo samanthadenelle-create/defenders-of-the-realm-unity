@@ -69,6 +69,8 @@ hole. Filter them out with the `Doc` chip when you want a pure work view.
 | Keyword in the `**Status:**` line | Bucket |
 |---|---|
 | `SUPERSEDED` / `CLOSED` / `CANCELLED` | **Closed** |
+| leading `AWAITING OWNER MATCH` — **beats `.RESULT.md` and any later keyword** | **Verify** |
+| leading `FIXED` | **Fixed** |
 | `DONE` / `IMPLEMENTED` / `COMPLETE` — **or a `.RESULT.md` exists** | **Done** |
 | `BLOCKED` | **Blocked** |
 | `READY` (any phrasing containing it) | **Ready** |
@@ -105,6 +107,17 @@ Write the truth *and* include one canonical keyword. The nuance belongs after it
 > ⚠ **A `.RESULT.md` forces the Done bucket** regardless of the status line. If you file a RESULT for
 > partially-complete work, say so loudly in the status line **and** the RESULT body — the board will
 > call it Done either way, so the file has to carry the caveat the bucket cannot.
+>
+> **The two exceptions, and both are leading-word tests above the `has_result` line:** a status
+> leading `FIXED` stays **Fixed**, and one leading `AWAITING OWNER MATCH` stays **Verify**.
+
+**`Verify` = built, and the OWNER has not yet judged it against the picture** (owner ruling
+2026-09-07; `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md` ruling 29). It exists because
+commit `949e848a0` declared nine Manage screens matched the owner's mockup on the strength of
+headless frames a seat read itself, and twelve tickets sat in Done and Fixed until she walked the
+build and matched none of them. `Verify` is deliberately **ineligible for `board_close_pass.py`**,
+which closes only `Fixed`: the debt here is a pixel comparison she has not made, not a felt test.
+A `Verify` ticket moves on only when the owner says the frame matches its mockup panel.
 
 ---
 

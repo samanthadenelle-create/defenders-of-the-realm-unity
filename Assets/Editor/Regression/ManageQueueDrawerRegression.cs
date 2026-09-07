@@ -124,7 +124,15 @@ namespace DeNelle.Editor.Regression
             // ── 4 [verbs-exist] — each control AND its command ───────────────────────────
             RequirePair(panel, failures, "\"Finish Now\"", "FinishNow(channel, jobId)", "Finish Now (the crystal sink)");
             RequirePair(panel, failures, "\"Ad\"",         "WatchAd(channel, jobId)",   "Ad (the rewarded-ad surface)");
-            RequirePair(panel, failures, "\"Cancel\"",     "Cancel(channel, jobId)",    "Cancel");
+            // ⛔ RE-POINTED 2026-09-07 (WO-1488): the authored face is "CANCEL", not "Cancel".
+            // The word was capitalised with the slot that finally fits it - the owner's device
+            // (Logs/device/screens/owner-screen-20260907-010356.png) read "CANC...", because three
+            // even cluster slots gave a two-letter "Ad" the same ~131px as a six-letter verb.
+            // ⚠ WHAT THIS PIN PROTECTS IS UNCHANGED AND IS NOT THE CASING: a control face must
+            // exist AND its command must be invoked, or a button that renders and does nothing
+            // reads as "shipped". Only the authored spelling moved, and there is still exactly
+            // ONE of it.
+            RequirePair(panel, failures, "\"CANCEL\"",     "Cancel(channel, jobId)",    "Cancel");
             RequirePair(panel, failures, "\"Move up\"",    "BumpUp(channel, jobId",     "Move up");
 
             // ── 5 [drawer-rendered] — built is not the same as rendered ──────────────────
@@ -270,9 +278,59 @@ namespace DeNelle.Editor.Regression
                 if (rail <= 0f)
                     failures.Add("[drawer-clear-of-card] the rail height reference went missing");
             }
-            if (!panel.Contains("DrawerModeListKeepPx = 10f + TroopWorkspacePx * (1f - TroopCtaY1)"))
-                failures.Add("[drawer-clear-of-card] DrawerModeListKeepPx is not derived from the card's CTA line - " +
-                             "the kept viewport and the CTA rect are no longer tied together");
+            // ⛔ RE-POINTED 2026-09-07 (WO-1488), WITH THE REASON KEPT SO IT IS NOT MOVED BACK.
+            // It read:
+            //     if (!panel.Contains("DrawerModeListKeepPx = 10f + TroopWorkspacePx * (1f - TroopCtaY1)"))
+            //         ... "the kept viewport and the CTA rect are no longer tied together"
+            // That pin was a VERBATIM STRING MATCH on an expression that measures the RETIRED 260px
+            // troop card - TroopWorkspacePx x (1 - TroopCtaY1). The tie it protected was real when
+            // the drawer was a BAND under that card; it is not what the player meets now. The
+            // overlay path (ApplyDrawerPlacement's else-branch) is the one every Manage screen
+            // takes, because `band` requires !WorkspaceActive and the WO-2001 workspace owns the
+            // well on all four destinations. So the pin was holding a constant in place for a
+            // shape nothing renders, and the owner's frames
+            // (Logs/device/screens/owner-screen-20260907-010356.png / -010257.png) show the
+            // overlay's rows clipped top and bottom while this case stayed green.
+            //
+            // ⭐ IT NOW MEASURES THE DERIVED ROW HEIGHT AND PINS THAT NO ROW IS CLIPPED.
+            // The invariant is the one that matters on a frame: whatever height a queue row is
+            // built at, the list seats a WHOLE number of them and every one of them clears the
+            // touch floor. The band expression is left in the source untouched and unpinned - it
+            // still seats the legacy band shape, and deleting it is a separate ticket.
+            {
+                if (!panel.Contains("MakeRowHost(\"QueueRow\", _queueRowPx)"))
+                    failures.Add("[drawer-clear-of-card] the queue row is not built at the DERIVED height " +
+                                 "(_queueRowPx). Building at the authored RowHeightPx again means the row " +
+                                 "height cannot answer the well, and mockup panel 8's five visible rows " +
+                                 "become an aspiration instead of arithmetic");
+                if (!panel.Contains("QueueRowsVisibleTarget"))
+                    failures.Add("[drawer-clear-of-card] the overlay names no visible-row target. Panel 8 draws " +
+                                 "FIVE numbered rows; a layout with no capacity to answer to cannot report a " +
+                                 "shortfall, which is how a one-row drawer shipped green");
+                string seat = Body(panel, "private void SeatQueueListToWholeRows()",
+                                          "private void AddQueueRow(");
+                if (seat == null)
+                    failures.Add("[drawer-clear-of-card] SeatQueueListToWholeRows is missing - nothing trims the " +
+                                 "list to whole rows, so the bottom row is sliced through its own text");
+                else
+                {
+                    if (!seat.Contains("_drawerList.rect.height"))
+                        failures.Add("[drawer-clear-of-card] the row height is not derived from the MEASURED list " +
+                                     "band. A height taken from a constant is the DrawerModeListKeepPx defect " +
+                                     "wearing a new name");
+                    if (!seat.Contains("Mathf.Clamp(ideal, ElarionUiKit.MinTouchPx, RowHeightPx)"))
+                        failures.Add("[drawer-clear-of-card] the derived row height is not clamped into " +
+                                     "[MinTouchPx, RowHeightPx]. Below the floor five rows are five rows nobody " +
+                                     "can press; above the authored height the row grows past its own text bands");
+                    if (!seat.Contains("whole * _queueRowPx"))
+                        failures.Add("[drawer-clear-of-card] the whole-row trim no longer measures the height the " +
+                                     "rows are actually BUILT at - the two units drift and the last row clips, " +
+                                     "which is exactly the row-2 overhang this suite already carries a case for");
+                    if (!seat.Contains("QueueRowsVisibleTarget"))
+                        failures.Add("[drawer-clear-of-card] the seating never compares what it got against what " +
+                                     "panel 8 draws, so a well that seats one row reports nothing");
+                }
+            }
             string place = Body(panel, "private void ApplyDrawerPlacement()", "private void SyncQueueToggleFace()");
             if (place == null)
                 failures.Add("[drawer-clear-of-card] ApplyDrawerPlacement is missing - nothing seats the drawer band");

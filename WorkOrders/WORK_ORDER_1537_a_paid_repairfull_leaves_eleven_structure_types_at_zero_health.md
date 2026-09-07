@@ -1,6 +1,10 @@
 # WO-1537: a PAID RepairFull leaves eleven structure types at zero health - the player is charged for nothing
 
-**Status:** READY TO IMPLEMENT - P1
+**Status:** IMPLEMENTED - 2026-09-07 - uncommitted, awaiting gate. See the RESULT file.
+WARNING: the section-2 fix shape (MaxHp-vs-tier mismatch) is DISPROVEN. The flat 0.00 is the WO-753
+destroyed guard (`Building.cs:260` / `WallSegment.cs:504`) refusing a fixture that drove structures to
+hp=0. The FIXTURE was corrected to DAMAGED; the assertions were not weakened and a ruling pin was added.
+WO-1352 fixed damage VISUALS only and never touched HP restoration.
 **Silo:** Village/Buildings repair - `RepairFull` + `RepairProbeRegression`.
 **Source:** wave-two regression `Builds/reg-wave2.log` (422/435), 2026-09-06. Surfaced by
 `RepairProbeRegression`, which **WO-1496 registered tonight for the first time** - so this is a PRE-EXISTING

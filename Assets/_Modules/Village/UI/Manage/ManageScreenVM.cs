@@ -112,6 +112,21 @@ namespace DeNelle.Village.UI
         /// <summary>Normalized BuildingTierCatalog id for Builder building jobs, otherwise empty.
         /// The View resolves structure art from this typed identity without parsing <see cref="Label"/>.</summary>
         public string BuildingId;
+
+        /// <summary>
+        /// ⭐ WO-1488 SECTION 2 - THE ROW'S THUMBNAIL KEY. Mockup panel 8 draws a small picture of
+        /// the thing being built between the row number and its name; the owner's capture
+        /// (Logs/device/screens/owner-screen-20260907-010356.png) has none on any row.
+        /// <para>⛔ COMPOSED HERE, BY <c>ManageArt.BuildingPortraitKey</c>, WHICH IS THE ONE KEY
+        /// PRODUCER. The View must not build it from <see cref="BuildingId"/> itself - that is the
+        /// canon-9 derivation the WO-2002 oracle looks for, and it is literally the defect WO-1567
+        /// section 5 item 3 records (a second, slug-based producer that asked for keys no folder
+        /// held and painted a tan placeholder disc instead).</para>
+        /// <para>Empty on a row with no structure identity - a troop stack, a research perk - and
+        /// the View then draws no thumbnail rather than a placeholder.</para>
+        /// </summary>
+        public string PortraitKey = string.Empty;
+
         /// <summary>True when the job has not started yet.</summary>
         public bool Queued;
         /// <summary>Position among pending jobs (0-based); -1 for an active job.</summary>
@@ -175,7 +190,12 @@ namespace DeNelle.Village.UI
         public bool CanCancel;
         /// <summary>True when this row may be moved one place up the pending FIFO.</summary>
         public bool CanBumpUp;
-        /// <summary>What a cancel would hand back, as ASCII ("400 wood, 200 food" / "nothing").</summary>
+        /// <summary>
+        /// WO-1479 - the FINISHED line the row prints beside Cancel: "Refund: 400 wood, 200 stone",
+        /// or the honest zero wording when the job carries no paid basket. Composed by
+        /// <see cref="ObsidianQueueVM.QuoteRefund(DeNelle.Core.State.JobCost)"/>, never by the View.
+        /// Empty/null ONLY on a row that cannot be cancelled (a collapsed stack header).
+        /// </summary>
         public string RefundText;
 
         /// <summary>
@@ -656,6 +676,7 @@ namespace DeNelle.Village.UI
                 if (!_queueOverlayChannelPinned) QueueOverlayChannel = ChannelOf(Tab);
                 BuildQueueRows(QueueOverlayChannel);
                 _queueTabs = ComposeQueueTabs();
+                BuildQueueEmptyText(QueueOverlayChannel);   // WO-1488: the empty state names ITS verb
                 BuildSlotOffer(QueueOverlayChannel);
                 BuildRepairOffer();
                 BuildBrowseRows();
@@ -953,6 +974,11 @@ namespace DeNelle.Village.UI
                 Channel = channel,
                 JobId = job.StructureId,
                 BuildingId = building != null ? buildingId : "",
+                // WO-1488 s2: the thumbnail key, from the ONE producer. Level 1 is the base sheet;
+                // ManageArt.LoadSprite already falls back tier -> base, so a tier the art wave has
+                // not drawn paints the building rather than a blank.
+                PortraitKey = building != null && !string.IsNullOrEmpty(buildingId)
+                    ? ManageArt.BuildingPortraitKey(buildingId, 1) : string.Empty,
                 Queued = queued,
                 PendingIndex = pendingIndex,
                 IsStackChild = isChild,
@@ -990,7 +1016,15 @@ namespace DeNelle.Village.UI
                               svc.CanWatchAdToSkip(channel, job.StructureId),
                 CanCancel = true,
                 CanBumpUp = queued && pendingIndex > 0,
-                RefundText = job.Paid.Describe(),
+                // WO-1479 - the WHOLE line, composed by ObsidianQueueVM.QuoteRefund, prefix and
+                // zero-case wording included. It used to be the bare basket ("120 wood, 40 iron" /
+                // "nothing") and the DRAWER decided what to do with it: it prefixed "Refund: " and
+                // string-matched "nothing" to suppress the line entirely. So a job that would refund
+                // NOTHING said nothing at all, and the player read a bare CANCEL with no idea the
+                // press was free of charge or cost them everything. Deciding that is a model job
+                // (WO-1512); the View now renders this string when it is non-empty and decides
+                // nothing. The FIGURE is untouched - it is still the job's own v37 paid basket.
+                RefundText = ObsidianQueueVM.QuoteRefund(job.Paid).Line,
                 Progress01 = ProgressOf(job, queued, rem),
                 IconRole = card.IconRole,
                 IconKey = card.IconKey,
@@ -1066,8 +1100,14 @@ namespace DeNelle.Village.UI
             else
             {
                 int free = Mathf.Max(0, slots - busy);
-                SlotOfferText = free + (free == 1 ? " slot free - tap TRAIN to fill it" :
-                    " slots free - tap TRAIN to fill them");
+                // ⭐ WO-1488 - THE VERB IS THIS CHANNEL'S, not TRAIN on every line. The literal
+                // "tap TRAIN" was painted under the RESEARCH tab on the owner's device
+                // (Logs/device/screens/owner-screen-20260907-010257.png), pointing her at a door
+                // that cannot start a research job. ONE table: QueueChannelVerb, shared with
+                // QueueEmptyText, so the two sentences in the same empty well cannot disagree.
+                string verb = QueueChannelVerb(channel);
+                SlotOfferText = free + (free == 1 ? " slot free - tap " + verb + " to fill it"
+                                                  : " slots free - tap " + verb + " to fill them");
             }
             FlowTrace.Step("Manage", "builder upsell shown=" + BuilderUpsellVisible + " busy=" + busy + "/" + slots +
                 " price='" + (BuilderUpsellVisible ? BuilderUpsellButtonText : "<hidden>") + "'");
@@ -3258,6 +3298,11 @@ namespace DeNelle.Village.UI
         public Action CloseRequested;
         /// <summary>Host command: enter Town build mode (the door for a structure that is not placed yet).</summary>
         public Action OpenTownBuilderRequested;
+        /// <summary>WO-1571 - host command: open PLACEMENT for ONE catalog id (the ghost, armed).
+        /// The not-built card's BUILD button uses THIS, never <see cref="OpenTownBuilderRequested"/>:
+        /// that one lands on the Build Collections root, which authors no ECONOMY/CRAFT/STORAGE
+        /// collection, so a non-defence row could never be reached from its own button.</summary>
+        public Action<string> PlaceStructureRequested;
 
         private ManageNavEntry _nav;
         private string _activeFilter = BuildFilter.All;
@@ -3715,12 +3760,26 @@ namespace DeNelle.Village.UI
             };
         }
 
+        /// <summary>
+        /// The ONE separator between MANAGE and the screen word.
+        /// <para>⭐ WO-1491 - IT IS A HYPHEN, NOT A SLASH. The mockup sheet heads panel 2
+        /// "MANAGE - BUILD" and panel 6 "MANAGE - RESEARCH"; the device build read
+        /// "MANAGE / BUILD" (Logs/device/screens/owner-screen-20260907-010356.png). A slash reads
+        /// as a file path, a hyphen reads as a title - and the acceptance on this wave is the
+        /// drawing, exactly.</para>
+        /// <para>⛔ ONE constant, read by all three arms below. Typing " - " three times is how the
+        /// next re-spelling lands on two of them.</para>
+        /// </summary>
+        private const string HeaderJoiner = " - ";
+
         private static string HeaderTitle(ManageNavEntry nav)
         {
             if (nav == null) return "MANAGE";
-            if (nav.Kind == ManageScreenKind.Detail) return "MANAGE / " + TabWordOf(nav.Tab) + " / DETAIL";
-            if (nav.Kind == ManageScreenKind.ResearchPerks) return "MANAGE / RESEARCH / SCHOOL";
-            return "MANAGE / " + TabWordOf(nav.Tab);
+            if (nav.Kind == ManageScreenKind.Detail)
+                return "MANAGE" + HeaderJoiner + TabWordOf(nav.Tab) + HeaderJoiner + "DETAIL";
+            if (nav.Kind == ManageScreenKind.ResearchPerks)
+                return "MANAGE" + HeaderJoiner + "RESEARCH" + HeaderJoiner + "SCHOOL";
+            return "MANAGE" + HeaderJoiner + TabWordOf(nav.Tab);
         }
 
         // ⛔ HeaderSubtitle IS DELETED - WO-1443 section 1 (owner felt-test 2026-09-06, "remove the
@@ -3795,6 +3854,44 @@ namespace DeNelle.Village.UI
                 });
             }
             return tabs;
+        }
+
+        /// <summary>
+        /// ⭐ WO-1488 - THE QUEUE OVERLAY'S EMPTY STATE, IN THIS CHANNEL'S OWN VERB.
+        ///
+        /// <para>⛔ IT WAS A VIEW LITERAL AND IT NAMED THE WRONG VERB. ManageScreenPanel typed
+        /// <i>"Nothing is queued on this line. Start an upgrade to see it here."</i> for all three
+        /// channels, and the slot line under it said <i>"tap TRAIN to fill them"</i> on every one -
+        /// so the owner's RESEARCH tab (Logs/device/screens/owner-screen-20260907-010257.png) told
+        /// her to tap TRAIN. A sentence that names the wrong door is worse than no sentence: it
+        /// sends the player to a screen that cannot help.</para>
+        ///
+        /// <para>The verb comes from <see cref="QueueChannelVerb"/>, ONE table, read by this
+        /// sentence and by the slot-offer line so the two can never disagree.</para>
+        /// </summary>
+        public string QueueEmptyText { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// The DOOR VERB for a queue line - what the player taps to put work on it.
+        /// BUILD / TRAIN / RESEARCH, matching the three faces on the overlay's tab row.
+        /// <para>⛔ A CHANNEL -&gt; VERB TABLE, MODEL-SIDE, ONE COPY. The View may not switch on a
+        /// ChannelId to pick a word (canon 9), and a second copy of this table beside the slot
+        /// offer is exactly the drift that let "tap TRAIN" reach the RESEARCH tab.</para>
+        /// </summary>
+        public static string QueueChannelVerb(ChannelId channel)
+        {
+            switch (channel)
+            {
+                case ChannelId.Train: return "TRAIN";
+                case ChannelId.Research: return "RESEARCH";
+                default: return "BUILD";
+            }
+        }
+
+        private void BuildQueueEmptyText(ChannelId channel)
+        {
+            string verb = QueueChannelVerb(channel);
+            QueueEmptyText = "Nothing is queued on this line. Tap " + verb + " to start something.";
         }
 
         /// <summary>Panel 8's tab list, rebuilt with the rows. The View binds it and picks nothing.</summary>
@@ -3917,6 +4014,17 @@ namespace DeNelle.Village.UI
                     {
                         tab.Tiles = ComposeResearchPerkTiles(nav.SchoolId);
                         tab.EmptyText = "This school authors no perks yet.";
+                        // ⭐ WO-1567 PANEL ROW 8 - THE SCHOOL'S OWN PAINTING, left of the rows.
+                        // Mockup panel 7 gives the tree a large square picture of the building
+                        // whose perks it lists; the owner's capture
+                        // (Logs/device/screens/owner-screen-20260907-010151.png) has no picture
+                        // anywhere on the screen - just four rows against black.
+                        // ⛔ ONE KEY PRODUCER: ManageArt.BuildingPortraitKey against the catalog
+                        // ID at level 1, exactly as the research PICKER binds its tiles. The
+                        // display-name slug that used to compose these keys is deleted (WO-1567
+                        // section 5 item 3) and must not come back.
+                        tab.HeaderArtKey = string.IsNullOrEmpty(nav.SchoolId)
+                            ? null : ManageArt.BuildingPortraitKey(nav.SchoolId, 1);
                     }
                     else
                     {
@@ -4137,6 +4245,7 @@ namespace DeNelle.Village.UI
         /// <summary>Authored, offered, not on the map yet. Owned=NotUnlocked with a door that opens.</summary>
         private ManageItemState ComposeUnplacedItem(BuildInventoryRow row)
         {
+            string rowId = row.Id;   // WO-1571: captured by the BUILD action below, by VALUE
             var item = new ManageItemState
             {
                 ItemId = row.Id,
@@ -4172,9 +4281,38 @@ namespace DeNelle.Village.UI
                 Cta = "BUILD",
                 CostLine = null,
                 IsPrimary = true,
-                Invoke = () => OpenTownBuilderRequested?.Invoke()
+                // ⛔ WO-1571 - THIS CARRIES THE ID. It used to be OpenTownBuilderRequested, which
+                // drops it and lands on the Build Collections ROOT; that root offers Towers /
+                // Walls and Gates / Manage Placed only, so a CRAFT / ECONOMY / STORAGE row was
+                // unreachable from its own BUILD button (device 358872, arcane-tower).
+                Invoke = () => RequestPlacement(rowId)
             });
             return item;
+        }
+
+        /// <summary>
+        /// WO-1571 - raise the direct-placement door, and NEVER fail silently (§12). A host that
+        /// bound only the legacy town-builder command still gets a working (if root-landing) button
+        /// and says so in the trace; a host that bound neither is a dead button and that is a Fail,
+        /// not a no-op.
+        /// </summary>
+        private void RequestPlacement(string structureId)
+        {
+            if (PlaceStructureRequested != null)
+            {
+                PlaceStructureRequested.Invoke(structureId);
+                return;
+            }
+            if (OpenTownBuilderRequested != null)
+            {
+                FlowTrace.Warn("Manage", "BUILD door for '" + structureId + "' fell back to the Build " +
+                    "Collections ROOT: this host never bound PlaceStructureRequested. The root authors no " +
+                    "ECONOMY/CRAFT/STORAGE collection, so a non-defence row is a DEAD END here (WO-1571).");
+                OpenTownBuilderRequested.Invoke();
+                return;
+            }
+            FlowTrace.Fail("Manage", "BUILD door for '" + structureId + "' is WIRED TO NOTHING - the host " +
+                "bound neither PlaceStructureRequested nor OpenTownBuilderRequested. The button is dead.");
         }
 
         private ManageItemState ComposeBuildingItem(BuildingChoiceVM c, BuildInventoryRow row)
@@ -4344,6 +4482,15 @@ namespace DeNelle.Village.UI
             // WO-1518: the bare word "SHORT" named neither the resource nor the amount. It now
             // carries both, from the item's OWN cost basket - see ShortBadgeText.
             item.BadgeText = ready ? "READY" : ShortBadgeText(costParts);
+            // ⭐ THE TILE GETS THE CLOSED WORD (mockup panel 2, WO-1567 panel row 2).
+            // WO-1518's amounts are RIGHT where there is room for them - the research list row's
+            // state column and the detail card - and WRONG in a grid cell: the owner's own capture
+            // (Logs/device/screens/owner-screen-20260907-004825.png) reads "SHORT 28..." on Crystal
+            // Mine and "SHORT 72..." on Healing Caravan, which names neither a resource nor an
+            // amount and so buys nothing over the bare word it replaced.
+            // ⛔ BOTH FACES ARE COMPOSED HERE, from the same basket. Nothing downstream splits or
+            // truncates the long one - see ManageItemState.BadgeWord.
+            item.BadgeWord = ready ? "READY" : "SHORT";
         }
 
         // ── ARMY ─────────────────────────────────────────────────────────────
@@ -4384,6 +4531,17 @@ namespace DeNelle.Village.UI
             // one here would be a second reading of a ladder this VM does not own (ruling 13's
             // [track-mismatch] invariant is exactly that trap).
 
+            // ⭐ THE TRAIN FACE NAMES WHAT IT TRAINS AND HOW MANY - mockup panel 5, "TRAIN 1
+            // ARCHER". The bare word "TRAIN" left the count implicit on the one button that spends
+            // an army slot, and the View was welding the DURATION onto it to compensate, which is
+            // how the owner's capture came to read "TRAIN . 1M 0S"
+            // (Logs/device/screens/owner-screen-20260907-005222.png). The time now has its own
+            // clock band; the face states the ACTION.
+            // ⛔ ONE is not a guess: TrainTroop(troopId) enqueues exactly one unit, and
+            // TroopDialogueCommands.SlotOf is the per-unit slot cost the cap test already uses. If
+            // a batch verb is ever added, this string moves WITH it.
+            string trainFace = "TRAIN 1 " + (Ascii(c.Name) ?? string.Empty).ToUpperInvariant();
+
             if (!c.Unlocked)
             {
                 item.LockReason = string.IsNullOrEmpty(c.Requirement)
@@ -4397,7 +4555,7 @@ namespace DeNelle.Village.UI
                 {
                     Kind = ManageActionKind.Train,
                     Availability = ManageActionAvailability.PrerequisiteBlocked,
-                    Cta = "TRAIN",
+                    Cta = trainFace,
                     BlockerReason = item.LockReason,
                     Route = ManageRoute.ToBuildCard("barracks", "VIEW BARRACKS"),
                     IsPrimary = true
@@ -4412,7 +4570,7 @@ namespace DeNelle.Village.UI
                 {
                     Kind = ManageActionKind.Train,
                     Availability = ManageActionAvailability.Available,
-                    Cta = "TRAIN",
+                    Cta = trainFace,
                     CostLine = Ascii(c.TrainTimeText),
                     IsPrimary = true,
                     Invoke = () => TrainTroop(troopId)
@@ -4442,7 +4600,7 @@ namespace DeNelle.Village.UI
                     Availability = (trainLineFull || c.ArmyFull)
                         ? ManageActionAvailability.QueueBlocked
                         : ManageActionAvailability.Unaffordable,
-                    Cta = "TRAIN",
+                    Cta = trainFace,
                     BlockerReason = string.IsNullOrEmpty(c.TrainStateText)
                         ? "Training cannot start right now."
                         : Ascii(c.TrainStateText),
@@ -4580,7 +4738,22 @@ namespace DeNelle.Village.UI
                 return;
             }
 
-            int columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(schools)));
+            // ⭐ ONE ROW WHILE THEY FIT (owner mockup panel 6, re-measured 2026-09-07).
+            // ⚠ THIS SUPERSEDES THE ceil(sqrt(n)) SHAPE DESCRIBED ABOVE, AND THE PARAGRAPH THAT
+            // DEFENDS TWO ROWS IS RETIRED WITH IT. Measured on the owner's own device
+            // (Logs/device/screens/owner-screen-20260907-005358.png): FOUR schools -> sqrt gives
+            // 2x2, and the frame shows four SHORT WIDE tiles stacked in the top 40% of the well
+            // with roughly 60% of it black - the very defect ceil(sqrt) was introduced to cure,
+            // reproduced in a different shape. The mockup draws ONE ROW of SQUARE tiles.
+            // ⛔ THE OLD "why two rows" ARGUMENT WAS TRUE AND ITS PREMISE IS GONE. It said a
+            // one-row picker could only paint MaxTileHeightPx(190) of a taller well. That cap now
+            // yields to the CELL WIDTH on a single-row grid (ManageWorkspacePanel: a tile may grow
+            // to square, never past it), so one row fills the well instead of hovering in it.
+            // ⛔ THE CAP IS FIVE, NOT A COLUMN COUNT. Five is the BUILD grid's own authored width
+            // at this reference well (ManageScreenVM: GridColumns = 5 for Build), so it is the
+            // measured number of tiles that fit across, reused rather than re-guessed. Past five
+            // the picker wraps, and the squarest-grid behaviour returns for free.
+            int columns = Mathf.Clamp(schools, 1, 5);
             int rows = Mathf.Max(1, Mathf.CeilToInt(schools / (float)columns));
             tab.GridColumns = columns;
             tab.GridRows = rows;
@@ -4615,7 +4788,20 @@ namespace DeNelle.Village.UI
                 {
                     ItemId = c.BuildingId,
                     DisplayName = Ascii(string.IsNullOrEmpty(c.BuildingName) ? c.BuildingId : c.BuildingName),
-                    IconId = string.IsNullOrEmpty(c.IconName) ? null : "HudIcons/BuildingUpgrades/" + c.IconName,
+                    // ⭐ THE SCHOOL WEARS ITS BUILDING PORTRAIT - the same key, the same folder and
+                    // the same loader as the BUILD grid (WO-1567 panel row 7).
+                    // ⛔ IT USED TO READ "HudIcons/BuildingUpgrades/" + c.IconName, WHICH RESOLVED
+                    // THE RETIRED LANDSCAPE CARD STRIPS. Measured on the owner's device
+                    // (Logs/device/screens/owner-screen-20260907-005358.png): every school tile
+                    // painted a 1963x789 strip stretched into a tall cell behind a jagged oval mask
+                    // - ManageScreenPanel already documents those strips as drawn for the retired
+                    // wide 2x2 seat and wrong for a tall one, and this was the last live caller.
+                    // ⛔ ONE PRODUCER, LIKE EVERY OTHER BUILDING KEY. ManageArt.BuildingPortraitKey
+                    // off the catalog id is the single producer WO-1567 section 5 item 3 records;
+                    // a school id IS a ladder id (armorer / barracks / forge / lumbermill), so this
+                    // adds no second spelling. A tier sheet that is missing falls back to the base
+                    // sheet and logs, and a genuine miss is announced by key - never silent.
+                    IconId = ManageArt.BuildingPortraitKey(c.BuildingId, 1),
                     Ownership = ManageOwnership.Owned,
                     UpgradeTrack = ManageUpgradeTrack.NotApplicable,
                     Badge = ready > 0 ? ManageTileBadge.UpgradeAffordable : ManageTileBadge.Idle,
@@ -4701,12 +4887,23 @@ namespace DeNelle.Village.UI
                 // row WITHOUT a door can never advertise a tap that does nothing.
                 bool hasDoor = !string.IsNullOrEmpty(c.BuildingId);
                 item.BadgeText = hasDoor ? "LOCKED - TAP" : "LOCKED";
-                // JOINED, not replaced: the effect sentence is the line the player decides on
-                // (mockup panel 7 gives every row one) and the blocker is what they must clear.
-                // Dropping either to make room for the other trades one missing fact for another.
-                item.NextRungLine = string.IsNullOrEmpty(item.NextRungLine)
-                    ? item.LockReason
-                    : item.NextRungLine + " . " + item.LockReason;
+                // ⛔ NO LONGER JOINED. WO-1567 panel row 8, owner capture
+                // Logs/device/screens/owner-screen-20260907-010151.png:
+                //     "Wood +8%, offline bucket +8% . Upgrade the building to Tier 3 f..."
+                // The join put a BENEFIT and a REQUIREMENT on one line with a floating period
+                // between them, and the line was too long, so the half the player needs in order
+                // to act got ellipsised away. Both facts survive, on the two channels the mockup
+                // draws them on: NextRungLine -> Subtitle is the effect under the name, and
+                // LockReason -> ManageTileVM.RequirementText is the padlock row beneath it
+                // (ManageVmProjection.ProjectTile / ManageWorkspacePanel.BuildListRow).
+                // ⚠ The joiner's own reasoning was right - "dropping either trades one missing
+                // fact for another" - and nothing is dropped here. Only the glue is.
+                // ⚠ AND THERE IS DELIBERATELY NO FALLBACK COPYING LockReason INTO NextRungLine
+                // when a perk authors no effect sentence. The requirement already has its own row;
+                // writing it into the subtitle as well would paint the identical sentence twice,
+                // one above the other, which is the state the join was hiding rather than fixing.
+                // ComposeResearchItem already falls back to c.TierText, so the line is rarely
+                // empty - and when it is, an empty band is honest.
                 if (!hasDoor)
                     FlowTrace.Warn("Manage", "locked perk '" + (c.PerkId ?? "?") + "' names no owning " +
                         "building, so no door can be routed - its face says LOCKED with no tap " +
@@ -4806,6 +5003,12 @@ namespace DeNelle.Village.UI
             string description = null;
             IReadOnlyList<ManageStatVM> stats = Array.Empty<ManageStatVM>();
             IReadOnlyList<ManageCostVM> costs = Array.Empty<ManageCostVM>();
+            // ⭐ WO-1567 panel rows 3 and 5 - the cost band's CAPTION and the CLOCK, which mockup
+            // panels 3 ("Upgrade Cost" / 45m) and 5 ("Train Cost" / 40s) both draw as a labelled
+            // block under the numbers. The duration is NOT pushed into the cost basket: it has no
+            // bank and no affordability verdict (see ManageSelectionVM.TimeText).
+            string costCaption = null;
+            string timeText = null;
             // WO-1517 §1B item 3 - the troop card's SECOND live face. Null on every other screen.
             ManageAction troopUpgradeFace = null;
 
@@ -4819,6 +5022,27 @@ namespace DeNelle.Village.UI
                         item = ComposeTroopItem(c);
                         description = Ascii(c.Description);
                         stats = TroopStatRows(c);
+                        // ⭐ THE TRAIN COST BAND (mockup panel 5, WO-1567 panel row 5). The Archer
+                        // card shipped with NO cost band at all - the owner's capture
+                        // (Logs/device/screens/owner-screen-20260907-005222.png) shows the price
+                        // nowhere and the TIME welded onto the button face as "TRAIN . 1M 0S".
+                        // ⛔ REUSED, NOT RE-COMPOSED. TrainTimeText is the WO-1517 train fact this
+                        // same file already composes; nothing here re-prices a troop, and the View
+                        // is handed a finished string.
+                        //
+                        // ⛔ AND THERE IS NO PRICE TO PAINT, WHICH IS A DELIBERATE DIVERGENCE FROM
+                        // THE MOCKUP - NOT AN OMISSION. Mockup panel 5 draws "Train Cost / 550
+                        // gold / 40s". TRAINING IS FREE IN THIS BUILD: owner ruling WO-1387
+                        // (2026-09-04 23:16), verbatim <i>"training free ... just time"</i>, and
+                        // FillTrainFacts sets TrainCostText = "" for exactly that reason with the
+                        // ruling quoted beside it. CAPTURE_LOOP_GOAL 3.0c says the mockup wins over
+                        // a text ruling - but that is a rule about how the screen LOOKS, and
+                        // inventing 550 gold to fill a band would be a PRICE the game does not
+                        // charge, i.e. a lie on the one screen a player uses to decide. So the band
+                        // carries the caption and the CLOCK, and the missing half is reported to
+                        // the owner (WO-1567 section 6, panel row 5) rather than fabricated.
+                        costCaption = "Train Time";
+                        timeText = Ascii(c.TrainTimeText);
                         troopUpgradeFace = item.ActionOf(ManageActionKind.Upgrade);
                     }
                     break;
@@ -4830,8 +5054,13 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeResearchItem(c);
                         description = Ascii(c.Description);
-                        stats = TwoFacts("Tier", Ascii(c.TierText), "Research time", Ascii(c.TimeText));
+                        // The duration LEAVES the stats table and takes the clock band, exactly as
+                        // it does on the building and troop cards - one shape for all three, so a
+                        // player learns where to look for a time once. See ManageSelectionVM.TimeText.
+                        stats = TwoFacts("Tier", Ascii(c.TierText), null, null);
                         costs = CostVms(c.CostParts);
+                        costCaption = "Research Cost";
+                        timeText = Ascii(c.TimeText);
                     }
                     break;
                 }
@@ -4842,9 +5071,17 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeBuildingItem(b, null);
                         description = Ascii(b.Description);
-                        stats = TwoFacts("Next level", Ascii(b.AfterUpgradeText),
-                                         "Upgrade time", Ascii(b.UpgradeTimeText));
+                        // ⭐ THE MOCKUP'S CURRENT -> NEXT TABLE (panel 3), wired 2026-09-07.
+                        // "Production 120 / hour -> 180 / hour" comes from the ONE producer
+                        // ResourceBuildingProgression.ProductionPerHour (which ResourceCollector's
+                        // runtime ThroughputScale now also calls); "Storage 2,000 -> 3,000" from
+                        // TownBankCapacity.CapacityAtLevel. A building with neither keeps the
+                        // honest prose row. See BuildingStatRows' summary for why the production
+                        // level is the HARVEST level and the delta is the TIER's multiplier.
+                        stats = BuildingStatRows(b);
                         costs = CostVms(b.UpgradeCostParts);
+                        costCaption = "Upgrade Cost";
+                        timeText = Ascii(b.UpgradeTimeText);
                         break;
                     }
                     var d = DefenseChoiceFor(nav.ItemId);
@@ -4852,9 +5089,10 @@ namespace DeNelle.Village.UI
                     {
                         item = ComposeDefenseItem(d, null);
                         description = Ascii(d.Description);
-                        stats = TwoFacts("Placed", Ascii(d.PlacedText),
-                                         "Upgrade time", Ascii(d.UpgradeTimeText));
+                        stats = TwoFacts("Placed", Ascii(d.PlacedText), null, null);
                         costs = CostVms(d.UpgradeCostParts);
+                        costCaption = "Upgrade Cost";
+                        timeText = Ascii(d.UpgradeTimeText);
                         break;
                     }
                     var row = InventoryRowById(nav.ItemId);
@@ -4880,6 +5118,18 @@ namespace DeNelle.Village.UI
             }
 
             var selection = ManageVmProjection.ProjectSelection(item, description, stats, costs, Navigate);
+
+            // ⭐ THE COST BAND'S CAPTION AND THE CLOCK (mockup panels 3 and 5).
+            // Seated here, on the composed selection, for the SAME reason the troop UPGRADE face is
+            // (see the note below): ManageVmProjection is a shared projection and every screen would
+            // have to grow the same two arguments to carry two facts only a composer knows - WHICH
+            // verb is being paid for, and which duration belongs to it. The composer says so.
+            if (selection != null && selection.Visible)
+            {
+                selection.CostCaption = costCaption;
+                selection.TimeText = timeText;
+                selection.TimeIconKey = string.IsNullOrEmpty(timeText) ? null : ManageArt.IconTime;
+            }
 
             // ⭐ WO-1517 §1B item 3 - "An UPGRADE button beside TRAIN whenever upgrade is Ready,
             // with its time and cost on its face."
@@ -5027,7 +5277,14 @@ namespace DeNelle.Village.UI
             // Training time does NOT scale with troop level (BarracksService prices a train at
             // TroopDef.BuildSeconds flat), so this row carries no delta - stating one would be a
             // promotion the game does not deliver.
-            rows.Add(new ManageStatVM { Label = "Train time", Value = FormatTime(def.BuildSeconds) });
+            // ⛔ NO "Train time" ROW HERE ANY MORE - IT MOVED, IT WAS NOT DELETED.
+            // ManageSelectionVM.TimeText now carries it into the clock band under the costs, which
+            // is where mockup panel 5 draws it. Leaving the row as well would print the duration
+            // TWICE on one card, and the contract says so in as many words ("the composer supplies
+            // this INSTEAD, not as well"). The value is unchanged: ComposeDetail reads the same
+            // TrainTimeText, which FillTrainFacts sets from this same def.BuildSeconds.
+            // ⚠ A stat row is a CURRENT -> NEXT pair (WO-1517); a train time has no next, and it
+            // never did carry a delta - it was the one row in this table that was not a promotion.
             FlowTrace.Step("Manage", "troop detail stats id=" + c.Id + " L" + level +
                 (next != null ? " -> L" + (level + 1) : " (max)") +
                 " hp=" + now.MaxHp.ToString("0") + " dmg=" + now.AttackDamage.ToString("0.0"));
@@ -5035,6 +5292,123 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>One before -&gt; after stat row. The arrow is omitted at max level.</summary>
+        /// <summary>
+        /// ⭐ WO-1567 PANEL ROW 3 - THE BUILDING DETAIL'S CURRENT -&gt; NEXT TABLE.
+        /// Mockup panel 3 draws two numeric rows under the name ("Production 120 / hour -&gt;
+        /// 180 / hour", "Storage 2,000 -&gt; 3,000"); the card shipped with ONE prose row
+        /// ("Next level: ...") and the owner's capture shows no number pair anywhere.
+        ///
+        /// <para>⛔ ONE PRODUCER PER NUMBER, AND ONLY THE NUMBERS THAT HAVE ONE.
+        /// <b>STORAGE is wired</b>: <c>TownBankCapacity.CapacityAtLevel(repo, level)</c> is already
+        /// the single authority for a container's ceiling at a placed level (it folds
+        /// StorageCapsCatalog's multiplier ladder) and it is called here at the LIVE level and at
+        /// the next rung. Nothing is re-derived and no multiplier is copied.
+        /// <br/>⛔ THE <c>RepoProps</c> OVERLOAD - NEVER REACH FOR THE RAW CAPACITY FIELD ON A
+        /// CATALOG ROW HERE. The [one-reader] law says only TownBankCapacity may read that seam,
+        /// and it is machine-enforced by <c>TownBankCapRegression.CheckOneReader</c>, which greps
+        /// every file under <c>_Modules</c> for the dotted field access - <b>including inside
+        /// comments</b>, which is why this paragraph does not spell it. This composer FAILED that
+        /// guard on Builds/reg-wave4a.log by passing the field into the int overload; the row now
+        /// hands the catalog row over and lets the one reader do its own field read - the same
+        /// passthrough shape <c>TownBankCapacity.IsStorageContainer(repo)</c> already uses, and for
+        /// the same reason (routing AROUND the one reader is how two ceilings disagree).</para>
+        ///
+        /// <para>⭐ <b>PRODUCTION IS NOW WIRED</b> (2026-09-07), and it has the same shape:
+        /// <c>ResourceBuildingProgression.ProductionPerHour(id, level, productionMult, echoMult)</c>
+        /// is the ONE producer, and <c>ResourceCollector.ThroughputScale</c> - which used to hold
+        /// that formula privately - now calls it too. So the number on the card is produced by the
+        /// same function that scales the collector at runtime. Every state-dependent term is passed
+        /// IN by this composer (the live perk multiplier and the live echo multiplier); nothing is
+        /// re-derived here and no multiplier is copied.</para>
+        ///
+        /// <para>⛔ THE LEVEL IS <c>ResourceBuildingState.GetLevel</c>, <b>NOT</b> <c>b.Level</c>,
+        /// AND THAT IS DELIBERATE - IT IS THE ONLY HONEST NUMBER. farm / lumbermill / forge are
+        /// DUAL-FAMILY: <c>UpgradeFamilyResolver.Resolve</c> sends all three to the CITY ladder
+        /// (<c>GameState.BuildingTiers</c>, which is what <c>b.Level</c> reports), so nothing has
+        /// written the legacy resource-ladder key <c>dotr.resbuilding.level.*</c> since that
+        /// precedence was fixed, and <c>DualFamilyLevelResetMigration</c> reset the residue to 1.
+        /// The harvester still ticks on THAT level. Painting
+        /// <c>ProductionPerHour(id, b.Level, ...)</c> would therefore state an income the game does
+        /// not pay - a lie on the one screen a player uses to decide (CLAUDE.md section 11B).
+        /// Income moves with the TIER instead, through the tier's authored <c>*ProductionMult</c>
+        /// (building-tiers.json: lumbermill 1.1 / 1.18 / 1.28 / 1.4), which is exactly what the
+        /// NEXT column asks <c>ModifierService.ProductionMultForTier</c> for.</para>
+        ///
+        /// <para>Falls back to the honest prose row when neither numeric row can be composed, so a
+        /// card never loses the "what changes next" line it already had.</para>
+        /// </summary>
+        private IReadOnlyList<ManageStatVM> BuildingStatRows(BuildingChoiceVM b)
+        {
+            if (b == null) return Array.Empty<ManageStatVM>();
+
+            var rows = new List<ManageStatVM>(3);
+
+            // ⭐ PRODUCTION - mockup panel 3's FIRST numeric row, so it is added first.
+            if (Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(b.Id))
+            {
+                int prodLevel = Buildings.Progression.ResourceBuildingState.GetLevel(b.Id);
+                double echo = Buildings.Progression.ResourceBuildingHarvester.EchoHarvestMultiplier();
+                double nowPerHour = Buildings.Progression.ResourceBuildingProgression.ProductionPerHour(
+                    b.Id, prodLevel, ModifierService.ProductionMultFor(b.Id), echo);
+
+                int tier = Mathf.Max(0, b.Level);
+                int nextTier = Mathf.Max(0, b.NextTier);
+                double? thenPerHour = nextTier > tier
+                    ? (double?)Buildings.Progression.ResourceBuildingProgression.ProductionPerHour(
+                        b.Id, prodLevel, ModifierService.ProductionMultForTier(b.Id, nextTier), echo)
+                    : null;
+
+                if (nowPerHour > 0.0)
+                {
+                    // The unit rides in the LABEL: StatRow emits a bare number, and "1,008" with no
+                    // unit is the mockup's "180 / hour" stripped of the half that gives it meaning.
+                    rows.Add(StatRow("Production / hr", (float)nowPerHour,
+                        thenPerHour.HasValue ? (float?)thenPerHour.Value : null, "N0"));
+                    FlowTrace.Step("Manage", "building detail production id=" + (b.Id ?? "?") +
+                        " harvest-level " + prodLevel + " tier " + tier +
+                        " now=" + nowPerHour.ToString("0") + "/hr" +
+                        (thenPerHour.HasValue
+                            ? " next(tier " + nextTier + ")=" + thenPerHour.Value.ToString("0") + "/hr"
+                            : " (no further tier)"));
+                }
+                else
+                {
+                    FlowTrace.Warn("Manage", "building detail for '" + (b.Id ?? "?") + "' is a resource " +
+                        "building but ProductionPerHour returned 0 at harvest-level " + prodLevel +
+                        " - no Production row is drawn rather than printing a zero the game does not mean");
+                }
+            }
+
+            var entry = string.IsNullOrEmpty(b.CatalogEntryId)
+                ? null : DeNelle.Core.Catalog.CatalogRegistry.Get(b.CatalogEntryId);
+            var repo = entry != null ? entry.repo : null;
+            if (DeNelle.Core.Economy.TownBankCapacity.IsStorageContainer(repo))
+            {
+                int level = Mathf.Max(1, b.Level);
+                int next = Mathf.Max(level, b.NextTier);
+                int now = DeNelle.Core.Economy.TownBankCapacity.CapacityAtLevel(repo, level);
+                int then = DeNelle.Core.Economy.TownBankCapacity.CapacityAtLevel(repo, next);
+                if (now > 0)
+                    rows.Add(StatRow("Storage", now, next > level ? (float?)then : null, "N0"));
+            }
+
+            if (rows.Count > 0)
+            {
+                // The prose line still says what a NUMBER cannot - "auto-gathers wood over time".
+                // It rides beneath the table rather than replacing it.
+                if (!string.IsNullOrWhiteSpace(b.AfterUpgradeText))
+                    rows.Add(new ManageStatVM { Label = "Next level", Value = Ascii(b.AfterUpgradeText) });
+                return rows;
+            }
+
+            FlowTrace.Once("Manage", "building-stat-prose:" + (b.Id ?? "?"),
+                "the building card for '" + (b.Id ?? "?") + "' has no numeric current->next pair " +
+                "to draw (mockup panel 3), so it keeps its prose 'Next level' row. It is neither a " +
+                "resource building (no per-hour production) nor a storage container (no capacity " +
+                "ladder), so there is no number to state. Reported, not faked.");
+            return TwoFacts("Next level", Ascii(b.AfterUpgradeText), null, null);
+        }
+
         private static ManageStatVM StatRow(string label, float now, float? next, string format)
         {
             return new ManageStatVM
@@ -5065,11 +5439,47 @@ namespace DeNelle.Village.UI
                 {
                     Label = p.Word,
                     AmountText = p.AmountText,
-                    IconKey = null,
+                    // ⭐ THE GLYPH, AT LAST. This read `null` on every row until 2026-09-07, so the
+                    // owner's Lumber Mill card (Logs/device/screens/owner-screen-20260907-004903.png)
+                    // showed two bare numbers - "2600  970" - naming neither resource. Mockup panel 3
+                    // draws a wood glyph beside 1,200 and an iron glyph beside 600. The five sprites
+                    // have been on disk since the art wave landed (WO-1567 section 1).
+                    // ⛔ THE MAPPING IS THE MODEL'S. A View switching on a concept id to pick art
+                    // would be canon-9 derivation, and the id vocabulary is this file's, not the
+                    // renderer's.
+                    IconKey = CostIconFor(p.ConceptId),
                     Affordable = BankOf(p.ConceptId) >= p.Amount
                 });
             }
             return list;
+        }
+
+        /// <summary>
+        /// The delivered glyph for a cost concept, or null when none was drawn for it.
+        /// <para>⛔ THE CONCEPT VOCABULARY IS <see cref="BankOf"/>'s, DELIBERATELY - the same cases
+        /// in the same spellings, so a concept can never have a bank reader and no glyph without
+        /// the two switches visibly disagreeing. A miss returns null and the row paints its NAME
+        /// and amount with no picture, which is honest; the trace names the concept once so an
+        /// unglyphed currency becomes an art ask rather than a silent blank.</para>
+        /// </summary>
+        private static string CostIconFor(string conceptId)
+        {
+            switch (conceptId)
+            {
+                case "wood": return ManageArt.ResWood;
+                case "iron": return ManageArt.ResIron;
+                case "stone":
+                case "food": return ManageArt.ResStone;
+                case "crystal":
+                case "crystals": return ManageArt.ResCrystal;
+                case "gold": return ManageArt.ResGold;
+                default:
+                    FlowTrace.Once("Manage", "cost-glyph:" + conceptId,
+                        "cost concept '" + conceptId + "' has no delivered glyph - its row paints " +
+                        "the resource NAME and the amount with no picture. That is an ART ASK, not " +
+                        "a defect: the name still says which resource it is.");
+                    return null;
+            }
         }
 
         /// <summary>

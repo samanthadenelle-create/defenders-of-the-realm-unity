@@ -9,7 +9,7 @@
 > deleted rail and the tile state model all stand**; only the number is superseded. The colourblind
 > criterion on the same list is separately unmet and is ticketed as WO-1534 section B2.
 
-**Status:** DONE - landed in bb51b8b9c; the >=12-tile density acceptance at :64 is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6, 5x2=10 tiles); the colourblind-legibility acceptance on the same list is OPEN (WO-1534 section B2), not superseded. See banner. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 2 (BUILDINGS grid) not yet passed (2026-09-07); code landed bb51b8b9c. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: DONE - landed in bb51b8b9c; the >=12-tile density acceptance at :64 is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6, 5x2=10 tiles); the colourblind-legibility acceptance on the same list is OPEN (WO-1534 section B2), not superseded. See banner. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*)*
 
 **Priority:** P0  
 **Depends on:** WO-2002, WO-2005

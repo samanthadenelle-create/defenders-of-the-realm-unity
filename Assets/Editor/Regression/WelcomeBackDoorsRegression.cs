@@ -21,11 +21,12 @@
 //      carrying the named words, each with a door (Manage / DefenseReport).
 //   2. [nothing-means-nothing] an empty window -> ZERO rows and NO ready door. There is no
 //      empty state and no disabled door; COLLECT stands alone.
-//   3. [raid-door-routes]      an army-ready fixture -> the RAID door exists and targets
-//      PanelId.JourneyDeck, and the trace says ready='raid'.
-//   4. [ready-needs-all-three] the ready door is withheld when the raid gate is shut, when
-//      there is no army, or when there is no Heartfire charge -- a door onto a refusal is
-//      the same cul-de-sac one layer down.
+//   3. [raid-door-retired]     an army-ready fixture -> NO ready door, NO army/Heartfire line,
+//      ready='none'. OWNER REVERSAL 2026-09-07 01:13 ("no idea why raid is listed here") on
+//      Logs/device/screens/owner-harvest-20260907-011321.png. This case previously asserted
+//      the OPPOSITE ([raid-door-routes]); it is inverted rather than deleted so that restoring
+//      WO-1408's spec fails here instead of reaching the owner a second time.
+//   4. [raid-door-retired]     no posture combination brings the door back.
 //   5. [manage-tab-is-real]    the tab string is one ManageScreenPanel.Open(string) actually
 //      accepts, and TRAIN wins the mixed case.
 //   6. [rows-are-ascii]        every produced string reaches a mobile font atlas.
@@ -140,37 +141,35 @@ namespace DeNelle.Editor.Regression
                     failures.Add("case2 [nothing-means-nothing] a NULL result did not yield an empty VM -- the popup " +
                                  "would blank rather than degrade");
 
-                // ── 3. the RAID door ──────────────────────────────────────────
+                // -- 3. the RAID door is RETIRED (owner reversal 2026-09-07 01:13) --
+                // WAS [raid-door-routes]: this case asserted the door EXISTED on an army-ready,
+                // Heartfire-lit, raid-capable window. The owner read that door on her own device
+                // frame (Logs/device/screens/owner-harvest-20260907-011321.png) and said "no idea
+                // why raid is listed here". The welcome-back popup is about the HARVEST; COLLECT is
+                // its single action. The case is INVERTED, not deleted, so a seat that restores the
+                // ready band from WO-1408's spec fails here instead of shipping it to her twice.
                 var ready = WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), raidCapable: true,
                     armyUsed: 3, armyCap: 10, heartfireLit: 3, heartfireMax: 3);
-                if (!ready.HasReadyDoor)
-                    failures.Add("case3 [raid-door-routes] an army-ready, Heartfire-lit, raid-capable window offered NO " +
-                                 "second door -- the return moment still ends on the HUD");
-                else
-                {
-                    if (ready.ReadyDoor != PanelId.JourneyDeck)
-                        failures.Add($"case3 [raid-door-routes] the ready door targets {ready.ReadyDoor}, expected " +
-                                     "PanelId.JourneyDeck (the deck whose own subtitle names the camps the army can raid)");
-                    if (ready.ReadyDoorText != "RAID")
-                        failures.Add($"case3 [raid-door-routes] the ready door face is '{ready.ReadyDoorText}', expected 'RAID'");
-                    if (ready.ReadyLine.IndexOf("3 / 10", StringComparison.Ordinal) < 0)
-                        failures.Add($"case3 [raid-door-routes] the ready line '{ready.ReadyLine}' does not state the " +
-                                     "army fill");
-                    if (ready.ReadyKind != "raid" ||
-                        ready.TraceLine.IndexOf("ready='raid'", StringComparison.Ordinal) < 0)
-                        failures.Add($"case3 [raid-door-routes] the trace line '{ready.TraceLine}' does not report " +
-                                     "ready='raid'");
-                }
+                if (ready.HasReadyDoor)
+                    failures.Add($"case3 [raid-door-retired] the fully-ready window still offered a '{ready.ReadyDoorText}' " +
+                                 "door beside COLLECT -- the owner retired it 2026-09-07 ('no idea why raid is listed here'); " +
+                                 "this popup's ONE action is COLLECT");
+                if (!string.IsNullOrEmpty(ready.ReadyLine))
+                    failures.Add($"case3 [raid-door-retired] the fully-ready window still drew the army/Heartfire line " +
+                                 $"'{ready.ReadyLine}' -- it is chrome for the retired raid door and goes with it");
+                if (ready.ReadyKind != "none")
+                    failures.Add($"case3 [raid-door-retired] ready kind = '{ready.ReadyKind}', expected 'none'");
 
-                // ── 4. all three conditions, or no door ───────────────────────
-                if (WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), false, 3, 10, 3, 3).HasReadyDoor)
-                    failures.Add("case4 [ready-needs-all-three] the RAID door appeared while PostureSignals.RaidCapable " +
-                                 "was FALSE -- it would open onto the raid gate's own refusal");
-                if (WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), true, 0, 10, 3, 3).HasReadyDoor)
-                    failures.Add("case4 [ready-needs-all-three] the RAID door appeared with an EMPTY army");
-                if (WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), true, 3, 10, 0, 3).HasReadyDoor)
-                    failures.Add("case4 [ready-needs-all-three] the RAID door appeared with ZERO Heartfire -- nothing " +
-                                 "can march, so the door leads nowhere");
+                // -- 4. NO posture combination may bring the door back ---------
+                // WAS [ready-needs-all-three] (the door appears only when all three signals are
+                // true). After the reversal the assertion is stronger and simpler: none of them,
+                // in any combination, produces a door.
+                if (WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), false, 3, 10, 3, 3).HasReadyDoor ||
+                    WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), true, 0, 10, 3, 3).HasReadyDoor ||
+                    WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), true, 3, 10, 0, 3).HasReadyDoor ||
+                    WelcomeBackDoorsVM.Build(new OfflineHarvestResult(), true, 10, 10, 3, 3).HasReadyDoor)
+                    failures.Add("case4 [raid-door-retired] some posture combination still produced a ready door on the " +
+                                 "welcome-back popup -- after the 2026-09-07 reversal there is no combination that may");
 
                 // ── 5. the Manage tab is one the panel actually accepts ───────
                 var trainOnly = new List<OfflineHarvestResult.OfflineJobLine>
@@ -275,9 +274,9 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "WELCOME BACK DOORS OK -- a finished job and a recorded attack each produce ONE row with ONE " +
-                         "door (Manage / Defence Report); an empty window produces none; an army-ready window offers " +
-                         "RAID onto the Journey deck; every door collects first and routes through PanelRouter on the " +
-                         "existing return-door arbiter";
+                         "door (Manage / Defence Report); an empty window produces none; NO posture brings back the " +
+                         "retired RAID door (owner reversal 2026-09-07); every door collects first and routes through " +
+                         "PanelRouter on the existing return-door arbiter";
                 return true;
             }
             reason = $"WELCOME BACK DOORS FAIL x{failures.Count}: " + string.Join(" | ", failures);

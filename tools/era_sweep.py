@@ -250,8 +250,15 @@ def git_added_dates():
     return dates
 
 def bucket_of(status_text, has_result):
-    """Mirror of tools/board_build.py bucket_of() for work orders."""
+    """Mirror of tools/board_build.py bucket_of() for work orders.
+
+    NOTE: This is a partial mirror for era_sweep.py's scanning purposes (only filters READY).
+    It does not need to perfectly replicate classify_status; the full classification lives in
+    board_build.py. If classify_status changes substantially, consider importing it directly.
+    """
     s = (status_text or "").upper()
+    # Match board_build.py's "AWAITING OWNER MATCH" bucket (owner ruling 2026-09-07)
+    if s.lstrip().startswith("AWAITING OWNER MATCH"): return "Verify"
     if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed"
     if has_result or "DONE" in s or "IMPLEMENTED" in s or "COMPLETE" in s: return "Done"
     if "BLOCKED" in s: return "Blocked"

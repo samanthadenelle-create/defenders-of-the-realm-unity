@@ -1832,22 +1832,60 @@ namespace DeNelle.Editor
             {
                 host = new GameObject("~UICapHarvestOverflow");
                 var panel = host.AddComponent<HarvestOverflowModal>();
+                // (!) THE OWNER'S OWN STATE, NOT A TOY ONE (2026-09-07 01:14, build 358872,
+                // Logs/device/screens/owner-screen-20260907-011426.png). The old fixture was two
+                // small rows with short container names, which is exactly why the capture never
+                // showed the two defects she hit: THREE full plates, and the long container names
+                // ("Lumberyard", "Stoneyard") whose chips ellipsized to "UPGRADE LUMBER..." and
+                // "UPGRADE STONEYA...". SIX statuses over THREE resources on purpose - that is the
+                // shape that produced her "+3 more" line, so the capture proves the merge as well
+                // as the fit. Figures reconcile to the WELCOME BACK frame one minute earlier:
+                // waiting = 40,972 wood / 21,843 iron / 45,257 stone.
+                const string Collectors = HarvestOverflowModal.CollectorSource;
+                const string Silo = HarvestOverflowModal.SiloSource;
                 var rows = new List<BankOverflowStatus>
                 {
                     new BankOverflowStatus
                     {
                         Available = true, Resource = BankResource.Wood,
                         ResourceName = "Wood", ContainerName = "Lumberyard",
-                        Requested = 920, Granted = 180, Lost = 740,
-                        Current = 9820, Max = 10000, Source = "OfflineHarvest"
+                        Requested = 15142, Granted = 2906, Lost = 12236,
+                        Current = 23094, Max = 26000, Source = Collectors
                     },
                     new BankOverflowStatus
                     {
                         Available = true, Resource = BankResource.Iron,
-                        ResourceName = "Iron", ContainerName = "Warehouse",
-                        Requested = 480, Granted = 0, Lost = 480,
-                        Current = 11250, Max = 10000, OverCap = true,
-                        Source = "OfflineHarvest"
+                        ResourceName = "Iron", ContainerName = "Foundry",
+                        Requested = 7570, Granted = 1535, Lost = 6035,
+                        Current = 8465, Max = 10000, Source = Collectors
+                    },
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Food,
+                        ResourceName = "Stone", ContainerName = "Stoneyard",
+                        Requested = 30932, Granted = 0, Lost = 30932,
+                        Current = 3000, Max = 3000, Source = Collectors
+                    },
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Wood,
+                        ResourceName = "Wood", ContainerName = "Lumberyard",
+                        Requested = 28736, Granted = 0, Lost = 28736,
+                        Current = 26000, Max = 26000, Source = Silo
+                    },
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Iron,
+                        ResourceName = "Iron", ContainerName = "Foundry",
+                        Requested = 15808, Granted = 0, Lost = 15808,
+                        Current = 10000, Max = 10000, Source = Silo
+                    },
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Food,
+                        ResourceName = "Stone", ContainerName = "Stoneyard",
+                        Requested = 14325, Granted = 0, Lost = 14325,
+                        Current = 3000, Max = 3000, Source = Silo
                     }
                 };
                 InvokePrivate(panel, "Open", rows);
@@ -7633,7 +7671,7 @@ namespace DeNelle.Editor
         };
 
         /// <summary>Which frame of the Manage flow a single capture body is shooting.</summary>
-        private enum ManageFlowFrame { GridTop, GridBottom, QueueDrawer, LockedDetail, MaxDetail, SchoolPerks }
+        private enum ManageFlowFrame { Hub, GridTop, GridBottom, QueueDrawer, LockedDetail, MaxDetail, SchoolPerks }
 
         /// <summary>One planned shot. The PLAN is the only place the frame set is written down,
         /// and <c>Expected</c> is its Length -- never a constant beside it (CLAUDE.md §2/§5:
@@ -7650,6 +7688,7 @@ namespace DeNelle.Editor
         {
             switch (frame)
             {
+                case ManageFlowFrame.Hub: return "hub";
                 case ManageFlowFrame.GridTop: return "gridtop";
                 case ManageFlowFrame.GridBottom: return "gridbottom";
                 case ManageFlowFrame.QueueDrawer: return "queue";
@@ -7681,7 +7720,20 @@ namespace DeNelle.Editor
                 ManageFlowFrame.GridTop, ManageFlowFrame.GridBottom, ManageFlowFrame.QueueDrawer,
                 ManageFlowFrame.LockedDetail, ManageFlowFrame.MaxDetail,
             };
-            var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 1);
+            var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 2);
+            // (!) THE HUB FRAME IS BACK (WO-1567 panel row 1, 2026-09-07).
+            // (!) THE RETIREMENT NOTE ABOVE STATED ITS OWN REVERSAL CONDITION and this is it: the hub
+            // was retired because it was UNREACHABLE, "not because a hub is wrong", and it said
+            // "if the hub is restored, put a Hub member back on ManageFlowFrame and into
+            // BuildManageFlowPlan - the plan is the only place the frame set lives." WO-1443
+            // restored ShowLauncher and mockup panel 1 is the screen the owner opens Manage onto,
+            // so it is now BOTH reachable and the least-covered screen in the flow.
+            // !! IT IS NOT A DUPLICATE OF THE BUILD GRID any more, which was the ledger objection:
+            // the hub is three cards, a title and CLOSE, and the grid is neither.
+            // (!) THE TAB IS CARRIED ONLY TO NAME THE FILE. The hub is above all three destinations;
+            // Build is used so the frame sorts beside the screen it leads to. The capture body
+            // does NOT enter it - entering a tab is precisely what dismisses the hub.
+            plan.Add(new ManageFlowShot(DeNelle.Core.Manage.ManageTabId.Build, ManageFlowFrame.Hub));
             for (int t = 0; t < tabs.Length; t++)
                 for (int f = 0; f < frames.Length; f++)
                 {
@@ -7779,7 +7831,7 @@ namespace DeNelle.Editor
             ReportTouchOracle();
             if (count == expected && ledger == 0 && _fidelityDegraded == 0 &&
                 _geoFailures.Count == 0 && _touchFailures.Count == 0)
-                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; 3 destinations x " +
+                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; the hub + 3 destinations x " +
                           "(grid top, grid bottom, queue, locked, max) + research school; inventory lines=" +
                           _flowInventory.Count);
             else
@@ -8290,6 +8342,21 @@ namespace DeNelle.Editor
                     if (vm == null)
                         throw new InvalidOperationException("ManageScreenPanel exposed no _vm -- nothing to drive");
 
+                    // !! THE HUB FRAME DOES NOT ENTER A TAB. EnterTab assigns a fresh ManageNavEntry,
+                    // and RenderWorkspace drops the hub the moment the model's nav entry changes
+                    // (ManageScreenPanel.ShowLauncher documents exactly that seam) -- so entering a
+                    // tab here would photograph the grid under a filename that claimed the hub,
+                    // which is the substitution this capture body refuses to make anywhere else.
+                    // ShowLauncher is the panel's OWN door, the one the root BACK press uses.
+                    if (frame == ManageFlowFrame.Hub)
+                    {
+                        InvokePrivate(panel, "ShowLauncher");
+                        if (!(bool)GetPrivateFieldValue(panel, "_hubShowing"))
+                            throw new InvalidOperationException(
+                                "ShowLauncher did not raise the hub -- the frame cannot be shot honestly");
+                    }
+                    else
+                    {
                     // The tab is entered through the MODEL, not through the legacy ShowOperational
                     // adapter: the plan's axis is ManageTabId, which is the axis the screen has.
                     vm.EnterTab(tab);
@@ -8297,6 +8364,7 @@ namespace DeNelle.Editor
                         throw new InvalidOperationException(
                             "the model refused tab " + tab + " (it is not available in this fixture) -- " +
                             "this frame cannot be shot honestly");
+                    }
 
                     if (frame == ManageFlowFrame.LockedDetail || frame == ManageFlowFrame.MaxDetail)
                     {

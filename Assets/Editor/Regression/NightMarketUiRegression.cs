@@ -732,12 +732,31 @@ namespace DeNelle.Editor.Regression
                 new Vector2(2400f, 1080f),
                 new Vector2(1920f, 1080f),
             };
-            Rect moveCluster;
-            bool haveStick = TryParseAreaRect(areas, "MoveCluster", out moveCluster);
+            // ⭐ WO-1464: THE STICK'S BAND IS NO LONGER PARSED OUT OF HudAreasHost SOURCE.
+            // It moved into HudLayoutBands.MoveClusterMount (DeNelle.Core.UI) because the raid
+            // deploy tray in DeNelle.Village has to start to the right of it and cannot reference
+            // DeNelle.HUD. Reading the TYPED constant is strictly stronger than regexing the
+            // literal it replaced: the parse could go quiet the moment the authored form changed
+            // (it did), and a [stick] failure raised by a REFACTOR rather than by a real overlap
+            // is the noise that gets an oracle ignored. HudAreasHost is still asserted to consume
+            // the constant, below, so this can never drift from what the game mounts.
+            Rect moveCluster = HudLayoutBands.MoveClusterMount;
+            bool haveStick = moveCluster.width > 0f && moveCluster.height > 0f;
             if (!haveStick)
-                failures.Add("[stick] could not read HudAreasHost's MoveCluster row, so the card " +
-                             "cannot be PROVEN clear of the movement stick. An unverifiable seat over " +
-                             "the only locomotion control is not an acceptable unknown.");
+                failures.Add("[stick] HudLayoutBands.MoveClusterMount resolved to a ZERO band (" +
+                             moveCluster.xMin.ToString("0.###") + ".." + moveCluster.xMax.ToString("0.###") +
+                             " x, " + moveCluster.yMin.ToString("0.###") + ".." +
+                             moveCluster.yMax.ToString("0.###") + " y), so the card cannot be PROVEN " +
+                             "clear of the movement " +
+                             "stick. An unverifiable seat over the only locomotion control is not an " +
+                             "acceptable unknown.");
+            if (areas != null &&
+                areas.IndexOf("Add(HudArea.MoveCluster, HudLayoutBands.MoveClusterMount)",
+                              StringComparison.Ordinal) < 0)
+                failures.Add("[stick] HudAreasHost no longer mounts HudArea.MoveCluster from " +
+                             "HudLayoutBands.MoveClusterMount, so the band asserted here is not the " +
+                             "band the game builds. The stick's seat has exactly one author " +
+                             "(CLAUDE.md sec.5 - DeNelle.Village cannot see DeNelle.HUD).");
 
             foreach (var size in sizes)
             {

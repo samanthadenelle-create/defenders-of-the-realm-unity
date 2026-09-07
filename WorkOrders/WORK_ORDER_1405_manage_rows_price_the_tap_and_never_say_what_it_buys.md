@@ -1,6 +1,6 @@
 # WO-1405: every Manage row prices the tap and never says what it buys; `grid 5, 16` is a developer coordinate on a player screen
 
-**Status:** IMPLEMENTED - Defense half landed 2026-09-06 (CompassSideOf, ManageRowBenefitRegression); gated; capture + Seeker still owed; Buildings/Troops half landed earlier in 3c677027e/949e848a0
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 3 (BUILDING DETAIL) not yet passed (2026-09-07); code landed the Defense half 2026-09-06; the rest uncommitted. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - Defense half landed 2026-09-06 (CompassSideOf, ManageRowBenefitRegression); gated; capture + Seeker still owed; Buildings/Troops half landed earlier in 3c677027e/949e848a0)*
 
 ## Evidence
 - Device frames (build 355952) - SEEN (`REVIEW_MERGED.md` row 4): `docs/qa/UI_REVIEW_2026-09-05/04-manage-defense.png`

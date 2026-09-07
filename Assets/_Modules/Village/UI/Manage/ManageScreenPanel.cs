@@ -169,9 +169,44 @@ namespace DeNelle.Village.UI
         private const float PrimaryX0 = 0.76f;      // THE primary slot — identical on every row
         private const float PrimaryX1 = 0.98f;      // 0.22 * ~1490px = ~328px: "Finish Now" fits flat
         private const float PrimaryGuardX = 0.04f;  // dead gap — nothing tappable may enter it
-        private const float ClusterX0 = 0.455f;     // secondary cluster starts clear of the text column
+        /// <summary>
+        /// Secondary cluster's left edge - it must start clear of the TEXT column.
+        /// <para>⭐ WO-1488 (2026-09-07): 0.455 -&gt; 0.415, and the text column's right edge moves
+        /// with it (<see cref="QueueTextX1"/>). MEASURED on the owner's device frame
+        /// Logs/device/screens/owner-screen-20260907-010356.png: the CANCEL face reads
+        /// <c>"CANC..."</c>. The arithmetic behind that ellipsis: three cluster controls split
+        /// (0.72 - 0.455) = 0.265 of a ~1490px row, i.e. ~131px each, and the word CANCEL needs
+        /// ~102px of glyph inside a plate that spends ~20px on its own border art. It was ~10px
+        /// short, every time.
+        /// ⛔ THE FIX IS WIDTH, NOT A SMALLER WORD. The WO-1058 law on this row is that TEXT may
+        /// shrink and CONTROLS may not, and an ellipsised verb on a DESTRUCTIVE control is the
+        /// worst case of all - "CANC..." and "CANCEL" are the same to a reader only until they are
+        /// wrong.</para>
+        /// </summary>
+        private const float ClusterX0 = 0.415f;
         private const float ClusterX1 = PrimaryX0 - PrimaryGuardX;   // 0.72
         private const float ClusterGapX = 0.010f;
+
+        /// <summary>The queue row's TEXT column right edge - name / state / refund all stop here,
+        /// and <see cref="ClusterX0"/> starts clear of it. ONE number, so the two columns cannot
+        /// drift into each other (they did: build 1 put the refund line under the button block).</summary>
+        private const float QueueTextX1 = 0.40f;
+
+        /// <summary>
+        /// ⭐ THE AD CHIP IS COMPACT, AND THAT IS WHAT PAYS FOR THE FULL WORD CANCEL.
+        /// <para>It carries a two-letter face ("Ad") where its neighbours carry six and seven, so
+        /// an even three-way split spent the same ~131px on a word that needs ~34px. Authored AT
+        /// <c>ElarionUiKit.MinTouchPx</c> as a fraction of the reference row width (112 / ~1490),
+        /// so it is exactly a compliant tap target and not one pixel of the cluster more.</para>
+        /// <para>⛔ THE CHIP IS NOT REMOVED, AND THE RULING SAYS SO PER CHANNEL. WO-911
+        /// (WorkOrders/WORK_ORDER_911_timer_speedup_crystals_all_channels.md:84-85) minted
+        /// <c>CanWatchAdToSkip(ChannelId, string)</c> / <c>WatchAdToSkip(ChannelId, string)</c>
+        /// precisely so ad-skip is offered on ANY channel, and BuildTimerService.cs:1160 is that
+        /// signature. The per-row offer is the MODEL's (ObsidianQueueVM.cs:208 calls
+        /// <c>svc.CanWatchAdToSkip(channel, job.StructureId)</c>), so BUILD, TRAIN and RESEARCH
+        /// each answer for themselves and this View never decides. Cited rather than removed.</para>
+        /// </summary>
+        private const float AdChipWidthX = 0.075f;
 
         // Queue-row TEXT bands (WO-1058 clipping pass). Each band now HOLDS its line box
         // (~1.16 * fontSize) instead of crowding it: the name line was authored at FontLabel(40)
@@ -370,6 +405,45 @@ namespace DeNelle.Village.UI
         /// the player asked for a screen; see ShowLauncher.</summary>
         private ManageNavEntry _hubNav;
         private RectTransform _launcherGrid;
+
+        /// <summary>
+        /// ⭐ THE MANAGE PANEL FILLS THE SCREEN. Owner ruling 2026-09-07 01:14, verbatim:
+        /// <i>"i expect these images to fill the screen, not 60% of it"</i>.
+        /// <para>The inset is the DEVICE SAFE AREA on every edge - it keeps the obsidian frame's
+        /// border off a rounded corner and out of a notch - and it is deliberately small enough
+        /// that the panel clears the 0.95-of-safe-area floor the fixture pins on BOTH axes.
+        /// It replaced x 0.18-0.82 (64% of the canvas); see BuildObsidianPanel's call site for the
+        /// retired reasoning and where its real problem is now solved instead.</para>
+        /// </summary>
+        private const float ManagePanelInsetF = 0.02f;
+
+        // ── THE HUB'S GEOMETRY, IN PX (mockup panel 1, WO-1567 panel row 1) ──────────────
+        // ⛔ EVERY FRACTION THE HUB USES IS DERIVED FROM THESE, AND NONE IS TYPED AT ITS SITE.
+        // The band used to read `0.055f .. 0.695f` - two numbers that meant "keep the CLOSE band"
+        // and "keep the title band" without saying so, and that reserved a DIFFERENT number of
+        // pixels on every surface height. Stating the reservation in px and dividing by the
+        // measured host makes it the same on all of them, and makes the intent readable.
+        /// <summary>The MANAGE title's band at the top of the hub, plus nothing else.</summary>
+        private const float HubTitleBandPx = 96f;
+        /// <summary>The bottom CLOSE button's band. It is shared chrome, so the cards must clear it.</summary>
+        private const float HubCloseBandPx = 140f;
+        /// <summary>The gutter between the cards and each of those bands - never zero, so no two
+        /// tappable things can touch.</summary>
+        private const float HubBandGapPx = 24f;
+        /// <summary>Side margin, as a fraction, because the host's WIDTH is the reference the
+        /// mockup's own side margin is proportional to (~3% of the panel on both edges).</summary>
+        private const float HubSideInsetF = 0.03f;
+        /// <summary>
+        /// The card's width:height, MEASURED off docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png
+        /// panel 1: each card is roughly 145 x 160 px in that sheet, i.e. slightly TALLER than it
+        /// is wide. Without it the three cards stretch to a third of the band's width each and read
+        /// as wide plaques rather than the portrait cards she drew; with it the row centres itself
+        /// and keeps the drawn shape at any well height.
+        /// </summary>
+        private const float HubCardAspect = 145f / 160f;
+        /// <summary>The art well's share of the card's height - the top block in panel 1, above the
+        /// name and the description.</summary>
+        private const float HubArtWellF = 0.46f;
         // WO-2001 - the three-tab workspace. It owns the WHOLE body well (the largest well this
         // chrome can offer) because the redesign's grid + selection band stack does not fit the
         // 533/542/612px wells the rail path was authored against; see ManageWorkspacePanel's
@@ -407,6 +481,8 @@ namespace DeNelle.Village.UI
         // of ApplyDrawerPlacement still finds them. Rename them when panel 8's rows are built.
         private GameObject _drawerHeading;
         private GameObject _drawerHide;
+        /// <summary>The shared kit CLOSE. WO-1491: visible on the HUB only (mockup panel 1).</summary>
+        private Button _chromeClose;
         /// <summary>Panel 8's tab row zone - fixed chrome above the list, never a scroll row.</summary>
         private RectTransform _drawerTabs;
         /// <summary>Panel 8's title band. The X is a CHILD of this, so it cannot leave the overlay.</summary>
@@ -483,8 +559,40 @@ namespace DeNelle.Village.UI
         // CLOSE band, and the plate's bottom 96px is TRANSPARENT MARGIN (DrawerPlateInsetPx), so
         // CLOSE would render straight through it while the drawer's own raycast swallowed the tap:
         // a visible button that does nothing. Buying rows with that is not buying them.
-        private const float DrawerOverlayY0 = 0.02f;
+        // ⭐ WO-1488 (2026-09-07) — THE FLOOR IS THE WELL'S FLOOR, WHICH IS THE TOP OF THE CLOSE
+        // BAND. It was 0.02, and that 2% was pure loss: the well's own floor already sits a
+        // CanonCtaHeight + gutter above the panel's bottom edge (the close-band reservation, see
+        // the `bodyFloor` arithmetic in Build), so nothing is under it to collide with. The task
+        // for this pass is the owner's: the drawer fills from under the tab plates to the CLOSE
+        // band, and 0.02 of a ~579px well is ~12px of rows given away for nothing.
+        // ⛔ IT STAYS AT 0 AND DOES NOT GO NEGATIVE. A negative floor hangs the drawer over the
+        // shared CLOSE through 96px of transparent plate margin - a visible button whose tap the
+        // drawer's raycast eats. WO-1491 now HIDES that CLOSE on every non-hub screen, which
+        // removes the collision but not the reason: the panel's frame art is down there, and a
+        // plate drawn over a frame border reads as a rendering fault.
+        private const float DrawerOverlayY0 = 0f;
         private const float DrawerOverlayY1 = 0.79f;
+
+        /// <summary>
+        /// ⭐ HOW MANY QUEUE ROWS THE MOCKUP ASKS TO SEE AT REST. Panel 8 draws FIVE numbered rows.
+        /// <para>⛔ IT IS A TARGET THE ROW HEIGHT IS DERIVED FROM, NOT A PROMISE THE LAYOUT MAKES.
+        /// <see cref="SeatQueueListToWholeRows"/> divides the MEASURED list band by this and floors
+        /// the result at <c>ElarionUiKit.MinTouchPx</c>; when the well cannot seat five compliant
+        /// rows it seats as many whole ones as it can and NAMES the shortfall in px. Squeezing five
+        /// rows under the touch floor would trade a scroll gesture for five untappable rows.</para>
+        /// </summary>
+        private const int QueueRowsVisibleTarget = 5;
+
+        /// <summary>
+        /// The height ONE queue row is actually built at. Seeded to the authored
+        /// <see cref="RowHeightPx"/> and re-derived from the measured list band by
+        /// <see cref="SeatQueueListToWholeRows"/>, which runs BEFORE the rows are added
+        /// (RenderQueueDrawer calls it first, then AddQueueRow).
+        /// <para>⚠ A FIELD, BECAUSE IT IS A MEASUREMENT. RowHeightPx stays the authored constant
+        /// every OTHER row type on this screen uses; only the queue overlay's rows chase the well,
+        /// because only the queue overlay has a drawn capacity to honour.</para>
+        /// </summary>
+        private float _queueRowPx = RowHeightPx;
 
         /// <summary>
         /// ⭐ WO-1488 — THE ROW BAND IS DERIVED FROM THE PLATE, NOT FROM THE DRAWER'S RECT.
@@ -789,6 +897,7 @@ namespace DeNelle.Village.UI
             _vm.OpenHeartRequested = OpenHeartSurface;
             _vm.CloseRequested = OnModelWantsOut;   // root BACK returns to the hub (mockup panel 1)
             _vm.OpenTownBuilderRequested = OpenTownBuilder;
+            _vm.PlaceStructureRequested = OpenPlacementFor;   // WO-1571
 
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.QueueChanged += OnQueueChanged;
@@ -955,6 +1064,27 @@ namespace DeNelle.Village.UI
             // three 150px rows (470px) once anything else is on screen. 0.02-0.98 lifts the panel to
             // 96%, and the well with it. This is the "(b) the modal's own chrome must go full-bleed"
             // half of the hand-back ManageWorkspacePanel's header has been naming since WO-2002.
+            // ⛔⛔ SUPERSEDED 2026-09-07 BY AN OWNER RULING. THE PARAGRAPH BELOW IS HISTORY.
+            // Owner, 01:14, verbatim: ***"i expect these images to fill the screen, not 60% of
+            // it"***. Every device frame that night shows the Manage plate centred at roughly 64%
+            // of the screen with the town visible around it; every panel in her mockup is
+            // full-frame. Owner statements are ground truth and this one is unambiguous, so the
+            // 0.18-0.82 band is retired and the panel goes FULL BLEED inside the safe area.
+            //
+            // ⚠ THE RETIRED REASONING WAS SOUND AND ITS ANSWER WAS PUT IN THE WRONG PLACE - that
+            // is worth stating, because the problem it names is REAL and still has to be solved.
+            // FrameCore genuinely is a 1210x1815 PORTRAIT frame and a landscape canvas genuinely
+            // does give it an 8:1 body strip; the old fix was to shrink the PANEL until the strip
+            // became 2:1. But the thing that must be ~2:1 is the GRID, not the modal - and the
+            // grid can be centred inside a wide band at the cell level for free. So the cure moved
+            // one layer down: ManageWorkspacePanel now clamps a cell's WIDTH to the mockup's tile
+            // aspect and centres the row (see MaxTileAspect there). The panel fills the screen, the
+            // tiles keep their drawn shape, and the scrim no longer eats a third of the display.
+            //
+            // ⛔ ANYONE NARROWING THIS AGAIN OWES THE OWNER A REASON, not a geometry argument -
+            // the geometry argument has an answer one layer down.
+            //
+            // ── history, kept because it records what the numbers were and why ──
             // ⛔ THE PANEL IS NARROW ON PURPOSE. Do not stretch it back across the canvas.
             // THE MEASUREMENT THAT FORCED IT: FrameCore is a 1210x1815 PORTRAIT frame
             // (ElarionUiKit.cs:437-458, pixel-measured 2026-07-03) and Manage was stretching it
@@ -972,7 +1102,12 @@ namespace DeNelle.Village.UI
             // The scrim owns the margins either side, which is what a modal is for.
             var chrome = ElarionUiKit.BuildObsidianPanel(
                 _ui.transform, "MANAGE",
-                new Vector2(0.18f, 0.02f), new Vector2(0.82f, 0.98f),
+                // FULL BLEED (owner ruling 2026-09-07 01:14). The 0.02 inset on every edge is the
+                // device safe area, not a margin: it keeps the obsidian frame's own border off a
+                // rounded corner and out of a notch. 0.96 x 0.96 clears the 0.95 floor the
+                // fixture pins, with 1% of headroom on each axis.
+                new Vector2(ManagePanelInsetF, ManagePanelInsetF),
+                new Vector2(1f - ManagePanelInsetF, 1f - ManagePanelInsetF),
                 Close, frameName: RpgUiCatalog.FrameCore);
             if (chrome == null)
             {
@@ -983,6 +1118,9 @@ namespace DeNelle.Village.UI
             // Commands, zones, timers, and authoritative queue state remain owned here.
             MedievalUiSkin.ApplyShell(chrome);
             _workspaceTitle = chrome.title;
+            // WO-1491: held so ApplyScreenVisibility can show CLOSE on the hub and hide it on the
+            // seven screens the mockup draws without one. Never re-found by name at paint time.
+            _chromeClose = chrome.close;
 
             // The approved Manage modal is one continuous obsidian field. FrameCore is
             // border-heavy and its transparent centre exposed the world around the troop
@@ -1182,11 +1320,14 @@ namespace DeNelle.Village.UI
             // CAPTURE_LOOP_GOAL.md 3.0b states it. It is a SMALL SQUARE seat (0.035-0.115 of the
             // panel width) rather than the old 0.035-0.205 word slab, because in the mockup the
             // chrome is thin and the grid is the screen.
-            // ⚠ ASCII "<-" AND NOT THE "left arrow" CHARACTER: this project's fonts render
-            // non-ASCII as tofu (CLAUDE.md 7's canon-strings note; ManageScreenVM.Ascii exists for
-            // exactly this). Assets/Resources/RpgUi/button/arrow.png was measured and rejected as
-            // the face - it is a filled RIGHT-pointing PLAY triangle, and mirroring a play glyph
-            // reads as "rewind", not "back". Recorded rather than silently substituted.
+            // ⭐ WO-1491 (2026-09-07): THE FACE IS THE DELIVERED SPRITE ManageArt.IconBack, bound
+            // by ApplyBackGlyph. The ASCII "<-" survives ONLY as the fallback when that sprite is
+            // unresolved - the door must never render blank.
+            // ⚠ THE "left arrow" CHARACTER IS STILL BANNED: this project's fonts render non-ASCII
+            // as tofu (CLAUDE.md 7's canon-strings note; ManageScreenVM.Ascii exists for exactly
+            // this). A SPRITE is not a character, which is why this is not a reversal of that rule.
+            // Assets/Resources/RpgUi/button/arrow.png stays rejected as the face - it is a filled
+            // RIGHT-pointing PLAY triangle, and mirroring a play glyph reads as "rewind".
             // ⛔ THE BACK ARROW IS BUILT IN BuildTabs, NOT HERE. Do not construct it at chrome time.
             // MEASURED 2026-09-06 in ManageFlow_ARMY_gridtop: the arrow was GONE - the row started
             // with the HEART face and the screen had no visible way back. Cause, and it is mine:
@@ -1271,6 +1412,16 @@ namespace DeNelle.Village.UI
                 _workspaceHost.gameObject.SetActive(!_hubShowing && !_queueDrawerOpen);
             // BACK belongs to the workspace: the hub is the root and CLOSE is its way out.
             if (_workspaceBack != null) _workspaceBack.gameObject.SetActive(!_hubShowing);
+            // ⭐ WO-1491 - CLOSE IS THE HUB'S, AND ONLY THE HUB'S.
+            // The mockup sheet draws CLOSE on panel 1 alone; the owner's device walk found it on
+            // panels 2, 4, 6, 7 and 8 as well, beside a back arrow that already leaves the screen.
+            // Two exits on one panel teach neither, and on the queue overlay the shared CLOSE sat
+            // under the drawer's own X.
+            // ⛔ SetActive, NOT a build-time flag: this panel builds ONE chrome and swaps SCREENS
+            // inside it, so a `withClose: false` at construction would delete the hub's exit too.
+            // ElarionUiKit.BuildObsidianPanel's `withClose` is the per-panel lever for surfaces
+            // that never show a close at all; this is the same ruling applied per SCREEN.
+            if (_chromeClose != null) _chromeClose.gameObject.SetActive(_hubShowing);
         }
 
         private void ShowWorkspace()
@@ -1458,8 +1609,29 @@ namespace DeNelle.Village.UI
             // The launcher shares chrome with the standard bottom Close. Reserve
             // that thumb band explicitly; measured captures proved .04 let row two
             // occupy the same glass as Close.
-            grid.anchorMin = new Vector2(0.03f, 0.055f);
-            grid.anchorMax = new Vector2(0.97f, 0.695f);
+            // ⭐ THE CARD BAND IS DERIVED FROM PX CONSTANTS, NOT TYPED (WO-1567 panel row 1).
+            // It read 0.055..0.695 - two magic fractions that meant "leave room for CLOSE" and
+            // "leave room for the title" without saying so, and that silently change what they
+            // reserve every time the host's height changes. The two bands are now stated in PX,
+            // once each, and divided by the measured host - so the reservation is the same number
+            // of pixels on every surface and the intent is readable.
+            Canvas.ForceUpdateCanvases();
+            float hostH = _launcherHost.rect.height;
+            if (hostH <= 1f)
+            {
+                // ⛔ REPORTED, NOT SILENTLY DEFAULTED. A zero-height host means the fractions below
+                // would be nonsense; saying so names the real problem instead of painting cards at
+                // a plausible-looking wrong size (CLAUDE.md section 12).
+                FlowTrace.Warn("Manage", "the hub host measured " + hostH.ToString("0.##") +
+                    "px when its card band was derived - the band falls back to the whole host, and " +
+                    "the title and CLOSE reservations cannot be honoured");
+                hostH = 1f;
+            }
+            float bottomF = Mathf.Clamp01((HubCloseBandPx + HubBandGapPx) / hostH);
+            float topF = Mathf.Clamp01(1f - (HubTitleBandPx + HubBandGapPx) / hostH);
+            if (topF <= bottomF) { bottomF = 0.05f; topF = 0.95f; }
+            grid.anchorMin = new Vector2(HubSideInsetF, bottomF);
+            grid.anchorMax = new Vector2(1f - HubSideInsetF, topF);
             grid.offsetMin = grid.offsetMax = Vector2.zero;
             // ⭐ THREE CARDS IN ONE ROW - the owner's mockup, panel 1 ("MANAGE (MAIN) - Simple entry
             // with three core options"): BUILD / ARMY / RESEARCH, each with a one-line description,
@@ -1476,7 +1648,19 @@ namespace DeNelle.Village.UI
             Canvas.ForceUpdateCanvases();
             float width = Mathf.Max(1f, grid.rect.width - layout.padding.horizontal - layout.spacing.x * 2f);
             float height = Mathf.Max(1f, grid.rect.height - layout.padding.vertical);
-            layout.cellSize = new Vector2(width / 3f, height);
+            // ⭐ THE CARD KEEPS THE MOCKUP'S PROPORTIONS (WO-1567 panel row 1). A third of the band
+            // is much wider than the drawn card is tall, so the width is CLAMPED to the aspect and
+            // the row centres itself in what is left. Without this the three cards read as wide
+            // plaques - which is what the owner's capture shows
+            // (Logs/device/screens/owner-screen-20260907-004724.png: cards about 2.2:1 against her
+            // 0.9:1) - and it is why the descriptions had nowhere to wrap.
+            float cellW = Mathf.Min(width / 3f, height * HubCardAspect);
+            layout.cellSize = new Vector2(cellW, height);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            FlowTrace.Step("Manage", "hub card band " + grid.rect.width.ToString("0") + "x" +
+                grid.rect.height.ToString("0") + "px -> cell " + cellW.ToString("0") + "x" +
+                height.ToString("0") + "px (aspect " + (cellW / Mathf.Max(1f, height)).ToString("0.##") +
+                ", mockup " + HubCardAspect.ToString("0.##") + ")");
         }
 
         private void RenderLauncherCards()
@@ -1578,30 +1762,101 @@ namespace DeNelle.Village.UI
                 // REALIGNED TO THE DECK rather than re-pointed away: 36f / Center / 30f-40f /
                 // 24f-30f are the deck's proven numbers, they are legible at the hub's card width,
                 // and Manage stays the reference. If these ever need to move, MOVE BOTH FILES.
+                // ⭐ THE FRAMED, EMPTY ART WELL - mockup panel 1's top block, with no picture in it.
+                // ⛔ EMPTY ON PURPOSE, AND THE FRAME IS WHAT MAKES IT READ AS PENDING RATHER THAN
+                // BROKEN. See ManageArt.HubArtBuild: the three portrait illustrations she drew do
+                // not exist on disk, and the retired landscape strips letterbox to two thirds
+                // black inside a tall card. A bordered well with nothing in it says "a picture goes
+                // here"; a black two-thirds says "this screen is broken".
+                BuildHubArtWell(card.transform);
+
                 var face = card.GetComponentInChildren<TMP_Text>();
                 if (face != null)
                 {
                     var rt = face.rectTransform;
-                    rt.anchorMin = new Vector2(0.04f, 0.52f);
-                    rt.anchorMax = new Vector2(0.96f, 0.74f);
+                    // The title sits directly under the art well - see HubArtWellF. The band is
+                    // 0.16 of the card, which at the hub's card height clears the TMP cull floor
+                    // with room to spare.
+                    rt.anchorMin = new Vector2(0.04f, 1f - HubArtWellF - 0.18f);
+                    rt.anchorMax = new Vector2(0.96f, 1f - HubArtWellF - 0.02f);
                     rt.offsetMin = rt.offsetMax = Vector2.zero;
                     face.fontSize = 36f;
                     face.alignment = TextAlignmentOptions.Center;
                     face.color = available ? ElarionUi.Gold : ElarionUi.ParchmentDim;
                     ElarionUiKit.FitSingleLine(face, 30f, 40f);
                 }
-                var description = ElarionUiKit.Label(card.transform, purpose, 0.26f, 0.48f,
+                // ⭐ THE FULL DESCRIPTION, WRAPPED OVER TWO LINES - FitBlock, not FitSingleLine.
+                // ⛔ THE SINGLE-LINE FIT IS THE DEFECT. Measured on the owner's device
+                // (Logs/device/screens/owner-screen-20260907-004724.png): "Construct and upgrade
+                // yo...", "Train and manage your tr...", "Unlock powerful advance..." - all three
+                // cards ellipsised, so the one sentence that says what the card DOES was unreadable
+                // on every card. FitBlock wraps and truncates instead of ellipsising a single line,
+                // the band below is two lines tall, and the floor is the kit's readable mobile
+                // floor - so if it still cannot fit, the card is too small and something says so
+                // rather than the sentence quietly disappearing.
+                var description = ElarionUiKit.Label(card.transform, purpose,
+                    0.04f, 1f - HubArtWellF - 0.20f,
                     available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
-                    (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.08f, 0.92f);
-                ElarionUiKit.FitSingleLine(description, 24f, 30f);
+                    (int)ElarionUi.FontLabel, TextAlignmentOptions.Top, 0.06f, 0.94f);
+                // Floor = the kit's readable MOBILE floor, ceiling a little above it so a short
+                // description is not forced to the floor. FitBlock TRUNCATES rather than
+                // ellipsising, so a sentence that genuinely will not fit goes missing visibly at
+                // the end of a line instead of being replaced by three dots that look deliberate.
+                ElarionUiKit.FitBlock(description, ElarionUi.FontFloorMobile, 34f);
 
                 if (!available && captured == ManageTab.Troops)
                     BuildLockBadge(card.transform);
 
             }
 
+            // ⛔ THE ART ASK, NAMED ONCE PER SESSION AND BY KEY. FlowTrace.Once, so it costs one
+            // line and not one per rebuild. It is a WARN and not a Step because an unfilled well is
+            // a real shortfall against the mockup that somebody has to close - it is simply not a
+            // code defect, and saying which is the whole point of naming it.
+            FlowTrace.Once("Manage", "hub-art-ask",
+                "the three hub cards paint a FRAMED, EMPTY art well: mockup panel 1 draws a " +
+                "portrait illustration filling each card and none of the three files exists. " +
+                "OWED, by Resources key: " + string.Join(", ", ManageArt.HubArtKeys) + " (folder " +
+                ManageArt.UiFolder + "). The retired landscape strips under " +
+                "UI/ElarionMedieval/cards/ are NOT a substitute - preserveAspect leaves two thirds " +
+                "of a tall card black, which reads as broken rather than as art pending.");
+
             // The Heart's door lives on the hub now, not in the chrome row - see BuildHeartFace.
+            // ⛔ AND THE HEART CHIP STAYS. CAPTURE_LOOP_GOAL.md:130 gates its removal on the Heart
+            // keeping a door SOMEWHERE ELSE, and it does not have one: HeartSurfaceRegression
+            // (:118-123) pins THIS hub face as the Heart's surface. Removing it to match the mockup
+            // would ship the WO-1430 defect the gate exists to prevent - a panel with no door.
             BuildHeartFace();
+        }
+
+        /// <summary>
+        /// The hub card's ART WELL - a bordered rectangle with NOTHING IN IT (mockup panel 1,
+        /// WO-1567 panel row 1).
+        /// <para>⛔ THE EMPTINESS IS THE FEATURE. The three illustrations do not exist
+        /// (<see cref="ManageArt.HubArtBuild"/>), and the two dishonest alternatives were both
+        /// tried and both rejected: the retired landscape strips letterbox to two thirds black
+        /// inside a tall card, and a bare text card gives the eye nothing to land on. A drawn
+        /// FRAME with an empty centre reads as "a picture belongs here", which is exactly true.</para>
+        /// <para>⚠ The frame sprite is the tile frame, reused - it is a border with a hollow-enough
+        /// centre and it is already delivered. Nothing here loads a hub key: LoadSprite would log a
+        /// miss per card per rebuild, and the single art-ask line in RenderLauncherCards says it
+        /// once, by key, which is the useful form.</para>
+        /// </summary>
+        private static void BuildHubArtWell(Transform card)
+        {
+            if (card == null) return;
+            var wellGo = new GameObject("HubArtWell", typeof(RectTransform), typeof(Image));
+            var rt = (RectTransform)wellGo.transform;
+            rt.SetParent(card, false);
+            rt.anchorMin = new Vector2(0.08f, 1f - HubArtWellF);
+            rt.anchorMax = new Vector2(0.92f, 0.94f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            var img = wellGo.GetComponent<Image>();
+            img.sprite = Resources.Load<Sprite>(ManageArt.FrameTile);
+            img.type = Image.Type.Simple;
+            img.preserveAspect = true;
+            img.color = new Color(1f, 1f, 1f, 0.55f);   // present, but never louder than the title
+            img.raycastTarget = false;                   // the CARD is the tap target, not the well
         }
 
         private void BuildLauncherSummaries()
@@ -2626,11 +2881,14 @@ namespace DeNelle.Village.UI
         /// <para>Built HERE, inside the row's own rebuild, because <see cref="BuildTabs"/> clears
         /// every child of <c>_tabsHost</c> on entry. Round 5 built it once at chrome time and the
         /// first Render deleted it; the capture showed a Manage screen with no way back.</para>
-        /// <para>⚠ ASCII "&lt;-", never the left-arrow character - this project's fonts render
-        /// non-ASCII as tofu. <c>RpgUi/button/arrow.png</c> was measured and rejected: it is a
-        /// filled RIGHT-pointing play triangle, and a mirrored play glyph reads as "rewind".</para>
+        /// <para>⭐ WO-1491: the FACE is <see cref="ManageArt.IconBack"/>, bound by
+        /// <see cref="ApplyBackGlyph"/>. ASCII "&lt;-" survives only as the fallback when that
+        /// sprite does not resolve - a back door that renders blank is worse than an ugly one.
+        /// The left-arrow CHARACTER is still banned (fonts render non-ASCII as tofu), and
+        /// <c>RpgUi/button/arrow.png</c> is still rejected (a filled RIGHT-pointing play triangle;
+        /// a mirrored play glyph reads as "rewind").</para>
         /// <para>Hidden on the hub (<see cref="ApplyScreenVisibility"/>): panel 1 is the root, and
-        /// CLOSE is its way out.</para>
+        /// CLOSE is its way out - and it is the ONLY screen that still draws CLOSE.</para>
         /// </summary>
         private void BuildBackArrow()
         {
@@ -2649,7 +2907,52 @@ namespace DeNelle.Village.UI
             _workspaceBack.gameObject.name = "ManageWorkspaceBack";
             ElarionUiKit.ClampMinTouch(_workspaceBack);
             MedievalUiSkin.ApplyButton(_workspaceBack);
+            ApplyBackGlyph(_workspaceBack);
             _workspaceBack.gameObject.SetActive(!_hubShowing);
+        }
+
+        /// <summary>
+        /// ⭐ WO-1491 - THE BACK FACE IS THE KIT'S ARROW SPRITE, NOT THE LITERAL "&lt;-".
+        /// <para>EVIDENCE: Logs/device/screens/owner-screen-20260907-010151.png reads
+        /// "&lt; -" in the top-left - two ASCII glyphs kerned apart, which is what a text arrow
+        /// looks like once FitSingleLine has sized it to a square plate. The mockup draws a plain
+        /// arrow on every numbered panel.</para>
+        /// <para>⛔ THE LABEL IS BLANKED, NOT DELETED, AND ONLY WHEN THE SPRITE RESOLVED. If
+        /// <c>ManageArt.IconBack</c> is missing the button keeps its ASCII face and
+        /// <see cref="ManageArt.LoadSprite"/> has already announced the miss - a back door that
+        /// silently renders EMPTY is the WO-1443 defect (a Manage screen with no visible way
+        /// back), and it is worse than an ugly one.</para>
+        /// <para>The glyph is a CHILD image inset inside the plate so the button's own art, tint
+        /// feedback and touch floor are untouched; nothing here re-implements a button.</para>
+        /// </summary>
+        private static void ApplyBackGlyph(Button back)
+        {
+            if (back == null) return;
+            var arrow = ManageArt.LoadSprite(ManageArt.IconBack);
+            if (arrow == null)
+            {
+                FlowTrace.Once("Manage", "back-glyph-miss",
+                    "the BACK arrow sprite is unresolved at Resources/" + ManageArt.IconBack +
+                    " - the button keeps its ASCII '<-' face rather than rendering blank. This is " +
+                    "an ART ASK, not a layout fault.");
+                return;
+            }
+
+            var label = back.GetComponentInChildren<TMP_Text>(true);
+            if (label != null) label.text = string.Empty;
+
+            var go = new GameObject("ManageBackGlyph", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(back.transform, false);
+            var rt = (RectTransform)go.transform;
+            // Inset inside the plate's own border art so the arrow never rides the frame edge.
+            rt.anchorMin = new Vector2(0.26f, 0.24f);
+            rt.anchorMax = new Vector2(0.74f, 0.76f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.sprite = arrow;
+            img.type = Image.Type.Simple;
+            img.preserveAspect = true;
+            img.raycastTarget = false;      // the BUTTON takes the tap, never the decoration
         }
 
         /// <summary>
@@ -3010,7 +3313,16 @@ namespace DeNelle.Village.UI
                 BuildQueueTabs(_drawerTabs);
                 SeatQueueListToWholeRows();
                 if (_vm.QueueRows.Count == 0)
-                    AddNoteRow("Nothing is queued on this line. Start an upgrade to see it here.");
+                    // ⭐ WO-1488 - THE MODEL'S SENTENCE, NAMING THIS CHANNEL'S OWN VERB.
+                    // The literal that stood here said "Start an upgrade" on all three lines while
+                    // the slot line beneath said "tap TRAIN" on all three, so the RESEARCH tab
+                    // pointed the owner at the troop door. ManageScreenVM.QueueEmptyText composes
+                    // it from the same table the slot offer reads (QueueChannelVerb).
+                    // ⛔ AND IT IS SEATED IN THE WELL, not typed at it: AddNoteRow's row is
+                    // SectionHeaderPx tall inside the list's own scroll padding, so the sentence
+                    // cannot render below the plate's inner floor the way the capture showed
+                    // "2 slots free - tap TRAIN to fill them" sliced by the frame.
+                    AddNoteRow(_vm.QueueEmptyText);
                 else
                     for (int i = 0; i < _vm.QueueRows.Count; i++) AddQueueRow(_vm.QueueRows[i]);
 
@@ -5125,6 +5437,27 @@ namespace DeNelle.Village.UI
             aMax = new Vector2(x + w, RowCtrlY1);
         }
 
+        /// <summary>
+        /// ⭐ WO-1488 - AN EVEN SPLIT OF WHAT THE COMPACT AD CHIP LEFT BEHIND, for the WORD
+        /// controls only (CANCEL, Move up).
+        /// <para><see cref="ClusterSlot"/> splits the whole cluster evenly and is KEPT, because the
+        /// other row types on this screen still lay their controls that way; this is the queue
+        /// row's variant, where one member ("Ad") is two characters and the others are six and
+        /// seven. Giving all three the same width is what ellipsised CANCEL to "CANC..." on the
+        /// owner's device.</para>
+        /// <para>⚠ The ORDER is unchanged - Ad, Cancel, Move up - so the destructive control is
+        /// still never adjacent to the primary slot (the WO-1058 rule).</para>
+        /// </summary>
+        private static void WordSlot(int index, int count, float x0, float span,
+                                     out Vector2 aMin, out Vector2 aMax)
+        {
+            if (count < 1) count = 1;
+            float w = (span - ClusterGapX * (count - 1)) / count;
+            float x = x0 + index * (w + ClusterGapX);
+            aMin = new Vector2(x, RowCtrlY0);
+            aMax = new Vector2(x + w, RowCtrlY1);
+        }
+
         private void AddSectionHeader(string text)
         {
             var row = MakeRowHost("SectionHeader", SectionHeaderPx);
@@ -5153,6 +5486,19 @@ namespace DeNelle.Village.UI
             Close();
             var controller = BuildModeController.Instance ?? BuildModeController.EnsureExists();
             controller?.EnterBuildMode(DeNelle.Core.Catalog.BuildType.Town);
+        }
+
+        /// <summary>
+        /// WO-1571 - the not-built card's BUILD door. Opens placement for THAT id (the ghost,
+        /// armed) instead of the Build Collections root, which offers no ECONOMY / CRAFT / STORAGE
+        /// collection and is therefore a dead end for every non-defence row. The controller owns
+        /// every gate; this method only carries the id across the panel boundary.
+        /// </summary>
+        private void OpenPlacementFor(string structureId)
+        {
+            Close();
+            var controller = BuildModeController.Instance ?? BuildModeController.EnsureExists();
+            controller?.EnterBuildModeForStructure(structureId);
         }
 
         private void AddActionNoteRow(string text, string action, Action onTap)
@@ -5232,6 +5578,35 @@ namespace DeNelle.Village.UI
                 btn.gameObject.name = "ManageQueueTab_" + t.Channel;
                 MedievalUiSkin.ApplyButton(btn, t.IsActive);
                 ElarionUiKit.ClampMinTouch(btn);
+                // ⭐ WO-1488 - THE ACTIVE LINE PLATE READS AS ACTIVE, BY FILL AND WEIGHT.
+                // MEASURED on the owner's device (owner-screen-20260907-010356.png and -010257.png):
+                // all three plates render identically, on both the BUILD tab and the RESEARCH tab,
+                // so the overlay never says which line the rows below belong to. The colour lever
+                // was already in place and could not carry it: MedievalUiSkin.ApplyButton's
+                // `primary` arm tints the plate (1.08, 1.03, 0.88) - about 8% of luminance, which
+                // is under the threshold on a dark plate and is invisible to a red/green
+                // colourblind reader either way.
+                // ⛔ SO THE CUE IS SHAPE + WEIGHT + INK, NEVER HUE ALONE: the active face is BOLD
+                // gold with an underline; the inactive faces are regular and dim. All three
+                // channels are readable in greyscale, which is the law on this project.
+                // ⚠ `tabLabel`, NOT `face`. The composed BUTTON TEXT is already a `string face` in
+                // this same scope (the `t.Label + " " + t.CountText` line above), so a second
+                // `face` here is CS0128 and every later `.color` / `.fontStyle` binds to the
+                // string instead (CS1061). Caught at the gate, Builds/cg-wave4a.log.
+                var tabLabel = btn.GetComponentInChildren<TMP_Text>(true);
+                if (tabLabel != null)
+                {
+                    tabLabel.color = t.IsActive ? ElarionUi.Gold : ElarionUi.ParchmentDim;
+                    if (t.IsActive) tabLabel.fontStyle |= FontStyles.Bold;
+                    else tabLabel.fontStyle &= ~FontStyles.Bold;
+                }
+                if (t.IsActive)
+                {
+                    var bar = ElarionUiKit.AddImage(btn.transform, "ActiveLineUnderline",
+                        new Vector2(0.12f, 0.02f), new Vector2(0.88f, 0.08f), ElarionUi.Gold);
+                    var barImg = bar != null ? bar.GetComponent<Image>() : null;
+                    if (barImg != null) barImg.raycastTarget = false;
+                }
             }
         }
 
@@ -5322,13 +5697,53 @@ namespace DeNelle.Village.UI
                     "and the last row may clip");
             }
 
-            float pitch = RowHeightPx + spacing;           // what each row after the first costs
+            // ⭐ WO-1488 (2026-09-07) — THE ROW HEIGHT IS DERIVED FROM THE MEASURED BAND, so the
+            // mockup's FIVE visible rows are arithmetic instead of an aspiration.
+            //
+            // ⛔ AND IT IS DERIVED FROM `have`, WHICH IS THE LIVE VIEWPORT - never from a constant
+            // describing a card that no longer exists. That is the ticketed cause: the drawer's
+            // kept viewport was `DrawerModeListKeepPx = 10 + TroopWorkspacePx * (1 - TroopCtaY1)`,
+            // i.e. a measurement of the RETIRED 260px troop card, pinned verbatim by
+            // ManageQueueDrawerRegression. A number that measures a control the screen no longer
+            // builds is duplicated state with nothing left to duplicate.
+            //
+            // THE FLOOR IS THE TOUCH FLOOR AND IT WINS. Five rows in a short well would resolve to
+            // sub-60px rows carrying three text lines and three controls - every one of them under
+            // MinTouchPx and under the TMP cull floor, i.e. five rows nobody can read or press.
+            // So the derived height is clamped into [MinTouchPx, RowHeightPx], the whole-row trim
+            // below then seats however many of THOSE fit, and the shortfall is named in px.
+            float ideal = (have - padTop - padBottom - (QueueRowsVisibleTarget - 1) * spacing)
+                          / QueueRowsVisibleTarget;
+            _queueRowPx = Mathf.Clamp(ideal, ElarionUiKit.MinTouchPx, RowHeightPx);
+            if (ideal < ElarionUiKit.MinTouchPx)
+                FlowTrace.Warn("Manage", "the queue overlay seats " + have.ToString("0") +
+                    "px of list, so " + QueueRowsVisibleTarget + " rows would be " +
+                    ideal.ToString("0") + "px each - under ElarionUiKit.MinTouchPx (" +
+                    ElarionUiKit.MinTouchPx.ToString("0") + "). Building at the floor and seating " +
+                    "whole rows only: the mockup's five-row capacity needs a list band of at least " +
+                    ((QueueRowsVisibleTarget * ElarionUiKit.MinTouchPx) +
+                     ((QueueRowsVisibleTarget - 1) * spacing) + padTop + padBottom).ToString("0") +
+                    "px. The WELL has to grow; nothing here will shrink a row under the touch floor " +
+                    "to hide that.");
+            else
+                FlowTrace.Step("Manage", "MANAGE_QUEUE_ROWPX derived " + _queueRowPx.ToString("0") +
+                    "px per row for " + QueueRowsVisibleTarget + " visible rows in a " +
+                    have.ToString("0") + "px list band (spacing " + spacing.ToString("0") +
+                    ", padding " + (padTop + padBottom).ToString("0") + ")");
+
+            float pitch = _queueRowPx + spacing;           // what each row after the first costs
             float chrome = padTop + padBottom;
-            if (have < chrome + RowHeightPx) return;       // less than one row: nothing to trim to
+            if (have < chrome + _queueRowPx) return;       // less than one row: nothing to trim to
 
             int whole = Mathf.FloorToInt((have - chrome + spacing) / pitch);
             if (whole < 1) return;
-            float want = chrome + whole * RowHeightPx + (whole - 1) * spacing;
+            float want = chrome + whole * _queueRowPx + (whole - 1) * spacing;
+            if (whole < QueueRowsVisibleTarget)
+                FlowTrace.Warn("Manage", "the queue overlay seats " + whole + " whole row(s) where " +
+                    "mockup panel 8 draws " + QueueRowsVisibleTarget + " - " + have.ToString("0") +
+                    "px of list at " + _queueRowPx.ToString("0") + "px a row. The rows still " +
+                    "scroll and NONE is clipped; the missing ones are under the fold, which is a " +
+                    "well shortfall and not a layout preference.");
             if (have - want < 1f) return;                 // already whole
 
             // ⛔ TRIM THE BOTTOM EDGE UP. DO NOT TOUCH THE ANCHORS.
@@ -5344,13 +5759,14 @@ namespace DeNelle.Village.UI
                                                 _drawerList.offsetMin.y + (have - want));
             FlowTrace.Step("Manage", "MANAGE_QUEUE_LIST seats " + whole + " whole rows: " +
                 want.ToString("0") + "px of " + have.ToString("0") + "px (row " +
-                RowHeightPx.ToString("0") + " + spacing " + spacing.ToString("0") +
+                _queueRowPx.ToString("0") + " + spacing " + spacing.ToString("0") +
                 ", padding " + chrome.ToString("0") + ") - the bottom edge lands between rows");
         }
 
         private void AddQueueRow(QueueRowVM r)
         {
-            var row = MakeRowHost("QueueRow", RowHeightPx);
+            // ⭐ WO-1488: the MEASURED row height, not the authored constant. See _queueRowPx.
+            var row = MakeRowHost("QueueRow", _queueRowPx);
             ApplyRowSurface(row);
 
             // A stack CHILD is indented so the parent/child relationship reads structurally, not
@@ -5372,6 +5788,33 @@ namespace DeNelle.Village.UI
                 x0 += 0.045f;
             }
 
+            // ⭐ WO-1488 SECTION 2 — THE ROW THUMBNAIL, the last open item on that ticket.
+            // Mockup panel 8 draws a small picture of the thing being built between the number and
+            // its name; the owner's capture has bare text where every row should carry one.
+            // ⛔ ONE LOADER, THE ONE THE BUILD GRID USES. ManageArt.LoadSprite against the key the
+            // MODEL supplies (QueueRowVM.PortraitKey, composed by ObsidianQueueVM from
+            // ManageArt.BuildingPortraitKey) - never a second key producer and never a second
+            // loader. The slug composer that used to make these keys is deleted (WO-1567 s5 i3).
+            string thumbKey = r.PortraitKey;
+            if (!string.IsNullOrEmpty(thumbKey))
+            {
+                var thumb = ManageArt.LoadSprite(thumbKey);
+                if (thumb != null)
+                {
+                    var zone = MakeZone(row, "QueueRowThumb",
+                        new Vector2(x0, 0.12f), new Vector2(x0 + 0.05f, 0.88f));
+                    var img = ElarionUiKit.AddImage(zone, "Art", Vector2.zero, Vector2.one,
+                        Color.white, rounded: false).GetComponent<Image>();
+                    if (img != null)
+                    {
+                        img.sprite = thumb;
+                        img.preserveAspect = true;
+                        img.raycastTarget = false;      // the ROW owns the tap
+                    }
+                    x0 += 0.06f;
+                }
+            }
+
             // THE ROW IS TWO COLUMNS, and they do not share pixels: TEXT left of x=0.44, CONTROLS
             // right of x=0.455. The left column is three stacked text lines (name / state / refund)
             // — build 1 put the refund line UNDER the button block at x 0.46-0.98 and the two
@@ -5387,11 +5830,11 @@ namespace DeNelle.Village.UI
             // QRow* block) and each label is now capped at a size whose line box FITS, which is a
             // TEXT change, never a control one: MinTouchPx and the CTA boxes are untouched.
             var name = ElarionUiKit.Label(row, label, QRowNameY0, QRowNameY1, ElarionUi.Parchment,
-                                          (int)QueueNameFontPx, TextAlignmentOptions.Left, x0, 0.44f, bold: true);
+                                          (int)QueueNameFontPx, TextAlignmentOptions.Left, x0, QueueTextX1, bold: true);
             ElarionUiKit.FitSingleLine(name, 0f, QueueNameFontPx);
             var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), QRowStateY0, QRowStateY1,
                                            ElarionUi.ParchmentDim, (int)QueueLineFontPx,
-                                           TextAlignmentOptions.Left, x0, 0.44f);
+                                           TextAlignmentOptions.Left, x0, QueueTextX1);
             // WO-1488: the TIMER line, fitted to its own floor. `0f` here resolved to FontFloor(30)
             // against a 32px max - two points of headroom - and the capture ellipsised at "(0% do...".
             ElarionUiKit.FitSingleLine(state, QueueStateFontFloorPx, QueueLineFontPx);
@@ -5406,7 +5849,7 @@ namespace DeNelle.Village.UI
             if (r.Progress01 >= 0f && !r.IsStackHeader)
             {
                 var bar = ElarionUiKit.Bar(row, ElarionUiKit.BarKind.Castle,
-                                           new Vector2(x0, QRowBarY0), new Vector2(0.44f, QRowBarY1));
+                                           new Vector2(x0, QRowBarY0), new Vector2(QueueTextX1, QRowBarY1));
                 if (bar?.fill != null)
                 {
                     bar.fill.fillAmount = Mathf.Clamp01(r.Progress01);
@@ -5492,9 +5935,17 @@ namespace DeNelle.Village.UI
             // puts `Move up` between `Cancel` and the primary slot: the destructive control is
             // never adjacent to the one the player is double-tapping.
             bool wantAd = r.AdAvailable && DeNelle.Core.FeatureFlags.RewardedAdSkip;
-            int clusterCount = (wantAd ? 1 : 0) + (r.CanCancel ? 1 : 0) + (r.CanBumpUp ? 1 : 0);
-            int clusterIdx = 0;
             Vector2 slotMin, slotMax;
+            // ⭐ WO-1488: the AD CHIP IS COMPACT AND IT PAYS FOR THE FULL WORD "CANCEL".
+            // An even split gave a two-letter face the same ~131px as a six-letter one, and the
+            // owner's capture reads "CANC...". The chip takes exactly MinTouchPx (AdChipWidthX)
+            // and the word controls share what is left. The AD OFFER ITSELF IS UNCHANGED and is
+            // still the MODEL's per-channel answer (WO-911's CanWatchAdToSkip(ChannelId, ...);
+            // see AdChipWidthX for the citation) - this is a WIDTH, not a gate.
+            float wordSpan = ClusterX1 - ClusterX0 - (wantAd ? AdChipWidthX + ClusterGapX : 0f);
+            int wordCount = (r.CanCancel ? 1 : 0) + (r.CanBumpUp ? 1 : 0);
+            float wordX0 = ClusterX0 + (wantAd ? AdChipWidthX + ClusterGapX : 0f);
+            int wordIdx = 0;
 
             // THE "Ad" CONTROL IS NEVER CONSTRUCTED while FeatureFlags.RewardedAdSkip is OFF —
             // absent, not present-and-disabled. The VM and BuildTimerService gate on the same
@@ -5512,7 +5963,10 @@ namespace DeNelle.Village.UI
             // while Finish Now renders perfectly. That gap is REPORTED, not widened here.
             if (wantAd)
             {
-                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
+                // FIRST in the cluster, as the WO-1058 order requires (Ad, Cancel, Move up), and
+                // exactly AdChipWidthX wide - see that constant for the width and the ad ruling.
+                slotMin = new Vector2(ClusterX0, RowCtrlY0);
+                slotMax = new Vector2(ClusterX0 + AdChipWidthX, RowCtrlY1);
                 var ad = ElarionUiKit.BuildObsidianButton(row, "Ad",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                     slotMin, slotMax,
@@ -5526,8 +5980,11 @@ namespace DeNelle.Village.UI
                 // never has to infer it from a colour or a number that appears after the fact.
                 // WO-1058 moved the BOX, not the promise: same Red face, same refund line, and it
                 // is now the FURTHEST control from the primary slot instead of sitting inside it.
-                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
-                var cancel = ElarionUiKit.BuildObsidianButton(row, "Cancel",
+                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, out slotMin, out slotMax);
+                // ⭐ THE FULL WORD, IN CAPS, like every other verb the mockup draws on this
+                // overlay. It read "CANC..." on the owner's device because six letters were being
+                // asked to fit a slot sized for two; the slot is the thing that changed.
+                var cancel = ElarionUiKit.BuildObsidianButton(row, "CANCEL",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
                     slotMin, slotMax,
                     () => { _vm?.Cancel(channel, jobId); FlushNotice(); });
@@ -5535,22 +5992,26 @@ namespace DeNelle.Village.UI
 
                 // Third line of the TEXT column (never under the buttons — see the two-column note).
                 //
-                // ⛔ ONLY WHEN THERE IS SOMETHING TO REFUND. "Refund: nothing" on every row is a
-                // sentence that tells the player nothing, on the line where the mockup puts nothing
-                // at all: panel 8's rows carry the item, its target level and the timer.
-                // ⚠ IT IS NOT DELETED, and the distinction matters. A cancel's consequence belongs
-                // beside the CANCEL button that causes it, so when a refund is REAL the line stays
-                // exactly where it was - it is the empty case that leaves. A player who would get
-                // something back still reads it before they tap; a player who would get nothing is
-                // no longer told so on every row of every queue.
+                // !! THE VIEW NO LONGER DECIDES WHETHER THE PLAYER IS TOLD (WO-1479). It used to
+                // build the sentence itself - prefix "Refund: " onto the model's bare basket, then
+                // string-match that text against "nothing" and suppress the line when it matched.
+                // Two model rules living in a skin, and the second one hid the case that hurts: a
+                // job with no paid basket showed a BARE CANCEL, so the one player who gets nothing
+                // back was the one player told nothing. The reasoning behind the old suppression
+                // still stands and is where it belongs - ObsidianQueueVM.QuoteRefund composes the
+                // real line AND the zero wording, so the row states the consequence either way and
+                // "Refund: nothing" (a sentence that says neither) never appears.
+                // !! Still the TEXT COLUMN and not the button face: the cluster gives ~122-192 ref px
+                // per control and "Refund: 120 wood, 40 iron" needs several times that at
+                // ElarionUiKit.FontFloor - it would ellipsise, which is the "HIRE REIN..." failure
+                // MakeJobRow's own comment records. It is beside the Cancel that causes it, and the
+                // player reads it before the finger arrives.
                 string refundText = ManageScreenVM.Ascii(r.RefundText ?? "");
-                bool hasRefund = !string.IsNullOrEmpty(refundText) &&
-                                 !string.Equals(refundText, "nothing", StringComparison.OrdinalIgnoreCase);
-                if (hasRefund)
+                if (!string.IsNullOrEmpty(refundText))
                 {
-                    var refund = ElarionUiKit.Label(row, "Refund: " + refundText,
+                    var refund = ElarionUiKit.Label(row, refundText,
                                                     QRowRefundY0, QRowRefundY1, ElarionUi.ParchmentDim,
-                                                    (int)QueueLineFontPx, TextAlignmentOptions.Left, x0, 0.44f);
+                                                    (int)QueueLineFontPx, TextAlignmentOptions.Left, x0, QueueTextX1);
                     ElarionUiKit.FitSingleLine(refund, 0f, QueueLineFontPx);
                 }
             }
@@ -5558,7 +6019,7 @@ namespace DeNelle.Village.UI
             if (r.CanBumpUp)
             {
                 int idx = r.PendingIndex;
-                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
+                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, out slotMin, out slotMax);
                 var up = ElarionUiKit.BuildObsidianButton(row, "Move up",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                     slotMin, slotMax,

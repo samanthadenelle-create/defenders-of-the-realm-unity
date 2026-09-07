@@ -214,6 +214,13 @@ namespace DeNelle.Core.Manage
                 IsSelected = isSelected,
                 VisualState = state,
                 StateText = item.BadgeText,
+                // ⭐ THE GRID CELL GETS THE CLOSED WORD (mockup panel 2). The fallback is the full
+                // BadgeText, so a composer that never sets BadgeWord is unchanged - this adds a
+                // SHORTER face where one exists, it does not require every composer to author one.
+                // ⛔ The shortening is the COMPOSER'S, never this projection's and never the View's:
+                // truncating "SHORT 280 STONE" here would be exactly the derivation canon 9 bans,
+                // and it would guess wrong the first time a word carried a space of its own.
+                StateWord = string.IsNullOrEmpty(item.BadgeWord) ? item.BadgeText : item.BadgeWord,
                 StateIconKey = ManageArt.StatusFor(state),
                 FrameKey = ManageArt.FrameFor(state),
                 Progress01 = running != null ? (float?)running.Progress01 : null,
@@ -222,7 +229,14 @@ namespace DeNelle.Core.Manage
                 // `item.PrimaryAction` read inline, not via a local: the sibling
                 // ProjectSelection declares `ManageAction primary` and this method never did, so a
                 // bare `primary` here was a compile error (CS0103, caught at the gate 2026-09-06).
-                RowAction = ProjectRowAction(item.PrimaryAction)
+                RowAction = ProjectRowAction(item.PrimaryAction),
+                // ⭐ THE REQUIREMENT IS ITS OWN CHANNEL (mockup panel 7's padlock row).
+                // Carried VERBATIM off the item's LockReason, and ONLY for an item the composer
+                // actually marked NotUnlocked - ruling 15 forbids a lock sentence on an owned
+                // thing, and the Wave-0 validator enforces that, so reading Ownership here keeps
+                // this projection agreeing with the validator instead of second-guessing it.
+                RequirementText = item.Ownership == ManageOwnership.NotUnlocked
+                    ? item.LockReason : null
             };
         }
 

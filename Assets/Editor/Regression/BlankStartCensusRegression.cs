@@ -27,7 +27,11 @@
 //   - a storefront that DOES gain a record STILL stands down (placed wins — no
 //     double). The tree/well/walls/gates + runtime-station standdown + Colosseum
 //     flag-gate are unchanged.
-//   - the baked CastleBarracks hides via ff.barracks OFF;
+//   - the baked CastleBarracks stands down on a BLANK founding via the WO-834
+//     surfacing gate (StructureSingleton.MayBakedTwinSurface). NOT via ff.barracks:
+//     that flag has been default ON since WO-771 (FeatureFlags.cs:1110), so the old
+//     "ff.barracks OFF" assertion here failed on a pristine PlayerPrefs in every
+//     environment and every run order (WO-1540, corrected 2026-09-07);
 //   - the runtime stations (apothecary / jewelers-bench) skip spawn via
 //     StanddownActiveForStation (WO-703 supersedes the "never lost" carve-out);
 //   - the Colosseum_ArenaEntrance placement is gated OFF via ff.colosseum;
@@ -192,14 +196,45 @@ namespace DeNelle.Editor
                 if (bakedRows.Count > 0 && !sawArmorerHost)
                     failures.Add("WO-1250: BakedRows dropped 'Forge_Armor_Storefront' — Armorer visual is uncovered");
 
-                // ── 3. Baked CastleBarracks: hidden while ff.barracks is OFF ──
+                // ── 3. Baked CastleBarracks: hidden on a BLANK founding ──
+                // STOP: THIS SECTION USED TO ASSERT `if (FeatureFlags.Barracks) -> FAIL`, with the
+                // message "ff.barracks is ON in this environment (default OFF)". BOTH halves of
+                // that were wrong, and WO-1540 was raised on the second one:
+                //   (a) THE PREMISE. ff.barracks has NOT been default-OFF since WO-771
+                //       (2026-07-26) flipped it - FeatureFlags.cs:1110 reads
+                //       `Get("barracks", defaultOn: true)`, and Get (:1373-1379) returns that
+                //       default whenever the key is ABSENT. No suite sets the key (grepped
+                //       2026-09-07: zero "ff.barracks" writers under Assets/Editor). So this
+                //       branch failed on a PRISTINE PlayerPrefs, for every environment, in
+                //       every run order. It was never a flag bleed; it was a stale oracle.
+                //   (b) THE QUESTION. Whether the twin STANDS is not the flag's to answer here.
+                //       FindInScene includes INACTIVE objects (:364-370) on purpose, so the
+                //       bake host is found whether or not it stands - asking the flag instead
+                //       of the standdown authority made presence-in-the-bake read as
+                //       visible-to-the-player. reg-wave3h.log:9366-9367 shows the very same run
+                //       suppressing this twin ("blank-town 'barracks': migrated=True
+                //       everBuilt=False maySurface=False twins=[CastleBarracks] -> Suppressed")
+                //       while this section called it an EXTRA structure.
+                // The authority for a blank founding is the WO-834 pure surfacing rule, asked
+                // against THIS fixture's state (not the live service) so the assertion is
+                // deterministic. 'barracks' is deliberately NOT a BakedRows entry - see the
+                // long ruling at StrategicPlacementMigration.cs:314-336 - so section 2 does not
+                // and must not cover it; this is its own pin.
                 if (FindInScene("CastleBarracks") != null)
                 {
-                    if (FeatureFlags.Barracks)
-                        failures.Add("EXTRA structure: baked 'CastleBarracks' visible — ff.barracks is ON in this environment " +
-                                     "(default OFF; spawner: scene bake, hidden by HubStructureVisualInjector.TrySwap)");
+                    bool maySurface = StructureSingleton.MayBakedTwinSurface(
+                        "barracks", state.EverBuiltStructureIds, state.StrategicPlacementMigrated);
+                    if (maySurface)
+                        failures.Add("EXTRA structure: baked 'CastleBarracks' may SURFACE on this blank fixture - " +
+                                     "StructureSingleton.MayBakedTwinSurface('barracks') returned true with " +
+                                     "marker=" + state.StrategicPlacementMigrated + " everBuilt=" +
+                                     (state.EverBuiltStructureIds == null ? "<null>" : state.EverBuiltStructureIds.Count.ToString()) +
+                                     ". A Build-Your-Own founding must load with no barracks (spawner: scene bake, " +
+                                     "stood down by StructureSingleton.EnforceAll / HubStructureVisualInjector.TrySwap).");
                     else
-                        log.AppendLine("[baked] CastleBarracks -> STANDS DOWN (ff.barracks OFF)");
+                        log.AppendLine("[baked] CastleBarracks -> STANDS DOWN on a blank founding " +
+                                       "(WO-834 surfacing gate closed; ff.barracks=" + FeatureFlags.Barracks +
+                                       " is NOT the gate here - the WO-724 unlock also needs founding-complete)");
                 }
 
                 // ── 4. Runtime stations: WO-703 unconditional standdown on marker-set saves ──

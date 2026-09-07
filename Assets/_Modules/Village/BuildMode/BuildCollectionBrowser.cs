@@ -404,7 +404,11 @@ namespace DeNelle.Village
                 ? new StructureCardVM(entry, EconomyService.Instance,
                     BuildModeController.FreeBuildAvailable(entry), progressionLocked, lockReason)
                 : null;
-            bool built = entry != null && StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry);
+            // WO-1572: IsPlayerBuilt, not IsBuilt - same trap as CollectionHasVisibleItems
+            // (:613). A card whose baked twin is standing must still read BUILDABLE, exactly
+            // as BuildModeController.IsSingletonBuilt (:2334-2346) already judges it; reading
+            // IsBuilt here rendered "Built" on a row the arm path was happy to place.
+            bool built = entry != null && StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsPlayerBuilt(entry);
             bool locked = entry == null || (vm != null && vm.Locked);
             bool available = vm != null && vm.Affordable && !locked && !built;
             // Shared collection-card law: the action is a sibling footer BELOW the
@@ -479,6 +483,60 @@ namespace DeNelle.Village
             // Done commits the selection, releases the browsing pause, then returns
             // to the existing placement authority. No economy/placement logic moved.
             Done(BuildFirstUseGuide.ItemSelected, () => callback?.Invoke(entry));
+        }
+
+        /// <summary>
+        /// WO-1571 - THE DIRECT-PLACEMENT DOOR: pick ONE id as if the player had tapped its card,
+        /// without ever rendering the category root.
+        ///
+        /// <para>WHY IT HAS TO EXIST. The root offers COLLECTIONS, and card-collections.json
+        /// authors collections for Towers / Walls and Gates / Manage Placed only. A row whose
+        /// manageFilters is ECONOMY / CRAFT / STORAGE - <c>arcane-tower</c> ("Cathedral of Magic")
+        /// is the captured one - therefore has NO collection to be reached through, so landing its
+        /// Manage BUILD button on the root is a dead end by construction, not by a missing tap.
+        /// Device build 358872, logcat 2026-09-07 00:58:40.</para>
+        ///
+        /// <para>⛔ IT REUSES <see cref="Place"/> AND ADDS NOTHING. A bare Close() + arm would skip
+        /// what <c>Done</c> does beyond closing - it commits the first-use guide step and releases
+        /// the browsing pause (ObsidianNavigationWorkspace.cs:97-107) - and would strand a ghost
+        /// behind a held pause: a worse dead end than the one this fixes. Singleton, affordability
+        /// and the why-band all stay exactly where they already are, downstream of
+        /// BuildModeController.Arm.</para>
+        ///
+        /// <para>⭐ THE GATE IS <see cref="IsCollectionItemVisible"/>, THE ONE OFFER AUTHORITY, and
+        /// it is asked BEFORE anything closes - so a refusal leaves the player on the normal root
+        /// with a reason in the trace, never inside an empty session. That predicate is what carries
+        /// the WO-1379 first-raid / build-categories lockedIds soft gates; do not add a second
+        /// unlock test here.</para>
+        /// </summary>
+        internal bool PlaceById(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Warn("BuildCollections", "PlaceById called with an empty id - refused.");
+                return false;
+            }
+            var entry = CatalogRegistry.Get(id);
+            if (entry == null)
+            {
+                FlowTrace.Warn("BuildCollections",
+                    "PlaceById '" + id + "': not in CatalogRegistry - the direct door is refused and the " +
+                    "category root stands. Nothing is armed.");
+                return false;
+            }
+            if (!IsCollectionItemVisible(id))
+            {
+                FlowTrace.Warn("BuildCollections",
+                    "PlaceById '" + id + "': the ONE offer authority (IsCollectionItemVisible) says this row " +
+                    "is not offered right now - locked out by build-categories lockedIds, RewardedProgression " +
+                    "or visibleLockedIds. The direct door is refused; the gate is NOT bypassed.");
+                return false;
+            }
+            FlowTrace.Step("BuildCollections",
+                "direct-placement door: '" + id + "' picked without rendering the category root " +
+                "(WO-1571) - same Place/Done seam a card tap uses.");
+            Place(entry);
+            return true;
         }
 
         private List<string> VisibleItemIds()
@@ -556,21 +614,55 @@ namespace DeNelle.Village
             return false;
         }
 
+        /// <summary>
+        /// WO-1572 - THE CATEGORY-ROOT FILTER, and it asks IsPlayerBuilt, never IsBuilt.
+        ///
+        /// A singleton row stops being a build choice when THE PLAYER has placed its one
+        /// allowed instance - not when the scene bake happens to be showing a twin of it.
+        /// This predicate read <c>StructureSingleton.IsBuilt(entry)</c> until 2026-09-07, and
+        /// IsBuilt counts an ACTIVE BAKED TWIN (StructureSingleton.cs:120-147, step 2). Every
+        /// item in build-realm (barracks / pet-house / arcane-tower) and build-trade (market /
+        /// forge / armorer) authors a bakedTwin, so on any save where the bake surfaced them
+        /// BOTH WHOLE CATEGORIES DISAPPEARED FROM THE ROOT - the owner's frame
+        /// Logs/device/screens/owner-screen-20260907-005742.png shows three cards where
+        /// card-collections.json authors seven. A surfaced twin means the item is still
+        /// OFFERED: placing it stands the twin down via NotifyPlaced -> Enforce ->
+        /// StandDownBakedTwins, and BuildModeController.IsSingletonBuilt (:2334-2346) has
+        /// asked IsPlayerBuilt since WO-843 - so the ARM path always agreed the row was
+        /// buildable while this filter hid the door to it.
+        ///
+        /// Walks EVERY item rather than returning on the first hit: the trace below is the
+        /// only place that says why a category is missing, and an early return would make the
+        /// count a lie. Called once per collection per root render (:139), never per frame.
+        /// </summary>
         private static bool CollectionHasVisibleItems(CardCollectionDefinition collection)
         {
             if (collection?.Items == null) return false;
+            int total = collection.Items.Count, offered = 0;
+            int hiddenByVisibility = 0, missingEntry = 0, playerBuilt = 0;
             foreach (var item in collection.Items)
             {
-                if (item == null || !IsCollectionItemVisible(item.ItemId)) continue;
+                if (item == null) { missingEntry++; continue; }
+                if (!IsCollectionItemVisible(item.ItemId)) { hiddenByVisibility++; continue; }
                 var entry = CatalogRegistry.Get(item.ItemId);
-                if (entry == null) continue;
-                // Singleton is today's authoritative finite-placement contract. Once its one
-                // allowed instance exists it is no longer a build choice; removal raises
-                // SingletonReleased and this category projection recomputes automatically.
-                if (StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry)) continue;
-                return true; // repeatable entries remain visible while their definition is eligible
+                if (entry == null) { missingEntry++; continue; }
+                // Singleton is today's authoritative finite-placement contract. Once the
+                // PLAYER's one allowed instance exists it is no longer a build choice;
+                // removal raises SingletonReleased and this projection recomputes.
+                if (StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsPlayerBuilt(entry))
+                { playerBuilt++; continue; }
+                offered++; // repeatable entries remain visible while their definition is eligible
             }
-            return false;
+            // WO-1572: the player-built tally counts PLACED instances only - a standing baked
+            // twin is not "built" here. Kept as a COMMENT, never appended to the trace string:
+            // BuildCollectionPlayerRegression.StringLiterals scans EVERY double-quoted literal
+            // in this file for a '[' glyph (WO-1417, palette copy), and it cannot tell a
+            // diagnostic string from a string the player reads on a card.
+            FlowTrace.Step("BuildCollections",
+                "collection=" + collection.CollectionId + " offered=" + offered + "/" + total +
+                " (hidden-by-visibility=" + hiddenByVisibility + " no-catalog-entry=" + missingEntry +
+                " player-built=" + playerBuilt + ") -> " + (offered > 0 ? "SHOWN" : "DROPPED"));
+            return offered > 0;
         }
 
         /// <summary>Every collection image resolves to art or an intentional neutral placeholder.</summary>

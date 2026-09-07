@@ -1,6 +1,6 @@
 # WO-1541 RESULT - one producer names the camp, and the army line is the door
 
-**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate. **All four acceptances landed.**
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 1 (MANAGE hub) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate. **All four acceptances landed.**)*
 Edit-only lane: no Unity run, no gate, no commit. Read at source this session (CLAUDE.md 11B).
 
 ## 1. THE SEAT RULING THAT CLOSED ACCEPTANCE 3

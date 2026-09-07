@@ -133,6 +133,18 @@ tooling — it may log loudly.** Any FUTURE *runtime* dungeon loader that reuses
 follow the player-quiet law (CLAUDE.md §12 / INSTRUMENTATION_STANDARD §1.5): loud only to the
 db / log, never spamming a shipped player build.
 
+## The common door (WO-1568)
+
+`CommonDungeonDoor` builds a **framed doorway** at runtime, not a bare slab: two proud jambs and a
+lintel that closes the opening up to `RoomForgeCanon.WallHeight` (so a closed door has no
+see-through letterbox, and an open one still reads as a doorway), plus an **inset** leaf resolved
+from the tracked KayKit copy in `Assets/Resources/Dungeon/Door/` — with a still-door-shaped
+primitive fallback (stile + raised panels + handle), warned via `FlowTrace`, never silent. Canon
+dims are still **read** from `RoomForgeCanon`, never re-typed. Frame pieces carry **no colliders**
+(no NavMesh re-bake, never trap the hero); the leaf's single blocker is the one `SetOpen` toggles.
+The visual is a static seam, `CommonDungeonDoor.BuildDoorVisual`, so `DungeonSceneCapture.CaptureDoor`
+and `DungeonDoorShapeRegression` drive the same code the game does. Door **logic** is unchanged.
+
 ## Relation to existing systems
 
 | System | Role |

@@ -4,6 +4,25 @@
 > **117 commits unpushed** - measured, not quoted: `git rev-list --count origin/feat/synty-art-retheme..HEAD`
 > = 117. Every banner below this block is history, kept, not guidance.
 >
+> ### 2026-09-07 - THE "ALL NINE SCREENS MATCH" CLAIM WAS FALSE. READ THIS BEFORE ANY MANAGE WORK.
+>
+> Commit `949e848a0` is titled *"all nine screens match the owner's mockup - twenty-four capture rounds"*
+> and records `geometry = 0 touch = 0 fidelity = 0 named faults = NONE`. **It did not match.** That night
+> the owner walked all nine Manage screens on device build 358872 beside
+> `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` and **none of them matched** - no card art and
+> truncated copy on the hub, ring medallions and blank tier tiles on the BUILD grid, no stat table on
+> detail, undimmed locked troops, a dead well under the research picker, clipped queue rows, and every
+> panel drawn through a 64%-wide plate over the town rather than filling the screen. Twelve board rows
+> sat in the Done and Fixed buckets (ten led `IMPLEMENTED`, two `FIXED`), plus WO-2006 and WO-2008 in
+> `WorkOrders/ManageRedesign/`, on the strength of a comparison **a seat made against its own
+> headless frames**. The rule that closes it (owner 2026-09-07, ruling 29 in
+> `WorkOrders/ManageRedesign/OWNER_RULINGS_LOCKED.md`): **the acceptance for every Manage screen is a
+> DEVICE SCREENSHOT beside its mockup panel, judged by the OWNER, at >=95% on SIZE / FONT / STYLE /
+> CONTEXT / IMAGES, and it must FILL the screen.** Headless captures are evidence toward that and can
+> never mark a ticket done; only her word moves one to DONE. Those tickets now read `AWAITING OWNER
+> MATCH` and the board has a new **Verify** bucket (`tools/board_build.py`) so they can never read as
+> finished again. Scorecard and loop: `WorkOrders/ManageRedesign/CAPTURE_LOOP_GOAL.md`.
+>
 > ### What landed tonight (21 commits, `949e848a0..HEAD`, 19:25 - 20:43)
 >
 > - **The audit fleet minted 72 tickets in one pass, WO-1446..WO-1517** (`0a171806b`), each with quoted

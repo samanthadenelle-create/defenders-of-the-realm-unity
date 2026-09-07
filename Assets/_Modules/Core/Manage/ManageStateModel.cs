@@ -282,6 +282,15 @@ namespace DeNelle.Core.Manage
         public ManageTileBadge Badge = ManageTileBadge.None;
         /// <summary>The ASCII badge WORD. Supplied so the View never derives a label from an enum name.</summary>
         public string BadgeText;
+        /// <summary>
+        /// The CLOSED one-word form of <see cref="BadgeText"/>, for a grid CELL - READY /
+        /// NOT BUILT / SHORT / LOCKED / UPGRADING / MAX / QUEUE FULL (mockup panel 2).
+        /// <para>Null means "the same word": <see cref="BadgeText"/> is already short enough, and
+        /// the projection falls back to it. Only a composer that lengthens BadgeText with numbers
+        /// (WO-1518's "SHORT 280 STONE, 720 GOLD") needs to set this, and only that composer knows
+        /// which half is the word - which is why the SHORTENING lives here and never in the View.</para>
+        /// </summary>
+        public string BadgeWord;
         /// <summary>ASCII "why is this locked" sentence when <see cref="Ownership"/> is NotUnlocked. Null otherwise.</summary>
         public string LockReason;
         /// <summary>ASCII one-line summary of what changes at the next rung. Null when none.</summary>

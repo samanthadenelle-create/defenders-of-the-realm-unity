@@ -563,10 +563,25 @@ namespace DeNelle.Core.UI
         /// Anchor by fraction-of-parent. Returns a <see cref="PanelChrome"/> whose <c>content</c> is
         /// the inner fill to populate. No per-panel X buttons — the Close is consistent game-wide.
         /// </summary>
+        /// <param name="withClose">
+        /// ⭐ WO-1491 - THE PER-PANEL CLOSE OPTION. Default TRUE, so every one of the ~19 existing
+        /// callers is byte-for-byte unchanged.
+        /// <para>The mockup sheet (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png) draws CLOSE on
+        /// panel 1 ONLY; panels 2 and 4-8 carry the back arrow instead, and the owner's device
+        /// walk found CLOSE on five panels that should not have it. A screen that offers TWO ways
+        /// out teaches neither.</para>
+        /// <para>⛔ THIS IS NOT THE SAME LEVER AS A NULL <paramref name="onClose"/>. A null handler
+        /// means "this surface has no exit at all" (a forced choice); FALSE here means "the exit
+        /// exists and this panel draws it somewhere else". Collapsing the two would make every
+        /// close-less panel un-closable, which is a softlock, not a copy fix.</para>
+        /// <para>⚠ A panel that switches BETWEEN screens on one chrome (Manage) must still toggle
+        /// <c>chrome.close</c> at runtime - this flag is a BUILD-time choice and cannot follow a
+        /// screen change. ManageScreenPanel.ApplyScreenVisibility is that toggle.</para>
+        /// </param>
         public static PanelChrome BuildObsidianPanel(Transform parent, string title,
             Vector2 anchorMin, Vector2 anchorMax, Action onClose,
             float headerX0 = 0.06f, float headerX1 = 0.94f, bool withBackdrop = true,
-            string frameName = null, string medallionIcon = null)
+            string frameName = null, string medallionIcon = null, bool withClose = true)
         {
             var chrome = new PanelChrome();
 
@@ -781,7 +796,9 @@ namespace DeNelle.Core.UI
                 // A null handler means this is a forced-choice/progression surface: do not draw
                 // a dead Close control over its actions. Non-null handlers use the frame's
                 // measured close zone (Stats_Panel's top-right notch etc.).
-                if (onClose != null)
+                // WO-1491: `withClose` is the panel's own drawing choice; a null handler is the
+                // absence of an exit. See the parameter doc for why they are two levers.
+                if (onClose != null && withClose)
                     chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
                 MedievalUiSkin.ApplyShell(chrome);
                 return chrome;
@@ -820,7 +837,7 @@ namespace DeNelle.Core.UI
 
             // A null handler means this is a forced-choice/progression surface: do not draw
             // a dead Close control over its actions.
-            if (onClose != null)
+            if (onClose != null && withClose)
                 chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
 
             // ── WO-714 P6: DEFAULT DROP-ZONES + CLOSE-BAND RESERVATION on the PROCEDURAL

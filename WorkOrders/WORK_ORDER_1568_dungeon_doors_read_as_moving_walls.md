@@ -1,6 +1,6 @@
 # WO-1568 - Composed-dungeon doors read as moving walls, not doors
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED - 2026-09-07 uncommitted, awaiting gate
 **Minted:** 2026-09-06 (banner main-line row, hundred-and-fourth pass read `next free = 1568`; bumped to 1569 in the same edit)
 **Silo:** Dungeons / presentation (RoomForge composed path)
 **Lane:** World/Environment - art + presentation only. No gameplay logic, no scene files.

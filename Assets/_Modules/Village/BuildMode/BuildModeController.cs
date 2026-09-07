@@ -466,6 +466,68 @@ namespace DeNelle.Village
             Enter();
         }
 
+        /// <summary>
+        /// WO-1571 - ENTER BUILD MODE ALREADY POINTED AT ONE STRUCTURE. The Manage &gt; BUILD card's
+        /// BUILD button lands here, so a not-built row opens ITS OWN ghost instead of the category
+        /// root.
+        ///
+        /// <para>⛔ THE BUG THIS REPLACES, so nobody re-points it back: the Manage card dropped the
+        /// id and called <see cref="EnterBuildMode"/>(Town), which shows the palette, which opens
+        /// BuildCollectionBrowser at its ROOT. card-collections.json authors collections for Towers
+        /// / Walls and Gates / Manage Placed ONLY - so every ECONOMY / CRAFT / STORAGE row (the
+        /// captured one is <c>arcane-tower</c>, "Cathedral of Magic") had no collection to be found
+        /// in and the door was a dead end BY CONSTRUCTION. Device build 358872, logcat 2026-09-07
+        /// 00:58:40: <c>opened workspace 'Build Collections' at root</c> then
+        /// <c>BuildMode.Enter - palette shown</c>, and nothing else.</para>
+        ///
+        /// <para>⭐ NOTHING IS BYPASSED. This routes through
+        /// <see cref="BuildPaletteUI.PlaceById"/> -&gt; BuildCollectionBrowser.PlaceById -&gt; its
+        /// own Place/Done -&gt; OnEntrySelected -&gt; <see cref="Arm"/>. The unlock/offer gate is the
+        /// browser's own IsCollectionItemVisible (which carries the WO-1379 soft gates), the
+        /// singleton gate is <see cref="SingletonAlreadyBuilt"/> inside Arm, and affordability is
+        /// judged where it always was - at the placement commit, so an unaffordable row still opens
+        /// its ghost and gets the why-band rather than a refused door.</para>
+        ///
+        /// <para>⚠ EXPECT ONE ROOT LINE IN THE LOG. <see cref="Enter"/> shows the palette, so
+        /// "opened workspace 'Build Collections' at root" still prints once, IMMEDIATELY followed in
+        /// the same frame by "Armed placement for '&lt;id&gt;'". That is synchronous - no rendered
+        /// flash - and a trace that stops at the root line is the FAILURE, not the fix.</para>
+        /// </summary>
+        /// <returns>False when the id is unknown, not currently offered, or build mode refused to
+        /// open (enemy-owned scene - <see cref="Enter"/> has already toasted the player).</returns>
+        public bool EnterBuildModeForStructure(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Warn("Build", "EnterBuildModeForStructure called with an empty id - refused.");
+                return false;
+            }
+            var entry = CatalogRegistry.Get(id);
+            if (entry == null)
+            {
+                FlowTrace.Warn("Build", "EnterBuildModeForStructure '" + id +
+                    "': not in CatalogRegistry - build mode is NOT opened.");
+                return false;
+            }
+            // The verb only decides what the palette WOULD list; we never render that list. It is
+            // still derived (never hardcoded Town) so the session's active BuildType matches the
+            // thing being placed - camera/grid/HUD all read it.
+            var verb = BuildFilter.Matches(entry, BuildFilter.Defense) ? BuildType.Defense : BuildType.Town;
+            EnterBuildMode(verb);
+            if (!IsActive)
+            {
+                FlowTrace.Warn("Build", "EnterBuildModeForStructure '" + id + "': Enter refused (see the " +
+                    "BuildMode.Enter line above) - nothing armed.");
+                return false;
+            }
+            FlowTrace.Step("Build", "Manage direct BUILD door -> place '" + id + "' as verb=" + verb +
+                " (WO-1571; the category root is deliberately never shown)");
+            if (_palette != null && _palette.PlaceById(id)) return true;
+            FlowTrace.Warn("Build", "EnterBuildModeForStructure '" + id + "': the palette could not honour the " +
+                "direct pick - the ordinary category root stands and the player is not stranded.");
+            return false;
+        }
+
         // =====================================================================
         //  Enter / Exit
         // =====================================================================

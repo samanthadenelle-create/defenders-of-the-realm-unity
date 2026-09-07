@@ -305,6 +305,20 @@ namespace DeNelle.Editor
             int suiteSkipLinesBefore = CollectSkippedSuiteTags(log).Count;
             int suiteFailuresBefore = failures.Count;
 
+            // --- FLAG HYGIENE (WO-1540): snapshot every ff.* PlayerPrefs key before the
+            //     registered suites run, and restore + DIFF it after the END fence. A suite
+            //     that sets a feature flag and does not restore it changes the environment
+            //     for every LATER suite in this run AND for the owner's next editor session
+            //     (PlayerPrefs in batchmode is process-external state), which makes results
+            //     depend silently on run ORDER. This is the fence-level half of the fix and
+            //     it is honest about its limit: it DETECTS and RESTORES drift, it does not
+            //     isolate suite N from suite N-1 — the region below is ~200 flat
+            //     `if (!X.Run(out var r))` lines, not a loop, so per-suite wrapping would
+            //     mean editing every registration and is a separate, larger call. Do NOT
+            //     hardcode a flag list here; FeatureFlagSnapshot derives the key set from
+            //     FeatureFlags.cs itself so a flag added tomorrow is watched automatically.
+            var flagSnapshotBefore = DeNelle.Editor.Regression.FeatureFlagSnapshot.Capture();
+
             // --- monetization covenant gate (LB-5) + tower upgrade perks (overnight silos C/E) ---
             if (!MonetizationCovenantRegression.Run(out var covReason)) failures.Add(covReason); else log.AppendLine("[covenant] " + covReason);
             // --- WORK_ORDER_battle_and_monthly_packs: the pay-to-win firewall of the Battle Pass +
@@ -436,6 +450,8 @@ namespace DeNelle.Editor
             //     entire (fully built, fully suite-covered) training stack became unreachable and no
             //     existing suite noticed — every one tested a LAYER, none tested the DOOR ---
             if (!ManageTroopsTrainDoorRegression.Run(out var manageTrainDoorReason)) failures.Add(manageTrainDoorReason); else log.AppendLine("[manage-train-door] " + manageTrainDoorReason);
+            // WO-1566/1567 - the nine Manage screens vs the owner mockup (fills screen, hub, tiles, detail, picker). Registered by the lead 2026-09-07.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-mockup-conformance suite", () => { if (!ManageMockupConformanceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-mockup-conformance] " + r); });
             if (!ManageProgressiveDisclosureRegression.Run(out var manageDisclosureReason)) failures.Add(manageDisclosureReason); else log.AppendLine("[manage-progressive-disclosure] " + manageDisclosureReason);
             // The two DOOR oracles for the owner's 2026-08-30 felt-test ("I do not see a way to get
             // to Skill Tree now" / "no way from manage or anywhere else to the upgrade defensive
@@ -537,6 +553,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "crystal-production suite", () => { if (!CrystalProductionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[crystal-production] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "sfx-resolve suite", () => { if (!SfxResolveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sfx-resolve] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
+            // WO-1568 - dungeon doors read as doors: leaf on the hinge, frame + lintel, no letterbox. Registered by the lead 2026-09-07.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-door-shape suite", () => { if (!DeNelle.Editor.Regression.DungeonDoorShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-door-shape] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-dressing suite", () => { if (!DungeonDressingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-dressing] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-return suite", () => { if (!DungeonReturnSceneRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-return] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-lore suite", () => { if (!DungeonLoreReadableRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-lore] " + r); });
@@ -1044,6 +1062,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-approved-launcher suite", () => { if (!DeNelle.Editor.Regression.ManageApprovedLauncherRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-approved-launcher] " + r); });
             // --- WO-1418 Manage - Buildings re-layout: rail + selected card + BUILDING NOW; ten RED-first cases (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-buildings-card suite", () => { if (!DeNelle.Editor.ManageBuildingsCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-buildings-card] " + r); });
+            // --- WO-1571 Manage - a not-built card's BUILD button opens ITS OWN placement, never the Build Collections root ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-build-door suite", () => { if (!DeNelle.Editor.ManageBuildDoorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-build-door] " + r); });
             // --- WO-1422 Manage - Defense and Research take the WO-1418 Buildings shape; the paged list is retired ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-defense-card suite", () => { if (!DeNelle.Editor.ManageDefenseCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-defense-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-research-card suite", () => { if (!DeNelle.Editor.ManageResearchCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-research-card] " + r); });
@@ -1736,6 +1756,11 @@ namespace DeNelle.Editor
             // are to ticket the OgreMage row, or to hoist the art-pending declaration into one
             // shared source both suites read. Adding an exemption HERE is neither (WO-1496 sec.3).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-art-coverage suite", () => { if (!DeNelle.Editor.EnemyArtCoverageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-art-coverage] " + r); });
+            // WO-1540: the flag-hygiene pin. A dummy "suite" inside it sets a feature flag and
+            // does NOT restore it; the oracle asserts the snapshot NAMES that key as drift and
+            // puts the environment back, so the next suite reads the compiled default. It
+            // restores in a finally, so it can never become the bleed it polices.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "flag-snapshot suite", () => { if (!DeNelle.Editor.Regression.FeatureFlagSnapshotRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[flag-snapshot] " + r); });
             // LAST LINE ABOVE THE END FENCE, DELIBERATELY: this suite opens
             // Main_Castle_Overworld in Single mode, so any suite registered after it would
             // census a different world than the one it was written against.
@@ -1752,6 +1777,17 @@ namespace DeNelle.Editor
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
             // =====================================================================
+
+            // --- FLAG HYGIENE, second half (WO-1540) -------------------------------
+            // Restore every ff.* key to what it was before the fence and NAME anything
+            // that drifted. On green this deliberately logs a line that does NOT start
+            // with '[' so it is not miscounted as an extra oracle suite by
+            // CountOracleTagLines; on red it lands in `failures` like any other suite
+            // result, which is where a bleed belongs.
+            if (!DeNelle.Editor.Regression.FeatureFlagSnapshot.RestoreAndDiff(flagSnapshotBefore, out var flagDriftReason))
+                failures.Add("[flag-hygiene] " + flagDriftReason);
+            else
+                log.AppendLine(flagDriftReason);
             // --- SKIPPED IS A THIRD STATE, NOT A PASS (2026-08-16 coverage audit) ---
             // A suite that stands down (GameStateService will not install headless, a
             // data file is absent) reports TRUE so a harness limitation is not read as a

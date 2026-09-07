@@ -24,6 +24,10 @@ namespace DeNelle.Editor
             // teardown happens before the source scans below.
             CheckBuildGridIsUnlockedOnly(failures);
 
+            // [building-production-single-producer] WO-1567 panel row 3 - its own fixture, run
+            // after the one above so the two never share an installed GameState.
+            CheckBuildingProductionRow(failures);
+
             // ⭐ [grid-tile-states-its-state] WO-1563, the RENDERER half. The model half is
             // asserted inside the fixture above; this is the binding that was missing. BuildTile
             // referenced tile.StateText EXACTLY ZERO TIMES while the sibling renderer BuildListRow
@@ -282,6 +286,17 @@ namespace DeNelle.Editor
                 fixture.BuildingTiers["lumbermill"] = 1;
                 fixture.BuildingTiers["barracks"] = 1;
                 fixture.ObsidianQueue = ObsidianQueueState.Empty();
+                // ⭐ WO-1567 PANEL ROW 8 - GOLD, SO A RESEARCHABLE PERK EXISTS TO ASSERT ON.
+                // ResearchChoiceVM.Ready is `stateWord == "Available" && gold >= price`
+                // (ManageScreenVM.cs:2018) and GoldBalance falls through to
+                // state.Resources.Coins, which a fresh fixture leaves at its seed. Without this
+                // EVERY perk projects Unaffordable, ProjectRowAction withholds the inline face
+                // from all of them, and [research-row-offers-its-action] would pass on a screen
+                // with no researchable row at all - a green that proves nothing, which is the
+                // exact failure mode the defence-tile note above records.
+                // ⚠ ResourceBalance is a STRUCT (NestedTypes.cs:41) held as a FIELD, so this
+                // assigns in place. A `!= null` guard here does not compile (CS0019).
+                fixture.Resources.Coins = 100000;
 
                 host = new GameObject("GSS (manage-build-grid oracle)");
                 var service = host.AddComponent<GameStateService>();
@@ -382,6 +397,9 @@ namespace DeNelle.Editor
 
                 // ⭐ [portrait-key-single-producer] - ONE PRODUCER OF THE PORTRAIT KEY.
                 CheckPortraitKeysComeFromManageArt(model, tab, failures);
+
+                // ⭐ [research-row-offers-its-action] - WO-1567 panel row 8, MEASURED on the model.
+                CheckResearchRowsSplitTheirFacts(model, failures);
             }
             catch (Exception ex)
             {
@@ -415,6 +433,112 @@ namespace DeNelle.Editor
         /// <para>RED RECIPE: put <c>ResolveBuildingPortraitKey(entry, PortraitSlug(...), level)</c>
         /// back in <c>BuildDefenseChoices</c> - both halves below fire.</para>
         /// </summary>
+        /// <summary>
+        /// ⭐ [research-row-offers-its-action] - WO-1567 section 6, PANEL ROW 8, measured on the
+        /// composed model rather than on source text.
+        ///
+        /// <para>THE THREE FACTS MOCKUP PANEL 7 PUTS ON A PERK ROW, and what the owner's device
+        /// actually showed (Logs/device/screens/owner-screen-20260907-010151.png):</para>
+        /// <list type="number">
+        /// <item>a RESEARCHABLE row carries a gold RESEARCH face WITH ITS PRICE beneath it -
+        /// the device had four rows and not one button;</item>
+        /// <item>a LOCKED row carries its requirement on its OWN channel - the device read
+        /// <i>"Wood +8%, offline bucket +8% . Upgrade the building to Tier 3 f..."</i>, a benefit
+        /// and a requirement glued with a floating period and then truncated;</item>
+        /// <item>and the two never share one string again.</item>
+        /// </list>
+        ///
+        /// <para>⛔ ASSERTED ON A REAL PROJECTION, AND IT FAILS RATHER THAN SKIPS. If the fixture
+        /// composes no researchable perk the case reports that as a FAILURE: a green taken over an
+        /// empty list proves nothing, and this suite's sibling case above was already caught doing
+        /// exactly that when the town had no tower.</para>
+        ///
+        /// <para>RED RECIPES: restore <c>item.NextRungLine + " . " + item.LockReason</c> in
+        /// ComposeResearchItem; or drop <c>RequirementText</c> from ManageVmProjection.ProjectTile;
+        /// or return <c>ManageActionVM.Hidden</c> from ProjectRowAction for an Available action.</para>
+        /// </summary>
+        private static void CheckResearchRowsSplitTheirFacts(ManageScreenVM model, List<string> failures)
+        {
+            if (model == null) return;
+
+            // The perk TREE for a school this town has placed. lumbermill is in the fixture's
+            // BaseLayout above, so its perks compose; a school with nothing placed would give an
+            // empty tree and nothing to measure.
+            model.OpenSchool("lumbermill", null);
+            var ws = model.ComposeWorkspace();
+            // ⚠ THE ACTIVE INDEX IS NOT ASSUMED. ComposeWorkspace builds its tab list from
+            // VisibleTabs, and a town that unlocks no research school would leave ActiveTabIndex
+            // at -1 - which would make this case red for a reason that has nothing to do with the
+            // row contract. Resolve by IDENTITY first, fall back to the active index.
+            ManageTabVM tab = null;
+            if (ws != null && ws.Tabs != null)
+            {
+                for (int i = 0; i < ws.Tabs.Count; i++)
+                    if (ws.Tabs[i] != null && ws.Tabs[i].Id == ManageTabId.Research) { tab = ws.Tabs[i]; break; }
+                if (tab == null && ws.ActiveTabIndex >= 0 && ws.ActiveTabIndex < ws.Tabs.Count)
+                    tab = ws.Tabs[ws.ActiveTabIndex];
+            }
+            var tiles = tab != null ? tab.Tiles : null;
+            if (tiles == null || tiles.Count == 0)
+            {
+                failures.Add("[research-row-offers-its-action] the fixture composed NO perk rows for " +
+                             "lumbermill, so panel 7's row contract is unmeasured. FAIL, not a skip.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(tab.HeaderArtKey))
+                failures.Add("[research-row-offers-its-action] the perks screen composed no HeaderArtKey, so " +
+                             "the View has no school painting to seat on the left of the well (mockup panel 7 " +
+                             "makes that picture nearly half the screen).");
+
+            int researchable = 0, locked = 0;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                var t = tiles[i];
+                if (t == null) continue;
+
+                if (!string.IsNullOrEmpty(t.Subtitle) && t.Subtitle.Contains(" . "))
+                    failures.Add("[research-row-offers-its-action] perk row '" + (t.Id ?? "?") +
+                                 "' still joins two facts into its benefit line with \" . \" (\"" +
+                                 t.Subtitle + "\"). That join is the captured defect: the requirement was " +
+                                 "ellipsised off the end of the line the player decides on.");
+
+                if (t.VisualState == ManageTileVisualState.Locked)
+                {
+                    locked++;
+                    if (string.IsNullOrEmpty(t.RequirementText))
+                        failures.Add("[research-row-offers-its-action] locked perk row '" + (t.Id ?? "?") +
+                                     "' carries no RequirementText, so its padlock row has no sentence and the " +
+                                     "player is told WHAT is locked but never WHY.");
+                    if (t.RowAction != null && t.RowAction.Visible)
+                        failures.Add("[research-row-offers-its-action] locked perk row '" + (t.Id ?? "?") +
+                                     "' offers an inline button. Panel 7 draws a padlock there; a greyed face " +
+                                     "beside the padlock and the requirement is a third telling of one fact.");
+                }
+
+                if (t.RowAction != null && t.RowAction.Visible && !string.IsNullOrEmpty(t.RowAction.Label))
+                {
+                    researchable++;
+                    if (string.IsNullOrEmpty(t.RowAction.CostText))
+                        failures.Add("[research-row-offers-its-action] perk row '" + (t.Id ?? "?") +
+                                     "' offers \"" + t.RowAction.Label + "\" with NO price beneath it. The " +
+                                     "mockup prints the cost inside the row so the tap is never blind.");
+                }
+            }
+
+            if (researchable == 0)
+                failures.Add("[research-row-offers-its-action] not one perk row offered an inline action, so " +
+                             "mockup panel 7's gold RESEARCH face is unmeasured. The fixture seeds " +
+                             "Resources.Coins precisely so an Available, affordable perk exists - if this " +
+                             "fires, either that seed stopped reaching GoldBalance or ProjectRowAction is " +
+                             "withholding the face. FAIL, not a skip.");
+            if (locked == 0)
+                failures.Add("[research-row-offers-its-action] not one perk row was LOCKED, so the padlock " +
+                             "requirement channel is unmeasured. lumbermill authors tiered perks and the " +
+                             "fixture places it at tier 1; a tree with no locked rung means the tier gate " +
+                             "stopped composing.");
+        }
+
         private static void CheckPortraitKeysComeFromManageArt(ManageScreenVM model, ManageTabVM tab,
             List<string> failures)
         {
@@ -552,6 +676,239 @@ namespace DeNelle.Editor
                 sb.Append(model.VisibleTabs[i].ToString());
             }
             return sb.ToString();
+        }
+
+        // =====================================================================
+        //  [building-production-single-producer] - WO-1567 section 6, PANEL ROW 3
+        // ---------------------------------------------------------------------
+        //  Mockup panel 3 (docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png) draws the building
+        //  detail's first numeric row as "Production 120 / hour -> 180 / hour". The card shipped
+        //  with no production number at all, because the per-hour formula
+        //  (yield * sizeMultiplier * 3600 / interval) lived PRIVATELY inside
+        //  ResourceCollector.ThroughputScale and the screen could not reach it without writing it
+        //  a second time.
+        //
+        //  WHAT THIS CASE DEFENDS, in three parts that fail for three different reasons:
+        //    1. THE SEAM. ThroughputScale must CALL ResourceBuildingProgression.ProductionPerHour
+        //       and must not carry the formula itself (no bare 3600 in its body). A source scan by
+        //       necessity - ThroughputScale is private and lives on a MonoBehaviour that needs a
+        //       collector, a catalog and PlayerPrefs to stand up.
+        //    2. THE ANCHOR. The producer is checked against numbers the BALANCE TABLE ITSELF
+        //       states in prose - the "Per-hour at x1 echo / no perks" comment on the lumbermill
+        //       row inside ResourceBuildingProgression.Build() (cited by ANCHOR, never by line:
+        //       this case's own edit moved that comment, which is CLAUDE.md section 11B's point
+        //       in miniature). A wiring-only assertion would pass on a producer that had silently
+        //       changed shape; this fails if the ladder moves and the comment does not.
+        //    3. THE WIRING. The composed detail row equals the producer at the SAME inputs the
+        //       runtime reads, formatted through the same cast + format string the VM uses (so a
+        //       culture-sensitive "N0" cannot make the two sides differ for a reason that is not
+        //       about production).
+        //
+        //  ⛔ THE LEVEL AXIS, AND WHY THE NEXT COLUMN IS NOT level+1.
+        //  farm / lumbermill / forge sit in BOTH ladders. UpgradeFamilyResolver.Resolve sends all
+        //  three to the CITY ladder, so nothing writes dotr.resbuilding.level.* any more and
+        //  DualFamilyLevelResetMigration reset the residue to 1 - the harvester ticks at that
+        //  frozen level for the life of the save. Income moves with the TIER's authored
+        //  *ProductionMult instead (building-tiers.json - read the values there, never from here).
+        //  So "next" is the SAME harvest level with the NEXT TIER's multiplier, which is the only
+        //  promotion an upgrade actually delivers.
+        //
+        //  RED PROOF: inline the formula back into ThroughputScale -> part 1 fires. Change
+        //  lumbermill's baseYield without its comment -> part 2 fires. Pass b.Level instead of
+        //  ResourceBuildingState.GetLevel in BuildingStatRows -> part 3's value check fires.
+        // =====================================================================
+        private static void CheckBuildingProductionRow(List<string> failures)
+        {
+            const string Tag = "[building-production-single-producer] ";
+            const string MillId = "lumbermill";
+            const string LevelPrefsKey = "dotr.resbuilding.level." + MillId;
+
+            // ── PART 1: the seam, scanned at source ──────────────────────────
+            const string CollectorPath =
+                "Assets/_Modules/Village/Buildings/Progression/ResourceCollector.cs";
+            if (!File.Exists(CollectorPath))
+            {
+                failures.Add(Tag + CollectorPath + " is missing - the runtime half of the single " +
+                             "producer cannot be checked, so this case cannot be trusted.");
+            }
+            else
+            {
+                string collector = File.ReadAllText(CollectorPath);
+                int tsAt = collector.IndexOf("private double ThroughputScale()", StringComparison.Ordinal);
+                if (tsAt < 0)
+                {
+                    failures.Add(Tag + "ResourceCollector.ThroughputScale is gone - the runtime reader " +
+                                 "of the per-hour producer no longer exists, so the screen and the " +
+                                 "collector can drift again with nothing to notice.");
+                }
+                else
+                {
+                    int tsEnd = collector.IndexOf("\n        /// <summary>", tsAt, StringComparison.Ordinal);
+                    string body = tsEnd > tsAt ? collector.Substring(tsAt, tsEnd - tsAt)
+                                               : collector.Substring(tsAt);
+                    if (body.IndexOf("ResourceBuildingProgression.ProductionPerHour", StringComparison.Ordinal) < 0)
+                        failures.Add(Tag + "ThroughputScale no longer calls " +
+                                     "ResourceBuildingProgression.ProductionPerHour. The collector and the " +
+                                     "Manage card are back to two formulas for one number.");
+                    if (body.IndexOf("3600", StringComparison.Ordinal) >= 0)
+                        failures.Add(Tag + "ThroughputScale carries a bare 3600 again - the per-hour " +
+                                     "conversion has been re-inlined beside the call to the producer, which " +
+                                     "is the duplicated state the producer exists to retire.");
+                }
+            }
+
+            // ── PART 2: the authored anchor ──────────────────────────────────
+            double l1 = DeNelle.Village.Buildings.Progression.ResourceBuildingProgression
+                .ProductionPerHour(MillId, 1, 1f, 1.0);
+            double l5 = DeNelle.Village.Buildings.Progression.ResourceBuildingProgression
+                .ProductionPerHour(MillId, 5, 1f, 1.0);
+            if (Math.Abs(l1 - 720.0) > 0.5)
+                failures.Add(Tag + "ProductionPerHour(lumbermill, 1) = " + l1.ToString("0.##") +
+                             "/hr, but the lumbermill row's own \"Per-hour at x1 echo / no perks\" " +
+                             "comment in ResourceBuildingProgression.Build() states 720 (10 per tick " +
+                             "every 50s). Either the ladder moved without its comment, or the " +
+                             "producer's shape changed.");
+            if (Math.Abs(l5 - 3960.0) > 0.5)
+                failures.Add(Tag + "ProductionPerHour(lumbermill, 5) = " + l5.ToString("0.##") +
+                             "/hr, but the balance table states 3,960 (22 per tick every 20s).");
+
+            // ── PART 3: the composed row ─────────────────────────────────────
+            var prior = GameStateService.Instance;
+            bool hadTabPref = PlayerPrefs.HasKey(ManageScreenVM.LastTabPrefKey);
+            int priorTabPref = PlayerPrefs.GetInt(ManageScreenVM.LastTabPrefKey, 0);
+            // ⚠ EditMode PlayerPrefs ARE the developer's real prefs. The harvest level is pinned
+            // to 1 for determinism (that is what the frozen ladder holds on a real save) and
+            // restored byte-for-byte in the finally.
+            bool hadLevelPref = PlayerPrefs.HasKey(LevelPrefsKey);
+            int priorLevelPref = PlayerPrefs.GetInt(LevelPrefsKey, 1);
+            GameObject host = null;
+            GameState fixture = null;
+            try
+            {
+                PlayerPrefs.SetInt(LevelPrefsKey, 1);
+                // The key above hardcodes ResourceBuildingState's PRIVATE prefs prefix. If that
+                // prefix ever moves, this fixture would be pinning a key nothing reads and the
+                // harvest level would silently be whatever the developer's own save holds - so
+                // the write is READ BACK through the public accessor before anything depends on it.
+                if (DeNelle.Village.Buildings.Progression.ResourceBuildingState.GetLevel(MillId) != 1)
+                {
+                    failures.Add(Tag + "writing PlayerPrefs '" + LevelPrefsKey + "' did not move " +
+                                 "ResourceBuildingState.GetLevel(" + MillId + ") to 1 - the level prefs " +
+                                 "prefix moved, so this fixture is no longer deterministic. FAIL, not a skip.");
+                    return;
+                }
+
+                fixture = ScriptableObject.CreateInstance<GameState>();
+                fixture.Onboarded = true;
+                fixture.VillageTier = 5;
+                fixture.BaseLayout = new List<PlacedStructureData>
+                {
+                    new PlacedStructureData(MillId, 4, 2, 0, 1),
+                };
+                // TIER 1, DELIBERATELY: lumbermill authors tiers 1..4, so 1 -> 2 is a REAL
+                // multiplier step (1.1 -> 1.18) and the delta assertion measures something. At the
+                // top tier there is no next rung and the DeltaText check would pass on null.
+                fixture.BuildingTiers[MillId] = 1;
+                fixture.ObsidianQueue = ObsidianQueueState.Empty();
+                fixture.Resources.Coins = 100000;
+
+                host = new GameObject("GSS (manage-production oracle)");
+                var service = host.AddComponent<GameStateService>();
+                if (!InstallState(service, fixture))
+                {
+                    failures.Add(Tag + "the GameStateService state seam is not reflectable, so the " +
+                                 "building detail could not be composed and the production row is " +
+                                 "unmeasured. FAIL, not a skip.");
+                    return;
+                }
+
+                var model = new ManageScreenVM();
+                model.EnterTab(ManageTabId.Build);
+                model.OpenDetail(ManageTabId.Build, MillId, null, null);
+                var ws = model.ComposeWorkspace();
+                ManageSelectionVM selection = null;
+                if (ws != null && ws.Tabs != null)
+                {
+                    for (int i = 0; i < ws.Tabs.Count && selection == null; i++)
+                        if (ws.Tabs[i] != null && ws.Tabs[i].Selection != null &&
+                            ws.Tabs[i].Selection.Visible)
+                            selection = ws.Tabs[i].Selection;
+                }
+                if (selection == null)
+                {
+                    failures.Add(Tag + "OpenDetail(Build, lumbermill) composed no visible selection, so " +
+                                 "the production row could not be read. A green taken here would prove " +
+                                 "nothing. FAIL, not a skip.");
+                    return;
+                }
+
+                ManageStatVM row = null;
+                if (selection.Stats != null)
+                {
+                    for (int i = 0; i < selection.Stats.Count && row == null; i++)
+                        if (selection.Stats[i] != null &&
+                            string.Equals(selection.Stats[i].Label, "Production / hr", StringComparison.Ordinal))
+                            row = selection.Stats[i];
+                }
+                if (row == null)
+                {
+                    failures.Add(Tag + "the lumbermill detail card has NO \"Production / hr\" row. Mockup " +
+                                 "panel 3 draws production as the card's first numeric row, and a resource " +
+                                 "building is exactly the case that has one.");
+                    return;
+                }
+
+                int harvestLevel = DeNelle.Village.Buildings.Progression.ResourceBuildingState.GetLevel(MillId);
+                double echo = DeNelle.Village.Buildings.Progression.ResourceBuildingHarvester
+                    .EchoHarvestMultiplier();
+                double expectNow = DeNelle.Village.Buildings.Progression.ResourceBuildingProgression
+                    .ProductionPerHour(MillId, harvestLevel, ModifierService.ProductionMultFor(MillId), echo);
+                double expectNext = DeNelle.Village.Buildings.Progression.ResourceBuildingProgression
+                    .ProductionPerHour(MillId, harvestLevel, ModifierService.ProductionMultForTier(MillId, 2), echo);
+
+                // Formatted through the SAME cast and format string ManageScreenVM.StatRow uses.
+                string expectNowText = ((float)expectNow).ToString("N0");
+                string expectNextText = ((float)expectNext).ToString("N0");
+
+                if (!string.Equals(row.Value, expectNowText, StringComparison.Ordinal))
+                    failures.Add(Tag + "the card reads Production \"" + (row.Value ?? "<null>") +
+                                 "\" but the producer says \"" + expectNowText + "\" at harvest level " +
+                                 harvestLevel + " with the live perk multiplier " +
+                                 ModifierService.ProductionMultFor(MillId).ToString("0.###") + ". The " +
+                                 "screen and the runtime are reading different functions again - which " +
+                                 "is precisely what one public producer was added to make impossible.");
+
+                if (Math.Abs(expectNext - expectNow) <= 0.01)
+                {
+                    failures.Add(Tag + "tier 1 -> 2 moves production by nothing (" +
+                                 expectNow.ToString("0.##") + " -> " + expectNext.ToString("0.##") +
+                                 "/hr), so the delta half of this case is asserting on a flat pair. " +
+                                 "building-tiers.json authors a RISING woodProductionMult across the " +
+                                 "lumbermill's tiers; if that is gone, the upgrade buys no income.");
+                }
+                else if (!string.Equals(row.DeltaText, expectNextText, StringComparison.Ordinal))
+                {
+                    failures.Add(Tag + "the card's Production delta reads \"" + (row.DeltaText ?? "<null>") +
+                                 "\" but the next TIER's multiplier gives \"" + expectNextText + "\". " +
+                                 "Mockup panel 3 draws current -> next, and the promotion an upgrade " +
+                                 "actually delivers is the tier multiplier, not a harvest level the " +
+                                 "dual-family resolver froze at 1.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add(Tag + "threw " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                SetGssInstance(prior);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                if (hadTabPref) PlayerPrefs.SetInt(ManageScreenVM.LastTabPrefKey, priorTabPref);
+                else PlayerPrefs.DeleteKey(ManageScreenVM.LastTabPrefKey);
+                if (hadLevelPref) PlayerPrefs.SetInt(LevelPrefsKey, priorLevelPref);
+                else PlayerPrefs.DeleteKey(LevelPrefsKey);
+            }
         }
 
         private static bool InstallState(GameStateService svc, GameState state)

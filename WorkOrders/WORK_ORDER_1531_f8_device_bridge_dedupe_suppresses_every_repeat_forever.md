@@ -1,6 +1,6 @@
 # WO-1531: the F8 device bridge dedupes on message text forever - 319 captures published 0, including the owner's FLAG
 
-**Status:** READY TO IMPLEMENT - P0
+**Status:** IMPLEMENTED - 2026-09-07 uncommitted, awaiting gate
 **Silo:** Tooling/F8 - `.claude/skills/run-defenders/f8-device-bridge.ps1`, `Get-EntryKey`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1531 -> 1532 in the same edit). Found by the WO-1460 lane, which landed
@@ -59,9 +59,13 @@ and it is worse than WO-1460's silent daemon: here the harness was running, saw 
   at a time.
 
 ## 4. ACCEPTANCE
-- [ ] `Get-EntryKey` includes session id and a time bucket; `flagged` bypasses dedupe entirely.
-- [ ] Bridge self-test case: **two FLAG presses ten minutes apart both publish**. RED today.
-- [ ] Bridge self-test case: the same error repeated 300 times within one bucket publishes once (the success
+- [x] `Get-EntryKey` includes session id and a time bucket; `flagged` bypasses dedupe entirely.
+- [x] Bridge self-test case: **two FLAG presses ten minutes apart both publish**. RED today.
+- [x] Bridge self-test case: the same error repeated 300 times within one bucket publishes once (the success
       path AND the refusal, memory `prove-the-success-path-not-just-the-refusal`).
 - [ ] The backfill run publishes exactly the 1 flagged + 2 softlocks; the count is pasted in the RESULT.
+      **STILL OPEN** - the live watermark has already advanced past those entries (device-state lastUtc
+      2026-09-07T05:44:05Z), so this is now a deliberate scoped replay for the lead, not an automatic
+      consequence of the fix. A fixture replay of the real log over the same tail is in the RESULT.
 - [ ] Cross-referenced in WO-1460 (heartbeat landed there; this is the other half of that silence).
+      **STILL OPEN** - WO-1460 is outside this edit-only lane's file list.

@@ -173,26 +173,35 @@ namespace DeNelle.Village.UI
                 });
             }
 
-            // ── THE READY LINE + its small second door ───────────────────────────
-            // Three conditions, ALL of them: the raid gate is open, there is an army to send,
-            // and there is at least one Heartfire charge to spend on the march. Any one of them
-            // false and the door would land the player on a refusal, which is the exact
-            // cul-de-sac this ticket exists to close — so the line simply is not drawn.
-            if (raidCapable && armyCap > 0 && armyUsed > 0 && heartfireLit > 0)
-            {
-                var sb = new StringBuilder();
-                sb.Append("Army ").Append(armyUsed).Append(" / ").Append(armyCap).Append(" ready");
-                // "LIT", never "full" and never a balance. PostureSignals names the value
-                // HeartfireLit for exactly this reason (PostureSignals.cs:229-235): Heartfire is a
-                // CHARGE, and a pool-fullness metaphor is the first step toward the currency
-                // HeartfireCharges.cs spends its header forbidding.
-                if (heartfireMax > 0 && heartfireLit >= heartfireMax)
-                    sb.Append(" - Heartfire ").Append(heartfireLit).Append(" / ").Append(heartfireMax).Append(" lit");
-                sb.Append(" - a camp awaits");
-                vm.ReadyLine = sb.ToString();
-                vm.ReadyDoorText = "RAID";
-                vm.ReadyDoor = PanelId.JourneyDeck;
-            }
+            // =====================================================================
+            //  !! THE READY LINE AND ITS RAID DOOR ARE RETIRED HERE.
+            //     OWNER REVERSAL, 2026-09-07 01:13, on her own frame
+            //     (Logs/device/screens/owner-harvest-20260907-011321.png), verbatim:
+            //         "no idea why raid is listed here"
+            // =====================================================================
+            //  WO-1408 built this line + door to close a real cul-de-sac (COLLECT dropped the
+            //  player on a HUD whose loudest control was the store card). The reasoning was sound;
+            //  the PLACEMENT was wrong. This popup answers ONE question - what happened to my town
+            //  while I was gone, and what do I collect - and a RAID invitation beside COLLECT reads
+            //  as a second, competing primary action on a screen about harvesting. The owner did
+            //  not recognise it as an offer at all; she read it as a stray row.
+            //
+            //  WHAT SURVIVES, DELIBERATELY: the ATTACKED row above. That row is NOT a raid
+            //  invitation - it is the door onto a REPORT of something that already happened to
+            //  her town, and it is drawn only when such a report exists. WO-1408's actual
+            //  invariant ("a row exists only when it is true") is unchanged.
+            //
+            //  THE FIELDS ARE KEPT AND ALWAYS EMPTY, not deleted: WelcomeBackPopup.AddReadyBand
+            //  reads HasReadyDoor and draws nothing when it is false, and the regression asserts
+            //  the ABSENCE (case 3 [raid-door-retired]) rather than the shape. The four posture
+            //  parameters are likewise kept - deleting them would change every call site and every
+            //  fixture for a ruling that could be reversed again, and the ONE gate that used them
+            //  is recorded here in prose so restoring it is a three-line edit, not an excavation:
+            //      raidCapable && armyCap > 0 && armyUsed > 0 && heartfireLit > 0
+            //          -> "Army <used> / <cap> ready[ - Heartfire <lit> / <max> lit] - a camp awaits"
+            //          -> door "RAID" onto PanelId.JourneyDeck.
+            //  Recorded as an owner reversal in WORK_ORDER_1408's RESULT.
+            _ = raidCapable; _ = armyUsed; _ = armyCap; _ = heartfireLit; _ = heartfireMax;
 
             return vm;
         }

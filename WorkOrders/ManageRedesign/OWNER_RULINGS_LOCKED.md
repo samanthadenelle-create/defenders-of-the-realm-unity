@@ -498,3 +498,41 @@ retention hook, without punishing absence**, which is the shape the owner has ch
 *Oracle sketch:* `[rush-price-tracks-remaining-time]` - the crystal price for the same job strictly decreases as
 remaining time falls, and an ad watch reduces it. **RED: make the price a constant.** Plus `[greyed-finish-routes-to-store]`
 and `[rush-returns-to-origin]` (ruling 28).
+
+---
+
+## Ruling 29 (added by the CLI seat, 2026-09-07) - WHO SAYS A MANAGE SCREEN MATCHES
+
+**Owner, 2026-09-07 01:10, verbatim:**
+> *"fix the board so those tickets dont say done and update the goal to be screenshots proving these
+> match"*
+
+**Owner, 2026-09-07 01:12, verbatim:**
+> *"95% coverage in size font style context images"* ... *"thats the minimum threshold to pass"*
+
+**Owner, 2026-09-07 01:14, verbatim:**
+> *"i expect these images to fill the screen, not 60% of it"*
+
+**Occasion.** Commit `949e848a0` declared *"all nine screens match the owner's mockup - twenty-four
+capture rounds"* on the strength of headless frames a seat read itself. That night she walked all nine
+Manage screens on device build 358872 beside `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` and none
+matched. Twelve board rows were sitting in the board's finished buckets on that claim (ten led with
+`IMPLEMENTED`, two with `FIXED`), plus `WO-2006` and `WO-2008` in this folder.
+
+**The ruling, binding on every Manage ticket:**
+
+1. **The acceptance is a DEVICE SCREENSHOT beside its mockup panel, judged a match BY THE OWNER.**
+2. **A headless capture, and any seat's own comparison, is EVIDENCE TOWARD that judgement and can never
+   mark a ticket done.**
+3. **A Manage ticket moves to DONE only when the owner says the frame matches.** Until then its status
+   reads `AWAITING OWNER MATCH` and the board buckets it **Verify** (`tools/board_build.py`), a bucket
+   that is deliberately ineligible for the owner-Pass close pass.
+4. **CRITERION ZERO: the panel FILLS the screen** - full bleed inside the safe area, as every mockup
+   panel is drawn. Not a 60%-width plate over the town. Judged before the five axes, because it
+   multiplies all of them.
+5. **THE FIVE AXES AND THE 95% FLOOR.** The owner must judge the frame at least **95% matched** on
+   **SIZE**, **FONT**, **STYLE**, **CONTEXT** (what is on screen and where) and **IMAGES** (the art
+   present and its treatment). Under 95% on any axis is a FAIL, whatever the headless capture says.
+
+The nine-row scorecard from her walk, one column per axis, is the current state and lives in
+`WorkOrders/ManageRedesign/CAPTURE_LOOP_GOAL.md`.

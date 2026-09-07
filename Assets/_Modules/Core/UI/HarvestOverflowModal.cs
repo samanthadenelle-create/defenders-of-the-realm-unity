@@ -144,6 +144,20 @@ namespace DeNelle.Core.UI
             // WO-1525 - ONE extra line, the VM's own shape summary. Deliberately NOT the long-form
             // BuildBody copy: a multi-line Step floods the F8 inbox harvester, which greps per line.
             FlowTrace.Step("Bank", $"harvest-result rows: {vm.TraceLine}");
+            // (!) THE LINE THE 2026-09-07 CAPTURE DID NOT HAVE (CLAUDE.md section 12).
+            // The two traces above carry the INPUT numbers and a row COUNT; neither proves what
+            // text reached the player, which is why the owner's frame could only be read by eye.
+            // ONE grep for "harvest-result screen" now returns the EXACT strings, and
+            // HarvestResultShapeRegression asserts the same strings equal the banked deltas.
+            FlowTrace.Step("Bank", $"harvest-result screen: {vm.ScreenText}");
+            // The merge is the WO-1525b fix; say out loud when it actually folded something, so a
+            // regression that re-splits the rows is visible in one line rather than as a "+N more".
+            if (vm.SourceStatusCount != vm.TotalRowCount)
+                FlowTrace.Step("Bank",
+                    $"harvest-result: {vm.SourceStatusCount} producer status(es) merged to " +
+                    $"{vm.TotalRowCount} resource row(s) - the welcome-back screen sums the same " +
+                    "producers per resource (OfflineHarvestService.BuildReturnRows), so the two " +
+                    "screens now report one figure per resource.");
         }
 
         // -- WO-1525: the row renderer --------------------------------------------
@@ -276,7 +290,19 @@ namespace DeNelle.Core.UI
             // THE DOOR. Full plate height ON PURPOSE - see the MinTouchPx note on
             // HarvestResultVM.MaxRows; insetting it gives the measurement straight back.
             var captured = row;
-            var chip = ElarionUiKit.BuildObsidianButton(plate.transform, row.ActionText,
+            // !! TWO LINES, NEVER AN ELLIPSIS (owner device 2026-09-07 01:14,
+            // Logs/device/screens/owner-screen-20260907-011426.png). The chip was drawn with
+            // FitSingleLine, whose contract ellipsizes past the mobile floor, and the frame shows
+            // "UPGRADE LUMBER..." and "UPGRADE STONEYA..." while the shorter "UPGRADE FOUNDRY" fit.
+            // A truncated chip names a building that does not exist, on the one control whose whole
+            // job is to say WHERE TO GO - so the break point is AUTHORED by the VM (ActionVerb /
+            // ActionTarget) and drawn on two lines at the same readable floor. FitBlock wraps and
+            // TRUNCATES rather than ellipsizing, so a face that still cannot fit loses whole words
+            // instead of turning a name into a lie.
+            string chipFace = string.IsNullOrEmpty(row.ActionTarget)
+                ? row.ActionText
+                : row.ActionVerb + "\n" + row.ActionTarget;
+            var chip = ElarionUiKit.BuildObsidianButton(plate.transform, chipFace,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.65f, 0f), new Vector2(0.97f, 1f),
                 () => Route(captured));
@@ -284,7 +310,11 @@ namespace DeNelle.Core.UI
             var face = chip != null ? chip.targetGraphic as UnityEngine.UI.Image : null;
             if (face != null) face.type = UnityEngine.UI.Image.Type.Simple;
             var chipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>() : null;
-            if (chipLabel != null) ElarionUiKit.FitSingleLine(chipLabel, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+            if (chipLabel != null)
+            {
+                chipLabel.text = chipFace;
+                ElarionUiKit.FitBlock(chipLabel, ElarionUi.FontFloorMobile, ElarionUi.FontLabel);
+            }
         }
 
         /// <summary>

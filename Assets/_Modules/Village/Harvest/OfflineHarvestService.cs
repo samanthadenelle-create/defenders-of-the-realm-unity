@@ -902,7 +902,25 @@ namespace DeNelle.Village
             int waiting = 0;
             for (int i = 0; i < rows.Count; i++) waiting += rows[i].Waits;
             if (waiting <= 0) return null;
-            return $"{waiting} stays where it is until there is room - nothing is lost. Spend, or upgrade storage.";
+            // !! "ALREADY WAITING", NOT "PRODUCED" (owner frame 2026-09-07 01:13). The header above
+            // this table says "YOUR REALM WORKED FOR 30m" and the rows then showed 108,072 units
+            // waiting - which reads as a claim that half an hour produced 108k. It did not: the
+            // waiting figures are the STANDING pools in the collectors and the Echo silo, banked up
+            // over days against a full store, while the "+" figures are what THIS window earned.
+            // The sentence now names where the units already are, so the two kinds of number
+            // cannot be read as one.
+            // Grouped with the invariant culture: a device locale can otherwise group with U+00A0,
+            // which renders as tofu on the mobile atlas (the same reason HarvestResultVM.N exists).
+            // ...AND THE PLACE IS COMPOSED FROM THE ROWS, never asserted. A collectors-only window
+            // must not claim an Echo silo is holding something: an untrue word on a reassurance
+            // sentence is the same defect as an untrue number, and this screen is the one the
+            // player checks the HUD rail against.
+            int fromCollectors = 0, fromSilo = 0;
+            for (int i = 0; i < rows.Count; i++) { fromCollectors += rows[i].FromCollectors; fromSilo += rows[i].FromSilo; }
+            string where = fromCollectors > 0 && fromSilo > 0 ? "your collectors and Echo silo"
+                         : (fromSilo > 0 ? "your Echo silo" : "your collectors");
+            string n = waiting.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+            return $"{n} is already waiting in {where} - nothing is lost. Spend, or upgrade storage.";
         }
 
         /// <summary>
@@ -1096,11 +1114,60 @@ namespace DeNelle.Village
         //     and are the resource the server-side reconciler logs most loudly.
         // If you change either, the server-side reconciliation in api/game/save.js
         // (§RECONCILE) becomes the ONLY line of defence. Do not silently rely on it.
+        // =====================================================================
+        //  WO-1445 -- WHAT THE CAP REFUSES HERE IS GENUINELY NOT ADDED, AND THE
+        //  SCREEN NOW SAYS SO IN WORDS INSTEAD OF PROMISING A FIGURE.
+        // =====================================================================
+        //  THE TICKET ASKED FOR RETENTION ("retain the remainder on the same pending store the
+        //  producers use"). MEASURED AT SOURCE, THERE IS NO SUCH STORE ON THIS PATH, and saying so
+        //  is the honest answer rather than inventing one (CLAUDE.md section 11B):
+        //    * ResourceCollector.PendingAmount is PER COLLECTOR, per building - the retention the
+        //      collectors and the Echo silo both use. This method's income comes from MINE NODES,
+        //      SETTLEMENTS and PETS (AccrueWorkerNodes / AccrueSettlements / AccruePets); none of
+        //      those has a collector, so there is no pending pool to put a remainder in.
+        //    * Pushing it into an unrelated building's collector would re-mint the WO-1392 defect
+        //      the other way (a second producer writing a pool one screen reads and another does
+        //      not), and it would hit that collector's OWN cap.
+        //    * A new persisted store is a save-schema bump - structural, and out of this lane.
+        //  So the remainder is NOT ADDED, and the owner's WO-1461 law is honoured the way that law
+        //  actually reads: the surplus is never SILENTLY lost. Every refused unit now (a) raises a
+        //  permanent FlowTrace.Warn naming the resource and the amount, (b) reaches the HARVEST
+        //  RESULT screen as a real row through the SAME BankOverflowStatus seam the collectors use,
+        //  and (c) is described on that screen as "not added" with a footer that says WHY - never
+        //  as "waiting, safe", which would be the WO-1434 lie inverted.
+        //  !! AND THE ROWS ONLY REACH THE SCREEN INSIDE A WARN SCOPE. Measured at source
+        //  2026-09-07: BankOverflowToastPresenter.OnOverflow opens with
+        //      if (_scopeDepth <= 0) return;                  // "Ruling 3 (WO-1207): NO SCOPE, NO SCOLD"
+        //  (BankOverflowToastPresenter.cs:162-171). Grant had NO scope, so for its whole life its
+        //  clamps raised the Overflowed event into a presenter that dropped them on the floor -
+        //  the away haul's overflow has never once reached the HARVEST RESULT screen. The scope is
+        //  what stamps Source and what calls HarvestOverflowModal.Present (`:250-256`); it also
+        //  merges repeat clamps of one resource into one row, which is why no separate batch is
+        //  opened here - a second aggregation mechanism over the same three statuses is exactly
+        //  the duplicated-producer shape WO-1392 was about.
+        //  ! The presenter keeps a per-resource cooldown; a second overflowing claim inside it is
+        //  deliberately silent on screen (the FlowTrace.Warn below is unthrottled regardless).
+        //  Raised to the lead as a contradiction in WORK_ORDER_1445's RESULT.
+        // =====================================================================
         private void Grant(OfflineHarvestResult result, GameState state)
         {
-            int iron = TownBankCapacity.ClampGrant(BankResource.Iron, state.Iron, result.Iron, "OfflineHarvest", out _);
-            int wood = TownBankCapacity.ClampGrant(BankResource.Wood, state.Wood, result.Wood, "OfflineHarvest", out _);
-            int food = TownBankCapacity.ClampGrant(BankResource.Food, state.Resources.Food, result.Food, "OfflineHarvest", out _);
+            int iron, wood, food, lostIron, lostWood, lostFood;
+            // FULLY QUALIFIED on purpose: this file already has `using DeNelle.Village.UI`, and a
+            // second `using DeNelle.Core.UI` would put two UI namespaces in scope here for the sake
+            // of ONE type. One name, no ambiguity surface.
+            using (DeNelle.Core.UI.BankOverflowToastPresenter.BeginWarnScope("OfflineHarvest"))
+            {
+                iron = TownBankCapacity.ClampGrant(BankResource.Iron, state.Iron, result.Iron, "OfflineHarvest", out lostIron);
+                wood = TownBankCapacity.ClampGrant(BankResource.Wood, state.Wood, result.Wood, "OfflineHarvest", out lostWood);
+                food = TownBankCapacity.ClampGrant(BankResource.Food, state.Resources.Food, result.Food, "OfflineHarvest", out lostFood);
+            }
+
+            // PERMANENT, per resource, and NEVER throttled: a discard on this path used to be
+            // computed nowhere and retained nowhere, so it left no line at all. One grep for
+            // "away haul NOT ADDED" now names every unit this path could not bank.
+            WarnDiscarded("Iron", state.Iron, result.Iron, iron, lostIron);
+            WarnDiscarded("Wood", state.Wood, result.Wood, wood, lostWood);
+            WarnDiscarded("Stone", state.Resources.Food, result.Food, food, lostFood);
 
             if (iron > 0) state.Iron += iron;
             if (wood > 0) state.Wood += wood;
@@ -1131,8 +1198,38 @@ namespace DeNelle.Village
                       (result.WasCapped ? " (away-cap)." : ".") +
                       $" clock={result.ClockSource}{(result.IsProvisional ? " (provisional until sync)" : "")}." +
                       (bankTruncated
-                          ? $" BANK FULL - accrued {result.Iron} iron / {result.Wood} wood / {result.Food} food; the surplus was LOST."
+                          ? $" BANK FULL - accrued {result.Iron} iron / {result.Wood} wood / {result.Food} food; " +
+                            "the surplus was NOT ADDED (there is no store that holds away node yield - see the WO-1445 block above)."
                           : ""));
+
+            // (!) ONE LINE, THE WHOLE CLAIM (CLAUDE.md section 12). Away seconds, and per resource:
+            // the cap, what was asked for, what BANKED and what was not added. The device capture
+            // of 2026-09-07 had accrue-pending lines and a collector status band but NOTHING that
+            // reconciled the away window to the banked deltas, so "looked like a fail" could not be
+            // checked against a number. One grep for "away claim banked" answers it now.
+            FlowTrace.Step("OfflineHarvest",
+                $"away claim banked: away={result.AwaySeconds:0}s capped={result.WasCapped} | " +
+                $"WOOD asked={result.Wood} banked={wood} notAdded={lostWood} cap={TownBankCapacity.MaxOf(BankResource.Wood)} | " +
+                $"IRON asked={result.Iron} banked={iron} notAdded={lostIron} cap={TownBankCapacity.MaxOf(BankResource.Iron)} | " +
+                $"STONE asked={result.Food} banked={food} notAdded={lostFood} cap={TownBankCapacity.MaxOf(BankResource.Food)} | " +
+                $"CRYSTALS asked={result.AetherCrystals} banked={result.AetherCrystals} notAdded=0 cap=uncapped. " +
+                "The HARVEST RESULT screen composes its figures from these same clamp events " +
+                "(HarvestResultVM.Build), so screen == banked by construction.");
+        }
+
+        /// <summary>
+        /// WO-1445 - the one permanent warn for a unit this path could not bank. Silent above zero
+        /// discard is the whole defect; a discard that leaves no line is indistinguishable from
+        /// income that never accrued.
+        /// </summary>
+        private static void WarnDiscarded(string word, int current, int asked, int banked, int lost)
+        {
+            if (lost <= 0) return;
+            FlowTrace.Warn("OfflineHarvest",
+                $"away haul NOT ADDED [{word}]: accrued {asked}, banked {banked}, {lost} could not be " +
+                $"stored (wallet {current}). Away node/settlement/pet yield has NO pending pool to wait " +
+                "in - unlike the collectors and the Echo silo, which both retain - so these units are " +
+                "not added at all. The HARVEST RESULT row says \"not added\", never \"waiting, safe\".");
         }
 
         // =====================================================================

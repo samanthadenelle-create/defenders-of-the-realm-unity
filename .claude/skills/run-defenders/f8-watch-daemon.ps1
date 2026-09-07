@@ -190,9 +190,17 @@ while ($true) {
             foreach ($line in $newLines) {
                 if ($line -match ('"kind"\s*:\s*"({0})"' -f $kindSkip)) { continue }
                 if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                # WO-1531: an owner FLAG is an EVENT, not a message. Two identical presses are two
+                # facts, so a flagged line is never suppressed by the seen table. (This key is the
+                # whole line, utc included, so ordinary entries were never suppressed forever the
+                # way the device bridge's kind+message key was - the flag carve-out is the half
+                # that matters here.)
+                $isFlaggedLine = $line -match '"kind"\s*:\s*"flagged"'
                 $key = 'bl:' + $line.GetHashCode()
-                if ($seenKeys.ContainsKey($key)) { continue }
-                $seenKeys[$key] = $true
+                if (-not $isFlaggedLine) {
+                    if ($seenKeys.ContainsKey($key)) { continue }
+                    $seenKeys[$key] = $true
+                }
 
                 # anchored on the "kind" FIELD: the old greedy 'kind.*:\s*"(\w+)"' walked past it and
                 # captured the LAST quoted word on the line - which is why PING.json kind read
@@ -228,9 +236,14 @@ while ($true) {
             $isSoftlock = $line -match 'Infinite loop|stack overflow|Deadlock|softlock'
             if (-not ($isFlagged -or $isError -or $isSoftlock)) { continue }
 
+            # WO-1531: same carve-out. A Player.log flag line carries no timestamp of its own, so
+            # the whole-line hash WOULD have suppressed every later press for the life of the
+            # daemon - the exact failure the device bridge shipped.
             $key = 'log:' + $line.GetHashCode()
-            if ($seenKeys.ContainsKey($key)) { continue }
-            $seenKeys[$key] = $true
+            if (-not $isFlagged) {
+                if ($seenKeys.ContainsKey($key)) { continue }
+                $seenKeys[$key] = $true
+            }
 
             if ($isFlagged) { $capKind = 'flagged' }
             elseif ($isSoftlock) { $capKind = 'softlock' }

@@ -1,6 +1,9 @@
 # WO-1445: OfflineHarvestService.Grant banks the clamped amount and throws the remainder away
 
-**Status:** READY TO IMPLEMENT - low severity today (dead on the owner's save), real divergence
+**Status:** IMPLEMENTED - 2026-09-07 uncommitted, awaiting gate. ! THE TICKET'S FIX SHAPE WAS NOT
+FOLLOWED AS WRITTEN and the reason is in the RESULT: there is no pending store on this path to retain
+onto. The remainder is NAMED IN WORDS instead (owner law, WO-1461). Contradiction raised for the lead.
+PRIOR STATUS: READY TO IMPLEMENT - low severity today (dead on the owner's save), real divergence
 **Silo:** `Assets/_Modules/Village/Harvest/OfflineHarvestService.cs` (`Grant`) + `OfflineHarvestRegression.cs`.
 Disjoint from the Manage 2000-block, the raid lanes, the HUD kit and Build mode.
 **Source:** found 2026-09-06 while re-verifying WO-1434 at source. Minted by the CLI seat from the banner

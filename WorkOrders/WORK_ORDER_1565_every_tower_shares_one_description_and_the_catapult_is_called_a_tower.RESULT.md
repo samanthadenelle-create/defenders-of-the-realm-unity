@@ -1,6 +1,6 @@
 # WO-1565 RESULT - authored descriptions; the unauthored case now FAILS the catalog gate
 
-**Status:** IMPLEMENTED - 2026-09-06, uncommitted, awaiting gate. Edit-only lane (no Unity, no git).
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 3 (BUILDING DETAIL) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06, uncommitted, awaiting gate. Edit-only lane (no Unity, no git).)*
 **Option chosen (sec.4):** (a) - all unauthored rows drafted against the existing voice, derived from each
 row's own `repo`/behaviour, for the owner to review in one pass.
 **Touched:** `structures-catalog.json` x2 (+9/-0 each), `StructureCardVM.cs` (+12/-9),

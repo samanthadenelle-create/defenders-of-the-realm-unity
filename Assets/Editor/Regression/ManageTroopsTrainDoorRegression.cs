@@ -372,11 +372,32 @@ namespace DeNelle.Editor
 
                 var stats = sel.Stats;
                 int rows = stats != null ? stats.Count : 0;
-                if (rows < 5)
-                    failures.Add($"[case 8] troop '{c.Id}' shows {rows} stat row(s). The card must carry the four " +
-                                 "stats troop-upgrades.json's curves actually move (Health / Damage / Range / " +
-                                 "Speed, via TroopStatResolver.Effective - the SAME resolver TroopDeployer applies " +
-                                 "to the live unit) plus its train time. Two timer rows is the 20:10 defect.");
+
+                // ⛔ RE-POINTED 2026-09-07 (WO-1567 panel row 5), WITH THE RETIRED READING KEPT SO
+                // IT IS NOT MOVED BACK. It read:
+                //     if (rows < 5) ... "the four stats ... plus its train time"
+                // i.e. it required the DURATION to be a fifth row IN THE STATS TABLE. The panel-5
+                // ruling moved it out: mockup panel 5 draws the time under the costs with a clock
+                // glyph, not among the stats, and ComposeDetail now sets costCaption "Train Time"
+                // + timeText from TrainTimeText. ManageSelectionVM.TimeText exists for exactly that.
+                //
+                // ⚠ TWO ORACLES CANNOT BOTH BE RIGHT, AND THIS WAS THE STALE ONE.
+                // ManageMockupConformanceRegression's [detail-clock-on-its-own] FAILS if the card
+                // stops painting sel.TimeText - "a duration has no bank and no affordability
+                // verdict, so it is never a cost row", and it is not a stat either. A count of 5
+                // and a clock band are mutually exclusive; the count was the assertion that had to
+                // move.
+                //
+                // ⭐ NOTHING IS LOST AND THE COUNT IS NO LONGER THE TEST. The four curve stats are
+                // now demanded BY NAME (a count of five could be met by any five rows, including
+                // the two mislabelled timer rows the owner photographed), and the duration is
+                // demanded on the channel that now carries it. Strictly stronger than "rows >= 5".
+                bool sawDamage = false, sawRange = false, sawSpeed = false;
+                if (string.IsNullOrWhiteSpace(sel.TimeText))
+                    failures.Add($"[case 8] troop '{c.Id}' carries no TimeText. The train duration left the stats " +
+                                 "table for the clock band under the costs (mockup panel 5) - if it is on neither, " +
+                                 "the card never says how long training takes, which is worse than the two " +
+                                 "mislabelled timer rows this case was written against.");
 
                 bool sawDelta = false, sawHealth = false;
                 for (int s = 0; s < rows; s++)
@@ -395,11 +416,20 @@ namespace DeNelle.Editor
                         failures.Add($"[case 8] troop '{c.Id}' still carries the retired row label \"{row.Label}\" " +
                                      $"over the value \"{row.Value}\" (WO-1517 §1B item 4).");
                     if (string.Equals(row.Label, "Health", StringComparison.Ordinal)) sawHealth = true;
+                    if (string.Equals(row.Label, "Damage", StringComparison.Ordinal)) sawDamage = true;
+                    if (string.Equals(row.Label, "Range", StringComparison.Ordinal)) sawRange = true;
+                    if (string.Equals(row.Label, "Speed", StringComparison.Ordinal)) sawSpeed = true;
                     if (!string.IsNullOrEmpty(row.DeltaText)) sawDelta = true;
                 }
-                if (rows > 0 && !sawHealth)
-                    failures.Add($"[case 8] troop '{c.Id}' names no Health row - the stat table is not being read " +
-                                 "from TroopStatResolver.");
+                // BY NAME, all four. These are the stats troop-upgrades.json's curves actually move
+                // (strength scales MaxHp + DPS, reach scales AttackRange + AggroRadius), read
+                // through TroopStatResolver.Effective - the SAME resolver TroopDeployer applies to
+                // the live unit, so the number on the card is the number that fights.
+                if (rows > 0 && !(sawHealth && sawDamage && sawRange && sawSpeed))
+                    failures.Add($"[case 8] troop '{c.Id}' shows {rows} stat row(s) and is missing " +
+                                 (!sawHealth ? "Health " : "") + (!sawDamage ? "Damage " : "") +
+                                 (!sawRange ? "Range " : "") + (!sawSpeed ? "Speed " : "") +
+                                 "- the stat table is not being read from TroopStatResolver.");
                 if (c.HasNextLevel && !sawDelta)
                     failures.Add($"[case 8] troop '{c.Id}' has a next level (L{c.Level} -> L{c.Level + 1}) and not " +
                                  "one stat row carries a DeltaText, so the card never says what the upgrade " +

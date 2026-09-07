@@ -1,5 +1,96 @@
 # STANDING GOAL: iterate the Manage screens against the mockups until they match
 
+---
+
+## RULING 2026-09-07 - THE GOAL IS A SCREENSHOT THE OWNER JUDGES, NOT A CAPTURE A SEAT READS
+
+**Owner, 2026-09-07 01:10, verbatim:**
+> *"fix the board so those tickets dont say done and update the goal to be screenshots proving
+> these match"*
+
+**Owner, 2026-09-07 01:12, verbatim - THE PASS THRESHOLD:**
+> *"95% coverage in size font style context images"* ... *"thats the minimum threshold to pass"*
+
+**Owner, 2026-09-07 01:14, verbatim - THE HARD CRITERION ABOVE THE FIVE AXES:**
+> *"i expect these images to fill the screen, not 60% of it"*
+
+### Why this ruling exists
+
+Commit `949e848a0` (2026-09-06 18:51) is titled *"all nine screens match the owner's mockup -
+twenty-four capture rounds"* and records `geometry = 0  touch = 0  fidelity = 0  named faults = NONE`.
+**That claim was false.** The same night the owner walked all nine Manage screens on device build
+358872 with `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png` beside her, and **not one screen
+matched** - see the scorecard below. Measured by classifying each ticket's own prior status line, not
+quoted: **twelve board rows were sitting in the finished buckets** on the strength of that claim - ten
+whose status led with `IMPLEMENTED` (board bucket Done) and two with `FIXED` - plus
+`WO-2006` and `WO-2008` in this folder, which are not board rows at all because `parse_wos` globs
+`WorkOrders/*.md` flat and never descends into `ManageRedesign/`.
+
+The failure is not the layout work. It is that a seat read its own headless frames and **declared the
+comparison passed**. A headless capture proves frames were written and that measurable oracles
+(geometry, touch, fidelity) are green. It cannot prove the picture matches, and 24 rounds of it did
+not.
+
+### THE ACCEPTANCE, BINDING ON EVERY MANAGE TICKET
+
+1. **The acceptance for every Manage screen is a DEVICE SCREENSHOT placed beside its mockup panel and
+   judged as a match BY THE OWNER.** Nothing else is the acceptance.
+2. **Headless captures and seat-read comparisons are EVIDENCE TOWARD it, and can never mark a ticket
+   done.** They are how a lane decides it is ready to be looked at. They are not the verdict.
+3. **A ticket may only move to DONE when the owner says the frame matches.** Until she has said it, a
+   Manage ticket's status is `AWAITING OWNER MATCH` and the board buckets it **Verify** - a bucket
+   added to `tools/board_build.py` on this ruling precisely so these can never read as finished again.
+   `Verify` is deliberately ineligible for `board_close_pass.py`, which closes only `Fixed`.
+4. **CRITERION ZERO - THE PANEL FILLS THE SCREEN.** Full bleed inside the safe area, like every mockup
+   panel. **Not a 60%-width plate floating over the town.** This is judged first and it multiplies
+   everything under it: a correctly-proportioned element inside a 64% plate is still the wrong size on
+   the device. Measured tonight: every frame was taken through a plate at x 0.18-0.82 = 64% of the
+   canvas.
+5. **THE FIVE AXES, AND THE 95% FLOOR.** A screen passes only when the owner judges the device frame
+   **at least 95% matched** to its mockup panel on each of:
+   - **SIZE** - element and type dimensions relative to the panel.
+   - **FONT** - face, weight and case. (Truncation and clipping are recorded under SIZE and CONTEXT,
+     not here - the axis names are the owner's five words and she has not defined them further.)
+   - **STYLE** - shape language, borders, fills, dimming, badge treatment.
+   - **CONTEXT** - what is on the screen and where it sits. A missing stat table or a bare number with
+     no label is a CONTEXT failure even when the type is perfect.
+   - **IMAGES** - the art that is present, and its treatment (crop, mask, aspect, ring vs square).
+
+   **Anything under 95% on any axis is a FAIL, whatever the headless capture says.**
+6. Everything in sections 2-6 below still stands. This ruling does not replace the loop; it names who
+   closes it.
+
+### CURRENT STATE - the owner's walk of device build 358872, 2026-09-07 00:47-01:04
+
+**Scorecard legend:** `no` = the owner's walk recorded a divergence on this axis tonight.
+`unscored` = she has not scored that axis yet; it is NOT a pass. **No row passes.**
+Frames are under `Logs/device/screens/`.
+
+| # | Screen | Frame | FILLS SCREEN | SIZE | FONT | STYLE | CONTEXT | IMAGES | The gap she named |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | MANAGE hub | `owner-screen-20260907-004724.png` | no | no | unscored | unscored | no | no | no card art; cards tiny (~2.2:1 against the mockup's 0.9:1); every description truncated |
+| 2 | MANAGE / BUILD grid | `owner-screen-20260907-004825.png` | no | no | unscored | unscored | unscored | no | ring medallions instead of square art; "SHORT 28..." truncates; blank tier tiles |
+| 3 | BUILDING detail | `owner-screen-20260907-004903.png` | no | no | unscored | unscored | no | no | no before/after stat table; bare cost numbers naming no resource; circular art |
+| 4 | MANAGE / ARMY grid | `owner-screen-20260907-005136.png` | no | unscored | unscored | no | unscored | no | ring medallions; locked troops at full brightness, not dimmed (dimming is a STYLE call, so this row scores STYLE) |
+| 5 | TROOP detail | `owner-screen-20260907-005222.png` | no | unscored | unscored | unscored | no | unscored | no cost band |
+| 6 | TROOP detail, locked | `owner-screen-20260907-005311.png` | no | unscored | unscored | unscored | no | unscored | requirement glued into the description line |
+| 7 | RESEARCH picker | `owner-screen-20260907-005358.png` | no | no | unscored | no | no | no | 2x2 of short wide tiles with a dead well beneath; banner art stretched through an oval mask |
+| 8 | RESEARCH tree | `owner-screen-20260907-010151.png` | no | unscored | unscored | unscored | no | no | no school painting; requirements glued to the benefit line |
+| 9 | QUEUE overlay | `owner-screen-20260907-010257.png`, `-010356.png` | no | no | unscored | unscored | no | unscored | the well is two rows tall; rows clipped top and bottom |
+
+**Tickets held at `AWAITING OWNER MATCH` on this ruling** (board bucket `Verify`, none of them Done):
+WO-1405, WO-1422, WO-1443, WO-1479, WO-1488, WO-1516, WO-1517, WO-1518, WO-1541, WO-1563, WO-1564,
+WO-1565 - twelve board rows - and, in this folder and invisible to the board, WO-2006 and WO-2008.
+
+**Left DONE / CLOSED deliberately, with the reason, so nobody re-opens them by sweep:** WO-1382,
+WO-1390, WO-1418, WO-1435, WO-1436 are `CLOSED - owner felt-test PASS` and carry her own sign-off in
+`proof/owner-validations.json` - **hers to reopen, not a seat's.** WO-2001 is SUPERSEDED (a closure,
+not a match claim); WO-2002 is a UI contract; WO-2003 and WO-2011 are model/data lanes whose FIXED is
+about the gate, not the pixels; WO-2005 is inventory reconciliation; WO-2013 is navigation behaviour;
+WO-2017's Heart surface is not one of the nine mockup panels. WO-1487 is already SPEC (blocked on art).
+
+---
+
 **Owner directive, 2026-09-06, verbatim:**
 > *"i want you to run these as a goal. Keep doing them and testing with images till they match the mock ups ok?"*
 

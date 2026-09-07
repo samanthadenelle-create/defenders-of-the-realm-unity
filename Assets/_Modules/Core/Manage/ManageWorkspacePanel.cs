@@ -159,6 +159,16 @@ namespace DeNelle.Core.Manage
         // "12 visible tiles". Clamped, so the tile fractions below stay annotated over a range
         // that is actually reachable (150-190px).
         private const float MaxTileHeightPx = 190f;
+        /// <summary>
+        /// The widest a tile may be against its own height, MEASURED off the owner's mockup:
+        /// BUILD's tiles (panel 2) are about 1.07:1 and ARMY's (panel 4) about 2.3:1, so 2.3 is
+        /// the drawn ceiling rather than a guess.
+        /// <para>⛔ IT EXISTS BECAUSE THE PANEL NOW FILLS THE SCREEN (owner ruling 2026-09-07).
+        /// The band grew by half, and without a cap the reclaimed width went straight into the
+        /// cells - round 4 already measured what that looks like (793x134, 5.9:1) and called them
+        /// BARS. The surplus becomes an even side margin instead, which is what the mockup draws.</para>
+        /// </summary>
+        private const float MaxTileAspect = 2.3f;
         private const float TileGapPx = 10f;
 
         /// <summary>
@@ -445,6 +455,65 @@ namespace DeNelle.Core.Manage
         //  GRID
         // =====================================================================
 
+        /// <summary>
+        /// The school painting's right edge, as a fraction of the well. Mockup panel 7 gives the
+        /// picture a little under half the panel; 0.40 leaves the rows the wider half, which is
+        /// where the words are.
+        /// </summary>
+        private const float ListPaintingX1 = 0.40f;
+
+        /// <summary>The gutter between the painting and the first row.</summary>
+        private const float ListPaintingGapF = 0.02f;
+
+        /// <summary>
+        /// ⭐ MOCKUP PANEL 7's LEFT-HAND PAINTING. Paints the school into the left
+        /// <see cref="ListPaintingX1"/> of the well and returns the zone the ROWS now own.
+        ///
+        /// <para>⛔ THE PICTURE IS SQUARE AND CROPPED, NOT LETTERBOXED. The delivered portraits
+        /// are 1024x1024 with transparent corners; <see cref="SquarePortrait"/> envelope-crops to
+        /// the zone, which is the same treatment the grid tiles got in WO-1567 panel row 2. A
+        /// preserveAspect fit into a tall zone would band the picture with black top and bottom,
+        /// which is the failure ManageArt's hub-art note records for the retired landscape strips.
+        /// The zone is therefore kept SQUARE and centred vertically rather than stretched.</para>
+        ///
+        /// <para>Returns null when the art does not resolve - the caller then keeps the full band
+        /// and the rows lose nothing. An ART ASK must never cost the player the words.</para>
+        /// </summary>
+        private RectTransform BuildListPainting(RectTransform band, string artKey,
+                                                float bandW, float bandH)
+        {
+            if (band == null) return null;
+            var art = ManageArt.LoadSprite(artKey);
+            if (art == null)
+            {
+                // LoadSprite has already announced the miss by key. This line says what the SCREEN
+                // does about it, which the loader cannot know.
+                FlowTrace.Once("Manage", "list-painting-miss:" + artKey,
+                    "the research tree has no painting for '" + artKey + "', so the rows keep the " +
+                    "full well rather than sitting beside an empty rect (mockup panel 7 draws the " +
+                    "school on the left). This is an ART ASK, not a layout fault.");
+                return null;
+            }
+
+            // A SQUARE seat inside the left column, centred on the band's vertical middle. Its side
+            // is whichever of the two is smaller, so the picture never overflows either axis.
+            float sidePx = Mathf.Min(bandW * ListPaintingX1, bandH);
+            float halfW = bandW > 1f ? (sidePx / bandW) * 0.5f : ListPaintingX1 * 0.5f;
+            float halfH = bandH > 1f ? (sidePx / bandH) * 0.5f : 0.5f;
+            float cx = ListPaintingX1 * 0.5f;
+            var artZone = Zone(band, "ListPainting",
+                new Vector2(Mathf.Max(0f, cx - halfW), Mathf.Clamp01(0.5f - halfH)),
+                new Vector2(Mathf.Min(ListPaintingX1, cx + halfW), Mathf.Clamp01(0.5f + halfH)));
+            SquarePortrait(artZone, artKey, dim: false);
+            FlowTrace.Step("Manage", "MANAGE_LIST_PAINTING key=" + artKey + " side=" +
+                sidePx.ToString("0") + "px in a " + bandW.ToString("0") + "x" + bandH.ToString("0") +
+                "px well - the rows take x " + (ListPaintingX1 + ListPaintingGapF).ToString("0.##") +
+                "..1.0");
+
+            return Zone(band, "ListRowsHost",
+                new Vector2(ListPaintingX1 + ListPaintingGapF, 0f), new Vector2(1f, 1f));
+        }
+
         private void BuildGrid(RectTransform band, ManageTabVM tab)
         {
             if (tab == null) return;
@@ -470,8 +539,33 @@ namespace DeNelle.Core.Manage
             // A square cell fixes the second outright and makes the first arithmetic instead of luck.
             int columns = tab.GridColumns > 0 ? tab.GridColumns : 3;
             int rows = tab.GridRows > 0 ? tab.GridRows : 3;
+
+            // ⭐ WO-1567 PANEL ROW 8 - THE SCHOOL PAINTING TAKES THE LEFT OF THE WELL, THE ROWS
+            // TAKE THE REST. Mockup panel 7 is a big square picture of the building on the left
+            // with its perk rows stacked to the right; the owner's capture
+            // (Logs/device/screens/owner-screen-20260907-010151.png) shows four rows spanning the
+            // whole well and no picture at all.
+            // ⛔ ONLY ON THE LIST SHAPE, and only when the MODEL supplied a key. A grid screen
+            // (BUILD / ARMY / the research picker) must keep the full width, and a list with no
+            // painting must not lose 40% of its band to an empty rect.
+            // The rows are re-parented into a sub-zone, so every measurement below - bandW, the
+            // cell, the whole-row trim - resolves against the band the rows actually get. Carving
+            // the picture out afterwards is how a "fixed" layout still renders rows off the edge.
             float bandW = band.rect.width > 1f ? band.rect.width : 1080f;
             float bandH = band.rect.height > 1f ? band.rect.height : LastGridPx;
+            if (columns == 1 && !string.IsNullOrEmpty(tab.HeaderArtKey))
+            {
+                var rowsHost = BuildListPainting(band, tab.HeaderArtKey, bandW, bandH);
+                if (rowsHost != null)
+                {
+                    band = rowsHost;
+                    // ⚠ ARITHMETIC, NOT A RE-READ. A rect created this frame has had no layout
+                    // pass, so `rowsHost.rect.width` can legitimately read 0 - and a 0 here would
+                    // silently fall back to the 1080px literal above and size every cell against a
+                    // band that does not exist. The fractions are this method's own, one line up.
+                    bandW = bandW * (1f - ListPaintingX1 - ListPaintingGapF);
+                }
+            }
 
             // ⛔ THE GRID FILLS THE BAND. THE CELL IS NOT SQUARE. Do not "fix" this back to a square.
             // MEASURED in Builds/ui-capture/ManageFlow_ARMY_gridtop_2670x1200.png: a square cell
@@ -492,7 +586,41 @@ namespace DeNelle.Core.Manage
             // a second symptom of the same cause and not a font problem.
             float cellW = (bandW - (columns - 1) * TileGapPx) / columns;
             float cellH = (bandH - (rows - 1) * TileGapPx) / rows;
-            cellH = Mathf.Min(cellH, MaxTileHeightPx);
+            // ⭐ THE CELL KEEPS THE MOCKUP'S SHAPE EVEN IN A VERY WIDE BAND (owner ruling
+            // 2026-09-07 01:14: the panel now FILLS THE SCREEN, so this band is roughly half as
+            // wide again as it was). ManageScreenPanel used to solve this by SHRINKING THE WHOLE
+            // MODAL to 64% of the canvas until the band came out ~2:1; the owner retired that, and
+            // the answer belongs here anyway - it is the GRID that has to be ~2:1, not the modal.
+            // ⛔ CLAMPED, THEN CENTRED. A cell wider than MaxTileAspect x its height reads as a
+            // BAR (round 4 measured 793x134, 5.9:1, and it was rejected then for the same reason).
+            // The reclaimed width becomes an even margin either side - which is what the mockup
+            // draws - rather than being poured into the tiles.
+            float cellWCap = cellH * MaxTileAspect;
+            if (cellW > cellWCap)
+            {
+                FlowTrace.Step("Manage", "grid cell width clamped from " + cellW.ToString("0") +
+                    "px to " + cellWCap.ToString("0") + "px (" + MaxTileAspect.ToString("0.##") +
+                    ":1 against a " + cellH.ToString("0") + "px cell) - the band is " +
+                    bandW.ToString("0") + "px for " + columns + " columns, so the row centres and " +
+                    "the tiles keep the drawn shape instead of stretching into bars");
+                cellW = cellWCap;
+            }
+            // ⭐ A ONE-ROW GRID MAY GROW TO SQUARE (WO-1567 panel row 7). MaxTileHeightPx(190)
+            // exists to stop a WIDE cell from making one row taller than the whole band on a
+            // multi-row grid; on a SINGLE row there is no second row to crowd out, and the cap was
+            // the reason the research picker painted 190px of tile into a ~580px well with the
+            // rest black (measured on the owner's device,
+            // Logs/device/screens/owner-screen-20260907-005358.png).
+            // ⛔ THE CEILING IS THE CELL'S OWN WIDTH, so a tile may become SQUARE and never taller
+            // than it is wide - the mockup's shape. It is not "fill the band whatever the cost":
+            // an unclamped cell in a tall band would produce portrait-shaped tiles the art was
+            // never drawn for.
+            // ⛔ AND ONLY ON A REAL GRID. columns == 1 is the LIST shape (mockup panel 7's research
+            // tree, BuildListRow), where the cell is a full-width ROW and letting its height chase
+            // its width would make one row as tall as the band is wide.
+            float cellCeiling = (rows == 1 && columns > 1)
+                ? Mathf.Max(MaxTileHeightPx, cellW) : MaxTileHeightPx;
+            cellH = Mathf.Min(cellH, cellCeiling);
             float cell = cellH;   // the vertical governor: text bands and the touch floor read this
             if (cellW < 1f || cellH < 1f)
             {
@@ -584,7 +712,11 @@ namespace DeNelle.Core.Manage
             grid.spacing = new Vector2(TileGapPx, TileGapPx);
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             grid.constraintCount = columns;
-            grid.childAlignment = TextAnchor.UpperLeft;
+            // ⭐ CENTRED, NOT LEFT-PACKED. With the cell width clamped to MaxTileAspect a full-screen
+            // band has surplus width, and UpperLeft would pile every tile against the left edge and
+            // leave one ragged black column on the right - which is how the research picker read on
+            // the owner's device. Centring turns the surplus into the mockup's even side margins.
+            grid.childAlignment = TextAnchor.UpperCenter;
 
             var fitter = contentGo.GetComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -613,12 +745,18 @@ namespace DeNelle.Core.Manage
             // time a composer authors a new word (the failure this repo keeps paying for).
             // Every tile then paints at the SAME size, which is also why the grid reads as one row
             // of peers instead of nine independently-fitted labels.
+            // ⭐ MEASURED OVER THE CLOSED WORD (WO-1567 panel row 2), which is what a tile paints.
+            // Measuring StateText here while the tile painted StateWord would size every label for
+            // a string no tile shows - the grid would shrink to fit "SHORT 280 STONE, 720 GOLD"
+            // and paint "SHORT" at that size.
             string widestState = "";
             for (int i = 0; i < tiles.Count; i++)
             {
                 var t = tiles[i];
-                if (t == null || string.IsNullOrEmpty(t.StateText)) continue;
-                if (t.StateText.Length > widestState.Length) widestState = t.StateText;
+                if (t == null) continue;
+                string w = TileStateWord(t);
+                if (string.IsNullOrEmpty(w)) continue;
+                if (w.Length > widestState.Length) widestState = w;
             }
             float stateFontPx = ResolveStateWordFont(widestState, cellW);
             for (int i = 0; i < tiles.Count; i++)
@@ -633,7 +771,11 @@ namespace DeNelle.Core.Manage
             if (overflowStrip)
             {
                 float y1 = Mathf.Clamp01((leftoverPx - TileGapPx) / bandH);
-                var more = ElarionUiKit.Label(band, hidden + " MORE - SCROLL", 0f, y1,
+                // ⭐ WO-1491 - AN AFFORDANCE, NOT AN INSTRUCTION. It read "12 MORE - SCROLL", which
+                // is a sentence telling the player how to use a touchscreen; the count is the only
+                // part that carries information. "+12 MORE" reads as a badge on the edge of the
+                // grid, which is what the strip is.
+                var more = ElarionUiKit.Label(band, "+" + hidden + " MORE", 0f, y1,
                     ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Center,
                     0.05f, 0.95f);
                 ElarionUiKit.FitSingleLine(more, 20f, 28f);
@@ -681,26 +823,69 @@ namespace DeNelle.Core.Manage
             if (tile.IsSelected) ElarionUiKit.GoldPerimeter(row);
 
             // ICON, left, square inside the row's height.
+            // ⭐ WO-1567 PANEL ROW 8 - THE BAKED CAPTION IS CROPPED OUT.
+            // The perk cards carry the perk's NAME painted into their bottom third, and this row
+            // typesets that name two columns to the right; the owner's capture shows the baked
+            // words leaking out from under every medallion. ManageArt owns both the test and the
+            // rect (IsCaptionedPerkIcon / PerkIconU0..V1) - the View asks, it does not decide.
             var iconZone = Zone(row, "RowIcon", new Vector2(0.012f, 0.10f), new Vector2(0.10f, 0.90f));
-            ElarionUiKit.Portrait(iconZone, ManageArt.LoadSprite(tile.PortraitKey), active: false);
+            if (ManageArt.IsCaptionedPerkIcon(tile.PortraitKey))
+                CroppedIcon(iconZone, tile.PortraitKey,
+                    ManageArt.PerkIconU0, ManageArt.PerkIconU1,
+                    ManageArt.PerkIconV0, ManageArt.PerkIconV1);
+            else
+                ElarionUiKit.Portrait(iconZone, ManageArt.LoadSprite(tile.PortraitKey), active: false);
+
+            // ⭐ TWO FACTS, TWO ROWS - the mockup's panel 7 shape. A LOCKED row grows a third text
+            // line carrying the requirement beside a padlock; every other row keeps two.
+            // ⛔ THE BANDS SHIFT, THE ROW DOES NOT GROW. Growing the row would re-open the
+            // whole-row seating arithmetic the grid above already resolved, and the third line is
+            // only present on the rows that need it.
+            bool hasRequirement = !string.IsNullOrEmpty(tile.RequirementText);
 
             // NAME on top, EFFECT under it. Both bands are stated in px against the row height so
             // neither can fall under the MinTextBandPx cull floor without saying so.
-            float namePx = rowH * 0.42f, effectPx = rowH * 0.34f;
-            if (namePx < MinTextBandPx || effectPx < MinTextBandPx)
+            float nameY0 = hasRequirement ? 0.63f : 0.50f, nameY1 = hasRequirement ? 0.97f : 0.92f;
+            float effectY0 = hasRequirement ? 0.35f : 0.10f, effectY1 = hasRequirement ? 0.61f : 0.46f;
+            float namePx = rowH * (nameY1 - nameY0), effectPx = rowH * (effectY1 - effectY0);
+            float reqPx = hasRequirement ? rowH * 0.28f : 0f;
+            if (namePx < MinTextBandPx || effectPx < MinTextBandPx ||
+                (hasRequirement && reqPx < MinTextBandPx))
                 FlowTrace.Warn("Manage", "list row is " + rowH.ToString("0") + "px - its name band (" +
-                    namePx.ToString("0") + "px) or effect band (" + effectPx.ToString("0") +
-                    "px) is under the " + MinTextBandPx + "px TMP cull floor and would render BLANK");
+                    namePx.ToString("0") + "px), effect band (" + effectPx.ToString("0") +
+                    "px) or requirement band (" + reqPx.ToString("0") + "px) is under the " +
+                    MinTextBandPx + "px TMP cull floor and would render BLANK");
 
-            var name = ElarionUiKit.Label(row, tile.Title ?? string.Empty, 0.50f, 0.92f,
+            var name = ElarionUiKit.Label(row, tile.Title ?? string.Empty, nameY0, nameY1,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Left,
                 0.12f, 0.60f, bold: true);
             ElarionUiKit.FitSingleLine(name, 22f, 30f);
 
-            var effect = ElarionUiKit.Label(row, tile.Subtitle ?? string.Empty, 0.10f, 0.46f,
+            var effect = ElarionUiKit.Label(row, tile.Subtitle ?? string.Empty, effectY0, effectY1,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Left,
                 0.12f, 0.60f);
             ElarionUiKit.FitSingleLine(effect, 18f, 26f);
+
+            if (hasRequirement)
+            {
+                // ⭐ THE PADLOCK ROW. Mockup panel 7 draws a padlock and "Requires Cathedral Tier 3"
+                // on their own line; the device build glued that sentence onto the benefit with a
+                // " . " and then ellipsised it away (ManageViewContract.ManageTileVM.RequirementText
+                // records the exact captured string).
+                // ⛔ SHAPE, NOT HUE. The padlock is a second, non-colour channel for "locked" - the
+                // owner is red/green colourblind, so the word and the glyph both have to carry it.
+                PaintSprite(row, "RowRequirementLock", new Vector2(0.115f, 0.04f),
+                    new Vector2(0.155f, 0.30f), ManageArt.IconPadlock);
+                var need = ElarionUiKit.Label(row, tile.RequirementText, 0.04f, 0.30f,
+                    ElarionUi.Gold, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    0.165f, 0.60f);
+                ElarionUiKit.FitSingleLine(need, 18f, 26f);
+                // ⚠ THE WO-1518 DOOR AFFORDANCE IS NOT REPEATED HERE. The word that tells the
+                // player the row is tappable ("LOCKED - TAP") is composed model-side onto StateText
+                // and painted in the state column below, derived from whether a route actually
+                // exists. Restating it beside the padlock would be a second copy that goes stale
+                // the first time a locked row has no door.
+            }
 
             // ⭐ THE INLINE ACTION, mockup panel 7's gold RESEARCH button with its price beneath.
             // Present ONLY on an AVAILABLE row (ManageVmProjection.ProjectRowAction): a locked row
@@ -843,6 +1028,24 @@ namespace DeNelle.Core.Manage
             }
         }
 
+        /// <summary>
+        /// ⭐ THE WORD A GRID CELL PAINTS - <c>tile.StateWord</c>, falling back to
+        /// <c>tile.StateText</c> when the composer authored no shorter face (WO-1567 panel row 2).
+        ///
+        /// <para>⛔ THIS IS A CHOICE BETWEEN TWO MODEL-SUPPLIED STRINGS AND NOTHING MORE. It does
+        /// not truncate, split, uppercase or re-word either of them - doing any of that would be
+        /// the View deriving a label, which canon 9 bans and ManageDumbViewRegression scans for.
+        /// The reason the two faces exist at all is WO-1518: the owner asked for the amounts
+        /// ("short doesnt help, i need to know waht im short"), and the amounts fit the research
+        /// row's state column and the detail card but NOT a grid cell, where they measured as
+        /// "SHORT 28..." on her own device (owner-screen-20260907-004825.png).</para>
+        /// </summary>
+        private static string TileStateWord(ManageTileVM tile)
+        {
+            if (tile == null) return null;
+            return string.IsNullOrEmpty(tile.StateWord) ? tile.StateText : tile.StateWord;
+        }
+
         private void BuildTile(RectTransform parent, ManageTileVM tile, float cellH, float stateFontPx = 26f)
         {
             if (tile == null) return;
@@ -878,30 +1081,59 @@ namespace DeNelle.Core.Manage
             // (0.05-0.25). It was never able to act as a tile border on a wide cell; it is a
             // portrait medallion frame, and this is the rect it was drawn for. The tile's own
             // border is LAYER 1's plate, which does fill the cell.
-            PaintSprite(cell, "TileFrame", new Vector2(TilePortX0, TilePortY0),
-                new Vector2(TilePortX1, TilePortY1), tile.FrameKey);
+            //
+            // ⚠ 2026-09-07, WO-1567 panel row 2: THE PORTRAIT NOW COVERS THIS RECT COMPLETELY.
+            // Layer 4 spans x 0..1 / y TilePortY0..1 so the art meets the cell edges the way the
+            // mockup draws it, which means an UNDER-painted frame contributes nothing but a draw
+            // call. It is kept, at its own rect, ONLY for the two frames whose centre is alpha 0
+            // (frame-locked and frame-max, measured in this method's summary) and those are painted
+            // OVER the art instead - see layer 4a. Painting the two OPAQUE members over the art is
+            // what made every owned tile read as an empty frame in the first place, so the split is
+            // by MEASURED alpha, never by state name.
+            bool hollowFrame = tile.VisualState == ManageTileVisualState.Locked ||
+                               tile.VisualState == ManageTileVisualState.Max;
+            if (!hollowFrame)
+                PaintSprite(cell, "TileFrame", new Vector2(TilePortX0, TilePortY0),
+                    new Vector2(TilePortX1, TilePortY1), tile.FrameKey);
 
             // LAYER 3 - selection GLOW, also under the portrait (frame-selected's centre is opaque
             // at alpha 253, so on top it blanked the portrait of whichever tile was selected).
-            if (tile.IsSelected)
-            {
-                // frame-selected's glow bleeds OUTSIDE its rect, so it gets a rect grown past the
-                // portrait zone on every side. Overlaying it on the same rect as the others clips
-                // the glow and makes the two frame families disagree at the edge. It is grown in
-                // CELL-normalised space, which is why x and y use different amounts: the cell is
-                // roughly 2.8x wider than tall, so an equal normalised inset would not be an equal
-                // number of pixels.
-                PaintSprite(cell, "TileSelectedGlow",
-                    new Vector2(TilePortX0 - 0.02f, TilePortY0 - 0.03f),
-                    new Vector2(TilePortX1 + 0.02f, Mathf.Min(1f, TilePortY1 + 0.03f)),
-                    ManageArt.FrameSelected);
-            }
+            // ⛔ RETIRED 2026-09-07 (WO-1567 panel row 2), AND DELETED RATHER THAN LEFT DEAD.
+            // This painted frame-selected under the portrait on a grown rect. With layer 4 now
+            // covering the cell edge to edge, an UNDER-painted glow is invisible on every frame -
+            // and frame-selected's centre is opaque (alpha 253, measured), so it cannot move on
+            // top without blanking the art of whichever tile is selected. That leaves nothing it
+            // can do. A layer that draws and is never seen is the "dead code that looks like a
+            // shipped feature" defect this file already names once.
+            // ⚠ NOTHING IS LOST: selection is LAYER 5's gold perimeter, which is what mockup
+            // panels 2, 4 and 6 actually draw, and which reads in greyscale.
 
-            // LAYER 4 - the portrait, ABOVE every frame, on the SAME rect as the frame so the two
-            // are concentric and neither can reach the title band below them.
+            // ⭐ LAYER 4 - THE PORTRAIT, SQUARE AND EDGE TO EDGE (mockup panels 2 and 4).
+            // ⛔ THE MEDALLION RING IS RETIRED ON GRID TILES. It was ElarionUiKit.Portrait, whose
+            // circular disc + gilt ring is the right shape for a hero/combat frame and the wrong
+            // one here: the owner's captures (owner-screen-20260907-004825.png BUILD,
+            // -005136.png ARMY) show a small round medallion floating in a black plate on every
+            // tile, where her mockup draws a square of art reaching the cell edges under a name
+            // strip. See SquarePortrait for why cropping beats letterboxing and why the ring's
+            // preserveAspect inset was making the art small twice over.
+            // ⛔ THE ZONE NOW SPANS THE CELL'S FULL WIDTH. TilePort* insets survive only as the
+            // FRAME's rect (layers 2 and 3): a frame is drawn art with its own margins, and the
+            // picture is not.
             var portZone = Zone(cell, "TilePortrait",
-                new Vector2(TilePortX0, TilePortY0), new Vector2(TilePortX1, TilePortY1));
-            ElarionUiKit.Portrait(portZone, ManageArt.LoadSprite(tile.PortraitKey), active: false);
+                new Vector2(0f, TilePortY0), new Vector2(1f, 1f));
+            // Locked tiles are DIMMED - panel 4 draws them darker than the unlocked ones. It is a
+            // luminance multiply, never a hue change (the owner is red/green colourblind), and it
+            // is never the only cue: the tile still carries the word LOCKED and the padlock.
+            SquarePortrait(portZone, tile.PortraitKey,
+                tile.VisualState == ManageTileVisualState.Locked);
+
+            // LAYER 4a - the HOLLOW state frames, over the art. frame-locked and frame-max are the
+            // only two of the four with an alpha-0 centre (measured, see this method's summary), so
+            // they are the only two that can ride on top without blanking the portrait. They are
+            // the two whose state most needs a silhouette, which is convenient rather than lucky.
+            if (hollowFrame)
+                PaintSprite(cell, "TileFrame", new Vector2(TilePortX0, TilePortY0),
+                    new Vector2(TilePortX1, TilePortY1), tile.FrameKey);
 
             // LAYER 5 - SELECTION IS A GOLD BORDER AROUND THE WHOLE TILE.
             // CAPTURE_LOOP_GOAL 3.0b: "Selected tile carries a gold border", and the mockup draws it
@@ -948,7 +1180,18 @@ namespace DeNelle.Core.Manage
             //
             // ⛔ NOT COLOUR. The channel is a WORD on a dark plate in the tile's corner - a shape
             // and a string, legible in greyscale, on the same precedent as LAYER 5's gold BORDER.
-            if (!string.IsNullOrEmpty(tile.StateText))
+            // ⭐ AND IT IS THE CLOSED WORD, NOT THE SENTENCE (WO-1567 panel row 2). See
+            // TileStateWord: the grid cell paints StateWord, the research LIST ROW and the DETAIL
+            // card keep WO-1518's amounts, and the MODEL composes both faces.
+            // ⛔ WRITTEN OUT INLINE, NOT CALLED THROUGH TileStateWord, AND ON PURPOSE.
+            // ManageProgressiveDisclosureRegression's [grid-tile-states-its-state] case reads THIS
+            // METHOD'S BODY and fails if the token `tile.StateText` is absent from it - that oracle
+            // exists because BuildTile once referenced the state word ZERO times while the model
+            // composed it. Hiding the reference behind a helper would make the oracle go red on
+            // working code, which is the worst of both outcomes. The helper is still the one place
+            // the RULE is written down, and the grid-wide measurement above calls it.
+            string tileState = string.IsNullOrEmpty(tile.StateWord) ? tile.StateText : tile.StateWord;
+            if (!string.IsNullOrEmpty(tileState))
             {
                 var statePlate = ElarionUiKit.AddImage(cell, "TileStatePlate",
                     new Vector2(TileStateX0, TileMedY0), new Vector2(TileStateX1, TileMedY1),
@@ -956,7 +1199,7 @@ namespace DeNelle.Core.Manage
                 var statePlateImage = statePlate != null ? statePlate.GetComponent<Image>() : null;
                 if (statePlateImage != null) statePlateImage.raycastTarget = false;
 
-                var stateWord = ElarionUiKit.Label(cell, tile.StateText, TileMedY0, TileMedY1,
+                var stateWord = ElarionUiKit.Label(cell, tileState, TileMedY0, TileMedY1,
                     ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Center,
                     TileStateX0 + 0.01f, TileStateX1 - 0.01f, bold: true);
                 // ⛔ THE CEILING IS THE GRID'S, NOT THIS TILE'S. stateFontPx was resolved once from
@@ -1096,10 +1339,25 @@ namespace DeNelle.Core.Manage
             // varying 252/253/250/247/248, which is a checker pattern left in the colour channels
             // when the alpha was zeroed). A square zone is both the mockup's shape and the smallest
             // transparent margin, so it is the safer of the two either way.
-            float artFrac = Mathf.Min(0.38f, (cardH * 0.92f) / Mathf.Max(1f, cardW));
+            // ⭐ LARGE AND SQUARE, AND NO LONGER A MEDALLION (WO-1567 panel rows 3, 5 and 6).
+            // Mockup panels 3, 5 and 6 all draw the art as a big SQUARE block filling the card's
+            // left third. The owner's captures showed a circular disc inside a gilt ring instead
+            // (owner-screen-20260907-004903.png Lumber Mill, -005222.png Archer, -005311.png
+            // Outrider) - the kit's hero/combat frame, correct on a hero card and the wrong shape
+            // here. SquarePortrait crops to the zone rather than insetting a preserveAspect square
+            // inside a ring, so the SAME art reads roughly a third larger at the same rect.
+            // ⚠ THE ZONE IS STILL SQUARE, for the reason recorded above: the delivered PNGs carry a
+            // transparency checkerboard baked into their RGB, so any transparent margin shows it.
+            // 0.42 replaces 0.38 because the ring's inset is gone and the card can spend the width
+            // on the picture the mockup makes the focus of the screen.
+            float artFrac = Mathf.Min(0.42f, (cardH * 0.92f) / Mathf.Max(1f, cardW));
             var portrait = Zone(band, "SelPortrait",
                 new Vector2(0.02f, 0.04f), new Vector2(0.02f + artFrac, 0.96f));
-            ElarionUiKit.Portrait(portrait, ManageArt.LoadSprite(sel.PortraitKey), active: false);
+            // ⛔ NEVER DIMMED HERE, EVEN WHEN LOCKED. Mockup panel 6 (OUTRIDER, locked) draws the
+            // art at FULL brightness - the dim on a grid tile is a scanning cue for "not yours
+            // yet" across nine peers, and this screen has one subject. Dimming it would make the
+            // detail card look broken while telling the player nothing the padlock row does not.
+            SquarePortrait(portrait, sel.PortraitKey, dim: false);
 
             const float RightX1 = 0.98f;
             float rightX0 = Mathf.Min(0.60f, 0.02f + artFrac + 0.04f);
@@ -1121,30 +1379,83 @@ namespace DeNelle.Core.Manage
             float cursorY = 0.96f;                               // fraction, top-down
             float gapF = 12f / cardH;
 
-            // LEVEL + STATE on one line. ⛔ NOT a gold heading of its own: the capture showed a
-            // locked troop headed "LOCKED" in gold where the mockup has no heading at all. The state
-            // word rides WITH the level, and the requirement sentence below carries the meaning.
-            string levelText = Join(sel.LevelText, sel.StateText);
-            if (!string.IsNullOrEmpty(levelText))
+            // ⛔ THE DOT JOINER IS GONE FROM THIS CARD, AND THAT IS ONE FIX FOR FOUR FRAMES.
+            // `Join(a, b)` welds two facts with "  .  ". On the owner's device that produced, in
+            // one evening:
+            //   panel 3  "Wood production +10%.  .  Wood production +18%."   (-004903)
+            //   panel 5  "Back-line ranged DPS. Fragile but hits hard.  .  L7 unlocks Thunderbolt"
+            //   panel 6  "Fast flanker. Runs down towers and stragglers.  .  Requires Barracks Tier 4"
+            //   panel 5/6 "Level 5  .  UPGRADING" / "Level 1  .  LOCKED"    (the title block)
+            // Every one of those is TWO facts of DIFFERENT kinds sharing one band - a description
+            // and a promotion, a description and a requirement, a level and a state. The mockup
+            // gives each its own line (panel 5: name, "Level 1", then the description, then the
+            // stats; panel 6: the requirement on its own padlock row). A separator is not a layout.
+            // ⚠ Join() SURVIVES for the cases it was right for - nothing else changes.
+
+            // LEVEL on its own line, with the STATE as a BADGE beside it (mockup panels 3/5/6).
+            // ⛔ STILL NOT a gold heading: the earlier capture showed a locked troop headed
+            // "LOCKED" in gold where the mockup has no such heading. The badge is a plate + word at
+            // the line's right end - a shape and a string, legible in greyscale.
+            if (!string.IsNullOrEmpty(sel.LevelText) || !string.IsNullOrEmpty(sel.StateText))
             {
                 float h = 44f / cardH;
-                var levelLine = ElarionUiKit.Label(band, levelText, cursorY - h, cursorY,
-                    ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                    TextAlignmentOptions.Left, rightX0, RightX1);
-                ElarionUiKit.FitSingleLine(levelLine, 22f, 32f);
+                bool hasBadge = !string.IsNullOrEmpty(sel.StateText);
+                float badgeX0 = hasBadge ? Mathf.Max(rightX0 + 0.10f, RightX1 - 0.26f) : RightX1;
+                if (!string.IsNullOrEmpty(sel.LevelText))
+                {
+                    var levelLine = ElarionUiKit.Label(band, sel.LevelText, cursorY - h, cursorY,
+                        ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                        TextAlignmentOptions.Left, rightX0, badgeX0 - 0.01f);
+                    ElarionUiKit.FitSingleLine(levelLine, 22f, 32f);
+                }
+                if (hasBadge)
+                {
+                    var badgePlate = ElarionUiKit.AddImage(band, "SelStateBadge",
+                        new Vector2(badgeX0, cursorY - h), new Vector2(RightX1, cursorY),
+                        new Color(0.03f, 0.03f, 0.03f, 0.86f));
+                    var badgeImage = badgePlate != null ? badgePlate.GetComponent<Image>() : null;
+                    if (badgeImage != null) badgeImage.raycastTarget = false;
+                    var badgeWord = ElarionUiKit.Label(band, sel.StateText, cursorY - h, cursorY,
+                        ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                        badgeX0 + 0.005f, RightX1 - 0.005f, bold: true);
+                    ElarionUiKit.FitSingleLine(badgeWord, ElarionUiKit.FontHardFloor, 26f);
+                }
                 cursorY -= h + gapF;
             }
 
-            string descText = Join(sel.Description, sel.AuxiliaryText);
-            if (!string.IsNullOrEmpty(descText))
+            // THE AUTHORED DESCRIPTION SENTENCE, ALONE. Two lines of room, wrapped, never joined.
+            if (!string.IsNullOrEmpty(sel.Description))
             {
-                float h = 92f / cardH;
-                var desc = ElarionUiKit.Label(band, descText, cursorY - h, cursorY,
+                float h = 76f / cardH;
+                var desc = ElarionUiKit.Label(band, sel.Description, cursorY - h, cursorY,
                     ElarionUi.Parchment, ElarionUi.FontLabel,
                     TextAlignmentOptions.TopLeft, rightX0, RightX1);
                 desc.enableAutoSizing = false;
                 desc.fontSize = 26f;
                 desc.overflowMode = TextOverflowModes.Ellipsis;
+                cursorY -= h + gapF;
+            }
+
+            // ⭐ THE AUXILIARY LINE GETS ITS OWN ROW - the promotion note ("L7 unlocks
+            // Thunderbolt") or, on a NotUnlocked item, the requirement ("Requires Barracks Tier 4",
+            // which ManageVmProjection puts here from item.LockReason).
+            // ⛔ A LOCKED ONE CARRIES THE PADLOCK. The owner is red/green colourblind, so the
+            // padlock is the SHAPE channel for "locked" (CAPTURE_LOOP_GOAL 3c) and mockup panel 6
+            // draws exactly that: a padlock glyph, then the requirement, on their own row. The
+            // glyph key is the MODEL's StateIconKey - the View picks no art by state.
+            if (!string.IsNullOrEmpty(sel.AuxiliaryText))
+            {
+                float h = 46f / cardH;
+                bool locked = sel.State == ManageTileVisualState.Locked;
+                float lockW = locked ? 0.045f : 0f;
+                if (locked)
+                    PaintSprite(band, "SelAuxLock",
+                        new Vector2(rightX0, cursorY - h), new Vector2(rightX0 + lockW, cursorY),
+                        sel.StateIconKey);
+                var aux = ElarionUiKit.Label(band, sel.AuxiliaryText, cursorY - h, cursorY,
+                    ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    rightX0 + lockW + (locked ? 0.012f : 0f), RightX1);
+                ElarionUiKit.FitSingleLine(aux, 18f, 26f);
                 cursorY -= h + gapF;
             }
 
@@ -1158,10 +1469,40 @@ namespace DeNelle.Core.Manage
                 cursorY -= h + gapF;
             }
 
-            if (sel.Costs != null && sel.Costs.Count > 0)
+            // ⭐ THE COST BAND - a CAPTION, the priced resources, then the CLOCK ON ITS OWN LINE.
+            // Mockup panel 3 draws "Upgrade Cost" over a wood glyph + 1,200 and an iron glyph +
+            // 600, with a clock and 45m beneath them; panel 5 draws "Train Cost" the same way.
+            // ⛔ THE CLOCK IS NOT A COST ROW. A duration has no bank and no affordability verdict,
+            // so it gets its own line rather than a basket slot that would need a special case in
+            // every reader (ManageSelectionVM.TimeText says the same thing from the model's side).
+            bool hasCosts = sel.Costs != null && sel.Costs.Count > 0;
+            bool hasTime = !string.IsNullOrEmpty(sel.TimeText);
+            if ((hasCosts || hasTime) && !string.IsNullOrEmpty(sel.CostCaption))
+            {
+                float h = 32f / cardH;
+                var caption = ElarionUiKit.Label(band, sel.CostCaption, cursorY - h, cursorY,
+                    ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    rightX0, RightX1);
+                ElarionUiKit.FitSingleLine(caption, 18f, 24f);
+                cursorY -= h + gapF * 0.5f;
+            }
+            if (hasCosts)
             {
                 float h = 58f / cardH;
                 BuildCostRow(band, sel.Costs, rightX0, RightX1, cursorY - h, cursorY);
+                cursorY -= h + gapF;
+            }
+            if (hasTime)
+            {
+                float h = 46f / cardH;
+                float clockW = 0.05f;
+                PaintSprite(band, "SelTimeIcon",
+                    new Vector2(rightX0, cursorY - h), new Vector2(rightX0 + clockW, cursorY),
+                    sel.TimeIconKey);
+                var time = ElarionUiKit.Label(band, sel.TimeText, cursorY - h, cursorY,
+                    ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                    rightX0 + clockW + 0.012f, RightX1);
+                ElarionUiKit.FitSingleLine(time, 18f, 26f);
                 cursorY -= h + gapF;
             }
 
@@ -1258,10 +1599,16 @@ namespace DeNelle.Core.Manage
                 string valueLine = string.IsNullOrEmpty(s.DeltaText)
                     ? (s.Value ?? string.Empty)
                     : (s.Value ?? string.Empty) + "  ->  " + s.DeltaText;
+                // ⭐ THE NEXT VALUE IS EMPHASISED BY WEIGHT, NOT BY HUE (WO-1567 panel row 3).
+                // The mockup prints the promoted number in green; the owner is red/green
+                // colourblind, so a row that CHANGES is set BOLD and keeps the ASCII arrow. Gold
+                // stays as a second, redundant channel - never the only one. A row with no delta
+                // is regular weight, so the difference is visible in greyscale at a glance.
+                bool promoted = !string.IsNullOrEmpty(s.DeltaText);
                 var value = ElarionUiKit.Label(band, valueLine,
                     rowBottom + inner, rowBottom + rowH - inner,
-                    string.IsNullOrEmpty(s.DeltaText) ? ElarionUi.Parchment : ElarionUi.Gold,
-                    ElarionUi.FontLabel, TextAlignmentOptions.Right, mid, x1);
+                    promoted ? ElarionUi.Gold : ElarionUi.Parchment,
+                    ElarionUi.FontLabel, TextAlignmentOptions.Right, mid, x1, bold: promoted);
                 ElarionUiKit.FitSingleLine(value, 18f, 26f);
             }
         }
@@ -1286,10 +1633,33 @@ namespace DeNelle.Core.Manage
                 float cx0 = x0 + i * w;
                 PaintSprite(band, "SelCostIcon" + i,
                     new Vector2(cx0, y0 + pad), new Vector2(cx0 + w * 0.28f, y1 - pad), c.IconKey);
-                var amount = ElarionUiKit.Label(band, c.AmountText ?? string.Empty, y0, y1,
-                    c.Affordable ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                // ⭐ THE RESOURCE IS NAMED IN WORDS BESIDE ITS NUMBER (WO-1567 panel row 3).
+                // ⛔ THE GLYPH ALONE WAS NEVER ENOUGH, AND ON THIS BUILD THERE WAS NO GLYPH EITHER.
+                // The owner's Lumber Mill card read "2600   970" - two bare numbers naming no
+                // resource at all (owner-screen-20260907-004903.png), because ManageScreenVM.CostVms
+                // set IconKey = null on every row. Both halves are fixed: the model now supplies the
+                // delivered glyph, and the row prints the model's own WORD next to the amount. The
+                // word is the accessible channel - a small icon is exactly the kind of meaning the
+                // owner cannot separate by colour, and a name cannot be misread.
+                bool named = !string.IsNullOrEmpty(c.Label);
+                var color = c.Affordable ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
+                var amount = ElarionUiKit.Label(band, c.AmountText ?? string.Empty,
+                    named ? (y0 + y1) * 0.5f : y0, y1, color,
                     ElarionUi.FontLabel, TextAlignmentOptions.Left, cx0 + w * 0.30f, cx0 + w * 0.98f);
                 ElarionUiKit.FitSingleLine(amount, 20f, 30f);
+                if (named)
+                {
+                    var word = ElarionUiKit.Label(band, c.Label, y0, (y1 + y0) * 0.5f, color,
+                        ElarionUi.FontLabel, TextAlignmentOptions.Left,
+                        cx0 + w * 0.30f, cx0 + w * 0.98f);
+                    ElarionUiKit.FitSingleLine(word, ElarionUiKit.FontHardFloor, 22f);
+                    float wordPx = (y1 - y0) * 0.5f * (band.rect.height > 1f ? band.rect.height : 1f);
+                    if (wordPx < MinTextBandPx)
+                        FlowTrace.Warn("Manage", "the cost row's resource NAME band is " +
+                            wordPx.ToString("0") + "px, under the " + MinTextBandPx + "px TMP cull " +
+                            "floor - the amount would paint and the word that says WHICH resource " +
+                            "it is would not, which is the defect this row was widened to fix");
+                }
             }
         }
 
@@ -1330,7 +1700,22 @@ namespace DeNelle.Core.Manage
             for (int i = 0; i < faces.Count; i++)
             {
                 var face = faces[i];
-                var btn = ElarionUiKit.Button(band, Join(face.Label, face.CostText),
+                // ⭐ THE FACE READS THE VERB, AND NOTHING ELSE (WO-1567 panel rows 3 and 5).
+                // ⛔ IT USED TO PASS THE LABEL AND THE COST LINE THROUGH THE DOT JOINER, AND THAT
+                // WELD IS THE DEFECT. (Deliberately DESCRIBED and not SPELLED: the oracle that
+                // forbids it scans this method's body for the literal call, and it does not strip
+                // comments first - a comment quoting the banned form would fail working code. That
+                // exact trap cost this repo a regression round on 2026-09-06; see
+                // ManageScreenPanel's launcher-card note.) Measured
+                // on the owner's device: "UPGRADE  .  STONE 2600  GOL..." (-004903) - the button
+                // ellipsised mid-word and the player could not read either the verb or the price -
+                // and "TRAIN  .  1M 0S" (-005222), which put a DURATION on a button as though it
+                // were a price. The mockup's buttons say "UPGRADE" and "TRAIN 1 ARCHER"; the cost
+                // and the clock live in the labelled band above them, where there is room for the
+                // resource NAMES and where a number can be compared against a bank.
+                // ⚠ NOTHING IS LOST: face.CostText's content is the same basket BuildCostRow
+                // paints from sel.Costs, and a REFUSAL still carries its sentence on the why band.
+                var btn = ElarionUiKit.Button(band, face.Label,
                     KindFor(face.StyleRole),
                     new Vector2(SlotStart(i, faces.Count), 0.02f),
                     new Vector2(SlotEnd(i, faces.Count), 0.98f),
@@ -1388,6 +1773,115 @@ namespace DeNelle.Core.Manage
             img.preserveAspect = true;
             img.raycastTarget = false;
             if (img.sprite == null) img.color = new Color(1f, 1f, 1f, 0f);
+        }
+
+        /// <summary>
+        /// ⭐ THE SQUARE, EDGE-TO-EDGE PORTRAIT - mockup panels 2, 4 and 6 (WO-1567 rows 2/4/7).
+        ///
+        /// <para>⛔ THIS REPLACES <c>ElarionUiKit.Portrait</c> ON GRID TILES AND THE DETAIL CARD,
+        /// AND THE MEDALLION RING GOES WITH IT. The kit's Portrait is a CIRCULAR identity disc
+        /// inside a gilt ring - the right shape for a combat/hero frame, and it is still used
+        /// everywhere else. It is the wrong shape here: the owner's captures
+        /// (Logs/device/screens/owner-screen-20260907-004825.png and -005136.png) show every BUILD
+        /// and ARMY tile as a small round medallion floating in a black plate, while every tile in
+        /// her mockup is a SQUARE of art that reaches the cell's edges with the name on a strip
+        /// below it. Two rings around one picture (the kit's, plus the state frame this file
+        /// already paints) is also the reason the art read as small: the ring's preserveAspect
+        /// square is inset inside the zone, so the art lost the corners twice over.</para>
+        ///
+        /// <para>⛔ IT CROPS, IT DOES NOT LETTERBOX OR STRETCH. The art is envelope-fitted inside a
+        /// <see cref="RectMask2D"/>, so a 1024x1024 portrait in a wide cell fills the cell and
+        /// loses its left and right edges rather than sitting in black bars (letterboxing is what
+        /// made the retired landscape card strips read as broken) or distorting (stretching is what
+        /// the research picker was doing to them). Square art in a square cell is unchanged.</para>
+        ///
+        /// <para>⛔ <paramref name="dim"/> IS A LUMINANCE MULTIPLY, NEVER A HUE SHIFT. Mockup panel
+        /// 4 draws locked troops darker than unlocked ones. The owner is red/green colourblind
+        /// (CAPTURE_LOOP_GOAL 3c: "meaning never carried by hue alone"), so the cue is a flat
+        /// brightness multiply that survives greyscale - and it is never the ONLY cue: a dimmed
+        /// tile also carries the word LOCKED and the padlock medallion.</para>
+        ///
+        /// <para>A missing key paints NOTHING here - no tan placeholder disc. ManageArt.LoadSprite
+        /// has already announced the miss by key, and an empty framed well reads as "art pending"
+        /// where a warm-tan oval read as a rendering bug (WO-1567 section 5 item 3).</para>
+        /// </summary>
+        private void SquarePortrait(RectTransform zone, string key, bool dim)
+        {
+            if (zone == null) return;
+            var sprite = ManageArt.LoadSprite(key);
+            if (sprite == null) return;
+
+            if (zone.GetComponent<RectMask2D>() == null) zone.gameObject.AddComponent<RectMask2D>();
+
+            var artGo = new GameObject("PortraitSquare", typeof(RectTransform), typeof(Image));
+            artGo.transform.SetParent(zone, false);
+            var rt = (RectTransform)artGo.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+            var img = artGo.GetComponent<Image>();
+            img.sprite = sprite;
+            img.preserveAspect = false;          // the fitter owns the aspect; preserveAspect would inset it
+            img.raycastTarget = false;
+            // 0.42 is the kit's own disabled-face multiply (ManageScreenPanel's launcher colours),
+            // reused so a dimmed thing looks the same wherever the player meets one.
+            img.color = dim ? new Color(0.42f, 0.42f, 0.42f, 1f) : Color.white;
+
+            float w = sprite.rect.width, h = sprite.rect.height;
+            if (h > 0.01f)
+            {
+                var fit = artGo.AddComponent<AspectRatioFitter>();
+                fit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+                fit.aspectRatio = w / h;
+            }
+        }
+
+        /// <summary>
+        /// ⭐ PAINT ONLY PART OF A SPRITE - the sub-rect <c>[u0..u1] x [v0..v1]</c> in UV, scaled
+        /// to fill <paramref name="zone"/>. Used to keep a BAKED CAPTION out of a medallion.
+        ///
+        /// <para>⛔ ANCHORS, NOT PIXELS, AND THAT IS THE WHOLE POINT. The child is anchored so the
+        /// requested sub-rect lands exactly on the zone: a child spanning parent fractions
+        /// <c>a..b</c> puts source <c>u</c> at <c>a + u*(b-a)</c>, so solving
+        /// <c>a + u0*(b-a) = 0</c> and <c>a + u1*(b-a) = 1</c> gives <c>b-a = 1/(u1-u0)</c> and
+        /// <c>a = -u0/(u1-u0)</c>. It needs no layout pass and no measured rect, which is what
+        /// makes it correct on the frame it is built - the trap that has cost this screen a
+        /// build-time estimate that was out by 1.5x.</para>
+        ///
+        /// <para>A RectMask2D on the zone clips the overhang. The Image is preserveAspect FALSE on
+        /// purpose: the aspect is already carried by the sub-rect the caller measured, and letting
+        /// the Image re-fit would inset the crop back inside the zone.</para>
+        /// </summary>
+        private void CroppedIcon(RectTransform zone, string key, float u0, float u1, float v0, float v1)
+        {
+            if (zone == null) return;
+            var sprite = ManageArt.LoadSprite(key);
+            if (sprite == null) return;                 // LoadSprite already announced the miss
+
+            float fw = u1 - u0, fh = v1 - v0;
+            if (fw <= 0.001f || fh <= 0.001f)
+            {
+                FlowTrace.Warn("Manage", "a cropped icon was asked for a degenerate sub-rect (" +
+                    fw.ToString("0.###") + "x" + fh.ToString("0.###") + ") of '" + key +
+                    "' - painting the whole sprite rather than a zero-area one");
+                ElarionUiKit.Portrait(zone, sprite, active: false);
+                return;
+            }
+
+            if (zone.GetComponent<RectMask2D>() == null) zone.gameObject.AddComponent<RectMask2D>();
+
+            var go = new GameObject("CroppedIcon", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(zone, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(-u0 / fw, -v0 / fh);
+            rt.anchorMax = new Vector2((1f - u0) / fw, (1f - v0) / fh);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.preserveAspect = false;
+            img.raycastTarget = false;
         }
 
         /// <summary>A two-part fill bar. Graphic only - nothing is typeset, so no cull floor applies.</summary>

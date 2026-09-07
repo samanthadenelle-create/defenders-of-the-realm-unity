@@ -113,7 +113,9 @@ namespace DeNelle.Village
         // not be told apart from a log. These fields carry the per-troop trace state.
         // PERMANENT instrumentation (CLAUDE.md §12) — flag it off, never strip it.
         private string _troopRole = "?";           // melee / ranged / siege / support / tank
-        private string _retargetReason = "spawn";  // why the last scan ran: timer / foe-died / foe-null
+        // why the last scan ran: timer / foe-died / foe-null / foe-destroyed (WO-1569: the foe's
+        // GameObject was Destroy()d, which `!= null` on an interface reference cannot see)
+        private string _retargetReason = "spawn";
         private int _retargetCount;                // how many times this troop has switched foe
         private Vector3 _aiLastPos;                // for the measured moved/sec in the heartbeat
         private float _aiLastPosTime;
@@ -132,6 +134,16 @@ namespace DeNelle.Village
         private float _lastNearestAnyDist = -1f;
         // Reused by TraceBreachProbe so the once-per-structure-kill path query allocates once.
         private NavMeshPath _breachPath;
+        // WO-1569 - the cached foe's world position, recorded WHILE IT WAS STILL LIVE.
+        // A DefenseTower is Destroy(gameObject)d on death (Destructible.NotifyBroken), so by the
+        // time the breach probe wants to sample "where the structure stood" the native object is
+        // gone and WorldPosition throws. Skipping the sample would be safe but would discard the
+        // one measurement WO-1438 is waiting on, and would discard it for exactly the structure
+        // kind that gets destroyed. Carrying the last live value forward keeps the probe honest
+        // AND crash-free. The `Valid` flag exists so a never-recorded position is reported as
+        // unknown rather than silently sampled at the origin.
+        private Vector3 _lastFoePos;
+        private bool _lastFoePosValid;
 
         // ── WO-1438 route gate (the FIX, not the trace) ──────────────────────
         // How often a troop may ask the NavMesh whether the defender it can SEE is a defender it
@@ -566,20 +578,33 @@ namespace DeNelle.Village
             // THROTTLE the target-hunt scan (mirrors Pet). Drop a cached foe that died /
             // was destroyed so we never aim at a corpse. Move + attack still run per-frame.
             _huntTimer -= dt;
-            bool foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
+            // WO-1569: IsLiveTarget, not `!= null`. IsAlive is field-backed on every structure
+            // (DefenseTower.cs:224 reads Hp + _broken) so a BROKEN foe already re-selected here;
+            // what did not was a foe Destroy()d without ever going through the damage path -
+            // scene teardown, build-mode removal - where `_cachedFoe != null` stayed true and the
+            // engaged branch below read foe.WorldPosition OUTSIDE any Guard.
+            bool foeValid = IsLiveTarget(_cachedFoe) && _cachedFoe.IsAlive;
             if (_huntTimer <= 0f || !foeValid)
             {
                 // WO-1438: name WHY we rescanned before we rescan. "foe-died" is the
                 // load-bearing one — it is the tick right after a wall segment collapses,
                 // and the retarget line that follows says what replaced it.
                 _retargetReason = _cachedFoe == null ? "foe-null"
+                                : !IsLiveTarget(_cachedFoe) ? "foe-destroyed"
                                 : !_cachedFoe.IsAlive ? "foe-died"
                                 : "timer";
                 var previousFoe = _cachedFoe;
+                // WO-1569: the position we recorded while that foe was still LIVE. The probe
+                // below must never re-read WorldPosition off it (that is the crash), and a
+                // skipped read would silently discard the hole sample for exactly the structure
+                // kind - a tower - that has never been measured. So we carry the value forward.
+                Vector3 previousFoePos = _lastFoePos;
+                bool previousFoePosValid = _lastFoePosValid;
+                _lastFoePosValid = false;
 
                 _huntTimer = HuntScanInterval;
                 _cachedFoe = NearestHostile();
-                foeValid = _cachedFoe != null && _cachedFoe.IsAlive;
+                foeValid = IsLiveTarget(_cachedFoe) && _cachedFoe.IsAlive;
 
                 // Fire ONLY on an actual change of foe — not every 0.2 s scan. This is the
                 // ticket's central line: it records the winner, its kind and distance, and
@@ -591,8 +616,16 @@ namespace DeNelle.Village
                 {
                     _retargetCount++;
                     bool wonIsStruct = _cachedFoe != null && IsHostileStructure(_cachedFoe);
-                    float wonDist = _cachedFoe != null
-                        ? Vector3.Distance(transform.position, _cachedFoe.WorldPosition) : -1f;
+                    float wonDist = -1f;
+                    if (foeValid)
+                    {
+                        // WO-1569: remember it WHILE IT IS LIVE. This is the only moment the
+                        // position of a foe is guaranteed readable, and it is what the breach
+                        // probe uses one death later.
+                        _lastFoePos = _cachedFoe.WorldPosition;
+                        _lastFoePosValid = true;
+                        wonDist = Vector3.Distance(transform.position, _lastFoePos);
+                    }
                     // Strings are built HERE, on the change, not on every 0.2 s scan (§1.3).
                     FlowTrace.Step("TroopAI",
                         $"id={_troopId} role={_troopRole} RETARGET#{_retargetCount} reason={_retargetReason} " +
@@ -617,8 +650,13 @@ namespace DeNelle.Village
                     // because there is no route to re-evaluate.
                     // NOTE: a collapsed WallSegment keeps its component and its Hostile faction
                     // (only IsAlive flips), so the dropped foe can still be classified here.
-                    if (_retargetReason == "foe-died" && previousFoe is IDamageableStructure)
-                        TraceBreachProbe(previousFoe, _cachedFoe);
+                    // WO-1569: "foe-destroyed" joins "foe-died" here. A DefenseTower is
+                    // Destroy()d by Destructible.NotifyBroken, so on the next Update it reaches
+                    // the rescan already gone; before this ticket that read as neither reason and
+                    // the probe fired anyway on a corpse it could not touch.
+                    if ((_retargetReason == "foe-died" || _retargetReason == "foe-destroyed")
+                        && previousFoe is IDamageableStructure)
+                        TraceBreachProbe(previousFoe, previousFoePos, previousFoePosValid, _cachedFoe);
                 }
             }
 
@@ -661,6 +699,12 @@ namespace DeNelle.Village
 
             SetInCombat(true);
             Vector3 foePos = foe.WorldPosition;
+            // WO-1569: this is the hot recorder. `foe` is proven live here (foeValid gated it
+            // through IsLiveTarget above), so this is the cheapest correct place to keep the
+            // last-live position the breach probe reads after the kill. Two stores per frame,
+            // no allocation, no query.
+            _lastFoePos = foePos;
+            _lastFoePosValid = true;
             float dist = Vector3.Distance(transform.position, foePos);
 
             // WO-1438 STEERING HEARTBEAT — ~1/s per troop (Throttle guards internally).
@@ -979,6 +1023,42 @@ namespace DeNelle.Village
         /// walking sideways along a wall run, which is the exact behaviour this ticket is about.
         /// It now returns the INSTANCE name plus the type, so adjacent segments are separable.
         /// </summary>
+        /// <summary>
+        /// WO-1569 - TRUE only when this target still exists as far as UNITY is concerned.
+        ///
+        /// THE TRAP THIS CLOSES, and it is the whole ticket. <see cref="IDamageable"/> is an
+        /// INTERFACE, so `dmg != null` compiles to a plain managed reference comparison and
+        /// NEVER reaches UnityEngine.Object's overloaded ==. A component whose GameObject has
+        /// been Destroy()d therefore PASSES `dmg != null` while its native side is gone, and the
+        /// very next `dmg.WorldPosition` throws NullReferenceException inside
+        /// UnityEngine.Component.get_transform. Device capture, build 2026.09.07.358872, scene
+        /// RaidBase_raider_camp_small, F8 seq 4688/4689:
+        ///   [Flow:TroopAI] breach-probe id=troop-footman FAILED: NullReferenceException
+        ///     at UnityEngine.Component.get_transform ()
+        ///     at DeNelle.Village.DefenseTower.get_WorldPosition ()
+        ///     at DeNelle.Village.TroopController+&lt;&gt;c__DisplayClass119_0.&lt;TraceBreachProbe&gt;b__0 ()
+        ///
+        /// Why it surfaced on a TOWER and not on the 133 measured WALL probes: a collapsed
+        /// WallSegment KEEPS its component (only IsAlive flips), while DefenseTower hands off to
+        /// Destructible.NotifyBroken, which Destroy(gameObject)s it (DefenseTower.cs:170, :349).
+        /// Unity's destroy is deferred to end of frame and the "foe-died" rescan runs on the NEXT
+        /// Update, so by the time the probe reads the felled tower the native object is already
+        /// gone.
+        ///
+        /// Public + static for the same reason as <see cref="PrefersUnitOverStructure"/>: the
+        /// editor regression asserts the LIVE predicate rather than a parallel re-implementation.
+        /// </summary>
+        public static bool IsLiveTarget(IDamageable dmg)
+        {
+            if (dmg == null) return false;
+            // The cast is what buys the Unity-aware comparison; `uo != null` here IS the
+            // overloaded operator, which answers false for a destroyed object.
+            if (dmg is UnityEngine.Object uo) return uo != null;
+            // A non-Unity implementation (test doubles, pure data foes) has no native half to
+            // lose, so a live managed reference is the whole answer.
+            return true;
+        }
+
         private static string DescribeTarget(IDamageable dmg)
         {
             if (dmg == null) return "<none>";
@@ -1021,19 +1101,33 @@ namespace DeNelle.Village
         ///                              required before anyone can walk through a breach.
         /// Neither answer has been measured yet — this line is what will measure it.
         /// </summary>
-        private void TraceBreachProbe(IDamageable destroyed, IDamageable replacement)
+        /// <param name="destroyedPos">
+        /// WO-1569 - the felled structure's position as recorded WHILE IT WAS LIVE. It is passed
+        /// in rather than read off <paramref name="destroyed"/> because reading it here is the
+        /// crash: a DefenseTower is Destroy()d before this probe runs, its interface reference
+        /// still passes `!= null`, and `WorldPosition` then throws in get_transform.
+        /// </param>
+        /// <param name="destroyedPosValid">False when no live position was ever recorded for it.</param>
+        private void TraceBreachProbe(IDamageable destroyed, Vector3 destroyedPos,
+                                      bool destroyedPosValid, IDamageable replacement)
         {
             if (!FlowTrace.Enabled) return;
             Guard.Try("TroopAI", $"breach-probe id={_troopId}", () =>
             {
                 if (_breachPath == null) _breachPath = new NavMeshPath();
 
+                // WO-1569 - EVERY position read below goes through one of these two, and neither
+                // touches a destroyed object. `replacementLive` is the Unity-aware check that
+                // `replacement != null` was NOT (see IsLiveTarget); `destroyedPos` is a value
+                // captured before the kill, so it stays readable however the corpse was removed.
+                bool replacementLive = IsLiveTarget(replacement);
+
                 // Probe toward the thing that just became our target. If we have no target at
                 // all, probe straight through the corpse of the wall we just felled — the
                 // point the player expects us to walk through.
-                Vector3 probeTo = replacement != null
+                Vector3 probeTo = replacementLive
                     ? replacement.WorldPosition
-                    : (destroyed != null ? destroyed.WorldPosition : transform.position);
+                    : (destroyedPosValid ? destroyedPos : transform.position);
 
                 // ⚠ THE 2026-09-06 CAPTURE PROVED THIS PROBE WAS MEASURING THE WRONG THING, and
                 // the repair is why the WO's "read one field" gate could not be answered off it:
@@ -1058,8 +1152,8 @@ namespace DeNelle.Village
                 // dropped", so the expectation is a MISS; a HIT would mean the ground under a
                 // felled wall really is walkable and the route half of this ticket is already
                 // solved. Neither answer has been measured before this line existed.
-                string breachSample = "n/a";
-                if (destroyed != null)
+                string breachSample = destroyedPosValid ? "n/a" : "UNRECORDED";
+                if (destroyedPosValid)
                 {
                     // Sampled at OUR foot height, not the structure's own Y. WallSegment's
                     // WorldPosition is transform.position (WallSegment.cs:223), but a tower's or
@@ -1067,7 +1161,11 @@ namespace DeNelle.Village
                     // elevation and print NOT-WALKABLE over ground that is perfectly walkable —
                     // the identical measured-the-wrong-thing failure this probe was just repaired
                     // for. The troop stands on the navmesh, so its Y is the right plane to ask on.
-                    Vector3 hole = destroyed.WorldPosition;
+                    // WO-1569: the LAST LIVE position, not a fresh read. Before this ticket this
+                    // line was `destroyed.WorldPosition` and it is the exact source of the
+                    // seq 4688/4689 NullReferenceException whenever the felled structure was a
+                    // DefenseTower. Towers become measurable here for the first time.
+                    Vector3 hole = destroyedPos;
                     hole.y = transform.position.y;
                     breachSample = NavMesh.SamplePosition(hole, out var holeHit, BreachSampleRadius, NavMesh.AllAreas)
                         ? $"WALKABLE@{Vector3.Distance(hole, holeHit.position):F2}m"
@@ -1087,10 +1185,10 @@ namespace DeNelle.Village
                 FlowTrace.Step("TroopAI",
                     $"id={_troopId} role={_troopRole} BREACH: structure '{DescribeTarget(destroyed)}' " +
                     $"died -> reacquired '{DescribeTarget(replacement)}' " +
-                    $"kind={(replacement == null ? "none" : IsHostileStructure(replacement) ? "struct" : "unit")} " +
+                    $"kind={(!replacementLive ? "none" : IsHostileStructure(replacement) ? "struct" : "unit")} " +
                     $"holeNavmesh={breachSample} selfNavmesh={selfSample} endSample={endSample} " +
                     $"routeStatus={status} corners={corners} " +
-                    $"straightLine={(replacement != null ? Vector3.Distance(transform.position, probeTo) : -1f):F1}m " +
+                    $"straightLine={(replacementLive ? Vector3.Distance(transform.position, probeTo) : -1f):F1}m " +
                     $"pathLength={PathLength(computed ? _breachPath : null):F1}m");
             });
         }

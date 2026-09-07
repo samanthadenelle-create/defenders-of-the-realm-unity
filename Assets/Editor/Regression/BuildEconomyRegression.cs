@@ -79,6 +79,7 @@ namespace DeNelle.Editor
                 CheckDualCopy(CatalogRelPath, failures, log);
                 CheckDualCopy(DamageRelPath, failures, log);
                 CheckStructureDescriptions(entries, failures, log);
+                CheckCardVmCostWordSource(failures, log);
 
                 // Hydrate the registry so the REAL cost/refund/factory paths resolve ids
                 // exactly as the game does (CatalogRegistry.Get). Mirrors CatalogBootstrap's
@@ -1765,6 +1766,97 @@ namespace DeNelle.Editor
                                  "the failure path would offer a structure the loaded game does not have. FIX: run " + regen);
 
             LogFallbackVerdict(failures, log, fallbackRows.Count, entries.Count);
+        }
+
+        // =====================================================================
+        //  [card-cost-words] WO-1570 -- THE DETAIL LAYOUT'S FIELDS EXIST, AND THE
+        //  RESOURCE WORDS COME FROM THE BANK, NOT FROM A LITERAL.
+        //
+        //  THE DEFECT THIS IS WRITTEN FROM, stated honestly: the capture
+        //  (Logs/device/screens/owner-screen-20260907-004903.png) showed a Lumber Mill
+        //  upgrade reading "UPGRADE . STONE 2600 GOL..." over bare numbers "2600  970".
+        //  It was read as "a RETIRED resource key reached the button". It is not:
+        //    * building-tiers.json:67 authors costWood 2600 / costGold 970 -- both LIVE
+        //      keys (BuildingTierCatalog.cs:61-62); costFood appears ZERO times in either
+        //      canonical twin, so no row is silently priced through the legacy alias at
+        //      BuildingTierCatalog.cs:64;
+        //    * "Stone" is the LIVE player-facing word for the Food wallet slot
+        //      (TownBankCapacity.DisplayName, HudKitController.cs:3024) -- WO-1416 retired
+        //      FOOD and Stone reuses that persisted slot;
+        //    * the tier-2 -> Stone charge lane is OWNER RULING 22 (WO-2005, 2026-09-06):
+        //      "the CHARGE is right and the AUTHORING is wrong". The button names the
+        //      lane the player is actually debited in.
+        //  The DATA oracle that "should have caught it" already exists and already covers
+        //  every structure's every upgrade step (CostBasketSeparationRegression
+        //  [invariant]/[regular] :759-828 over repo.upgradeCost, plus [tiers-basket] :384
+        //  over building-tiers.json). Re-walking those rows here would be the duplicated-
+        //  oracle shape this repo keeps paying for, so this case does NOT.
+        //
+        //  What was genuinely unguarded is the LABEL SOURCE. Five surfaces spell the
+        //  resource words by hand (StructureCardVM.PlacementCostWords,
+        //  BuildStructureInfoPanel.cs:347-350, NPCUpgradeStation.cs:196,
+        //  BuildingUpgradeVM.cs:1427, ManageScreenVM.cs:2046), and a sixth was about to be
+        //  added by the fields below. This case pins the new fields to the ONE authority
+        //  so the palette/info card can never disagree with the wallet chip beside it.
+        // =====================================================================
+        private const string CardVmRelPath = "Assets/_Modules/Village/BuildMode/StructureCardVM.cs";
+
+        private static void CheckCardVmCostWordSource(List<string> failures, StringBuilder log)
+        {
+            string path = CardVmRelPath.Replace('/', System.IO.Path.DirectorySeparatorChar);
+            if (!System.IO.File.Exists(path))
+            {
+                failures.Add("[card-cost-words] " + CardVmRelPath + " not found - the build card's cost " +
+                             "projection cannot be checked, so a hand-typed resource word would go unseen.");
+                return;
+            }
+
+            string src = System.IO.File.ReadAllText(path);
+
+            // The fields a detail layout needs from the MODEL (canon 9: a View never
+            // derives text). Named individually so a failure says WHICH one went missing.
+            string[] required =
+            {
+                "public int CurrentLevel",
+                "EffectiveCostParts",
+                "NextTierCostParts",
+                "UpgradeStats",
+                "public int UpgradeSeconds",
+                "UpgradeTimeText",
+                "UpgradeButtonLabel"
+            };
+            var missing = new List<string>();
+            foreach (var member in required)
+                if (src.IndexOf(member, System.StringComparison.Ordinal) < 0) missing.Add(member);
+            if (missing.Count > 0)
+                failures.Add("[card-cost-words] StructureCardVM no longer exposes " + string.Join(", ", missing.ToArray()) +
+                             " - the detail layout then has to derive it in the View, which is how the captured card " +
+                             "ended up printing bare numbers with no resource words.");
+
+            // The word source. TownBankCapacity.DisplayName is the ONE speller; a literal
+            // here is the sixth copy of a word this repo has already paid for four times.
+            if (src.IndexOf("TownBankCapacity.DisplayName", System.StringComparison.Ordinal) < 0)
+                failures.Add("[card-cost-words] StructureCardVM's cost rows no longer read " +
+                             "DeNelle.Core.Economy.TownBankCapacity.DisplayName. Every resource word must come " +
+                             "from the bank's own speller - 'Stone' for the Food slot is stated in exactly one " +
+                             "place (canon sec.7 / WO-1416), never re-typed on a screen.");
+
+            // The button face stays ONE WORD. The captured defect is a label that ran past
+            // its own edge because the price was concatenated into it.
+            int face = src.IndexOf("UpgradeButtonLabel", System.StringComparison.Ordinal);
+            if (face >= 0)
+            {
+                int eol = src.IndexOf('\n', face);
+                string line = eol > face ? src.Substring(face, eol - face) : src.Substring(face);
+                if (line.IndexOf("\"UPGRADE\"", System.StringComparison.Ordinal) < 0)
+                    failures.Add("[card-cost-words] UpgradeButtonLabel is no longer the bare word \"UPGRADE\". " +
+                                 "The price belongs on NextTierCostParts BESIDE the button, not inside its label - " +
+                                 "concatenating it is exactly the 'UPGRADE . STONE 2600 GOL...' truncation the " +
+                                 "2026-09-07 capture shows.");
+            }
+
+            log.AppendLine("  [card-cost-words] StructureCardVM exposes the detail-layout fields and spells every " +
+                           "resource word through TownBankCapacity.DisplayName OK");
         }
 
         private static void LogFallbackVerdict(List<string> failures, StringBuilder log, int fallbackRows, int catalogRows)

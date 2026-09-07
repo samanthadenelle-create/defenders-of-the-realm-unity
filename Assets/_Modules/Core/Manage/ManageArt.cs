@@ -70,6 +70,72 @@ namespace DeNelle.Core.Manage
         public const string FrameLocked = "RpgUi/manage/frame-locked";
         public const string FrameMax = "RpgUi/manage/frame-max";
 
+        // ── The delivered Manage UI sheet (Assets/Resources/UI/ElarionMedieval/Manage/) ───────
+        /// <summary>
+        /// The 36-file Manage UI folder delivered by the art wave (WO-1567 section 1). Frames,
+        /// chips, resource glyphs and stat glyphs live here. It is NOT the same folder as
+        /// <c>RpgUi/manage/</c>, which holds the older frame/medallion set the tiles still use;
+        /// both are real and both are read, so neither key may be "tidied" into the other.
+        /// </summary>
+        public const string UiFolder = "UI/ElarionMedieval/Manage/";
+
+        // ── Resource glyphs, delivered (256px) ───────────────────────────────
+        // ⛔ THE COST ROW PAINTED NO GLYPH AT ALL until 2026-09-07: ManageScreenVM.CostVms set
+        // IconKey = null on every row, so the owner's Lumber Mill capture showed two bare numbers
+        // ("2600  970") with nothing saying WHICH resource. The five glyphs below have been on
+        // disk the whole time. Mapping lives in the MODEL (ManageScreenVM.CostIconFor) because a
+        // View that switched on a concept id would be canon-9 derivation.
+        public const string ResWood = UiFolder + "res-wood";
+        public const string ResStone = UiFolder + "res-stone";
+        public const string ResIron = UiFolder + "res-iron";
+        public const string ResCrystal = UiFolder + "res-crystal";
+        public const string ResGold = UiFolder + "res-gold";
+        /// <summary>The clock. Mockup panels 3 and 5 draw the time on its OWN line, never inside
+        /// the cost row - a duration is not a price and cannot be compared against a bank.</summary>
+        public const string IconTime = UiFolder + "icon-time";
+
+        /// <summary>
+        /// ⭐ WO-1491 - THE BACK ARROW'S FACE. The mockup draws a plain left arrow on every
+        /// numbered panel; the device build painted the ASCII literal "&lt;-", which the owner's
+        /// capture (Logs/device/screens/owner-screen-20260907-010151.png) shows rendering as
+        /// "&lt; -" with the two glyphs kerned apart.
+        /// <para>⛔ THIS IS A DELIVERED KIT SPRITE, NOT A FONT GLYPH AND NOT A MIRRORED PLAY
+        /// TRIANGLE. <c>icon-back.png</c> arrived with the WO-1567 art wave in
+        /// <see cref="UiFolder"/> (36 files, section 1). The old note that rejected
+        /// <c>RpgUi/button/arrow.png</c> - "a filled RIGHT-pointing play triangle, and a mirrored
+        /// play glyph reads as rewind" - is still true of THAT file and is why this one is bound
+        /// instead of it. The non-ASCII arrow CHARACTER stays banned (fonts render it as tofu);
+        /// a sprite is not a character.</para>
+        /// <para>A miss falls back to the ASCII literal rather than an empty button - the door
+        /// must never disappear, which is the WO-1443 defect this file's siblings record.</para>
+        /// </summary>
+        public const string IconBack = UiFolder + "icon-back";
+
+        /// <summary>The padlock the mockup draws beside a LOCKED row's requirement (panel 7).
+        /// It is the same medallion <see cref="StatusFor"/> hands a Locked tile - ONE glyph for
+        /// "you cannot have this yet", wherever the player meets it.</summary>
+        public const string IconPadlock = StatusLocked;
+
+        // ── Hub card art (mockup panel 1) - NOT DELIVERED. See HubArtFor. ────
+        /// <summary>
+        /// ⚠ THESE THREE FILES DO NOT EXIST, AND THAT IS A STANDING ART ASK, NOT A BUG.
+        /// Mockup panel 1 draws a portrait-shaped illustration filling each hub card (a building,
+        /// a helmet, a book). The art wave delivered 36 UI files into <see cref="UiFolder"/> -
+        /// frames, chips and glyphs only - and no hub illustration among them.
+        /// <para>⛔ AND THE RETIRED LANDSCAPE STRIPS ARE NOT A SUBSTITUTE.
+        /// <c>Assets/Resources/UI/ElarionMedieval/cards/*.png</c> are 1963x789 strips drawn for the
+        /// retired wide 2x2 seat; preserveAspect-ing one into a tall card letterboxes two thirds of
+        /// it black, which reads as BROKEN rather than as art-pending. The hub therefore paints a
+        /// FRAMED, EMPTY well and names the three missing keys through FlowTrace once per session
+        /// (ManageScreenPanel.RenderLauncherCards).</para>
+        /// </summary>
+        public const string HubArtBuild = UiFolder + "hub-build";
+        public const string HubArtArmy = UiFolder + "hub-army";
+        public const string HubArtResearch = UiFolder + "hub-research";
+
+        /// <summary>The three hub keys in card order, for the art-ask trace and its oracle.</summary>
+        public static readonly string[] HubArtKeys = { HubArtBuild, HubArtArmy, HubArtResearch };
+
         // ── Status medallions (256px), one per canon-7 state ──────────────────
         public const string StatusAvailable = "RpgUi/manage/status-available";
         public const string StatusLocked = "RpgUi/manage/status-locked";
@@ -121,6 +187,42 @@ namespace DeNelle.Core.Manage
             }
         }
 
+        // ── Perk icons: art with a NAME BAKED INTO IT ────────────────────────
+
+        /// <summary>Resources folder holding the research perk cards.</summary>
+        public const string PerkIconFolder = "HudIcons/BuildingUpgrades/";
+
+        /// <summary>
+        /// ⛔ THESE FILES ARE PORTRAIT CARDS WITH THE PERK'S NAME PAINTED INTO THE BOTTOM THIRD,
+        /// AND THE ROW ALREADY TYPESETS THAT NAME. MEASURED 2026-09-07 on
+        /// <c>Lumber_Mill_T1_Improved_Logging.jpg</c> (786x1177): the ornate frame runs
+        /// x 65..725 and y 155..800 from the top, and everything below y~840 is the words
+        /// "Improved Logging" in gold. The owner's capture
+        /// (Logs/device/screens/owner-screen-20260907-010151.png) shows exactly that - a baked
+        /// caption bleeding out from under each round medallion, half-cropped, beside the real
+        /// TMP name that says the same thing.
+        /// <para>So the medallion is drawn from the FRAMED PICTURE ONLY. The four numbers below are
+        /// that measured rect in UV (u left..right, v BOTTOM-up, which is the space a RectTransform
+        /// anchor works in), trimmed slightly inside the measured edges so no frame pixel of the
+        /// caption band can creep in at a rounding boundary.</para>
+        /// <para>⚠ THIS IS A CROP, NOT A NEW ASSET. Nothing is re-exported and no key changes; a
+        /// future re-draw without the caption simply makes the crop a no-op worth re-checking.</para>
+        /// </summary>
+        public const float PerkIconU0 = 0.09f, PerkIconU1 = 0.91f;
+        /// <summary>Bottom-up V of the framed picture: 1 - 0.67 and 1 - 0.14 of the card height.</summary>
+        public const float PerkIconV0 = 0.33f, PerkIconV1 = 0.86f;
+
+        /// <summary>
+        /// True when <paramref name="resourceKey"/> names one of the captioned perk cards, so the
+        /// renderer knows to crop rather than paint the whole file.
+        /// <para>⛔ MODEL-SIDE ON PURPOSE. A View that tested a key's folder itself would be
+        /// deriving presentation from an id, which is exactly what canon 9 bans and what the
+        /// WO-2002 oracle looks for. The art authority answers questions about art.</para>
+        /// </summary>
+        public static bool IsCaptionedPerkIcon(string resourceKey)
+            => !string.IsNullOrEmpty(resourceKey) &&
+               resourceKey.StartsWith(PerkIconFolder, System.StringComparison.Ordinal);
+
         // ── Building portrait keys ────────────────────────────────────────────
 
         /// <summary>Resources folder that holds STRUCTURE portraits, one per ladder id per tier.</summary>
@@ -149,11 +251,19 @@ namespace DeNelle.Core.Manage
         /// lowercase-with-hyphens, so the two agree today; if a future ladder id is authored with an
         /// underscore the FILE is named with the underscore too, and nothing has to be kept in sync.</para>
         ///
-        /// <para>⛔ NO TIER-TO-BASE FALLBACK, ON PURPOSE. A tier whose art has not been delivered
-        /// must go BLANK and LOG (a missing portrait renders as the placeholder disc, see
-        /// <see cref="LoadSprite"/>), so the oracle catches it and the owner gets an art request.
-        /// Quietly serving the level-1 sheet for a level-4 building is a wrong icon, and a wrong
-        /// icon is a lie the capture loop cannot see.</para>
+        /// <para>⚠ SUPERSEDED 2026-09-07 BY THE OWNER'S SPEC (mockup panel 2). This paragraph read
+        /// <i>"NO TIER-TO-BASE FALLBACK, ON PURPOSE ... quietly serving the level-1 sheet for a
+        /// level-4 building is a wrong icon, and a wrong icon is a lie the capture loop cannot
+        /// see."</i> The reasoning was sound and the conclusion was wrong on the player's screen:
+        /// the alternative to a slightly-stale icon is a BLANK TILE, and a blank tile is the bigger
+        /// lie - it says "this building has no art" rather than "this tier has no art yet".
+        /// <see cref="LoadSprite"/> now retries the unsuffixed key of the same ladder and paints
+        /// the base sheet.</para>
+        ///
+        /// <para>⛔ NOTHING IS HIDDEN BY THE FALLBACK. The miss is still announced by key
+        /// (<c>art-tier-miss:</c>), and <c>ManagePortraitCoverage</c> still lists every missing
+        /// tier as an ART ASK - so the owner still gets the request, and the capture loop can still
+        /// see it. The fallback changes what the PLAYER sees, not what the gate reports.</para>
         /// </summary>
         public static string BuildingPortraitKey(string ladderId, int level)
         {
@@ -201,6 +311,20 @@ namespace DeNelle.Core.Manage
                     art.name = texture.name + "_manage";
                 }
             }
+            // ⭐ TIER FALLS BACK TO THE BASE SHEET (owner spec 2026-09-07, mockup panel 2).
+            // A tier key that misses now retries the UNSUFFIXED key of the same ladder before
+            // giving up, so a level-3 tower whose tier sheet was never drawn paints its level-1
+            // portrait instead of a blank disc. The miss is still announced, naming the exact tier
+            // key that is absent, so ManagePortraitCoverage keeps listing it as an art ask.
+            // ⛔ THIS DELIBERATELY REVERSES THE "NO TIER-TO-BASE FALLBACK" RULE ABOVE - see the
+            // superseded note on BuildingPortraitKey for the owner's reasoning.
+            string baseKey = null;
+            if (art == null)
+            {
+                baseKey = UnsuffixedKey(resourceKey);
+                if (baseKey != null) art = LoadSprite(baseKey);   // one hop only: baseKey has no suffix
+            }
+
             if (art == null)
                 // ⚠ The old text here read "the slot renders transparent rather than as a white
                 // box", which the doc comment eight lines above already records as FALSE - the slot
@@ -211,10 +335,32 @@ namespace DeNelle.Core.Manage
                     "manage art unresolved at Resources/" + resourceKey +
                     " - the slot renders the placeholder disc inside its ring, NOT the real portrait." +
                     " Either the art has not been delivered (art request) or the key names a folder" +
-                    " the file is not in (mis-key). Do not add a substitute icon: a wrong icon is a lie.");
+                    " the file is not in (mis-key).");
+            else if (baseKey != null)
+                FlowTrace.Once("Manage", "art-tier-miss:" + resourceKey,
+                    "no tier sheet at Resources/" + resourceKey + " - painting the base sheet " +
+                    baseKey + " instead. The TILE IS NOT BLANK, and that is the owner's spec " +
+                    "(mockup panel 2); the missing tier stays an ART ASK and " +
+                    "ManagePortraitCoverage still lists it.");
 
             Cache[resourceKey] = art;
             return art;
+        }
+
+        /// <summary>
+        /// The same key with a trailing "-&lt;digits&gt;" tier suffix removed, or null when the key
+        /// carries no suffix (so a base-sheet miss cannot recurse).
+        /// <para>The suffix grammar is <see cref="BuildingPortraitKey"/>'s own and nothing else's -
+        /// this reverses that method, it does not invent a second spelling.</para>
+        /// </summary>
+        private static string UnsuffixedKey(string resourceKey)
+        {
+            if (string.IsNullOrEmpty(resourceKey)) return null;
+            int dash = resourceKey.LastIndexOf('-');
+            if (dash <= 0 || dash == resourceKey.Length - 1) return null;
+            for (int i = dash + 1; i < resourceKey.Length; i++)
+                if (resourceKey[i] < '0' || resourceKey[i] > '9') return null;
+            return resourceKey.Substring(0, dash);
         }
 
         /// <summary>Editor/test hook: drops the cache so a re-import is seen. No production caller.</summary>

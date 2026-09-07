@@ -663,8 +663,28 @@ namespace DeNelle.Editor.Regression
             Parity(failures, "card title size",  deck, manage, "face.fontSize", ";");
             Parity(failures, "card title align", deck, manage, "face.alignment", ";");
             Parity(failures, "card title fit",   deck, manage, "FitSingleLine(face,", ")");
-            string manageFit = ArgsOf(manage, "FitSingleLine(description,", ")");
-            string deckFit   = ArgsOf(deck,   "FitSingleLine(purpose,", ")");
+            // ⛔ RE-POINTED 2026-09-07 (WO-1567 panel row 1), WITH THE RETIRED ANCHORS KEPT SO
+            // THEY ARE NOT MOVED BACK. They read:
+            //     ArgsOf(manage, "FitSingleLine(description,", ")")
+            //     ArgsOf(deck,   "FitSingleLine(purpose,",     ")")
+            // Manage's card description moved to FitBlock, so the Manage read returned null and
+            // this case reported "cannot read the card purpose fit call" - i.e. it stopped
+            // measuring rather than failing on a real drift.
+            //
+            // ⭐ THE FITTER CHANGED FOR A MEASURED REASON AND THE PARITY IS UNCHANGED IN FORCE.
+            // Owner's device, Logs/device/screens/owner-screen-20260907-004724.png: all three hub
+            // cards read "Construct and upgrade yo...", "Train and manage your tr...", "Unlock
+            // powerful advance..." - the one sentence that says what the card DOES was ellipsised
+            // off every card. FitSingleLine can only shrink to a floor and then ellipsise; FitBlock
+            // WRAPS, and the band is two lines tall. The deck card's purpose band is 0.26-0.52 of
+            // its plate - taller still - and case 6d below already argues for wrapping over an
+            // inserted U+2026 on that exact label.
+            // ⚠ THE FLOOR IS NOT WEAKENED. This still demands EQUALITY, and Manage's floor ROSE
+            // (24f -> ElarionUi.FontFloorMobile, 30f), so the deck had to follow UP, not down.
+            // Manage remains the standard the deck is read against; this case cannot pass by
+            // recomputing the deck's own constants back at itself.
+            string manageFit = ArgsOf(manage, "FitBlock(description,", ")");
+            string deckFit   = ArgsOf(deck,   "FitBlock(purpose,", ")");
             if (manageFit == null || deckFit == null)
                 failures.Add("[deck-card-labels] cannot read the card purpose fit call from " +
                              (manageFit == null ? ManageSrc : DeckSrc));
@@ -681,7 +701,10 @@ namespace DeNelle.Editor.Regression
             // at RENDER time because the purpose label hard-set TextOverflowModes.Ellipsis with
             // wrapping off. Manage sets neither. The one legitimate ellipsis on a card is the
             // fixed-width "[ LOCKED ]" badge, which cannot truncate.
-            string purposeBlock = Between(deck, "available ? spec.Purpose", "FitSingleLine(purpose,");
+            // Terminator moved with the fitter (see 6c). An anchor that no longer occurs makes
+            // Between return null, which this case reports as "cannot find the block" - a case
+            // that cannot find its scope must fail loudly, not measure nothing.
+            string purposeBlock = Between(deck, "available ? spec.Purpose", "FitBlock(purpose,");
             if (purposeBlock == null)
                 failures.Add("[deck-card-labels] cannot find the deck card purpose label block in " + DeckSrc);
             else

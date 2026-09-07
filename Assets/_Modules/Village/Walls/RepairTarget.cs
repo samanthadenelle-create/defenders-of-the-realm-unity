@@ -242,9 +242,23 @@ namespace DeNelle.Village
                     if (_building != null) _building.Repair(_building.MaxHp); // additive, clamped at MaxHp
                     break;
             }
+            float after = DamageFraction;
             FlowTrace.Step("Repair",
                 $"RepairTarget.RepairFull '{DisplayName}' ({Kind}) " +
-                $"frac {before:0.00}->{DamageFraction:0.00} needsRepair={NeedsRepair}");
+                $"frac {before:0.00}->{after:0.00} needsRepair={NeedsRepair}");
+
+            // WO-1537 no-silent-failure net (CLAUDE.md section 12): RepairFull is what the CHARGED
+            // paths call (WallRepairController.ConfirmRepair + the RepairAll Fix lambda), so a
+            // call that moves the fraction NOWHERE means the player was billed and got nothing.
+            // The only sanctioned way that happens is the WO-753 destroyed guard (Building.cs:260
+            // / WallSegment.cs:504) refusing a lost structure - which the charged paths are
+            // supposed to exclude BEFORE spending. Either way it is an anomaly, never a Step that
+            // reads like a normal repair.
+            if (after > 0.0001f && after >= before - 0.0001f)
+                FlowTrace.Warn("Repair",
+                    $"RepairTarget.RepairFull '{DisplayName}' ({Kind}) DELIVERED NOTHING - frac stayed " +
+                    $"{after:0.00} (destroyed guard, or a full-restore magnitude that no longer reaches max). " +
+                    "If a charge preceded this line the player paid for nothing.");
         }
 
         /// <summary>

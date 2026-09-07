@@ -187,7 +187,64 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, hundred-and-fifth pass): main line next free = **1569**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-ninth pass): main line next free = **1573**.
+> *(Edit-only fix lane minted **1572** = BUILD COLLECTIONS ROOT HIDES FOUR CATEGORIES BECAUSE BAKED
+> TWINS COUNT AS BUILT. Bumped 1572 -> 1573 in this SAME edit. The other half of 1571: that lane
+> re-pointed the Manage BUILD door, then found the root itself was EMPTIED, not authored short.
+> `card-collections.json` authors SEVEN active build collections; the owner's frame
+> `Logs/device/screens/owner-screen-20260907-005742.png` shows THREE.
+> `BuildCollectionBrowser.CollectionHasVisibleItems` (:613) dropped a collection whose every item
+> was a singleton reading `StructureSingleton.IsBuilt`, and IsBuilt COUNTS AN ACTIVE BAKED TWIN
+> (StructureSingleton.cs:120-147 step 2). Every item of build-realm and build-trade authors a
+> bakedTwin, so the scene bake hid both categories outright. Re-pointed to `IsPlayerBuilt` - the
+> query `BuildModeController.IsSingletonBuilt` (:2334-2346) has asked since WO-843 - at all three
+> player-facing sites. Recorded as section 5 of WO-1540, whose class this is.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-eighth pass): main line next free = **1572**.
+> *(Edit-only fix lane minted **1571** = MANAGE BUILD DOOR FOR A NON-DEFENCE STRUCTURE LANDS ON THE
+> BUILD COLLECTIONS ROOT, A DEAD END. Row 190 below already stood at 1571 when this lane read it -
+> a CONCURRENT mint by another lane in the same minute - so this row takes 1571 and bumps to 1572
+> in this SAME edit, per the section 2 rule. Device build 358872, logcat 2026-09-07 00:58:40:
+> Manage > BUILD > Cathedral of Magic (`arcane-tower`, CRAFT, NOT BUILT) -> BUILD ->
+> `[Flow:Navigation] opened workspace 'Build Collections' at root` + `BuildMode.Enter - palette
+> shown`, and that root offers only Towers / Walls & Gates / Manage Placed - no ECONOMY / CRAFT /
+> STORAGE collection exists, so the id is unreachable from its own BUILD button. The id is DROPPED
+> at `ManageScreenVM.cs:4188` (`Invoke = () => OpenTownBuilderRequested?.Invoke()`). Fixed by a
+> direct-placement door through the browser's OWN pick seam.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-seventh pass): main line next free = **1571**.
+> *(Edit-only fix lane minted **1570** = LUMBER MILL UPGRADE COST NAMES STONE AND GOLD - THE
+> PREMISE WAS WRONG AND THE FINDING IS THE VIEW. Device capture build 358872,
+> `Logs/device/screens/owner-screen-20260907-004903.png`: "UPGRADE . STONE 2600 GOL..." over bare
+> numbers "2600  970". Read at source: NO retired key is involved. `building-tiers.json:67` authors
+> `costWood: 2600, costGold: 970`, both LIVE keys (`BuildingTierCatalog.cs:61-62`); `costFood`
+> appears ZERO times in either canonical twin so the legacy alias at `:64` prices nothing. "Stone"
+> is the LIVE player word for the Food wallet slot (`TownBankCapacity.DisplayName`), and the
+> tier-2 -> Stone charge lane is OWNER RULING 22 (WO-2005) - "the CHARGE is right and the AUTHORING
+> is wrong". THE SPEND IS HONEST: `BuildingUpgradeService.TryUpgrade` debits Stone 2600 +
+> Coins 970, exactly what the button says. The real defect is the MANAGE VIEW: `ManageScreenVM`
+> composes `ManageCostVM.Label` correctly but sets `IconKey = null` (:5078) and
+> `ManageWorkspacePanel.BuildCostRow` (:1288-1291) paints only the icon + `AmountText`, never the
+> `Label` - so the resource identity is nowhere on screen (colorblind law), and the button
+> concatenates the price until it truncates. Manage is another lane; handed back with file:line.
+> DONE HERE: StructureCardVM exposes the detail-layout fields with words from the bank authority,
+> a FlowTrace naming the upgrade basket's keys + source, and a `[card-cost-words]` lint in
+> BuildEconomyRegression. Bumped 1570 -> 1571 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-sixth pass): main line next free = **1570**.
+> *(Edit-only fix lane minted **1569** = BREACH PROBE READS A FELLED TOWER AFTER DESTROY. Device
+> capture, build 2026.09.07.358872, scene RaidBase_raider_camp_small, F8 seq 4688 (troop-footman)
+> + 4689 (troop-archer), same instant: `breach-probe ... FAILED: NullReferenceException` at
+> `UnityEngine.Component.get_transform` -> `DefenseTower.get_WorldPosition` inside
+> `TroopController.<TraceBreachProbe>b__0`. `IDamageable` is an INTERFACE, so `destroyed != null`
+> is a plain managed comparison that never reaches UnityEngine.Object's overloaded `==`; a
+> DefenseTower is `Destroy(gameObject)`d by `Destructible.NotifyBroken` and still passes it. Walls
+> never showed it because a collapsed `WallSegment` KEEPS its component. Cost: WO-1438's
+> `holeNavmesh=` measurement is lost entirely for towers - the probe aborts before its Step. Fix
+> is source-side: `TroopController.IsLiveTarget`, a last-live-position carried into the probe, and
+> a destroy-safe `DefenseTower.WorldPosition`. Bumped 1569 -> 1570 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, hundred-and-fifth pass): main line next free = **1569**.
 > *(Diagnosis lane minted **1568** = DUNGEON DOORS READ AS MOVING WALLS. The composed-dungeon
 > working door is a `PrimitiveType.Cube` (`CommonDungeonDoor.cs:57-60`) of the same primitive family
 > as the room walls, 2.2 x 2.4 x 0.16, told apart only by a brown colour - the one cue the

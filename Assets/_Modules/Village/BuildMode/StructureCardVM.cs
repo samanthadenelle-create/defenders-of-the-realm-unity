@@ -168,6 +168,85 @@ namespace DeNelle.Village
         /// <summary>The next-tier upgrade cost (the View formats it with its own cost formatter).</summary>
         public CoreCost NextTierCost { get; }
 
+        // =====================================================================
+        //  WO-1570 - WHAT A DETAIL LAYOUT NEEDS, SPELLED BY THE MODEL.
+        //
+        //  The captured defect (Logs/device/screens/owner-screen-20260907-004903.png)
+        //  is a detail card printing "2600   970" with no resource words and an
+        //  upgrade button truncated to "UPGRADE . STONE 2600 GOL...". That capture is
+        //  the MANAGE detail (ManageVmProjection.cs:306 / ManageScreenVM.cs:4859) and
+        //  its own model already carries the words - its View drops them. This block
+        //  is the same shape for THIS VM's consumer (BuildStructureInfoPanel), which
+        //  today formats the basket itself at BuildStructureInfoPanel.cs:347-350 with
+        //  hardcoded ("stone", "Stone", c.food) literals. A View re-spelling a
+        //  resource name is how one screen ends up naming a slot differently from the
+        //  wallet chip beside it.
+        //
+        //  STOP - NO WORD IS TYPED HERE. Every resource name comes from
+        //  DeNelle.Core.Economy.TownBankCapacity.DisplayName(BankResource), the one
+        //  authority the HUD chips, the bank and the cap-block copy already read -
+        //  so "Stone" for the Food slot (canon sec.7; WO-1416 retired FOOD and the same
+        //  persisted slot now holds Stone) is stated in exactly one place. A literal
+        //  here would be a fifth copy of a word this repo has already paid for
+        //  (CLAUDE.md sec.2 / sec.5 / sec.16, the duplicated-state failures).
+        //
+        //  STOP - NO NUMBER IS RE-DERIVED. The amounts are EffectiveCost / NextTierCost,
+        //  which are BuildModeController's own values; the seconds come from the
+        //  SAME two steps BuildTimerService.StartUpgrade runs (tier = targetLevel - 2,
+        //  then the config curve) - grace deliberately not applied, because
+        //  GraceAdjustedDurationMs returns early for upgrades.
+        // =====================================================================
+
+        /// <summary>One (label, current, next) row for an upgrade preview table.</summary>
+        public readonly struct UpgradeStatRow
+        {
+            public readonly string Label;
+            public readonly string Current;
+            public readonly string Next;
+            public UpgradeStatRow(string label, string current, string next)
+            { Label = label; Current = current; Next = next; }
+        }
+
+        /// <summary>
+        /// The level this projection describes. A palette / info-panel card is a
+        /// PRE-PLACEMENT projection of a catalog row, so it is always 1 - the same
+        /// fact <see cref="TierBadge"/> already spells ("Lv 1" / "Lv 1 / N"). Exposed
+        /// as a number so a layout never has to parse that badge back apart.
+        /// A PLACED structure's live level is a different authority
+        /// (PlacedStructureUpgradeService / GameState.BaseLayout) and is NOT this.
+        /// </summary>
+        public int CurrentLevel => 1;
+
+        /// <summary>The paid basket in (resource word, amount) rows - empty while the
+        /// first-build freebie is live, which is the WO-1010 D20 no-price rule.</summary>
+        public IReadOnlyList<DeNelle.Core.UI.CostPart> EffectiveCostParts => _effectiveCostParts;
+        private readonly IReadOnlyList<DeNelle.Core.UI.CostPart> _effectiveCostParts;
+
+        /// <summary>The next-tier basket in (resource word, amount) rows; empty when
+        /// there is no next tier.</summary>
+        public IReadOnlyList<DeNelle.Core.UI.CostPart> NextTierCostParts => _nextTierCostParts;
+        private readonly IReadOnlyList<DeNelle.Core.UI.CostPart> _nextTierCostParts;
+
+        /// <summary>Current-vs-next stat rows for the upgrade preview. Same numbers
+        /// <see cref="NextTierStats"/> spells as one string - built once, read two ways,
+        /// so a table and a sentence can never disagree.</summary>
+        public IReadOnlyList<UpgradeStatRow> UpgradeStats => _upgradeStats;
+        private readonly List<UpgradeStatRow> _upgradeStats = new List<UpgradeStatRow>();
+
+        /// <summary>Seconds the Lv1 -&gt; Lv2 upgrade will actually run; 0 when the timer
+        /// service is absent, in which case the layout omits the term rather than
+        /// quoting a fiction (the same rule <see cref="PlacementBuildSeconds"/> follows).</summary>
+        public int UpgradeSeconds { get; }
+
+        /// <summary>The wait in words ("57s"), or "" when unknown.</summary>
+        public string UpgradeTimeText { get; }
+
+        /// <summary>The upgrade control's face. ONE WORD: the button is a fixed-width
+        /// slot and the captured defect is a label that ran past its own edge because
+        /// the price was concatenated into it. The price belongs on
+        /// <see cref="NextTierCostParts"/>, beside the button, not inside it.</summary>
+        public string UpgradeButtonLabel => "UPGRADE";
+
         /// <summary>The one game-state-touching factory (audit §3.1): resolves the economy handle +
         /// the freebie flag itself, then builds the pure projection. Views call THIS (they never
         /// name EconomyService / BuildModeController).</summary>
@@ -209,7 +288,12 @@ namespace DeNelle.Village
                 if (item == null || !BuildCollectionBrowser.IsCollectionItemVisible(item.ItemId)) continue;
                 var entry = CatalogRegistry.Get(item.ItemId);
                 if (entry == null) continue;
-                if (StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry)) continue;
+                // WO-1572: IsPlayerBuilt, not IsBuilt. This count is the CATEGORY CARD's
+                // subtitle and BuildCollectionBrowser.cs:186-190 states it must fold the same
+                // authorities as the item cards behind that door. Those two sites moved off
+                // the twin-counting predicate, so leaving this one on IsBuilt would promise
+                // "nothing you can afford" over a door full of buildable rows.
+                if (StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsPlayerBuilt(entry)) continue;
                 bool progressionLocked = !string.IsNullOrEmpty(RewardedProgression.LockReasonFor(item.ItemId)) &&
                                          !ProgressionUnlocks.IsUnlocked(item.ItemId);
                 var vm = new StructureCardVM(entry, EconomyService.Instance,
@@ -285,11 +369,11 @@ namespace DeNelle.Village
             if (entry == null) return string.Empty;
             if (BuildModeController.FreeBuildAvailable(entry)) return string.Empty;
             var c = BuildModeController.SoftcappedCostFor(entry);
-            return DeNelle.Core.UI.CostFormat.Words(DeNelle.Core.UI.CostFormat.Parts(new[]
-            {
-                ("wood", "Wood", c.wood), ("stone", "Stone", c.food),
-                ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals)
-            }));
+            // WO-1570: was a hand-typed ("stone", "Stone", c.food) tuple - the fifth copy of a
+            // word the bank already spells. Re-pointed at PartsOf, which reads
+            // TownBankCapacity.DisplayName. Output is IDENTICAL (Wood/Stone/Iron/Crystals both
+            // ways), which matters: CostBasketSeparationRegression.cs:662 reads CostWords.
+            return DeNelle.Core.UI.CostFormat.Words(PartsOf(c));
         }
 
         /// <summary>0 when the timer service is absent — the line then omits the term rather
@@ -383,6 +467,8 @@ namespace DeNelle.Village
                 NextTierTitle = null;
                 NextTierStats = null;
                 NextTierCost = default;
+                UpgradeSeconds = 0;
+                UpgradeTimeText = string.Empty;
             }
             else
             {
@@ -394,15 +480,115 @@ namespace DeNelle.Village
                 {
                     float dps1 = repo.damage * (repo.fireRate > 0f ? repo.fireRate : 1f);
                     float dps2 = (repo.damage * l2Mul) * (repo.fireRate > 0f ? repo.fireRate : 1f);
-                    parts.Add("DPS " + FormatNum(dps1) + " -> " + FormatNum(dps2));
+                    _upgradeStats.Add(new UpgradeStatRow("DPS", FormatNum(dps1), FormatNum(dps2)));
                 }
                 if (repo.range > 0f)
-                    parts.Add("Range " + FormatNum(repo.range) + "m -> " + FormatNum(repo.range * l2Mul) + "m");
+                    _upgradeStats.Add(new UpgradeStatRow("Range", FormatNum(repo.range) + "m",
+                                                         FormatNum(repo.range * l2Mul) + "m"));
+                // The sentence is DERIVED from the rows, never authored a second time -
+                // a table and a summary line that are typed separately drift.
+                for (int i = 0; i < _upgradeStats.Count; i++)
+                    parts.Add(_upgradeStats[i].Label + " " + _upgradeStats[i].Current
+                              + " -> " + _upgradeStats[i].Next);
+                // Nothing MEASURED to compare: the sentence stays, and UpgradeStats stays
+                // EMPTY rather than inventing two player-facing words for a table row.
+                // Empty is honest; fabricated copy is the owner's call, not this file's.
                 if (parts.Count == 0)
                     parts.Add("Sturdier — higher durability tier");
                 NextTierStats = string.Join("\n", parts);
                 NextTierCost = BuildModeController.UpgradeCostFor(entry, 1);
+                UpgradeSeconds = UpgradeSecondsFor();
+                UpgradeTimeText = UpgradeSeconds > 0
+                    ? DeNelle.Core.UI.ElarionUi.Duration(UpgradeSeconds) : string.Empty;
             }
+
+            _effectiveCostParts = PartsOf(EffectiveCost);
+            _nextTierCostParts = HasNextTier ? PartsOf(NextTierCost)
+                                             : System.Array.Empty<DeNelle.Core.UI.CostPart>();
+
+            // CLAUDE.md sec.12 - the upgrade line NAMES ITS KEYS AND THEIR SOURCE, once per row. The
+            // captured defect was read as "a retired resource key reached the button";
+            // proving which keys a basket actually carries, and which file authored them,
+            // is a single log read instead of a catalog hunt. Fires only for a row that
+            // HAS an upgrade rung, so the palette does not narrate 40 single-tier cards.
+            if (HasNextTier && Id != null)
+                FlowTrace.Once("Build", "upgrade-basket-" + Id,
+                    "UPGRADE BASKET '" + Id + "' Lv1->Lv2 keys=[" + KeysOf(NextTierCost)
+                    + "] words=[" + DeNelle.Core.UI.CostFormat.Words(_nextTierCostParts)
+                    + "] seconds=" + UpgradeSeconds
+                    + " | SOURCE: BuildModeController.UpgradeCostFor(entry,1) took the "
+                    + (AuthoredFirstStep(entry)
+                        ? "AUTHORED step - structures-catalog.json row 'repo.upgradeCost[0]' "
+                          + "(both canonical twins)"
+                        : "FALLBACK SCALER - this row authors no usable upgradeCost[0], so the "
+                          + "basket is CostFor(entry) x fromLevel (BuildModeController.cs:2807-2828), "
+                          + "NOT an authored table")
+                    + "; words from TownBankCapacity.DisplayName. NOTE the building-tiers.json "
+                    + "PERK ladder is a DIFFERENT authority with a DIFFERENT charge rule "
+                    + "(BuildingTierChargeLane: T1 Wood / T2 Stone / T3+ Iron by tier NUMBER, "
+                    + "owner ruling 22) - do not read one to explain the other.");
+        }
+
+        /// <summary>
+        /// The basket as (word, amount) rows. The concept ids stay the lowercase tokens
+        /// UiStyle.Icon already resolves; the WORDS come from the bank's own DisplayName
+        /// so no surface re-spells a resource. Zero terms are dropped by CostFormat.Parts.
+        /// </summary>
+        private static IReadOnlyList<DeNelle.Core.UI.CostPart> PartsOf(CoreCost c)
+        {
+            return DeNelle.Core.UI.CostFormat.Parts(new[]
+            {
+                ("wood",    Word(DeNelle.Core.Economy.BankResource.Wood),     c.wood),
+                ("stone",   Word(DeNelle.Core.Economy.BankResource.Food),     c.food),
+                ("iron",    Word(DeNelle.Core.Economy.BankResource.Iron),     c.iron),
+                ("crystal", Word(DeNelle.Core.Economy.BankResource.Crystals), c.crystals)
+            });
+        }
+
+        private static string Word(DeNelle.Core.Economy.BankResource r)
+            => DeNelle.Core.Economy.TownBankCapacity.DisplayName(r);
+
+        /// <summary>
+        /// True when UpgradeCostFor's AUTHORED branch supplies the L1-&gt;L2 step - the exact
+        /// condition at BuildModeController.cs:2812-2816 (array present, index in range, step
+        /// not all-zero). Mirrored rather than guessed, because a trace that names the wrong
+        /// authoring file is worse than no trace: 'healing_caravan' (maxLevel 3, no array)
+        /// takes the scaler, and BuildEconomyRegression :1193 records that as the ruled shape.
+        /// </summary>
+        private static bool AuthoredFirstStep(CatalogEntry e)
+        {
+            var repo = e != null ? e.repo : null;
+            return repo != null && repo.upgradeCost != null && repo.upgradeCost.Length > 0
+                   && !repo.upgradeCost[0].IsZero;
+        }
+
+        /// <summary>The NON-ZERO cost keys of a basket, for the trace. Names the keys the
+        /// data actually carries - the question the capture could not answer.</summary>
+        private static string KeysOf(CoreCost c)
+        {
+            var keys = new List<string>(4);
+            if (c.wood > 0) keys.Add("wood=" + c.wood);
+            if (c.food > 0) keys.Add("food=" + c.food);
+            if (c.iron > 0) keys.Add("iron=" + c.iron);
+            if (c.crystals > 0) keys.Add("crystals=" + c.crystals);
+            return keys.Count == 0 ? "none" : string.Join(",", keys.ToArray());
+        }
+
+        /// <summary>
+        /// The Lv1 -&gt; Lv2 wait, run through the SAME two steps BuildTimerService.StartUpgrade
+        /// runs: tier = max(0, targetLevel - 2) (BuildTimerService.cs:662-664), then the config
+        /// curve for BuildJobKind.Upgrade. Grace is deliberately NOT applied -
+        /// GraceAdjustedDurationMs returns the duration unchanged for an upgrade.
+        /// 0 when the service is absent, so the layout omits the term.
+        /// </summary>
+        private static int UpgradeSecondsFor()
+        {
+            var svc = BuildTimerService.Instance;
+            if (svc == null || svc.Config == null) return 0;
+            const int targetLevel = 2;                       // this VM previews Lv1 -> Lv2 only
+            int tier = Mathf.Max(0, targetLevel - 2);
+            float seconds = svc.Config.DurationSecondsForTier(tier, BuildJobKind.Upgrade);
+            return Mathf.Max(0, Mathf.RoundToInt(seconds));
         }
 
         private void BuildCurrentStats(CatalogEntry entry, RepoProps repo)

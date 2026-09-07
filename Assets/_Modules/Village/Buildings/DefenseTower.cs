@@ -259,7 +259,38 @@ namespace DeNelle.Village
         /// <see cref="IDamageable"/> — this tower's world position, used by the range and
         /// nearest-target queries of every attacker that acquires through the interface.
         /// </summary>
-        public Vector3 WorldPosition => transform.position;
+        /// <remarks>
+        /// WO-1569 - DESTROY-SAFE, and it has to be. A tower dies through
+        /// <c>Destructible.NotifyBroken</c>, which <c>Destroy(gameObject)</c>s it, but callers
+        /// hold it through <see cref="IDamageable"/> - an INTERFACE, where `!= null` is a plain
+        /// managed comparison that never reaches UnityEngine.Object's overloaded ==. So a
+        /// destroyed tower sails through every caller's null check and the bare
+        /// `transform.position` below threw NullReferenceException in
+        /// <c>UnityEngine.Component.get_transform</c> (device capture, build 2026.09.07.358872,
+        /// scene RaidBase_raider_camp_small, F8 seq 4688/4689 - it killed TroopController's
+        /// WO-1438 breach probe outright).
+        ///
+        /// The cache refreshes ON READ rather than in Awake/OnDestroy: a tower is static, so the
+        /// last read is always current, and refresh-on-read needs no lifecycle hook and works in
+        /// EditMode where Awake ordering is not guaranteed. The `this` test is Unity's own
+        /// alive check; it runs once per read, and the hottest reader
+        /// (TroopController.NearestHostile, per candidate at 5 Hz) is nowhere near a budget.
+        ///
+        /// This is a SAFETY NET, not the fix. Callers that must not aim at a corpse still filter
+        /// on liveness (TroopController.IsLiveTarget); this only guarantees that reading the
+        /// property can never take down the caller's whole code path.
+        /// </remarks>
+        public Vector3 WorldPosition
+        {
+            get
+            {
+                if (this != null) _lastWorldPosition = transform.position;
+                return _lastWorldPosition;
+            }
+        }
+
+        // Last position observed while this tower still existed natively. See WorldPosition.
+        private Vector3 _lastWorldPosition;
 
         /// <summary>
         /// <see cref="IDamageable"/> hero / troop / pet / ability damage entry. Routes into the

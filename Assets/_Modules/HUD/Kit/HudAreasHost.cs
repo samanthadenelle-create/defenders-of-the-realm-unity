@@ -141,7 +141,16 @@ namespace DeNelle.HUD.Kit
             // HudDockLayoutRegression pins their source text verbatim.
             Add(HudArea.ActionBar,   new Vector2(ActionBarMinX, HudLayoutBands.ThumbActionRowMinY),
                                      new Vector2(ActionBarMaxX, HudLayoutBands.ThumbActionRowMaxY));
-            Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
+            // ⭐ WO-1464 - THE STICK'S BAND IS NO LONGER AUTHORED HERE. It is
+            // HudLayoutBands.MoveClusterMount (DeNelle.Core.UI), because the raid deploy tray in
+            // DeNelle.Village has to start to the RIGHT of it and DeNelle.Village may not
+            // reference DeNelle.HUD (CLAUDE.md §5). The tray was drawn straight across the stick
+            // in the owner's 2026-09-07 capture for exactly the reason WO-1436's bar was drawn
+            // across the ability row: a Village-local literal cannot see a HUD-local one.
+            // ⚠ ActionBarMinX above is documented as "also the MoveCluster's RIGHT edge" and its
+            // source text is pinned verbatim by HudDockLayoutRegression, so it stays a const here;
+            // RaidHudThumbBandRegression asserts the two agree so the drift is a red build.
+            Add(HudArea.MoveCluster, HudLayoutBands.MoveClusterMount);
             // ⭐ WO-1219 - THE LEFT COLUMN IS NO LONGER AUTHORED HERE.
             // Vitals / HeartStatus / Minimap / Dock are read from DeNelle.Core.UI.HudLayoutBands,
             // the ONE table that owns the whole column (hero plate -> SKILL chip -> Heart bar ->

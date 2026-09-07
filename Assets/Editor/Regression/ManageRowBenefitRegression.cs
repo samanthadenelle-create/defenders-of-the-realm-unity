@@ -300,8 +300,11 @@ namespace DeNelle.Editor.Regression
         //
         //  RED PROOF: put `item.BadgeText = c.Ready ? "READY" : "SHORT";` back in
         //  ManageScreenVM.ComposeResearchItem -> [research-short-names-what] fires. Put
-        //  `item.BadgeText = "LOCKED";` back (dropping the tap word and the NextRungLine join) ->
-        //  [research-locked-names-why] fires on both halves.
+        //  `item.BadgeText = "LOCKED";` back (dropping the tap word) -> the door half of
+        //  [research-locked-names-why] fires. Delete the RequirementText assignment from
+        //  ManageVmProjection.ProjectTile -> the blocker half fires. Restore
+        //  `item.NextRungLine + " . " + item.LockReason` -> the JOIN half fires (added 2026-09-07;
+        //  see the case body for why the blocker moved off the benefit line).
         // =====================================================================
         private static void CheckResearchRowsSayWhatAndWhy(ManageScreenVM vm, GameState fixture,
             List<string> failures, StringBuilder log)
@@ -377,18 +380,48 @@ namespace DeNelle.Editor.Regression
                             failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' reads \"" + word +
                                          "\" - it carries a door (Activate is wired) and no tap affordance, so it " +
                                          "teleports the player somewhere with no warning (owner, 20:19).");
-                        // ...and the row must NAME THE BLOCKER, which is the 20:12 ruling. The
-                        // sentence rides the row's SECOND LINE because the state column is a
-                        // quarter of the row wide and would cull it - see ComposeResearchItem.
+                        // ...and the row must NAME THE BLOCKER, which is the 20:12 ruling.
+                        //
+                        // ⛔ RE-POINTED 2026-09-07 (WO-1567 panel row 8), WITH THE RETIRED READING
+                        // KEPT SO IT IS NOT MOVED BACK. It read:
+                        //     tile.Subtitle.IndexOf(blocker, ...) < 0   ->  "its row paints ..."
+                        // i.e. it required the blocker to be INSIDE THE BENEFIT LINE, and the
+                        // comment beside it explained why: "the sentence rides the row's SECOND
+                        // LINE because the state column is a quarter of the row wide and would cull
+                        // it". That reasoning was right about the STATE COLUMN and wrong about the
+                        // only alternative - so ComposeResearchItem joined the two facts with
+                        // `NextRungLine + " . " + LockReason`, and the owner's device
+                        // (Logs/device/screens/owner-screen-20260907-010151.png) shows the result:
+                        //     "Wood +8%, offline bucket +8% . Upgrade the building to Tier 3 f..."
+                        // A benefit and a requirement in one string, a floating period between
+                        // them, and the half she needs in order to act ellipsised off the end. The
+                        // pin was holding the join in place.
+                        //
+                        // ⭐ THE RULING IS UNCHANGED AND STILL ENFORCED: the blocker MUST reach a
+                        // face. It now has a face of its own - ManageTileVM.RequirementText, drawn
+                        // by ManageWorkspacePanel.BuildListRow as a padlock row under the benefit
+                        // (mockup panel 7's shape). This asserts the SAME invariant against the
+                        // channel that now carries it, and additionally that the join has not come
+                        // back - a locked row whose benefit line swallowed the blocker again would
+                        // pass the first half and fail the second.
                         var choice = FindPerk(vm, schools[s], tile.Id);
                         string blocker = choice != null ? choice.LockReason : null;
-                        if (!string.IsNullOrWhiteSpace(blocker) &&
-                            (string.IsNullOrEmpty(tile.Subtitle) ||
-                             tile.Subtitle.IndexOf(blocker, StringComparison.Ordinal) < 0))
-                            failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' has the blocker \"" +
-                                         blocker + "\" composed on ResearchChoiceVM.LockReason and its row paints \"" +
-                                         tile.Subtitle + "\" - the reason reaches no face, which is exactly the " +
-                                         "composed-but-unpainted defect (WO-1518 section 1).");
+                        if (!string.IsNullOrWhiteSpace(blocker))
+                        {
+                            if (string.IsNullOrEmpty(tile.RequirementText) ||
+                                tile.RequirementText.IndexOf(blocker, StringComparison.Ordinal) < 0)
+                                failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' has the blocker \"" +
+                                             blocker + "\" composed on ResearchChoiceVM.LockReason and its row carries " +
+                                             "RequirementText \"" + tile.RequirementText + "\" - the reason reaches no " +
+                                             "face, which is exactly the composed-but-unpainted defect " +
+                                             "(WO-1518 section 1).");
+                            if (!string.IsNullOrEmpty(tile.Subtitle) &&
+                                tile.Subtitle.IndexOf(blocker, StringComparison.Ordinal) >= 0)
+                                failures.Add("[research-locked-names-why] locked perk '" + tile.Id + "' has the blocker " +
+                                             "back inside its BENEFIT line (\"" + tile.Subtitle + "\"). That join is the " +
+                                             "captured defect: the benefit is the line the player decides on, and the " +
+                                             "requirement pushed off its end is the fact she needed. Two facts, two rows.");
+                        }
                         continue;
                     }
 

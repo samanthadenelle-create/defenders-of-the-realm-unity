@@ -88,6 +88,41 @@ namespace DeNelle.Village
     }
 
     /// <summary>
+    /// WO-1479 - what a CANCEL would hand back, decided ONCE in the VM.
+    ///
+    /// The player is asked to press a destructive button; the price of pressing it must be on
+    /// screen BEFORE the finger arrives, not in the notice that lands after the spend is already
+    /// reversed. The figure is the job's own paid basket (BuildJobData.Paid, save v37, owner ruling
+    /// WO-911 Q1: cancel refunds 100% of what was paid, flat) - never a re-derivation, because the
+    /// placement path charges against the LIVE tower count and a first build charges nothing.
+    ///
+    /// The LINE is composed here and not in the View. Before this existed the drawer decided the
+    /// zero case itself, by string-matching the model's text against "nothing" - a View deciding
+    /// whether the player is told about a refund, which is the WO-1512 breach shape. The View now
+    /// renders <see cref="Line"/> when it is non-empty and decides nothing.
+    /// </summary>
+    public readonly struct RefundQuote
+    {
+        /// <summary>The basket a cancel would credit back. All-zero when there is nothing to pay.</summary>
+        public readonly JobCost Basket;
+        /// <summary>TRUE when a cancel actually returns something.</summary>
+        public readonly bool HasRefund;
+        /// <summary>Ready-made ASCII line for the row ("Refund: 120 wood, 40 iron"), or the honest
+        /// zero wording. Empty ONLY when no such job exists to quote.</summary>
+        public readonly string Line;
+
+        public RefundQuote(JobCost basket, bool hasRefund, string line)
+        {
+            Basket = basket;
+            HasRefund = hasRefund;
+            Line = line;
+        }
+
+        /// <summary>No job to quote - the row draws no refund line at all.</summary>
+        public static readonly RefundQuote None = new RefundQuote(default(JobCost), false, "");
+    }
+
+    /// <summary>
     /// ViewModel for <see cref="ObsidianQueueHud"/>: channel projections + the three spend commands.
     /// Stateless over the queue itself (BuildTimerService remains the single owner); this type is the
     /// SEAM, not a second copy of the queue.
@@ -177,6 +212,64 @@ namespace DeNelle.Village
                                    : price + "c";
 
             return new QueueOffer(price, paysGold, adOk, face);
+        }
+
+        // -- refund quote (WO-1479) ------------------------------------------────────────
+
+        /// <summary>Prefix on a real refund line. One literal, so the row and any future surface
+        /// can never word the same promise two ways.</summary>
+        public const string RefundPrefix = "Refund: ";
+
+        /// <summary>
+        /// The zero wording. It says what is PROVABLE and no more: an all-zero basket is either a
+        /// pre-v37 in-flight job or a genuinely free build, and BuildJobData carries no stamp that
+        /// tells them apart - so naming either one on the row would be a guess the player pays for.
+        /// "Nothing was paid" is true of both, and it is the same fact the service traces at cancel.
+        /// </summary>
+        public const string NoRefundLine = "No refund - nothing was paid for this job";
+
+        /// <summary>
+        /// Compose the quote from a basket already in hand (the queue-row build site has the job).
+        /// PURE - no service, no wallet, no trace: this runs on every row of every Rebuild.
+        /// </summary>
+        public static RefundQuote QuoteRefund(JobCost paid)
+        {
+            return paid.IsZero
+                ? new RefundQuote(paid, false, NoRefundLine)
+                : new RefundQuote(paid, true, RefundPrefix + paid.Describe());
+        }
+
+        /// <summary>
+        /// The quote for ONE live job, by the id the cancel verb takes.
+        ///
+        /// !! THE LOOKUP MUST MATCH THE CANCEL'S OWN, or the row quotes one job and the service
+        /// refunds another: BuildTimerService.CancelChannelJobWithRefund reads its basket through
+        /// FindInChannel, which is an EXACT StructureId match, ACTIVE list first and pending second.
+        /// This walks the same two lists in the same order through the service's public snapshots,
+        /// so the two can never disagree. It is a READ - nothing is spent, nothing is cancelled.
+        /// </summary>
+        public RefundQuote QuoteRefund(ChannelId channel, string structureId)
+        {
+            return TryGetPaidBasket(channel, structureId, out JobCost paid)
+                ? QuoteRefund(paid)
+                : RefundQuote.None;
+        }
+
+        /// <summary>The paid basket carried by a live job, or false when no such job is queued.</summary>
+        public bool TryGetPaidBasket(ChannelId channel, string structureId, out JobCost paid)
+        {
+            paid = default(JobCost);
+            if (string.IsNullOrEmpty(structureId)) return false;
+
+            var active = ActiveJobs(channel);
+            for (int i = 0; i < active.Count; i++)
+                if (active[i].StructureId == structureId) { paid = active[i].Paid; return true; }
+
+            var pending = PendingJobs(channel);
+            for (int i = 0; i < pending.Count; i++)
+                if (pending[i].StructureId == structureId) { paid = pending[i].Paid; return true; }
+
+            return false;
         }
 
         // ── spend commands ────────────────────────────────────────────────────

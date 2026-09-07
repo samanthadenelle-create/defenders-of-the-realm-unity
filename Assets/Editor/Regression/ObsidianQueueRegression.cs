@@ -62,6 +62,7 @@ namespace DeNelle.Editor
                 CheckWo911DepthCap(failures, log);
                 CheckWo911PaidBasketAndPricing(failures, log);
                 CheckWo911Seams(failures, log);
+                CheckWo1479RefundQuote(failures, log);
             }
             catch (System.Exception ex)
             {
@@ -898,6 +899,255 @@ namespace DeNelle.Editor
             if ((string)stackKey.Invoke(null, new object[] { "forge@1_2" }) != null)
                 failures.Add("StackKey collapses structure jobs — two different forges would hide behind one card");
             return outp.ToArray();
+        }
+
+        // =====================================================================
+        //  WO-1479 - CANCEL QUOTES THE REFUND IT IS ABOUT TO PAY
+        // ---------------------------------------------------------------------
+        // The player is asked to press a destructive button. What comes back must be on screen
+        // BEFORE the press, and it must be the SAME number BuildTimerService actually credits -
+        // a second formula in the UI is how a face promises 240 wood and a wallet pays 120.
+        //
+        // Four cases, and the third is the load-bearing one:
+        //   a. a basket job quotes the EXACT basket, in words;
+        //   b. a job with no paid basket says so, instead of saying nothing at all;
+        //   c. ROUND TRIP on the LIVE service - quote, then really cancel, then compare the quote
+        //      against the out-basket the service just credited. No re-derivation on either side;
+        //   d. the drawer no longer decides the zero case with a view-side string match.
+        // =====================================================================
+        private static void CheckWo1479RefundQuote(List<string> failures, StringBuilder log)
+        {
+            // -- a. a real basket is quoted exactly, with the prefix and the resource words --
+            var quote = ObsidianQueueVM.QuoteRefund(new JobCost(120, 0, 40, 0));
+            if (!quote.HasRefund)
+                failures.Add("[wo1479/a] a 120 wood + 40 iron basket does not report HasRefund - the row would " +
+                             "tell a paying player there is nothing to get back");
+            if (string.IsNullOrEmpty(quote.Line) ||
+                quote.Line.IndexOf(ObsidianQueueVM.RefundPrefix, StringComparison.Ordinal) != 0)
+                failures.Add("[wo1479/a] the refund line does not start with ObsidianQueueVM.RefundPrefix: \"" +
+                             quote.Line + "\"");
+            if (quote.Line == null || quote.Line.IndexOf("120 wood", StringComparison.Ordinal) < 0 ||
+                quote.Line.IndexOf("40 iron", StringComparison.Ordinal) < 0)
+                failures.Add("[wo1479/a] the refund line does not name both resources: \"" + quote.Line + "\"");
+            if (quote.Line != null && !IsAsciiLine(quote.Line))
+                failures.Add("[wo1479/a] the refund line is not ASCII: \"" + quote.Line + "\"");
+
+            // -- b. no paid basket SAYS SO. The old drawer suppressed this line entirely, so the
+            //      one player who gets nothing back was the one player told nothing. --
+            var zero = ObsidianQueueVM.QuoteRefund(default(JobCost));
+            if (zero.HasRefund)
+                failures.Add("[wo1479/b] an all-zero basket reports HasRefund - a cancel would promise a refund " +
+                             "the service will not pay");
+            if (string.IsNullOrEmpty(zero.Line))
+                failures.Add("[wo1479/b] a pre-basket job quotes an EMPTY line, so the row falls back to a bare " +
+                             "CANCEL - exactly the defect WO-1479 was raised for");
+            else if (zero.Line.IndexOf("No refund", StringComparison.OrdinalIgnoreCase) < 0)
+                failures.Add("[wo1479/b] the zero-basket wording does not say there is no refund: \"" + zero.Line + "\"");
+            if (zero.Line != null && zero.Line.IndexOf(ObsidianQueueVM.RefundPrefix, StringComparison.Ordinal) == 0)
+                failures.Add("[wo1479/b] the zero case wears the \"Refund:\" prefix - \"Refund: nothing\" is a " +
+                             "sentence that states neither outcome");
+
+            // -- c. the round trip against the REAL service --
+            CheckWo1479LiveRoundTrip(failures, log);
+
+            // -- d. the drawer renders the model's line; it does not re-decide the zero case --
+            string panelPath = Path.Combine(Application.dataPath, "_Modules/Village/UI/Manage/ManageScreenPanel.cs");
+            if (!File.Exists(panelPath))
+            {
+                failures.Add("[wo1479/d] ManageScreenPanel.cs missing - the drawer's refund line cannot be checked");
+            }
+            else
+            {
+                string src = File.ReadAllText(panelPath);
+                if (src.IndexOf("\"Refund: \" + refundText", StringComparison.Ordinal) >= 0)
+                    failures.Add("[wo1479/d] ManageScreenPanel composes the \"Refund: \" prefix itself - the sentence " +
+                                 "is the model's (WO-1512), and a View that builds half of it will word the zero " +
+                                 "case its own way again");
+                if (src.IndexOf("string.Equals(refundText, \"nothing\"", StringComparison.Ordinal) >= 0)
+                    failures.Add("[wo1479/d] ManageScreenPanel still string-matches the refund text against " +
+                                 "\"nothing\" to decide whether to draw the line - a View deciding whether the " +
+                                 "player is told what a cancel pays");
+            }
+
+            string vmPath = Path.Combine(Application.dataPath, "_Modules/Village/UI/Manage/ManageScreenVM.cs");
+            if (File.Exists(vmPath))
+            {
+                string vm = File.ReadAllText(vmPath);
+                if (vm.IndexOf("ObsidianQueueVM.QuoteRefund(job.Paid)", StringComparison.Ordinal) < 0)
+                    failures.Add("[wo1479/d] ManageScreenVM.MakeJobRow no longer builds RefundText through " +
+                                 "ObsidianQueueVM.QuoteRefund - the queue row and the queue panel would word the " +
+                                 "same promise two ways");
+            }
+
+            log.AppendLine("  WO-1479 refund quote (exact basket, zero wording, live round trip, dumb view) OK-checked");
+        }
+
+        /// <summary>
+        /// THE LOAD-BEARING CASE. Quote a live job, then cancel it for real, and compare the quoted
+        /// basket field-by-field with what BuildTimerService actually credited. Both sides read the
+        /// job's own v37 Paid basket, so this fails the moment either grows a formula of its own.
+        /// </summary>
+        private static void CheckWo1479LiveRoundTrip(List<string> failures, StringBuilder log)
+        {
+            string priorSave = PlayerPrefs.GetString(SaveSchema.PlayerPrefsKey, null);
+            var priorGss = GameStateService.Instance;
+            var priorQueue = BuildTimerService.Instance;
+
+            GameObject gssGo = null, svcGo = null;
+            GameState throwaway = null;
+            try
+            {
+                throwaway = ScriptableObject.CreateInstance<GameState>();
+                gssGo = new GameObject("GSS (wo1479 refund-quote oracle)");
+                var gss = gssGo.AddComponent<GameStateService>();
+                if (!InstallStateInstance(gss, throwaway))
+                {
+                    // NOT A SKIP: a suite that green-passes on an unreachable seam asserts nothing.
+                    failures.Add("[wo1479/c] GameStateService state seam is not reflectable, so the quote could not " +
+                                 "be compared against a REAL refund. FAIL, not a skip.");
+                    return;
+                }
+
+                svcGo = new GameObject("BuildTimerService (wo1479 refund-quote oracle)");
+                var svc = svcGo.AddComponent<BuildTimerService>();
+                if (!InstallQueueInstance(svc))
+                {
+                    failures.Add("[wo1479/c] BuildTimerService.Instance is not installable - the live round trip " +
+                                 "could not run. FAIL, not a skip.");
+                    return;
+                }
+
+                throwaway.ObsidianQueue = ObsidianQueueState.Empty();
+                var vm = ObsidianQueueVM.CreateDefault();
+
+                // A PAID job. The basket rides the job exactly as the placement path records it.
+                const string paidId = "wo1479-paid-structure";
+                var basket = new JobCost(240, 0, 120, 0);
+                if (svc.Enqueue(JobKind.Build, ChannelId.Builder, paidId, 600d, 0, basket) == null)
+                {
+                    failures.Add("[wo1479/c] could not enqueue a paid Builder job - the round trip is unproven.");
+                }
+                else
+                {
+                    var live = vm.QuoteRefund(ChannelId.Builder, paidId);
+                    bool cancelled = svc.CancelChannelJobWithRefund(ChannelId.Builder, paidId,
+                                                                    out JobCost refunded, out string unrefunded);
+                    log.AppendLine("  wo1479/c paid - quote=\"" + live.Line + "\" cancelled=" + cancelled +
+                                   " refunded=\"" + refunded.Describe() + "\" unrefunded=\"" + unrefunded + "\"");
+
+                    if (!cancelled)
+                        failures.Add("[wo1479/c] the paid fixture job would not cancel, so the quote is unverified.");
+                    if (refunded.Wood != live.Basket.Wood || refunded.Food != live.Basket.Food ||
+                        refunded.Iron != live.Basket.Iron || refunded.Crystals != live.Basket.Crystals ||
+                        refunded.Magic != live.Basket.Magic || refunded.Coins != live.Basket.Coins)
+                        failures.Add("[wo1479/c] the QUOTED basket (" + live.Basket.Describe() + ") is not what " +
+                                     "BuildTimerService refunded (" + refunded.Describe() + ") - the face promises " +
+                                     "one number and the wallet pays another");
+                    if (live.Line != ObsidianQueueVM.QuoteRefund(refunded).Line)
+                        failures.Add("[wo1479/c] the line quoted before the cancel does not match the line the same " +
+                                     "composer makes from what was actually paid back");
+                    if (!live.HasRefund)
+                        failures.Add("[wo1479/c] a live job carrying a 240 wood + 120 iron basket quoted no refund");
+                }
+
+                // A PRE-BASKET job: enqueued with no basket, exactly like a pre-v37 save's in-flight
+                // job. It must quote the zero wording, and the service must really pay nothing.
+                const string legacyId = "wo1479-legacy-structure";
+                if (svc.Enqueue(JobKind.Build, ChannelId.Builder, legacyId, 600d) == null)
+                {
+                    failures.Add("[wo1479/c] could not enqueue the basket-less job - the zero case is unproven.");
+                }
+                else
+                {
+                    var live = vm.QuoteRefund(ChannelId.Builder, legacyId);
+                    bool cancelled = svc.CancelChannelJobWithRefund(ChannelId.Builder, legacyId,
+                                                                    out JobCost refunded, out string _);
+                    log.AppendLine("  wo1479/c legacy - quote=\"" + live.Line + "\" cancelled=" + cancelled +
+                                   " refundedIsZero=" + refunded.IsZero);
+
+                    if (!cancelled)
+                        failures.Add("[wo1479/c] the basket-less fixture job would not cancel.");
+                    if (live.HasRefund || !refunded.IsZero)
+                        failures.Add("[wo1479/c] a job with no paid basket quoted or paid a refund - a legacy cancel " +
+                                     "would mint resources");
+                    if (string.IsNullOrEmpty(live.Line))
+                        failures.Add("[wo1479/c] a live basket-less job quotes an EMPTY line, so its row shows a bare " +
+                                     "CANCEL");
+                }
+
+                // A job that is not queued at all quotes nothing - the row draws no line rather than
+                // inventing a zero one for a job that does not exist.
+                var absent = vm.QuoteRefund(ChannelId.Builder, "wo1479-not-a-job");
+                if (!string.IsNullOrEmpty(absent.Line) || absent.HasRefund)
+                    failures.Add("[wo1479/c] an unknown job id still produced a refund quote: \"" + absent.Line + "\"");
+            }
+            finally
+            {
+                if (svcGo != null) UnityEngine.Object.DestroyImmediate(svcGo);
+                if (gssGo != null) UnityEngine.Object.DestroyImmediate(gssGo);
+                if (throwaway != null) UnityEngine.Object.DestroyImmediate(throwaway);
+                RestoreQueueInstance(priorQueue);
+                RestoreStateInstance(priorGss);
+                // The cancel calls GameStateService.Save(), which writes the editor save slot. Put
+                // the developer's save back exactly as it was.
+                if (priorSave != null) PlayerPrefs.SetString(SaveSchema.PlayerPrefsKey, priorSave);
+                else PlayerPrefs.DeleteKey(SaveSchema.PlayerPrefsKey);
+                PlayerPrefs.Save();
+            }
+        }
+
+        private static bool IsAsciiLine(string s)
+        {
+            for (int i = 0; i < s.Length; i++)
+                if (s[i] > 126 || s[i] < 32) return false;
+            return true;
+        }
+
+        private static bool InstallStateInstance(GameStateService svc, GameState state)
+        {
+            var f = typeof(GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f == null) return false;
+            f.SetValue(svc, state);
+            var i = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (i == null) return false;
+            i.SetValue(null, svc);
+            return ReferenceEquals(GameStateService.Instance, svc);
+        }
+
+        private static void RestoreStateInstance(GameStateService prior)
+        {
+            var i = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (i != null) i.SetValue(null, prior);
+        }
+
+        private static bool InstallQueueInstance(BuildTimerService svc)
+        {
+            var t = typeof(BuildTimerService);
+            var prop = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            if (prop != null && prop.GetSetMethod(true) != null)
+            {
+                prop.GetSetMethod(true).Invoke(null, new object[] { svc });
+                return ReferenceEquals(BuildTimerService.Instance, svc);
+            }
+            var f = t.GetField("<Instance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?? t.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f == null) return false;
+            f.SetValue(null, svc);
+            return ReferenceEquals(BuildTimerService.Instance, svc);
+        }
+
+        private static void RestoreQueueInstance(BuildTimerService prior)
+        {
+            var t = typeof(BuildTimerService);
+            var prop = t.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            if (prop != null && prop.GetSetMethod(true) != null)
+            {
+                prop.GetSetMethod(true).Invoke(null, new object[] { prior });
+                return;
+            }
+            var f = t.GetField("<Instance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?? t.GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (f != null) f.SetValue(null, prior);
         }
 
         private static BuildJobData MakeJob(string id, JobKind kind, double durationMs, ChannelId channel = ChannelId.Builder)

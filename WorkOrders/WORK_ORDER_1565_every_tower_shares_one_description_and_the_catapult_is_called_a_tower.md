@@ -1,6 +1,6 @@
 # WO-1565: every tower shares one description, the Catapult is called a tower, and an unauthored description paints prose instead of failing
 
-**Status:** IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate
+**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 3 (BUILDING DETAIL) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
 **Priority:** P2 — small code change, real content task. **Read §4 before scheduling: part of this is copy,
 and copy has a voice.**
 **Silo:** `Assets/_Modules/Village/.../StructureCardVM.cs` (the fallback + the gate) and

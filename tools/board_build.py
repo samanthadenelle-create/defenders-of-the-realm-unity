@@ -84,7 +84,7 @@ _WO_COMPANION_KIND = re.compile(
 def is_work_order(basename):
     """True for a real work order (numbered or legacy-unnumbered); False for a companion doc."""
     if _WO_COMPANION_KIND.match(basename): return False
-    return bool(_WO_FILENAME.match(basename))
+    return bool(_WO_FILENAME.match(basename) or _WO_DASH_FILENAME.match(basename))
 
 OWNER_AREAS = [
     "UI / HUD / Panels", "Village / Buildings", "Combat / Heroes / Gear",
@@ -154,6 +154,33 @@ def classify_status(status_text, has_result, is_wo=True):
     # First word wins when it is canonical; otherwise we fall back to the old behaviour.
     lead = s.lstrip().split(None, 1)
     lead = lead[0].strip("*:-—,.") if lead else ""
+    # -- "Verify": built, but the OWNER has not yet judged it against the picture -----
+    # Owner ruling 2026-09-07 01:10, verbatim: *"fix the board so those tickets dont say done
+    # and update the goal to be screenshots proving these match"*.
+    #
+    # On 2026-09-06 commit 949e848a0 declared "all nine screens match the owner's mockup -
+    # twenty-four capture rounds", on the strength of HEADLESS captures a seat read itself.
+    # That night the owner walked all nine Manage screens on the device beside
+    # docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and NONE of them matched. Twelve
+    # board rows were sitting in the finished buckets on that claim - ten leading
+    # IMPLEMENTED, two leading FIXED - and Done is the one bucket nobody re-opens.
+    #
+    # Fixed could not carry these: Fixed means "on her device, awaiting the FELT test", and
+    # board_close_pass.py closes a Fixed ticket the moment a Pass lands in the validation
+    # record. These are a different debt - a PIXEL comparison the owner has not made yet -
+    # and they must be ineligible for that close, which they are, because the closer reads
+    # eligibility through this function and "Verify" is not "Fixed".
+    #
+    # !! TESTED ON THE LEADING PHRASE, AND IT MUST STAY IN THIS BLOCK, ABOVE THE SUBSTRING
+    # FALLBACK. The status these tickets carry keeps its own history inline - "AWAITING OWNER
+    # MATCH - ... (was: IMPLEMENTED - 2026-09-06 ...)" - so the fallback at the bottom of this
+    # function would read the word IMPLEMENTED out of the parenthetical and put the row
+    # straight back into Done, and `has_result` would do it again for any ticket with a
+    # RESULT.md. The exact failure this whole comment block exists to describe.
+    #
+    # NOT a bare "AWAITING": "AWAITING OWNER RULING" is a different state entirely (it is a
+    # contradiction phrase in _STATUS_CONTRADICTIONS below) and must not be swallowed here.
+    if s.lstrip().startswith("AWAITING OWNER MATCH"): return "Verify", False
     if lead in ("SUPERSEDED", "CLOSED", "CANCELLED"): return "Closed", False
     if lead == "FIXED": return "Fixed", False
     if lead in ("DONE", "IMPLEMENTED", "COMPLETE"): return "Done", False
@@ -326,11 +353,19 @@ def status_contradiction(status, bucket, filename=""):
 # Fixed sits directly after Ready because that is the owner's queue: what is built and waiting
 # on her, before anything that is merely proposed. It is deliberately NOT next to Done - Done is
 # finished, Fixed is owed a test.
-BUCKET_ORDER = ["Ready", "Fixed", "Blocked", "Spec", "Unlabeled", "Done", "Closed", "Doc"]
+# Verify sits directly after Fixed because both are the OWNER's queue and neither is finished:
+# Fixed is owed a felt test, Verify is owed a look at a device frame beside a mockup panel.
+# Neither belongs anywhere near Done (owner ruling 2026-09-07).
+BUCKET_ORDER = ["Ready", "Fixed", "Verify", "Blocked", "Spec", "Unlabeled", "Done", "Closed", "Doc"]
 # Owner is RED/GREEN COLOURBLIND: every bucket is labelled in TEXT and the colour is decoration
 # only. Fixed is a cyan that also separates from Ready's amber and Done's green in GREYSCALE
 # (luminance ~0.62 vs 0.72 and 0.63) - but never let the hue carry the meaning.
-BUCKET_COLOR = {"Ready": "#e0b341", "Fixed": "#4fb3c4", "Blocked": "#d06060", "Spec": "#7fa8d9",
+# Verify's violet is a decoration like every other hue here: with nine buckets on one strip
+# no palette can keep every pair apart in greyscale, so the BUCKET WORD is the carrier and
+# always has been. Its luminance (~0.53) does separate it from its two dangerous neighbours,
+# Fixed (~0.62) and Done (~0.63) - the two it must never be mistaken for.
+BUCKET_COLOR = {"Ready": "#e0b341", "Fixed": "#4fb3c4", "Verify": "#b473d6",
+                "Blocked": "#d06060", "Spec": "#7fa8d9",
                 "Unlabeled": "#999999", "Done": "#6fae6f", "Closed": "#777777",
                 "Doc": "#a98fd0"}
 
@@ -686,9 +721,10 @@ def parse_wos():
     rows = []
     added_dates = git_added_dates()
     today = datetime.date.today()
+    # Glob both top-level and subdirectories for RESULT files to enable pairing with subdirectory WOs
     results = {os.path.basename(p).replace(".RESULT.md", ".md")
-               for p in glob.glob(os.path.join(WO_DIR, "*.RESULT.md"))}
-    for path in sorted(glob.glob(os.path.join(WO_DIR, "*.md"))):
+               for p in glob.glob(os.path.join(WO_DIR, "**/*.RESULT.md"), recursive=True)}
+    for path in sorted(glob.glob(os.path.join(WO_DIR, "**/*.md"), recursive=True)):
         base = os.path.basename(path)
         if base.endswith(".RESULT.md"):
             continue
@@ -732,10 +768,11 @@ def parse_wos():
         prod_m  = re.match(r"WORK_ORDER_PROD-(\d+)", base, re.IGNORECASE)
         ui_m    = re.match(r"WORK_ORDER_UI-(\d+)", base, re.IGNORECASE)
         num_m   = re.match(r"WORK_ORDER_(\d+)", base)
+        wo_dash_m = re.match(r"WO-(\d+)[_\-]", base, re.IGNORECASE)  # ManageRedesign/WO-2001_*.md format
         mon     = None
         prod    = int(prod_m.group(1)) if prod_m else None
         ui      = int(ui_m.group(1)) if ui_m else None
-        num     = int(num_m.group(1)) if (num_m and not prod_m and not ui_m) else None
+        num     = int(wo_dash_m.group(1)) if wo_dash_m else (int(num_m.group(1)) if (num_m and not prod_m and not ui_m) else None)
         title_m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_m.group(1).strip() if title_m else base
         title = re.sub(r"[*`]", "", title)

@@ -34,8 +34,12 @@
 #     lastUtc    - the newest entry utc we have published (secondary, rotation-proof: if the app
 #                  clears or rotates the log the offset resets to 0 but lastUtc still suppresses
 #                  everything already seen, so a rotation cannot cause a 736-entry replay)
-#     seen       - rolling hashes of kind+message, so one repeating error (the MagentaGuard sweep
-#                  fires dozens of times a session) contributes ONE capture, not dozens
+#     seen       - rolling hashes of kind+message+SESSION+TIME BUCKET (WO-1531), so one repeating
+#                  error (the MagentaGuard sweep fires dozens of times a session) contributes ONE
+#                  capture per bucket, not dozens - and a new session or a later bucket still
+#                  publishes. It used to be kind+message ALONE, which suppressed every repeat of
+#                  any message forever, across days. flagged is never keyed at all: see
+#                  Get-EntryKey.
 #   FIRST RUN AGAINST A DEVICE BASELINES and publishes nothing, the same way f8-watch-daemon.ps1
 #   baselines a break-log it has never seen. The five weeks of history already on the phone are
 #   handled ONCE, as a digest, by f8-device-backfill-digest.ps1 -- importing them live would bury
@@ -65,6 +69,8 @@
 #   ... -ReplayLast N   on a device with NO state yet, seed the watermark N eligible entries back
 #                       instead of at the end (used to demonstrate the chain end to end)
 #   ... -Quiet          no output at all unless something was published
+#   ... -SelfTest       WO-1531 dedupe cases (flag never deduped, storm collapses per bucket).
+#                       Touches no inbox, no device, no state. Marker: F8_DEVICE_BRIDGE_SELFTEST_OK
 
 param(
     [switch]$Loop,
@@ -74,7 +80,8 @@ param(
     [int]$ReplayLast = 0,
     [switch]$Quiet,
     [string]$InboxOverride = '',   # tests only
-    [string]$LogOverride = ''      # tests only: read this local jsonl instead of pulling
+    [string]$LogOverride = '',     # tests only: read this local jsonl instead of pulling
+    [switch]$SelfTest              # WO-1531: run the dedupe cases and exit. Touches no inbox.
 )
 
 Set-StrictMode -Off
@@ -208,15 +215,53 @@ function Save-DeviceState($State) {
     Write-F8Text $StateFile ($obj | ConvertTo-Json -Depth 6)
 }
 
-function Get-EntryKey([string]$Kind, [string]$Message) {
+# -- dedupe key (WO-1531) ------------------------------------------------------------------------
+# THE KEY IS SCOPED IN TIME. It used to be kind + the first 200 chars of the message and NOTHING
+# else, so the FIRST time any message was seen it was suppressed for every later occurrence, in
+# every later session, forever. On 2026-09-06 that filter ate 319 signal entries in one day - 316
+# errors, 2 possible_softlocks and ONE of the owner's own FLAG presses - while both producers
+# polled healthily and the inbox looked like a dead daemon (CLAUDE.md section 14).
+#
+# The key now carries the SESSION (the utc of the session_start the entry falls under) and a TIME
+# BUCKET, so a repeat inside one bucket of one session is still one capture - the WO-1450 storm
+# that dedupe exists for - but a new session, or the same condition ten minutes later, is a new
+# fact and publishes.
+#
+# ** flagged IS NEVER DEDUPED. ** An owner FLAG is an EVENT, not a message: two identical presses
+# are two facts, and the second one is exactly what was lost. Get-EntryKey returns '' for it and
+# Test-F8Duplicate treats an empty key as never-seen.
+$Script:DedupeBucketMinutes = 10
+
+function Get-EntryBucket([string]$Utc) {
+    if ([string]::IsNullOrWhiteSpace($Utc)) { return 'no-utc' }
+    $dt = [datetime]::MinValue
+    $styles = [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal
+    if (-not [datetime]::TryParse($Utc, [System.Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$dt)) {
+        return 'no-utc'
+    }
+    $b = [int]$Script:DedupeBucketMinutes
+    if ($b -lt 1) { $b = 1 }
+    $mins = [int][Math]::Floor($dt.TimeOfDay.TotalMinutes / $b)
+    return ('{0}#{1}' -f $dt.ToString('yyyyMMdd'), $mins)
+}
+
+function Get-EntryKey([string]$Kind, [string]$Message, [string]$SessionId, [string]$Utc) {
+    # An owner FLAG never dedupes. Empty key == always publish.
+    if ($Kind -eq 'flagged') { return '' }
     $m = [string]$Message
     if ($m.Length -gt 200) { $m = $m.Substring(0, 200) }
-    $raw = ($Kind + '|' + $m)
+    $raw = ($Kind + '|' + $m + '|' + [string]$SessionId + '|' + (Get-EntryBucket $Utc))
     $sha = [System.Security.Cryptography.SHA1]::Create()
     try {
         $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($raw))
         return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16)
     } finally { $sha.Dispose() }
+}
+
+function Test-F8Duplicate($Seen, [string]$Key) {
+    if ([string]::IsNullOrEmpty($Key)) { return $false }
+    if ($null -eq $Seen) { return $false }
+    return [bool]$Seen.ContainsKey($Key)
 }
 
 # -- screenshots ---------------------------------------------------------------------------------
@@ -326,15 +371,26 @@ function Invoke-BridgePass {
     $seenOrder = @(@($dev.seen) | Where-Object { $_ })
 
     # Which lines carry signal at all -- needed for both the first-run baseline and -ReplayLast.
+    # The same pass records, per line, the session the line belongs to (the utc of the newest
+    # session_start at or above it). The publish loop starts at the watermark, which is usually
+    # PAST that session_start, so the session cannot be tracked from the publish loop alone
+    # (WO-1531).
     $eligible = @()
+    $sessionAt = New-Object 'string[]' ([Math]::Max($count, 1))
+    $curSession = 'pre-session'
     for ($i = 0; $i -lt $count; $i++) {
         $raw = [string]$lines[$i]
-        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+        if ([string]::IsNullOrWhiteSpace($raw)) { $sessionAt[$i] = $curSession; continue }
         $raw = $raw.TrimStart([char]0xFEFF)   # the harness writes a BOM on the first line
         $e = $null
         try { $e = $raw | ConvertFrom-Json } catch { $e = $null }
-        if ($null -eq $e) { continue }
+        if ($null -eq $e) { $sessionAt[$i] = $curSession; continue }
         $k = [string]$e.kind
+        if ($k -eq 'session_start') {
+            $u = [string]$e.utc
+            $curSession = $(if ([string]::IsNullOrWhiteSpace($u)) { 'session-' + $i } else { $u })
+        }
+        $sessionAt[$i] = $curSession
         if ($SignalKinds -notcontains $k) { continue }
         $eligible += $i
     }
@@ -382,8 +438,10 @@ function Invoke-BridgePass {
         if ($utc -and $lastUtc -and ([string]::Compare($utc, $lastUtc, $true) -le 0)) { continue }
 
         $msg = [string]$e.message
-        $key = Get-EntryKey $kind $msg
-        if ($seen.ContainsKey($key)) { $skippedDup++; continue }
+        $sid = ''
+        if ($i -lt $sessionAt.Length) { $sid = [string]$sessionAt[$i] }
+        $key = Get-EntryKey $kind $msg $sid $utc
+        if (Test-F8Duplicate $seen $key) { $skippedDup++; continue }
 
         if ($published -ge $MaxPublish) {
             # stop cleanly and leave the rest for the next poll: a burst must not bury the queue.
@@ -452,8 +510,12 @@ function Invoke-BridgePass {
             -PingMessage 'F8 DEVICE capture - triage now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
 
         $published++
-        $seen[$key] = $true
-        $seenOrder += $key
+        if (-not [string]::IsNullOrEmpty($key)) {
+            # flagged has no key on purpose - nothing is remembered, so nothing suppresses the
+            # next press (WO-1531).
+            $seen[$key] = $true
+            $seenOrder += $key
+        }
         if ($utc -and ([string]::Compare($utc, $lastUtc, $true) -gt 0)) { $lastUtc = $utc }
         Write-Bridge ('F8_DEVICE_CAPTURE seq={0} kind={1} utc={2}' -f $seq, $kind, $utc)
     }
@@ -483,6 +545,112 @@ function Invoke-BridgePass {
         Write-Bridge ('F8_DEVICE_BRIDGE noop reason={0} device={1} published=0 offset={2}/{3} dupSuppressed={4}' -f $why, $devSerial, $newOffset, $count, $skippedDup)
     }
     return $published
+}
+
+# -- self test (WO-1531) -------------------------------------------------------------------------
+# Exercises the dedupe decision exactly as the publish loop makes it: same Get-EntryKey, same
+# Test-F8Duplicate, same rolling $seen table. Touches NO inbox, NO device, NO state file.
+#   powershell -File .claude\skills\run-defenders\f8-device-bridge.ps1 -SelfTest
+function New-TestEntry([string]$Kind, [string]$Message, [string]$Session, [datetime]$When) {
+    return [pscustomobject]@{
+        kind    = $Kind
+        message = $Message
+        session = $Session
+        utc     = $When.ToUniversalTime().ToString('o')
+    }
+}
+
+function Invoke-DedupeSim($Entries) {
+    # mirrors the publish loop's decision, nothing else
+    $seen = @{}
+    $out = @()
+    foreach ($e in @($Entries)) {
+        $key = Get-EntryKey ([string]$e.kind) ([string]$e.message) ([string]$e.session) ([string]$e.utc)
+        if (Test-F8Duplicate $seen $key) { continue }
+        if (-not [string]::IsNullOrEmpty($key)) { $seen[$key] = $true }
+        $out += $e
+    }
+    return @($out)
+}
+
+if ($SelfTest) {
+    function Assert-Eq([string]$What, $Expected, $Actual) {
+        if ([string]$Expected -eq [string]$Actual) {
+            Write-Host ('  PASS  {0}  (= {1})' -f $What, $Actual)
+        } else {
+            Write-Host ('  FAIL  {0}  expected {1}, got {2}' -f $What, $Expected, $Actual)
+            $Script:selfTestFails++
+        }
+    }
+    $Script:selfTestFails = 0
+    $t0 = [datetime]::Parse('2026-09-07T01:00:00Z').ToUniversalTime()
+    $sessA = '2026-09-07T00:55:00Z'
+    $sessB = '2026-09-07T02:30:00Z'
+    $errMsg = 'MagentaGuard swept 1 renderer(s) in Main_Castle_Overworld'
+
+    Write-Host 'CASE 1 - the WO-1531 evidence: 319 entries, one session, one repeated message, one FLAG'
+    $c1 = @()
+    for ($i = 0; $i -lt 319; $i++) {
+        $when = $t0.AddSeconds($i * 2)          # 319 entries at 2 s = ~10.6 min = 2 buckets
+        if ($i -eq 200) { $c1 += New-TestEntry 'flagged' '[Main_Castle_Overworld] on-screen FLAG button (mobile)' $sessA $when }
+        else { $c1 += New-TestEntry 'error' $errMsg $sessA $when }
+    }
+    $pub1 = Invoke-DedupeSim $c1
+    $buckets1 = @(@($c1 | Where-Object { $_.kind -eq 'error' } | ForEach-Object { Get-EntryBucket $_.utc }) | Sort-Object -Unique).Count
+    $pubFlag1 = @($pub1 | Where-Object { $_.kind -eq 'flagged' }).Count
+    $pubErr1 = @($pub1 | Where-Object { $_.kind -eq 'error' }).Count
+    Assert-Eq 'input entries' 319 $c1.Count
+    Assert-Eq 'the owner FLAG publishes' 1 $pubFlag1
+    Assert-Eq 'errors publish once per bucket' $buckets1 $pubErr1
+    Assert-Eq 'total published' ($buckets1 + 1) $pub1.Count
+
+    Write-Host 'CASE 2 - two FLAG presses ten minutes apart both publish (RED before WO-1531)'
+    $c2 = @(
+        (New-TestEntry 'flagged' '[Main_Castle_Overworld] on-screen FLAG button (mobile)' $sessA $t0),
+        (New-TestEntry 'flagged' '[Main_Castle_Overworld] on-screen FLAG button (mobile)' $sessA $t0.AddMinutes(10))
+    )
+    Assert-Eq 'both flags published' 2 @(Invoke-DedupeSim $c2).Count
+
+    Write-Host 'CASE 2b - two identical FLAG presses one second apart are two facts'
+    $c2b = @(
+        (New-TestEntry 'flagged' 'flag' $sessA $t0),
+        (New-TestEntry 'flagged' 'flag' $sessA $t0.AddSeconds(1))
+    )
+    Assert-Eq 'both flags published' 2 @(Invoke-DedupeSim $c2b).Count
+
+    Write-Host 'CASE 3 - the refusal: 300 identical errors inside ONE bucket publish once'
+    $c3 = @()
+    for ($i = 0; $i -lt 300; $i++) { $c3 += New-TestEntry 'error' $errMsg $sessA $t0.AddMilliseconds($i * 100) }
+    Assert-Eq 'storm collapsed to one' 1 @(Invoke-DedupeSim $c3).Count
+
+    Write-Host 'CASE 3b - the success path: the SAME error in a new session publishes again'
+    $c3b = @(
+        (New-TestEntry 'error' $errMsg $sessA $t0),
+        (New-TestEntry 'error' $errMsg $sessB $t0.AddHours(2))
+    )
+    Assert-Eq 'new session republishes' 2 @(Invoke-DedupeSim $c3b).Count
+
+    Write-Host 'CASE 3c - the bug itself: the same error a day later is not suppressed forever'
+    $c3c = @(
+        (New-TestEntry 'error' $errMsg $sessA $t0),
+        (New-TestEntry 'error' $errMsg $sessA $t0.AddDays(1))
+    )
+    Assert-Eq 'next day republishes' 2 @(Invoke-DedupeSim $c3c).Count
+
+    Write-Host 'CASE 4 - a softlock still dedupes inside its bucket but returns in the next one'
+    $c4 = @(
+        (New-TestEntry 'possible_softlock' 'no input for 90s' $sessA $t0),
+        (New-TestEntry 'possible_softlock' 'no input for 90s' $sessA $t0.AddSeconds(30)),
+        (New-TestEntry 'possible_softlock' 'no input for 90s' $sessA $t0.AddMinutes(12))
+    )
+    Assert-Eq 'two of three published' 2 @(Invoke-DedupeSim $c4).Count
+
+    if ($Script:selfTestFails -gt 0) {
+        Write-Host ('F8_DEVICE_BRIDGE_SELFTEST_FAIL failures={0}' -f $Script:selfTestFails)
+        exit 1
+    }
+    Write-Host 'F8_DEVICE_BRIDGE_SELFTEST_OK'
+    exit 0
 }
 
 if ($Loop) {

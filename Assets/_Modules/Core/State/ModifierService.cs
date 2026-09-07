@@ -71,9 +71,51 @@ namespace DeNelle.Core.State
         /// ladder be authored under the dead id and appear to work, which is the exact silent
         /// failure this ruling removed. Guarded by [upgrader-reaches-receiver].
         /// </summary>
-        public static float ProductionMultFor(string buildingId)
+        public static float ProductionMultFor(string buildingId) => ProductionMultOf(Active, buildingId);
+
+        /// <summary>
+        /// WO-1567 panel row 3 - the production multiplier this building WOULD carry at
+        /// <paramref name="tier"/>, i.e. the live multiplier with THIS building's own tier
+        /// contribution swapped for the target tier's. Perks and every other building's tier stay
+        /// exactly as they are, because an upgrade does not change them.
+        ///
+        /// <para>⛔ WHY IT LIVES HERE AND NOT IN THE SCREEN THAT ASKS: this file owns the ONE
+        /// building-id -&gt; modifier-field mapping (see <see cref="ProductionMultOf"/>). A caller
+        /// that fetched a raw tier multiplier and did the substitution itself would need that
+        /// mapping too, and a second copy of it is the duplicated state CLAUDE.md section 5
+        /// records. The View-Model does no arithmetic; it asks a question and gets a number.</para>
+        ///
+        /// <para>⚠ <see cref="Compute"/> applies each building's CURRENT tier def only (it does not
+        /// compound the ladder), so a tier's authored mult is ABSOLUTE and the swap is a plain
+        /// divide-and-multiply. A tier below 1 contributes identity there, so
+        /// <see cref="TierProductionMult"/> returns 1 for it - matching Compute rather than
+        /// guarding a zero into a one.</para>
+        /// </summary>
+        public static float ProductionMultForTier(string buildingId, int tier)
         {
-            var m = Active;
+            if (string.IsNullOrEmpty(buildingId)) return 1f;
+            float live = ProductionMultOf(Active, buildingId);
+            float current = TierProductionMult(buildingId, TierOf(buildingId));
+            if (current <= 0f) current = 1f;
+            return live / current * TierProductionMult(buildingId, tier);
+        }
+
+        /// <summary>The production multiplier authored on ONE tier def (identity for tier &lt; 1).</summary>
+        private static float TierProductionMult(string buildingId, int tier)
+        {
+            if (tier < 1) return 1f;
+            var def = BuildingTierCatalog.TierOf(buildingId, tier);
+            var m = def != null ? def.Modifiers : null;
+            return m != null ? ProductionMultOf(m, buildingId) : 1f;
+        }
+
+        /// <summary>
+        /// THE ONE building-id -&gt; production-field mapping. Both public production reads call it,
+        /// so lumbermill/farm/forge can never drift onto different fields in two places.
+        /// </summary>
+        private static float ProductionMultOf(GameModifiers m, string buildingId)
+        {
+            if (m == null) return 1f;
             switch (buildingId)
             {
                 case "lumbermill": return m.WoodProductionMult;

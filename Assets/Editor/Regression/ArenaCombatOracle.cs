@@ -363,11 +363,27 @@ namespace DeNelle.Editor
                 if (ApproxColor(applied, WeaponVfxMap.SteelColor))
                     failures.Add($"TRAIL: controller applied the STEEL default for a '{band}' weapon -- rarity does not read");
 
-                // (d.3) the permanent FIRED line emitted AT the apply (felt-test break-log signal).
-                if (!sink.Has("TRAIL color=") || !sink.Has($"rarity={high.rarity} applied"))
-                    failures.Add($"TRAIL: missing FlowTrace 'TRAIL color=... rarity={high.rarity} applied' (trail fire-point not reached)");
+                // (d.2b) REACHABILITY GUARD (WO-1538). Before asserting the fire-point TRACE, prove
+                // the fire point RAN AT ALL: the real apply builds a TrailRenderer under the probe.
+                // Without this, a seam that silently no-ops and a seam that runs but never speaks
+                // both surface as the SAME "fire-point not reached" line -- the exact ambiguity that
+                // cost this ticket its diagnosis. It FAILS BY NAME; it never passes silently.
+                var builtTrail = heroGo.GetComponentInChildren<TrailRenderer>(true);
+                if (builtTrail == null)
+                {
+                    failures.Add("TRAIL: the apply seam built NO TrailRenderer under the probe -- the fire point never " +
+                                 "executed, so the trace assertion below is UNREACHABLE (a false green, not a pass)");
+                }
                 else
-                    log.AppendLine($"  [exec] TRAIL -> FlowTrace 'TRAIL color=... rarity={high.rarity} applied' CAPTURED");
+                {
+                    log.AppendLine($"  [exec] TRAIL -> apply seam built TrailRenderer '{builtTrail.name}' (fire point genuinely executed)");
+
+                    // (d.3) the permanent FIRED line emitted AT the apply (felt-test break-log signal).
+                    if (!sink.Has("TRAIL color=") || !sink.Has($"rarity={high.rarity} applied"))
+                        failures.Add($"TRAIL: missing FlowTrace 'TRAIL color=... rarity={high.rarity} applied' (trail fire-point not reached)");
+                    else
+                        log.AppendLine($"  [exec] TRAIL -> FlowTrace 'TRAIL color=... rarity={high.rarity} applied' CAPTURED");
+                }
             }
             finally
             {

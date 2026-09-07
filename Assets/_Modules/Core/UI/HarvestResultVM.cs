@@ -92,6 +92,30 @@ namespace DeNelle.Core.UI
         /// "SPEND WOOD"). Empty when this row needs no door.</summary>
         public string ActionText = string.Empty;
 
+        /// <summary>
+        /// The chip's face SPLIT IN TWO, so the modal can draw it on two lines instead of
+        /// ellipsising it (owner device 2026-09-07 01:14, Logs/device/screens/
+        /// owner-screen-20260907-011426.png: "UPGRADE LUMBER..." and "UPGRADE STONEYA..." both
+        /// truncated on a 2670x1200 phone while "UPGRADE FOUNDRY" fit).
+        /// <para>!! AN ELLIPSIS IS NOT A FIT. The chip names the ONE thing the player must go and
+        /// do; "UPGRADE STONEYA..." names a building that does not exist. <see cref="ActionText"/>
+        /// is kept EXACTLY as it was (oracles grep it, and it is the trace/accessibility string);
+        /// these two fields are the same words with the break point authored, never re-derived by
+        /// the View.</para>
+        /// </summary>
+        public string ActionVerb = string.Empty;
+        public string ActionTarget = string.Empty;
+
+        /// <summary>Units refused that are STILL held by a producer the player owns.</summary>
+        public int WaitingUnits;
+
+        /// <summary>Units refused that were genuinely discarded (no cache exists to hold them).</summary>
+        public int BurnedUnits;
+
+        /// <summary>How many producer statuses were merged into this row (1 = a single producer).
+        /// The oracle seam for [one-producer-per-resource].</summary>
+        public int MergedSources = 1;
+
         /// <summary>Where the chip leads. Routed through <see cref="PanelRouter"/>.</summary>
         public PanelId ActionDoor = PanelId.Manage;
 
@@ -174,11 +198,26 @@ namespace DeNelle.Core.UI
                     if (r.Burned) burned++;
                     if (r.HasAction) doors++;
                 }
-                return "rows=" + TotalRowCount + " shown=" + Rows.Count + " waiting=" + waiting +
+                return "statuses=" + SourceStatusCount + " merged=" + TotalRowCount +
+                       " shown=" + Rows.Count + " waiting=" + waiting +
                        " burned=" + burned + " doors=" + doors +
                        " footer='" + (FooterReassures ? "reassure" : (string.IsNullOrEmpty(FooterLine) ? "none" : "loss")) + "'";
             }
         }
+
+        /// <summary>How many raw producer statuses were handed to <see cref="Build"/> before the
+        /// merge. Differs from <see cref="TotalRowCount"/> exactly when two producers overflowed
+        /// the same resource - the case that produced the owner's "+3 more".</summary>
+        public int SourceStatusCount;
+
+        /// <summary>
+        /// EVERY PLAYER-FACING STRING THIS SCREEN WILL DRAW, ON ONE LINE (CLAUDE.md section 12).
+        /// <para>The modal traced its INPUT numbers and a row COUNT, which is why a screenshot of
+        /// the owner's device could not be checked against what the code believed it had written.
+        /// This is the line that closes that: one grep for <c>harvest-result screen</c> returns the
+        /// exact text, and the fixture asserts the same string equals the banked deltas.</para>
+        /// </summary>
+        public string ScreenText => AllText().Replace("\n", " | ");
 
         /// <summary>
         /// THE PURE SEAM. Clamp events in, rows out - no service lookup, no clock, no scene.
@@ -193,21 +232,22 @@ namespace DeNelle.Core.UI
         {
             var vm = new HarvestResultVM();
             if (results == null || results.Count == 0) return vm;
-            vm.TotalRowCount = results.Count;
+
+            // (!) ONE ROW PER RESOURCE - THE FIX FOR THE TWO-SCREEN DIVERGENCE.
+            // See the Merge header. TotalRowCount is the MERGED count, because that is what the
+            // player is being shown a subset of; the raw status count is TraceLine's business.
+            var merged = Merge(results);
+            vm.SourceStatusCount = results.Count;
+            vm.TotalRowCount = merged.Count;
 
             bool anyRefused = false;
             bool anyBurned = false;
 
-            for (int i = 0; i < results.Count; i++)
+            for (int i = 0; i < merged.Count; i++)
             {
-                var s = results[i];
-                bool retains = Retains(s.Source);
-                int refused = s.Lost > 0 ? s.Lost : 0;
-                if (refused > 0)
-                {
-                    anyRefused = true;
-                    if (!retains) anyBurned = true;
-                }
+                var s = merged[i];
+                if (s.Waiting > 0 || s.Burned > 0) anyRefused = true;
+                if (s.Burned > 0) anyBurned = true;
                 if (vm.Rows.Count >= MaxRows) continue;
 
                 string name = string.IsNullOrEmpty(s.ResourceName) ? "Resource" : s.ResourceName;
@@ -215,7 +255,9 @@ namespace DeNelle.Core.UI
 
                 // WO-1392's figure, unchanged: BankOverflowStatus.Current is the wallet BEFORE the
                 // grant was applied (that is what the clamp weighed), so the number the player can
-                // check against the HUD rail is Current + Granted.
+                // check against the HUD rail is Current + Granted. After the merge, Current is the
+                // EARLIEST measurement across this resource's producers (Merge picks the minimum)
+                // and Granted is their SUM - so `after` is still exactly one post-collect figure.
                 int granted = s.Granted > 0 ? s.Granted : 0;
                 long after64 = (long)Math.Max(0, s.Current) + granted;
                 int after = after64 > int.MaxValue ? int.MaxValue : (int)after64;
@@ -228,15 +270,30 @@ namespace DeNelle.Core.UI
                     After = after,
                     Max = max,
                     Fill01 = max > 0 ? Clamp01((float)after / max) : 1f,
-                    Waits = refused > 0 && retains,
-                    Burned = refused > 0 && !retains,
-                    TraceKind = refused <= 0 ? "clean" : SourceWord(s.Source),
+                    Waits = s.Waiting > 0,
+                    Burned = s.Burned > 0,
+                    WaitingUnits = s.Waiting,
+                    BurnedUnits = s.Burned,
+                    MergedSources = s.Sources,
+                    TraceKind = s.TraceKind,
                 };
 
                 // THE SECOND NUMBER. The law word rides WITH the figure, so a player who reads
-                // nothing else still learns the fate of what did not fit.
-                if (refused > 0)
-                    row.WaitingText = retains ? N(refused) + " waiting, safe" : N(refused) + " lost";
+                // nothing else still learns the fate of what did not fit. A merged row can carry
+                // BOTH fates at once (the collectors retain, an away node haul has nowhere to be
+                // retained) - and when it does, BOTH are said. Collapsing them into one figure is
+                // the WO-1434 lie in either direction.
+                // !! "LOST" IS THE RIGHT WORD ON THE BURN PATH AND IT STAYS. WO-1434 forbids
+                // calling a RETAINED amount lost; it does not license softening a genuine discard.
+                // Away node/settlement/pet yield has no pending pool (OfflineHarvestService.Grant's
+                // WO-1445 block), so those units are gone, and a euphemism there would be the same
+                // dishonesty pointed the other way. Pinned by [burn-never-lies].
+                if (s.Waiting > 0 && s.Burned > 0)
+                    row.WaitingText = N(s.Waiting) + " waiting, safe - " + N(s.Burned) + " lost";
+                else if (s.Waiting > 0)
+                    row.WaitingText = N(s.Waiting) + " waiting, safe";
+                else if (s.Burned > 0)
+                    row.WaitingText = N(s.Burned) + " lost";
 
                 // THE STATE, AS A WORD. OverCap is a DIFFERENT situation from a full bank
                 // (BankOverflowStatus.OverCap spends a paragraph on why) and keeps its own word.
@@ -257,10 +314,9 @@ namespace DeNelle.Core.UI
                         int n = builtContainersFor(s.Resource);
                         built = n > 0 ? n : 0;
                     }
-                    row.ActionText = s.OverCap
-                        ? "SPEND " + name.ToUpperInvariant()
-                        : (built > 0 ? "UPGRADE " + container.ToUpperInvariant()
-                                     : "BUILD " + container.ToUpperInvariant());
+                    row.ActionVerb = s.OverCap ? "SPEND" : (built > 0 ? "UPGRADE" : "BUILD");
+                    row.ActionTarget = (s.OverCap ? name : container).ToUpperInvariant();
+                    row.ActionText = row.ActionVerb + " " + row.ActionTarget;
                     row.ActionDoor = PanelId.Manage;
                     row.ActionContext = BuildingsTab;
                 }
@@ -282,12 +338,151 @@ namespace DeNelle.Core.UI
                 }
                 else
                 {
+                    // WO-1445 / WO-1461 law: spoils above the cap are never SILENTLY lost. Where no
+                    // cache exists to hold them, the screen SAYS SO IN WORDS rather than printing a
+                    // promise it cannot keep. Away node/settlement/pet yield has no pending store -
+                    // OfflineHarvestService.Grant writes the wallet directly - so this sentence
+                    // names the reason, not just the outcome.
                     vm.FooterReassures = false;
-                    vm.FooterLine = "Units shown as lost were not added to storage.";
+                    vm.FooterLine = "Storage was full, so the amounts marked lost never reached it - " +
+                                    "away gathering has no store to wait in. Make room first.";
                 }
             }
 
             return vm;
+        }
+
+        // =====================================================================
+        //  (!) THE MERGE - ONE ROW PER RESOURCE, AND IT IS THE ONE-PRODUCER FIX
+        // =====================================================================
+        //
+        // THE MEASURED DEFECT (owner's Seeker, build 358872, two frames one minute apart):
+        //
+        //   Logs/device/screens/owner-harvest-20260907-011321.png  (WELCOME BACK)
+        //       WOOD +2906      40972 MORE WAITS
+        //       IRON +1535      21843 MORE WAITS
+        //       STONE 45257 WAITING   STORAGE FULL - STAYS PUT
+        //       footer: "108072 stays where it is..."   (= 40972 + 21843 + 45257)
+        //
+        //   Logs/device/screens/owner-screen-20260907-011426.png   (HARVEST RESULT, after COLLECT)
+        //       WOOD  +2,906   12,236 waiting, safe
+        //       IRON  +1,535    6,035 waiting, safe
+        //       STONE      0   30,932 waiting, safe
+        //       "+3 more"
+        //
+        // The banked figures AGREE to the unit. The WAITING figures did not, and the reason was not
+        // a maths bug - it was a MISSING MERGE:
+        //   !! READ THE WELCOME-BACK COLUMN CAREFULLY: "40972 MORE WAITS" is
+        //   OfflineHarvestService.ReturnRowDestiny printing r.Waits = Pending - Banks. It is what
+        //   will STILL be waiting AFTER the tap, NOT the pending pool. (Reading it as pending is an
+        //   easy off-by-Banks and it fits the STONE row by accident, because Banks is 0 there.)
+        //   So the two screens' waiting figures are the same quantity, and they reconcile exactly:
+        //       wood   12,236 (collector remainder) + 28,736 (Echo silo) = 40,972
+        //       iron    6,035                       + 15,808             = 21,843
+        //       stone  30,932                       + 14,325             = 45,257
+        //   ...which is the welcome-back column to the unit, and sums to its own 108,072 footer.
+        // The welcome-back screen already merges both producers per resource
+        // (OfflineHarvestService.BuildReturnRows, which sums FromCollectors + FromSilo). This
+        // screen did not: it received the collector statuses AND the silo statuses as SIX rows,
+        // drew the first three, and collapsed the other three into "+N more". So "+3 more" was
+        // never a hidden fourth resource - it was the OTHER HALF OF THE SAME THREE, and the
+        // player was shown 12,236 for a resource the previous screen had called 40,972.
+        //
+        // !! THE "+3 more" LINE WAS THE SYMPTOM, NOT THE BUG, AND RAISING MaxRows WOULD HAVE
+        // ENTRENCHED IT: six rows for three resources is the defect, not a layout shortage.
+        // TownBankCapacity.UncappableResources (:265-269) exempts Crystals and Coins, so at most
+        // three resources can overflow at all - after this merge, TotalRowCount can never exceed
+        // MaxRows from the live callers, and "+N more" is unreachable. It is KEPT (not deleted)
+        // as the honest tail for the day a fourth cappable resource is introduced.
+        //
+        // Merged in FIRST-APPEARANCE order, which is the rail order the collector rows arrive in
+        // (ResourceCollectorService.RailOrder) - never re-sorted here, so the two screens list the
+        // three resources in the same order as well as with the same numbers.
+        // =====================================================================
+
+        /// <summary>One resource's outcome after every producer's status has been folded together.</summary>
+        public struct MergedResource
+        {
+            public BankResource Resource;
+            public string ResourceName;
+            public string ContainerName;
+            /// <summary>Everything every producer asked the bank for, this resource.</summary>
+            public int Requested;
+            /// <summary>Everything that actually banked, this resource.</summary>
+            public int Granted;
+            /// <summary>Refused units a producer STILL holds (collectors, Echo silo).</summary>
+            public int Waiting;
+            /// <summary>Refused units nothing holds - genuinely not added.</summary>
+            public int Burned;
+            public int Max;
+            /// <summary>The EARLIEST wallet reading across this resource's producers.</summary>
+            public int Current;
+            public bool OverCap;
+            /// <summary>How many statuses folded in.</summary>
+            public int Sources;
+            /// <summary>"clean" / "collectors" / "silo" / "burned" / "mixed".</summary>
+            public string TraceKind;
+        }
+
+        /// <summary>
+        /// Fold every producer's <see cref="BankOverflowStatus"/> into ONE row per resource.
+        /// PURE - no service lookup, no clock, no scene. Pinned by HarvestResultShapeRegression
+        /// [one-row-per-resource] / [merged-waiting-equals-welcome-back].
+        /// </summary>
+        public static List<MergedResource> Merge(IReadOnlyList<BankOverflowStatus> results)
+        {
+            var order = new List<BankResource>();
+            var by = new Dictionary<BankResource, MergedResource>();
+            if (results == null) return new List<MergedResource>();
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                var s = results[i];
+                int refused = s.Lost > 0 ? s.Lost : 0;
+                int granted = s.Granted > 0 ? s.Granted : 0;
+                int current = Math.Max(0, s.Current);
+                bool retains = Retains(s.Source);
+                string word = SourceWord(s.Source);
+
+                if (!by.TryGetValue(s.Resource, out var m))
+                {
+                    order.Add(s.Resource);
+                    m = new MergedResource
+                    {
+                        Resource = s.Resource,
+                        ResourceName = s.ResourceName,
+                        ContainerName = s.ContainerName,
+                        Max = s.Max,
+                        Current = current,
+                        Sources = 0,
+                        TraceKind = "clean",
+                    };
+                }
+
+                // The NAME and the CONTAINER are the player's words for the resource; the first
+                // non-empty one wins so a producer that left them blank cannot blank the row.
+                if (string.IsNullOrEmpty(m.ResourceName)) m.ResourceName = s.ResourceName;
+                if (string.IsNullOrEmpty(m.ContainerName)) m.ContainerName = s.ContainerName;
+
+                m.Requested += s.Requested > 0 ? s.Requested : 0;
+                m.Granted += granted;
+                if (retains) m.Waiting += refused; else m.Burned += refused;
+                if (s.Max > m.Max) m.Max = s.Max;
+                // EARLIEST wallet reading: the collector sweep measured the store BEFORE the tap,
+                // the silo clamp measured it after the collectors had already banked. The minimum
+                // is the pre-tap figure, and `Current + Granted` is then the ONE post-collect total.
+                if (current < m.Current) m.Current = current;
+                m.OverCap |= s.OverCap;
+                m.Sources++;
+                if (refused > 0)
+                    m.TraceKind = m.TraceKind == "clean" || m.TraceKind == word ? word : "mixed";
+
+                by[s.Resource] = m;
+            }
+
+            var list = new List<MergedResource>(order.Count);
+            for (int i = 0; i < order.Count; i++) list.Add(by[order[i]]);
+            return list;
         }
 
         /// <summary>

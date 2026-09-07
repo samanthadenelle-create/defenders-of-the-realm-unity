@@ -257,6 +257,81 @@ namespace DeNelle.Core.UI
             return Rect.MinMaxRect(xMin, y0, xMax, y0 + height);
         }
 
+        // ── WO-1464 — THE MOVEMENT STICK'S BAND, AND THE RAID READOUT'S SEAT ────
+        //
+        // ⭐ MEASURED BASELINE, NOT INFERRED: Logs/device/screens/owner-screen-20260907-004502.png
+        // (build 358872, 2670x1200, mid-raid at 1:13). Three raid surfaces were drawn across town
+        // HUD bands in that one frame:
+        //   * the deploy TRAY   (x 0.020-0.980, y 0.160-0.310)  across the movement stick;
+        //   * the deploy STATUS (x 0.020-0.980, y 0.320-0.360)  across the stick's top edge;
+        //   * the raid READOUT  (x 0.020-0.980, y 0.860-0.990)  across the hero nameplate
+        //     ("1:13" over "Th... Lv 7") and the compass ("1/3" and "Troops 10/10" over NE/E).
+        // Every one of them was authored as a Village-local literal that could not see the band
+        // it was landing on - the same shape as WO-1219 and WO-1436, for the third time.
+        //
+        // ⛔ WHY THE STICK'S BAND MOVES HERE. RaidDeployController (DeNelle.Village) has to start
+        // its tray to the RIGHT of the movement stick, and DeNelle.Village may not reference
+        // DeNelle.HUD (CLAUDE.md sec.5). So the stick's band becomes shared DATA, exactly as
+        // ThumbActionRowMinY/MaxY did for the ability row in WO-1436. HudAreasHost reads it; it
+        // does not author its own. ⚠ HudAreasHost.ActionBarMinX (0.270f) is documented there as
+        // "also the MoveCluster's RIGHT edge" and its SOURCE TEXT is pinned verbatim by
+        // HudDockLayoutRegression, so that const cannot be dissolved into this table. The two
+        // therefore have to AGREE, and agreement-by-hand is the failure this file exists to end -
+        // so RaidHudThumbBandRegression asserts ActionBarMinX == MoveClusterMount.xMax and a
+        // drift is a RED BUILD rather than a felt-test report.
+
+        /// <summary>The virtual movement stick's mount (HudArea.MoveCluster). ⛔ THIS IS THE ONLY
+        /// COPY - HudAreasHost reads it. Covering this band removes the player's only locomotion
+        /// control on a phone, which is why it is stated as shared data rather than trusted to two
+        /// files agreeing.</summary>
+        public static readonly Rect MoveClusterMount = Rect.MinMaxRect(0.010f, 0.030f, 0.270f, 0.330f);
+
+        /// <summary>
+        /// ⭐ THE LEFT EDGE FOR ANY BOTTOM-ANCHORED RAID/COMBAT OVERLAY THAT SPANS THE SCREEN.
+        /// A full-width strip seated above the thumb band still crosses the stick, because the
+        /// stick's band reaches up to y 0.330 - higher than <see cref="BottomOverlayFloorY"/>.
+        /// So a bottom overlay starts HERE on x, not at the screen edge.
+        /// </summary>
+        public static float BottomOverlayLeftX
+        {
+            get { return MoveClusterMount.xMax + ThumbBandClearanceGap; }
+        }
+
+        /// <summary>
+        /// ⭐ THE RAID READOUT'S OWN BAND (timer / stars / spire / razed) - a RIGHT-HAND COLUMN,
+        /// because there is no free full-width strip at the top of this HUD and gap-fitting one
+        /// into the slivers between the authored top-row mounts is the hand-nudge WO-1464 sec.3
+        /// forbids.
+        ///
+        /// ⛔ WHY A COLUMN AND NOT A TOP STRIP, MEASURED FROM THE MOUNT TABLE RATHER THAN EYED.
+        /// The top row is fully spoken for at every x: Vitals 0.011-0.240 reaches y 0.983, Status
+        /// (the compass) 0.340-0.660 reaches 0.990, System 0.845-0.995 reaches 0.985. Above all
+        /// three there is 0.010 of screen left - not a band, a seam. Below them TargetInfo
+        /// (0.280-0.720 x, 0.660-0.840 y) and the Heart plate (x &lt;= 0.240, 0.655-0.790 y) close
+        /// the next row. A full-width raid strip CANNOT exist without evicting a town element.
+        ///
+        /// ⭐ WHAT MAKES THIS COLUMN FREE IS OCCUPANCY, AND IT IS AUTHORED, NOT ASSUMED.
+        /// BOTH shipped copies of hud-areas.json (Assets/Resources/Data/Canonical/ and
+        /// Assets/StreamingAssets/Data/Canonical/ - read and compared 2026-09-07, they agree)
+        /// list `actionRail` with an EMPTY widget array in BOTH hostile postures, and neither
+        /// lists `queueStatus` in either. Checking only one copy would have been hearsay about
+        /// the shipped build; hostile(activebattle) DOES occupy `system` with fleeButton +
+        /// settingsButton, which is why the top edge stops short of it. And WO-1436
+        /// made a raid declare combat for its whole duration, so a raid is hostile end to end.
+        /// The column those two mounts share (x 0.780-0.995) is therefore empty for exactly as
+        /// long as the raid lasts. It also happens to be where the spire/razed group already sat
+        /// in the owner's capture, and where Clash of Clans puts its raid clock.
+        ///
+        /// ⚠ THE CONFLICT IS STATED, NOT HIDDEN (the ResolveNightMarketCard precedent above).
+        /// This band TAKES the ActionRail + QueueStatus seat. If either area is ever occupied
+        /// during a hostile posture, the two collide and MUST be re-split HERE - not resolved by
+        /// drawing one across the other, and never by re-ordering the canvases.
+        ///
+        /// The top edge stops one clearance gap under the System mount's bottom edge (0.880),
+        /// because hostile(activebattle) DOES occupy System with fleeButton + settingsButton.
+        /// </summary>
+        public static readonly Rect RaidReadoutBand = Rect.MinMaxRect(0.780f, 0.510f, 0.995f, 0.870f);
+
         // ── THE ONE RESERVED TOAST ZONE ─────────────────────────────────────────
 
         /// <summary>

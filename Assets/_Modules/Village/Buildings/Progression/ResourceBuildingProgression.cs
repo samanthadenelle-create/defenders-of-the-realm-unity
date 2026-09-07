@@ -232,6 +232,51 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>True when <paramref name="buildingId"/> is one of the three resource buildings.</summary>
         public static bool IsResourceBuilding(string buildingId) => Find(buildingId) != null;
 
+        /// <summary>
+        /// THE ONE PRODUCER OF "HOW MUCH THIS BUILDING MAKES PER HOUR" (WO-1567 panel row 3).
+        ///
+        /// <para>Until 2026-09-07 this shape - <c>yield * sizeMultiplier * 3600 / interval</c> -
+        /// lived PRIVATELY inside <c>ResourceCollector.ThroughputScale</c>, so the Manage detail
+        /// card could not state a production number without writing the formula a second time.
+        /// A second copy of a live formula is the duplicated state this repo has paid for in
+        /// CLAUDE.md sections 2, 5, 8 and 16. <c>ThroughputScale</c> now CALLS this, so the runtime
+        /// capacity basis and the screen read one function.</para>
+        ///
+        /// <para>PURE BY CONSTRUCTION. Every state-dependent term is an EXPLICIT INPUT, never read
+        /// in here:
+        /// <list type="bullet">
+        /// <item><paramref name="productionMultiplier"/> - the WO-430 city-tier / perk production
+        /// mult (<c>ModifierService.ProductionMultFor</c>). Folded exactly where
+        /// <c>ResourceBuildingState.CurrentEffectiveYield</c> folds it: INSIDE the per-tick
+        /// rounding, so the per-hour number is a whole number of ticks of a whole-number yield.</item>
+        /// <item><paramref name="echoMultiplier"/> - <c>ResourceBuildingHarvester.EchoHarvestMultiplier</c>.
+        /// Applied to the per-hour TOTAL, exactly as <c>ThroughputScale</c> always applied it. Note
+        /// the harvester itself rounds the echo term PER TICK, so a measured live hour can differ
+        /// from this by at most one tick's rounding - stated rather than claimed away.</item>
+        /// </list>
+        /// A caller that wants the AUTHORED baseline passes 1 for both. The STEWARD
+        /// <c>harvestRate</c> talent is deliberately absent - see ThroughputScale's own note on
+        /// why capacity is <c>collectorCap</c>'s seam and not <c>harvestRate</c>'s.</para>
+        ///
+        /// <para>Returns 0 for an unknown id or an empty table - never a fabricated number.</para>
+        /// </summary>
+        public static double ProductionPerHour(string buildingId, int level,
+                                               float productionMultiplier, double echoMultiplier)
+        {
+            var def = Find(buildingId);
+            var lvl = def?.LevelDef(level);
+            if (lvl == null) return 0.0;
+
+            float size = Mathf.Max(0f, lvl.YieldSizeMultiplier);
+            float prod = Mathf.Max(0f, productionMultiplier);
+            int yield = Mathf.Max(0, Mathf.RoundToInt(lvl.YieldPerTick * size * prod));
+            if (yield <= 0) return 0.0;
+
+            double interval = Mathf.Max(0.5f, lvl.HarvestInterval);
+            double echo = echoMultiplier > 0.0 ? echoMultiplier : 1.0;
+            return yield * (3600.0 / interval) * echo;
+        }
+
         // =====================================================================
         //  The balance table — the single source of truth for costs + yields.
         // =====================================================================

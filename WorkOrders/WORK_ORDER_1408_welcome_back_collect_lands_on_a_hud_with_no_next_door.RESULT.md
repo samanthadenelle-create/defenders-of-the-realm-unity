@@ -44,3 +44,27 @@ postdates `eb161dc98` or the current working tree. The wave-two gate is owed.
 
 Still owed: the regression gate re-run at HEAD, `WELCOME_BACK_CAPTURE 6/6` with the frames opened, and a Seeker
 capture of the popup after an offline completion. The Heartfire wave-start door is an owner ruling, not work.
+
+
+---
+
+# OWNER REVERSAL 2026-09-07 01:13 - the RAID door is retired from this popup
+
+On her own frame (`Logs/device/screens/owner-harvest-20260907-011321.png`, build 358872) the owner
+said, verbatim: **"no idea why raid is listed here"**.
+
+The RAID door and the "Army 10 / 10 ready - Heartfire 3 / 3 lit - a camp awaits" line are REMOVED
+from `WelcomeBackDoorsVM.Build`. This ticket's reasoning was sound - COLLECT did drop the player on
+a HUD whose loudest control was the store card - but the PLACEMENT was wrong: the welcome-back popup
+answers one question (what happened to my town, and what do I collect), and a raid invitation beside
+COLLECT reads as a second competing primary. She did not recognise it as an offer at all.
+
+**What survives, deliberately:** the ATTACKED row. That is a door onto a REPORT of something that
+happened to her town, drawn only when such a report exists - not a raid invitation. This ticket's
+actual invariant ("a row exists only when it is true") is unchanged.
+
+The `ReadyLine` / `ReadyDoorText` / `ReadyDoor` fields and the four posture parameters are KEPT and
+always empty, and the retired gate is recorded in prose at the removal site, so a reversal of the
+reversal is a three-line edit. `WelcomeBackDoorsRegression` cases 3 and 4 are INVERTED to
+`[raid-door-retired]` rather than deleted - a seat restoring this ticket's spec fails in editmode
+instead of shipping it to her a second time.
