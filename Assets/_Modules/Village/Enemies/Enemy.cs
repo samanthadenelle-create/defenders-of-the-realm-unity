@@ -3440,6 +3440,16 @@ namespace DeNelle.Village
                 bool raidInProgress = RaidScoring.RaidInProgress;
                 int rolledWood = 0, rolledIron = 0, rolledStone = 0;
                 int creditedWood = 0, creditedIron = 0, creditedStone = 0;
+                // WO-1590 — the APPLIED basket EconomyService.Grant returns (post town-bank
+                // clamp). It is NOT a second measurement of the wallet; the credited deltas
+                // above remain the truth about what landed. This exists solely to NAME the
+                // cause when they disagree: inside GrantInternal the only thing that can
+                // reduce an axis is TownBankCapacity.ClampGrant, so applied < rolled means
+                // "the bank is full", and applied == rolled with credited < rolled means the
+                // grant left the economy service in full and still did not reach the wallet.
+                // Seeded to -1 = "no grant was attempted" so a suppressed/econ-null kill is
+                // distinguishable from a grant that applied 0.
+                int appliedWood = -1, appliedIron = -1, appliedStone = -1;
                 int matBaseWood = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "wood", raidInProgress);
                 int matBaseIron = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "iron", raidInProgress);
                 int matBaseStone = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "stone", raidInProgress);
@@ -3479,8 +3489,11 @@ namespace DeNelle.Village
                         int woodBefore  = econ.Wood;
                         int ironBefore  = econ.Iron;
                         int stoneBefore = econ.Food;
-                        econ.Grant(new ResourceCost(
+                        var applied = econ.Grant(new ResourceCost(
                             wood: rolledWood, food: rolledStone, iron: rolledIron));
+                        appliedWood  = applied.Wood;
+                        appliedIron  = applied.Iron;
+                        appliedStone = applied.Food;   // WO-1212: Stone rides the Food axis
                         creditedWood  = Mathf.Max(0, econ.Wood - woodBefore);
                         creditedIron  = Mathf.Max(0, econ.Iron - ironBefore);
                         creditedStone = Mathf.Max(0, econ.Food - stoneBefore);
@@ -3512,12 +3525,11 @@ namespace DeNelle.Village
                         "(missing HeroProgression / EconomyService / clamped wallet).");
                 if (creditedWood != rolledWood || creditedIron != rolledIron || creditedStone != rolledStone)
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
-                        $"KILL GRANT SHORTFALL (materials) id={_def.Id} " +
-                        $"askedWood={rolledWood} bankedWood={creditedWood} " +
-                        $"askedIron={rolledIron} bankedIron={creditedIron} " +
-                        $"askedStone={rolledStone} bankedStone={creditedStone} - a material grant " +
-                        "did not land in full (missing EconomyService/GameState, or the town bank " +
-                        "cap clamped that axis — TownBankCapacity warns separately with the ceiling).");
+                        DescribeMaterialShortfall(
+                            _def.Id,
+                            rolledWood, creditedWood, appliedWood,
+                            rolledIron, creditedIron, appliedIron,
+                            rolledStone, creditedStone, appliedStone));
 
                 // WO-1103 item 3+4, on the CREDITED amounts (WO-1104): never announce an award
                 // that did not bank.
@@ -3591,6 +3603,81 @@ namespace DeNelle.Village
         // ---------------------------------------------------------------------
 
         /// <summary>
+        /// WO-1590 — compose the "materials did not land in full" warn so it NAMES the reason
+        /// per material instead of guessing one for all three.
+        /// <para>
+        /// WHY THIS EXISTS. The retired text ended "(missing EconomyService/GameState, or the
+        /// town bank cap clamped that axis)" — one sentence offering two causes for a line that
+        /// always reports three materials at once. On the owner's 2026-09-07 Seeker session it
+        /// fired on EVERY dungeon kill with `askedStone=8 bankedStone=0` beside `bankedWood=8`
+        /// and `bankedIron=8`, and the ticket that was minted from it (WO-1590) spent its first
+        /// three hypotheses on causes the log had already ruled out. The bank had ALREADY said
+        /// which it was, unthrottled, on the adjacent line:
+        /// `[Flow:Bank] BANK FULL [Grant] Stone: requested 8, banked 0, LOST 8 (wallet
+        /// 34000/34000)`. A full Stoneyard is WO-837 working as ruled; the DEFECT was that this
+        /// warn re-guessed instead of reading what it was handed.
+        /// </para>
+        /// <para>
+        /// HOW THE REASON IS DERIVED — from the two numbers already in hand, with NO second cap
+        /// walk (<c>TownBankCapacity.ClampGrant</c>'s own comment forbids re-walking the layout
+        /// on this hot path):
+        /// <list type="bullet">
+        /// <item><description><c>applied &lt; asked</c> — <c>ClampGrant</c> is the ONLY reducer
+        /// inside <c>EconomyService.GrantInternal</c>, so this IS the town bank cap. Say so, and
+        /// point at the [Flow:Bank] line that carries the ceiling.</description></item>
+        /// <item><description><c>applied == asked</c> but <c>banked &lt; asked</c> — the grant
+        /// left the economy service in full and still did not reach the wallet. THIS is the
+        /// missing-GameState / swallowed-write case, and it is the only branch that earns the
+        /// old wording.</description></item>
+        /// <item><description><c>applied &lt; 0</c> — no grant was attempted at all (sentinel).
+        /// </description></item>
+        /// </list>
+        /// Materials that landed in full are named as such rather than omitted, so the line can
+        /// never be misread as "all three failed".
+        /// </para>
+        /// <para>PURE + <c>static</c> on purpose: the warn lives on the death path, which no
+        /// EditMode suite can drive. Pulling the wording out here makes it directly testable —
+        /// <c>KillGrantShortfallReasonRegression</c> drives both branches.</para>
+        /// </summary>
+        public static string DescribeMaterialShortfall(
+            string enemyId,
+            int askedWood, int bankedWood, int appliedWood,
+            int askedIron, int bankedIron, int appliedIron,
+            int askedStone, int bankedStone, int appliedStone)
+        {
+            var sb = new System.Text.StringBuilder(320);
+            sb.Append("KILL GRANT SHORTFALL (materials) id=").Append(enemyId ?? "?").Append(' ');
+            sb.Append("askedWood=").Append(askedWood).Append(" bankedWood=").Append(bankedWood).Append(' ');
+            sb.Append("askedIron=").Append(askedIron).Append(" bankedIron=").Append(bankedIron).Append(' ');
+            sb.Append("askedStone=").Append(askedStone).Append(" bankedStone=").Append(bankedStone);
+            sb.Append(" - ");
+            sb.Append(MaterialReason("Wood", askedWood, bankedWood, appliedWood)).Append("; ");
+            sb.Append(MaterialReason("Iron", askedIron, bankedIron, appliedIron)).Append("; ");
+            sb.Append(MaterialReason("Stone", askedStone, bankedStone, appliedStone)).Append('.');
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// One material's clause for <see cref="DescribeMaterialShortfall"/>. See that method for
+        /// why the three cases are split this way. Never returns an empty string — a silent
+        /// material is exactly the ambiguity this replaced.
+        /// </summary>
+        private static string MaterialReason(string name, int asked, int banked, int applied)
+        {
+            if (asked <= 0) return name + ": none rolled";
+            if (banked >= asked) return name + $": banked {banked}/{asked} in full";
+            if (applied < 0)
+                return name + $": no grant was attempted ({banked}/{asked}) - EconomyService was absent";
+            if (applied < asked)
+                return name + $": BANK FULL - the town bank cap clamped {asked} to {applied} " +
+                       "(the adjacent [Flow:Bank] warn carries the wallet/ceiling and the container " +
+                       "to upgrade). WO-837/WO-901 working as ruled, not a lost grant";
+            return name + $": the economy service applied {applied} but only {banked} reached the " +
+                   "wallet - a write was swallowed downstream (missing GameStateService, or a " +
+                   "second wallet reader)";
+        }
+
+        /// <summary>
         /// WO-1103 item 4 (B2) + WO-1104: ONE aggregate earned-rewards label per KILL
         /// ("+N XP  +M gold" at the corpse). It uses the shared screen-space
         /// <see cref="CombatText"/> layer: font capped at 44 reference pixels, pooled,
@@ -3605,6 +3692,19 @@ namespace DeNelle.Village
         /// a pack is one toast, never per-body spam.
         /// The amounts passed in are the MEASURED credited deltas, so the label can never
         /// promise an award the player did not actually bank.
+        /// <para>
+        /// ⛔ WO-1590 — THE LABEL CARRIES XP AND GOLD ONLY, AND MATERIALS ARE DELIBERATELY NOT
+        /// ADDED. Verified 2026-09-07 against the owner's Seeker session, where every dungeon
+        /// kill clamped Stone to 0 on a full 34000/34000 bank: the toast promised nothing it did
+        /// not bank, because it never mentions Stone at all. Do NOT "fix" that by printing the
+        /// materials here — the amounts would be right, but a per-kill "Stone full" scold is the
+        /// exact noise WO-1207 ruling 3 forbids ("a grant made OUTSIDE a scope is silent on
+        /// screen by design: the player did not time it, so a scold is noise she cannot act on").
+        /// A kill grant is not player-timed, so this path must never open a
+        /// <c>BankOverflowToastPresenter</c> warn scope either. If the owner later rules that a
+        /// dungeon run SHOULD tell her the bank is full, the seam is one opt-in scope around the
+        /// run — not a label change here.
+        /// </para>
         /// </summary>
         private void ShowFieldKillReward(int xp, int gold)
         {
