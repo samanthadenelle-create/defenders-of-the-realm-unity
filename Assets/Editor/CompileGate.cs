@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.Build.Player;
 using UnityEditor.Compilation;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace DeNelle.Editor
 {
@@ -63,6 +66,30 @@ namespace DeNelle.Editor
         /// </summary>
         private const string FailMarker = "COMPILE_GATE_FAIL";
 
+        // ---------------------------------------------------------------------
+        // WO-1575 — the WebGL player-script pass. THREE distinct markers so a log
+        // reader can tell "the pass ran and passed" from "the pass ran and failed"
+        // from "the pass never ran", and so marker ABSENCE on a fresh log is itself
+        // a failure (CLAUDE.md §16 - judge by the marker, never the exit code).
+        //
+        // ⛔ SUBSTRING DISCIPLINE, deliberate: none of the three contains the
+        // substring "COMPILE_GATE_OK", and neither the FAIL nor the SKIPPED literal
+        // contains "COMPILE_GATE_WEBGL_OK". So an existing
+        // `Select-String -Pattern 'COMPILE_GATE_OK'` consumer cannot be fooled by
+        // this stage, and a new `COMPILE_GATE_WEBGL_OK` consumer cannot be fooled
+        // by its own failure line. Same rule the FailMarker above was written to.
+        // ---------------------------------------------------------------------
+        private const string WebGlOkMarker = "COMPILE_GATE_WEBGL_OK";
+        private const string WebGlFailMarker = "COMPILE_GATE_WEBGL_FAIL";
+        private const string WebGlSkippedMarker = "COMPILE_GATE_WEBGL_SKIPPED";
+
+        /// <summary>
+        /// Scratch output folder for the WebGL player-script compile. Under Temp/,
+        /// which Unity owns and .gitignore excludes, and which the gate's own NUL /
+        /// brace scans already skip (they filter "/Temp/").
+        /// </summary>
+        private const string WebGlScratchFolder = "Temp/CompileGateWebGL";
+
         /// <summary>Cap on how many offenders we name per check; the rest are counted.</summary>
         private const int MaxNamed = 12;
 
@@ -95,6 +122,13 @@ namespace DeNelle.Editor
             // Runs FIRST and reads the log BEFORE this method prints anything, so
             // our own diagnostic output can never poison our own scan.
             failures.AddRange(ProveScriptsCompiled());
+            // Recorded HERE, not at the verdict: only an EDITOR-compile failure makes
+            // the WebGL pass pointless (the same broken tree, a second compiler, the
+            // same errors twice). A NUL/brace failure from checks 2-3 must NOT
+            // suppress it. This is also what keeps CompileGateSelfTest cheap: it
+            // replays a 54-error log through RunInternal, and that replay now stands
+            // the WebGL pass down instead of firing a real player compile.
+            bool editorCompileAlreadyFailed = failures.Count > 0;
 
             // ---- CHECK 2: mount-garble NUL bytes (WO-434) -----------------------
             List<string> nulOffenders = ScanForNulBytes();
@@ -123,6 +157,13 @@ namespace DeNelle.Editor
                     Debug.LogError("[CompileGate] ... and " + braceMore + " more brace-mismatched file(s)");
                 failures.Add(braceOffenders.Count + " .cs file(s) have mismatched braces");
             }
+
+            // ---- CHECK 4: WebGL player-script compile (WO-1575) -----------------
+            // MUST run AFTER check 1: this pass writes its own `error CS` lines into
+            // the live editor log, and check 1's contract is "read the log before
+            // this method prints anything". Running it earlier would let our own
+            // WebGL diagnostics poison the editor-compile scan.
+            failures.AddRange(CompileForWebGl(editorCompileAlreadyFailed));
 
             // ---- verdict --------------------------------------------------------
             if (failures.Count > 0)
@@ -270,6 +311,297 @@ namespace DeNelle.Editor
                              "A gate that cannot prove green must report red.");
             }
 
+            return failures;
+        }
+
+        // =====================================================================
+        // CHECK 4 - WebGL player-script compile (WO-1575)
+        // =====================================================================
+
+        /// <summary>
+        /// Compiles the PLAYER assemblies for <see cref="BuildTarget.WebGL"/> without
+        /// switching the active build target, so code behind <c>#if UNITY_WEBGL</c>
+        /// is handed to a compiler by the ordinary commit gate instead of rotting
+        /// until an Addressables WebGL content build trips over it.
+        ///
+        /// WHY THIS EXISTS (WO-1575, measured — not inferred):
+        /// <c>Builds/webgl-build.log</c> failed the WebGL content build with exactly
+        /// one error, <c>Assets\_Modules\Core\Diagnostics\WebTrace.cs(325,35): error
+        /// CS1501: No overload for method 'Warn' takes 3 arguments</c>, while the
+        /// desktop compile gate on this machine read green the whole time. The gate
+        /// only ever saw the ACTIVE build target's define set, so a platform-guarded
+        /// block was never compiled by anything a seat runs before committing.
+        ///
+        /// WHY THIS API. <c>PlayerBuildInterface.CompilePlayerScripts</c> is the
+        /// EXACT call the failing build makes: Scriptable Build Pipeline's
+        /// <c>BuildPlayerScripts</c> task invokes it at
+        /// <c>Library/PackageCache/com.unity.scriptablebuildpipeline@36e3b5898ee2/
+        /// Editor/Tasks/BuildPlayerScripts.cs:41</c>, with settings built by
+        /// <c>BuildParameters.GetScriptCompilationSettings()</c>
+        /// (<c>Editor/Shared/BuildParameters.cs:140-147</c> — the fields are exactly
+        /// <c>group</c> / <c>target</c> / <c>options</c>). Same call, same shape, so
+        /// this gate fails on the same input the content build fails on. SBP's own
+        /// verdict rule is on the next line of that task
+        /// (<c>assemblies.IsNullOrEmpty() &amp;&amp; typeDB == null -> ReturnCode.Error</c>);
+        /// this method is deliberately STRICTER, because SBP is allowed to be
+        /// inconclusive and a gate is not (see the DESIGN RULE in the class doc).
+        ///
+        /// EVIDENCE, THREE SOURCES — a compile that cannot be judged FAILS:
+        ///   (a) <c>CompilationPipeline.assemblyCompilationFinished</c> messages of
+        ///       type Error, collected across the call. It is NOT proven on this
+        ///       machine that this event fires for PLAYER compiles in 6000.4, which
+        ///       is precisely why it is not the only source.
+        ///   (b) the editor log TAIL — the byte range this call appended — rescanned
+        ///       with the same <see cref="CsErrorRx"/> check 1 uses. This is what
+        ///       preserves the <c>file(line,col): error CSxxxx</c> shape verbatim.
+        ///   (c) <c>result.assemblies</c> — empty means nothing was produced.
+        /// Errors from (a) or (b) -> FAIL. No errors and (c) non-empty -> OK. No
+        /// errors and (c) empty -> FAIL as INCONCLUSIVE.
+        ///
+        /// SKIPPED IS NOT A FAILURE, AND THAT IS A POLICY, NOT AN OVERSIGHT.
+        /// A machine with no WebGL module installed still gets a working commit gate;
+        /// blocking the Android ship lane over an absent module would be a refusal
+        /// unrelated to the tree. The visibility is the named
+        /// <c>COMPILE_GATE_WEBGL_SKIPPED reason=</c> line PLUS the absence of
+        /// <c>COMPILE_GATE_WEBGL_OK</c> on a fresh log. Reversible by the owner in
+        /// one line (move the skip reasons into <c>failures</c>).
+        /// </summary>
+        /// <param name="editorCompileAlreadyFailed">
+        /// True when check 1 already proved the tree does not compile for the ACTIVE
+        /// target. Running a second compiler over the same broken tree only reprints
+        /// the same errors, so the pass stands down with a named reason.
+        /// </param>
+        private static List<string> CompileForWebGl(bool editorCompileAlreadyFailed)
+        {
+            var failures = new List<string>();
+
+            if (editorCompileAlreadyFailed)
+            {
+                Debug.LogWarning(WebGlSkippedMarker + " reason=editor-compile-already-failed :: " +
+                                 "the tree does not compile for the active target, so a WebGL " +
+                                 "player compile would only reprint the same errors. Fix check 1 " +
+                                 "and re-run to exercise the WebGL pass.");
+                return failures;
+            }
+
+            // ---- module guard: a named refusal, never a silent pass --------------
+            bool supported;
+            try
+            {
+                supported = BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, BuildTarget.WebGL);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(WebGlFailMarker + " :: BuildPipeline.IsBuildTargetSupported threw " +
+                               e.GetType().Name + ": " + e.Message +
+                               " - cannot determine whether the WebGL module is present, so this " +
+                               "check reports red rather than passing silently.");
+                failures.Add("WebGL support probe threw (" + e.GetType().Name + ") - WebGL compile status undeterminable");
+                return failures;
+            }
+
+            if (!supported)
+            {
+                Debug.LogWarning(WebGlSkippedMarker + " reason=webgl-module-not-installed :: " +
+                                 "BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, " +
+                                 "BuildTarget.WebGL) == false on this machine. #if UNITY_WEBGL code " +
+                                 "was NOT compiled by this gate. Install the WebGL Build Support " +
+                                 "module to close the hole; a machine that ships WebGL content MUST " +
+                                 "have it.");
+                return failures;
+            }
+
+            // AC4: the active build target must be identical before and after. A target
+            // switch here would trigger a full asset reimport and would corrupt the
+            // Android/Windows ship chain (memory `desktop-build-after-android-target`).
+            BuildTarget targetBefore = EditorUserBuildSettings.activeBuildTarget;
+
+            // ---- evidence source (b): where the log stands BEFORE we compile -----
+            // Deliberately not consulted while the self-test replay hook is armed:
+            // that path points FindEditorLogPath at a captured file we are not writing.
+            string logPath = string.IsNullOrEmpty(LogPathOverrideForSelfTest) ? FindEditorLogPath() : null;
+            long logOffset = -1;
+            if (!string.IsNullOrEmpty(logPath))
+            {
+                try { logOffset = new FileInfo(logPath).Length; }
+                catch (Exception) { logOffset = -1; }
+            }
+
+            // ---- evidence source (a): the compiler's own messages ----------------
+            var callbackErrors = new List<string>();
+            Action<string, CompilerMessage[]> onAssemblyFinished = (asmPath, messages) =>
+            {
+                if (messages == null) return;
+                foreach (CompilerMessage m in messages)
+                {
+                    if (m.type != CompilerMessageType.Error) continue;
+                    callbackErrors.Add(m.file + "(" + m.line + "," + m.column + "): error: " + m.message);
+                }
+            };
+
+            var sw = Stopwatch.StartNew();
+            ScriptCompilationResult result = default(ScriptCompilationResult);
+            bool threw = false;
+
+            try
+            {
+                CompilationPipeline.assemblyCompilationFinished += onAssemblyFinished;
+
+                string outFolder = Path.Combine(Directory.GetCurrentDirectory(),
+                                                WebGlScratchFolder.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(outFolder);
+
+                var settings = new ScriptCompilationSettings
+                {
+                    group = BuildTargetGroup.WebGL,
+                    target = BuildTarget.WebGL,
+                    options = ScriptCompilationOptions.None,
+                };
+
+                Debug.Log("[CompileGate] WebGL pass: compiling player scripts for BuildTarget.WebGL " +
+                          "(active target stays " + targetBefore + ") -> " + outFolder);
+
+                result = PlayerBuildInterface.CompilePlayerScripts(settings, outFolder);
+            }
+            catch (Exception e)
+            {
+                threw = true;
+                Debug.LogError(WebGlFailMarker + " :: PlayerBuildInterface.CompilePlayerScripts threw " +
+                               e.GetType().Name + ": " + e.Message);
+                failures.Add("WebGL player-script compile threw (" + e.GetType().Name + ": " + e.Message + ")");
+            }
+            finally
+            {
+                CompilationPipeline.assemblyCompilationFinished -= onAssemblyFinished;
+                sw.Stop();
+            }
+
+            // ---- AC4: prove the active target did not move -----------------------
+            BuildTarget targetAfter = EditorUserBuildSettings.activeBuildTarget;
+            if (targetAfter != targetBefore)
+            {
+                Debug.LogError("[CompileGate] ACTIVE BUILD TARGET MOVED during the WebGL pass: " +
+                               targetBefore + " -> " + targetAfter + ". That is a full reimport and " +
+                               "it breaks the ship chain - the WebGL pass must never switch targets.");
+                failures.Add("active build target changed during the WebGL compile pass (" +
+                             targetBefore + " -> " + targetAfter + ")");
+            }
+
+            if (threw) return failures;
+
+            // ---- evidence source (b): rescan only the bytes this call appended ---
+            var logErrors = new List<string>();
+            if (!string.IsNullOrEmpty(logPath) && logOffset >= 0)
+            {
+                try
+                {
+                    using (var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read,
+                                                   FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        if (logOffset <= fs.Length) fs.Seek(logOffset, SeekOrigin.Begin);
+                        using (var sr = new StreamReader(fs))
+                        {
+                            string line;
+                            while ((line = sr.ReadLine()) != null)
+                            {
+                                if (line.IndexOf("error CS", StringComparison.Ordinal) < 0) continue;
+                                if (!CsErrorRx.IsMatch(line)) continue;
+                                logErrors.Add(line.Trim());
+                            }
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[CompileGate] WebGL pass: could not re-read the editor log tail (" +
+                                     e.GetType().Name + ": " + e.Message +
+                                     ") - falling back to the compiler callback + assembly outputs.");
+                }
+            }
+
+            // ReadOnlyCollection<string> in 6000.4 (the WO-1575 lane wrote .Length; cg-wave10 CS1061).
+            int assemblyCount = result.assemblies == null ? 0 : result.assemblies.Count;
+            string seconds = (sw.ElapsedMilliseconds / 1000f).ToString("0.0");
+
+            // ---- package-only errors are ADVISORY, not a verdict (cg-wave10, 2026-09-07) ----
+            // First live run: the only errors were Packages\com.solana.unity_sdk\...\WebGLInput.cs
+            // CS1069 ('WebGLInput' forwarded to UnityEngine.WebGLModule) - a module reference this
+            // player-script compile does not carry while the active target is Android. The REAL WebGL
+            // content build (shipped 2026-09-07 05:26, WEBGL_BUILD_OK) resolves it, so a red here on a
+            // Packages/ path is the pass's reference set, not the tree. Errors under Assets/ - the
+            // #if UNITY_WEBGL code this pass exists to catch (WebTrace.cs:325 CS1501) - still FAIL.
+            // Closing the reference gap properly is the WO-1575 follow-up; until then the package
+            // lines are printed under their own marker so their presence stays visible on the log.
+            var packageErrors = new List<string>();
+            logErrors = SplitPackageErrors(logErrors, packageErrors);
+            callbackErrors = SplitPackageErrors(callbackErrors, packageErrors);
+            if (packageErrors.Count > 0)
+            {
+                List<string> pkgShown = Cap(packageErrors, out int pkgMore);
+                foreach (string l in pkgShown)
+                    Debug.LogWarning("[CompileGate]   ~ (package, advisory) " + l);
+                Debug.LogWarning("COMPILE_GATE_WEBGL_ADVISORY :: " + packageErrors.Count + " error line(s) in " +
+                                 "Packages/ ignored by the WebGL pass (module reference gap, WO-1575)" +
+                                 (pkgMore > 0 ? " - " + pkgMore + " more not shown" : ""));
+            }
+
+            // ---- verdict ---------------------------------------------------------
+            if (callbackErrors.Count > 0 || logErrors.Count > 0)
+            {
+                Debug.LogError("[CompileGate] WEBGL-ONLY COMPILE ERRORS - this code is invisible to " +
+                               "the active-target compile and would only have failed in a WebGL " +
+                               "content build:");
+
+                // Log lines FIRST: they carry the verbatim `file(line,col): error CSxxxx`
+                // shape every existing log reader already parses (AC2).
+                List<string> logShown = Cap(logErrors, out int logMore);
+                foreach (string l in logShown)
+                    Debug.LogError("[CompileGate]   > " + l);
+                if (logMore > 0)
+                    Debug.LogError("[CompileGate]   ... and " + logMore + " more WebGL error line(s) in the log");
+
+                List<string> cbShown = Cap(callbackErrors, out int cbMore);
+                foreach (string l in cbShown)
+                    Debug.LogError("[CompileGate]   > (compiler callback) " + l);
+                if (cbMore > 0)
+                    Debug.LogError("[CompileGate]   ... and " + cbMore + " more callback error(s)");
+
+                Debug.LogError(WebGlFailMarker + " :: " + logErrors.Count + " log error line(s) + " +
+                               callbackErrors.Count + " compiler-callback error(s) in " + seconds +
+                               "s. OK marker withheld.");
+                failures.Add("WebGL player-script compile failed (" +
+                             Math.Max(logErrors.Count, callbackErrors.Count) +
+                             " error(s)) - #if UNITY_WEBGL code does not compile");
+                return failures;
+            }
+
+            if (assemblyCount <= 0 && packageErrors.Count > 0)
+            {
+                // The package reference gap stopped the compile before any assembly was produced, so
+                // this pass could not judge the tree at all. That is a SKIP with a named reason (the
+                // class doc's SKIPPED policy: visible, does not withhold COMPILE_GATE_OK), not a red
+                // against code that the real WebGL content build compiles. WO-1575 follow-up closes it.
+                Debug.LogWarning(WebGlSkippedMarker + " reason=package-reference-gap :: the WebGL pass " +
+                                 "stopped on " + packageErrors.Count + " Packages/ error line(s) before " +
+                                 "producing an assembly (" + seconds + "s); the tree's own #if UNITY_WEBGL " +
+                                 "code was NOT judged this run - see COMPILE_GATE_WEBGL_ADVISORY above.");
+                return failures;
+            }
+
+            if (assemblyCount <= 0)
+            {
+                // No errors AND no assemblies == we learned nothing. Fail loud; never
+                // pass silently (class doc DESIGN RULE).
+                Debug.LogError(WebGlFailMarker + " :: INCONCLUSIVE - the WebGL compile produced 0 " +
+                               "assemblies and no diagnosable error lines after " + seconds + "s. A " +
+                               "check that cannot prove green must report red.");
+                failures.Add("WebGL player-script compile produced 0 assemblies and no error lines - " +
+                             "inconclusive, so the gate reports red");
+                return failures;
+            }
+
+            Debug.Log(WebGlOkMarker + " :: " + assemblyCount + " player assemblies compiled for " +
+                      "BuildTarget.WebGL in " + seconds + "s (active target unchanged: " + targetAfter + ")");
             return failures;
         }
 
@@ -430,6 +762,26 @@ namespace DeNelle.Editor
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Moves every error line whose path lives under Packages/ (or Library/PackageCache/) into
+        /// <paramref name="packageErrors"/> and returns the rest. An error the tree does not own cannot be
+        /// the tree's verdict; it is reported under COMPILE_GATE_WEBGL_ADVISORY instead (WO-1575 follow-up).
+        /// </summary>
+        private static List<string> SplitPackageErrors(List<string> all, List<string> packageErrors)
+        {
+            var mine = new List<string>(all.Count);
+            foreach (string line in all)
+            {
+                string norm = (line ?? "").TrimStart().Replace('\\', '/');
+                bool isPackage = norm.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
+                                 norm.StartsWith("Library/PackageCache/", StringComparison.OrdinalIgnoreCase) ||
+                                 norm.IndexOf("/Packages/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 norm.IndexOf("/PackageCache/", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (isPackage) packageErrors.Add(line); else mine.Add(line);
+            }
+            return mine;
         }
 
         /// <summary>Returns at most <see cref="MaxNamed"/> entries; <paramref name="more"/> gets the remainder count.</summary>
