@@ -86,10 +86,17 @@ namespace DeNelle.Village
         private const int GridColumns = 6;
 
         /// <summary>
-        /// Rail entries, in order. Seven today; the count is a constant so the touch-floor
-        /// arithmetic below and the regression both read the SAME number.
+        /// Rail entries, in order. SEVEN — Gear, Weapons, Off Hand, Armor, Trinkets, Potions,
+        /// Skills — which is exactly the number of BuildRailEntry calls in BuildRail. The count
+        /// is a constant so the touch-floor arithmetic below and InventoryArmoryRailRegression
+        /// (which PARSES this literal) both read the SAME number.
+        /// ⚠ It read 8 until 2026-09-07 (WO-1500). The eighth was the Realm Map, whose entry was
+        /// retired 2026-08-31 while this number was left behind — so the touch-floor case had
+        /// been sizing the rail for an entry that is never built, and the doc comment two lines
+        /// up already said "Seven today" while the literal said otherwise. Count the
+        /// BuildRailEntry calls before changing it; never guess it from this sentence.
         /// </summary>
-        private const int RailEntryCount = 8;
+        private const int RailEntryCount = 7;
 
         /// <summary>Rail entry height, in canvas REFERENCE px, authored AT the kit touch floor.</summary>
         private const float RailEntryHeightPx = ElarionUiKit.MinTouchPx;
@@ -345,7 +352,10 @@ namespace DeNelle.Village
                            CountOf(counts, InventoryTabKind.Consumables), false);
             BuildRailEntry(content.transform, RailSkills,   InventoryStrings.KeyRailSkills,   -1, false);
             AddRailSeparator(content.transform);
-            // Realm Map retired from public inventory navigation (owner 2026-08-31).
+            // ⛔ SEVEN ENTRIES, AND THAT IS THE WHOLE RAIL. The Realm Map was retired from public
+            // inventory navigation (owner 2026-08-31); WO-1500 removed the section it left behind
+            // (see the retirement note further down). Keep RailEntryCount equal to the number of
+            // BuildRailEntry calls above - the touch-floor regression parses that literal.
 
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
@@ -520,15 +530,15 @@ namespace DeNelle.Village
                 ElarionUiKit.FitSingleLine(cnt, 0f, ElarionUi.FontMicro);
             }
 
-            if (dormant)
-            {
-                var soon = ElarionUiKit.Label(root.transform,
-                    InventoryStrings.Get(InventoryStrings.KeyRailMapSoon),
-                    0.08f, 0.44f, InkMicro, ElarionUi.FontMicro,
-                    TextAlignmentOptions.MidlineLeft, 0.16f, 0.98f);
-                soon.raycastTarget = false;
-                ElarionUiKit.FitSingleLine(soon, 0f, ElarionUi.FontMicro);
-            }
+            // ⛔ NO "soon" SUB-LABEL. RETIRED 2026-09-07 (WO-1500). This block painted
+            // InventoryStrings.KeyRailMapSoon under a dormant entry, and the ONLY entry that
+            // was ever dormant was the Realm Map - whose rail entry is gone (see the note at
+            // the end of the rail build). It is deleted rather than left unreachable because
+            // it IS the "label it as coming" option the owner ruled against: a labelled entry
+            // that does nothing on the first screen a new player explores is the worst of the
+            // three choices, and dead code is how that option walks back in. The `dormant`
+            // parameter stays - it still drives the label's dim ink above, which survives a
+            // greyscale pass where a "soon" word competing with the count did not.
 
             if (selected)
             {
@@ -594,7 +604,11 @@ namespace DeNelle.Village
             {
                 case RailGear:  return InventoryStrings.Get(InventoryStrings.KeyNextTabsHint);
                 case RailSkills: return InventoryStrings.Get(InventoryStrings.KeyEmptySkills);
-                case RailMap:   return InventoryStrings.Get(InventoryStrings.KeyEmptyMapLocked);
+                // ⛔ NO `case RailMap`. RETIRED 2026-09-07 (WO-1500): the Realm Map rail entry
+                // is not built, so nothing can select RailMap and this branch could only ever
+                // answer for a section the player cannot reach. It is deleted rather than kept
+                // "harmless" because an unreachable Map branch reads as a Map section that
+                // exists, and that is what a seat re-wires an entry back onto.
             }
             // A content section: if it is empty, say what fills it; otherwise teach the rail.
             int count = SectionCount(RailTab(_railIndex));
@@ -659,10 +673,30 @@ namespace DeNelle.Village
         // The seating editor keeps its ONE sanctioned entry point, AdminOverlay. Do not re-add
         // a per-screen launcher.
 
-        // RETIRED 2026-09-05 (WO-1396): the Bag's "Map" section door (OpenRealmMap, gated on the
-        // deleted MapTab feature flag) is GONE. The Realm Map has exactly ONE public door - the
-        // Journey deck's Realm Map card (PlayerDeckWorkspace). The RailMap pseudo-section keeps
-        // its authored locked sentence (KeyEmptyMapLocked) and never routes.
+        // RETIRED 2026-09-05 (WO-1396) and FINISHED 2026-09-07 (WO-1500): the Bag's "Map" section
+        // door (OpenRealmMap, gated on the deleted MapTab feature flag) is GONE, and so now is
+        // every remnant of the section INSIDE THIS FILE - no rail entry builds it, no NextStepLine
+        // branch answers for it, and no "soon" sub-label offers it. The Realm Map has exactly ONE
+        // public door: the Journey deck's Realm Map card (PlayerDeckWorkspace).
+        //
+        // ⚠ THE MIDDLE STATE IS THE LESSON, because it is what WO-1500 was filed against. WO-1396
+        // deleted the DOOR and left the SECTION - a locked sentence, a "soon" label and a stale
+        // 8-entry count, all describing a Map the player could no longer reach. Read as source it
+        // looked like a labelled entry that cannot open, which is the worst of the three options
+        // on the first screen a new player explores. Retiring a route means retiring what it
+        // pointed at, in the same breath.
+        //
+        // Remnants that live in the SIBLING partials and are deliberately untouched here: the
+        // RailMap constant and its SelectRail branch (HeroInventoryController.cs) and the
+        // RailMap stage note (InventoryGrid.cs). PublicNavigationRetirementRegression pins that
+        // this file builds no RailMap entry and opens no Realm Map panel.
+        //
+        // ⚠ DO NOT SPELL THE RETIRED TOKENS IN THIS FILE, EVEN IN A COMMENT. That oracle's
+        // AssertAbsent reads the RAW source (PublicNavigationRetirementRegression.cs:163-172,
+        // File.ReadAllText with no comment strip), so writing the panel-id or the flag name in
+        // prose here fails the suite exactly as re-adding the route would. Its sibling
+        // AssertAbsentInCode is the comment-stripping one, and it is NOT the one applied to this
+        // file. Say "Realm Map panel" and "the retired map feature flag" in words instead.
 
         // The "Skills" section: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
         // Routes through PanelRouter so the inventory needs NO reference to the Talents panel type.

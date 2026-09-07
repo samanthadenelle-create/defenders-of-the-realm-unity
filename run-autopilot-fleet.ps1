@@ -16,10 +16,16 @@
 # smart-quotes / em-dashes corrupt the parse. PS 5.1 compatible (no '&&', no
 # ternary). Mirrors the style of build-windows.ps1 / run-unity-method.ps1.
 #
+# STANDING LANES (-Lane): a NAMED, one-command fleet run whose pass is judged by a
+# marker the bot itself prints, not by "the fleet finished". A lane exists so a
+# coverage question that must be answered EVERY night is one word on a command line
+# instead of a paragraph somebody has to remember. See the $Lanes table below.
+#
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\run-autopilot-fleet.ps1 -Count 20
 #   powershell -ExecutionPolicy Bypass -File .\run-autopilot-fleet.ps1 `
 #       -Count 8 -SeedStart 100 -TimeoutMin 10
+#   powershell -ExecutionPolicy Bypass -File .\run-autopilot-fleet.ps1 -Lane freshsave-ftue
 # =============================================================================
 param(
     [int]$Count = 8,
@@ -30,11 +36,71 @@ param(
     [string]$Phases = '',  # optional comma list; driver runs ONLY matching phases (substring, case-insensitive) - fast single-purpose capture runs
     [string]$Dungeon = '', # optional dungeon/portal id for the DungeonLoop phase
     [int]$Width = 0,    # -Graphics only; 0 => the capture default below
-    [int]$Height = 0
+    [int]$Height = 0,
+    [string]$Lane = ''  # named standing lane (see $Lanes); sets Phases + defaults and judges by the lane's own marker
 )
 
 $ErrorActionPreference = 'Stop'
 $proj = $PSScriptRoot
+
+# =============================================================================
+# STANDING LANES
+# -----------------------------------------------------------------------------
+# WHY THIS TABLE EXISTS (WO-1500, 2026-09-07). Across ALL FIVE fleet logs captured
+# on 2026-09-06 there were ZERO [Flow:Onboard*] lines: every run booted a RETURNING
+# save, so every fresh-save assertion in the driver went N/A and the fleet reported
+# green while asserting nothing about the first ten minutes. The only artefacts of
+# minute one were PNGs from 2026-09-01. The FIX IS NOT A LONGER SWEEP - the phases
+# existed; nothing ran them on a town that had just been founded. A lane is that
+# missing thing: a named run, a fixed phase filter, and a MARKER the run must print.
+#
+# THE MARKER IS THE VERDICT, on a FRESH per-instance player.log. This repo's runners
+# exit 0 on refusals and FAILs (CLAUDE.md sec.8), and the fleet's own completion
+# check only proves the bot finished - a lane whose phase went N/A finishes perfectly.
+# Marker absence is a FAILURE, never an unknown.
+#
+# Each lane sets Phases + the defaults its coverage needs; anything the CALLER passed
+# explicitly still wins (PSBoundParameters), so a lane is a preset, not a cage.
+$Lanes = @{
+    'freshsave-ftue' = @{
+        Phases     = 'FreshSaveFtue'
+        Marker     = 'FRESH_SAVE_FTUE_OK'
+        # ONE instance: the lane founds a New Game and reads process-scoped state
+        # (TutorialFlow.RanThisSession), so N concurrent runs add no coverage.
+        Count      = 1
+        TimeoutMin = 6
+        # -Graphics because the acceptance for this coverage is PNGs a human opens:
+        # a -nographics run writes flat-black frames (UiCaptureCoverageRegression's
+        # 2026-08-04 evidence), and a black FTUE shot is worse than none.
+        Graphics   = $true
+        Why        = 'the fresh-save FTUE: found a new town, walk the guide beats, prove the first welcome-back claims nothing'
+    }
+}
+
+$LaneMarker = ''
+if ($Lane -ne '') {
+    $laneKey = $Lane.ToLowerInvariant()
+    if (-not $Lanes.ContainsKey($laneKey)) {
+        # Write-HOST, not Write-Error: $ErrorActionPreference is 'Stop' at the top of this
+        # file, so Write-Error TERMINATES here and the `exit 5` below never runs - the caller
+        # then sees exit 0 for a refusal, which is the exact failure shape CLAUDE.md section 8
+        # warns about. Measured 2026-09-07 by running `-Lane nope`: exit was 0.
+        Write-Host ("[fleet] FLEET_LANE_UNKNOWN '$Lane'. Known lanes: " + (($Lanes.Keys | Sort-Object) -join ', '))
+        exit 5
+    }
+    $cfg = $Lanes[$laneKey]
+    $LaneMarker = $cfg.Marker
+    if (-not $PSBoundParameters.ContainsKey('Phases'))     { $Phases     = $cfg.Phases }
+    if (-not $PSBoundParameters.ContainsKey('Count'))      { $Count      = $cfg.Count }
+    if (-not $PSBoundParameters.ContainsKey('TimeoutMin')) { $TimeoutMin = $cfg.TimeoutMin }
+    # Assigning $true to a [switch] leaves a plain bool behind, which every `if ($Graphics)`
+    # below reads identically - but it has no .IsPresent, so never print that here.
+    if ((-not $PSBoundParameters.ContainsKey('Graphics')) -and $cfg.Graphics) { $Graphics = $true }
+    $laneGfx = $false
+    if ($Graphics) { $laneGfx = $true }
+    Write-Host "[fleet] LANE '$laneKey' - $($cfg.Why)"
+    Write-Host "[fleet] LANE phases='$Phases' count=$Count timeoutMin=$TimeoutMin graphics=$laneGfx marker='$LaneMarker'"
+}
 
 # --- resolve + verify the player exe -----------------------------------------
 if (-not [System.IO.Path]::IsPathRooted($ExePath)) { $ExePath = Join-Path $proj $ExePath }
@@ -185,6 +251,7 @@ while ($true) {
 $plMissing = 0
 $markerMissing = 0
 $abortedRuns = 0
+$laneMissing = 0
 for ($i = 0; $i -lt $Count; $i++) {
     $runDir = Join-Path $runsDir "$i"
     $pl = Join-Path $runDir 'player.log'
@@ -225,6 +292,22 @@ for ($i = 0; $i -lt $Count; $i++) {
         Write-Host "FLEET_RUN_ABORTED run=$i (the aborted-false field is absent from '$sum' - the run ended early (global cap / critical phase), or the summary schema changed; either way this instance's coverage is NOT proven)"
         $abortedRuns++
     }
+
+    # --- THE LANE'S OWN VERDICT (WO-1500) -------------------------------------
+    # 'AutoPilot complete' + aborted=false prove the BOT ran. They cannot prove the
+    # lane's PHASE asserted anything: a phase that returns N/A (wrong scene, flag off,
+    # already-Onboarded save) yields a perfectly complete, unaborted run - which is
+    # exactly how five 2026-09-06 logs reported green with zero FTUE coverage in them.
+    # The lane's marker is printed only on the phase's success path, so it is the one
+    # line that separates "the fleet ran" from "the question got answered".
+    if ($LaneMarker -ne '') {
+        if (Select-String -Path $pl -Pattern $LaneMarker -SimpleMatch -Quiet -ErrorAction SilentlyContinue) {
+            Write-Host "[fleet] FLEET_LANE_MARKER run=$i '$LaneMarker' present."
+        } else {
+            Write-Host "FLEET_LANE_MISSING run=$i (no '$LaneMarker' in '$pl' - the lane's phase did not reach its success path. Read the [Flow:Auto] lines in that log: a FAIL names the dead link, and an N/A line names the precondition that was not met. Marker absence on a fresh log is a FAILURE, not an unknown.)"
+            $laneMissing++
+        }
+    }
 }
 if ($plMissing -eq 0) {
     Write-Host "[fleet] FLEET_PLAYERLOG_OK $Count/$Count per-instance player.log present and non-empty."
@@ -240,6 +323,17 @@ if (($markerMissing -eq 0) -and ($abortedRuns -eq 0)) {
     # aggregation below. Exiting at this line would suppress the ranked ticket list,
     # which is precisely the evidence that explains WHY an instance never completed.
     $fleetExit = 3
+}
+if ($LaneMarker -ne '') {
+    if ($laneMissing -eq 0) {
+        Write-Host "[fleet] FLEET_LANE_OK $Count/$Count instance(s) printed '$LaneMarker' - the lane's question was actually answered."
+    } else {
+        Write-Host "[fleet] FLEET_LANE_FAIL $laneMissing/$Count instance(s) never printed '$LaneMarker' - the lane RAN but did not ASSERT. Do not report this lane as covered."
+        # Deferred like $fleetExit above, and for the same reason: the ranked tickets
+        # below carry the FlowTrace.Fail that explains which link died. Exit 5 is the
+        # lane's own code so a caller can tell a lane miss from an aborted instance.
+        if ($fleetExit -eq 0) { $fleetExit = 5 }
+    }
 }
 
 # --- aggregate every run's breaks into one ranked ticket list -----------------

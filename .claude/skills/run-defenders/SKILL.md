@@ -80,6 +80,36 @@ Raw artifacts live under `%LOCALAPPDATA%Low\DeNelle\Defenders of the Realm\autop
 + details), `break_*.png` (screenshots — **blank under -nographics**). Ranked, deduped tickets:
 `Builds/autopilot-tickets.md`.
 
+## Standing lanes — a named fleet run judged by its own marker
+
+A **lane** is a coverage question that must be answered every night, reduced to one word.
+`-Lane <name>` sets the phase filter and the defaults that question needs, and then judges the
+run by a marker the **bot** prints — not by "the fleet finished".
+
+```bash
+powershell -ExecutionPolicy Bypass -File ./run-autopilot-fleet.ps1 -Lane freshsave-ftue
+# -> [fleet] FLEET_LANE_OK 1/1 instance(s) printed 'FRESH_SAVE_FTUE_OK'
+```
+
+| Lane | Question it answers | Phase | Marker | Refusal |
+|---|---|---|---|---|
+| `freshsave-ftue` | found a NEW town, walk the guide beats, prove the first welcome-back claims nothing | `AssertFreshSaveFtue` | `FRESH_SAVE_FTUE_OK` | `FLEET_LANE_FAIL`, exit 5 |
+
+**Why the marker and not the run (WO-1500, 2026-09-07).** All FIVE fleet logs captured on
+2026-09-06 had ZERO `[Flow:Onboard*]` lines — every run booted a RETURNING save, so every
+fresh-save assertion in the driver went N/A and the fleet reported green while asserting nothing
+about the first ten minutes. `AutoPilot complete` + `aborted:false` prove the bot ran; only the
+phase's own marker proves the question got answered. **Marker absence on a fresh log is a
+FAILURE, not an unknown.** The lane defaults to `-Count 1 -Graphics` on purpose: it founds a New
+Game and reads process-scoped state (`TutorialFlow.RanThisSession`), so extra instances add no
+coverage, and a `-nographics` run would write flat-black FTUE frames. Anything you pass
+explicitly still overrides the preset.
+
+Wiring is pinned by `DeNelle.Editor.Regression.FreshSaveFtueLaneRegression`
+(`FRESH_SAVE_FTUE_LANE_OK`, registered in the data gate): the phase is in the sequence, it still
+founds its own town, it still asserts the fresh-clock/zero-window/no-popup trio, and this script
+still refuses without the marker.
+
 ## Run — HUMAN PATH (real visuals)
 The fleet is `-nographics` (no pixels). For actual visuals, launch the built player directly:
 ```bash

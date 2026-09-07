@@ -28,7 +28,12 @@
 //                       actuate its clickables, then close.
 //   OpenEachHUDPanel  — open every registered PanelId, actuate, close.
 //   TriggerWave       — WaveManager.ForceBeginNextWave, poll the phase advances.
-//   AttemptExitCastle — LAST: walk into the south exit, record scene change.
+//   AttemptExitCastle — walk into the south exit, record scene change.
+//
+// ⚠ THE LIST ABOVE IS THE ORIGINAL SPINE, NOT THE SEQUENCE — read RunAll for that.
+// Dozens of assertion phases have been seated between these since. What matters here
+// is the TAIL: AssertExactlyOneGuideBody and AssertFreshSaveFtue (WO-1500) each found
+// a NEW GAME, so no phase that reads the pre-reset save may ever be added after them.
 //
 // On completion it writes the summary and Application.Quit()s — UNLESS it was
 // started from the dev-panel button (quitOnDone:false), so an in-editor manual
@@ -442,11 +447,22 @@ namespace DeNelle.DevTools
                 // and the wolf at (2.00,0.06,3.00), with the one 'world.guide' spotlight
                 // alternating between them. The steward is deleted, so the probe that
                 // guarded its lifecycle is replaced by the probe that guards its ABSENCE.
-                // Runs LAST deliberately: it resets the save and reloads the scene, so
-                // nothing state-dependent may sit downstream of it. The reload is an
-                // intentional scene load — window the UNEXPECTED-CROSS probe around it.
+                // Runs in the RESET TAIL deliberately: it resets the save and reloads the
+                // scene, so nothing state-dependent may sit downstream of it. The reload is
+                // an intentional scene load — window the UNEXPECTED-CROSS probe around it.
+                // (It was the LAST phase until WO-1500 seated AssertFreshSaveFtue behind it;
+                // both live in this tail because both own a New Game, and no phase that reads
+                // the pre-reset save may ever be added after either of them.)
                 _probes?.SetIntentionalCrossPhase(true);
                 yield return RunPhase("AssertExactlyOneGuideBody", AssertExactlyOneGuideBody());
+                _probes?.SetIntentionalCrossPhase(false);
+
+                // FRESH-SAVE FTUE LANE (WO-1500). LAST, for the same reason as the phase
+                // above: it founds a New Game of its own. See the method header for why this
+                // is the ONE phase that must normally be run on its own
+                // (--phases=FreshSaveFtue) rather than at the tail of a full sweep.
+                _probes?.SetIntentionalCrossPhase(true);
+                yield return RunPhase("AssertFreshSaveFtue", AssertFreshSaveFtue());
                 _probes?.SetIntentionalCrossPhase(false);
             }
 
@@ -3491,6 +3507,371 @@ namespace DeNelle.DevTools
             FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: PASS - the founding arc has exactly ONE guide figure and no legacy stand-in (WO-971 locked).");
         }
 
+        // =====================================================================
+        //  AssertFreshSaveFtue - THE STANDING FRESH-SAVE FTUE LANE (WO-1500)
+        // ---------------------------------------------------------------------
+        //  WHAT WAS BLIND, on captured evidence and not on inference. Across all
+        //  five fleet logs captured 2026-09-06 there were ZERO [Flow:Onboard*]
+        //  lines; every one carried 'raid.first_completed already latched' and
+        //  echoes=4/6. Every run was a RETURNING save. The only artefacts of
+        //  minute one through minute ten were PNGs from 2026-09-01 - five days and
+        //  the whole Manage 2000-block earlier. For a retention-limited product the
+        //  first ten minutes are the worst place to be unobserved, and NOTHING in
+        //  the fleet founded a town of its own to look at them.
+        //
+        //  WHY THE OTHER FRESH-SAVE PHASES DID NOT COVER IT: AssertTutorialArms and
+        //  AssertFoundingArc both open with "on a fresh save" and both go N/A the
+        //  moment the boot save is Onboarded (AssertTutorialArms link 2 returns N/A
+        //  on st.Onboarded, and again on flow.IsFinished && TutorialFlow
+        //  .RanThisSession). They are correct as written - a returning save has no
+        //  founding arc to assert - but the consequence is that a fleet running on
+        //  a returning save reports GREEN while asserting nothing about the FTUE.
+        //  A phase that only runs when someone happens to have deleted the save is
+        //  not coverage. This lane FOUNDS THE TOWN ITSELF so the observation cannot
+        //  depend on the state the machine happened to boot with.
+        //
+        //  ⚠ RUN THIS LANE ALONE:  --phases=FreshSaveFtue
+        //  Two independent reasons, both measured, not stylistic:
+        //    1. TutorialFlow.RanThisSession is PROCESS state. By the tail of a full
+        //       sweep the flow has usually already run once (AssertFoundingArc drives
+        //       founding_greet; AssertExactlyOneGuideBody founds a New Game just
+        //       above), so link 3 can only report SOFT - it cannot prove the flow is
+        //       LIVE on a boot that has never seen it. Alone, it can.
+        //    2. GlobalCapSeconds is 420 and a full sweep already sits at the budget
+        //       (see the AssertDungeonLoop note in TimeoutFor). A lane appended to a
+        //       full sweep is the lane most likely to be cut off by the cap - which
+        //       would restore the exact silence this phase exists to end.
+        //  It stays wired into the default sequence anyway, because a lane that only
+        //  exists as a command line is a lane somebody forgets to run.
+        //
+        //  LINKS (each failure NAMES its link, and every one is a FlowTrace.Fail so
+        //  it lands in break-log.jsonl and ranks as a ticket):
+        //    link 0  context gates (hub scene / GameStateService) - N/A otherwise
+        //    link 1  a genuinely new town: ResetToNewGame through the REAL service,
+        //            with the three persisted invariants read IMMEDIATELY, before
+        //            the reload can let a cold-load claim advance the clock
+        //    link 2  the hub reloads and the hero re-resolves on that new save
+        //    link 3  the FTUE is LIVE (a TutorialFlow exists and is not parked
+        //            Finished) - the [Flow:Onboard*]/[Flow:Tutorial] silence itself
+        //    link 4  the guide BEATS advance: walk the step spine and NAME every
+        //            beat id reached, so minute one is in the log by id
+        //    link 5  THE FIRST WELCOME-BACK CLAIMS NOTHING. OfflineHarvest case 6
+        //            (WO-1414) already pins the MODEL - a fresh GameState carries
+        //            LastHarvestClaimMs=0 and an empty ever-built ledger, and an
+        //            empty result fails HasSummaryContent. This link pins the FLOW:
+        //            the claim that actually runs on a real new town yields a fresh
+        //            clock, a ZERO window, and no welcome-back popup on screen.
+        //            That is the owner's 2026-09-05 "YOUR REALM WORKED FOR 8h 22m"
+        //            on START NEW, watched end to end instead of in a fixture.
+        //
+        //  ⛔ THE MARKER IS PRINTED ONLY WHEN THE FTUE WAS ACTUALLY OBSERVED - a LIVE
+        //  flow AND at least one named beat. Every other outcome prints
+        //  FRESH_SAVE_FTUE_SOFT and NAMES its precondition, so the fleet reports
+        //  FLEET_LANE_MISSING rather than a green line over an unanswered question.
+        //  Printing OK on a run where the flow was flag-gated off or already spent
+        //  would reproduce the 2026-09-06 state - a pass with nothing behind it -
+        //  inside the very lane written to end it.
+        //
+        //  Emits FRESH_SAVE_FTUE_OK on success - the marker run-autopilot-fleet.ps1
+        //  judges the lane by, on a FRESH per-instance player.log.
+        // =====================================================================
+        private IEnumerator AssertFreshSaveFtue()
+        {
+            const string Tag = "Auto";
+            FlowTrace.Step(Tag, "AssertFreshSaveFtue: ENTER - WO-1500 standing fresh-save FTUE lane (the first ten minutes, observed).");
+
+            // -- link 0: context gates ---------------------------------------
+            string scene = ActiveScene();
+            if (!DeNelle.Core.HubScenes.IsHub(scene))
+            {
+                _lastDetail = $"'{scene}' not a hub - N/A (skipped)";
+                FlowTrace.Step(Tag, $"AssertFreshSaveFtue: scene '{scene}' is not a hub - N/A, skipping.");
+                yield break;
+            }
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc == null || svc.State == null)
+            {
+                _lastDetail = "GameStateService unavailable - N/A (skipped)";
+                FlowTrace.Warn(Tag, "AssertFreshSaveFtue: GameStateService/State unavailable - N/A.");
+                yield break;
+            }
+
+            // ⛔ THE TWO PRECONDITIONS ARE CHECKED HERE, BEFORE THE RESET, AND THEY ARE THE
+            // REASON THIS LANE IS NORMALLY RUN ALONE. Both were originally checked further
+            // down and both were wrong there:
+            //  * ff.tutorialv2 OFF -> there is no guide flow to observe at all, so founding a
+            //    town and walking a spine that cannot exist spends the budget of a full sweep
+            //    (GlobalCapSeconds is 420 and the sweep already sits at it - see the
+            //    AssertDungeonLoop note in TimeoutFor) to answer nothing.
+            //  * TutorialFlow.RanThisSession -> s_ranThisSession latches in Bootstrap the
+            //    first time a fresh save arms the flow (TutorialFlow.cs:640-643) and is
+            //    PROCESS state that no New Game clears. So by the tail of a full sweep the
+            //    flow is correctly parked Finished and this lane CANNOT see a first boot.
+            //    Checked after the reset, it produced a guaranteed false ticket every night:
+            //    the beat walk's `while (!flow.IsFinished)` never entered, zero beats were
+            //    recorded, and the lane FAILED a perfectly healthy build.
+            // Both exit as N/A - a precondition that cannot be met is not a defect.
+            if (!DeNelle.Core.FeatureFlags.TutorialV2)
+            {
+                _lastDetail = "ff.tutorialv2 OFF - N/A (skipped)";
+                FlowTrace.Step(Tag, "FRESH_SAVE_FTUE_SOFT :: ff.tutorialv2 is OFF, so there is no guide flow to observe. Nothing was founded and nothing was asserted.");
+                yield break;
+            }
+            if (TutorialFlow.RanThisSession)
+            {
+                _lastDetail = "tutorial already ran this process - N/A (run the lane alone)";
+                FlowTrace.Step(Tag, "FRESH_SAVE_FTUE_SOFT :: the tutorial flow already ran in THIS PROCESS (TutorialFlow.RanThisSession latches in Bootstrap and no New Game clears it), so a first boot cannot be observed from here and founding another town would only spend the run's remaining budget. Run the lane on its own: --phases=FreshSaveFtue (or run-autopilot-fleet.ps1 -Lane freshsave-ftue).");
+                yield break;
+            }
+
+            // -- link 1: found a new town, and read the persisted invariants NOW --
+            // The reads happen BEFORE the reload on purpose. OfflineHarvestService.Start
+            // fires ClaimDeferred("cold-load") on the reloaded scene, and the coordinator
+            // STAMPS the clock on every claim (fresh ones included) - so a read taken after
+            // the reload would legitimately see a non-zero LastHarvestClaimMs and this link
+            // would fail on the fix rather than on the defect.
+            try { svc.ResetToNewGame(); }
+            catch (Exception ex)
+            {
+                _lastDetail = "FAIL link 1 - ResetToNewGame threw";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 1 - ResetToNewGame() threw {ex.GetType().Name}: {ex.Message}.");
+                yield break;
+            }
+
+            var st = svc.State;
+            double claimClock = st != null ? st.LastHarvestClaimMs : -1d;
+            bool onboarded = st != null && st.Onboarded;
+            int everBuilt = (st != null && st.EverBuiltStructureIds != null) ? st.EverBuiltStructureIds.Count : -1;
+            if (onboarded || claimClock != 0d || everBuilt != 0)
+            {
+                _lastDetail = $"FAIL link 1 - onboarded={onboarded} claimClock={claimClock:0} everBuilt={everBuilt}";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 1 - ResetToNewGame() left Onboarded={onboarded}, " +
+                                    $"LastHarvestClaimMs={claimClock:0} and {everBuilt} ever-built id(s). A new town must carry " +
+                                    "Onboarded=false (or the FTUE never arms), a ZERO harvest clock (or the coordinator's fresh-clock " +
+                                    "arm is skipped and the PREVIOUS save's away window is paid out - the owner's 2026-09-05 " +
+                                    "'YOUR REALM WORKED FOR 8h 22m' on START NEW) and an EMPTY ever-built ledger (or the harvest tick " +
+                                    "pays buildings this town does not have). OfflineHarvestRegression case 6 pins the same three on " +
+                                    "the model; this is the live service disagreeing with it.");
+                yield break;
+            }
+            int claimsBefore = OfflineClaimCoordinator.ClaimCount;
+            FlowTrace.Step(Tag, $"AssertFreshSaveFtue: link 1 PASS - new town founded (Onboarded=false, LastHarvestClaimMs=0, " +
+                                $"ever-built ledger empty, newGameThisProcess={OfflineClaimCoordinator.NewGameThisProcess}); " +
+                                $"claims so far this process = {claimsBefore}.");
+
+            // -- link 2: the hub reloads on that new save, and a hero re-resolves --
+            string hub = DeNelle.Core.SceneRouter.Castle;
+            try { SceneManager.LoadScene(hub); }
+            catch (Exception ex)
+            {
+                _lastDetail = "FAIL link 2 - hub reload threw";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 2 - LoadScene('{hub}') threw {ex.GetType().Name}: {ex.Message} (is it in Build Settings?).");
+                yield break;
+            }
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < BootTimeout && ActiveScene() != hub) yield return null;
+            if (ActiveScene() != hub)
+            {
+                _lastDetail = "FAIL link 2 - hub never became active after the New-Game reload";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 2 - '{hub}' never became the active scene within {BootTimeout:0}s after the New-Game reload; the first screen of a new game does not come up.");
+                yield break;
+            }
+            for (int i = 0; i < 3; i++) yield return null;   // Awake/Start + the sceneLoaded injectors
+
+            _hero = null;
+            t0 = Time.realtimeSinceStartup;
+            while (_hero == null && Time.realtimeSinceStartup - t0 < ResolveHeroTimeout)
+            {
+                _hero = UnityEngine.Object.FindAnyObjectByType<HeroLocomotion>();
+                if (_hero != null) break;
+                yield return null;
+            }
+            if (_hero == null)
+            {
+                _lastDetail = "FAIL link 2 - no hero on the founded town";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 2 - no HeroLocomotion resolved within {ResolveHeroTimeout:0}s of the New-Game hub load. A brand-new player has no character to move.");
+                yield break;
+            }
+            FlowTrace.Step(Tag, $"AssertFreshSaveFtue: link 2 PASS - hub '{hub}' up on the new save and the hero resolved at {_hero.transform.position}.");
+
+            // -- link 3: the FTUE is LIVE, not parked --------------------------
+            // Both N/A cases (flag off, flow already spent this process) were settled at
+            // link 0 and exited there, so everything reaching here is a HARD assertion: on a
+            // town founded seconds ago the flow must exist and must not be parked Finished.
+            bool tutorialAsserted = false;
+            TutorialFlow flow = null;
+            t0 = Time.realtimeSinceStartup;
+            while (flow == null && Time.realtimeSinceStartup - t0 < 4f)
+            {
+                flow = UnityEngine.Object.FindAnyObjectByType<TutorialFlow>();
+                if (flow != null) break;
+                yield return null;
+            }
+            if (flow == null)
+            {
+                _lastDetail = "FAIL link 3 - no TutorialFlow on a founded town";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 3 - ff.tutorialv2 ON and '{hub}' IS a hub, but no TutorialFlow was constructed within 4s of founding a new town. The new player is dropped into the world with no guide at all - this is the ZERO-[Flow:Onboard*] silence WO-1500 was opened on, reproduced.");
+                yield break;
+            }
+            if (flow.IsFinished)
+            {
+                _lastDetail = "FAIL link 3 - fresh save but the flow parked Finished";
+                FlowTrace.Fail(Tag, "AssertFreshSaveFtue: FAIL at link 3 - a town founded seconds ago (Onboarded=false, and the flow had NOT run this process - link 0 proved that) yet TutorialFlow phase=Finished. The interpreter declined the run, which is the F8-29 'no tutorial on a fresh boot' symptom on a save this phase created itself.");
+                yield break;
+            }
+            tutorialAsserted = true;
+            FlowTrace.Step(Tag, $"AssertFreshSaveFtue: link 3 PASS - the FTUE is LIVE on the founded town (phase '{flow.PhaseName}', step '{flow.CurrentStepId ?? "<none>"}').");
+
+            // -- link 4: walk the guide beats and NAME each one ---------------
+            // WHAT THIS WALKS, said exactly: TutorialFlow.SkipCurrentStep is the seam the
+            // flow itself documents as "kept public for probes / dev tooling", and it still
+            // honours the authored skippable flag - so this advances the REAL step machine
+            // and stops dead on the first beat that requires a real action. That stop is
+            // information, not a failure: AssertFoundingArc and AssertTutorialFirstTower are
+            // the phases that DRIVE beats one and two through their real gates. What this
+            // link owns is the SPINE - that beats exist, that they advance, and that every
+            // id reached is written into the log, so minute one is observable by id every
+            // night instead of once every five days.
+            //
+            // ⚠ THE WINDOW IS WALL-CLOCK, NOT FRAMES, AND THAT IS DELIBERATE. A newly armed
+            // flow sits in Phase.Settling with _step still NULL until AdvanceStep runs
+            // (TutorialFlow.cs:651 then :733), and the first beat's intro is a dialogue the
+            // bot's own SuppressDialogue has to dismiss first. An early frame-count bound
+            // (the original `guard < 200` was ~3s at 60fps) would sample that settle window,
+            // see no step id, and FAIL a healthy flow for being slow. The frame guard that
+            // remains is only an anti-spin backstop for a zero-delta frame loop.
+            var beats = new List<string>();
+            {
+                string last = null;
+                float walkStart = Time.realtimeSinceStartup;
+                int guard = 0;
+                while (Time.realtimeSinceStartup - walkStart < 30f && guard++ < 20000 && !flow.IsFinished)
+                {
+                    string id = flow.CurrentStepId;
+                    if (!string.IsNullOrEmpty(id) && id != last)
+                    {
+                        beats.Add(id);
+                        last = id;
+                        FlowTrace.Step(Tag, $"AssertFreshSaveFtue: beat {beats.Count} = '{id}' (phase '{flow.PhaseName}').");
+                    }
+                    try { flow.SkipCurrentStep(); }
+                    catch (Exception ex) { FlowTrace.Warn(Tag, "AssertFreshSaveFtue: SkipCurrentStep threw " + ex.Message); break; }
+                    yield return null;
+                }
+                if (beats.Count == 0)
+                {
+                    _lastDetail = "FAIL link 4 - a founded town reached ZERO guide beats";
+                    FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 4 - a town founded seconds ago reached NO guide beat at all within 30s (flow phase '{flow.PhaseName}', finished={flow.IsFinished}). A new player is being shown nothing; this is the blind first ten minutes stated as a failing assertion.");
+                    yield break;
+                }
+                if (!flow.IsFinished)
+                {
+                    FlowTrace.Step(Tag, $"AssertFreshSaveFtue: link 4 PASS (spine walked) - {beats.Count} beat(s) [{string.Join(" -> ", beats)}]; the walk stopped at '{flow.CurrentStepId ?? "<none>"}', which is the first beat needing a REAL action (this seam honours the authored skippable flag). That beat's real drive belongs to AssertFoundingArc / AssertTutorialFirstTower.");
+                }
+                else
+                {
+                    FlowTrace.Step(Tag, $"AssertFreshSaveFtue: link 4 PASS - the whole spine walked to Finished across {beats.Count} beat(s) [{string.Join(" -> ", beats)}].");
+                }
+            }
+
+            // -- link 5: THE FIRST WELCOME-BACK CLAIMS NOTHING -----------------
+            // Prefer the REAL trigger: OfflineHarvestService.Start fires ClaimDeferred
+            // ("cold-load") two frames into the reloaded scene. Wait for it; only drive the
+            // claim by hand if it never came, and SAY SO in the trace - a probe that quietly
+            // manufactures the event it is asserting proves nothing about the shipped path.
+            t0 = Time.realtimeSinceStartup;
+            while (OfflineClaimCoordinator.ClaimCount == claimsBefore && Time.realtimeSinceStartup - t0 < 8f)
+                yield return null;
+
+            bool droveClaim = false;
+            if (OfflineClaimCoordinator.ClaimCount == claimsBefore)
+            {
+                var harvest = OfflineHarvestService.Instance ?? UnityEngine.Object.FindAnyObjectByType<OfflineHarvestService>();
+                if (harvest == null)
+                {
+                    _lastDetail = "FAIL link 5 - no OfflineHarvestService on a founded town";
+                    FlowTrace.Fail(Tag, "AssertFreshSaveFtue: FAIL at link 5 - no cold-load claim landed within 8s of the New-Game hub load AND no OfflineHarvestService exists to drive one. Nothing owns the returning-session report on a brand-new town, so nothing can be asserted about what it would say.");
+                    yield break;
+                }
+                droveClaim = true;
+                FlowTrace.Warn(Tag, "AssertFreshSaveFtue: link 5 - no cold-load claim arrived within 8s of the reload (the same-process launch latch, OfflineHarvestService._windowClaimed, is not reset by a New Game), so the lane drives ClaimAccrual() itself. The ARITHMETIC below is still the shipped one - OfflineClaimCoordinator.Claim - but the TRIGGER on this run was the probe, not the lifecycle.");
+                try { harvest.ClaimAccrual(); }
+                catch (Exception ex)
+                {
+                    _lastDetail = "FAIL link 5 - ClaimAccrual threw";
+                    FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 5 - ClaimAccrual() threw {ex.GetType().Name}: {ex.Message}.");
+                    yield break;
+                }
+            }
+
+            if (OfflineClaimCoordinator.ClaimCount == claimsBefore)
+            {
+                _lastDetail = "FAIL link 5 - no claim ran at all on the founded town";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 5 - ClaimCount never advanced past {claimsBefore}. The first session of a new town never runs an offline claim, so the clock is never seeded and the SECOND launch would measure its window from zero - the largest away report the game can produce.");
+                yield break;
+            }
+
+            var window = OfflineClaimCoordinator.LastWindow;
+            if (!window.WasFreshClock || window.ElapsedSeconds != 0d)
+            {
+                _lastDetail = $"FAIL link 5 - first claim window fresh={window.WasFreshClock} elapsed={window.ElapsedSeconds:0}s";
+                FlowTrace.Fail(Tag, $"AssertFreshSaveFtue: FAIL at link 5 - the FIRST claim on a brand-new town reported WasFreshClock={window.WasFreshClock} and a window of {window.ElapsedSeconds:0}s (claim #{window.Sequence}, reason '{window.Reason}'). It must take the fresh-clock arm and measure ZERO. A non-zero window here IS the owner's 2026-09-05 START NEW report: 'YOUR REALM WORKED FOR 8h 22m' with WOOD +11520 / IRON +6912 / STONE +15000, paid out of the PREVIOUS save's wall time.");
+                yield break;
+            }
+
+            var popup = UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.UI.WelcomeBackPopup>();
+            if (popup != null)
+            {
+                _lastDetail = "FAIL link 5 - a welcome-back report is on screen on a new town";
+                FlowTrace.Fail(Tag, "AssertFreshSaveFtue: FAIL at link 5 - a WelcomeBackPopup is live on a town founded seconds ago. The reveal gate is OfflineHarvestResult.HasSummaryContent and a zero window carries none of its five axes, so a popup here means a second producer is opening the screen behind the gate - the exact shape of the defect OfflineHarvestRegression case 6 pins on the model.");
+                yield break;
+            }
+
+            // -- the verdict, and ONLY on real observation ---------------------
+            // The marker is the fleet's whole judgement of this lane, so it may not be
+            // printed by a run that reached here without seeing the FTUE. tutorialAsserted
+            // and a non-empty beat list are exactly "a live flow, and beats a player would
+            // have been shown"; without both, the honest line is SOFT and the fleet reports
+            // FLEET_LANE_MISSING - which is the correct answer to a question nobody answered.
+            if (tutorialAsserted && beats.Count > 0)
+            {
+                _lastDetail = $"fresh town: {beats.Count} beat(s), first claim zero ({(droveClaim ? "probe-driven" : "lifecycle")}), no welcome-back";
+                FlowTrace.Step(Tag, $"FRESH_SAVE_FTUE_OK :: new town founded; beats={beats.Count} [{string.Join(" -> ", beats)}]; " +
+                                    $"first claim #{window.Sequence} ('{window.Reason}') took the fresh-clock arm with a 0s window and revealed nothing " +
+                                    $"(trigger={(droveClaim ? "probe" : "cold-load")}).");
+            }
+            else
+            {
+                _lastDetail = $"SOFT - tutorialLive={tutorialAsserted}, beats={beats.Count}";
+                FlowTrace.Step(Tag, $"FRESH_SAVE_FTUE_SOFT :: the claim half held (window 0s, no welcome-back) but the FTUE half was not observed (tutorialLive={tutorialAsserted}, beats={beats.Count}). Not marked OK: a green line over an unobserved FTUE is the 2026-09-06 state this lane exists to end.");
+            }
+
+            // -- TEARDOWN: leave a RETURNING save, not a fresh one -------------
+            // ⚠ NIGHT-2 SELF-DEFEAT, and it is the whole reason this block exists. The lane
+            // leaves whatever save it founded on disk. If that save is still FRESH, the NEXT
+            // night's boot arms the flow itself, s_ranThisSession latches in Bootstrap
+            // (TutorialFlow.cs:640-643), and this lane's link-0 precondition then refuses -
+            // so a lane written to run every night would have worked exactly once.
+            // SkipAll is the sanctioned completer (its own doc: a skipper ends in the SAME
+            // state as a completer, applying every mandatory grant and routing through the
+            // single FinishFlow / FinishOnboarding path), so the save left behind is a normal
+            // returning one. It runs AFTER the verdict so it can never colour it.
+            // KNOWN AND ACCEPTED: a run that FAILED a link above exits before this teardown
+            // and leaves a fresh save, so the NEXT run refuses at link 0 with SOFT. That
+            // cascade is visible (FLEET_LANE_FAIL both nights), never silent, and a failing
+            // lane is a ticket somebody is already holding - so the teardown is deliberately
+            // not wrapped around the failure paths, where it would tidy away the evidence
+            // state a repro needs.
+            if (!flow.IsFinished)
+            {
+                try { flow.SkipAll(); }
+                catch (Exception ex) { FlowTrace.Warn(Tag, "AssertFreshSaveFtue: teardown SkipAll threw " + ex.Message); }
+            }
+            try { svc.Save(); }
+            catch (Exception ex) { FlowTrace.Warn(Tag, "AssertFreshSaveFtue: teardown Save threw " + ex.Message); }
+            FlowTrace.Step(Tag, $"AssertFreshSaveFtue: teardown - the founded save was completed through SkipAll and persisted (Onboarded={(svc.State != null && svc.State.Onboarded)}), so the NEXT run of this lane boots on a returning save and its link-0 precondition holds.");
+        }
+
         private static float TimeoutFor(string phase)
         {
             switch (phase)
@@ -3506,6 +3887,11 @@ namespace DeNelle.DevTools
                 case "AssertTutorialFirstTower": return 45f;  // P0 real-input build-placement probe (enter + arm + 8 candidate clicks + signal waits)
                 case "AssertFoundingArc": return 75f;         // WO-702: Sylas poll + greet dialogue drive + Hollow placement + grant/DEFEND waits
                 case "AssertExactlyOneGuideBody": return 60f;    // WO-971: New-Game hub reload + hero re-resolve + an 8s stand-in watch window + slack
+                // WO-1500 fresh-save FTUE lane: New-Game hub reload (<=30s) + hero re-resolve (<=15s)
+                // + a 4s TutorialFlow find-poll + the bounded 30s beat walk + an 8s wait for the real
+                // cold-load claim + slack. Sized so the phase can NEVER outlive its own budget; the
+                // 420s GlobalCapSeconds is why this lane is normally run alone (see the method header).
+                case "AssertFreshSaveFtue": return 110f;
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row
