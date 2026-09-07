@@ -52,7 +52,12 @@ clear. The ghost appears and the controls live ON it, CoC-style:
   - `OK` chip (gold) — confirm placement; disabled-with-reason as text when invalid ("Blocked").
   - `Rot` chip — 90° step per tap.
   - `X` chip (red-bordered) — cancel this placement, restore the carousel.
-- **Name + cost pill** floats above the ghost ("Arcane Spire - 88 wood, 88 iron, 187 crystals").
+- **Name + cost pill** floats above the ghost (the structure's name plus its LIVE catalog basket, spelled
+  by the shared `CostFormat`).
+  > **CORRECTION 2026-09-06 (WO-1478):** this line originally illustrated the pill with a wood+iron+crystals
+  > example basket. That was never catalog data — it was a hardcoded stub in the capture harness
+  > (`Assets/Editor/UICaptureLaunch.cs`), and its all-three-resources shape is exactly what WO-947 forbids.
+  > The authored Arcane Spire row is **iron 360**. Never quote an example basket here; the row is the source.
 - **Gestures (existing `LeanTouchBuildDriver`):** one-finger drag moves the ghost; pinch zooms. (Twist
   rotate MAY be enabled as a bonus; the `Rot` chip is the canonical control.)
 - **D-pad becomes an off-by-default TOGGLE:** a small translucent `+` button in the corner summons the

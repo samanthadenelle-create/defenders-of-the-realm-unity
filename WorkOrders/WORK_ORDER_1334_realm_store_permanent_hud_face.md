@@ -94,7 +94,7 @@ Fix or ticket separately, but do not lose them:
 
 ## IMPLEMENTED 2026-09-03 - DEFECT #1 (the wallet chip) ONLY. The HUD face is NOT built.
 
-**Status of this WO stays READY TO IMPLEMENT** - the headline ask (a permanent store face on the
+(residual status clause removed 2026-09-06: the Status line at the top of this file is the authority)
 action bar) is untouched. What landed is the owner's chip ruling from the "TWO LAYOUT DEFECTS"
 section, plus a measurement (not a fix) for defect #2 and a hand-back on defect #3.
 

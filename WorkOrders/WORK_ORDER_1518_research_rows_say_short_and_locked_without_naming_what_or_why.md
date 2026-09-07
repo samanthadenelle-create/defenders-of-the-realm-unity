@@ -80,3 +80,54 @@ This is the composed-but-unpainted family again (WO-1444, WO-1491, WO-1517). **D
 - [ ] The RESULT states which rows carried a door BEFORE the change, with file:line.
 - [ ] Headless research PNGs opened in the RESULT.
 - [ ] `REGRESSION_OK n/n` on a fresh log.
+
+## 5. LANE HAND-BACK (edit-only lane, 2026-09-06)
+
+### WHICH ROWS CARRIED A DOOR BEFORE THE CHANGE (acceptance line 6, answered at source)
+
+`ManageScreenVM.ComposeResearchItem` composed a **`PrerequisiteBlocked` action with
+`Route = ManageRoute.ToBuildCard(c.BuildingId, "VIEW BUILDING")` on EVERY locked perk** (the
+`if (c.Locked)` arm). `ManageVmProjection.ProjectAction` turns any blocked action with a routable
+route into a live, ENABLED door. So **100% of locked research rows already had a working door** -
+the routing was never the defect, exactly as the ticket says. What no face carried was the WORDS.
+(The `ResearchChoiceVM.Activate` seam the ticket cites is the OTHER, legacy path -
+`ManageScreenVM.cs:444` in the pre-change numbering - still non-null for Locked and Available and
+null for Researched/Researching. It is untouched.)
+
+### WHAT LANDED (`ManageScreenVM.cs` only - the renderer needed no change)
+
+- **SHORT names what.** New `ShortBadgeText(IReadOnlyList<CostPart>)` computes
+  `Amount - BankOf(ConceptId)` over the item's OWN cost basket - the same parts the cost row paints
+  and the same bank reader `CostVms` uses - and emits `SHORT 120 IRON`. Wired into
+  `ComposeResearchItem` and `ApplyBuildBadge` (which now takes the cost parts). No second
+  affordability predicate. It stays a WORD + NUMBERS, not a sentence: the research row's state
+  column is ~a quarter of the row wide with an 18px `FitSingleLine` floor, and a sentence there is
+  culled blank.
+- **LOCKED names why, and says what the tap does.** `BadgeText` becomes `LOCKED - TAP` (the short
+  form the state column can hold), and the blocker sentence is JOINED onto `NextRungLine`, which the
+  renderer paints as the row's wide SECOND line. So the row reads
+  `name / "Troop damage +8% . Requires Barracks Tier 3" / [padlock] LOCKED - TAP`. The `- TAP` half
+  is derived from whether a door can be routed, never assumed.
+- **The green arrow leaves a SHORT row.** `ProjectAffordanceTile` (added by WO-1516) withholds the
+  status medallion whenever the tile's state is the `Available` catch-all and its primary action is
+  refused. Applied to research perk tiles as well as BUILD and ARMY.
+- **The `Army is full.` footer.** It is NOT a footer: it is `ManageScreenVM.Notice`, the single band
+  `ManageScreenPanel.BuildNotice` seats beside CLOSE, still holding the sentence `BarracksService`
+  handed back on a refused TRAIN tap. Nothing cleared it, so it rode the back stack onto the Armorer
+  research screen. New `ClearStaleNotice(destination)` is called from `EnterTab` and `GoTo`: a
+  refusal belongs to the screen whose verb was refused. Fixed in the NAVIGATOR, not the band -
+  suppressing it in the View would need the View to decide which sentences belong on which screen.
+
+### MEASURED CASES
+- `ManageRowBenefitRegression.CheckResearchRowsSayWhatAndWhy` - **empties the fixture's purse**
+  (the existing fixture is deliberately rich and could never produce a SHORT row), walks every
+  school's composed perk tiles and asserts: a `SHORT` word carries a digit; a `SHORT` row carries no
+  status medallion; a LOCKED row's state word carries `TAP`; a LOCKED row's second line contains
+  `ResearchChoiceVM.LockReason` verbatim. It FAILS rather than skips when no SHORT and no LOCKED row
+  was produced.
+- `ManageTroopsTrainDoorRegression` case 9 (shared with WO-1517) proves the `Army is full.` sentence
+  does not survive navigation to another Manage screen.
+
+**Not verified by this lane (edit-only):** the `PanelDoorRegression`-class check that each locked
+row's door opens a REGISTERED `PanelId` with a return door, and the headless research PNGs. Both
+need the Unity gate.

@@ -1,6 +1,6 @@
 # WO-1292 — Environment + prop dressing onto Synty
 
-**Status:** READY TO IMPLEMENT (BLOCKED ON WO-1291 — dress last, once the buildings set the language)
+**Status:** IN PROGRESS - implemented (editor script landed 33ba9c966), awaiting scene execution + verification (see RESULT). Still sequenced behind WO-1291.
 **Minted:** 2026-09-01 (CLI, banner bumped 1289 -> 1293 in the same edit)
 **Branch:** `feat/synty-art-retheme`   **Lane:** 4 of 4 (Synty art re-theme)
 **Owner ruling 2026-09-01:** FULL re-theme, everything Synty.

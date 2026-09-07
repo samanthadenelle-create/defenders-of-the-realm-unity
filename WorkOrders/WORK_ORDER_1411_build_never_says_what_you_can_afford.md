@@ -1,6 +1,6 @@
 # WO-1411: Build never says what you can afford, the ghost stage is three icon-only buttons, and confirm shows no cost or time
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-06 in eb161dc98 - suite-green after the MVVM fix, awaiting owner felt-verify. PRIOR STATUS: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review.
 
 > **CORRECTION 2026-09-06 (WO-1478):** every cost basket quoted below as an example was a HARNESS STUB, not
 > game data. `Assets/Editor/UICaptureLaunch.cs` hardcoded a wood+iron+crystals string into the ghost pill, so

@@ -90,3 +90,40 @@ it get me.
 - [ ] No row label contradicts its value on the detail screen.
 - [ ] Headless `ManageFlow_ARMY_*` PNGs opened in the RESULT.
 - [ ] `REGRESSION_OK n/n` on a fresh log.
+
+## 5. LANE HAND-BACK (edit-only lane, 2026-09-06)
+
+All of it landed in `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs`; the renderer needed no
+change, because every face used here already exists in `ManageWorkspacePanel`.
+
+- **`FillTrainFacts`** now reads `ArmyReadiness.Compute(state)` + `TroopDialogueCommands.SlotOf` -
+  the SAME formula and slot reader `BarracksService.EnqueueTraining` seeds its own refusal from -
+  and tests the ARMY CAP **before** the line depth, matching the service's own order. New
+  `TroopChoiceVM` fields: `ArmyFull`, `ArmyFullText`, `QueueFullText`, `ArmyUsedSlots`,
+  `ArmyCapSlots`.
+- **`ComposeTroopItem`** refuses TRAIN with the army-full reason as `QueueBlocked` + `Route.None`
+  (reasoning recorded in-code: `Unaffordable` would claim a wallet that is never charged since
+  WO-1387; `PrerequisiteBlocked` needs a routable door and raising the cap is not one destination;
+  a routable blocked action has its LABEL replaced by the route CTA, which would delete the TRAIN
+  verb the band is explaining). Tile badge precedence is now UPGRADING -> ARMY FULL -> QUEUE FULL ->
+  the upgrade word -> TRAINABLE -> MAX -> IDLE.
+- **`FillUpgradeFacts`** composes `TroopChoiceVM.UpgradeWord` -
+  `UPGRADE AVAILABLE | MAX | UPGRADING | NEEDS <blocker>` - asked of `BarracksService
+  .CanUpgradeTroop`, never re-derived. The Research LINE being full is deliberately excluded: that
+  is the queue's state, not the troop's.
+- **The detail card**: `TroopStatRows(c)` emits Health / Damage / Range / Speed (current value +
+  `DeltaText` at level+1, from `TroopStatResolver.Effective` - the resolver `TroopDeployer` applies
+  to the live unit) plus Train time. `TwoFacts` now takes its LABELS from the caller, retiring the
+  hardcoded `Next` / `Time` on the Research and Build cards too. `ComposeDetail` seats the composed
+  Upgrade action in the card's SECONDARY face slot - it had always been composed and never painted,
+  because `ProjectSelection` fills that slot from `ActionOf(Cancel)` and a troop has no Cancel.
+- **Measured cases** in `ManageTroopsTrainDoorRegression`: **case 8** walks EVERY unlocked troop's
+  detail card (row count, labels, the retired `Next`/`Time` labels banned by name, a level+1 delta
+  wherever a next level exists, the UPGRADE face with its time on it); **case 9** fills the fixture
+  army through `BarracksProgression.GrantTrainedTroop`, then asserts `ArmyFull`, `TrainReady=false`,
+  a `TrainStateText` naming the army, an `ARMY FULL` tile word, a TRAIN tap that enqueues nothing
+  and leaves the reason as the notice - and (WO-1518) that the notice does not travel.
+
+**Not done here:** `ManageScreenPanel.cs` was another lane's uncommitted work and was not touched.
+Its legacy operational troop card reads `TroopChoiceVM.TrainStateText` / `UpgradeCostText`, both of
+which now carry the new sentences, so it inherits the fix without an edit.

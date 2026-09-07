@@ -1,6 +1,6 @@
 # WO-1409: the Night Market without a wallet is nine "unavailable"s with no reason, and its right rail overlaps
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
+**Status:** FIXED 2026-09-06 in eb161dc98 - suite-green after the hollow-pass fix, awaiting owner felt-verify. PRIOR STATUS: READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review.
 
 ## Evidence
 - `Builds/ui-capture/NightMarket_2670x1200.png` (09-05 07:02, no wallet) - SEEN (`REVIEW_MERGED.md` row 8):

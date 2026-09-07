@@ -1,6 +1,6 @@
 # WO-1457: /api/game/save lets schema_version go BACKWARDS and defaults a missing version to 10
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED locally 2026-09-06 (321b753c4) - all four acceptance criteria met; vercel --prod push still owed, HELD behind WO-1446 (see RESULT).
 **Silo:** `api/game/save.js`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1457 -> 1458 in the same edit).

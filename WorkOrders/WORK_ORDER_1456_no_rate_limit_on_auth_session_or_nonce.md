@@ -1,6 +1,6 @@
 # WO-1456: /api/auth/session renewal and /api/auth/nonce have no rate limit at all
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - HALF DONE 2026-09-06 (321b753c4): the nonce route carries the IP budget, api/auth/session.js does not (other lane owns that file; see RESULT).
 **Silo:** `api/auth/session.js` + `api/auth/nonce.js`, reusing the existing promo IP-budget helper.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1456 -> 1457 in the same edit).

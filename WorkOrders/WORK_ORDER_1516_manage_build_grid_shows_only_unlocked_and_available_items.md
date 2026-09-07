@@ -55,3 +55,37 @@ The ruling removes the locked state from this screen entirely.
 - [ ] `BuildManageFlowPlan` no longer plans the `locked` frame; zero `CAPTURE_LEDGER_MISSING`.
 - [ ] Fresh `ManageFlow_BUILD_gridtop` PNG opened in the RESULT.
 - [ ] `REGRESSION_OK n/n` on a fresh log.
+
+## 5. LANE HAND-BACK (edit-only lane, 2026-09-06) - what landed, and the ONE spec line owed
+
+**Landed in `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs`:**
+- `InventoryTiles()` now calls `BuildInventoryModel.Tiles(_activeFilter)` instead of
+  `ManageTiles(...)`. `Tiles` is the accessor whose own doc comment records that it matches the
+  BUILD palette (`BuildAvailability.Offered`), so the grid and the palette answer "is this unlocked"
+  from ONE authority. `ManageTiles` is left standing and untouched - the ARMY grid's locked-troop
+  treatment (mockup panel 4) is unaffected by this ruling.
+- New `ProjectAffordanceTile(...)` wraps `ManageVmProjection.ProjectTile` and WITHHOLDS the status
+  medallion whenever the tile's visual state is the `Available` CATCH-ALL and its primary action is
+  not `Available`. The four distinct glyphs (locked / in-progress / queue / max) are untouched, so
+  only the badge that was lying stops being painted. Used by BUILD, ARMY and RESEARCH-PERK tiles;
+  deliberately NOT by the research SCHOOL tiles (they carry no `ManageAction` at all by design).
+
+**Measured case:** `ManageProgressiveDisclosureRegression.CheckBuildGridIsUnlockedOnly`
+(`[build-grid-is-unlocked-only]`) - stands up a GameState fixture, composes the BUILD grid, and
+asserts (a) the tile count equals `BuildInventoryModel.Tiles(chip).Count`, (b) no tile renders
+`ManageTileVisualState.Locked`, (c) a tile reading `SHORT`/`HEART GATED` carries no `StateIconKey`.
+
+### ⛔ SPEC LINE OWED - `BuildManageFlowPlan` (NOT edited by this lane)
+
+`Assets/Editor/UICaptureLaunch.cs` is **another lane's uncommitted work** (`git status` shows it
+modified at the time of this hand-back), so it was deliberately not touched. It needs a THREE-LINE
+change before the next `RunManageFlowMapCaptureHeadless`, or that run will `MANAGE_FLOW_MAP_FAIL`:
+the BUILD grid can no longer produce a locked tile to photograph.
+
+> In `BuildManageFlowPlan()` (`UICaptureLaunch.cs:7667`), skip the ONE combination
+> `(ManageTabId.Build, ManageFlowFrame.LockedDetail)` when the plan is expanded - e.g. inside the
+> `for (t) for (f)` loop, `if (tabs[t] == ManageTabId.Build && frames[f] == ManageFlowFrame.LockedDetail) continue;`
+> with a comment citing WO-1516 and the owner's 20:07 ruling.
+> **ARMY and RESEARCH keep their `LockedDetail` frame** - locked troops (mockup panel 4) and locked
+> perks (WO-1518) both still exist and are still worth photographing. `Expected` is derived from
+> `plan.Length`, so nothing else has to change and no count is hand-kept.

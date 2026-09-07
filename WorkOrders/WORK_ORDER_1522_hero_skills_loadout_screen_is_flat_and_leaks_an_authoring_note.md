@@ -28,6 +28,30 @@ strip     "Assigned skills - change them in LOADOUT."   1 ARCANE B... / 2 MEND /
 The authoring note is the sharp one: a data-entry comment is being rendered to the player, and truncated
 mid-word at that.
 
+### CORRECTION 2026-09-06 (edit lane) - `icons` above is WRONG, and the wrong seam
+
+The frame does not show a missing sprite. A node with no sprite draws a TWO-LETTER MONO LABEL
+(`HeroSkillTreePanelMvvm.BuildGraphNode`, the `LoadIcon(...) == null` branch) and can never draw a
+texture; a missing SHADER draws flat magenta, not tiles. What the frame shows is a multi-coloured tile
+grid filling a SQUARE around exactly two plates - the focused one and the single owned one - and the
+focused one's square is visibly the larger. That is `BuildVfxPatch`: peek **0.35** for the pointer rig,
+**0.25** for the aura rig. The seam is `TalentNodeVfxRig`'s RenderTexture, bound to a `RawImage`.
+
+PROVING LINES (`Logs/device/freeze-20260904-095249.log`, same code path on device):
+```
+07:48:40.676 [Flow:TalentPointer] attach: rig live - pointer loop presents on the focus node
+07:48:45.911 [Flow:TalentAura]    attach: rig live - aura presents on owned nodes
+```
+Both rigs go live and bind patches. **NOT PROVEN:** why the render leaves the texture undefined on
+device - no capture in the tree names a failing call, and no `Camera.Render` / URP warning appears in
+any `Logs/device/*.log`. The fix therefore closes the CONSEQUENCE, not the cause: the RT is cleared to
+the well ink on create and re-created + re-cleared on device context loss, so an undefined surface can
+never be sampled. A `FlowTrace.Step` on the first `RenderTick` was added so the next device log says
+whether the draw executes at all.
+
+Consequently **acceptance item 4's `KnownGaps` clause does not apply** - `MageAbilityIconRegression` is
+an uncommitted lane and this was never an icon defect. Left untouched.
+
 ## 2. FIX SHAPE
 
 1. **Never paint an authoring note.** The learn dialog shows player copy ONLY. An unimplemented perk either
