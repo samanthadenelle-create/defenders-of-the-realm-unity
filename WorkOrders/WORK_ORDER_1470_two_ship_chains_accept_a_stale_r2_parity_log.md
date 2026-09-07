@@ -1,6 +1,6 @@
 # WO-1470: two ship chains accept a STALE r2-parity.log, and r2-ship can exit before deleting it
 
-**Status:** FIXED - 2026-09-06: overnight-apk-build.ps1 and morning-ship-chain.ps1 now require LastWriteTime >= start AND the marker; PARSE_OK; r2-ship.ps1:107-110 early-exit and the two stale doc lines still open
+**Status:** FIXED - 2026-09-06: overnight-apk-build.ps1 and morning-ship-chain.ps1 now require LastWriteTime >= start AND the marker; PARSE_OK. Residual (r2-ship.ps1:107-110 early-exit; two stale doc lines) is recorded in section 5 for a follow-up.
 **Silo:** `overnight-apk-build.ps1`, `morning-ship-chain.ps1`, `tools/r2-ship.ps1`, plus two stale doc lines.
 Pairs with WO-1469 (same gate, different caller).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
