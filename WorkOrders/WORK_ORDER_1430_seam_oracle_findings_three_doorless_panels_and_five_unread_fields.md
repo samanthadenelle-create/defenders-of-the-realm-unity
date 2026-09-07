@@ -1,6 +1,6 @@
 # WO-1430: the seam oracles' first eight findings - three panels no player can open, five authored fields no code reads
 
-**Status:** READY TO IMPLEMENT - minted 2026-09-06 (CLI). Each finding is EXEMPTED in its oracle with a dated pointer
+**Status:** IN PROGRESS - Group A (the three doorless panels) RESOLVED in `bb51b8b9c` (`PanelDoorRegression.cs:159-161` allowlist now empty); Group B (five unread fields) still exempted in `AuthoredFieldReaderRegression.cs`. Minted 2026-09-06 (CLI). Each finding is EXEMPTED in its oracle with a dated pointer
 to this file, so the gate is green and the oracles stay sharp for anything NEW. **Nothing here is hidden; it is parked.**
 **Silo:** mixed - HUD panels, and five separate catalogs
 **Source:** `PanelDoorRegression` and `AuthoredFieldReaderRegression`, both shipped 2026-09-06 in Wave 0 of the Manage
