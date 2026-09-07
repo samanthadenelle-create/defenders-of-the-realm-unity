@@ -1,6 +1,6 @@
 # WO-1441 RESULT - the client now mints the wallet session at connect; proof on device is still owed
 
-**Status:** FIXED - ON THE SEEKER `2026.09.07.358574` (installed 2026-09-06 19:20, package version read
+**Status:** FIXED and DEVICE-PROVEN on `2026.09.07.358872` (2026-09-07 00:41, section 5). Earlier: ON THE SEEKER `2026.09.07.358574` (installed 2026-09-06 19:20, package version read
 back from the device). Awaiting the owner's felt-verify and a post-fix device capture for acceptance 2-4.
 **Commit:** `32659c0f6` (2026-09-06 16:51). The client fix was bundled under the title
 `feat(manage,build): ...` and the WO Status was not flipped in that commit - this RESULT closes that
@@ -78,3 +78,15 @@ which is the owner-run repair (`tools/run-schema-repair.mjs`) - not this ticket'
 ## 4. Device evidence 2026-09-06 20:48 (F8 seq 4686, build 358574)
 
 `[SolanaWalletProvider] SignMessage failed: authorization request failed` from `SignMessageBase58` during a LINK01 promo redeem in `Main_Castle_Overworld`; the screen read "We could not verify your account, so the code was NOT used. Sign in, then try again." Proves the interactive mint path runs on the post-fix build (acceptance 2 half-proven: the sheet was asked); the refusal came from the wallet app (MWA authorization), not from the game, so this is the WO-1420 attribution class. A minute earlier the same account was refused by the server per-player cap, which means a signature HAD verified then. Open: why the wallet refused the second authorization (owner cancelled vs Seed Vault refusal); the WO-1420 elapsed-time branch should name it in the device log.
+
+## 5. Device evidence 2026-09-07 00:41 (build 2026.09.07.358872, F8 seq 4687 + adb logcat)
+
+Acceptance 2 PROVEN: `[Flow:Wallet] MintSessionAsync held why=explicit-connect scene=Title caller=explicit-connect`
+at 00:41:34.254, 0.5 s after the MWA encrypted channel came up (socket 61495, HELLO_REQ, key exchange, two
+encrypted frames) - the session minted at connect, Night Market never opened. The F8 capture itself was the
+FIRST attempt: `Connect REFUSED by the wallet after 25.6s (TimeoutException raised INSIDE the provider)` -
+the WO-1420 elapsed-time branch attributing a wallet-side timeout correctly; the retry 20 s later succeeded.
+Acceptances 3 and 4 (save 2xx, offline queue DRAINED) read from the same logcat: see the line appended below
+by the lead: `[Flow:Sync] offline queue DRAINED - 4 queued marker(s) cleared by ONE successful upload of the
+current snapshot` at 00:41:37.720 (3.5 s after the mint). A DRAIN requires a 2xx from /api/game/save, so
+acceptances 3 and 4 are both PROVEN on build 358872. All seven acceptance items hold; ticket FIXED.
