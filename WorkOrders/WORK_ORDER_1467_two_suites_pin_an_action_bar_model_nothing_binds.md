@@ -1,6 +1,6 @@
 # WO-1467: two suites pin a 4-face action-bar model that is never bound; the shipped 5-face dock has only a lint
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - implemented in the 2026-09-07 afternoon gate wave (COMPILE_GATE_OK Builds/cg-wave10h.log, REGRESSION_OK 454/454 Builds/reg-wave10d.log 13:05); reaches the Seeker with the next tester build; owner felt-test closes it. PRIOR STATUS: READY TO IMPLEMENT
 **Silo:** `HudKitController` + `HudLabelFitRegression` + `SessionShapeRegression` + `HudActionBarRegression`
 + `HudActionBarModel` docstring + `CLAUDE.md` sec.7.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

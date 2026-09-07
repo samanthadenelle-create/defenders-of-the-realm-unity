@@ -2462,6 +2462,29 @@ namespace DeNelle.HUD.Kit
             Register("peacefulDock", WrapAsWidget("peacefulDock", _peacefulDockRoot));
         }
 
+        /// <summary>
+        /// WO-1467 — MEASUREMENT HOOK, and nothing else. It builds the dock exactly as the
+        /// runtime does (it calls the one builder above) and hands back the same
+        /// <c>_peacefulDockRoot</c> the runtime registers.
+        ///
+        /// WHY IT EXISTS. Until this ticket the dock the player actually touches was covered
+        /// only by SOURCE-TEXT LINT, while two suites pinned <c>HudActionBarModel</c> — a model
+        /// <see cref="BindActionBar"/> never subscribes once this dock exists, because it returns
+        /// early on <c>_peacefulDockRoot != null</c>. A lint cannot see a face that moved, was
+        /// re-ordered, or lost its caption. <c>HudActionBarRegression.CheckMeasuredPeacefulDock</c>
+        /// calls this on a throwaway instance in batch mode, walks the returned tree and asserts
+        /// the faces it FINDS — count, captions, left-to-right order, touch floor and label fit.
+        ///
+        /// It is not a second build path: it has no live caller, adds no state, and must never
+        /// grow one. Reflection on the private builder was the alternative and is worse — a rename
+        /// would silently turn the oracle off instead of failing to compile.
+        /// </summary>
+        public GameObject BuildPeacefulDockProbe(Transform pool)
+        {
+            BuildAdaptivePeacefulDock(pool);
+            return _peacefulDockRoot;
+        }
+
         // WO-1319 — the peaceful dock's vertical band, named once and shared with the live
         // solver. (The horizontal 1/5 slicing that used to sit beside them is GONE: it is what
         // collapsed under ElarionUiKit's touch floor at a narrow aspect and printed the five

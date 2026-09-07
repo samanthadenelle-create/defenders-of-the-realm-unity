@@ -14,10 +14,19 @@
 //      Onboarded (WO-825 R4); Quests is never replaced by Upgrade (§3c split);
 //      explore = Talk?/Bag only; non-calm postures empty the bar; events are
 //      edge-triggered (never per-frame relayout).
-//   2. VIEW PURITY (source oracle on HudKitController.cs — DeNelle.HUD is not
-//      referenced by this asmdef): the View binds the model and no longer holds
-//      the retired gate reads (GameStateService / RaidEntryGate.ArmyStatus /
-//      the Talk interactable dim), and the Upgrade face is registered.
+//   1b. THE MEASURED DOCK (WO-1467) — the bar the PLAYER touches is the adaptive
+//      peaceful dock, which HudKitController.BindActionBar builds INSTEAD of
+//      subscribing the model above. It is built live here and its faces are read
+//      out of the tree. See CheckMeasuredPeacefulDock for the full reasoning.
+//   2. VIEW PURITY (source oracle on HudKitController.cs): the View binds the
+//      model and no longer holds the retired gate reads (GameStateService /
+//      RaidEntryGate.ArmyStatus / the Talk interactable dim), and the Upgrade
+//      face is registered.
+//      ⚠ The old note here said "DeNelle.HUD is not referenced by this asmdef".
+//      That was FALSE and it is why the shipped dock ended up under source lint:
+//      DeNelle.EditorRegression.asmdef lists DeNelle.HUD (read the asmdef, §5),
+//      and HudUiRegression has been calling HudKitController statics typed for
+//      some time. Source lint is a choice here, not a constraint.
 //   3. WIRING — PostureSignals carries the RaidCapable mirror seam; the Village
 //      RaidCapabilityHudBridge exists and cites ArmyReadiness.Compute (WO-823
 //      single-source law); hud-areas.json dual copies carry the upgradeButton
@@ -28,6 +37,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using TMPro;
 using UnityEngine;
 using DeNelle.Core.HudModel;
 
@@ -69,6 +79,7 @@ namespace DeNelle.Editor
             try
             {
                 CheckModelInvariants(failures, log);
+                CheckMeasuredPeacefulDock(failures, log);
                 CheckViewPurity(failures, log);
                 CheckWiring(failures, log);
                 CheckDungeonFlagAcknowledgement(failures, log);
@@ -219,6 +230,209 @@ namespace DeNelle.Editor
                 failures.Add($"{label}: expected [{string.Join(" ", expected)}], got [{string.Join(" ", got)}]");
         }
 
+        // =====================================================================
+        //  1b. THE MEASURED DOCK ORACLE (WO-1467) — the bar the player touches
+        // =====================================================================
+        // WHAT WAS WRONG. Case 1 above exercises HudActionBarModel, and until this ticket TWO
+        // other suites asserted a literal against HudActionBarModel.MaxVisibleFaces as if that
+        // constant described the shipped bottom bar. It does not, and cannot:
+        // HudKitController.BindActionBar returns early whenever the adaptive peaceful dock exists
+        // (it disables every legacy face and never subscribes the model at all), so on the
+        // shipping path this model drives NOTHING. The dock the player actually touches is built
+        // by HudKitController.BuildAdaptivePeacefulDock, and its only coverage was source-text
+        // lint — which cannot see a face that moved, re-ordered, lost its caption, or fell under
+        // the touch floor, because every one of those leaves the literals intact.
+        //
+        // WHAT THIS CASE DOES INSTEAD. It BUILDS the real dock on a throwaway HudKitController
+        // (WO-1467 measurement hook: BuildPeacefulDockProbe, which calls the one builder and
+        // returns the same root the runtime registers) and reads the answers OUT OF THE BUILT
+        // TREE:
+        //   * the face COUNT is discovered, never assumed — it is then fed into the shipping
+        //     solver, so the geometry assertions below are measured against what was found;
+        //   * the CAPTIONS are read off each slot's TMP_Text;
+        //   * the ORDER is taken from anchorMin.x (the build-time seed HudDockSlotLayout later
+        //     overwrites with the same left-to-right ordering), NOT from sibling index — a
+        //     dock that builds its slots in the right order but seeds them in the wrong x is
+        //     exactly the defect a lint cannot see;
+        //   * the TOUCH FLOOR and LABEL FIT are re-derived through DeNelle.Core.UI.HudDockLayout
+        //     at the shipping surfaces, because rects are 0 pre-layout in batch mode (the kit's
+        //     own ClampMinTouch no-ops there) and asserting on them would be asserting on noise.
+        //
+        // ONE-LINE MUTATION THAT REDS IT TODAY: in HudKitController.BuildPeacefulDockSlot, change
+        //   float x0 = gap + index * (width + gap);
+        // to
+        //   float x0 = gap + (count - 1 - index) * (width + gap);
+        // Every BuildPeacefulDockSlot(i, "CAPTION" literal is untouched, so every source lint in
+        // this repo stays green; this case fails with "face 0 is 'MANAGE', expected 'BUILD'".
+
+        /// <summary>The faces the calm dock ships, left to right. This is the ONE place the set is
+        /// written down, and it is asserted against a dock that was actually built — not against a
+        /// constant, and not against the source text that authored it.</summary>
+        private static readonly string[] ShippedDockFaces =
+            { "BUILD", "TALK", "HERO", "JOURNEY", "MANAGE" };
+
+        /// <summary>Shipping surfaces (w, h): the Seeker, a 16:9 desktop window, a tablet, and the
+        /// portrait reference. The dock solves in reference pixels, so the aspect is the variable.</summary>
+        private static readonly float[][] DockSurfaces =
+        {
+            new[] { 2340f, 1080f },
+            new[] { 1920f, 1080f },
+            new[] { 2048f, 1536f },
+            new[] { 1080f, 1920f },
+        };
+
+        private static void CheckMeasuredPeacefulDock(List<string> failures, StringBuilder log)
+        {
+            const string Tag = "[dock-measured]";
+            GameObject probeGo = null;
+            try
+            {
+                probeGo = new GameObject("WO1467_DockProbe", typeof(RectTransform));
+                var kit = probeGo.AddComponent<DeNelle.HUD.Kit.HudKitController>();
+                var pool = new GameObject("Pool", typeof(RectTransform));
+                pool.transform.SetParent(probeGo.transform, false);
+
+                GameObject dock = kit.BuildPeacefulDockProbe(pool.transform);
+                if (dock == null)
+                {
+                    failures.Add(Tag + " BuildPeacefulDockProbe built no dock root — the bar the player " +
+                                 "touches did not construct, so nothing below was measured");
+                    return;
+                }
+
+                // ── read the faces out of the tree ───────────────────────────
+                var captions = new List<string>();
+                var seeds = new List<float>();
+                int slotsWithoutOneCaption = 0;
+                var dockRt = (RectTransform)dock.transform;
+                for (int i = 0; i < dockRt.childCount; i++)
+                {
+                    var child = dockRt.GetChild(i) as RectTransform;
+                    if (child == null) continue;
+                    // A face is a tappable child. Register() deactivates the widget, so every
+                    // search here is includeInactive — a false zero would read as a RED for
+                    // entirely the wrong reason.
+                    if (child.GetComponentInChildren<UnityEngine.UI.Button>(true) == null) continue;
+
+                    // The caption is a DIRECT child of the slot root (ActionSlotHandle.SetCaption
+                    // builds it at y 0.02..0.26 - the bottom strip). The slot's other TMP_Texts
+                    // (cooldown seconds, stack count) are constructed EMPTY today, so the
+                    // non-empty direct children are normally exactly one. Should a prefab-mode
+                    // slot ever arrive carrying pre-filled text, the LOWEST band is still the
+                    // caption strip - resolve it that way rather than red-flagging a working dock.
+                    string word = null;
+                    float bestBand = float.MaxValue;
+                    int found = 0;
+                    for (int c = 0; c < child.childCount; c++)
+                    {
+                        var kid = child.GetChild(c) as RectTransform;
+                        if (kid == null) continue;
+                        var t = kid.GetComponent<TMP_Text>();
+                        if (t == null || string.IsNullOrEmpty(t.text) || t.text.Trim().Length == 0) continue;
+                        found++;
+                        if (kid.anchorMax.y >= bestBand) continue;
+                        bestBand = kid.anchorMax.y;
+                        word = t.text.Trim();
+                    }
+                    if (found == 0) { slotsWithoutOneCaption++; continue; }
+                    captions.Add(word);
+                    seeds.Add(child.anchorMin.x);
+                }
+
+                if (slotsWithoutOneCaption > 0)
+                    failures.Add(Tag + " " + slotsWithoutOneCaption + " dock face(s) carry NO caption — " +
+                                 "the word is what makes the face readable without colour (the owner is " +
+                                 "red/green colourblind), so an unlabelled medallion is a defect, not a style");
+
+                // Left-to-right by the seeded x anchor, not by sibling index.
+                var order = Enumerable.Range(0, captions.Count).ToList();
+                order.Sort((a, b) => seeds[a].CompareTo(seeds[b]));
+                var measured = order.Select(i => captions[i]).ToList();
+
+                if (measured.Count != ShippedDockFaces.Length)
+                {
+                    failures.Add(Tag + " the built dock carries " + measured.Count + " face(s) [" +
+                                 string.Join(" ", measured) + "], expected " + ShippedDockFaces.Length +
+                                 " [" + string.Join(" ", ShippedDockFaces) + "]");
+                }
+                else
+                {
+                    for (int i = 0; i < measured.Count; i++)
+                        if (!string.Equals(measured[i], ShippedDockFaces[i], System.StringComparison.Ordinal))
+                            failures.Add(Tag + " face " + i + " is '" + measured[i] + "', expected '" +
+                                         ShippedDockFaces[i] + "' — measured order [" +
+                                         string.Join(" ", measured) + "]. A face that swaps places keeps " +
+                                         "every source literal intact, which is why this is measured.");
+                }
+
+                // ── geometry, re-derived from the COUNT that was found ────────
+                int n = measured.Count > 0 ? measured.Count : ShippedDockFaces.Length;
+                float headroom = DeNelle.HUD.Kit.HudAreasHost.ActionBarRightHeadroomRatio;
+                float mountFrac = DeNelle.HUD.Kit.HudAreasHost.ActionBarMaxX -
+                                  DeNelle.HUD.Kit.HudAreasHost.ActionBarMinX;
+                foreach (var s in DockSurfaces)
+                {
+                    float mount = DeNelle.Core.UI.HudDockLayout.CanvasLocalWidthPx(s[0], s[1]) * mountFrac;
+                    var sol = DeNelle.Core.UI.HudDockLayout.Solve(n, mount, mount * (1f + headroom));
+                    string at = " at " + s[0].ToString("0") + "x" + s[1].ToString("0");
+
+                    if (sol.Overflowed)
+                    {
+                        failures.Add(Tag + " the dock OVERFLOWS" + at + " with the " + n +
+                                     " faces it actually builds — the touch floor is unreachable in one " +
+                                     "row on a surface we ship");
+                        continue;
+                    }
+                    if (sol.SlotWidthPx < DeNelle.Core.UI.HudDockLayout.MinSlotPx - 0.01f)
+                        failures.Add(Tag + " a face solves to " + sol.SlotWidthPx.ToString("0.#") +
+                                     " px" + at + ", under the touch floor (" +
+                                     DeNelle.Core.UI.HudDockLayout.MinSlotPx.ToString("0") + " px)");
+
+                    if (!sol.ShowCaptions) continue;   // icon-only tier: no word to fit
+                    float boxW = sol.SlotWidthPx * CaptionInset;
+                    foreach (string word in measured)
+                    {
+                        float w = DeNelle.Core.UI.ElarionUiKit.MeasureLineWidthPx(
+                            DeNelle.Core.UI.ElarionUiKit.FontRole.Body, word,
+                            DeNelle.Core.UI.ElarionUiKit.FontHardFloor, out string detail);
+                        if (w < 0f)
+                        {
+                            // -1 means NO font was resolvable, never "it fits". Say so rather than
+                            // letting an unmeasurable caption read as a pass.
+                            log.AppendLine("  " + Tag + " caption '" + word + "' NOT MEASURED (" +
+                                           detail + ") - label fit asserted nothing this run");
+                            continue;
+                        }
+                        if (w > boxW)
+                            failures.Add(Tag + " the caption '" + word + "' MEASURES " + w.ToString("0.0") +
+                                         " px at the hard font floor against a " + boxW.ToString("0.0") +
+                                         " px face" + at + " (" + detail + ") — it can only render " +
+                                         "elided");
+                    }
+                }
+
+                log.AppendLine("  measured peaceful dock: [" + string.Join(" ", measured) + "] built live, " +
+                               "ordered by seeded x, solved at " + DockSurfaces.Length + " shipping surfaces");
+            }
+            catch (System.Exception ex)
+            {
+                // NOT a stand-down. The dock is plain GameObject construction (HudUiRegression
+                // already builds ElarionUiKit action slots headlessly), so a throw here means the
+                // shipping bar cannot be constructed — that is the product defect this case exists
+                // to catch, and swallowing it would restore the hollow green WO-1467 removed.
+                failures.Add(Tag + " building the shipped peaceful dock THREW " + ex.GetType().Name +
+                             ": " + ex.Message);
+            }
+            finally
+            {
+                if (probeGo != null) UnityEngine.Object.DestroyImmediate(probeGo);
+            }
+        }
+
+        /// <summary>The caption strip is inset from the medallion rim (ActionSlotHandle.SetCaption
+        /// authors it at x 0.06..0.94), so the word's box is not the whole face.</summary>
+        private const float CaptionInset = 0.88f;
+
         // ── 2. View purity (source oracle — the WO-835 architecture law) ──────
         private static void CheckViewPurity(List<string> failures, StringBuilder log)
         {
@@ -236,9 +450,13 @@ namespace DeNelle.Editor
                 failures.Add("HudKitController does not consume ActiveButtonsChanged (repack render pass unbound)");
             if (kitSrc.IndexOf("\"upgradeButton\"") < 0)
                 failures.Add("HudKitController does not register the upgradeButton face (WO-835 §3c split missing)");
-            if (kitSrc.IndexOf("BuildPeacefulDockSlot(1, \"TALK\"") < 0 ||
-                kitSrc.IndexOf("const int count = 5;") < 0)
-                failures.Add("adaptive peaceful dock lost its always-reachable Talk medallion or five-slot fit");
+            // ⚠ WO-1467 — the source lint that used to sit here (BuildPeacefulDockSlot(1, "TALK"
+            // plus a `const int count = 5;` literal) is RETIRED, not weakened. It asserted the
+            // TEXT that authors the dock; CheckMeasuredPeacefulDock now asserts the dock that text
+            // produces — count, captions, order, touch floor and label fit, read from the built
+            // tree. Keeping both would be the doubled state this repo keeps paying for: the lint
+            // stays green through every re-order and every dropped caption, so its green was worth
+            // nothing while looking like coverage.
 
             // The retired gate reads must NOT return to the View (predicates live in Core).
             if (kitSrc.IndexOf("GameStateService") >= 0)
@@ -288,7 +506,8 @@ namespace DeNelle.Editor
                     failures.Add("RaidCapabilityHudBridge never publishes SetRaidCapable");
             }
 
-            // Occupancy rows: the approved four-medallion peacefulDock in BOTH dual copies;
+            // Occupancy rows: the approved peacefulDock in BOTH dual copies (WO-1467: no face
+            // count restated here — CheckMeasuredPeacefulDock owns that, measured);
             // copies identical (CanonicalJson law — the Work-button-dark lesson).
             string resJson = Path.Combine(Application.dataPath, "Resources/Data/Canonical/hud-areas.json");
             string samJson = Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/hud-areas.json");
@@ -297,7 +516,7 @@ namespace DeNelle.Editor
                 if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
                 string json = File.ReadAllText(p);
                 if (json.IndexOf("peacefulDock") < 0)
-                    failures.Add("hud-areas.json missing peacefulDock (approved four-action HUD would be behavior-absent): " + p);
+                    failures.Add("hud-areas.json missing peacefulDock (the approved calm HUD would be behavior-absent): " + p);
             }
             if (File.Exists(resJson) && File.Exists(samJson) &&
                 File.ReadAllText(resJson) != File.ReadAllText(samJson))

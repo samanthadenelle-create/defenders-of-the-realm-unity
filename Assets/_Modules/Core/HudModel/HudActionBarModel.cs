@@ -113,10 +113,28 @@ namespace DeNelle.Core.HudModel
         public const int ButtonCount = 7;
 
         /// <summary>
-        /// WO-911 — the MAXIMUM number of faces that can render at once (the widest posture set).
-        /// The calm(town) bar is Build, Talk, Bag, Raids, Quests, Manage = SIX since Map moved into
-        /// Bag as a tab. This is the number the View must size a slot from; <see cref="ButtonCount"/>
-        /// is the enum-identity bound and is deliberately larger (Map stays dormant at ordinal 4).
+        /// The maximum length <see cref="Active"/> can reach — i.e. the widest set
+        /// <see cref="ComputeMask"/> can produce. Read that method for the authority: both calm
+        /// postures currently return an UNCONDITIONAL four bits (Build, Bag, Quests, Upgrade);
+        /// Talk, Raids and Map are dormant identities that no branch sets any more. Every other
+        /// posture returns 0.
+        ///
+        /// ⛔ WO-1467 — THIS IS NOT THE NUMBER OF FACES THE PLAYER SEES, AND IT NEVER WAS.
+        /// The shipped bottom bar is the adaptive peaceful dock, built by
+        /// <c>HudKitController.BuildAdaptivePeacefulDock</c>; <c>HudKitController.BindActionBar</c>
+        /// returns early whenever that dock exists, so this model is never subscribed on the
+        /// shipping path and its geometry does not size the dock's medallions
+        /// (<c>HudDockSlotLayout</c> / <c>DeNelle.Core.UI.HudDockLayout</c> solve those in
+        /// reference pixels from the live mount). Two suites used to assert a literal against this
+        /// constant AS IF it described the dock; those pins are retired and the dock is now covered
+        /// by a measured oracle — <c>HudActionBarRegression.CheckMeasuredPeacefulDock</c>, which
+        /// builds the real dock and reads the faces out of the built tree.
+        ///
+        /// What legitimately consumes it (all of them model-side or legacy-geometry, none of them
+        /// the shipped dock): <c>HudKitController.BarSlotW</c> (the retired repacker's slot width),
+        /// <c>UICaptureLaunch</c>'s bar mock, <c>HudActionBarRegression</c>'s overflow check and
+        /// <c>HudActionBarModelTests</c>. <see cref="ButtonCount"/> is a DIFFERENT axis — the
+        /// enum-identity bound, deliberately larger, and the one that must never be renumbered.
         /// </summary>
         public const int MaxVisibleFaces = 4;
 

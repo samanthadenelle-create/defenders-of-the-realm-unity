@@ -258,38 +258,30 @@ table here; point at the `.asmdef` instead.**
     and `PublicNavigationRetirementRegression` pins that the flag and the Bag route stay gone.
     `ActionBarButtonId.Map` stays **dormant at ordinal 4** — never renumber it, the face arrays are
     indexed by ordinal.
-  - ⛔ **`HudActionBarModel.MaxVisibleFaces` IS `4`. STOP RESTATING IT HERE - READ THE CONSTANT.**
-    `Assets/_Modules/Core/HudModel/HudActionBarModel.cs:121`. It is pinned by TWO suites:
-    `Assets/Editor/Regression/HudLabelFitRegression.cs:266-269` (`Case0_BoxesStillAuthored`) **FAILS**
-    if it is not 4 - *"adaptive peaceful HUD is locked to Build/Hero/Journey/Manage"* - and
-    `Assets/Editor/Regression/SessionShapeRegression.cs:232` pins it too. `HudKitController.cs:199-202`
-    derives the slot width from the constant, so the View's geometry follows the code.
-    **THE CODE AND THE SUITES ARE THE AUTHORITY. This file is not.**
-    ⚠ **THIS IS THE SECOND TIME THIS LINE WENT STALE, AND THAT PATTERN IS THE REAL FINDING.** It said
-    "SIX faces" flat, was corrected on 2026-08-26 at the cost of a felt-test report and an RCA opened
-    against working code, and by 2026-09-03 the corrected version was wrong again - it still asserted
-    `MaxVisibleFaces = 6` while the constant read 4 (measured 2026-09-03; flagged in commit
-    `a17dfa126`: *"The doc is stale, not the code."*). A hand-maintained count in canon tracking a live
-    constant is **duplicated state**, and it fails exactly like §2's stale WO-number block, §5's
-    retired dependency table and §16's copy-pasted R2 verify. The cure is not a better copy - it is
-    deleting the copy. **Do not write a face count back into this file.**
-    ⚠ **BANNER 2026-09-06: THE FROZEN NOTE BELOW DESCRIBES A PATH NOTHING BINDS.** Measured today:
-    `HudKitController.cs:2978-2986` returns early whenever `_peacefulDockRoot != null`, disabling every
-    legacy bar face and never subscribing `HudActionBarModel` at all - so `ComputeMask` and its
-    conditional `Talk` bit do not drive what ships. The peaceful dock the player sees is built by
-    `HudKitController` and carries FIVE faces (BUILD / TALK / HERO / JOURNEY / MANAGE); TALK is a
-    permanent slot there, pinned only by a source-text lint at `HudActionBarRegression.cs:239`
-    (`BuildPeacefulDockSlot(1, "TALK")`). Do not act on the note below without reading
-    `WorkOrders/WORK_ORDER_1467_two_suites_pin_an_action_bar_model_nothing_binds.md`, which owns the fix.
-    *(Frozen, because its reasoning is still true and only its number was wrong: the 2026-08-26
-    correction established that the bar's membership is CONDITIONAL, not flat - `Talk` is added only
-    `if (_source.TalkAvailable)` (`HudActionBarModel.ComputeMask`), which `TalkHudBridge.cs:69` sets
-    from `TalkPromptRegistry.Count > 0`, i.e. only while a talkable NPC is in range, and `Raids` is
-    likewise gated on `RaidCapable`. So a bar showing FEWER faces than the maximum is the feature
-    working, not a missing face. `MaxVisibleFaces` has always been the MAXIMUM, never the count. The
-    same conditional shape applies to `calm(explore)`.)*
-    `HudActionBarModel.ButtonCount` stays **7** (enum-identity / array bound) - a different axis from
-    `MaxVisibleFaces`, and the one that must not be renumbered.
+  - ⛔ **THE BOTTOM BAR THE PLAYER TOUCHES IS THE ADAPTIVE PEACEFUL DOCK, NOT `HudActionBarModel`.**
+    `HudKitController.BindActionBar` **returns early** whenever the peaceful dock exists — it
+    disables every legacy bar face and never subscribes the model at all. So `HudActionBarModel`,
+    `ComputeMask` and `MaxVisibleFaces` do **not** drive what ships, and no reasoning about the
+    shipped bar may start from that constant. The dock is built by
+    `HudKitController.BuildAdaptivePeacefulDock` and laid out in reference pixels by
+    `HudDockSlotLayout` / `DeNelle.Core.UI.HudDockLayout`.
+    ⛔ **DO NOT WRITE A FACE COUNT, A FACE LIST OR AN ORDER INTO THIS FILE — RUN THE ORACLE.**
+    `HudActionBarRegression.CheckMeasuredPeacefulDock` (WO-1467) **builds the real dock** and reads
+    the count, the captions, their left-to-right order, the touch floor and the label fit **out of
+    the built tree**. It is the single authority, it cannot go stale, and it is the answer to
+    "how many faces does the bar have" — never a sentence here.
+    ⚠ **THIS LINE WENT STALE THREE TIMES AND THAT PATTERN IS THE REAL FINDING.** It said "SIX faces"
+    flat; the 2026-08-26 correction cost a felt-test report and an RCA opened against working code;
+    by 2026-09-03 the correction was itself wrong (commit `a17dfa126`: *"The doc is stale, not the
+    code."*); and on 2026-09-06 the replacement was wrong in a new way — it restated the constant,
+    described a `Talk`-is-conditional `ComputeMask` branch that no longer exists, and pointed at a
+    source-text lint as the dock's coverage. Hand-maintained state in canon tracking live code is
+    **duplicated state**, exactly like §2's stale WO-number block, §5's retired dependency table and
+    §16's copy-pasted R2 verify. **The cure is not a better copy — it is deleting the copy.**
+    `HudActionBarModel.ButtonCount` is a **different axis** — the enum-identity / array bound, and
+    the one that must never be renumbered. Read it, and the ordinals, off
+    `Assets/_Modules/Core/HudModel/HudActionBarModel.cs`; the ordinal pins live in
+    `SessionShapeRegression` `Case5_BarShape`.
   - The right-column **Builders chip SURVIVES as a STATUS GLANCE ONLY** (count/timer + the inline peek
     rail). Its old **double-tap door is retired**, so the bar face is the single entry.
 - **Echo harvest affinity is a MATCH BONUS, NEVER a lock** (owner ruling WO-830, 2026-08-02): each of the
