@@ -322,8 +322,11 @@ namespace DeNelle.Core.Diagnostics
                     {
                         // On failure: DROP the batch (already dequeued) — no retry-storm.
                         // REPORT THE DROP so it is not silently lost in the logs.
-                        FlowTrace.Warn("WebTrace", "post-fail",
-                            $"trace POST failed ({req.responseCode}): {req.error} — batch of {batchCount} " +
+                        // NOTE: FlowTrace.Warn has exactly ONE overload - (system, message). The
+                        // former key argument ("post-fail") is folded into the message text so no
+                        // information is lost; do not re-add a third argument (WebGL-only compile).
+                        FlowTrace.Warn("WebTrace",
+                            $"post-fail: trace POST failed ({req.responseCode}): {req.error} - batch of {batchCount} " +
                             $"entries dropped (session={_sessionId}, {remainingInRing} remain buffered)");
                     }
                     else

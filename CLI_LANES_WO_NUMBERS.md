@@ -187,7 +187,18 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-tenth pass): main line next free = **1575**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-eleventh pass): main line next free = **1576**.
+> *(Edit-only WebGL compile-fix lane minted **1575** = THE COMPILE GATE NEVER COMPILES WEBGL, SO
+> WEBGL-ONLY CODE ROTS SILENTLY. Bumped 1575 -> 1576 in this SAME edit. Found while fixing the one
+> error in `Builds/webgl-build.log`: `WebTrace.cs(325,35) CS1501: No overload for method 'Warn' takes
+> 3 arguments` - a `FlowTrace.Warn(system, key, message)` call inside `#if UNITY_WEBGL && !UNITY_EDITOR`
+> that no desktop gate can ever see, because `CompileGate` only compiles the editor's ACTIVE target
+> defines. Proposal (NOT built by that lane): add a `PlayerBuildInterface.CompilePlayerScripts` pass
+> for `BuildTarget.WebGL` to `CompileGate` so a guarded-block arity break fails at gate time instead
+> of at content-build time. File `WorkOrders/WORK_ORDER_1575_compile_gate_never_compiles_webgl.md`,
+> READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-tenth pass): main line next free = **1575**.
 > *(Manage pass-three lane minted **1573** and **1574** = QUEUE PILL ON MANAGE HUB OPENS NOTHING +
 > TROOP PORTRAITS CARRY BAKED GILT RING. Bumped 1573 -> 1575 in this SAME edit. The other half of the
 > pass-three handback. 1573: drawer is child of Zone_Body, which ApplyScreenVisibility sets inactive
