@@ -83,9 +83,10 @@ test('a parsed object body reconstructs to the compact JSON the client signed', 
 
 // ── 3. The source ratchet ───────────────────────────────────────────────────
 // ⛔ THE SAME GUARD WAS COPY-PASTED INTO THREE ENDPOINTS, which is how one could be
-// fixed and the others left broken. WO-1453's silo covers two of them; assert the new
-// shape at SOURCE so a partial revert fails here.
-const FIXED = ['api/game/save.js', 'api/promo/redeem.js'];
+// fixed and the others left broken. WO-1453's first pass covered two and named
+// referral/claim.js as the remaining carrier; the follow-up lane closed it, so ALL
+// THREE are ratcheted here. Assert the new shape at SOURCE so a partial revert fails.
+const FIXED = ['api/game/save.js', 'api/promo/redeem.js', 'api/referral/claim.js'];
 
 test('the fixed endpoints no longer refuse the signature rail on reconstructed bytes', () => {
     for (const rel of FIXED) {

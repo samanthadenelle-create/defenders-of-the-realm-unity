@@ -55,8 +55,8 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { AuthCode, authenticateGranting, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
-const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
+const { AuthCode, authenticateGranting, WALLET_MAX_BODY_BYTES } = require('../_lib/wallet-auth');
+const { applyCors, newRef, quietFail, readBodyExact, bodyBytesDetail } = require('../_lib/http');
 const { logAuthReject } = require('../_lib/audit');
 
 const CLAIM_REWARD_CRYSTALS = (() => {
@@ -116,20 +116,25 @@ async function handler(req, res) {
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 
-    // ⛔ SCOPED TO THE SIGNATURE PATH (2026-08-24). A session bearer does NOT sign the body:
-    // wallet-auth.js verifyWallet() accepts `x-session` and returns via:'session' without ever
-    // reading `payload`. This guard predates WO-1157's session rail and rejected BEFORE
-    // authenticate() ran, so a session-authed call was refused for lacking bytes it never needed.
-    // Same defect fixed in api/game/save.js, where it had silently 500ed EVERY wallet save in
-    // production — all 21 rows in player_data were guest rows.
-    const hasSessionHeader = !!(req.headers && req.headers['x-session']);
-    if (!exactBytes && !isGuestId(claimerId) && !hasSessionHeader) {
-        await logAuthReject(sql, req, {
-            code: AuthCode.SERVER_ERROR, ref, identity: claimerId, mode: 'wallet',
-            detail: { reason: 'raw_body_unavailable_bodyparser_active' },
-        });
-        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
-    }
+    // ⛔ THE RAW-BODY REFUSAL IS RETIRED HERE TOO (WO-1453 follow-up, 2026-09-06). It read:
+    //
+    //     if (!exactBytes && !isGuestId(claimerId) && !hasSessionHeader) -> 500 SERVER_ERROR
+    //         detail { reason: 'raw_body_unavailable_bodyparser_active' }
+    //
+    // This file was the THIRD copy of the same guard, and the one WO-1453 left standing
+    // ("referral/claim.js still carries the guard (follow-up)", commit 0f35490ad). Its cost
+    // is the one already proven on the other two: Vercel's Node 24 runtime parses `req.body`
+    // regardless of `config.api.bodyParser`, so `exact` is effectively ALWAYS false in
+    // production — see WORK_ORDER_1440_..._blocker.RESULT.md:225-252, where a cryptographically
+    // valid signature over the exact bytes returned "RAIL 1 (signature) -> HTTP 500". This
+    // route is wallet-rail-ONLY (authenticateGranting), so the refusal blanket-500ed every
+    // referral claim from a fresh device, which holds no session to fall back on.
+    //
+    // We now PROCEED and TAG. See _lib/http.bodyBytesDetail for why that cannot create a
+    // false accept: sha256(payload) is bound into the signed message (wallet-auth.js
+    // buildSignedMessage), so a wrong reconstruction fails CLOSED as a 401. The guard's one
+    // real value — the diagnosis — survives as a detail tag on the reject row below, through
+    // the SAME shared helper the other two endpoints use rather than a fourth copy-paste.
 
     // ── AUTH GATE — WALLET RAIL ONLY (2026-08-18) ──────────────────────────
     // The claimer must PROVE they are the claimer, and "proof" here has to mean a
@@ -149,7 +154,11 @@ async function handler(req, res) {
         // LOUD server-side (full audit row + runtime line), QUIET to the player
         // (a stable code + ref, never a wall of JSON).
         await logAuthReject(sql, req, {
-            code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
+            code: auth.code, ref, identity: auth.identity, mode: auth.mode,
+            // WO-1453: when the runtime parsed the body out from under us, say so ON THE
+            // REJECT ROW. An AUTH_BAD_SIGNATURE carrying bytes:'reconstructed' is worth a
+            // second look; one without it is simply a bad signature.
+            detail: Object.assign({}, auth.detail, bodyBytesDetail(exactBytes)),
         });
         const status = (auth.code === AuthCode.PLAYER_ID_BAD_SHAPE ||
                         auth.code === AuthCode.PLAYER_ID_MISSING ||
