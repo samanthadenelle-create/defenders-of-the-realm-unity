@@ -22,8 +22,14 @@
 //     Every state on this screen is a SENTENCE: "OVERRUN - the Heart fell",
 //     "DESTROYED", "damaged 40%", "Nothing was taken." Tints are decoration on top
 //     of text that already says it. A greyscale screenshot must lose no information.
-//   • Fixed-pixel row bands via LayoutElement — the kit scroll column does NOT
-//     control child height (the documented PartyShop collapse).
+//   • ⛔ FIXED-PIXEL ROW BANDS VIA sizeDelta, **NOT** VIA LayoutElement.
+//     This line said "via LayoutElement" until 2026-09-07 and that sentence IS the
+//     WO-1585 defect, sitting in this file's own construction law. The kit scroll
+//     column does not control child height (the documented PartyShop collapse), and
+//     uGUI's layout group therefore reads `child.sizeDelta[axis]` and IGNORES the
+//     LayoutElement outright (HorizontalOrVerticalLayoutGroup.cs:224-229). Rows and
+//     the map plate band both shipped at the RectTransform default. Full RCA, with
+//     the numbers measured off the owner's frame, at the top of DefenseMapPlate.cs.
 //
 // ⛔ IT NEVER READS WaveDamageReport, AND THAT IS LOAD-BEARING.
 //    The panel renders the PERSISTED RECORD and nothing else. A panel that re-scanned
@@ -74,8 +80,14 @@ namespace DeNelle.Village.UI
         /// layout oracle asserts the pitch clears the rendered line box at every capture aspect.</summary>
         private const float ListRowGapPx = 10f;
 
-        private const float MapPlatePx = 420f;  // fixed band for the diagram (the scroll column
-                                                // does not control child height -- §1.14 kit rule)
+        /// <summary>MakeScrollZone padding on the DETAIL column (each edge). Named because the
+        /// plate band's derived width is the viewport minus twice this.</summary>
+        private const int DetailPadPx = 28;
+
+        // ⛔ THE PLATE BAND IS NO LONGER A LITERAL (WO-1585). It is derived from the MEASURED
+        //    detail viewport by DefenseMapPlate.DeriveHeightPx, and written to the band's
+        //    sizeDelta by DefenseMapPlate.BuildBand -- the RCA for why a LayoutElement alone was
+        //    ignored lives at the top of that file, sourced from the uGUI layout group itself.
 
         /// <summary>The well plate. FULLY opaque on purpose -- see <see cref="StyleObsidianWell"/>.
         /// ElarionUiKit.ObsidianFill is a=0.98, which lets 2% of whatever is behind it through;
@@ -85,6 +97,14 @@ namespace DeNelle.Village.UI
         private GameObject _ui;
         private RectTransform _listContent;
         private RectTransform _detailContent;
+
+        /// <summary>The detail scroll VIEWPORT — the visible well. The plate band's height is
+        /// derived from this rect, so the diagram is sized by the screen it is on rather than by
+        /// a number typed once at some other aspect (WO-1585).</summary>
+        private RectTransform _detailViewport;
+
+        /// <summary>The band the plate lives in, held for the §12 rect dump below.</summary>
+        private RectTransform _plateBand;
         private PanelHandle _panelHandle;
         private bool _onParchment;
 
@@ -136,6 +156,9 @@ namespace DeNelle.Village.UI
                 _rows = DefenseReportLedger.NewestFirst();   // the [NEW] tag on that row is stale now
 
             BuildChrome();
+            // The wells have to have a REAL rect before Render derives the plate band from the
+            // detail viewport; a fresh canvas reports zero until the first canvas update.
+            Canvas.ForceUpdateCanvases();
             Render();
 
             if (!PanelManager.NotifyOpened(_panelHandle))
@@ -149,6 +172,9 @@ namespace DeNelle.Village.UI
         {
             _listContent = null;
             _detailContent = null;
+            _detailViewport = null;
+            _plateBand = null;
+            _plate = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelManager.NotifyClosed(_panelHandle);
@@ -185,7 +211,9 @@ namespace DeNelle.Village.UI
             // Padding clears the bezel drawn by StyleObsidianWell so no line of text is ever
             // laid across the gold border; spacing IS the row gap the derived pitch is built from.
             _listContent = ElarionUiKit.MakeScrollZone(listZone, spacing: ListRowGapPx, padding: 22).content;
-            _detailContent = ElarionUiKit.MakeScrollZone(detailZone, spacing: 12f, padding: 28).content;
+            var detailZoneHandle = ElarionUiKit.MakeScrollZone(detailZone, spacing: 12f, padding: DetailPadPx);
+            _detailContent = detailZoneHandle.content;
+            _detailViewport = detailZoneHandle.viewport;
         }
 
         // ── Render ───────────────────────────────────────────────────────────────
@@ -195,14 +223,82 @@ namespace DeNelle.Village.UI
             RebuildList();
             RebuildDetail();
 
+            // ⚠ TWO PASSES, NOT ONE (WO-1585). The column reads each child's sizeDelta.y during
+            //   CalculateLayoutInputVertical, but a Paragraph's ContentSizeFitter WRITES its
+            //   sizeDelta.y later in the same pass (SetLayoutVertical). One rebuild therefore
+            //   sums pre-fit paragraph heights, and the content column ends up shorter than what
+            //   it holds -- which is a scroll range that cannot reach the last rows, and a rect
+            //   dump that measures a layout the player never sees.
+            Settle();
+            Settle();
+
+            // The plate's rect only becomes real after the rebuilds above, so the path geometry
+            // AND every label box is solved HERE rather than at build time.
+            _plate?.Relayout();
+
+            TraceDetailRects();
+        }
+
+        private void Settle()
+        {
             Canvas.ForceUpdateCanvases();
             if (_listContent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(_listContent);
             if (_detailContent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(_detailContent);
-
-            // The plate's rect only becomes real after the rebuild above, so the path geometry
-            // is solved HERE rather than at build time.
-            _plate?.Relayout();
         }
+
+        /// <summary>
+        /// §12 INSTRUMENTATION, PERMANENT. Dumps the measured world rects of the detail column's
+        /// text rows against the plate band, so "the labels draw over the sentences" is a line in
+        /// the log rather than a thing someone has to see. It NAMES any intersection, which is
+        /// the only form of this finding that is actionable.
+        /// </summary>
+        private void TraceDetailRects()
+        {
+            if (!FlowTrace.Enabled || _detailContent == null) return;
+
+            Rect band = _plateBand != null ? WorldRect(_plateBand) : new Rect();
+            var sb = new System.Text.StringBuilder();
+            sb.Append("detail rects: viewport=").Append(RectStr(WorldRect(_detailViewport)))
+              .Append(" content=").Append(RectStr(WorldRect(_detailContent)))
+              .Append(" band=").Append(RectStr(band));
+
+            int overlaps = 0;
+            for (int i = 0; i < _detailContent.childCount; i++)
+            {
+                var child = _detailContent.GetChild(i) as RectTransform;
+                if (child == null || child == _plateBand || !child.gameObject.activeSelf) continue;
+                Rect r = WorldRect(child);
+                bool hit = band.width > 0.5f && band.height > 0.5f && r.width > 0.5f && r.height > 0.5f
+                           && r.xMin < band.xMax && band.xMin < r.xMax
+                           && r.yMin < band.yMax && band.yMin < r.yMax;
+                if (hit)
+                {
+                    overlaps++;
+                    sb.Append("\n  OVERLAP row[").Append(i).Append("] ").Append(RectStr(r))
+                      .Append(" intersects the plate band -- a sentence and the diagram are on the "
+                            + "same pixels.");
+                }
+            }
+
+            if (overlaps > 0) FlowTrace.Warn("DefenseReport", sb.ToString());
+            else FlowTrace.Step("DefenseReport", sb.Append(" | no text row intersects the band.").ToString());
+        }
+
+        private static readonly Vector3[] _corners = new Vector3[4];
+
+        private static Rect WorldRect(RectTransform rt)
+        {
+            if (rt == null) return new Rect();
+            rt.GetWorldCorners(_corners);
+            float x0 = Mathf.Min(_corners[0].x, _corners[2].x), x1 = Mathf.Max(_corners[0].x, _corners[2].x);
+            float y0 = Mathf.Min(_corners[0].y, _corners[2].y), y1 = Mathf.Max(_corners[0].y, _corners[2].y);
+            return new Rect(x0, y0, x1 - x0, y1 - y0);
+        }
+
+        private static string RectStr(Rect r)
+            => "[x " + r.xMin.ToString("0") + ".." + r.xMax.ToString("0")
+             + " y " + r.yMin.ToString("0") + ".." + r.yMax.ToString("0")
+             + " h " + r.height.ToString("0") + "]";
 
         private void RebuildList()
         {
@@ -232,6 +328,16 @@ namespace DeNelle.Village.UI
 
                 var host = new GameObject("ReportRow", typeof(RectTransform), typeof(LayoutElement));
                 host.transform.SetParent(_listContent, false);
+                // ⛔ sizeDelta IS THE BAND (WO-1585). MakeScrollZone's column runs
+                //    childControlHeight:false, and uGUI's HorizontalOrVerticalLayoutGroup then
+                //    reads child.sizeDelta[axis] and IGNORES the LayoutElement entirely
+                //    (HorizontalOrVerticalLayoutGroup.cs:224-229). The row shipped at the
+                //    RectTransform default of 100 px -- UNDER ElarionUiKit.MinTouchPx (112) --
+                //    which the owner's 2026-09-07 Seeker frame measures as a 135.5 device-px
+                //    pitch at 2670x1200 (scaler 1.2431 => 109 canvas = 100 + ListRowGapPx),
+                //    where the derived band would read 151.7. The LayoutElement below stays as
+                //    advice for any host that DOES control child height; it is not the mechanism.
+                ((RectTransform)host.transform).sizeDelta = new Vector2(0f, ListRowPx);
                 var le = host.GetComponent<LayoutElement>();
                 le.preferredHeight = ListRowPx;
                 le.minHeight = ListRowPx;
@@ -263,7 +369,8 @@ namespace DeNelle.Village.UI
 
         private void RebuildDetail()
         {
-            _plate = null;   // destroyed with the cleared children below
+            _plate = null;        // destroyed with the cleared children below
+            _plateBand = null;
             ClearChildren(_detailContent);
             if (_detailContent == null) return;
 
@@ -399,17 +506,32 @@ namespace DeNelle.Village.UI
             for (int i = 0; i < described.Count; i++)
                 Paragraph(host, described[i], ElarionUi.FontLabel, inkDim, false);
 
-            // Fixed-pixel band: the kit scroll column does NOT control child height, so the
-            // plate carries its own LayoutElement (the documented PartyShop-collapse rule).
-            var band = new GameObject("MapPlateBand", typeof(RectTransform), typeof(LayoutElement));
-            band.transform.SetParent(host, false);
-            var le = band.GetComponent<LayoutElement>();
-            le.preferredHeight = MapPlatePx;
-            le.minHeight = MapPlatePx;
+            // ⭐ THE BAND IS DERIVED FROM THE MEASURED WELL AND WRITTEN TO sizeDelta.
+            //    Both halves matter and the second one is the WO-1585 defect: the kit scroll
+            //    column runs childControlHeight:false, so a LayoutElement alone is INVISIBLE to
+            //    it (RCA at the top of DefenseMapPlate). DefenseMapPlate.BuildBand is the one
+            //    seam that does it right, and DefenseReportLayoutRegression measures that seam.
+            float wellW = _detailViewport != null ? _detailViewport.rect.width : 0f;
+            float wellH = _detailViewport != null ? _detailViewport.rect.height : 0f;
+            float bandPx = DefenseMapPlate.DeriveHeightPx(Mathf.Max(0f, wellW - 2f * DetailPadPx), wellH);
+            FlowTrace.Step("DefenseReport",
+                $"plate band derived: viewport={wellW:F0}x{wellH:F0} pad={DetailPadPx} -> band={bandPx:F0} "
+                + $"(min={DefenseMapPlate.PlateMinPx:F0} max={DefenseMapPlate.PlateMaxPx:F0} "
+                + $"wellFraction={DefenseMapPlate.PlateWellFraction:F2}).");
 
-            _plate = DefenseMapPlate.Build(band.transform, r);
+            _plateBand = DefenseMapPlate.BuildBand(host, r, bandPx, out _plate);
             if (_plate == null)
             {
+                // No diagram, so no band: an empty reserved strip would push the legend and the
+                // breach list off the well for nothing. Collapsed rather than Destroy()ed --
+                // Destroy is deferred to end of frame, so a destroyed band would still hold its
+                // height through the layout passes below.
+                if (_plateBand != null)
+                {
+                    _plateBand.sizeDelta = new Vector2(0f, 0f);
+                    _plateBand.gameObject.SetActive(false);
+                }
+                _plateBand = null;
                 Paragraph(host, "(map unavailable -- the positions above still describe it)",
                     ElarionUi.FontLabel, inkDim, false);
                 return;
@@ -753,7 +875,12 @@ namespace DeNelle.Village.UI
             for (int i = host.childCount - 1; i >= 0; i--)
             {
                 var c = host.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                // Deactivate FIRST: Destroy is deferred to end of frame, so a cleared row would
+                // otherwise still occupy its band through this frame's layout passes (and show up
+                // in the rect dump as a phantom overlap).
+                c.gameObject.SetActive(false);
+                Destroy(c.gameObject);
             }
         }
     }

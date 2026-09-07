@@ -64,6 +64,29 @@
 //                      the 22 px FitBlock floor - the WO-1144 "Tap to collec" lesson,
 //                      same chip family, and the reason the face is two lines. A
 //                      FIXTURE case - Compose is pure, so no GameState is needed.
+//   5 [sizedelta-law] WO-1585. The list row band and the map plate band BOTH reach
+//                      sizeDelta, the plate band is DERIVED from the measured detail
+//                      viewport, and plate labels stay NoWrap + floored at
+//                      ElarionUiKit.FontFloor.
+//   6 [measured-plate] WO-1585, BUILT AND MEASURED at three landscape surfaces: the
+//                      real kit scroll zone + the real DefenseMapPlate.BuildBand +
+//                      real TMP paragraphs, settled twice, then measured. The band
+//                      gets the height it was built at (100px is the shipped defect),
+//                      no text row's rect intersects the band (LayoutOracle.Overlaps -
+//                      the WO-1060 engine), and every plate label is one line inside
+//                      the band. It also carries a RED FIXTURE: a band built the OLD
+//                      way (LayoutElement only, no sizeDelta) is MEASURED, and the case
+//                      FAILS if it ever gets the height it asks for - the only thing
+//                      that proves this suite still measures the MECHANISM rather than
+//                      restating the panel's intent.
+//
+// ⛔ WHY 5 AND 6 EXIST, AND WHY CASE 1 WAS GREEN THROUGH WO-1585: case 1 does
+//    ARITHMETIC ON SOURCE CONSTANTS and assumes the height a row ASKS for is the
+//    height it GETS. ElarionUiKit.MakeScrollZone runs childControlHeight:false, so
+//    uGUI reads child.sizeDelta and ignores the LayoutElement the panel was setting
+//    (HorizontalOrVerticalLayoutGroup.cs:224-229). The rows shipped at the 100px
+//    RectTransform default and the plate band with them, and every number case 1
+//    checked was correct. A suite that measures intent proves nothing about pixels.
 //
 // NO HOLLOW PASSES: every early return below is preceded by a recorded FAILURE. A
 // missing constant or an unreadable source file is a FAILURE here, never a note.
@@ -77,7 +100,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using DeNelle.Core.Defense;
 using DeNelle.Core.HudModel;
 using DeNelle.Core.UI;
@@ -161,7 +186,9 @@ namespace DeNelle.Editor.Regression
                     CaseDarkPlate(failures, notes);
                     CaseSourceLaws(src, failures, notes);
                     CaseChipGate(src, failures, notes);
+                    CaseSizeDeltaLaw(src, failures, notes);
                 }
+                CaseMeasuredPlate(failures, notes);
             }
             catch (Exception ex)
             {
@@ -169,7 +196,7 @@ namespace DeNelle.Editor.Regression
             }
 
             reason = failures.Count == 0
-                ? "4 cases - " + string.Join("; ", notes)
+                ? "6 cases - " + string.Join("; ", notes)
                 : failures.Count + " finding(s): " + string.Join(" | ", failures);
             return failures.Count == 0;
         }
@@ -457,6 +484,363 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == before)
                 notes.Add("[chip-gate] chip absent at 0 unread, present with HELD/BREACHED/OVERRUN on its face");
         }
+
+        // ── 5. [sizedelta-law] ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// ⭐ WO-1585. THE CASE THAT WOULD HAVE CAUGHT IT, AND THE REASON CASE 1 DID NOT.
+        ///
+        /// <para>CaseDerivedPitch does ARITHMETIC ON SOURCE CONSTANTS and assumes the number a
+        /// row asks for becomes the height it gets. That assumption is FALSE in a kit scroll
+        /// column: ElarionUiKit.MakeScrollZone runs <c>childControlHeight = false</c>, and uGUI's
+        /// HorizontalOrVerticalLayoutGroup.GetChildSizes then reads <c>child.sizeDelta[axis]</c>
+        /// and ignores the child's LayoutElement entirely (com.unity.ugui .../Layout/
+        /// HorizontalOrVerticalLayoutGroup.cs:224-229, read at source 2026-09-07). So the panel
+        /// asked for a 112 px row and a 420 px plate band via LayoutElement, got the
+        /// RectTransform default of 100 px for both, and case 1 stayed green through the whole
+        /// defect. A suite that measures the number a screen WANTS proves nothing about the
+        /// pixels a player gets.</para>
+        ///
+        /// <para>This case pins the MECHANISM in source; case 6 measures the result.</para>
+        /// </summary>
+        private static void CaseSizeDeltaLaw(string src, List<string> failures, List<string> notes)
+        {
+            int before = failures.Count;
+            string code = StripComments(src);
+
+            if (!Regex.IsMatch(code, @"sizeDelta\s*=\s*new\s+Vector2\s*\(\s*0f?\s*,\s*ListRowPx\s*\)"))
+                failures.Add("[sizedelta-law] the list row no longer writes its band to sizeDelta "
+                    + "(sizeDelta = new Vector2(0f, ListRowPx)). MakeScrollZone runs "
+                    + "childControlHeight:false, so a LayoutElement alone is INVISIBLE to the column "
+                    + "and the row falls back to the RectTransform default of 100px - under the "
+                    + Px(TouchFloorPx) + " touch floor, which is exactly what the owner's "
+                    + "2026-09-07 Seeker frame measures.");
+
+            if (code.IndexOf("DefenseMapPlate.BuildBand", StringComparison.Ordinal) < 0)
+                failures.Add("[sizedelta-law] the panel no longer builds its plate through "
+                    + "DefenseMapPlate.BuildBand - that seam is the ONE place the band's height "
+                    + "reaches sizeDelta, and it is the seam this suite measures.");
+
+            if (code.IndexOf("DefenseMapPlate.DeriveHeightPx", StringComparison.Ordinal) < 0)
+                failures.Add("[sizedelta-law] the plate band height is no longer derived from the "
+                    + "measured detail viewport (DefenseMapPlate.DeriveHeightPx) - a re-typed "
+                    + "literal is sized for one aspect and wrong on every other.");
+
+            if (Regex.IsMatch(code, @"MapPlatePx\s*=\s*[0-9]"))
+                failures.Add("[sizedelta-law] a hardcoded MapPlatePx band constant is back in "
+                    + PanelSrc + " - the band is derived from the well, not typed.");
+
+            string plate = ReadSource(PlateSrc, failures);
+            if (plate != null)
+            {
+                string pcode = StripComments(plate);
+                if (!Regex.IsMatch(pcode, @"brt\s*\.\s*sizeDelta\s*=\s*new\s+Vector2"))
+                    failures.Add("[sizedelta-law] DefenseMapPlate.BuildBand no longer writes the "
+                        + "band height to sizeDelta - the LayoutElement it also sets is advisory, "
+                        + "not the mechanism.");
+                // ⚠ MATCHED AGAINST THE STRIPPED SHAPE, DELIBERATELY. StripComments blanks string
+                //    LITERAL BODIES while preserving length, so `glyph + "\n" + label` reads as
+                //    `glyph + "  " + label` in pcode (two spaces for the two source chars) and the
+                //    legitimate one-line `glyph + " " + label` reads as ONE space. A regex written
+                //    against the literal "\\n" here would never fire on anything - a hollow assert,
+                //    which this suite's header forbids. Case 6 measures the rendered line count as
+                //    well, so the property is pinned twice and neither pin is decorative.
+                if (Regex.IsMatch(pcode, @"glyph\s*\+\s*""  ""\s*\+\s*label"))
+                    failures.Add("[sizedelta-law] the plate mark has re-grown its hard \"\\n\" - a "
+                        + "two-line mark in a box sized for one is how the label started painting "
+                        + "on the report's sentences.");
+                if (pcode.IndexOf("TextWrappingModes.NoWrap", StringComparison.Ordinal) < 0)
+                    failures.Add("[sizedelta-law] plate labels are no longer NoWrap - TMP's default "
+                        + "wrapping is what broke the word BREACH in half on the owner's frame.");
+                if (pcode.IndexOf("ElarionUiKit.FontFloor", StringComparison.Ordinal) < 0)
+                    failures.Add("[sizedelta-law] the plate label fit no longer respects "
+                        + "ElarionUiKit.FontFloor - a label allowed below the kit legibility floor "
+                        + "is unreadable rather than fitted, and the legend fallback never fires.");
+            }
+
+            if (failures.Count == before)
+                notes.Add("[sizedelta-law] row band + plate band both reach sizeDelta; labels NoWrap, "
+                    + "floored at ElarionUiKit.FontFloor");
+        }
+
+        // ── 6. [measured-plate] ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// ⭐ BUILT AND MEASURED, at three landscape surfaces. This is the half of WO-1585 that
+        /// a source lint cannot do: the real kit scroll zone, the real
+        /// <see cref="DefenseMapPlate.BuildBand"/>, real TMP paragraphs shaped exactly as
+        /// DefenseReportPanel.Paragraph shapes them, settled twice, then measured.
+        ///
+        /// <para>Two passes because the column reads a child's sizeDelta.y during
+        /// CalculateLayoutInputVertical while a ContentSizeFitter WRITES it during
+        /// SetLayoutVertical - one rebuild measures pre-fit paragraph heights.</para>
+        ///
+        /// <para>Asserted: the band gets the derived height (not 100), no text row's rect
+        /// intersects the band, and every label on the plate is one line inside the band. The
+        /// overlap predicate is <see cref="LayoutOracle.Overlaps"/> - the WO-1060 engine - so this
+        /// panel is judged by the same rule as every other surface rather than a local copy.</para>
+        /// </summary>
+        private static void CaseMeasuredPlate(List<string> failures, List<string> notes)
+        {
+            for (int i = 0; i < Aspects.GetLength(0); i++)
+                MeasureAt(Aspects[i, 0], Aspects[i, 1], failures, notes);
+        }
+
+        private static void MeasureAt(int w, int h, List<string> failures, List<string> notes)
+        {
+            string tag = "[measured-plate:" + w + "x" + h + "]";
+            GameObject canvasGo = null;
+            try
+            {
+                float scale = Mathf.Pow(w / RefW, 0.5f) * Mathf.Pow(h / RefH, 0.5f);
+                if (scale <= 0f) { failures.Add(tag + " degenerate scaler."); return; }
+
+                canvasGo = NewCanvas("drl-" + w + "x" + h, w / scale, h / scale);
+                var rootRt = (RectTransform)canvasGo.transform;
+                var panel = Region(rootRt, "Panel",
+                    new Vector2(0.05f, PanelYMin), new Vector2(0.95f, PanelYMax));
+                // FrameQuest bodyRight, read at source 2026-09-07 from ElarionUiKit.ZonesFor:
+                // new Vector4(0.505f, 0.115f, 0.966f, 0.760f). The DETAIL well, not the list well.
+                var detail = Region(panel, "DetailWell",
+                    new Vector2(DetailZoneXMin, DetailZoneYMin), new Vector2(DetailZoneXMax, DetailZoneYMax));
+                Settle(rootRt);
+
+                var zone = ElarionUiKit.MakeScrollZone(detail, spacing: DetailSpacingPx, padding: DetailPadPx);
+                if (zone == null || zone.content == null || zone.viewport == null)
+                {
+                    failures.Add(tag + " MakeScrollZone returned no content column - nothing to measure.");
+                    return;
+                }
+                Settle(rootRt);
+
+                float wellW = zone.viewport.rect.width, wellH = zone.viewport.rect.height;
+                float derived = DefenseMapPlate.DeriveHeightPx(Mathf.Max(0f, wellW - 2f * DetailPadPx), wellH);
+
+                // ── ⭐ THE RED FIXTURE. The defect, built the OLD way, MEASURED. ──────────
+                //    A LayoutElement asking for 420px and no sizeDelta -- verbatim what
+                //    DefenseReportPanel.BuildMapPlate did before WO-1585. If this band comes out
+                //    at 420 then the kit column HAS started controlling child height and every
+                //    assertion below has quietly stopped measuring what it claims (the same
+                //    negative-fixture discipline as CaseDarkPlate's tan surface). It is
+                //    deactivated immediately after measuring so it cannot pollute the overlap
+                //    sweep. This is the half a source lint cannot do: it proves the MECHANISM,
+                //    not the intent.
+                var legacy = new GameObject("LegacyBand", typeof(RectTransform), typeof(LayoutElement));
+                legacy.transform.SetParent(zone.content, false);
+                var legacyLe = legacy.GetComponent<LayoutElement>();
+                legacyLe.preferredHeight = LegacyAskPx;
+                legacyLe.minHeight = LegacyAskPx;
+                legacyLe.flexibleHeight = 0f;
+                Settle(rootRt);
+                Settle(rootRt);
+                float legacyH = ((RectTransform)legacy.transform).rect.height;
+                if (Mathf.Abs(legacyH - LegacyAskPx) <= 1.5f)
+                    failures.Add(tag + " a band carrying ONLY a LayoutElement(" + Px(LegacyAskPx)
+                        + ") measured " + Px(legacyH) + " - the kit scroll column now honours "
+                        + "LayoutElement, so this suite has stopped measuring the WO-1585 mechanism "
+                        + "and its sizeDelta assertions prove nothing.");
+                legacy.SetActive(false);
+                UnityEngine.Object.DestroyImmediate(legacy);
+                Settle(rootRt);
+
+                // The column, in the SHIPPING order: summary sentences, the plate, then the legend.
+                var above = new List<RectTransform>
+                {
+                    Para(zone.content, "1st BREACH: Open ground at 24s (south-west of the Heart)"),
+                    Para(zone.content, "They came from the west."),
+                };
+                DefenseMapPlate.Plate plate;
+                var band = DefenseMapPlate.BuildBand(zone.content, Fixture(), derived, out plate);
+                var below = new List<RectTransform>();
+                for (int i = 0; i < DefenseMapPlate.Legend.Length; i++)
+                    below.Add(Para(zone.content, DefenseMapPlate.Legend[i]));
+
+                Settle(rootRt);
+                Settle(rootRt);
+                plate?.Relayout();
+                Settle(rootRt);
+
+                if (band == null || plate == null)
+                {
+                    failures.Add(tag + " BuildBand produced no band/plate - the diagram cannot be measured.");
+                    return;
+                }
+
+                // 1. THE BAND GOT THE HEIGHT IT WAS GIVEN. 100 here is the shipped defect.
+                float measured = band.rect.height;
+                if (Mathf.Abs(measured - derived) > 1.5f)
+                    failures.Add(tag + " the plate band measures " + Px(measured) + " but was built at "
+                        + Px(derived) + ". A LayoutElement the kit column does not read is how it "
+                        + "shipped at the 100px RectTransform default.");
+                if (measured < DefenseMapPlate.PlateMinPx - 1.5f)
+                    failures.Add(tag + " the plate band measures " + Px(measured) + ", under the "
+                        + Px(DefenseMapPlate.PlateMinPx) + " floor - the marks crowd into a smear.");
+
+                // 2. NO SENTENCE SHARES PIXELS WITH THE DIAGRAM. The WO-1060 predicate, not a copy.
+                Rect bandRect = Box(band);
+                var rows = new List<RectTransform>(above); rows.AddRange(below);
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    Rect r = Box(rows[i]);
+                    float ow, oh;
+                    if (r.width > 0.5f && r.height > 0.5f && LayoutOracle.Overlaps(r, bandRect, 0.5f, out ow, out oh))
+                        failures.Add(tag + " text row " + i + " " + LayoutOracle.RectStr(r)
+                            + " OVERLAPS the plate band " + LayoutOracle.RectStr(bandRect)
+                            + " by " + ow.ToString("0.#") + "x" + oh.ToString("0.#")
+                            + " px - the diagram and a sentence are on the same pixels.");
+                }
+
+                // 3. EVERY LABEL: one line, inside the plate. This is the "1st BREACH" defect.
+                int labels = 0, glyphOnly = plate.GlyphOnlyFallbacks;
+                foreach (var t in plate.Root.GetComponentsInChildren<TextMeshProUGUI>(true))
+                {
+                    labels++;
+                    if (t.textWrappingMode != TextWrappingModes.NoWrap)
+                        failures.Add(tag + " plate label \"" + t.text.Replace("\n", "/")
+                            + "\" is not NoWrap - TMP will break it mid-word again.");
+                    if (t.text.IndexOf('\n') >= 0)
+                        failures.Add(tag + " plate label \"" + t.text.Replace("\n", "/")
+                            + "\" carries a hard line break - the box is sized for one line.");
+                    t.ForceMeshUpdate();
+                    if (t.textInfo != null && t.textInfo.lineCount > 1)
+                        failures.Add(tag + " plate label \"" + t.text.Replace("\n", "/")
+                            + "\" renders on " + t.textInfo.lineCount + " lines at font "
+                            + t.fontSize.ToString("0.#") + " in a " + Px(((RectTransform)t.transform).sizeDelta.x)
+                            + " box - that is the wrapped \"1st / BREA / CH\" returning.");
+                    if (t.fontSize < ElarionUiKit.FontHardFloor - 0.01f)
+                        failures.Add(tag + " plate label \"" + t.text + "\" sits at font "
+                            + t.fontSize.ToString("0.#") + ", under the kit hard floor "
+                            + ElarionUiKit.FontHardFloor + " - the fallback is the glyph, never sub-legible words.");
+                    Rect lr = Box((RectTransform)t.transform);
+                    if (lr.width > 0.5f && !Contains(bandRect, lr))
+                        failures.Add(tag + " plate label \"" + t.text.Replace("\n", "/") + "\" "
+                            + LayoutOracle.RectStr(lr) + " hangs OUTSIDE the plate band "
+                            + LayoutOracle.RectStr(bandRect) + " - it paints onto the report's rows.");
+                }
+                if (labels == 0)
+                    failures.Add(tag + " the plate carries NO labels - this case would pass on an "
+                        + "empty diagram, which is not evidence.");
+
+                if (w == 2670 && h == 1200)
+                    notes.Add(tag + " well " + Px(wellW) + "x" + Px(wellH) + ", band " + Px(measured)
+                        + " (derived " + Px(derived) + "), " + labels + " labels one-line, "
+                        + glyphOnly + " glyph-only, zero overlap; RED fixture: a LayoutElement-only "
+                        + "band asking " + Px(LegacyAskPx) + " measured " + Px(legacyH));
+            }
+            catch (Exception ex)
+            {
+                failures.Add(tag + " THREW " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+            }
+        }
+
+        /// <summary>A well-formed record with a breach, a path and two losses - enough for the
+        /// plate to draw every kind of mark, which is what the label assertions need.</summary>
+        private static DefenseOutcomeRecord Fixture()
+        {
+            var r = DefenseOutcomeRecord.NewEmpty();
+            r.Outcome = DefenseOutcome.Breached;
+            if (r.Defender == null) r.Defender = new DefenderSnapshot();
+            r.Defender.CoreX = 0f; r.Defender.CoreZ = 0f;
+            r.Defender.CoreRadius = 12f; r.Defender.FrontRadius = 28f;
+            if (r.Breaches == null) r.Breaches = new List<BreachRecord>();
+            r.Breaches.Add(new BreachRecord { DisplayName = "Open ground", WorldX = -24f, WorldZ = -18f, AtSeconds = 24f });
+            r.Breaches.Add(new BreachRecord { DisplayName = "West wall", WorldX = -30f, WorldZ = 4f, AtSeconds = 31f });
+            if (r.Path == null) r.Path = new List<AttackPathPoint>();
+            r.Path.Add(new AttackPathPoint { WorldX = -46f, WorldZ = -2f });
+            r.Path.Add(new AttackPathPoint { WorldX = -24f, WorldZ = -10f });
+            r.Path.Add(new AttackPathPoint { WorldX = -4f, WorldZ = -2f });
+            if (r.Rows == null) r.Rows = new List<StructureOutcome>();
+            r.Rows.Add(new StructureOutcome { DisplayName = "Watchtower", WorldX = -20f, WorldZ = 6f, DistanceFromCore = 21f });
+            r.Rows.Add(new StructureOutcome { DisplayName = "Granary", WorldX = 14f, WorldZ = -8f, DistanceFromCore = 16f });
+            return r;
+        }
+
+        /// <summary>A paragraph shaped exactly as DefenseReportPanel.Paragraph shapes one: TMP,
+        /// wrapping, PreferredSize vertical fitter, unconstrained horizontally.</summary>
+        private static RectTransform Para(Transform parent, string text)
+        {
+            var go = new GameObject("Para", typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var t = go.GetComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
+            t.text = text;
+            t.fontSize = ElarionUi.FontLabel;
+            t.alignment = TextAlignmentOptions.TopLeft;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            t.raycastTarget = false;
+            var fit = go.AddComponent<ContentSizeFitter>();
+            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            return (RectTransform)go.transform;
+        }
+
+        // ── measured-case plumbing (mirrors RaidSelectionLayoutRegression) ───────
+
+        /// <summary>FrameQuest bodyRight, read at source from ElarionUiKit.ZonesFor 2026-09-07.</summary>
+        private const float DetailZoneXMin = 0.505f, DetailZoneYMin = 0.115f;
+        private const float DetailZoneXMax = 0.966f, DetailZoneYMax = 0.760f;
+
+        /// <summary>The detail column's MakeScrollZone arguments in DefenseReportPanel.BuildChrome.</summary>
+        private const float DetailSpacingPx = 12f;
+        private const int DetailPadPx = 28;
+
+        private const string PlateSrc = "Assets/_Modules/Core/UI/DefenseMapPlate.cs";
+
+        /// <summary>The height the OLD BuildMapPlate asked for through a LayoutElement and never
+        /// got. Used by the RED fixture in case 6 - it is a historical number, not a knob.</summary>
+        private const float LegacyAskPx = 420f;
+
+        private static GameObject NewCanvas(string name, float w, float h)
+        {
+            // WORLD-SPACE and hand-sized: a ScreenSpace canvas in an edit-mode batchmode call
+            // reports the editor's own 640x480 (the WO-1060 F8-5 root cause).
+            var go = new GameObject(name, typeof(RectTransform), typeof(Canvas));
+            go.hideFlags = HideFlags.HideAndDontSave;
+            go.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+            var rt = (RectTransform)go.transform;
+            rt.position = Vector3.zero;
+            rt.localRotation = Quaternion.identity;
+            rt.localScale = Vector3.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w, h);
+            return go;
+        }
+
+        private static RectTransform Region(Transform parent, string name, Vector2 aMin, Vector2 aMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
+
+        private static void Settle(RectTransform root)
+        {
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(root);
+        }
+
+        private static readonly Vector3[] _corners = new Vector3[4];
+
+        private static Rect Box(RectTransform rt)
+        {
+            if (rt == null) return new Rect();
+            rt.GetWorldCorners(_corners);
+            float x0 = Mathf.Min(_corners[0].x, _corners[2].x), x1 = Mathf.Max(_corners[0].x, _corners[2].x);
+            float y0 = Mathf.Min(_corners[0].y, _corners[2].y), y1 = Mathf.Max(_corners[0].y, _corners[2].y);
+            return new Rect(x0, y0, x1 - x0, y1 - y0);
+        }
+
+        private static bool Contains(Rect outer, Rect inner)
+            => inner.xMin >= outer.xMin - 1f && inner.xMax <= outer.xMax + 1f
+            && inner.yMin >= outer.yMin - 1f && inner.yMax <= outer.yMax + 1f;
 
         // ── helpers ──────────────────────────────────────────────────────────────
 
