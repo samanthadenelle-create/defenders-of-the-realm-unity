@@ -187,7 +187,32 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 22:4x (CLI, hundred-and-third pass): main line next free = **1567**.
+> ## RECONCILED 2026-09-06 22:5x (CLI, hundred-and-fourth pass): main line next free = **1568**.
+> *(CLI minted **1567** = CONSOLIDATE THE MANAGE ART WAVE - gate, capture, build, push. Handover to the
+> CLI lane on the owner's ask. The art is ALREADY COMMITTED (`ad808ecf3`): 57 PNGs + 58 metas, 26 of 26
+> BUILD rows now resolve a portrait (up from 5), filenames an EXACT match for the 21 missing catalog ids.
+> ⚠ **That is FILESYSTEM evidence, not Unity evidence** - `ManagePortraitCoverageRegression` has never run
+> because the tree does not compile.
+> ⛔ **THE GATE IS RED TWICE AND NEITHER FAILURE IS THE ART** (PNGs cannot produce CS errors). Both runs
+> EXITED 0 and FAILED - `VERDICT=FAIL reason=MARKER_ABSENT`, the
+> `gates-report-success-without-proving-it` class. 66 errors in the COMMITTED
+> `RaidSelectionSpoilsRegression.cs`, which calls `RaidSelectionVM.ArmyLockWordFor` after the in-flight
+> WO-1542 lane removed it - that oracle must move WITH the ruling, never be deleted to green the gate.
+> 6 errors in `SkillsPanelLayoutRegression.cs:1460` where `lGround` is undefined while its siblings `lWell`
+> and `lRaised` resolve - a dropped declaration. ⚠ The first run RACED a live edit (files written 22:37:20
+> and 22:37:32, after the 22:36:09 start), so confirm quiescence before believing any gate result.
+> ⛔ **§16 SETTLED: NO R2 PUSH IS OWED.** Owner ruled the portraits stay in `Resources/` and are NOT
+> addressable (she said "should be addressable" and reversed it the same minute - the reversal is the
+> ruling, recorded so it is not re-opened). Measured: no Addressable group references `Resources/Portraits`,
+> and `git status ServerData/` is empty, so the pre-push invariant is satisfied untouched. That is NOT
+> licence to hand-build and `adb install` - the sanctioned scripts still own installation.
+> Two art caveats carried: the 21 portraits were UPSCALED from the contact sheets and must be judged at
+> mockup panel 3's large detail scale, not grid scale; and the four tile frames are not interchangeable at
+> one rect (frame-max reaches 23px from the top, frame-selected 84px). The earlier opaque-vs-hollow frame
+> defect IS fixed - all four now read centre alpha 0.
+> Bumped 1567 -> 1568 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 22:4x (CLI, hundred-and-third pass): main line next free = **1567**.
 > *(CLI minted **1566** = THE MANAGE CONFORMANCE SPEC - the end-of-session definition of done, so the work
 > matches the documents the owner already handed over (the 8-screen mockup + the UI asset sheets).
 > `CAPTURE_LOOP_GOAL.md` already owns the LOOP and the eight-screen table; 1566 adds the two things it does
