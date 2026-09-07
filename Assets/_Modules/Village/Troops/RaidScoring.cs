@@ -81,32 +81,50 @@ namespace DeNelle.Village
         /// <c>HeroDeathEndState</c> (which sentence the fallen screen prints), so the
         /// behaviour and the copy can never disagree.
         ///
-        /// <para><b>OWNER DECISION, PENDING (WO-1437 sec.4.3).</b> Whether "Rise again" may
-        /// legally stand the hero back up INSIDE a live raid is a design ruling, not an
-        /// engineering one. This constant is that ruling, and flipping it is the whole
-        /// change — nothing else in either file branches on the question.</para>
+        /// <para><b>THE OWNER DECISION WO-1437 LEFT PENDING IS NOW RULED (WO-1526, owner
+        /// 2026-09-06), AND IT RULED <c>false</c>.</b> Verbatim: <i>"Do not let hero death
+        /// instantly terminate the raid... let the raid continue, but cap the result at 2
+        /// stars if the hero dies. That makes hero survival matter without turning the hero
+        /// into a giant red self-destruct button."</i></para>
         ///
         /// <list type="bullet">
-        /// <item><c>true</c> (current): hero death is the raid's THIRD EXIT. It settles
-        /// partial loot, reconciles the army and routes home — identical to Retreat.</item>
-        /// <item><c>false</c>: hero death respawns in place and the raid continues; the
-        /// player leaves by objective, clock or Retreat only.</item>
+        /// <item><c>true</c> (RETIRED 2026-09-06): hero death was the raid's THIRD EXIT — it
+        /// settled partial loot, reconciled the army and routed home, identical to Retreat.
+        /// Measured cost of that shape, <c>logs/debug/raid-no-abilities-2026-09-06.log</c>
+        /// 12:59:47: <c>"hero death settle: partial loot for 32% razed"</c> fired 45 s into a
+        /// 180 s raid with a full army still standing on the field.</item>
+        /// <item><c>false</c> (current): the hero goes down and STAYS down — the raid keeps
+        /// running to clear, Retreat or the clock, the army fights on, and the settled result
+        /// is clamped to <see cref="HeroDeathStarCap"/> stars by
+        /// <see cref="ApplyHeroDeathCap"/>. The clamp IS the cost of dying.</item>
         /// </list>
         ///
-        /// <para>RECOMMENDED <c>true</c>, and set that way, because it is not a new opinion —
-        /// it is the ruling ALREADY recorded in code. <c>HeroHealth.HandleDeath</c> carries the
-        /// owner ruling of 2026-07-30 verbatim ("Hero death is the THIRD raid exit... All three
-        /// exits are honest now") and WO-1110 sec.3 made death pay exactly what retreat pays.
-        /// The 12:59:47 capture is that ruling working; the 13:02:53 capture is it being
-        /// bypassed. Flipping this to false would retire a shipped ruling, so it needs the
-        /// owner's word — which is precisely why it is one line and not a refactor.</para>
+        /// <para>⛔ <c>false</c> DOES NOT MEAN "respawns in place". WO-1437 wrote that gloss into
+        /// this doc while the branch was unruled, and WO-1526 sec.3 rules the opposite: <i>"Do
+        /// not let the hero respawn mid-raid. The ruling is that survival still matters — the
+        /// 2-star clamp IS the cost, and a respawn removes it."</i> <c>HeroHealth.HandleDeath</c>
+        /// therefore neither respawns nor routes home on this branch; it hands off to
+        /// <c>RaidDeployController.NotifyHeroDown</c> and stops.</para>
+        ///
+        /// <para>⚠ FLIPPING THIS CONSTANT ALONE IS <b>NOT</b> THE WHOLE CHANGE — the old doc
+        /// claimed it was, and that claim was false. <c>HeroHealth</c>'s evac test is
+        /// <c>if (enemyOwnedScene || raidDeathExit)</c>, and a live raid base IS enemy-owned
+        /// (the claim only flips it at the win), so the evac fired regardless of this value.
+        /// The live-raid branch must be evaluated BEFORE that OR, and it now is.</para>
         ///
         /// <para>⚠ A SETTLED raid ignores this constant and ALWAYS routes home: once
         /// <see cref="Finalized"/> has latched, the loot is paid, the camp is claimed and the
-        /// clock has stopped, so there is no session left to respawn into. That is the
-        /// softlock this WO exists to close and it is not a matter of taste.</para>
+        /// clock has stopped, so there is no session left to fight on inside. That is the
+        /// WO-1437 softlock and it is not a matter of taste.</para>
         /// </summary>
-        public const bool RaidDeathEndsRaid = true;
+        public const bool RaidDeathEndsRaid = false;
+
+        /// <summary>
+        /// WO-1526 — the star ceiling a raid can settle at once the hero has fallen. The owner's
+        /// ruling ("cap the result at 2 stars if the hero dies") lives here as a number so no
+        /// call site re-hardcodes a 2.
+        /// </summary>
+        public const int HeroDeathStarCap = 2;
 
         /// <summary>
         /// The LIVE raid clock default (seconds). Selection/deploy UI must display this
@@ -158,6 +176,9 @@ namespace DeNelle.Village
         private string _engagedReason;
         private float _detectTimer;
         private float _spireHpAtStart = -1f;
+        // WO-1526: latched the moment the hero falls in this raid. Clamps the settled result to
+        // HeroDeathStarCap. Session state, never persisted - a raid is one session by definition.
+        private bool _heroDied;
 
         /// <summary>How often the passive engagement detector sweeps while the raid is staging.</summary>
         private const float EngagementScanInterval = 0.2f;
@@ -400,9 +421,40 @@ namespace DeNelle.Village
         /// star ladder itself (ComputeStars) is untouched, only what feeds it.
         /// </summary>
         public int ProjectedStars =>
-            ComputeStars(RaidWon,
-                         RaidWon,                                 // the objective IS the boss kill now
-                         DestructionPct, _elapsed, _clockSeconds, SurvivalPct);
+            ApplyHeroDeathCap(
+                ComputeStars(RaidWon,
+                             RaidWon,                             // the objective IS the boss kill now
+                             DestructionPct, _elapsed, _clockSeconds, SurvivalPct),
+                _heroDied);
+
+        /// <summary>
+        /// WO-1526 — true once the hero has fallen in THIS raid. Read by the HUD and by
+        /// <see cref="Finalize"/>; latched by <see cref="NotifyHeroDied"/>.
+        /// </summary>
+        public bool HeroDied => _heroDied;
+
+        /// <summary>
+        /// WO-1526 — latch the hero's death for the star clamp. Idempotent: called from the raid
+        /// death path (<c>HeroHealth.HandleDeath</c>), which may be reached more than once across
+        /// a death/settle race, and the second call must be a silent no-op, not a second trace.
+        ///
+        /// <para><b>COMPOSE NOTE (2026-09-06):</b> WO-1594 (branch <c>grok/raid-1593-1595</c>)
+        /// adds an identically-named <c>NotifyHeroDied</c> on this same class for the honor-star
+        /// snuff. That is DELIBERATELY THE SAME SEAM, not a second hero-death path — on merge,
+        /// take his body (it traces the snuff as well) and keep this one call site. There must
+        /// never be two latches for one death.</para>
+        /// </summary>
+        public void NotifyHeroDied()
+        {
+            if (_heroDied) return;
+            _heroDied = true;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"HERO DOWN - the raid CONTINUES (WO-1526 owner ruling 2026-09-06). elapsed=" +
+                $"{_elapsed:F0}s/{_clockSeconds:F0}s destruction={DestructionPct:P0} " +
+                $"finalized={_finalized}. The army fights on; this raid can now settle at most " +
+                $"{HeroDeathStarCap} star(s). Nothing is settled here - loot settles when the raid " +
+                "actually ends (clear, Retreat or the clock).");
+        }
 
         /// <summary>The simple re-watch record (order/time/place of every deploy).</summary>
         public RaidDeployLog DeployLog => _deployLog;
@@ -465,6 +517,22 @@ namespace DeNelle.Village
             }
             return Mathf.Clamp(s, 0, 3);
         }
+
+        /// <summary>
+        /// WO-1526 — the owner's hero-death clamp, PURE so an oracle can assert it with no scene.
+        /// A raid in which the hero fell settles at most <see cref="HeroDeathStarCap"/> stars,
+        /// however perfect the clear. It only ever LOWERS a tier - a hero who never fell is
+        /// returned untouched, so this can never inflate a result.
+        ///
+        /// <para><b>COMPOSE NOTE (2026-09-06):</b> WO-1594 replaces <see cref="Finalize"/>'s star
+        /// line with <c>Mathf.Min(settleStars, honorStars)</c>, and its <c>ComputeHonorStars</c>
+        /// already returns at most 2 when <c>heroDied</c> — so on merge that Min SUBSUMES this
+        /// call and this helper becomes a redundant (still-correct, still-pinned) second
+        /// statement of the same ceiling. Take his hunk; keeping both is harmless but keeping
+        /// only his is cleaner.</para>
+        /// </summary>
+        public static int ApplyHeroDeathCap(int stars, bool heroDied)
+            => heroDied ? Mathf.Min(stars, HeroDeathStarCap) : stars;
 
         /// <summary>
         /// Survivors / deployed at this instant, clamped 0..1. Deploying nothing reads as 1f
@@ -930,9 +998,13 @@ namespace DeNelle.Village
             // field at Finalize (nothing on the victory path destroys troops; the scene only
             // unloads at ReturnHome), so this is the real number, not an estimate.
             float survival = SurvivalPct;
-            int stars = ComputeStars(cleared, bossDown, destruction, _elapsed, _clockSeconds, survival);
+            int earnedStars = ComputeStars(cleared, bossDown, destruction, _elapsed, _clockSeconds, survival);
+            // WO-1526 — the owner's hero-death ceiling, applied at the ONE place a raid settles.
+            int stars = ApplyHeroDeathCap(earnedStars, _heroDied);
             DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                $"stars settled: {stars} (cleared={cleared} destruction={destruction:P0} " +
+                $"stars settled: {stars} (earned={earnedStars} heroDied={_heroDied} " +
+                $"cap={(_heroDied ? HeroDeathStarCap.ToString() : "none")}) " +
+                $"(cleared={cleared} destruction={destruction:P0} " +
                 $"elapsed={_elapsed:F0}s/{_clockSeconds:F0}s underTime={_elapsed <= Mathf.Max(1f, _clockSeconds)} " +
                 $"survival={survival:P0} high={survival >= HighSurvivalPct} @{HighSurvivalPct:P0}).");
 

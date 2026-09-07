@@ -869,6 +869,10 @@ namespace DeNelle.Village
             // HitStop above restores Time.timeScale within ~0.1s, so this elapses.
             yield return new WaitForSeconds(Mathf.Max(0.1f, _downSeconds));
 
+            // WO-1526 SCOPE NOTE: this header describes the branch that survives BELOW the new
+            // live-raid guard — a SETTLED raid, or an enemy-owned non-raid scene (Village2, an
+            // enemy dungeon). A death inside a LIVE raid no longer reaches it; the raid continues
+            // and the army fights on.
             // RAID-DEATH EVAC: dying in an enemy-owned base ends the raid — retreat
             // to the home hub (MainCastle_Hall) instead of respawning in place. The
             // hub load resets the hero fresh on the far side. Player-owned scenes
@@ -909,9 +913,71 @@ namespace DeNelle.Village
             var  raidScorer      = DeNelle.Village.RaidScoring.Instance;
             bool raidSettled     = raidScorer != null && raidScorer.Finalized;
 
+            // ── WO-1526 — HERO DEATH NO LONGER ENDS A LIVE RAID ──────────────────────────
+            // Owner ruling 2026-09-06, verbatim: "Do not let hero death instantly terminate the
+            // raid... let the raid continue, but cap the result at 2 stars if the hero dies. That
+            // makes hero survival matter without turning the hero into a giant red self-destruct
+            // button."
+            //
+            // MEASURED COST OF THE OLD SHAPE (logs/debug/raid-no-abilities-2026-09-06.log):
+            //   12:59:47  [Flow:Raid] hero death settle: partial loot for 32% razed
+            // 45 seconds into a 180-second raid, with a full army still standing on the field.
+            //
+            // LATCH FIRST, BRANCH SECOND. The scorer is told about the death on EVERY path -
+            // live raid, settled raid, enemy-owned non-raid - before any branch is chosen, so the
+            // 2-star cap can never depend on which exit was taken. NotifyHeroDied is idempotent.
+            // (COMPOSE NOTE: WO-1594 on branch grok/raid-1593-1595 adds the same call ~40 lines
+            // below, inside the EVAC branch, for its honor-star snuff. That is the SAME seam -
+            // on merge keep THIS call site, which covers the live-raid branch his cannot reach,
+            // and drop the inner one. Two latches for one death is the duplicated state.)
+            if (raidScorer != null) raidScorer.NotifyHeroDied();
+
+            // ⛔ THIS TEST MUST PRECEDE THE `enemyOwnedScene ||` BELOW, AND THAT IS THE WHOLE FIX.
+            // RaidScoring.RaidDeathEndsRaid's own doc used to claim "flipping it is the whole
+            // change"; it was wrong. A LIVE raid base IS enemy-owned (RaidClaimService only flips
+            // it at the win), so `enemyOwnedScene` is true and the evac below fired regardless of
+            // the constant's value. Flipping the constant alone would have changed nothing.
+            //
+            // ⛔ `raidScorer != null` IS LOAD-BEARING, NOT DEFENSIVE PADDING. RaidInProgress
+            // answers TRUE off a scene-name fallback when the scorer failed to install
+            // (RaidScoring.RaidInProgress: "the scene test is a FALLBACK, not the definition").
+            // In that degenerate raid there is no clock, no cap to apply, and no
+            // StrandingWatchdog either - that lives on RaidDeployController, which is installed
+            // beside the scorer. Before WO-1526 the hero's death was the rescue exit from a raid
+            // like that; "the raid continues" is only meaningful when there IS a session to
+            // continue, so a scorer-less raid keeps the old EVAC and stays escapable.
+            bool liveRaidContinues = raidInProgress && raidScorer != null && !raidSettled &&
+                                     !DeNelle.Village.RaidScoring.RaidDeathEndsRaid;
+
+            if (liveRaidContinues)
+            {
+                // Step, never Warn/Fail: a normal hero death must not raise an F8 severity
+                // (HeroDeathSeverityRegression pins that, audit 2026-08-15).
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Death",
+                    "HandleDeath: down-beat elapsed -> HERO STAYS DOWN, RAID CONTINUES (WO-1526). " +
+                    $"Signal: enemyOwned={enemyOwnedScene} raidInProgress={raidInProgress} " +
+                    $"raidSettled={raidSettled} raidDeathEndsRaid={DeNelle.Village.RaidScoring.RaidDeathEndsRaid}. " +
+                    "No respawn (WO-1526 sec.3: the 2-star clamp IS the cost and a respawn removes " +
+                    "it), no loot settle (sec.3: loot settles when the raid actually ends), no army " +
+                    "reconcile, no route home. Locomotion and abilities are already disabled at the " +
+                    "top of this coroutine, so the hero is simply out of the fight; the army fights " +
+                    "on and the raid ends by objective, Retreat or the clock.");
+
+                var liveRaidDeploy = FindAnyObjectByType<DeNelle.Village.RaidDeployController>();
+                if (liveRaidDeploy != null)
+                    DeNelle.Core.Diagnostics.Guard.Try("Raid", "hero down - army fights on",
+                        () => liveRaidDeploy.NotifyHeroDown());
+                else
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                        "HandleDeath: live raid continues but no RaidDeployController was found, so " +
+                        "nobody tells the player 'HERO DOWN - your army fights on'. The star cap is " +
+                        "still latched on the scorer above; only the status line is lost.");
+                yield break;
+            }
+
             // A SETTLED raid always goes home (see RaidScoring.RaidDeathEndsRaid): the loot is
             // paid, the camp is claimed and the clock is stopped, so there is nothing left to
-            // respawn INTO. An UNSETTLED raid follows the owner's ruling constant.
+            // fight on inside. An UNSETTLED raid took the branch above.
             bool raidDeathExit = raidInProgress &&
                                  (raidSettled || DeNelle.Village.RaidScoring.RaidDeathEndsRaid);
 

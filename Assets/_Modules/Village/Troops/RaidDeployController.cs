@@ -190,6 +190,11 @@ namespace DeNelle.Village
         // END the raid (retreat) when time runs out. Null when scoring isn't present.
         private RaidScoring _scoring;
 
+        // WO-1526: local latch so a repeated hero-death notification cannot re-stamp the status
+        // line over whatever the player is reading next. The scorer's latch owns the star cap;
+        // this one owns the sentence.
+        private bool _heroDownAcknowledged;
+
         /// <summary>
         /// WO-1110 fault-injection hook: when true the next <see cref="BuildHud"/> throws.
         /// Exists so the "a HUD build failure still leaves an exit" acceptance can be PROVEN
@@ -393,7 +398,9 @@ namespace DeNelle.Village
                 DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
                     $"RAID STRANDING WATCHDOG FIRED (last-resort arm) - {aliveFor:0}s in a raid scene " +
                     $"with a {clock:0}s clock that NEVER finalized, so neither the objective, the clock " +
-                    "expiry, Retreat nor hero death ended this session. Routing home anyway. This arm " +
+                    "expiry nor Retreat ended this session (WO-1526: hero death is no longer an exit - " +
+                    "the army fights on and the raid ends by objective, Retreat or the clock). " +
+                    "Routing home anyway. This arm " +
                     "firing means the OnTimeExpired subscriber is missing or RaidScoring never " +
                     "installed - fix THAT (WO-1437).");
                 ForceExitHome("unsettled-raid last-resort watchdog");
@@ -834,6 +841,52 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-1526 — THE HERO FELL AND THE RAID DOES NOT END. Owner ruling 2026-09-06, verbatim:
+        /// <i>"Do not let hero death instantly terminate the raid... let the raid continue, but
+        /// cap the result at 2 stars if the hero dies. That makes hero survival matter without
+        /// turning the hero into a giant red self-destruct button."</i>
+        ///
+        /// <para><b>WHAT THIS DELIBERATELY DOES NOT DO — and each omission is the ticket:</b> it
+        /// does not call <see cref="SettlePartialLoot"/> (WO-1526 sec.3: <i>"Do not settle loot at
+        /// the moment of death. Loot settles when the raid actually ends"</i>), does not call
+        /// <see cref="ReconcileRaidEnd"/>, does not show an end state, does not route home, and
+        /// does not respawn the hero. The raid's exits stay exactly the four it already had —
+        /// objective, Retreat, clock, and <see cref="StrandingWatchdog"/> — and every one of them
+        /// still settles through the same shared authority, so the WO-1110 parity this ticket
+        /// touches is untouched.</para>
+        ///
+        /// <para>All it does is LATCH the death on the scorer (the star ceiling) and say so on
+        /// screen. Raid session ownership lives on this controller, never on a view — the same
+        /// rationale <see cref="StrandingWatchdog"/> is written to.</para>
+        ///
+        /// <para>Idempotent by construction: <c>RaidScoring.NotifyHeroDied</c> latches, and the
+        /// local latch keeps a second call from re-writing the status line over whatever the
+        /// player is doing next.</para>
+        /// </summary>
+        public void NotifyHeroDown()
+        {
+            if (_heroDownAcknowledged) return;
+            _heroDownAcknowledged = true;
+
+            if (_scoring == null) _scoring = RaidScoring.Instance;
+            if (_scoring != null) _scoring.NotifyHeroDied();
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "NotifyHeroDown: no RaidScoring instance to latch the hero death on, so this " +
+                    "raid CANNOT apply the 2-star cap (WO-1526). The raid still continues; the " +
+                    "result will over-pay. If you are reading this, the scorer failed to install.");
+
+            SetStatus(DeNelle.Village.UI.EndStateVM.HeroDownArmyFightsOn);
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                "hero DOWN - the raid CONTINUES and the army fights on (WO-1526). No loot settled, " +
+                "no army reconciled, no route home: the raid ends by objective, Retreat or the " +
+                $"clock as it always did, and settles at most {RaidScoring.HeroDeathStarCap} star(s). " +
+                $"deployed={(_scoring != null && _scoring.DeployLog != null ? _scoring.DeployLog.Count : -1)} " +
+                $"scorer={(_scoring != null ? "present" : "MISSING")}.");
+        }
+
+        /// <summary>
         /// WO-1561 - build and show the result screen, then leave through IT rather than
         /// straight past it.
         ///
@@ -1197,7 +1250,8 @@ namespace DeNelle.Village
             // WO-823 Phase E - THE FIRST-RAID STAMP, and the ONLY writer of this flag.
             // ReconcileRaidEnd is the latched seam every raid exit already funnels through
             // (victory -> RaidVictoryController, retreat -> DoRetreat's ReconcileRaidEnd(0),
-            // hero death -> HeroHealth's ReconcileRaidEnd(0)), so stamping here covers all
+            // hero death -> HeroHealth's ReconcileRaidEnd(0), now only on a SETTLED raid: WO-1526
+            // made a live-raid death take the "raid continues" branch above it), so stamping here covers all
             // three exits with one line and no exit-specific branching. It sits AFTER the
             // army null-guard on purpose: headless has no GameState, so a headless run can
             // never spend a live player's softened first raid.

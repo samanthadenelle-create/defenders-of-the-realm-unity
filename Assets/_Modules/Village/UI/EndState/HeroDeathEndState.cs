@@ -127,6 +127,29 @@ namespace DeNelle.Village.UI
             bool raidInProgress = RaidScoring.RaidInProgress;
             var raidScorer = RaidScoring.Instance;
             bool raidSettled = raidScorer != null && raidScorer.Finalized;
+
+            // WO-1526 — THE RAID IS NOT OVER, SO THERE IS NO END STATE TO SHOW. Same three
+            // signals, read in the same order as HeroHealth.HandleDeath (the WO-1437 rule: the
+            // copy tracks the branch, it never decides one). When the hero falls inside a LIVE
+            // raid the army fights on, so a "YOU HAVE FALLEN" modal would (a) tell the player
+            // "The raid is lost" about a raid that is still winnable, and (b) put a full-screen
+            // panel over the deploy tray the player now needs MORE than before, not less. The
+            // status line RaidDeployController.NotifyHeroDown sets ("HERO DOWN - your army fights
+            // on", composed by EndStateVM) is the whole presentation of this beat.
+            // `raidScorer != null` mirrors HeroHealth exactly, for the same reason: a raid whose
+            // scorer failed to install still reads RaidInProgress true off the scene-name
+            // fallback, and there the hero's death IS still the exit - so the fallen screen must
+            // still show. The copy tracks the branch; it never picks one (WO-1437).
+            if (raidInProgress && raidScorer != null && !raidSettled && !RaidScoring.RaidDeathEndsRaid)
+            {
+                FlowTrace.Step("EndState",
+                    $"hero death in LIVE raid scene '{scene}' (enemyOwned={enemyOwned} " +
+                    $"raidSettled=False raidDeathEndsRaid={RaidScoring.RaidDeathEndsRaid}) -> NO end " +
+                    "state. WO-1526: the raid continues and the army fights on, so the fallen screen " +
+                    "would be both untrue and in the way. The raid HUD status line carries this beat.");
+                return;
+            }
+
             bool leavingTheRaid = enemyOwned ||
                                   (raidInProgress && (raidSettled || RaidScoring.RaidDeathEndsRaid));
 

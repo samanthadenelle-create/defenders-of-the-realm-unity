@@ -499,6 +499,17 @@ namespace DeNelle.Village.UI
         public const string RewardShortSentence = "Some of the reward could not be paid out.";
 
         /// <summary>
+        /// WO-1526 — the raid HUD's status line the instant the hero falls, while the raid keeps
+        /// running. It lives HERE, on the view model, and not inside
+        /// <c>RaidDeployController</c>'s view code, because the acceptance criterion is that the
+        /// sentence is composed by the VM (the same reason <see cref="TimeoutReason"/> and
+        /// <see cref="RewardShortSentence"/> are consts here rather than literals at their call
+        /// sites): presentation copy has exactly one owner, so the words a player reads and the
+        /// words an oracle asserts can never drift apart.
+        /// </summary>
+        public const string HeroDownArmyFightsOn = "HERO DOWN - your army fights on";
+
+        /// <summary>
         /// WO-1561 - THE RESULT SCREEN A LOSING OR ABANDONED RAID NEVER HAD.
         ///
         /// <para><b>THE DEFECT THIS CLOSES.</b> <c>RaidDeployController.DoRetreat</c> settled the
