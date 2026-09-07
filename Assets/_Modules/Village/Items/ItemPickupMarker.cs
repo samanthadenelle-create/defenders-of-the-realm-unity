@@ -41,17 +41,141 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using DeNelle.Core.UI;            // CombatText / CombatTextKind - the ONE bounded stamp seam
+using DeNelle.Core.Diagnostics;   // FlowTrace (CLAUDE.md sec.12)
 
 namespace DeNelle.Village.Items
 {
+    /// <summary>
+    /// WO-1589 - the ONE producer of the "what did I just bank?" reward stamp for LOOT.
+    /// <para>
+    /// THE DEFECT IT CLOSES (owner, Seeker, 2026-09-07: "when i open a chest no toast to
+    /// what i found"): the chest path ended at
+    /// <c>[Flow:Loot] Chest_crate opened -&gt; dropped 2 loot line(s) as a world mote</c> and
+    /// said nothing, while a kill 25 seconds later toasted through
+    /// <c>CombatText(Reward)</c> in the same session. Two feedback rules on one screen.
+    /// </para>
+    /// <para>
+    /// ⛔ IT IS NOT A SECOND TOAST SYSTEM. It composes a label and hands it to the SAME
+    /// bounded, pooled, deduped screen-space stamp Enemy.ShowFieldKillReward uses
+    /// (<c>CombatText.Show(CombatTextKind.Reward, ...)</c>, WO-1103 §1.8). Building a
+    /// parallel loot toast is the inferior fix; do not.
+    /// </para>
+    /// <para>
+    /// ⛔ IT FIRES AT THE BANK, NEVER AT THE DROP. A chest that dropped a mote the player
+    /// walked past has granted NOTHING - toasting at the open would claim what is not yet
+    /// held. The call sites are therefore ItemPickupMarker.Collect (the mote
+    /// is walked over) and BreakableContainer's direct-deposit fallback (the roll banked
+    /// straight to the larder because world pickups are off). Both are banks.
+    /// </para>
+    /// </summary>
+    public static class LootRewardToast
+    {
+        private const string Sys = "Loot";
+
+        /// <summary>Most lines named individually before the label spills into "+N more".
+        /// The stamp is capped at 44 reference px (CombatTextLayer) - an unbounded label
+        /// from a fat chest roll would run off a Seeker screen.</summary>
+        private const int MaxNamedLines = 4;
+
+        /// <summary>How many reward stamps this producer has routed this session. Permanent
+        /// instrumentation (sec.12), and the counter the [chest-loot-toast] oracle reads to
+        /// prove "one toast per pickup, zero without".</summary>
+        public static int AnnouncedCount { get; private set; }
+
+        /// <summary>The last label routed, verbatim. Diagnostics + oracle read.</summary>
+        public static string LastLabel { get; private set; }
+
+        /// <summary>Reset the session counters (oracle setup; never called by gameplay).</summary>
+        public static void ResetCounters()
+        {
+            AnnouncedCount = 0;
+            LastLabel = null;
+        }
+
+        /// <summary>
+        /// Compose the player-facing label for <paramref name="lines"/>:
+        /// <c>"+1 Oil Flask  +1 Tattered Cloth"</c>. PURE and DETERMINISTIC - ordered by
+        /// count descending then ordinal id, because a <see cref="Dictionary{TKey,TValue}"/>
+        /// has no stable order and the same roll must never read two different ways.
+        /// Names come from <see cref="ItemIdentity.DisplayName"/> (the authored
+        /// consumables/materials row), never from the raw id when a row exists.
+        /// Returns an empty string when there is nothing bankable to name.
+        /// </summary>
+        public static string ComposeLabel(IDictionary<string, int> lines)
+        {
+            if (lines == null || lines.Count == 0) return string.Empty;
+
+            var ordered = new List<KeyValuePair<string, int>>();
+            foreach (var kv in lines)
+            {
+                if (string.IsNullOrEmpty(kv.Key) || kv.Value <= 0) continue;
+                ordered.Add(kv);
+            }
+            if (ordered.Count == 0) return string.Empty;
+
+            ordered.Sort((a, b) =>
+            {
+                int byCount = b.Value.CompareTo(a.Value);
+                return byCount != 0 ? byCount : string.CompareOrdinal(a.Key, b.Key);
+            });
+
+            var sb = new System.Text.StringBuilder(64);
+            int named = 0;
+            for (int i = 0; i < ordered.Count && named < MaxNamedLines; i++, named++)
+            {
+                if (named > 0) sb.Append("  ");
+                string display = ItemIdentity.DisplayName(ordered[i].Key);
+                if (string.IsNullOrEmpty(display)) display = ordered[i].Key;
+                sb.Append('+').Append(ordered[i].Value).Append(' ').Append(display);
+            }
+            int spilled = ordered.Count - named;
+            if (spilled > 0) sb.Append("  +").Append(spilled).Append(" more");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Say what was just banked, ONCE, at <paramref name="worldPos"/>, through the kill
+        /// path's own stamp. <paramref name="source"/> is a trace token ("mote-pickup" /
+        /// "chest-deposit") so the device log tells the two banks apart.
+        /// Returns true when a stamp was routed (false = nothing nameable, so nothing said).
+        /// </summary>
+        public static bool Announce(IDictionary<string, int> lines, Vector3 worldPos, string source)
+        {
+            string label = ComposeLabel(lines);
+            if (string.IsNullOrEmpty(label)) return false;
+
+            AnnouncedCount++;
+            LastLabel = label;
+
+            // The SAME seam Enemy.ShowFieldKillReward uses - pooled, capped, deduped.
+            CombatText.Show(CombatTextKind.Reward, label, worldPos);
+
+            // sec.12 permanent trace, mirroring the kill line
+            // ("[Flow:Reward] KILL REWARD TOAST '+17 XP  +7 gold' ... routed=CombatText(Reward)")
+            // so a device log proves the chest now speaks too.
+            FlowTrace.Step(Sys,
+                $"CHEST REWARD TOAST '{label}' source={(string.IsNullOrEmpty(source) ? "?" : source)} " +
+                $"lines={(lines != null ? lines.Count : 0)} routed=CombatText(Reward) at {worldPos}");
+            return true;
+        }
+    }
+
     /// <summary>Spawns the code-built world drop motes (dark behind the lane flag).</summary>
     public static class ItemPickupSpawner
     {
         /// <summary>
         /// Spawn a collectible mote at <paramref name="at"/> carrying <paramref name="lines"/>
         /// (materialId -> count). No-op when the lane is off or there is nothing to carry.
+        /// <para>
+        /// <paramref name="source"/> (WO-1589) is a TRACE token only - "chest" from
+        /// BreakableContainer, the default "drop" from the kill-drop watcher. It changes
+        /// nothing about the mote; it exists so the device log can tell a chest pickup from a
+        /// kill pickup, which is the whole acceptance evidence for WO-1589 ("CHEST REWARD
+        /// TOAST follows the pickup, once per chest").
+        /// </para>
         /// </summary>
-        public static void Spawn(Vector3 at, Dictionary<string, int> lines)
+        public static void Spawn(Vector3 at, Dictionary<string, int> lines, string source = "drop")
         {
             if (!ItemDropSystem.Enabled) return;            // SHIPS DARK.
             if (lines == null || lines.Count == 0) return;
@@ -97,7 +221,7 @@ namespace DeNelle.Village.Items
                     rot * new Vector3(0f, -0.16f, 0.30f), Vector3.one * 0.09f), tint);
             }
 
-            go.AddComponent<ItemPickupMarker>().Init(lines);
+            go.AddComponent<ItemPickupMarker>().Init(lines, source);
         }
 
         /// <summary>
@@ -191,14 +315,20 @@ namespace DeNelle.Village.Items
         private const float Lifetime = 60f;     // motes self-clean so kills don't litter
 
         private Dictionary<string, int> _carried;
+        private string _source = "drop";   // WO-1589 trace token: "chest" / "drop"
         private Transform _hero;
         private float _born;
         private float _baseY;
         private bool _collected;
 
-        public void Init(Dictionary<string, int> lines)
+        public void Init(Dictionary<string, int> lines) => Init(lines, "drop");
+
+        /// <summary><paramref name="source"/> is the WO-1589 trace token ("chest" / "drop")
+        /// carried only so the reward-toast line names where the mote came from.</summary>
+        public void Init(Dictionary<string, int> lines, string source)
         {
             _carried = lines;
+            _source = string.IsNullOrEmpty(source) ? "drop" : source;
             _born = Time.time;
             _baseY = transform.position.y;
         }
@@ -226,6 +356,13 @@ namespace DeNelle.Village.Items
                 Collect();
         }
 
+        /// <summary>
+        /// THE BANK MOMENT (WO-1589). Everything the mote carries moves into the larder
+        /// here - this is the first instant the player actually HOLDS it, which is why the
+        /// reward stamp fires here and not at the chest open. A mote that is never walked
+        /// over never reaches this method, so a chest the player ignored says nothing:
+        /// correct, and the world mote stays where it fell.
+        /// </summary>
         private void Collect()
         {
             _collected = true;
@@ -237,7 +374,17 @@ namespace DeNelle.Village.Items
                     ItemInventory.GrantDrop(kv.Key, kv.Value);
                 }
             }
-            Destroy(gameObject);
+
+            // Say what was found, ONCE, through the kill path's own bounded stamp.
+            // Positioned slightly above the mote so the label rises off the pickup the
+            // player is standing on rather than out of their feet.
+            LootRewardToast.Announce(_carried, transform.position + Vector3.up * 0.6f, _source + "-pickup");
+
+            // Editor-boundary-safe teardown, the SAME idiom BuildPart already uses above:
+            // plain Destroy is a hard error outside play mode, and the [chest-loot-toast]
+            // oracle drives this exact method from an EditMode batchmode run.
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
         }
 
         private void EnsureHero()

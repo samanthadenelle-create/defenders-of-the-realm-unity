@@ -228,7 +228,11 @@ namespace DeNelle.Village
             var lines = ItemDropSystem.RollLines(lootTableId, includeBossOnly: bossTable);
             if (ItemDropSystem.UseWorldPickups && lines != null && lines.Count > 0)
             {
-                ItemPickupSpawner.Spawn(at, lines);
+                // WO-1589: the "chest" token is TRACE ONLY - it rides on the mote so the
+                // reward line printed at PICKUP names the chest as its origin, which is what
+                // makes "one CHEST REWARD TOAST per chest" readable in a device log at all.
+                // Nothing is said HERE: the loot is on the floor, not in the player's hands.
+                ItemPickupSpawner.Spawn(at, lines, "chest");
                 FlowTrace.Step(Sys, $"{label} opened -> dropped {lines.Count} loot line(s) as a world mote (table '{lootTableId}')");
             }
             else
@@ -236,6 +240,14 @@ namespace DeNelle.Village
                 int deposited = ItemDropSystem.DepositLines(lines);
                 FlowTrace.Step(Sys, $"{label} opened -> deposited {deposited} item(s) to larder " +
                     $"from the ONE captured roll (table '{lootTableId}', bossLines={bossTable})");
+
+                // WO-1589: this branch IS a bank - the roll went straight into the larder, so
+                // the player holds it the instant the chest opens. Say it here, through the
+                // SAME producer the mote pickup uses. The world-mote branch above deliberately
+                // says NOTHING yet: nothing has been granted until the mote is walked over,
+                // and ItemPickupMarker.Collect owns that toast.
+                if (deposited > 0)
+                    LootRewardToast.Announce(lines, at + Vector3.up * 1.0f, "chest-deposit");
             }
 
             // The prop STAYS, wearing its open lid. An empty room with a vanished chest
