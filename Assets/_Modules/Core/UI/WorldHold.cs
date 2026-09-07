@@ -250,6 +250,28 @@ namespace DeNelle.Core.UI
             internal readonly string Reason;
             internal float AcquiredUnscaled;
 
+            // -----------------------------------------------------------------
+            //  THE UNCREDITED STAMP (WO-1579). THE CLOCK THE SUSPEND CREDIT CANNOT MOVE.
+            // -----------------------------------------------------------------
+            //  AcquiredUnscaled above is REBASED forward by NotifyApplicationPause so an
+            //  OS suspension does not read as foreground leak time (WO-1260). That credit
+            //  is right for a hold a HUMAN owns and wrong for one the CODE owns: a wallet
+            //  signing request that sat two hours of wall clock has expired whether or not
+            //  Unity was awake, and forgiving that gap means a BOUNDED hold has no ceiling
+            //  at all while the app is backgrounded  -  which is exactly what shipped
+            //  (owner F8 seq 4690: 'purchase' outstanding 7869.3s past a 180.0s ceiling,
+            //  world at timeScale 0.00, released 19s BEFORE the sign round trip returned).
+            //
+            //  This stamp is set ONCE at construction and is never touched again by
+            //  anything. Time.unscaledTime already advances across an Android suspend  -
+            //  that is why the age above could read 7869s in the first place  -  so
+            //  (now - AcquiredUnscaledUncredited) IS wall clock, in the same clock domain
+            //  as every other number in this file. A BOUNDED hold is judged on BOTH: the
+            //  credited age (foreground leak) and this one (wall-clock expiry). A
+            //  PLAYER-OWNED hold is judged on NEITHER, because age never judges it at all.
+            // -----------------------------------------------------------------
+            internal readonly float AcquiredUnscaledUncredited;
+
             /// <summary>The scale THIS hold requests. 0 for a freeze; a cosmetic dip requests its
             /// own value. The world runs at the MINIMUM across every live hold.</summary>
             internal float Scale;
@@ -318,6 +340,7 @@ namespace DeNelle.Core.UI
             {
                 Reason = string.IsNullOrEmpty(reason) ? "unnamed" : reason;
                 AcquiredUnscaled = acquiredUnscaled;
+                AcquiredUnscaledUncredited = acquiredUnscaled;
             }
 
             /// <summary>The scale this hold is asking the world to run at.</summary>
@@ -882,15 +905,41 @@ namespace DeNelle.Core.UI
                 }
 
                 float limit = s_holds[i].MaxSeconds > 0f ? s_holds[i].MaxSeconds : StuckHoldSeconds;
-                if (age < limit) continue;
+
+                // WO-1579 - TWO CLOCKS JUDGE A BOUNDED HOLD, AND THE SECOND ONE IS WHY.
+                // `age` is the CREDITED age: NotifyApplicationPause rebases it forward so an OS
+                // suspension is not counted as foreground leak time (WO-1260). For a hold the CODE
+                // owns that credit is unbounded forgiveness - background the app during a wallet
+                // round trip and the ceiling stops existing for as long as you stay away. `wallAge`
+                // is measured from the stamp nothing ever rebases, so it is the wall clock, and it
+                // is the one that expires a signing request that sat two hours.
+                float wallAge = now - s_holds[i].AcquiredUnscaledUncredited;
+                bool foregroundOverrun = age >= limit;
+                bool wallOverrun = wallAge >= limit;
+                if (!foregroundOverrun && !wallOverrun) continue;
+
+                // ⚠ WHICH SENTENCE IS TRUE DEPENDS ON WHETHER THE RESUME CREDIT HAS LANDED YET, so
+                // read s_applicationBackgrounded rather than assuming. On the resume frame this tick
+                // can run BEFORE OnApplicationPause(false) (the credit not yet applied, so the
+                // CREDITED age carries the whole background gap and foregroundOverrun is true even
+                // though the app was asleep) or AFTER it (credit applied, so only the uncredited
+                // wall age overruns). Both are the same event; only one of them is a foreground leak.
+                bool sleptThroughIt = s_applicationBackgrounded || !foregroundOverrun;
+                string judgedBy = sleptThroughIt
+                    ? "the WALL clock (the app was BACKGROUNDED for this; the OS-suspend credit " +
+                      "forgives that gap for foreground-leak purposes and must NOT forgive the " +
+                      "ceiling - a request that sat this long of real time has expired whether or " +
+                      "not Unity was awake, WO-1579)"
+                    : "the FOREGROUND clock (its owner never disposed it while the app was awake)";
                 FlowTrace.Fail("Pause",
                     $"⛔ STUCK WORLD HOLD: '{s_holds[i].Reason}' (scale {s_holds[i].Scale:F2}) has been " +
-                    $"outstanding for {age:F1}s, past its {limit:F1}s ceiling. It OVERRAN by " +
-                    $"{age - limit:F1}s. Its owner never disposed it - for a cosmetic beat that means the " +
-                    "host was deactivated or destroyed mid-dip (which kills a coroutine without firing " +
-                    "OnDestroy and without throwing, so no try/finally could have caught it); for a " +
-                    "transaction it means the app was backgrounded and an await never resumed. " +
-                    "Force-releasing so the world is not left slow.");
+                    $"outstanding for {age:F1}s credited / {wallAge:F1}s wall, past its {limit:F1}s " +
+                    $"ceiling. Judged by {judgedBy}. It OVERRAN by " +
+                    $"{Mathf.Max(age, wallAge) - limit:F1}s. Its owner never disposed it - for a cosmetic " +
+                    "beat that means the host was deactivated or destroyed mid-dip (which kills a " +
+                    "coroutine without firing OnDestroy and without throwing, so no try/finally could " +
+                    "have caught it); for a transaction it means the app was backgrounded and an await " +
+                    "never resumed. Force-releasing so the world is not left slow.");
                 s_holds.RemoveAt(i);
             }
 
@@ -1001,6 +1050,14 @@ namespace DeNelle.Core.UI
         /// wall-clock gap; counting that gap made a legitimate open pause menu look 300-500 seconds
         /// abandoned on the first foreground frame (WO-1260). Real foreground leaks still reach the
         /// unchanged 180-second watchdog ceiling.
+        ///
+        /// <para>⛔ WO-1579 - WHAT THIS CREDIT DOES NOT BUY, AND MUST NOT. It shifts
+        /// <see cref="Handle.AcquiredUnscaled"/> only. <see cref="Handle.AcquiredUnscaledUncredited"/>
+        /// is never touched, so a BOUNDED hold still expires on WALL clock. Without that, the credit
+        /// was unbounded forgiveness for a hold the CODE owns: background the app during a wallet
+        /// round trip and the ceiling simply stopped existing (owner F8 seq 4690, 7869.3s past a
+        /// 180.0s ceiling with the world at timeScale 0.00). A PLAYER-OWNED hold is exempt from both
+        /// clocks by kind, which is where WO-1260's original pause-menu case now lives.</para>
         /// </summary>
         internal static void NotifyApplicationPause(bool paused)
         {
@@ -1030,7 +1087,19 @@ namespace DeNelle.Core.UI
                 s_holds[i].AcquiredUnscaled += suspendedSeconds;
             FlowTrace.Step("Pause",
                 $"WorldHold watchdog excluded {suspendedSeconds:F0}s of OS-suspended time from " +
-                $"{s_holds.Count} hold(s) [{Describe()}]. Foreground leak detection remains armed.");
+                $"{s_holds.Count} hold(s) [{Describe()}]. Foreground leak detection remains armed, " +
+                "and the WALL-clock ceiling on every BOUNDED hold is UNAFFECTED by this credit " +
+                "(WO-1579) - it is judged next, on this very frame.");
+
+            // ⛔ WO-1579 - THE CEILING IS ENFORCED ON RESUME, NOT ON THE NEXT Update().
+            // Unity delivers OnApplicationPause around the frame updates, so whether the resume
+            // frame runs Update (WatchdogTick) BEFORE or AFTER this callback is an engine-ordering
+            // detail nobody in this repo has measured on the owner's device. Ticking here makes the
+            // outcome IDENTICAL either way: tick-then-credit already judged the hold, and
+            // credit-then-tick judges it right now on the uncredited clock. That is what turns
+            // "it depends on the ordering" into a property, and it is why the pin can assert
+            // release from the resume callback alone with no separate WatchdogTick call.
+            WatchdogTick(nowUnscaled);
         }
 
         // Static state survives nothing but a domain reload; re-arm a clean slate on play so a

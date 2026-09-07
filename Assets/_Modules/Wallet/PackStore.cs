@@ -3702,8 +3702,30 @@ namespace DeNelle.Wallet
                         return result;
                     }
                     FlowTrace.Fail("Store", $"Purchase '{pack.Sku}' ({currency}) FAILED: {result.Error}");
-                    SetCommerceState(CommerceState.Failed,
-                        "Reopen the store to reconcile before trying another payment.");
+
+                    // ⛔ WO-1579 - ONE FAILURE HERE IS NOT AMBIGUOUS, AND TELLING THE PLAYER TO
+                    // "RECONCILE" IT IS A LIE THAT COSTS TRUST. A wallet sign-leg timeout is raised
+                    // before anything is submitted, so there is nothing to reconcile and nothing was
+                    // charged - the honest sentence is the curated one the provider hands up. It is
+                    // matched by IDENTITY against a const, never by parsing the error text, so raw
+                    // exception wording can never reach the money screen (the pin
+                    // StoreCommerceStateRegression holds). Every OTHER failure keeps the neutral
+                    // reconcile wording, because it may have been thrown after the POST left.
+                    bool nothingSubmitted = string.Equals(result.Error,
+                        TargetedLocalAssociationScenario.SignTimeoutMessage, StringComparison.Ordinal);
+                    if (nothingSubmitted)
+                    {
+                        // SetCommerceState IS the seam: it composes the Failed headline with this
+                        // detail and writes the banner through SetStatus (:4338). A second explicit
+                        // SetStatus here would CLOBBER that headline with the detail alone.
+                        SetCommerceState(CommerceState.Failed,
+                            TargetedLocalAssociationScenario.SignTimeoutMessage);
+                    }
+                    else
+                    {
+                        SetCommerceState(CommerceState.Failed,
+                            "Reopen the store to reconcile before trying another payment.");
+                    }
                     TrackCheckoutFailed(pack.Sku, FailError, result.Error);
                 }
                 return result;

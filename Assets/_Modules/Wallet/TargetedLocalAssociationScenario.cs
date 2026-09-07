@@ -76,6 +76,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
@@ -158,6 +159,35 @@ namespace DeNelle.Wallet
         /// <summary>Records an endpoint retirement. Internal: only the association transport may
         /// assert this fact, and only from its own OnClose callback.</summary>
         internal static void NoteAssociationClosed() => LastAssociationCloseUtc = DateTime.UtcNow;
+
+        /// <summary>
+        /// Ceiling on "wallet activity launched -> signed transaction back" (WO-1579). This is the
+        /// TIMEOUT POLICY; <see cref="DeNelle.Core.UI.WorldHold.StuckHoldSeconds"/> is a LAST RESORT
+        /// and its own header says so, so the two must never be equal.
+        ///
+        /// <para>⚠ JUDGEMENT CALL, not a derived number, and recorded as one. 90s is chosen to sit
+        /// strictly BELOW the 180s hold ceiling with the whole second half of that budget left as
+        /// headroom, so this policy always fires first and the watchdog stays the backstop it is
+        /// documented to be - if both fired in the same window a legitimate slow approval would be
+        /// reported as a stuck hold. It is far above the 9s association handshake
+        /// (<c>clientTimeoutSeconds</c>) because THIS window contains a human tapping Approve in
+        /// another app, not a machine handshake. Raise or lower it with the hold ceiling in view,
+        /// never on its own.</para>
+        /// </summary>
+        public const float SignTimeoutSeconds = 90f;
+
+        /// <summary>
+        /// The one PLAYER-FACING sentence for a sign-leg timeout. Curated, not an exception message:
+        /// StoreCommerceStateRegression pins that raw exception text never reaches the money screen,
+        /// and this is the seam PackStore matches on to say "nothing was charged" truthfully. It can
+        /// say that because a timeout here happens strictly BEFORE any submission
+        /// (SolanaWalletProvider.SubmitSignedTransaction needs a signed payload that never arrived),
+        /// which no other failure on that path can claim.
+        /// </summary>
+        public const string SignTimeoutMessage =
+            "Your wallet did not return a signed transaction in time. Nothing was charged. Try again when ready.";
+
+        private static readonly TimeSpan SignTimeout = TimeSpan.FromSeconds(SignTimeoutSeconds);
 
 #if SOLANA_SDK
         // ── Association state ────────────────────────────────────────────────
@@ -379,28 +409,96 @@ namespace DeNelle.Wallet
             var client = await StartAssociation();
             try
             {
-                if (string.IsNullOrEmpty(authToken))
+                // ⛔ WO-1579 - ONE DEADLINE OVER THE WHOLE AUTHORIZE+SIGN LEG. READ THIS BEFORE
+                // REMOVING IT. Before today, StartAssociation above was bounded (_clientTimeout, 9s,
+                // the Task.WhenAny at :~526) and everything BELOW it was not: Authorize/Reauthorize
+                // and SignTransactions awaited a wallet app that may never answer, with no ceiling
+                // at all. That is not a theoretical leak - PackStore.Purchase takes a WorldHold as
+                // its first statement, so an unbounded await here freezes the world for its entire
+                // duration, and the owner's Seeker (F8 seq 4690-4693, 2026-09-07) sat at
+                // timeScale 0.00 for 7869 SECONDS before the watchdog force-released it, 19s BEFORE
+                // this round trip finally returned.
+                //
+                // Task.Delay runs on the THREAD-POOL TIMER, which keeps counting while the Android
+                // Activity is paused and our wallet sheet owns the screen. So the deadline is real
+                // wall clock even though no Unity frame runs, and the continuation lands on the
+                // first foreground frame - which is precisely when the player is back to be told.
+                //
+                // ⚠ AND THAT IS WHY THIS IS NOT THE ONLY THING THAT FIRES. The continuation needs
+                // the main thread, so on a dwell longer than WorldHold.StuckHoldSeconds the world
+                // hold's WALL-clock ceiling (WO-1579) is judged on the resume frame FIRST and this
+                // deadline resolves a stage later. That order is correct - the world must not stay
+                // frozen waiting on us - but it means a very long wallet dwell produces a stuck-hold
+                // report BEFORE this timeout's own line. Read them as one event, not two defects.
+                //
+                // NOTHING IS SUBMITTED WHEN THIS FIRES. The transaction reaches the chain only via
+                // SolanaWalletProvider.SubmitSignedTransaction, which cannot run without a signed
+                // payload from below. So a timeout here is an unambiguous "no charge", never an
+                // indeterminate one - that is why the caller may return Failure and say so plainly.
+                var work = SignLeg(client, identityUri, iconUri, identityName, cluster, authToken,
+                                   serializedTransaction);
+                using var deadline = new CancellationTokenSource();
+                var timer = Task.Delay(SignTimeout, deadline.Token);
+                var completed = await Task.WhenAny(work, timer);
+                if (completed != work)
                 {
-                    await client.Authorize(
-                        new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, cluster);
-                }
-                else
-                {
-                    await client.Reauthorize(
-                        new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, authToken);
+                    // The inner task is ORPHANED, not abandoned: it must not raise an UNOBSERVED
+                    // TaskException later. This continuation is EXPECTED to fire on most timeouts,
+                    // not just exotic ones - the `finally` below tears the association socket down
+                    // underneath this still-pending request, and a pending MWA request faults when
+                    // its transport closes. So read this line as "the orphan finished, as designed",
+                    // never as a second defect. It is logged rather than swallowed (CLAUDE.md §12).
+                    work.ContinueWith(t => FlowTrace.Warn("Wallet",
+                            $"MWA sign leg finished FAULTED after its {SignTimeout.TotalSeconds:0}s deadline " +
+                            $"had already been reported to the player " +
+                            $"({t.Exception?.GetBaseException().GetType().Name}). Expected: the association " +
+                            "was closed under it. Observed here so it is not an unhandled task exception. " +
+                            "Nothing was submitted."),
+                        TaskContinuationOptions.OnlyOnFaulted);
+
+                    FlowTrace.Fail("Wallet",
+                        $"MWA authorize+sign timed out after {SignTimeout.TotalSeconds:0}s - the wallet " +
+                        "app never returned a signed transaction. NOTHING WAS SUBMITTED, so no payment " +
+                        "can have settled. The world hold the purchase took is released by the caller's " +
+                        "`using` on this return path.");
+                    throw new TimeoutException(SignTimeoutMessage);
                 }
 
-                var signed = await client.SignTransactions(
-                    new List<byte[]> { serializedTransaction });
-                if (signed == null || signed.SignedPayloadsBytes == null ||
-                    signed.SignedPayloadsBytes.Count == 0)
-                    return null;
-                return signed.SignedPayloadsBytes[0];
+                deadline.Cancel();          // never leave a timer outliving a good signature
+                return await work;          // rethrows a real wallet-side fault unchanged
             }
             finally
             {
                 await CloseAssociation();
             }
+        }
+
+        /// <summary>
+        /// The authorize/reauthorize + sign pair as ONE awaitable, so <see cref="SignTransaction"/>
+        /// can put a single deadline across both. Split out for exactly that reason: two separate
+        /// windows would let a wallet spend the full ceiling twice.
+        /// </summary>
+        private static async Task<byte[]> SignLeg(
+            MobileWalletAdapterClient client, string identityUri, string iconUri, string identityName,
+            string cluster, string authToken, byte[] serializedTransaction)
+        {
+            if (string.IsNullOrEmpty(authToken))
+            {
+                await client.Authorize(
+                    new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, cluster);
+            }
+            else
+            {
+                await client.Reauthorize(
+                    new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, authToken);
+            }
+
+            var signed = await client.SignTransactions(
+                new List<byte[]> { serializedTransaction });
+            if (signed == null || signed.SignedPayloadsBytes == null ||
+                signed.SignedPayloadsBytes.Count == 0)
+                return null;
+            return signed.SignedPayloadsBytes[0];
         }
 
         /// <summary>

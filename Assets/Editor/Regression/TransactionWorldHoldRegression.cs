@@ -85,6 +85,8 @@ namespace DeNelle.Editor.Regression
                 CaseRefCountedAcrossOverlappingHolds(failures, log);
                 CaseForceReleaseAlwaysUnfreezes(failures, log);
                 CaseBackgroundTimeDoesNotAgeHolds(failures, log);
+                CaseSuspendCreditCannotOutliveTheWallClockCeiling(failures, log);
+                CaseSignLegIsBounded(failures, log);
                 CaseAcquireIsTheFirstStatementOfPurchase(failures, log);
                 CaseDrivePurchaseBranches(failures, log);
                 CaseSingleTimeScaleOwner(failures, log);
@@ -291,10 +293,21 @@ namespace DeNelle.Editor.Regression
         // WO-1260: Android suspension is not foreground leak time. Drive the real private clock
         // overload through reflection so a 300-second OS gap rebases every outstanding handle,
         // while keeping the watchdog itself and its 180-second foreground ceiling unchanged.
+        //
+        // ⚠ RETARGETED TO A PLAYER-OWNED HOLD (WO-1579), and the reason is the whole point of that
+        // ticket. This case used to take a BOUNDED Acquire(ReasonPauseMenu) and read as "a 300s OS
+        // suspension is forgiven" - which after WO-1579 is FALSE for a bounded hold: the credit
+        // shifts AcquiredUnscaled but AcquiredUnscaledUncredited still expires it on wall clock, and
+        // a bounded hold driven through this exact sequence is now force-released (that is
+        // CaseSuspendCreditCannotOutliveTheWallClockCeiling below, which asserts it). The pause menu
+        // this case was minted for became PLAYER-OWNED in WO-1360, so the hold kind here is now the
+        // one the scenario actually describes, and the credit is still what is being measured. A
+        // green case asserting a property the code no longer has is the drift CLAUDE.md §15 is
+        // written against - so it was moved, not deleted.
         private static void CaseBackgroundTimeDoesNotAgeHolds(List<string> failures, StringBuilder log)
         {
             WorldHold.ResetForTests();
-            var handle = WorldHold.Acquire(WorldHold.ReasonPauseMenu);
+            var handle = WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu, () => true);
             var acquired = typeof(WorldHold.Handle).GetField("AcquiredUnscaled",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             var notify = typeof(WorldHold).GetMethod("NotifyApplicationPause",
@@ -322,7 +335,204 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[background-age] WorldHoldWatchdog does not forward the real application pause callback");
 
             handle.Dispose();
-            log.AppendLine("  [background-age] 300s OS suspension excluded; foreground watchdog remains armed.");
+            log.AppendLine("  [background-age] 300s OS suspension excluded from a PLAYER-OWNED hold's age; " +
+                           "foreground watchdog remains armed. A BOUNDED hold's wall-clock ceiling is " +
+                           "unaffected by the credit - see [wall-ceiling].");
+        }
+
+        // =====================================================================
+        //  (F) [wall-ceiling] -- WO-1579. THE DEFECT, DRIVEN, ON BOTH ORDERINGS.
+        //
+        //  Owner F8 seq 4690 (Seeker, 2026-09-07, build 2026.09.07.359076):
+        //    "STUCK WORLD HOLD: 'purchase' (scale 0.00) has been outstanding for
+        //     7869.3s, past its 180.0s ceiling ... Force-releasing"
+        //  at Unity t=8110.16, world at timeScale 0.00 -- and seq 4692/4693 show the
+        //  sign round trip returned 19 SECONDS AFTER that force-release. The hold
+        //  outlived its ceiling by over two hours because the ONLY thing that ticks
+        //  it (WorldHoldWatchdog.Update) is dead while the Activity is paused, and
+        //  the WO-1260 suspend credit then forgives the entire gap on resume -- for
+        //  a hold the CODE owns, that is unbounded forgiveness, i.e. no ceiling.
+        //
+        //  What is asserted, and why it needs three sub-cases rather than one:
+        //   1. RESUME-ORDER  credit-then-tick: the resume callback ALONE releases the
+        //      hold. No separate WatchdogTick call -- that is the "enforced on resume"
+        //      claim, not "enforced on some later frame".
+        //   2. UPDATE-ORDER  tick-then-credit: the pre-existing path still releases,
+        //      and the resume callback that arrives afterwards on zero holds is a
+        //      silent no-op rather than a second write of the clock.
+        //   Together these make the fix ORDERING-INDEPENDENT, which matters because
+        //   which order Android delivers Update vs OnApplicationPause(false) on the
+        //   resume frame is NOT proven for the owner's device (the WO asked for an
+        //   adb read that no editor process can perform). The fix does not depend on
+        //   the answer; this case is what makes that a property instead of a hope.
+        //   3. CONTROL  the same sequence against a PLAYER-OWNED hold leaves it HELD.
+        //      WO-1360/WO-1369 forbid force-releasing a live pause menu by age, and
+        //      this pins that from the inside rather than trusting the diff.
+        // =====================================================================
+        private static void CaseSuspendCreditCannotOutliveTheWallClockCeiling(
+            List<string> failures, StringBuilder log)
+        {
+            var acquired = typeof(WorldHold.Handle).GetField("AcquiredUnscaled",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var notify = typeof(WorldHold).GetMethod("NotifyApplicationPause",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic,
+                null, new[] { typeof(bool), typeof(float) }, null);
+            if (acquired == null || notify == null)
+            {
+                failures.Add("[wall-ceiling] the deterministic WorldHold clock seams " +
+                             "(Handle.AcquiredUnscaled / NotifyApplicationPause(bool,float)) are missing, so the " +
+                             "ceiling cannot be driven. That is a FAIL, not an unknown: an unprovable failsafe " +
+                             "is the state WO-1579 was minted from.");
+                return;
+            }
+
+            float over = WorldHold.StuckHoldSeconds + 1f;
+
+            // --- 1. RESUME-ORDER: credit first, then the tick this fix puts on the resume path.
+            WorldHold.ResetForTests();
+            Time.timeScale = 1f;
+            var purchase = WorldHold.Acquire(WorldHold.ReasonPurchase);
+            float t0 = (float)acquired.GetValue(purchase);
+            notify.Invoke(null, new object[] { true, t0 + 10f });
+            notify.Invoke(null, new object[] { false, t0 + 10f + over });
+
+            if (WorldHold.IsHeld)
+                failures.Add("[wall-ceiling] a BOUNDED '" + WorldHold.ReasonPurchase + "' hold SURVIVED a " +
+                             over.ToString("0") + "s OS suspension past its " +
+                             WorldHold.StuckHoldSeconds.ToString("0") + "s ceiling: holds [" +
+                             WorldHold.Describe() + "]. The WO-1260 suspend credit is forgiving the entire " +
+                             "background gap, which for a hold the CODE owns means the ceiling does not exist " +
+                             "while the app is away - owner F8 seq 4690, 7869.3s frozen at timeScale 0.00.");
+            if (!Mathf.Approximately(Time.timeScale, 1f))
+                failures.Add("[wall-ceiling] after the resume-frame release the clock read " +
+                             Time.timeScale.ToString("0.00") + " instead of 1.00. A world left frozen after " +
+                             "a failed purchase is the WO-1579 symptom itself.");
+            purchase.Dispose();
+
+            // --- 2. UPDATE-ORDER: the tick lands first (no resume callback yet), then the callback
+            //        arrives on zero holds and must change nothing.
+            WorldHold.ResetForTests();
+            Time.timeScale = 1f;
+            var second = WorldHold.Acquire(WorldHold.ReasonPurchase);
+            float t1 = (float)acquired.GetValue(second);
+            notify.Invoke(null, new object[] { true, t1 + 10f });
+            WorldHold.WatchdogTick(t1 + 10f + over);
+            if (WorldHold.IsHeld)
+                failures.Add("[wall-ceiling] update-order: a bounded hold survived a WatchdogTick " +
+                             over.ToString("0") + "s past its ceiling taken BEFORE the resume callback.");
+            notify.Invoke(null, new object[] { false, t1 + 10f + over });
+            if (!Mathf.Approximately(Time.timeScale, 1f))
+                failures.Add("[wall-ceiling] update-order: the resume callback arriving on ZERO holds moved " +
+                             "the clock to " + Time.timeScale.ToString("0.00") + ". It must be a no-op.");
+            second.Dispose();
+
+            // --- 3. CONTROL: a PLAYER-OWNED hold is exempt from both clocks, at any age.
+            WorldHold.ResetForTests();
+            Time.timeScale = 1f;
+            var menu = WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu, () => true);
+            float t2 = (float)acquired.GetValue(menu);
+            notify.Invoke(null, new object[] { true, t2 + 10f });
+            notify.Invoke(null, new object[] { false, t2 + 10f + over });
+            if (!WorldHold.IsHeld)
+                failures.Add("[wall-ceiling] ⛔ a PLAYER-OWNED '" + WorldHold.ReasonPauseMenu + "' hold was " +
+                             "force-released after a " + over.ToString("0") + "s suspension. The wall-clock " +
+                             "ceiling must apply to BOUNDED holds ONLY - unfreezing live gameplay underneath " +
+                             "a modal that still says PAUSED is the WO-1360 defect and is strictly worse than " +
+                             "the leak the ceiling guards.");
+            menu.Dispose();
+
+            WorldHold.ResetForTests();
+            Time.timeScale = 1f;
+            log.AppendLine("  [wall-ceiling] a BOUNDED hold expires on WALL clock across an OS suspension and is " +
+                           "released ON THE RESUME CALLBACK, in either Update/OnApplicationPause order, leaving " +
+                           "timeScale 1.00; a PLAYER-OWNED hold is untouched by the same sequence.");
+        }
+
+        // =====================================================================
+        //  (F2) [sign-bound] -- STRUCTURAL. The unbounded await that FILLED the hold.
+        //  The ceiling firing at all was the SYMPTOM; the cause is that
+        //  TargetedLocalAssociationScenario bounded only its association handshake
+        //  and let authorize+sign await a wallet app forever, with PackStore's
+        //  WorldHold open for the whole of it. Source-read, because no editor
+        //  process can drive a signing wallet -- see the [live-rails] partial-skip.
+        // =====================================================================
+        private static void CaseSignLegIsBounded(List<string> failures, StringBuilder log)
+        {
+            string path = Application.dataPath + "/_Modules/Wallet/TargetedLocalAssociationScenario.cs";
+            if (!File.Exists(path))
+            {
+                failures.Add("[sign-bound] TargetedLocalAssociationScenario.cs not found at " + path +
+                             " - the signing leg's ceiling cannot be verified, so this is a FAIL, not an unknown.");
+                return;
+            }
+
+            string code = File.ReadAllText(path);
+            string sign = Slice(code, "public async Task<byte[]> SignTransaction(", "private static async Task<byte[]> SignLeg(");
+            if (string.IsNullOrEmpty(sign))
+            {
+                failures.Add("[sign-bound] could not slice SignTransaction out of " +
+                             "TargetedLocalAssociationScenario.cs - the oracle is pointed at a signature that " +
+                             "has moved. Re-point it; do not delete it.");
+                return;
+            }
+
+            if (sign.IndexOf("Task.WhenAny", StringComparison.Ordinal) < 0 ||
+                sign.IndexOf("Task.Delay", StringComparison.Ordinal) < 0)
+                failures.Add("[sign-bound] SignTransaction no longer races its wallet round trip against a " +
+                             "Task.Delay deadline. An unbounded await here freezes the world for its whole " +
+                             "duration, because PackStore.Purchase takes a WorldHold as its FIRST statement " +
+                             "(owner F8 seq 4690: 7869.3s at timeScale 0.00). Task.Delay is required " +
+                             "specifically because it runs on the thread-pool timer, which keeps counting " +
+                             "while the Android Activity is paused and the wallet sheet owns the screen.");
+
+            if (sign.IndexOf("TimeoutException", StringComparison.Ordinal) < 0)
+                failures.Add("[sign-bound] the sign-leg deadline no longer throws TimeoutException, which is " +
+                             "the type SolanaWalletProvider.SendPayment catches to return the curated " +
+                             "'nothing was charged' Failure instead of an Indeterminate receipt.");
+
+            if (code.IndexOf("SignTimeoutMessage", StringComparison.Ordinal) < 0)
+                failures.Add("[sign-bound] the curated player-facing timeout sentence (SignTimeoutMessage) is " +
+                             "gone. A silent failure on the money screen is the WO-1579 half the player " +
+                             "actually experiences.");
+
+            // The policy timeout must stay STRICTLY BELOW the hold ceiling. If they were equal, a
+            // legitimately slow approval would trip WorldHold's last-resort FAIL in the same window
+            // the `using` was about to release cleanly - a false stuck-hold report on working code.
+            if (!(TargetedLocalAssociationScenario.SignTimeoutSeconds < WorldHold.StuckHoldSeconds))
+                failures.Add("[sign-bound] the sign-leg timeout (" +
+                             TargetedLocalAssociationScenario.SignTimeoutSeconds.ToString("0") +
+                             "s) is not strictly below WorldHold.StuckHoldSeconds (" +
+                             WorldHold.StuckHoldSeconds.ToString("0") + "s). The sign timeout is the TIMEOUT " +
+                             "POLICY; the hold ceiling is a LAST RESORT and its own header says so. Equal " +
+                             "values make the watchdog fire on a slow-but-working approval.");
+
+            string providerPath = Application.dataPath + "/_Modules/Wallet/SolanaWalletProvider.cs";
+            string provider = File.Exists(providerPath) ? File.ReadAllText(providerPath) : string.Empty;
+            if (provider.IndexOf("catch (TimeoutException", StringComparison.Ordinal) < 0)
+                failures.Add("[sign-bound] SolanaWalletProvider.SendPayment no longer handles TimeoutException " +
+                             "explicitly, so a pre-submission timeout falls into the generic catch and reaches " +
+                             "the player as a raw exception message.");
+            if (provider.IndexOf("PaymentResult.Indeterminate(packSku, currency, amount, signedSignature", StringComparison.Ordinal) >= 0 &&
+                provider.IndexOf("SignTimeoutMessage", StringComparison.Ordinal) < 0)
+                failures.Add("[sign-bound] the timeout path does not return the curated Failure. A timeout " +
+                             "happens strictly BEFORE submission, so an Indeterminate receipt would tell the " +
+                             "player to reconcile a payment that never existed.");
+
+            log.AppendLine("  [sign-bound] the MWA authorize+sign leg is bounded by a thread-pool deadline " +
+                           "strictly below the hold ceiling, throws TimeoutException, and surfaces one curated " +
+                           "'nothing was charged' sentence.");
+        }
+
+        /// <summary>Text between two anchors. Empty when either anchor is missing - the caller must
+        /// treat that as a FAIL (a stale oracle address), never as a silent pass.</summary>
+        private static string Slice(string code, string from, string to)
+        {
+            if (string.IsNullOrEmpty(code)) return string.Empty;
+            int a = code.IndexOf(from, StringComparison.Ordinal);
+            if (a < 0) return string.Empty;
+            int b = code.IndexOf(to, a, StringComparison.Ordinal);
+            if (b < 0) return string.Empty;
+            return code.Substring(a, b - a);
         }
 
         // =====================================================================
