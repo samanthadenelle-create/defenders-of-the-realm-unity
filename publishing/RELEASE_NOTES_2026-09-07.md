@@ -147,7 +147,11 @@ carries everything the New/Fixed/Balance text above now says. The 09:26 file is 
 - `apksigner verify -v --print-certs`: `Verifies`; certificate SHA-256 `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443` (same key as every prior build)
 - R2 parity: `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=276` 13:29:36
 - Tester twin on the Seeker: `2026.09.07.359651` (TESTER_BUILD), installed 13:19, distributed to Firebase testers 13:22 - a DIFFERENT file from the store candidate
-- AAB / Windows exe / WebGL: building behind it in one chain (recorded below when their markers land)
+- AAB (SEPARATE identity row): `Builds/Android/store/EchoesOfElarion-GooglePlay-2026.09.07.359670.aab` (copy of `Builds/Android/EchoesOfElarion-GooglePlay.aab`), `AAB_OK 13:45:34`, 451,986,581 bytes (431 MiB), `AAB_SIZE_OK 448,652,965 (51,347,035 under the cap)`, SHA-256 `DDB9BE378442D25400446E32977EAA861FEA9C5E571DFB6D7731654E96FF4A31`, release keystore (`AAB_SIGNING_OK`), stamp `2026.09.07.359670`
+- Store APK copied aside as `Builds/Android/store/EchoesOfElarion-store-2026.09.07.359664.apk` (SHA-256 re-hashed identical) so a later tester build cannot overwrite the submission file
+- Windows exe: `Builds/Windows/DefendersOfTheRealm.exe` written 13:49:27 (Unity exit 0, Builds/build.log)
+- WebGL / Vercel: HELD by owner ruling 2026-09-07 13:5x ('hold off on the Web GL build until we triage these last four issues') - the chain was stopped after the Windows build; nothing web deployed from this wave
+- Owner ruling 2026-09-07 13:5x: 'cut and send the APK to production' - the store APK above is the submission candidate; the owner submits through the portal (SUBMIT_CHECKLIST Gate E)
 
 ## (superseded) Build identity - STORE APK, measured 2026-09-07 09:27 from the artifact
 
