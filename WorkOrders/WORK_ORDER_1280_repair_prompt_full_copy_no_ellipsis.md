@@ -1,6 +1,6 @@
 # WORK ORDER 1280 - Repair prompt full copy, no ellipsis
 
-**Status:** FIXED 2026-08-29 - complete repair copy is present in Seeker tester APK 2026.08.29.346849; awaiting owner device test.
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-04T17:26:32, build 2026.09.04.354315). PRIOR STATUS: FIXED 2026-08-29 - complete repair copy is present in Seeker tester APK 2026.08.29.346849; awaiting owner device test.
 
 **Minted:** 2026-08-29 from authoritative main-line banner 1280; banner bumped to 1281 in this same edit.
 

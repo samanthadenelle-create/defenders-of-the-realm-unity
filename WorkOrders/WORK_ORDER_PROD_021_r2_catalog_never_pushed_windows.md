@@ -1,6 +1,6 @@
 # PROD-021 — The R2 catalog for the shipped build was never pushed (occurrence FOUR)
 
-**Status:** FIXED - implemented in 486cd7b17 (2026-09-01, the r2-ship.ps1 per-target gate), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: a Windows exe run showing no catalog 404 (Title + town render real art, zero "VisualFactory model not found"); the machine evidence is Builds/r2-parity.log 2026-09-04 22:21:57 R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271. PRIOR STATUS: READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT. ⚠ **CANDIDATE CLOSE — 2026-09-02 verification below says the gate defect this ticket was minted against is FIXED. NOT closed here: PO closes (CLAUDE.md §13).** *(Prior line:)* **Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:49:10, build 2026.09.07.358574). PRIOR STATUS: FIXED - implemented in 486cd7b17 (2026-09-01, the r2-ship.ps1 per-target gate), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: a Windows exe run showing no catalog 404 (Title + town render real art, zero "VisualFactory model not found"); the machine evidence is Builds/r2-parity.log 2026-09-04 22:21:57 R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271. PRIOR STATUS: READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT. ⚠ **CANDIDATE CLOSE — 2026-09-02 verification below says the gate defect this ticket was minted against is FIXED. NOT closed here: PO closes (CLAUDE.md §13).** *(Prior line:)* **Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
 **Minted:** 2026-09-01 (CLI, PROD banner bumped 021 -> 022 in the same edit)
 **Silo:** Content ship chain (CLAUDE.md §16). Disjoint from the WO-1289..1292 art lane.
 **Covers 93 of the 148 un-acked F8 captures** (seq 4081–4224 clusters A + B).
@@ -117,7 +117,8 @@ fixed, and the Windows catalog is present on R2.** Recorded here, not closed —
 - ⛔ **A §16 freshness violation is live RIGHT NOW.** `ServerData/WebGL/catalog_2026.09.02.352005.bin`
   and `.hash` are stamped **16:31:40**, i.e. **50 seconds AFTER** the 16:30:50 parity proof. The §16
   invariant is *the proof must postdate the bytes it claims to prove*, so `.githooks/pre-push` should
-  refuse a push that carries `ServerData/`. Clear it the one sanctioned way (`tools2-ship.ps1`) —
+  refuse a push that carries `ServerData/`. Clear it the one sanctioned way (`tools
+2-ship.ps1`) —
   never with an override.
 
 **Recommendation to the owner:** this looks closeable on the gate defect, but close it only after the

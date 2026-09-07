@@ -120,3 +120,48 @@ cannot reach in seconds is not a control.
 **What changed since the RCA:** the console gained sales/retention, ack, a Balance tab and eight tunable flags; the "key not set" blocker is contradicted by canon.
 **Ready for a lane?** no - a bare "Fail" on a surface with three later tickets layered on it; the failing pillar/action is unknown. Files a lane would touch: `api/admin/console.js`, `api/admin/ops.js`, `api/admin/stats.js`.
 **Pins/rulings needed:** her phone screenshot of the failing screen with the response code shown (`OPS_WRITE_NOT_CONFIGURED` / `OPS_UNAUTHORIZED` / blank); CLI confirms `ADMIN_OPS_KEY` is present and differs from `ADMIN_DASH_KEY` on prod.
+
+---
+## 2026-09-06 - the bounce is STILL unproven, and that is now a FIXED gap, not a standing one
+
+**The cause was not found, and no fix is claimed for it.** Every avenue of evidence was checked and
+came back empty:
+
+- `proof/owner-validations.json:130` - `{"note": "", "validated": true, "verdict": "Fail"}`. The note
+  is empty, and **every** entry in that batch has an empty note, so this is the file's shape, not a
+  note she chose to omit. There is no screenshot, no code, no timestamp.
+- No runtime log in the tree carries an admin request (`logs/` holds Unity, R2 and F8 material only).
+- ⛔ **AND THE SERVER RECORDED NOTHING EITHER - that is the real finding.** At the moment she
+  felt-tested, `api/admin/ops.js` had **six** refusal paths and `api/admin/stats.js` **three**, and
+  **every one of them returned an HTTP 400 in silence**. A SUCCESSFUL write lands in the ops history
+  table (`recordOpsWrite`); a REFUSED one left no trace in the database, the runtime log, or anywhere
+  else. So even with Vercel log access, her attempt was unrecoverable after the fact. A bare "Fail"
+  was the *only possible* outcome of that felt-test, whatever she tapped.
+
+**Fixed here (the diagnostic gap, not the defect):** both endpoints now emit exactly one
+`[ops-refusal] {json}` line per refusal - booleans and stable machine codes only, never a key, never a
+header value, not even a length. `readKeyConfigured` / `opsKeyConfigured` separate *"the deployment is
+missing the env var"* from `readKeySupplied` / `opsKeySupplied` *"it was typed wrong"* - the two that
+answer identically to the caller and have opposite remedies. Proven RED first, then green:
+`test/command-center.refusal-logging.test.js`, 8 cases.
+
+⭐ **The absence of a line is itself a diagnosis, and it is the leading unproven candidate.** The
+console page and the game site are on **different Vercel projects** (`api/DB_SETUP.md:669` names the
+console host as `defenders-of-the-realm-v2.vercel.app`; `api/admin/stats.js:263` records that
+`site/admin.html` is on `echoes-of-elarion` and is "ALWAYS a cross-origin caller"). A console opened on
+the wrong host 404s and no function in this repo ever runs - which looks exactly like "Fail" and leaves
+exactly zero server evidence. **This is NOT proven. It is the first thing the next attempt rules out.**
+
+### ⛔ THE THREE-LINE QUESTION FOR THE OWNER - ask verbatim, do not paraphrase
+
+1. Open `https://defenders-of-the-realm-v2.vercel.app/api/admin/console` on your phone - does the
+   **key box** appear, or do you get a 404 / a Vercel login page? (If the page itself never appeared,
+   that is the whole answer and the URL you used before is the bug.)
+2. Type `ADMIN_DASH_KEY` and tap **Enter** - do the tiles fill with numbers, or does it say
+   `Refused: ...`? Send that exact word.
+3. Tap **Toggles**, seal one area, and read the message the page prints back - it will be one of
+   `OPS_WRITE_NOT_CONFIGURED`, `OPS_UNAUTHORIZED`, `NETWORK`, or the area going `SEALED`.
+
+Any one of those three answers closes this ticket. Whichever she reaches, the matching `[ops-refusal]`
+line is now in the Vercel runtime log for that deployment, so the CLI can confirm her answer instead
+of taking it on trust - and if there is no line at all, question 1 is the answer.

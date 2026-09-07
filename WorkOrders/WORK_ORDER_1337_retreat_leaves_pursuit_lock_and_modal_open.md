@@ -1,6 +1,6 @@
 # WORK ORDER 1337 — A retreat leaves the battle-lock held by the pursuit probe, and a panel handle open
 
-**Status:** FIXED — the pursuit pulse now dies with the body that stamped it (`Enemy.OnDisable`), and the retreat arm stops telling the gate it has no end-state screen; the modal finding names its panel and heals a proven ghost. Owner felt-verifies and CLOSES.
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:50:10, build 2026.09.07.358574). PRIOR STATUS: FIXED — the pursuit pulse now dies with the body that stamped it (`Enemy.OnDisable`), and the retreat arm stops telling the gate it has no end-state screen; the modal finding names its panel and heals a proven ghost. Owner felt-verifies and CLOSES.
 **Silo:** Combat / Quiescence
 **Severity:** P0 — player-facing softlock. Combat input stays suppressed, the HUD cannot return to its town context, and the world interact button is dead under an invisible panel.
 **Origin:** Owner felt-test on device, 2026-09-03.

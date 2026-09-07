@@ -79,3 +79,62 @@ from `mesh.bounds`, which is available regardless - never from vertex data.
 **What changed since the RCA:** the identity gap is closed at the gate (18 shields no longer derive from a missing row); the `ShieldWithItemLogic` row was re-dialled; whether the DERIVED pose reads right on device is unmeasured.
 **Ready for a lane?** no - the failing case must be named first; PROD-019 already shows the knight's row applying correctly. Files a lane would touch: `WeaponOrientHelper.cs` (`TryResolveShieldFrame:514`, `TryComputeShieldMountRotation:627/647`, `TryResolveShieldHandleSide:727`), `GearSeat.cs`.
 **Pins/rulings needed:** a device screenshot plus logcat `AttachOffHandProp MEASURED` / `ShieldHandleSide` lines for the exact shield id and hero she saw (`blink_shield1h_*` vs `ShieldWithItemLogic`).
+
+---
+## 2026-09-06 — implementation pass: CAUSE STILL NOT PROVEN; the missing FACET is now instrumented
+
+**Verdict: the WO-1215 code path cannot be the defect for the LIVE starter shield.** Proving line,
+`logs/device/pull-20260830/boot-logcat.txt` (device, build after the 08-26 fix):
+
+> `[Flow:Equip] off-hand seat NOT derived for 'knight_shield_starter' key='ShieldWithItemLogic':`
+> `source=AuthoredOffset (authoredRow=True manual=False native=True fullOverride=True) — keeping the`
+> `preset euler (-58.00, 16.00, -90.00).`
+> `AttachOffHandProp MEASURED after hold: id='knight_shield_starter' parent='Socket_Shield'`
+> `state=SHEATHED fullOverride=True comp=False GRIP 'EquipmentProp_OffHand' parent='Socket_Shield'`
+> `lPos=(-0.103, 0.164, -0.238) lEuler=(1.9, 311.7, 232.1)`
+
+`fullOverride=True` short-circuits before `ManualSeatIsSubstantiated` ever runs, and the measured GRIP
+is `offsets.json:24` applied byte-exact. `AttachmentOffsetRegression` pins the gate truth table and a
+source lint; it asserts **nothing** about the on-device grip TRS, so its green was always orthogonal
+to what she saw. Matches PROD-019 s0b: *"THE SEAT IS NOT THE DEFECT."*
+
+**Why it stays unprovable.** No capture in the repo records a shield attach after the bounce:
+- `logs/device/freeze-20260904-095249.log` and `full-buffer-094110.log` (build `2026.09.04.354315`,
+  i.e. AFTER 09-03, so not the build under test) contain **0** occurrences each of
+  `AttachOffHandProp`, `Socket_Shield`, `EquipmentProp_OffHand`, `knight_shield_starter`,
+  `blink_shield`. The session (pid 22805) is a KNIGHT — `[Flow:HudModel] ability bar bound: bar=qwer
+  class='knight' source=GameState(persisted) hero='Grom'` — on a body GameObject named
+  `Hero (Blaise)`, yet it attaches `tripo_staff_a` and logs `seat-proof … state=SHEATHED
+  offHand='<null>' prop=False`. So the loadout carried **no off-hand at all**: nothing to seat, hence
+  nothing to measure. (A knight holding a staff with an empty off-hand is a separate, PROD-019-shaped
+  data point — recorded here, not acted on in this silo.) Zero `RemoteProviderException`/404, so this
+  is not a §16 bundle miss.
+- `logs/f8-inbox/QUEUE.jsonl` holds nothing on a shield for 09-03..09-06.
+- `proof/owner-validations.json:106` records `"verdict": "Fail"` with `"note": ""` (ingested
+  `695a5c92b`, 2026-09-03 18:15).
+- Seat frame has NOT drifted since the row was dialled: the only two commits touching
+  `EquipmentController.cs` after `74d9e6546` are `dcd25e9fe` (null-guard on a destroyed hand) and
+  `2f167c8d6` (the D-SEAT oracle, "writes no transform"). `GearSeat.cs` and both `offsets.json`
+  untouched; `Assets/OffsetForge/offsets.json` and `Assets/Resources/OffsetForge/offsets.json` are
+  byte-identical.
+- The Resources offset path IS live on Android: `[Flow:Offset] WO-994 registryProbe path=START
+  rows=26 shield_A[…]` appears in the 09-04 device log.
+
+**Instrumented instead of guessed (§12).** Two facts the RCA needed and no log has ever carried:
+1. `AttachOffHandProp MEASURED` now names `key=`, `class=` (the wearer's class via
+   `GearLoadout.WearerClass`), `body=`, `hand=`, `authoredRow=` and `derived=` alongside the pose.
+2. The `registryProbe` START/SCENELOAD lines now print `ShieldWithItemLogic[…]` and
+   `ShieldWithItemLogic@sheathed[…]` — the row the starter shield actually uses. They previously
+   printed only `shield_A`, the **tripo** shield the default hero never wears.
+Both pinned by new `Require` tokens in `AttachmentOffsetRegression.Case…` tripwire-wiring.
+
+**THE CAPTURE THAT CLOSES THIS (name it when asking her):** with a hero holding a shield, on a build
+whose version stamp is in the same log —
+`adb logcat` filtered to `Flow:Equip|Flow:Offset`, keeping `registryProbe path=START`,
+`AttachOffHandProp MEASURED after hold`, `off-hand seat (DERIVED|NOT derived)`, `ShieldFrame`,
+`ShieldHandleSide` — **plus a device screenshot of that same hero**. One line each and the ticket is
+decidable; without them any further seat edit is a guess.
+
+**Files touched:** `Assets/_Modules/Village/Hero/EquipmentController.cs`,
+`Assets/Editor/Regression/AttachmentOffsetRegression.cs`. Braces 904/904 and 71/71, 0 NUL bytes.
+Needs `COMPILE_GATE_OK` + `REGRESSION_OK` from the CLI seat (this pass ran no Unity).

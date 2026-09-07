@@ -268,21 +268,52 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Key');
     if (req.method === 'OPTIONS') { return res.status(204).end(); }
 
+    const q = req.query || {};
+    const view = String(q.view || 'overview');
+
+    // =========================================================================
+    // WO-1244 REOPENED. A refused READ used to be silent, so an owner bounce with
+    // no note could not be told apart from "the console never reached this
+    // deployment" (the page and the game site live on DIFFERENT Vercel projects).
+    // The line below is the ONLY thing this endpoint logs, it fires only on a
+    // refusal, and it is booleans and machine codes ONLY - no key, no header
+    // value, no length. Pinned by test/command-center.refusal-logging.test.js.
+    //
+    // ⛔ THIS DOES NOT TOUCH THE READ-ONLY CONTRACT. Nothing here reads or writes
+    // the database; the SELECT-only lint in test/command-center.test.js still
+    // governs every statement below.
+    // =========================================================================
+    const suppliedRead = (req.headers || {})['x-admin-key'];
+    const refuse = (code) => {
+        const record = {
+            endpoint: 'admin/stats',
+            code: code,
+            view: view,
+            method: String(req.method || ''),
+            readKeyConfigured: !!process.env.ADMIN_DASH_KEY,
+            readKeySupplied: typeof suppliedRead === 'string' && suppliedRead.length > 0,
+            at: new Date().toISOString(),
+        };
+        try { console.warn('[ops-refusal] ' + JSON.stringify(record)); }
+        catch (_) { /* a log must never break the request */ }
+    };
+
     if (req.method !== 'GET') {
+        refuse('METHOD_NOT_ALLOWED');
         return res.status(400).json({ error: 'Method not allowed' });
     }
 
     const expected = process.env.ADMIN_DASH_KEY;
     if (!expected) {
         // Not configured yet — refuse everything (never fail open).
+        refuse('ADMIN_NOT_CONFIGURED');
         return res.status(400).json({ error: 'Admin access not configured' });
     }
-    if (!adminKeyOk(req.headers['x-admin-key'], expected)) {
+    if (!adminKeyOk(suppliedRead, expected)) {
+        refuse('UNAUTHORIZED');
         return res.status(400).json({ error: 'Unauthorized' });
     }
 
-    const q = req.query || {};
-    const view = String(q.view || 'overview');
     const days = clampLimit(q.days, 30, 180);   // analysis window, hard-capped
     const now = new Date();
     const meta = { view: view, generated_at: now.toISOString(), window_days: days };

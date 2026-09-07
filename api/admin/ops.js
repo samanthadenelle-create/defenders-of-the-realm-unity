@@ -73,6 +73,37 @@ const {
 /** Bodies here are a handful of short fields. Anything larger is not our client. */
 const MAX_BODY_BYTES = 16 * 1024;
 
+// =============================================================================
+// WO-1244 REOPENED (owner felt-test 2026-09-03, verdict "Fail", note EMPTY).
+// -----------------------------------------------------------------------------
+// Every refusal below used to return an HTTP 400 IN SILENCE. A successful write
+// lands in the ops history table (recordOpsWrite); a refused one left no trace
+// anywhere - not in the database, not in the runtime log. So when she tapped a
+// control on her phone and it did not work, there was afterwards no way to tell
+// these four apart:
+//
+//   * the deployment is missing ADMIN_OPS_KEY       -> OPS_WRITE_NOT_CONFIGURED
+//   * the write key was typed wrong                 -> OPS_UNAUTHORIZED
+//   * the READ key was typed wrong                  -> UNAUTHORIZED
+//   * the page never reached this deployment at all -> NO LINE AT ALL
+//
+// The fourth is diagnosed by the ABSENCE of a line, which is why the first three
+// must always produce one. It is also the live hazard: the console page and the
+// game site sit on DIFFERENT Vercel projects, so a console opened on the wrong
+// host 404s and no function in this file ever runs.
+//
+// ⛔ A DIAGNOSTIC LINE MUST NEVER BECOME A LEAK. The reason the write half has a
+// second secret at all is that the read key ends up in phone screenshots. So
+// every field here is a BOOLEAN or a stable machine code - never a key, never a
+// header value, and not even a LENGTH (a length narrows a brute force and buys no
+// diagnosis a boolean does not already give). Pinned by
+// test/command-center.refusal-logging.test.js.
+// =============================================================================
+function logRefusal(record) {
+    try { console.warn('[ops-refusal] ' + JSON.stringify(record)); }
+    catch (_) { /* a log must never be the thing that breaks the request */ }
+}
+
 /**
  * Read the JSON body whether or not the platform already parsed it. Never
  * throws; a body we cannot understand becomes null and the handler refuses.
@@ -96,22 +127,55 @@ module.exports = async (req, res) => {
     // No CORS. See the header - this is same-origin only, by design.
     res.setHeader('Cache-Control', 'no-store');
 
+    const readKey = process.env.ADMIN_DASH_KEY;
+    const opsKey = process.env.ADMIN_OPS_KEY;
+    const headers = (req && req.headers) || {};
+    const suppliedRead = headers['x-admin-key'];
+    const suppliedOps = headers['x-admin-ops-key'];
+
+    // Best-effort: the platform often hands us a parsed body, and naming the
+    // action on an early refusal is what makes the line answer "which control did
+    // she tap". When the body has not been parsed yet this is empty, and the later
+    // refusals below pass the real action instead.
+    let declaredAction = '';
+    try {
+        if (req && req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+            declaredAction = String(req.body.action || '');
+        }
+    } catch (_) { declaredAction = ''; }
+
+    // Booleans only. See the header above: no value, no length, ever.
+    const refuse = (code, action) => {
+        logRefusal({
+            endpoint: 'admin/ops',
+            code: code,
+            action: String(action === undefined ? declaredAction : action),
+            method: String((req && req.method) || ''),
+            readKeyConfigured: !!readKey,
+            readKeySupplied: typeof suppliedRead === 'string' && suppliedRead.length > 0,
+            opsKeyConfigured: !!opsKey,
+            opsKeySupplied: typeof suppliedOps === 'string' && suppliedOps.length > 0,
+            at: new Date().toISOString(),
+        });
+    };
+
     // POST only. A write that can be triggered by a GET is a write that can be
     // triggered by a link someone sends you.
     if (req.method !== 'POST') {
+        refuse('METHOD_NOT_ALLOWED');
         return res.status(400).json({ ok: false, code: 'METHOD_NOT_ALLOWED' });
     }
 
-    const readKey = process.env.ADMIN_DASH_KEY;
-    const opsKey = process.env.ADMIN_OPS_KEY;
-
     if (!readKey) {
+        refuse('ADMIN_NOT_CONFIGURED');
         return res.status(400).json({ ok: false, code: 'ADMIN_NOT_CONFIGURED' });
     }
-    if (!keyOk(req.headers['x-admin-key'], readKey)) {
+    if (!keyOk(suppliedRead, readKey)) {
+        refuse('UNAUTHORIZED');
         return res.status(400).json({ ok: false, code: 'UNAUTHORIZED' });
     }
     if (!opsKey) {
+        refuse('OPS_WRITE_NOT_CONFIGURED');
         // Said in WORDS, with the remedy, because the alternative is the owner
         // tapping "Seal" on a phone during an incident and getting "Unauthorized"
         // with no idea that the deployment is simply missing an env var.
@@ -122,17 +186,20 @@ module.exports = async (req, res) => {
                   'separate from ADMIN_DASH_KEY, and it gates every write.',
         });
     }
-    if (!keyOk(req.headers['x-admin-ops-key'], opsKey)) {
+    if (!keyOk(suppliedOps, opsKey)) {
+        refuse('OPS_UNAUTHORIZED');
         return res.status(400).json({ ok: false, code: 'OPS_UNAUTHORIZED' });
     }
 
     const body = await readJsonBody(req);
     if (!body || typeof body !== 'object') {
+        refuse('BAD_BODY');
         return res.status(400).json({ ok: false, code: 'BAD_BODY' });
     }
 
     const action = String(body.action || '');
     if (OPS_ACTIONS.indexOf(action) < 0) {
+        refuse('UNKNOWN_ACTION', action);
         return res.status(400).json({
             ok: false, code: 'UNKNOWN_ACTION',
             hint: 'one of ' + OPS_ACTIONS.join(', '),
@@ -143,12 +210,16 @@ module.exports = async (req, res) => {
     try { sql = neon(process.env.DATABASE_URL); }
     catch (_) { sql = null; }
     if (!sql) {
+        refuse('NO_DATABASE', action);
         return res.status(400).json({ ok: false, code: 'NO_DATABASE' });
     }
 
     let operator;
     try { operator = normalizeOperator(body.by); }
-    catch (err) { return res.status(400).json({ ok: false, code: err.code || 'BAD_OPERATOR' }); }
+    catch (err) {
+        refuse(err.code || 'BAD_OPERATOR', action);
+        return res.status(400).json({ ok: false, code: err.code || 'BAD_OPERATOR' });
+    }
 
     const at = new Date().toISOString();
 
@@ -296,6 +367,10 @@ module.exports = async (req, res) => {
         return res.status(400).json({ ok: false, code: 'UNKNOWN_ACTION' });
     } catch (err) {
         if (err instanceof OpsError) {
+            // A validation refusal is still a refusal she saw on the phone, so it
+            // gets the same line. err.message is authored by us and carries no
+            // secret and no player identity.
+            refuse(err.code || 'INVALID', action);
             return res.status(400).json({ ok: false, code: err.code, hint: err.message });
         }
         // The message may contain SQL text or column names; it never reaches the
