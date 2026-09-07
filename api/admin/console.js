@@ -1007,6 +1007,76 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     return h;
   }
 
+  // ---- WO-1599 THE SKU FIELD ----------------------------------------------
+  // Owner ask 2026-09-07, verbatim: "Would it be possible to add in the command
+  // center a drop-down for the SKUs that allowed me to just select the SKU from
+  // a drop-down list instead of having to manually type it in?"
+  //
+  // ONE LIST, AND IT IS THE ONE THE SERVER ALREADY SENT. The options are built
+  // from state.skus - the WO-1532 catalog view this page fetches on every load -
+  // and NEVER from a list typed into this file. A second copy of the sku list
+  // here would be the duplicated state that has cost this repo its most expensive
+  // bugs: a pack added to packs.json would exist on the shelf and be unmintable
+  // from this console, with nothing on any screen saying why.
+  //
+  // THE TYPED FIELD NEVER GOES AWAY. A brand-new pack authored straight into
+  // the DB is not in the catalog yet, and a console that cannot mint a code for it
+  // is a console that blocks a legitimate mint. So the free-text input survives
+  // behind a toggle - and it is what the catalog OUTAGE degrades to.
+  //
+  // EXACTLY ONE OF THE TWO IS LIVE AT A TIME. Whichever is showing is the one
+  // read. The mint form already refuses "a pack sku AND crystals" because the sku
+  // would silently win; two sku inputs both holding a value is that same defect a
+  // level down, so the toggle disables the one it hides and clears its value.
+  //
+  // The state is a WORD in every case (the owner is red/green colourblind): the
+  // toggle says which input it will switch TO, and a failed catalog read is
+  // spelled out in a sentence next to a select that says so in its only option.
+  function skuFieldHtml(id, labelText, noneText){
+    var d = state.skus;
+    var rows = (d && Array.isArray(d.packs)) ? d.packs : [];
+    var broke = !!state.skusErr;
+    var h = '<label for="' + id + '">' + esc(labelText) + '</label>';
+    h += '<select id="' + id + '"' + (broke ? ' disabled' : '') + '>';
+    if (broke){
+      h += '<option value="">SKU catalog unreadable - type the sku below</option>';
+    } else {
+      h += '<option value="">' + esc(noneText) + '</option>';
+      rows.forEach(function(p){
+        var name = p.name || p.sku;
+        h += '<option value="' + esc(p.sku) + '">' + esc(name + ' (' + p.sku + ')') + '</option>';
+      });
+    }
+    h += '</select>';
+    if (broke){
+      h += '<p class="note">COULD NOT READ the SKU catalog (' + esc(state.skusErr) + '), so the ' +
+           'list is EMPTY and DISABLED - it is not saying there are no packs. Type the sku instead; ' +
+           'the server checks it either way.</p>';
+    } else if (!rows.length){
+      h += '<p class="note">The catalog read fine and lists no packs at all. Type the sku instead.</p>';
+    }
+    // No toggle while the catalog is unreadable: switching BACK would leave the
+    // operator with a disabled select and a hidden text box - two dead inputs and
+    // no way to mint. The typed field simply IS the field until the read recovers.
+    if (!broke){
+      h += '<div class="row" style="margin-top:6px"><button class="sku-typeit" data-sku-field="' +
+           id + '" aria-expanded="false">Type it instead</button></div>';
+    }
+    h += '<input id="' + id + '-text" type="text" autocomplete="off" spellcheck="false" ' +
+         'aria-label="' + esc(labelText) + ', typed" ' +
+         'placeholder="a sku the catalog does not know yet"' + (broke ? '' : ' hidden') + '>';
+    return h;
+  }
+
+  // The ONE reader. Whichever input is showing is the answer; the hidden one was
+  // cleared when it was hidden, so there is no second value to lose track of.
+  function skuFieldValue(id){
+    var box = $(id + '-text');
+    if (box && !box.hidden) return String(box.value || '').trim();
+    var sel = $(id);
+    return sel ? String(sel.value || '') : '';
+  }
+
   // ---- promos -------------------------------------------------------------
   function renderPromos(){
     var o = state.ops;
@@ -1017,8 +1087,10 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       '<p class="note">Set a PACK SKU or crystals/coins, never both - the sku would silently win, ' +
       'so this refuses instead. Blank caps mean unlimited. Codes are stored uppercase because the ' +
       'client uppercases before sending.</p>' +
+      '<p class="note">The sku list is the live pack catalog - the same read the SKUs tab shows. ' +
+      'A pack it does not know yet (one authored straight into the database) can still be typed.</p>' +
       '<label for="pc">Code</label><input id="pc" type="text" autocomplete="off" spellcheck="false" placeholder="LAUNCH2026">' +
-      '<label for="ppack">Reward pack sku (optional)</label><input id="ppack" type="text" autocomplete="off" placeholder="hearth-spark">' +
+      skuFieldHtml('ppack', 'Reward pack sku (optional)', '- none -') +
       '<div class="row"><div class="grow"><label for="pcry">Crystals</label>' +
       '<input id="pcry" type="number" inputmode="numeric" min="0" placeholder="0"></div>' +
       '<div class="grow"><label for="pcoin">Coins</label>' +
@@ -1464,6 +1536,28 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       count.setAttribute('aria-expanded', detail.hidden ? 'false' : 'true');
       return;
     }
+    // WO-1599. The sku field's two halves, one live at a time. This does NOT
+    // re-render: the operator may already have typed a code and a message into
+    // this form, and redrawing the card to flip one input would throw the rest of
+    // her work away.
+    var typeit = e.target.closest('.sku-typeit');
+    if (typeit){
+      var fid = typeit.getAttribute('data-sku-field');
+      var fbox = $(fid + '-text');
+      var fsel = $(fid);
+      if (fbox){
+        var toText = fbox.hidden;
+        fbox.hidden = !toText;
+        if (!toText) fbox.value = '';
+        // The select is disabled whenever it is not the live input, and stays
+        // disabled regardless if the catalog never read.
+        if (fsel) fsel.disabled = toText || !!state.skusErr;
+        if (toText && fsel) fsel.value = '';
+        typeit.setAttribute('aria-expanded', toText ? 'true' : 'false');
+        typeit.textContent = toText ? 'Pick from the list instead' : 'Type it instead';
+      }
+      return;
+    }
     var seal = e.target.closest('.seal-btn');
     if (seal){
       var box = seal.closest('.toggle');
@@ -1580,7 +1674,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       var draft = {
         action:'promo.create',
         code: $('pc').value,
-        rewardPackSku: $('ppack').value,
+        rewardPackSku: skuFieldValue('ppack'),
         rewardCrystals: $('pcry').value,
         rewardCoins: $('pcoin').value,
         message: $('pmsg').value,
