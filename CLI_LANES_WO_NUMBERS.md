@@ -187,7 +187,9 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-twenty-fourth pass): main line next free = **1598**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-twenty-sixth pass): main line next free = **1600**.
+> *(CLI minted **1599** Command Center SKU dropdown - owner 12:5x. Bumped 1599 -> 1600 in this SAME edit.)*
+> *(CLI minted **1598** cloud save sanity guard rejects a legitimate new game (177 save_sanity_reject rows; owner's row 901 -> 36 crystals rejected 11x) - from the Command Center event table 2026-09-07 11:4x. Bumped 1598 -> 1599 in this SAME edit.)*
 > *(CLI minted **1597** Manage hub: HEART chip only for an upgrade, ghost CLOSE, cards fill the band - owner 10:2x "its the only one wrong". Bumped 1597 -> 1598 in this SAME edit.)*
 > *(CLI minted **1596** first Rough Stone is a log line, owner wants a full-screen fanfare - her words 09:46. Bumped 1596 -> 1597 in this SAME edit.)*
 > *(COLLISION 09:3x-09:4x: two seats minted **1588-1591** on the MAIN line in the same minutes - the

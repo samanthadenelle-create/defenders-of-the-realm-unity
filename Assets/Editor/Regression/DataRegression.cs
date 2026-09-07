@@ -22,6 +22,15 @@
 //   DataRegression.RunAll    -> REGRESSION_OK <n>/<n> suites   (THE gate)
 //   RegressionSuite.RunAll   -> CHECKIN_SUITE_OK <p>/<n> cases (legacy smoke battery)
 //   SessionRegression.RunAll -> SESSION_GUARDS_OK
+//   CompileGate.Run          -> COMPILE_GATE_OK  (whole-gate verdict)
+//                            -> COMPILE_GATE_WEBGL_OK / _FAIL / _SKIPPED reason=<why>
+//                               (WO-1575, the WebGL player-script stage INSIDE that gate;
+//                                substring-disjoint from COMPILE_GATE_OK on purpose, so a
+//                                grep for the whole gate cannot match the stage and a grep
+//                                for the stage's pass cannot match its failure. _SKIPPED is
+//                                a THIRD state, not a pass: it does NOT withhold
+//                                COMPILE_GATE_OK, so on a machine with no WebGL module the
+//                                proof is the named reason PLUS the absence of _WEBGL_OK.)
 // RegressionMarkerRegression [regression-marker] keeps that invariant true.
 // =============================================================================
 using System.Collections.Generic;
@@ -589,6 +598,13 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cosmetic-apply suite", () => { if (!DeNelle.Editor.Regression.CosmeticApplyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cosmetic-apply] " + r); });
             // --- WO-1129 (2026-08-21): the gate AssetRoots.cs:46 has claimed since 08-18 that it had ("AssetRootsRegression fails the build if the string reappears") and NEVER DID — 16 re-typed root literals were live in 14 files, two of them other regression suites. Also carries the §3.5 enemy-art token ratchet. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "asset-roots suite", () => { if (!DeNelle.Editor.Regression.AssetRootsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[asset-roots] " + r); });
+            // --- WO-1485 (2026-09-07): textures were 82% of user assets, and 177.2 MB of that was ONE defect —
+            // Android format Automatic + crunch falls back to uncompressed RGBA32 whenever the post-clamp
+            // dimensions are not both multiples of 4, silently, on textures that DID carry an override.
+            // Rule 1 hard-fails that state; rules 2-3 carry the no-override and duplicate-content debt as
+            // frozen shrinking ledgers, because hard-failing 2114 files and 623 duplicate groups would make
+            // this gate permanently red rather than useful. Registered by the lead. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "texture-import-budget suite", () => { if (!DeNelle.Editor.Regression.TextureImportBudgetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[texture-import-budget] " + r); });
             // --- WO-1037 single-resource impulse packs (legalised by the WO-947 §12 amendment): exactly ONE economy key per SKU, $5 ceiling, resources-only, smallest-sufficient resolver, no grant route ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "impulse-pack suite", () => { if (!DeNelle.Editor.Regression.ImpulsePackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[impulse-pack] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
@@ -1082,6 +1098,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "progression-reachability suite", () => { if (!DeNelle.Editor.ProgressionReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[progression-reachability] " + r); });
             // --- WO-2003 / WO-2017 Heart surface: the spine has a direct route and ONE player-facing name ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "heart-surface suite", () => { if (!DeNelle.Editor.Regression.HeartSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heart-surface] " + r); });
+            // --- WO-2004 requirements lane: a Heart Level's cost, PREREQUISITES and unlocks all resolve
+            //     from heart-progression.json through one traced seam, and a level the data forgot is a
+            //     named Fail AND a refusal. Before 2026-09-07 an unauthored level inside the ceiling cost
+            //     0, and TryUpgrade skips the spend at cost 0 - so the Fail fired and the realm was granted
+            //     free. Runs AFTER heart-surface, which owns the ladder cases ([ladder-*]). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "heart-bundle suite", () => { if (!DeNelle.Editor.Regression.HeartUnlockBundleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[heart-bundle] " + r); });
             // --- WO-2011 + ruling 21: the barracks BUILDING tier is the troop gate, and every troop is reachable ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-reachability suite", () => { if (!DeNelle.Editor.TroopReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[troop-reachability] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "manage-state-model suite", () => { if (!DeNelle.Editor.ManageStateModelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[manage-state-model] " + r); });
@@ -1110,6 +1132,8 @@ namespace DeNelle.Editor
             // --- OWNER RULING 26b: a full collector spills into its matching storage; nothing is ever burned ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-overflow suite", () => { if (!DeNelle.Editor.Regression.CollectorOverflowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-overflow] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "public-navigation-retirement suite", () => { if (!DeNelle.Editor.Regression.PublicNavigationRetirementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[public-navigation-retirement] " + r); });
+            // --- WO-1500: the fresh-save FTUE is a STANDING fleet lane (five 2026-09-06 logs carried zero [Flow:Onboard*] lines), and the Bag's retired Map section is gone rather than labelled "coming" ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "freshsave-ftue-lane suite", () => { if (!DeNelle.Editor.Regression.FreshSaveFtueLaneRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[freshsave-ftue-lane] " + r); });
             // --- WO-1404 Journey deck subtitles carry state (Quests / Raids), one pure Core VM, change-only publisher (Codex dev lane) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "journey-deck-subtitle suite", () => { if (!DeNelle.Editor.Regression.JourneyDeckSubtitleRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[journey-deck-subtitle] " + r); });
             // --- WO-1421 Journey deck is TWO cards: Dungeons / Realm Map / Season removed by owner ruling 2026-09-06 ---
@@ -1393,11 +1417,18 @@ namespace DeNelle.Editor
             // dist=4.2m preferStruct=False`: a live defender was inside the sweep and a wall
             // 4.2 m away won, because a hostile STRUCTURE competed in the same nearest-wins
             // bucket as a live body for every non-siege role. Pins the extracted pick rule
-            // itself (TroopController.PrefersUnitOverStructure, the function NearestHostile
-            // calls) so the suite cannot stay green while the selector does something else, and
+            // itself (RaidAssaultAi.PreferUnit in Breach - the WO-1595 live pick rule NearestHostile
+            // calls via PickBucket) so the suite cannot stay green while the selector drifts, and
             // pins the anti-pinning half: an unreachable defender must NOT be preferred, or the
             // troop pushes into an intact wall with NoObstacleAvoidance and freezes.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-target-preference suite", () => { if (!DeNelle.Editor.TroopTargetPreferenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[troop-target-preference] " + r); });
+
+            // WO-1595 - raid assault: Peel > Breach > Push spire; no wall-ring farm after
+            // breach; formation Front ahead of Ranged. Pins the RaidAssaultAi pure helpers the
+            // live TroopController / TroopDeployer call. Grok worktree lane, merged 2026-09-07
+            // by explicit path from 7879bc2e8 (this registration hand-applied - the worktree's
+            // DataRegression.cs also carried a WO-1593 suite that does not exist here).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-assault-ai suite", () => { if (!DeNelle.Editor.RaidAssaultAiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-assault-ai] " + r); });
 
             // --- COLLECTOR STACK PROPS (2026-08-16): CollectorStackPropCatalog.cs told
             // everyone to "place the asset at Assets/Resources/Collectors/..." and nobody
@@ -1718,6 +1749,16 @@ namespace DeNelle.Editor
             // headless + device capture, never from this suite.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "frame-budget-measure suite", () => { if (!DeNelle.Editor.Regression.FrameBudgetMeasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[frame-budget-measure] " + r); });
 
+            // WO-1582 (2026-09-07): registered per this file's fencing rule. The sibling of the
+            // suite above, on the OTHER half of the same ring problem. Where frame-budget-measure
+            // pins that per-frame PERF scopes use the accumulating overload, this one pins that the
+            // per-frame SHEATHE-POSE trace de-duplicates by RESULT rather than by a clock: a
+            // FlowTrace.Throttle on ApplyHoldPose's path logged twelve identical lines a minute on
+            // the owner's device, and the 256 KiB Android ring cannot hold that plus a boot window.
+            // Cases 1-5 are a real fixture (they count lines through a swapped FlowTrace.Sink);
+            // case 6 is a source lint and says so. Neither proves the device ring - that is a capture.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "sheathe-trace-latch suite", () => { if (!DeNelle.Editor.Regression.SheatheTraceLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sheathe-trace-latch] " + r); });
+
             // WO-1447 + WO-1448 (2026-09-06): registered by the implementing lane at the
             // committer's explicit dispatch instruction. Pins what a cloud LOAD restores (the
             // WHOLE row through MigrateForImport + ApplyPersisted, not the retired seven-field
@@ -1808,6 +1849,39 @@ namespace DeNelle.Editor
             // carrying the art keys the ONE material seam needs, and SelectedId as the single
             // truth behind both the lit row and the detail column.
             if (!DeNelle.Editor.Regression.StoreSellRowIdentityRegression.Run(out var storeSellRowReason)) failures.Add(storeSellRowReason); else log.AppendLine("[store-sell-row] " + storeSellRowReason);
+
+            // WO-1580 — RepairAvailabilityProbe's severity is SCENE-CLASS dependent. Both-surfaces-
+            // absent stays FlowTrace.Fail (error level, and error is what the F8 harness records)
+            // everywhere except HubScenes.IsRaid, where no repair surface is the authored state and
+            // the same line reports at Step. Two-sided plus a scope pin on purpose: a one-sided
+            // suite would go green on a probe that had simply been silenced everywhere.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "repair-probe-severity suite", () => { if (!DeNelle.Editor.Regression.RepairProbeSeverityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[repair-probe-severity] " + r); });
+
+            // WO-1575 — the compile gate never compiled WebGL, so a `#if UNITY_WEBGL` block
+            // carried a CS1501 arity error indefinitely while every desktop gate read green;
+            // it only surfaced inside the Addressables WebGL content build. CompileGate now
+            // runs a WebGL player-script pass (PlayerBuildInterface.CompilePlayerScripts, no
+            // target switch) and emits COMPILE_GATE_WEBGL_OK / _FAIL / _SKIPPED. This suite is
+            // a SOURCE LINT on the gate's shape — the compile itself is proven by that marker
+            // on a fresh CompileGate log, not here.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "webgl-compile-gate suite", () => { if (!DeNelle.Editor.Regression.WebGlCompileGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[webgl-compile-gate] " + r); });
+
+            // WO-1598 — the CLIENT half of the reset epoch. api/game/save.js's sanity guard reads a
+            // legitimate New Game as an implausible drop / a rollback and rejects those fields, so the
+            // cloud row keeps the OLD town and hands it back on the next load (the owner's 2026-09-07
+            // reset: `implausible_drop crystals 901 -> 36`, eleven times; 177 such rows in 14 days).
+            // A save now DECLARES a monotonic resetEpoch. Six arms: the body carries it top-level as
+            // an integer on EVERY write, ResetToNewGame raises it and never clears it, a backend row
+            // from before that reset is refused EVEN THOUGH its timestamp is newer (a guard-rejected
+            // save still bumps updated_at, which is why the WO-1448 recency gate alone cannot see it),
+            // an equal or absent epoch still applies so nothing changes for a player who has never
+            // reset, and an APPLIED row's newer epoch is adopted locally (the server keeps the epoch in
+            // its own column and strips it from the state blob, so without the adoption a reinstall
+            // would be refused SAVE_RESET_STALE on every save it made), and the server's 409
+            // SAVE_RESET_STALE is its own NON-RETRYABLE category whose markers the drain DROPS rather
+            // than looping on an answer that can never change. The server half is tested under test/
+            // in the api lane (test/game.save.reset-epoch.test.js).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "reset-epoch suite", () => { if (!DeNelle.Editor.Regression.ResetEpochRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[reset-epoch] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
