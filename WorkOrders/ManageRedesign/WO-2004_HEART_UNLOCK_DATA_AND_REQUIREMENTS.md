@@ -1,6 +1,6 @@
 # WO-2004 — Define Data-Driven Heart Unlock Bundles and Upgrade Requirements
 
-**Status:** READY TO IMPLEMENT - state unproven 2026-09-06
+**Status:** FIXED (requirements half) - the data-driven requirement reader and the sole-writer refusal landed in the 2026-09-07 afternoon gate (REGRESSION_OK 454/454); requirements author EMPTY on every row pending the owner's balance ruling; owner felt-test closes. PRIOR STATUS: READY TO IMPLEMENT - state unproven 2026-09-06
 
 **Priority:** P0  
 **Depends on:** WO-2003
@@ -261,3 +261,132 @@ it — but it means the last third of the troop roster hangs off a single Heart 
   `HeartPanel` lays out a fixed row count or an unscrolled column, that is a **presentation** question
   for WO-2017 and an owner call — flagged so the lead sees it before opening a `UI_CAPTURE` PNG, not
   after.
+
+---
+
+## Requirements lane (Opus, 2026-09-07) — edit-only, ungated
+
+**Status: EDIT-ONLY, NOT GATED.** No Unity lock held, no compile gate, no regression run, no commit.
+Every claim below was measured at source **this session** or is named as unproven.
+
+**Built on the 2026-09-06 lane, which is COMMITTED (`5bc5025f5`) and was verified at source before any
+edit** — not taken from its own notes: `heart-progression.json` exists in both canonical copies and was
+byte-identical (2,486 bytes, 10 CRLF each); `VillageTierService.cs:48` reads
+`HeartProgressionCatalog.MaxLevel` and `:71-76` reads `CostToReach`, with no `const int MaxTier` and no
+`250 *` literal left in the file.
+
+### ⛔ The defect this lane closes — a named Fail that granted the thing anyway
+
+`HeartProgressionCatalog.CostToReach` returns **0** for a level with no authored row, and
+`VillageTierService.TryUpgrade` **skips the spend entirely when the cost is 0**
+(`VillageTierService.cs`, `if (cost > 0) { ...TrySpend... }` then `s.VillageTier = Current + 1`
+unconditionally). So a `maxLevel: 3` whose level-3 row was missing emitted a correct, well-worded
+`FlowTrace.Fail` naming the hole — **and then raised the Heart for nothing.** The instrument fired, the
+failure was named, and the system carried on. **A named failure that still hands the player the thing is
+not a refusal** (CLAUDE.md §12). That is now refused at the sole writer.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `Assets/Resources/Data/Canonical/heart-progression.json` | `requiresBuildings: []` on all three level rows; `_authoringNotes` item (2) corrected in the same edit |
+| `Assets/StreamingAssets/Data/Canonical/heart-progression.json` | byte-identical mirror (`cmp` clean, 3,569 bytes, 10 CRLF, was 10) |
+| `Assets/_Modules/Core/State/HeartProgressionCatalog.cs` | `HeartBuildingRequirement` DTO; `HeartLevelDef.RequiresBuildings`; `HasAuthoredRow`; `RequirementsFor`; `LoadForTests` fixture seam; `ParseOrEmpty` extracted so the fixture runs the PRODUCTION parser |
+| `Assets/_Modules/Village/Buildings/Progression/HeartProgression.cs` | `HeartRequirement` + `HeartLevelBundle`; `RequirementsFor` (the unlock-requirement reader); `BlockedReason`; `ResolveBundle` (the instrumented seam); `HeartActionState.MissingPrerequisite`; `TryRaise` refuses before the crystal check |
+| `Assets/_Modules/Village/Buildings/Progression/VillageTierService.cs` | `TryUpgrade` refuses via `HeartProgression.BlockedReason` **before** the spend — the sole-writer enforcement |
+| `Assets/Editor/Regression/HeartUnlockBundleRegression.cs` | **NEW** `[heart-bundle]`, five cases |
+| `Assets/Editor/Regression/DataRegression.cs` | registered inside the fences, immediately after `heart-surface` |
+
+`.meta` files for the new `.cs` are left for Unity to generate on import.
+
+### Decisions, and why they went this way
+
+- **Requirements are authored EMPTY on every shipped row.** ⛔ The owner rules on balance, so this lane
+  shipped the **shape and its production reader** with **zero behaviour change**. Filling one array is
+  now a data edit. Authoring a gate here would have been a re-balance smuggled into a plumbing change.
+- **The check lives at the SOLE WRITER, not at the model.** There are **two** doors into a Heart raise:
+  `HeartProgression.TryRaise` and `BuildingUpgradeVM.Select(VillageTierRowId)`
+  (`BuildingUpgradeVM.cs:1045`, confirmed live this session). Gating only the model would have left the
+  second door able to buy past an unmet prerequisite — the same "second door that skips the rule"
+  species this program keeps finding. The model checks too, because it owns the player **sentence**;
+  the writer owns the **truth**.
+- **`HeartActionState.MissingPrerequisite` was added rather than folded into `MissingCrystals`**, which
+  would have told a player who already holds the price to go and find crystals. Both live consumers were
+  read at source first and neither is a `switch` or an enum-indexed array: `HeartPanel.cs:266/276/298/311/321`
+  tests `== Max` / `== Ready` by equality, `ManageScreenVM.cs:583-585` is `!= Max`. **Neither file was edited**
+  (another lane owns them this wave).
+- **Still no second unlock table.** Unlocks stay derived by `UnlocksAt`; case `[bundle-no-second-table]`
+  fails on an unexpected key in a level row, so the duplication WO-2004 forbids cannot be authored back
+  in quietly.
+- **The prerequisite level axis is the BUILDING ladder** (`ModifierService.TierOf`), never
+  `GameState.BarracksLevel` (owner ruling 21) and never the Heart ladder. Three integer scales; the
+  DTO and the reader both say so in-code.
+
+### Suite cases — `[heart-bundle]`
+
+| Case | Asserts | RED recipe |
+|---|---|---|
+| `[bundle-requirements-are-data]` | every shipped level row carries a `requiresBuildings` array, AND a fixture's one `{barracks, RepoProps.MaxStructureLevel + 1}` row parses, resolves against `ModifierService.TierOf`, reads UNSATISFIED and blocks the raise | delete the key from a row; or make `RequirementsFor` return empty unconditionally |
+| `[bundle-missing-row-is-named-fail]` | `maxLevel 3` with two rows → `HasAuthoredRow(3)` false, bundle `IsAuthored` false, an **error-level trace names "Heart Level 3"**, and `BlockedReason(3)` refuses | make `HasAuthoredRow` return true; drop the `FlowTrace.Fail`; drop the refusal |
+| `[bundle-resolve-is-traced]` | `ResolveBundle` emits one `[Flow:Heart]` step naming the level | drop the `FlowTrace.Step` |
+| `[bundle-enforced-at-sole-writer]` | `VillageTierService` (comments stripped) names `HeartProgression.BlockedReason(`; the model names `HeartProgressionCatalog.HasAuthoredRow(` | delete the guard from `TryUpgrade` |
+| `[bundle-no-second-table]` | a level row carries only `{level, costCrystal, requiresBuildings}`, and both canonical copies parse identically | author `"unlockBuildings": []` onto a row |
+
+The fixture goes through `HeartProgressionCatalog.ParseOrEmpty` — **the same parse path the shipped
+loader uses** — and observes the trace through a `CapturingSink` installed on `FlowTrace.Sink`. Sink and
+catalog are both restored in `finally`, so no later suite inherits the fixture ladder.
+
+### Hollow-pass finding on this suite — fixed (2026-09-07, same lane)
+
+`Builds/reg-wave10b.log` reported
+`HeartUnlockBundleRegression.cs:388 [A-missing-dependency] guard 'levels == null'`. The suite that is
+*about* silent empties had one of its own: `CheckNoSecondUnlockTable` did `if (levels == null) return;`,
+so a `heart-progression.json` that parsed but carried **no ladder** would have made case 5 check nothing
+and report green. Resolved on the **fixture-absent** limb of the three-way rule (the canonical file is
+present, so this is not a harness limit): the guard now **FAILS naming the path and the key**
+(`HeartUnlockBundleRegression.cs:387-401`), and the loop's `o == null` row guard names the malformed row
+rather than skipping past it (`:404-411`).
+
+**Proven, not asserted.** `HollowPassScanner`'s arm A was replicated in Python from the `.cs` at source
+(`scratchpad/arma_replica.py`, sibling of the WO-1500 lane's `armd_replica.py`): `BuildMasks`,
+`BracesBalance`, `VerdictMethods`, the whole `ScanMethod` walk, `GuardBlockFor`, `TopLevelOnly` and all
+five exonerations (`Asserted`, `AccumulatorVerdict`, `ReportedByProducer`, `SharesIdentifier(produced)`,
+`SiblingReported`). ⚠ **The replica was validated against a known-true input before being trusted** — run
+over a reconstruction of the pre-fix file it reproduces the coordinator's finding **exactly**:
+`prefix_probe.cs:388 [A-missing-dependency] guard 'levels == null' (in CheckNoSecondUnlockTable)`. Over
+the fixed file: `9 verdict methods scanned, RESULT: CLEAR`. Arm D was run over **every** verdict method
+(`scratchpad/armd_allmethods.py`, since `armd_replica.py` only walks two hard-coded signatures): also
+CLEAR. Braces 57/57, zero NULs.
+
+*Not ported, deliberately:* the `AlreadyReportedNote` comment regex and the per-site `hollow-pass-ok`
+opt-out. Both only ever **clear** a site, so omitting them can produce a false FINDING but never a false
+CLEAR — the safe direction for a proof. Still not a gate run.
+
+### Proven this session
+
+- **JSON, byte-mode:** patched with a Python binary read/write, no text-mode rewrite. `CRLF 10 → 10`,
+  `LF 10 → 10`, `2,486 → 3,569` bytes; both copies `cmp`-identical; `json.loads` parses to
+  `maxLevel 3`, levels `[(1,250,[]), (2,500,[]), (3,750,[])]`.
+- **Brace balance + NUL guard on all five `.cs`:** 29/29, 44/44, 9/9, 56/56, 1150/1150, zero NUL bytes.
+- **Registration sits INSIDE the fences** (START 298 / END 1863; the new line is at ~1099), so it is
+  COUNTED, not merely run.
+
+### NOT proven by this lane
+
+- **Nothing was compiled, gated, run or committed.** The `[heart-bundle]` suite has **never been
+  executed** — it is written against behaviour measured at source and should be green, but that is a
+  claim, not a result. The suite count will move by one.
+- **The free-realm hole was reasoned from source, not reproduced at runtime.** The three facts are each
+  read at source (`CostToReach` returns 0 on a missing row; `TryUpgrade` skips the spend at cost 0; the
+  tier is then assigned unconditionally) — the composition is not measured on a device.
+- **`State` now costs a catalog lookup + a `Guard.Try` closure per read.** Call sites were grepped
+  rather than measured: the only production reader of `ManageScreenVM.HeartUpgradeAvailable` is
+  `ManageScreenPanel.cs:2071`, which assigns `_hubHeartShown` **once at chrome-layout time** and hands
+  the answer to both writers (its own comment says so). So it is not on a frame path today. **That is a
+  call-pattern read, not a cost measurement** — if a frame-cost ticket ever names it,
+  `FlowTrace.Measure`'s 4-arg form is the instrument.
+- **The 2026-09-06 lane's open item still stands:** whether the BUILD / ARMY grids re-project after a
+  raise without a restart. Unchanged by this lane; still needs a runtime capture.
+- Owner rulings 12 (data-driven reach), 24 (Cathedral basket) and the duration/reward fields remain
+  **deliberately absent** — no system exists to make them real, and authoring them would trip
+  `AuthoredFieldReaderRegression` Case C.

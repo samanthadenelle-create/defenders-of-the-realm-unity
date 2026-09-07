@@ -89,6 +89,94 @@ namespace DeNelle.Village.Buildings.Progression
         MissingCrystals = 1,
         /// <summary>Already at the highest authored Heart Level — no CTA at all.</summary>
         Max = 2,
+        /// <summary>
+        /// Crystals are not the blocker: an authored prerequisite for the next level is unmet, or the
+        /// next level has no authored row at all (WO-2004 requirements lane, 2026-09-07).
+        /// <para>⚠ ADDED AS A NEW VALUE RATHER THAN FOLDED INTO <see cref="MissingCrystals"/>, which
+        /// would have made the Heart say "you need N crystals" to a player who already has them. The
+        /// two live consumers were read at source before adding it and both are safe: the Heart panel
+        /// tests <c>== Max</c> / <c>== Ready</c> by equality (HeartPanel.cs:266/276/298/311/321), and
+        /// <c>ManageScreenVM.HeartUpgradeAvailable</c> is <c>!= Max</c> (ManageScreenVM.cs:583-585) —
+        /// neither is a switch that could throw and neither indexes an array by the enum.</para>
+        /// <para>⚠ UNREACHABLE ON SHIPPED DATA TODAY, on purpose: every row in
+        /// heart-progression.json authors an EMPTY requirement list, so this is the shape working,
+        /// not a gate anyone will feel. The owner rules on whether to fill one.</para>
+        /// </summary>
+        MissingPrerequisite = 3,
+    }
+
+    /// <summary>
+    /// One authored prerequisite on a Heart Level, resolved against what the player actually holds.
+    /// Model-composed text (canon §9) — the view binds <see cref="Text"/> and never re-derives it.
+    /// </summary>
+    public readonly struct HeartRequirement
+    {
+        /// <summary>The building ladder id the requirement names (routing/art; never parsed for meaning).</summary>
+        public readonly string BuildingId;
+        /// <summary>The building level that ladder must have reached.</summary>
+        public readonly int RequiredLevel;
+        /// <summary>The level that ladder stands at right now.</summary>
+        public readonly int CurrentLevel;
+        /// <summary>True when <see cref="CurrentLevel"/> already meets <see cref="RequiredLevel"/>.</summary>
+        public readonly bool Satisfied;
+        /// <summary>Player-facing line, already composed ("Barracks Level 2 (you have Level 1)").</summary>
+        public readonly string Text;
+
+        public HeartRequirement(string buildingId, int requiredLevel, int currentLevel, string text)
+        {
+            BuildingId = buildingId;
+            RequiredLevel = requiredLevel;
+            CurrentLevel = currentLevel;
+            Satisfied = currentLevel >= requiredLevel;
+            Text = text;
+        }
+    }
+
+    /// <summary>
+    /// Everything one Heart Level is, resolved in ONE pass: whether it is authored at all, what it
+    /// costs, what it demands, and what it opens.
+    ///
+    /// <para>⛔ THE POINT OF BUNDLING THEM. Before 2026-09-07 a caller wanting the whole picture had
+    /// to make four separate static calls in the right order and know that an unauthored level
+    /// returned <c>cost 0</c> / <c>requirements empty</c> / <c>unlocks empty</c> — three answers that
+    /// each read like "this level is free and unconditional" and were in fact "this level does not
+    /// exist". <see cref="HeartProgression.ResolveBundle"/> answers once, carries
+    /// <see cref="IsAuthored"/> explicitly, and traces the resolve, so a data hole cannot be mistaken
+    /// for a design (CLAUDE.md §12: no silent failure).</para>
+    /// </summary>
+    public readonly struct HeartLevelBundle
+    {
+        /// <summary>The Heart Level this bundle describes.</summary>
+        public readonly int Level;
+        /// <summary>FALSE when heart-progression.json has no row for <see cref="Level"/>. ⛔ Check this
+        /// before believing the other three fields — an unauthored level yields empty everything.</summary>
+        public readonly bool IsAuthored;
+        /// <summary>Crystals to reach <see cref="Level"/> (0 when unauthored). ⛔ Owner rules on balance.</summary>
+        public readonly int CostCrystal;
+        /// <summary>Authored prerequisites, resolved against the player's ladders. Never null.</summary>
+        public readonly IReadOnlyList<HeartRequirement> Requirements;
+        /// <summary>What reaching the level opens, DERIVED (see <see cref="HeartProgression.UnlocksAt"/>).
+        /// Never null.</summary>
+        public readonly IReadOnlyList<HeartUnlock> Unlocks;
+
+        public HeartLevelBundle(int level, bool isAuthored, int costCrystal,
+                                IReadOnlyList<HeartRequirement> requirements,
+                                IReadOnlyList<HeartUnlock> unlocks)
+        {
+            Level = level;
+            IsAuthored = isAuthored;
+            CostCrystal = costCrystal;
+            Requirements = requirements ?? System.Array.Empty<HeartRequirement>();
+            Unlocks = unlocks ?? System.Array.Empty<HeartUnlock>();
+        }
+
+        /// <summary>The first unmet prerequisite, or null when every one is satisfied.</summary>
+        public string FirstUnmet()
+        {
+            for (int i = 0; i < Requirements.Count; i++)
+                if (!Requirements[i].Satisfied) return Requirements[i].Text;
+            return null;
+        }
     }
 
     /// <summary>
@@ -137,11 +225,153 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>True when the next Heart Level is affordable right now.</summary>
         public static bool CanAfford => !IsMax && Crystals >= NextCost();
 
-        /// <summary>The one explicit action state of the Heart control (canon §7).</summary>
-        public static HeartActionState State =>
-            IsMax ? HeartActionState.Max
-                  : CanAfford ? HeartActionState.Ready
-                              : HeartActionState.MissingCrystals;
+        /// <summary>The one explicit action state of the Heart control (canon §7).
+        /// <para>⚠ ORDER IS LOAD-BEARING. A prerequisite is checked BEFORE affordability, because a
+        /// player who holds the crystals and is still blocked must not be told to go and get
+        /// crystals. Max still wins over everything.</para></summary>
+        public static HeartActionState State
+        {
+            get
+            {
+                if (IsMax) return HeartActionState.Max;
+                if (BlockedReason(NextLevel) != null) return HeartActionState.MissingPrerequisite;
+                return CanAfford ? HeartActionState.Ready : HeartActionState.MissingCrystals;
+            }
+        }
+
+        /// <summary>
+        /// The player-facing reason <paramref name="level"/> cannot be bought for reasons OTHER than
+        /// crystals — an unmet authored prerequisite, or a data hole. Null when nothing blocks it.
+        ///
+        /// <para>⛔ THE DATA-HOLE BRANCH IS THE ONE THAT MATTERS. Until 2026-09-07 a level inside the
+        /// authored ceiling with no row cost 0, and <c>VillageTierService.TryUpgrade</c> SKIPS THE
+        /// SPEND when the cost is 0 — so the missing row was traced as a Fail and then the Heart was
+        /// raised FOR FREE. A named failure that still grants the thing is not a refusal, and this is
+        /// exactly the "no silent failure" shape §12 exists for. Both this and
+        /// <c>HeartProgressionCatalog.HasAuthoredRow</c> must stay, because this one produces the
+        /// WORDS and that one is what the writer enforces.</para>
+        ///
+        /// <para>⚠ Guarded: a broken building catalog must not make the Heart permanently
+        /// unraisable. A throw degrades to "nothing blocks it", which is the pre-2026-09-07
+        /// behaviour, and the throw itself is logged by <c>Guard</c>.</para>
+        /// </summary>
+        public static string BlockedReason(int level)
+        {
+            return DeNelle.Core.Diagnostics.Guard.Try<string>("Heart",
+                "prerequisite check for Heart Level " + level,
+                () =>
+                {
+                    if (level <= 0) return null;
+                    if (!HeartProgressionCatalog.HasAuthoredRow(level))
+                        return "Heart Level " + level + " is not authored in heart-progression.json — "
+                             + "it cannot be raised until the data carries it.";
+
+                    var reqs = RequirementsFor(level);
+                    for (int i = 0; i < reqs.Count; i++)
+                        if (!reqs[i].Satisfied) return "Requires " + reqs[i].Text + ".";
+                    return null;
+                },
+                null);
+        }
+
+        /// <summary>
+        /// The authored prerequisites for <paramref name="level"/>, resolved against the ladders the
+        /// player actually holds. THE UNLOCK-REQUIREMENT READER — the one place authored
+        /// <c>requiresBuildings</c> rows become player words and a satisfied/unsatisfied verdict.
+        ///
+        /// <para>⛔ THE LEVEL COMPARED IS THE BUILDING LADDER, via
+        /// <c>ModifierService.TierOf(id)</c> — the same number the Manage BUILD grid upgrades and the
+        /// same one owner ruling 21 made the troop gate. It is NOT <c>GameState.BarracksLevel</c> (a
+        /// dead field whose only writer was unreachable) and NOT the Heart ladder. Three integer
+        /// scales; picking the wrong one is the WO-1423 dead end.</para>
+        ///
+        /// <para>⚠ Empty on every shipped row today, deliberately — see the file's
+        /// <c>_authoringNotes</c>. This method exists so that filling one array is a DATA edit.</para>
+        /// </summary>
+        public static IReadOnlyList<HeartRequirement> RequirementsFor(int level)
+        {
+            var authored = HeartProgressionCatalog.RequirementsFor(level);
+            if (authored == null || authored.Count == 0)
+                return System.Array.Empty<HeartRequirement>();
+
+            var list = new List<HeartRequirement>(authored.Count);
+            for (int i = 0; i < authored.Count; i++)
+            {
+                var r = authored[i];
+                if (r == null || string.IsNullOrEmpty(r.Id))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("Heart",
+                        "heart-progression.json level " + level + " authors a requiresBuildings entry with "
+                        + "NO id — it can never be satisfied and can never be explained to the player. "
+                        + "Skipped; fix the row.");
+                    continue;
+                }
+
+                int have = ModifierService.TierOf(r.Id);
+                string name = DisplayNameForBuilding(r.Id);
+                string text = name + " Level " + r.Level
+                            + (have >= r.Level ? "" : " (you have Level " + have + ")");
+                list.Add(new HeartRequirement(r.Id, r.Level, have, text));
+            }
+            return list;
+        }
+
+        /// <summary>The catalog display name for a building id, falling back to the id itself so a
+        /// requirement naming an unknown ladder still reads as something rather than blank.</summary>
+        private static string DisplayNameForBuilding(string buildingId)
+        {
+            var all = BuildingTierCatalog.All;
+            if (all != null)
+            {
+                for (int i = 0; i < all.Count; i++)
+                {
+                    var b = all[i];
+                    if (b == null || b.Id != buildingId) continue;
+                    return !string.IsNullOrEmpty(b.DisplayName) ? b.DisplayName : b.Id;
+                }
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Heart",
+                    "heart-progression.json names building id '" + buildingId + "' in a Heart prerequisite "
+                    + "but building-tiers.json has no such ladder — the requirement will read as the raw id "
+                    + "and ModifierService.TierOf will report 0 forever.");
+            }
+            return buildingId;
+        }
+
+        /// <summary>
+        /// Resolve EVERYTHING about one Heart Level in a single traced pass: authored-or-not, cost,
+        /// requirements and unlocks. The instrumented seam (§12) — one line names what the level
+        /// resolved to, so a preview that comes back empty can be told apart from a level that opens
+        /// nothing and from a level that does not exist.
+        /// </summary>
+        public static HeartLevelBundle ResolveBundle(int level)
+        {
+            bool authored = HeartProgressionCatalog.HasAuthoredRow(level);
+            if (!authored)
+            {
+                // CostToReach / RequirementsFor already name the hole when it is inside the ceiling;
+                // this line names the RESOLVE so the caller's own path is visible in the trace.
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Heart",
+                    "bundle resolve for Heart Level " + level + " found NO authored row (ceiling is "
+                    + MaxLevel + "). Returning an UNAUTHORED bundle — cost 0, no requirements, no "
+                    + "unlocks. That is a data hole, not a free level: the raise is refused.");
+                return new HeartLevelBundle(level, false, 0, null, null);
+            }
+
+            int cost = HeartProgressionCatalog.CostToReach(level);
+            var reqs = RequirementsFor(level);
+            var unlocks = UnlocksAt(level);
+
+            int unmet = 0;
+            for (int i = 0; i < reqs.Count; i++) if (!reqs[i].Satisfied) unmet++;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Heart",
+                "bundle resolve: Heart Level " + level + " costs " + cost + " Crystals, "
+                + reqs.Count + " prerequisite(s) (" + unmet + " unmet), " + unlocks.Count
+                + " unlock line(s) derived from building-tiers.json / troops.json / "
+                + "population-milestones.json.");
+
+            return new HeartLevelBundle(level, true, cost, reqs, unlocks);
+        }
 
         /// <summary>Short realm-progression description (WO-2017 "short realm-progression
         /// description"). Code literal by design: it is not authored in canon-strings.json —
@@ -159,6 +389,11 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 case HeartActionState.Max:
                     return "The Heart is fully raised. Nothing further is gated on it.";
+                case HeartActionState.MissingPrerequisite:
+                    // BlockedReason already composed the words, including WHICH ladder and where it
+                    // stands. Re-deriving them here would be a second author for one sentence.
+                    return BlockedReason(NextLevel)
+                           ?? "The Heart cannot be raised yet.";
                 case HeartActionState.MissingCrystals:
                     return "Need " + DeNelle.Core.UI.ElarionUi.CompactNumber(NextCost())
                          + " Crystals to raise the Heart (you have "
@@ -382,6 +617,21 @@ namespace DeNelle.Village.Buildings.Progression
                 status = "The Heart is already at its highest level.";
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Heart",
                     "raise REFUSED: already at max Heart Level " + Level + ".");
+                return false;
+            }
+
+            // Prerequisites (and the unauthored-row data hole) are checked BEFORE crystals, so a
+            // player holding the price is never told to go and find crystals they already have.
+            // ⚠ This is the SECOND of two checks by design: VillageTierService.TryUpgrade enforces the
+            // same rule at the SOLE WRITER, which is what covers the other door into the raise
+            // (BuildingUpgradeVM.Select -> VillageTierService.TryUpgrade, BuildingUpgradeVM.cs:1045).
+            // This one exists to produce the player SENTENCE; that one exists to make it true.
+            string blocked = BlockedReason(NextLevel);
+            if (blocked != null)
+            {
+                status = blocked;
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Heart",
+                    "raise REFUSED for Heart Level " + NextLevel + ": " + blocked);
                 return false;
             }
 

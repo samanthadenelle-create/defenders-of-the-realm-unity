@@ -44,12 +44,17 @@ using UnityEngine;
 namespace DeNelle.Core.State
 {
     /// <summary>
-    /// One Heart Level transition: the level reached, and what reaching it costs.
-    /// <para>⚠ There is no <c>durationSeconds</c> and no prerequisite block on purpose.
+    /// One Heart Level transition: the level reached, what reaching it costs, and what must already
+    /// stand before it can be bought.
+    /// <para>⚠ There is still no <c>durationSeconds</c>, on purpose.
     /// <c>VillageTierService.TryUpgrade</c> is INSTANT (spend crystals → tier+1 → Save →
     /// Recompute); no Heart job kind, queue channel or timer exists in the tree, measured
-    /// 2026-09-06. WO-2004 asks for a duration; inventing one here would author a promise
-    /// nothing keeps. Recorded as an owner gap, not papered over.</para>
+    /// 2026-09-06 and again 2026-09-07. WO-2004 asks for a duration; inventing one here would author
+    /// a promise nothing keeps. Recorded as an owner gap, not papered over.</para>
+    /// <para>⚠ CORRECTED 2026-09-07: this summary used to say "no prerequisite block on purpose".
+    /// A prerequisite block now EXISTS (<see cref="RequiresBuildings"/>) and is enforced at the sole
+    /// writer. It is authored EMPTY on every shipped row, so nothing about play changed — what
+    /// changed is that a prerequisite is now expressible in data instead of unexpressible at all.</para>
     /// </summary>
     [Serializable]
     public sealed class HeartLevelDef
@@ -60,6 +65,38 @@ namespace DeNelle.Core.State
 
         /// <summary>Crystals spent to reach <see cref="Level"/>. ⛔ Owner rules on balance.</summary>
         [JsonProperty("costCrystal")] public int CostCrystal;
+
+        /// <summary>
+        /// Building ladders that must ALREADY stand at a given level before this Heart Level can be
+        /// bought (WO-2004 requirements lane, 2026-09-07). Never null after a parse.
+        /// <para>⛔ AUTHORED EMPTY ON EVERY SHIPPED ROW, DELIBERATELY. The owner rules on balance,
+        /// so this lane shipped the SHAPE and its production READER with ZERO behaviour change.
+        /// Filling one array is a data edit; no code moves.</para>
+        /// <para>⚠ The doc comment above used to say prerequisites "do not exist"; that was true of
+        /// the tree on 2026-09-06 and is no longer true. It is corrected here and in the file's own
+        /// <c>_authoringNotes</c> in the same change (CLAUDE.md §15) — a note that survives the thing
+        /// it describes is the duplicated-state failure this whole file exists to undo.</para>
+        /// </summary>
+        [JsonProperty("requiresBuildings")]
+        public List<HeartBuildingRequirement> RequiresBuildings = new List<HeartBuildingRequirement>();
+    }
+
+    /// <summary>
+    /// One authored prerequisite on a Heart Level: a building ladder id and the level it must
+    /// already have reached.
+    /// <para>⛔ THE LEVEL AXIS HERE IS THE BUILDING LADDER (<c>ModifierService.TierOf(id)</c>,
+    /// ceiling <c>RepoProps.MaxStructureLevel</c>), NOT the Heart ladder. Two integer scales spelled
+    /// the same way; conflating them was the WO-1423 dead end and owner ruling 21's barracks trap.</para>
+    /// </summary>
+    [Serializable]
+    public sealed class HeartBuildingRequirement
+    {
+        /// <summary>The building ladder id as spelled in building-tiers.json (e.g. "barracks").</summary>
+        [JsonProperty("id")] public string Id;
+
+        /// <summary>The level that ladder must already stand at. Read by
+        /// <c>HeartProgression.RequirementsFor</c> and enforced in <c>VillageTierService.TryUpgrade</c>.</summary>
+        [JsonProperty("level")] public int Level;
     }
 
     /// <summary>The parsed heart-progression.json root.</summary>
@@ -139,8 +176,55 @@ namespace DeNelle.Core.State
             return 0;
         }
 
+        /// <summary>
+        /// True when <paramref name="level"/> has an authored row.
+        /// <para>⛔ THIS IS THE GUARD AGAINST A FREE REALM. <see cref="CostToReach"/> returns 0 for an
+        /// unauthored level, and <c>VillageTierService.TryUpgrade</c> skips the spend entirely when the
+        /// cost is 0 — so before 2026-09-07 a level inside the ceiling with no row was traced as a Fail
+        /// AND THEN GRANTED FOR NOTHING. A named Fail that still hands the player the thing is not a
+        /// refusal. TryUpgrade now calls this first and refuses.</para>
+        /// </summary>
+        public static bool HasAuthoredRow(int level) => level > 0 && Find(level) != null;
+
+        /// <summary>
+        /// The authored prerequisites for reaching <paramref name="level"/> — never null.
+        /// <para>An unauthored level INSIDE the ceiling is a data hole, so it is NAMED
+        /// (<c>FlowTrace.Fail</c>) rather than returned as a quietly-empty requirement set, which
+        /// would read exactly like "this level has no prerequisites" (§12: no silent failure).</para>
+        /// </summary>
+        public static IReadOnlyList<HeartBuildingRequirement> RequirementsFor(int level)
+        {
+            if (level <= 0) return Array.Empty<HeartBuildingRequirement>();
+            var def = Find(level);
+            if (def == null)
+            {
+                if (level <= MaxLevel)
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("HeartCatalog",
+                        "heart-progression.json authors maxLevel " + MaxLevel + " but has NO row for level "
+                        + level + " — its requirements read EMPTY, which is indistinguishable from "
+                        + "'this level is unconditional'. Author the row or lower maxLevel.");
+                return Array.Empty<HeartBuildingRequirement>();
+            }
+            return (IReadOnlyList<HeartBuildingRequirement>)def.RequiresBuildings
+                   ?? Array.Empty<HeartBuildingRequirement>();
+        }
+
         /// <summary>Drop the cache so the next read re-parses (editor tooling / regression fixtures).</summary>
         public static void Reload() { _data = null; EnsureLoaded(); }
+
+        /// <summary>
+        /// FIXTURE SEAM (regression only): parse <paramref name="json"/> as if it were the catalog file.
+        /// Pass null to drop back to the real file on the next read.
+        /// <para>⚠ There is no fallback ladder by design (WO-1170), so the ONLY way to prove what a
+        /// BROKEN catalog does is to hand the loader a broken one. Every caller must restore with
+        /// <see cref="Reload"/> in a <c>finally</c> — a fixture left installed would make every later
+        /// suite read the fixture's ladder.</para>
+        /// </summary>
+        public static void LoadForTests(string json)
+        {
+            if (json == null) { Reload(); return; }
+            _data = ParseOrEmpty(json, "regression fixture");
+        }
 
         private static void EnsureLoaded()
         {
@@ -154,20 +238,7 @@ namespace DeNelle.Core.State
             {
                 string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
                 if (!string.IsNullOrEmpty(json))
-                {
-                    var parsed = JsonConvert.DeserializeObject<HeartProgressionData>(json);
-                    if (parsed != null && parsed.Levels != null && parsed.Levels.Count > 0)
-                    {
-                        DeNelle.Core.Diagnostics.FlowTrace.Step("HeartCatalog",
-                            "heart-progression.json v" + parsed.Version + " loaded: maxLevel " + parsed.MaxLevel
-                            + ", " + parsed.Levels.Count + " level rows.");
-                        return parsed;
-                    }
-                    DeNelle.Core.Diagnostics.FlowTrace.Fail("HeartCatalog",
-                        "heart-progression.json parsed EMPTY (" + json.Length + " chars read) — the Heart "
-                        + "ladder is now empty and the Heart will report Max at level 0.");
-                    Debug.LogError("[HeartProgressionCatalog] heart-progression.json parsed empty.");
-                }
+                    return ParseOrEmpty(json, "heart-progression.json");
                 else
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Fail("HeartCatalog",
@@ -182,6 +253,41 @@ namespace DeNelle.Core.State
                     "heart-progression.json read/parse THREW " + ex.GetType().Name + ": " + ex.Message);
                 Debug.LogError($"[HeartProgressionCatalog] Failed to read heart-progression.json: {ex.Message}");
             }
+            return new HeartProgressionData { Levels = new List<HeartLevelDef>() };
+        }
+
+        /// <summary>
+        /// The ONE parse path, shared by the real file and by <see cref="LoadForTests"/>.
+        /// <para>⚠ IT IS SHARED ON PURPOSE. A fixture that ran through its own parser would prove what
+        /// the FIXTURE does, not what the game does — the "measuring something is not the same as
+        /// measuring the right thing" failure CLAUDE.md §11B names. Every trace line a regression can
+        /// observe here is a line the shipped loader emits.</para>
+        /// </summary>
+        private static HeartProgressionData ParseOrEmpty(string json, string sourceLabel)
+        {
+            var parsed = JsonConvert.DeserializeObject<HeartProgressionData>(json);
+            if (parsed != null && parsed.Levels != null && parsed.Levels.Count > 0)
+            {
+                int reqRows = 0;
+                for (int i = 0; i < parsed.Levels.Count; i++)
+                {
+                    var l = parsed.Levels[i];
+                    if (l == null) continue;
+                    // Newtonsoft leaves the member at its field initializer when the key is absent and
+                    // NULLS it when the key is present-but-null. Normalise once, here, so no reader
+                    // downstream has to null-check a list that is "never null" by contract.
+                    if (l.RequiresBuildings == null) l.RequiresBuildings = new List<HeartBuildingRequirement>();
+                    reqRows += l.RequiresBuildings.Count;
+                }
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeartCatalog",
+                    sourceLabel + " v" + parsed.Version + " loaded: maxLevel " + parsed.MaxLevel
+                    + ", " + parsed.Levels.Count + " level rows, " + reqRows + " authored prerequisites.");
+                return parsed;
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeartCatalog",
+                sourceLabel + " parsed EMPTY (" + json.Length + " chars read) — the Heart "
+                + "ladder is now empty and the Heart will report Max at level 0.");
+            Debug.LogError("[HeartProgressionCatalog] " + sourceLabel + " parsed empty.");
             return new HeartProgressionData { Levels = new List<HeartLevelDef>() };
         }
     }

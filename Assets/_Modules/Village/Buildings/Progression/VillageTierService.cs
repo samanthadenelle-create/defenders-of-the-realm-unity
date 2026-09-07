@@ -79,12 +79,35 @@ namespace DeNelle.Village.Buildings.Progression
         /// Raise the Village/Stronghold Tier by one (the Heart-of-Elarion upgrade). Spends Crystals
         /// atomically via EconomyService. Returns false at max tier or when unaffordable. On success it
         /// persists + recomputes the active modifiers so the newly-gated tiers/research open immediately.
+        ///
+        /// <para>⛔ THE PREREQUISITE CHECK LIVES HERE, AT THE SOLE WRITER, NOT AT THE MODEL (WO-2004
+        /// requirements lane, 2026-09-07). There are TWO doors into this method — the Heart surface
+        /// (<c>HeartProgression.TryRaise</c>) and the building action band
+        /// (<c>BuildingUpgradeVM.Select(VillageTierRowId)</c>, BuildingUpgradeVM.cs:1045). Gating only
+        /// the first would have left the second able to buy a Heart Level whose prerequisites are
+        /// unmet, which is the same "a second door that skips the rule" species this whole program
+        /// keeps finding. The model still checks too — it owns the player SENTENCE; this owns the
+        /// TRUTH.</para>
+        ///
+        /// <para>⛔ AND IT CLOSES A FREE-REALM HOLE. <see cref="NextCost"/> returns 0 for a level with
+        /// no authored row, and the spend below is SKIPPED when the cost is 0 — so before this check a
+        /// data hole inside the ceiling was traced as a Fail and then the Heart was raised for
+        /// NOTHING. A named failure that still grants the thing is not a refusal (CLAUDE.md §12).</para>
         /// </summary>
         public static bool TryUpgrade()
         {
             if (IsMax) return false;
             var s = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (s == null) return false;
+
+            int next = Current + 1;
+            string blocked = HeartProgression.BlockedReason(next);
+            if (blocked != null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Heart",
+                    "TryUpgrade REFUSED at the sole writer for Heart Level " + next + ": " + blocked);
+                return false;
+            }
 
             int cost = NextCost();
             if (cost > 0)
