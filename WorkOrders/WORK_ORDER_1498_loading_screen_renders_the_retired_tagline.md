@@ -1,6 +1,6 @@
 # WO-1498: the loading screen renders the RETIRED tagline, and the banned-copy suite cannot see .cs literals
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/Core/UI/VillageLoadOverlay.cs` + `GlossaryRegression` + `CanonStrings` comments.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1498 -> 1499 in the same edit).

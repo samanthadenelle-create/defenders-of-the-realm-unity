@@ -1,6 +1,6 @@
 # WO-1480: WallSegment.SetTier clamps 1..3 as GAMEPLAY, against the RepoProps ceiling of 6
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/Village/Buildings/WallSegment.cs`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1480 -> 1481 in the same edit).

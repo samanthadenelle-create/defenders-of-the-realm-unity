@@ -1,6 +1,6 @@
 # WO-1492: thirteen ManageRedesign work orders carry no Status line and are invisible to the board
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** Board hygiene. `WorkOrders/ManageRedesign/` + `tools/board_build.py`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1492 -> 1493 in the same edit).

@@ -1,6 +1,6 @@
 # WO-1473: ArcaneTower_Aura VFX loops never release - 14 of 24 loop slots held; the WO-1057 release policy was never built
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/VFX/` loop pool + `ArcaneTower_Aura` owner lifecycle.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1473 -> 1474 in the same edit).

@@ -1,6 +1,6 @@
 # WO-1478: a FABRICATED cost basket is hardcoded in the capture harness and has propagated into six files
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/Editor/UICaptureLaunch.cs` + `BuildPreviewModal` docstring + four documents.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1478 -> 1479 in the same edit).

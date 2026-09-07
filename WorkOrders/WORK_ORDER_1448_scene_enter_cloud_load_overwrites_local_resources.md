@@ -1,6 +1,6 @@
 # WO-1448: every scene enter overwrites local resources from a possibly stale server row
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/Core/State/PersistenceBridge.cs` + `GameStateService.LoadFromBackend`. Same silo as
 WO-1447; sequence this AFTER it.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

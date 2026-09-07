@@ -187,8 +187,21 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1531**.
-> *(CLI minted **1446 through 1530** - eighty-five tickets from the read-only audit fleet's nine batches
+> ## RECONCILED 2026-09-06 (CLI, ninety-seventh pass): main line next free = **1533**.
+> *(api/web lane minted **1532** - "Command centre: a read-only SKU catalog view with contents and rail
+> parity", from the owner's 20:52 ask *"can we add a list in command center of All SKU's and contents"*.
+> A new `?view=skus` on `api/admin/stats.js` plus a SKUs tab on the console: every pack from the canonical
+> `packs.json` with its contents, joined against `USD_ANCHORS` and `PRODUCT_TYPES`, so a SKU that cannot be
+> quoted or cannot be sold through Play reads MISSING on the page instead of failing under a player's thumb
+> - the WO-1165 s2 failure (the Monthly Ledger cards silently unbuyable) made into a column. The canonical
+> file reaches the server the way the tunable manifest does - a generated copy under `api/_lib/` pinned by a
+> parity test - because `.vercelignore` never uploads `Assets/`.
+> **DRAFTED AS 1531 AND RENUMBERED IN THIS SAME EDIT:** the F8 device-bridge P0 took 1531 on disk AND in the
+> ninety-sixth-pass block while this ticket was being written. First-on-disk-and-referenced wins, so this one
+> moved to 1532. Bumped 1532 -> 1533 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1532**.
+> *(CLI minted **1446 through 1531** - eighty-six tickets from the read-only audit fleet's nine batches
 > (backend/auth, persistence, raid, HUD, Manage 2000-block, perf, regression harness, ship chain, architecture,
 > art, canon) plus seven owner rulings/asks taken tonight (the defense-report door 20:05, Manage BUILD
 > unlocked-only 20:07, train/army state words and the troop-detail stats 20:10, research SHORT/LOCKED reasons
@@ -200,6 +213,10 @@
 > 60% repeat clear (folded into 1461, retitled), the Barracks army-cap curve (Option C, NOT yet - Option A
 > stands), the four-camp ladder, and measuring enemy level scaling FIRST. Her order of operations is the
 > epilogue of **1520**, whose acceptance now carries the seven-point Easy-camp retest gate that unblocks them.
+> **1531 is a P0 on the F8 rail itself:** the device bridge dedupes on message text with no session or time
+> boundary, so 319 eligible captures on 09-06 published ZERO - the owner pressed FLAG at 01:18Z and no seat was
+> told. 1460's silent-daemon theory was wrong; both producers were alive. Heartbeat stays in 1460, the key
+> fix is 1531.
 > **1503 was RESCOPED the same day, P0 -> P2:** its premise was FALSE - `CastleHubRoot` has no collider and no
 > damageable component, and the trace was printing the hierarchy root, so eleven "hits on the castle" were
 > correct kills. Left IMPLEMENTED (the melee path now routes through `CombatFactionRules`, the trace names the

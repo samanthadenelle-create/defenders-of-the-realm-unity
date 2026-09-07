@@ -2,13 +2,21 @@
 
 **Status:** READY TO IMPLEMENT - minted 2026-09-05 from the merged UI review (sprint: the reason to tap the next screen)
 
+> **CORRECTION 2026-09-06 (WO-1478):** every cost basket quoted below as an example was a HARNESS STUB, not
+> game data. `Assets/Editor/UICaptureLaunch.cs` hardcoded a wood+iron+crystals string into the ghost pill, so
+> the `BuildGhostChips_blocked` frame this ticket cites shows a price the game cannot charge - and that shape
+> (all three resources in one basket) is precisely what WO-947 forbids. The authored Arcane Spire row is
+> **iron 360**. The example strings are replaced with placeholders below; the FIX SHAPE is unaffected, because
+> it always said the line comes from the structure def, never from a literal.
+
 ## Evidence
 - AGREED by both reviewers quoting the same words (`REVIEW_MERGED.md` row 10; `REVIEW_A_independent.md` C-1..C-4,
   `REVIEW_B_independent.md` C1 / C3 / C4 / C5). Frames: `Builds/ui-capture/BuildCollections_2670x1200.png` (07:02) -
   eight cards, no card says what is affordable; `Defenses` and `Protection` side by side; the eighth card
   `Upgrade Defenses` in a smaller title; banner `First build: select a category.`.
-  `BuildGhostChips_blocked_2670x1200.png` (07:02) - `Arcane Spire - 88 wood, 88 iron, 187 crystals` + `Not enough
-  Wood` (good), bottom-right three unlabelled glyphs (check / rotate / X). `BuildPreview_2670x1200.png` (09-01) -
+  `BuildGhostChips_blocked_2670x1200.png` (07:02) - `Arcane Spire - <fabricated basket, see the correction above>`
+  + `Not enough Wood` (the worded refusal is good; the basket and the resource it names were both stub fiction),
+  bottom-right three unlabelled glyphs (check / rotate / X). `BuildPreview_2670x1200.png` (09-01) -
   orientation only, no cost, no time. The palette dock frame (08-27) is STALE - re-capture before touching it.
 - CODE: `Assets/_Modules/Village/BuildMode/BuildCollectionBrowser.cs:191` `Label(..., "Upgrade Defenses", 30, ...)`,
   `:176` its tap `PanelRouter.Open(PanelId.Manage, "Defense")`; `BuildFirstUseGuide.cs:25` `First build: select a
@@ -23,8 +31,9 @@ spending shows neither the price nor the wait.
 - Collections card subtitle carries a count from the palette's existing NEED check: `Gathering - 2 you can build
   now` / `Defenses - nothing affordable yet` (VM computes, card renders).
 - Ghost stage buttons get words: `PLACE / ROTATE / CANCEL` (kit `ButtonPack`, same seats).
-- Confirm modal adds one line above CONFIRM: `88 wood, 88 iron, 187 crystals . 45s . Builder free` from the
-  structure def + `BuildTimerConfig` + free-slot count.
+- Confirm modal adds one line above CONFIRM: `<live cost words> . <build time> . Builder free` from the
+  structure def + `BuildTimerConfig` + free-slot count. Never a literal - the words come from the same
+  `CostFormat` seam the card and the ghost pill use.
 - The first-use banner takes the PHASE (`Place it - drag, then PLACE`) once a ghost is armed; `Step.Category`
   copy never persists past its step.
 - Rename per ruling #13: `Protection` -> `Walls & Gates`, `Defenses` -> `Towers`; `Upgrade Defenses` leaves the
@@ -32,8 +41,8 @@ spending shows neither the price nor the wait.
 
 ```
 [ Gathering - 2 you can build now ] [ Towers - 1 you can build now ] [ Walls & Gates - nothing affordable yet ]
-ghost:  Arcane Spire - 88 wood, 88 iron, 187 crystals        [ PLACE ] [ ROTATE ] [ CANCEL ]
-confirm: 88 wood, 88 iron, 187 crystals . 45s . Builder free    [ CONFIRM ]
+ghost:  Arcane Spire - <live cost words>                     [ PLACE ] [ ROTATE ] [ CANCEL ]
+confirm: <live cost words> . <build time> . Builder free        [ CONFIRM ]
 ```
 Trace: `FlowTrace.Step("Build", "collection=<id> affordable=<n>")`, `FlowTrace.Step("Build", "confirm cost='<text>' time=<s>")`.
 

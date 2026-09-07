@@ -1,6 +1,6 @@
 # WO-1488: Manage queue drawer - row 2 overlaps the gold frame, the timer clips mid-word, and the flow map FAILS
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** Manage 2000-block (WO-2012, global queue and context strip).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1488 -> 1489 in the same edit).

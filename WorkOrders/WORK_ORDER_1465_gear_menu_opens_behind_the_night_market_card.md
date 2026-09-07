@@ -1,6 +1,6 @@
 # WO-1465: the gear menu opens BEHIND the Night Market card, and PAUSE lands on the joystick ring
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/HUD/` gear menu sort order + the Night Market HUD card.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1465 -> 1466 in the same edit).

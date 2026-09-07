@@ -1,6 +1,6 @@
 # WO-1463: the rally flag renders MAGENTA in the player build - a built-in-pipeline material under URP
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** `Assets/_Modules/Village/Troops/RaidDeployController.cs` (rally flag construction).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1463 -> 1464 in the same edit).

@@ -1,6 +1,6 @@
 # WO-1508: enemy target re-acquisition thrashes physics every frame - all-layers OverlapSphere per enemy per frame
 
-**Status:** READY TO IMPLEMENT (headless trace FIRST)
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT (headless trace FIRST)
 **Silo:** `Assets/_Modules/Village/AI/Enemy.cs`. Sibling of WO-1450 - land them TOGETHER.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1508 -> 1509 in the same edit).

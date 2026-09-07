@@ -1,6 +1,6 @@
 # WO-1466: the Night Market card caption ellipsises and sits outside the label-fit oracle entirely
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS - lane handed back edits 2026-09-06 (uncommitted, awaiting the wave-two compile + regression gate); prior: READY TO IMPLEMENT
 **Silo:** the Night Market HUD card + `Assets/Editor/Regression/HudLabelFitRegression.cs`.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1466 -> 1467 in the same edit).
