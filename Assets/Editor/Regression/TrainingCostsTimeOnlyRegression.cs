@@ -42,7 +42,19 @@
 //                      charges EXACTLY the quoted gold price and the troop lands.
 //                      RED: `FinishPaysGold(JobKind kind) => false` -> priced in crystals,
 //                      the fixture holds 0 crystals, the hire is refused.
-//   D  SHAPE         - BarracksService.cs and BarracksProgression.cs CODE never read
+//   E  FREE SWAP     - WO-1586. With the SAME zero wallet and a roster of owned troops,
+//                      ArmyMusterService.Preview of a swap between OWNED kinds projects
+//                      Cost.Gold == 0, Affordable == true and a ShortOf that never says
+//                      "Gold"; owned/toTrain read the roster (E). A plan that outruns the
+//                      roster is priced in TIME and still not in gold (E2). The instant-
+//                      finish skip still quotes gold (E3) - it is the ONLY gold price left
+//                      on the path.
+//                      RED: restore `p.Cost.Gold += def.CostGold * row.Count` and
+//                      `p.Affordable = state.Resources.Coins >= p.Cost.Gold` in
+//                      ArmyMusterService.Preview -> E fails on gold=1650 and Affordable=false,
+//                      which is exactly what the owner saw on 2026-09-07.
+//   D  SHAPE         - BarracksService.cs, BarracksProgression.cs, ArmyMusterService.cs and
+//                      ArmyMusterPanel.cs CODE never read
 //                      CostGold. The value stays authored in troops.json as the reward
 //                      anchor / hire basis (do not touch it) but no train/upgrade seam may
 //                      price with it.
@@ -65,7 +77,12 @@ namespace DeNelle.Editor
     {
         private const string ServicePath     = "Assets/_Modules/Village/Troops/BarracksService.cs";
         private const string ProgressionPath = "Assets/_Modules/Village/Troops/BarracksProgression.cs";
+        private const string MusterPath      = "Assets/_Modules/Village/Troops/ArmyMusterService.cs";
+        private const string MusterPanelPath = "Assets/_Modules/Village/Troops/ArmyMusterPanel.cs";
         private const string TroopId = "troop-footman";
+        /// <summary>The second OWNED kind case E swaps to. Tier-1 like the footman, so both are
+        /// unlocked at the fixture's Barracks level and neither depends on troop-upgrades.json tiers.</summary>
+        private const string SwapTroopId = "troop-archer";
 
         public static bool Run(out string reason)
         {
@@ -225,6 +242,87 @@ namespace DeNelle.Editor
                     failures.Add($"[case B] the wallet MOVED on a free upgrade: coins={afterB.Coins} wood={throwaway.Wood} " +
                                  $"iron={throwaway.Iron} food={afterB.Food} crystals={afterB.Crystals}.");
 
+                // -- CASE E: REBALANCING AN ARMY YOU ALREADY OWN QUOTES NO GOLD (WO-1586) --
+                // Owner, 2026-09-07 (Seeker 2026.09.07.359076): "i couldnt seem to rebalance my army
+                // for the raids. Now that I upgraded troops, I should be able to change out troops but
+                // everytime showed as need gold. But we agreed the one need for gold was if you didnt
+                // want to wait on troops to train". The train SEAM was already free (case A); the
+                // Armies panel's PROJECTION was not. Runs with the wallet still at ZERO - case C
+                // funds it afterwards, so the order of these two blocks matters.
+                throwaway.Army.GrantTrained(TroopId);
+                throwaway.Army.GrantTrained(TroopId);
+                throwaway.Army.GrantTrained(SwapTroopId);
+
+                var swap = new ArmyComposition { Name = "Rebalance" };
+                swap.Add(TroopId, 2);
+                swap.Add(SwapTroopId, 1);
+                var swapPreview = ArmyMusterService.Preview(swap);
+                int coinsAtPreview = throwaway.Resources.Coins;
+                log.AppendLine($"  case E - swap between OWNED kinds with coins={coinsAtPreview}: " +
+                               $"units={swapPreview.TotalUnits} cost=\"{swapPreview.Cost}\" gold={swapPreview.Cost.Gold} " +
+                               $"affordable={swapPreview.Affordable} shortOf=\"{swapPreview.ShortOf}\" " +
+                               $"owned={swapPreview.AlreadyOwned} toTrain={swapPreview.ToTrain} " +
+                               $"planSlots={swapPreview.PlanSlots} newArmySlots={swapPreview.NewArmySlots} " +
+                               $"armyRoom={swapPreview.ArmyRoom} lineRoom={swapPreview.LineRoom}");
+
+                if (coinsAtPreview != 0)
+                    failures.Add($"[case E] fixture defect: the wallet holds {coinsAtPreview} coins, so a " +
+                                 "zero-gold projection would prove nothing. Case E must run before case C funds it.");
+                if (swapPreview.Cost.Gold != 0 || !swapPreview.Cost.IsZero)
+                    failures.Add($"[case E] ArmyMusterService.Preview priced a swap between troops the player " +
+                                 $"ALREADY OWNS at {swapPreview.Cost.Gold} gold (\"{swapPreview.Cost}\"). Training has " +
+                                 "charged nothing since WO-1387; a projection that quotes gold is the panel telling " +
+                                 "the player she cannot afford something the action takes for free. The " +
+                                 "`p.Cost.Gold += def.CostGold * row.Count` line has come back.");
+                if (!swapPreview.Affordable)
+                    failures.Add($"[case E] the swap is NOT Affordable with {coinsAtPreview} coins " +
+                                 $"(shortOf=\"{swapPreview.ShortOf}\", armyRoom={swapPreview.ArmyRoom}, " +
+                                 $"lineRoom={swapPreview.LineRoom}). Affordable means \"fits the army cap and the " +
+                                 "train line\" (WO-1586), never \"coins >= Cost.Gold\".");
+                if (swapPreview.ShortOf.IndexOf("Gold", StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add($"[case E] the panel's SHORT OF chip would read \"{swapPreview.ShortOf}\" - a " +
+                                 "train-side surface may never name gold. Gold belongs to the skip verb alone.");
+                if (swapPreview.AlreadyOwned != 3 || swapPreview.ToTrain != 0)
+                    failures.Add($"[case E] the projection reads owned={swapPreview.AlreadyOwned} " +
+                                 $"toTrain={swapPreview.ToTrain} for a plan of 2x{TroopId} + 1x{SwapTroopId} against a " +
+                                 "roster holding exactly those three. Expected owned=3 toTrain=0 - the owned-vs-train " +
+                                 "reading is what a capture uses to tell a rebalance from a new training order.");
+                // NewArmySlots is the owned-vs-train READING, not the cap input (the cap is judged on
+                // PlanSlots, because Muster enqueues every staged unit). Pinned so the reading itself
+                // stays honest - a capture uses it to tell a rebalance from a recruitment drive.
+                if (swapPreview.NewArmySlots != 0)
+                    failures.Add($"[case E] a swap between OWNED kinds reads {swapPreview.NewArmySlots} NEW army " +
+                                 "slots; troops already on the roster add none. The owned-vs-train reading is wrong, " +
+                                 "so a capture can no longer tell a rebalance from a recruitment drive.");
+
+                // E2: a plan that OUTRUNS the roster is priced in TIME, still never in gold.
+                var grow = new ArmyComposition { Name = "Grow" };
+                grow.Add(SwapTroopId, 5);
+                var growPreview = ArmyMusterService.Preview(grow);
+                log.AppendLine($"  case E2 - 5x{SwapTroopId} with 1 owned: gold={growPreview.Cost.Gold} " +
+                               $"owned={growPreview.AlreadyOwned} toTrain={growPreview.ToTrain} " +
+                               $"seconds={growPreview.TotalSeconds} affordable={growPreview.Affordable}");
+                if (growPreview.Cost.Gold != 0)
+                    failures.Add($"[case E2] training NEW troops was priced at {growPreview.Cost.Gold} gold. " +
+                                 "Owner: \"the one need for gold was if you didnt want to wait\".");
+                if (growPreview.TotalSeconds <= 0d)
+                    failures.Add("[case E2] a plan that must TRAIN four new troops projects 0 seconds - with gold " +
+                                 "gone, TIME is the only price left and it must be quoted.");
+                if (growPreview.ToTrain != 4)
+                    failures.Add($"[case E2] toTrain={growPreview.ToTrain} for 5 staged against 1 owned; expected 4.");
+
+                // E3: the ONE gold price on this whole path is the SKIP. Measured here so the pin
+                // says "gold moved to the skip verb", not merely "gold left the projection".
+                if (trainJob.StructureId != null)
+                {
+                    int skipPrice = svc.InstantFinishPrice(ChannelId.Train, trainJob.StructureId);
+                    log.AppendLine($"  case E3 - skip price on the free Train job = {skipPrice} gold " +
+                                   $"(paysGold={svc.FinishPaysGold(ChannelId.Train, trainJob.StructureId)})");
+                    if (skipPrice <= 0)
+                        failures.Add("[case E3] with training free AND the projection free, the instant-finish skip " +
+                                     "quotes 0 gold - the ruling's single gold sink has vanished entirely.");
+                }
+
                 // -- CASE C: gold still buys the skip, on the SAME free Train job --
                 if (trainJob.StructureId != null)
                 {
@@ -288,21 +386,28 @@ namespace DeNelle.Editor
         // -- CASE D: shape - the train/upgrade seams never price with CostGold ---
         private static void CheckShape(List<string> failures, StringBuilder log)
         {
-            foreach (var path in new[] { ServicePath, ProgressionPath })
+            // WO-1586 added the two MUSTER files: the train SEAM was already clean, but the Armies
+            // panel's PROJECTION (ArmyMusterService.Preview) and its roster rows (ArmyMusterPanel.
+            // PerUnitLine) still read CostGold and put "550 Gold" / "SHORT OF: Gold" in front of a
+            // player rebalancing troops she owned. A ruling that holds in the service and breaks in
+            // the panel is not a ruling that holds.
+            foreach (var path in new[] { ServicePath, ProgressionPath, MusterPath, MusterPanelPath })
             {
                 string src = ReadSource(path, failures);
                 if (src == null) continue;
                 string code = StripLineComments(src);
                 if (code.IndexOf("CostGold", StringComparison.Ordinal) >= 0)
                     failures.Add($"[case D] {path} CODE reads CostGold again. troops.json costGold is the raid-reward " +
-                                 "anchor and the mercenary-hire basis, never a train or upgrade price (WO-1387). " +
+                                 "anchor and the mercenary-hire basis, never a train or upgrade price (WO-1387) and " +
+                                 "never a muster projection or a roster row (WO-1586). " +
                                  "Comments may discuss it; live code may not price with it.");
                 if (path == ServicePath && code.IndexOf("Resources.Coins -=", StringComparison.Ordinal) >= 0)
                     failures.Add("[case D] BarracksService debits Coins again. The ONE coins debit is " +
                                  "BuildTimerService.SpendCoins behind TryInstantFinish (HireReinforcementsRegression 5a).");
             }
             if (!failures.Exists(f => f.StartsWith("[case D]", StringComparison.Ordinal)))
-                log.AppendLine("  case D OK - BarracksService / BarracksProgression code never prices with CostGold");
+                log.AppendLine("  case D OK - BarracksService / BarracksProgression / ArmyMusterService / " +
+                               "ArmyMusterPanel code never prices with CostGold");
         }
 
         // -- helpers (same shape as HireReinforcementsRegression) ---------------
@@ -395,8 +500,9 @@ namespace DeNelle.Editor
             {
                 reason = "TRAINING COSTS TIME ONLY OK - with a wallet of nothing a Train job and a troop upgrade both " +
                          "enqueue for exactly their authored seconds, TroopUpgradeCost is empty, the wallet never " +
-                         "moves, gold still buys the instant-finish skip for exactly the quoted price, and no " +
-                         "train/upgrade seam prices with CostGold";
+                         "moves, gold still buys the instant-finish skip for exactly the quoted price, a swap " +
+                         "between OWNED troops projects zero gold and stays Affordable on an empty wallet, and no " +
+                         "train/upgrade/muster seam prices with CostGold";
                 Debug.Log("TRAINING_COSTS_TIME_ONLY_OK\n" + log);
                 return true;
             }

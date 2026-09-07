@@ -5,11 +5,18 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // NO SECOND QUEUE. This is a BATCH ENQUEUE over the sanctioned single-troop train
-// path — BarracksService.EnqueueTraining, which spends the ledger cost, honours the
+// path — BarracksService.EnqueueTraining, which honours the
 // army cap (incl. in-flight jobs) and calls BuildTimerService.Enqueue(JobKind.TrainTroop,
 // ...) on ChannelId.Train. The muster adds exactly one thing on top: the QUEUE-DEPTH
 // budget (owner ruling WO-911 Q4 — five items total per line) and a REPORT naming what
 // did and did not fit.
+//
+// ⚠ NOTHING ON THIS PATH SPENDS ANYTHING (WO-1387 for the seam, WO-1586 for the
+// projection). Training is priced in TIME; gold appears ONLY on the skip verb
+// (BuildTimerService.TryInstantFinish / HIRE REINFORCEMENTS). Header comments here used
+// to say the enqueue "spends the ledger cost" long after it stopped doing so — that is
+// exactly the "comments lie" trap MASTER_CATALOG is built around, and it is what let a
+// gold projection sit in Preview() unnoticed until the owner hit it on 2026-09-07.
 //
 // NO SILENT TRUNCATION (CLAUDE.md §12). Every unit that is not queued is counted,
 // attributed to a named blocker, surfaced as ASCII TEXT (never colour — the owner is
@@ -86,7 +93,12 @@ namespace DeNelle.Village
     {
         /// <summary>Units the composition asks for.</summary>
         public int TotalUnits;
-        /// <summary>Summed resource cost of every unit.</summary>
+        /// <summary>
+        /// Summed resource cost of every unit. WO-1387/WO-1586: this is ALWAYS ZERO - training is
+        /// priced in TIME and nothing else, so it prints "Free". The field stays because
+        /// <see cref="ArmyCost"/> is the panel's cost grammar and a future non-gold price (should the
+        /// owner ever rule one) has an obvious home; nothing may write a gold term into it here.
+        /// </summary>
         public ArmyCost Cost;
         /// <summary>Wall-clock seconds for the batch across the Train channel's parallel slots.</summary>
         public double TotalSeconds;
@@ -100,16 +112,34 @@ namespace DeNelle.Village
         public int WouldFit;
         /// <summary>Units that would NOT fit right now. &gt; 0 = the panel must say so in TEXT.</summary>
         public int WouldNotFit => TotalUnits - WouldFit > 0 ? TotalUnits - WouldFit : 0;
-        /// <summary>True when the ledger covers <see cref="Cost"/> in full.</summary>
+        /// <summary>
+        /// WO-1586: "the plan FITS", never "you have the gold". Training costs TIME only
+        /// (WO-1387), so the only things that can refuse a plan are the ARMY CAP and the
+        /// TRAIN LINE. A wallet reading has no vote here.
+        /// </summary>
         public bool Affordable;
-        /// <summary>ASCII names of the short resources ("Wood, Iron"); empty when affordable.</summary>
+        /// <summary>ASCII name of what the plan does not fit into ("Army room", "Queue space");
+        /// empty when it fits. NEVER "Gold" - see <see cref="Affordable"/>.</summary>
         public string ShortOf;
+        /// <summary>Army slots the staged plan totals (troop Slots x count), owned units included.</summary>
+        public int PlanSlots;
+        /// <summary>Army slots the plan asks for that are NOT already filled by owned/in-flight troops.
+        /// A READING for the trace, NOT the cap input: Muster() enqueues every staged unit, so the cap
+        /// is judged on <see cref="PlanSlots"/>. Read this to tell a rebalance from a recruitment drive.</summary>
+        public int NewArmySlots;
+        /// <summary>Army slots still free right now (cap - roster - in-flight training).</summary>
+        public int ArmyRoom;
+        /// <summary>Units of the plan already covered by troops the player OWNS (roster + in-flight).
+        /// Informational: staging these costs nothing, which is the WO-1586 rebalance case.</summary>
+        public int AlreadyOwned;
+        /// <summary>Units of the plan that would have to be TRAINED (the ones the time estimate is for).</summary>
+        public int ToTrain;
     }
 
     /// <summary>
     /// Turns an <see cref="ArmyComposition"/> into Train-channel jobs in one action, and projects
     /// its cost/time for the panel. Reuses <see cref="BarracksService.EnqueueTraining(string,int,out string)"/>
-    /// — it never forks the enqueue, the spend or the army-cap rule.
+    /// — it never forks the enqueue or the army-cap rule. There is no spend to fork (WO-1387).
     /// </summary>
     public static class ArmyMusterService
     {
@@ -173,6 +203,8 @@ namespace DeNelle.Village
             p.LineDepth = TrainLineDepth();
             p.LineRoom = ArmyMusterPlanner.RoomInLine(p.LineDepth, ArmyMusterPlanner.TrainQueueDepthCap);
 
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+
             var durations = new List<double>();
             if (comp != null && comp.Rows != null)
             {
@@ -184,19 +216,72 @@ namespace DeNelle.Village
                     if (def == null) continue;
 
                     p.TotalUnits += row.Count;
-                    p.Cost.Gold += def.CostGold * row.Count;
+                    p.PlanSlots += TroopDialogueCommands.SlotOf(row.TroopId) * row.Count;
                     for (int i = 0; i < row.Count; i++) durations.Add(def.BuildSeconds);
+
+                    // WO-1586 §12 instrumentation: OWNED vs TO-TRAIN, per row, so a capture answers
+                    // "was this a rebalance between troops she already has, or a new training order?"
+                    // without anyone theorising. It is a READING, not a discount - pressing Train Army
+                    // still enqueues every staged unit, so the time estimate must cover them all.
+                    int owned = state != null && state.Army != null ? state.Army.CountOfDef(row.TroopId) : 0;
+                    owned += BarracksService.CountInFlightTrainOf(row.TroopId);
+                    int covered = owned < row.Count ? owned : row.Count;
+                    p.AlreadyOwned += covered;
+                    p.ToTrain += row.Count - covered;
+                    p.NewArmySlots += TroopDialogueCommands.SlotOf(row.TroopId) * (row.Count - covered);
+                    FlowTrace.Step("Muster",
+                        $"preview row '{row.TroopId}' count={row.Count} owned+inflight={owned} " +
+                        $"covered={covered} toTrain={row.Count - covered} " +
+                        $"seconds={def.BuildSeconds:0}/unit goldCharged=0 (WO-1387: training is TIME only).");
                 }
             }
 
             p.TotalSeconds = ArmyMusterPlanner.BatchSeconds(durations, p.TrainSlots);
             p.WouldFit = p.TotalUnits < p.LineRoom ? p.TotalUnits : p.LineRoom;
 
-            // Affordability against the SAME wallet the spend charges (the GameState ledger),
-            // never EconomyService's divergent in-session pool - see BarracksService's wallet note.
-            var state = DeNelle.Core.State.GameStateService.Instance?.State;
-            p.Affordable = state != null && state.Resources.Coins >= p.Cost.Gold;
-            p.ShortOf = p.Affordable ? "" : "Gold";
+            // ── WO-1586: THE PLAN IS JUDGED BY WHAT IT FITS INTO, NOT BY THE WALLET ──
+            // This block used to read `p.Cost.Gold += def.CostGold * row.Count` above and then
+            // `p.Affordable = state.Resources.Coins >= p.Cost.Gold`, which is what put "SHORT OF:
+            // Gold" on the Armies panel for a player rebalancing troops she already owned (owner,
+            // 2026-09-07: "everytime showed as need gold. But we agreed the one need for gold was
+            // if you didnt want to wait on troops to train"). BarracksService.EnqueueTraining has
+            // charged NOTHING since WO-1387, so the projection was quoting a price the action never
+            // took. Cost stays a zero ArmyCost (it prints "Free"); gold lives on the SKIP verb only
+            // (BuildTimerService.TryInstantFinish / HIRE REINFORCEMENTS).
+            int rosterSlots = 0, queuedSlots = 0, capSlots = 0;
+            if (state != null && state.Army != null)
+            {
+                var readiness = ArmyReadiness.Compute(state);
+                rosterSlots = readiness.RosterSlots;
+                queuedSlots = readiness.QueuedSlots;
+                capSlots = readiness.CapSlots;
+            }
+            p.ArmyRoom = capSlots - rosterSlots - queuedSlots;
+            if (p.ArmyRoom < 0) p.ArmyRoom = 0;
+
+            // THE CAP IS MEASURED AGAINST **PlanSlots**, NOT NewArmySlots - because Muster() enqueues
+            // EVERY staged unit through BarracksService.EnqueueTraining, which refuses each one on
+            // `rosterSlots + committed + unitSlots > cap` (BarracksService.cs:385). Projecting the
+            // cheaper NewArmySlots here would say "fits" and then have the button return "Queued 0 of
+            // 10 - army is full", which is the projection/action disagreement §12 exists to kill. The
+            // gold chip was FALSE because nothing charges gold; an army-room chip is TRUE, because the
+            // cap really is checked. NewArmySlots/AlreadyOwned stay as the owned-vs-train READING for
+            // the trace, and are deliberately not the cap input.
+            bool fitsArmy = state == null || state.Army == null || p.PlanSlots <= p.ArmyRoom;
+            bool fitsQueue = p.TotalUnits <= 0 || p.LineRoom > 0;
+            p.Affordable = fitsArmy && fitsQueue;
+
+            var shortOf = new System.Text.StringBuilder();
+            if (!fitsArmy) shortOf.Append("Army room");
+            if (!fitsQueue) shortOf.Append(shortOf.Length > 0 ? ", " : "").Append("Queue space");
+            p.ShortOf = shortOf.ToString();
+
+            FlowTrace.Step("Muster",
+                $"preview plan units={p.TotalUnits} slots={p.PlanSlots} newSlots={p.NewArmySlots} owned={p.AlreadyOwned} " +
+                $"toTrain={p.ToTrain} seconds={p.TotalSeconds:0} | army {rosterSlots}+{queuedSlots}/{capSlots} " +
+                $"(room {p.ArmyRoom}) line {p.LineDepth}/{ArmyMusterPlanner.TrainQueueDepthCap} " +
+                $"-> Affordable={p.Affordable} ShortOf=\"{p.ShortOf}\" Cost={p.Cost} " +
+                $"(coins={(state != null ? state.Resources.Coins : 0)} - NOT a gate).");
             return p;
         }
 
@@ -204,8 +289,9 @@ namespace DeNelle.Village
 
         /// <summary>
         /// MUSTER: enqueues every troop in <paramref name="comp"/> onto the existing Train channel,
-        /// in composition order, one job per unit — spending resources through the normal train
-        /// rules. Stops adding to a line that has hit the five-item cap and REPORTS the remainder;
+        /// in composition order, one job per unit, through the normal train rules. It charges
+        /// NOTHING — the price is the queue time (WO-1387). Stops adding to a line that has hit the
+        /// five-item cap and REPORTS the remainder;
         /// it never silently drops a unit. Safe to call with a null/empty composition.
         /// </summary>
         public static MusterReport Muster(ArmyComposition comp)
@@ -301,8 +387,8 @@ namespace DeNelle.Village
 
             int allowed = row.Count < room ? row.Count : room;
 
-            // THE reuse point: the same call the single-troop train button makes. It spends the
-            // ledger cost, honours the army cap incl. in-flight jobs, and enqueues one
+            // THE reuse point: the same call the single-troop train button makes. It charges NOTHING
+            // (WO-1387), honours the army cap incl. in-flight jobs, and enqueues one
             // JobKind.TrainTroop job per unit on ChannelId.Train with a unique id.
             string stopReason;
             outcome.Queued = BarracksService.EnqueueTraining(row.TroopId, allowed, out stopReason);
@@ -310,7 +396,7 @@ namespace DeNelle.Village
             if (outcome.Queued < row.Count)
             {
                 // Attribute the shortfall to the RIGHT blocker: the per-unit gate that stopped the
-                // train call (army full / short resources / locked) if it stopped short, otherwise
+                // train call (army full / owned limit / locked - never a price) if it stopped short, otherwise
                 // the queue-depth cap that clipped `allowed` in the first place.
                 if (outcome.Queued < allowed && !string.IsNullOrEmpty(stopReason))
                     outcome.Reason = Lower(stopReason);

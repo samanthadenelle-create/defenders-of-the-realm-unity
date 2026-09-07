@@ -605,9 +605,10 @@ namespace DeNelle.Village
             nameLabel.raycastTarget = false;
             ElarionUiKit.FitSingleLine(nameLabel);
 
-            // Collision 3: "550 Gold - 1m 00s each" wrapped to a second line and pushed into the
-            // row below. The string is now ONE compact line, and FitSingleLine makes a long one
-            // ellipsize inside its own band instead of wrapping into a neighbour.
+            // Collision 3: the old two-part row string ("550 Gold - 1m 00s each") wrapped to a second
+            // line and pushed into the row below. The string is now ONE compact line, and
+            // FitSingleLine makes a long one ellipsize inside its own band instead of wrapping into a
+            // neighbour. WO-1586 dropped the gold half entirely - see PerUnitLine.
             var costLabel = ElarionUiKit.Label(row.transform, PerUnitLine(def), rCost.yMin, rCost.yMax,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
                 rCost.xMin, rCost.xMax);
@@ -659,10 +660,17 @@ namespace DeNelle.Village
             Say(_vm.Step(troopId, delta));
         }
 
+        /// <summary>
+        /// The per-troop roster line. TIME ONLY - "1m 00s each" (WO-1586).
+        /// This read `new ArmyCost { Gold = def.CostGold }` and printed "550 Gold - 1m 00s each" on
+        /// every row, which is half of the "everytime showed as need gold" the owner hit on
+        /// 2026-09-07 while rebalancing an army she already owned. Training has charged nothing
+        /// since WO-1387; gold is quoted ONLY by the skip verb (HIRE REINFORCEMENTS /
+        /// BuildTimerService.InstantFinishPrice), so no train-side surface may name it.
+        /// </summary>
         private static string PerUnitLine(TroopDef def)
         {
-            var cost = new ArmyCost { Gold = def.CostGold };
-            return cost.ToString() + " - " + CompactDuration(def.BuildSeconds);
+            return CompactDuration(def.BuildSeconds) + " each";
         }
 
         /// <summary>ONE-LINE time grammar for a roster row ("45s", "1m", "1m30", "2h"). The long
@@ -731,6 +739,18 @@ namespace DeNelle.Village
             body.Append("\nTip: Training auto-saves this slot. Fill the army, then Raids.");
 
             bool shortOf = preview.TotalUnits > 0 && !preview.Affordable;
+            // WO-1586 §12: the REASON STRING the player actually reads, captured verbatim. If a
+            // capture ever shows "Gold" in this line again, the WO-1387 ruling has been reversed a
+            // third time and the trace names the exact frame it happened on.
+            // The chip text is composed OUTSIDE the interpolation hole on purpose: escaped quotes
+            // inside a hole read as an unbalanced brace to the compile gate's string stripper
+            // (COMPILE_GATE_FAIL 2026-09-07, cg-wave8.log: 62 open vs 65 close on this file).
+            string shortOfChip = shortOf ? "'SHORT OF: " + preview.ShortOf + "'" : "none";
+            FlowTrace.Step("Muster",
+                "panel detail: units=" + preview.TotalUnits + " cost='" + preview.Cost + "' " +
+                "time=" + ArmyMusterPlanner.FormatDuration(preview.TotalSeconds) + " " +
+                "shortOfChip=" + shortOfChip + " " +
+                "(owned=" + preview.AlreadyOwned + " toTrain=" + preview.ToTrain + " armyRoom=" + preview.ArmyRoom + ").");
             float textFloor = shortOf ? 0.17f : 0.04f;
 
             var text = ElarionUiKit.Label(_detailBody, body.ToString(), textFloor, 0.96f,
@@ -882,6 +902,14 @@ namespace DeNelle.Village
             _musterCta.interactable = interactable;
             if (_musterCtaLabel != null) _musterCtaLabel.text = "Train Army";
             if (_musterCtaSub != null) _musterCtaSub.text = sub;
+
+            // WO-1586 §12: the CTA's REASON, as the player reads it. Note the button has never been
+            // gated on gold - only on queue room - which is why the defect presented as a panel that
+            // SAID "need gold" rather than one that refused. Both halves are now in the trace.
+            FlowTrace.Step("Muster",
+                "panel cta: interactable=" + interactable + " sub='" + sub + "' " +
+                "(units=" + preview.TotalUnits + " lineRoom=" + preview.LineRoom + " affordable=" + preview.Affordable + " " +
+                "shortOf='" + preview.ShortOf + "').");
         }
     }
 }
