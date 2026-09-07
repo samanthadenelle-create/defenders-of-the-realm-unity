@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Echoes of Elarion — DeNelle Studios</title>
+<title>Echoes of Elarion &mdash; DeNelle Studios</title>
 <meta name="description" content="Echoes of a Forgotten Civilization. Build the village, wake the Echoes, hold the dark back. Live on the Solana dApp Store for Seeker.">
 <meta name="theme-color" content="#07060a">
 <meta property="og:title" content="Echoes of Elarion">
@@ -33,6 +33,7 @@
     </a>
     <nav class="topbar__nav" aria-label="Primary">
       <a href="#about">About</a>
+      <a href="#update">Update</a>
       <a href="#heroes">Heroes</a>
       <a href="#pillars">Play</a>
       <a href="#gameplay">Gameplay</a>
@@ -63,6 +64,10 @@
          href="solanadappstore://details?id=com.denellestudios.echoesofelarion">
         Get it on Solana dApp Store
       </a>
+      <!-- Browser build. The WebGL deployment is aliased to defenders-webgl.vercel.app;
+           this marketing site owns the root of echoes-of-elarion.vercel.app, so the two
+           are separate surfaces and this link is the only door between them. -->
+      <a class="btn btn--ghost" href="https://defenders-webgl.vercel.app/">Play in your browser</a>
       <a class="btn btn--ghost" href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Discord</a>
       <a class="btn btn--ghost" href="https://x.com/EchoesOfElarion" rel="noopener noreferrer" target="_blank">X</a>
     </div>
@@ -83,7 +88,7 @@
       <div class="cinematic__copy">
         <div class="section__label">Cinematic</div>
         <h2 class="section__title">A living poster</h2>
-        <p>Five seconds from the Realm — muted loop, sound off by default.</p>
+        <p>Five seconds from the Realm &mdash; muted loop, sound off by default.</p>
       </div>
       <div class="cinematic__frame">
         <video class="cinematic__video"
@@ -111,21 +116,108 @@
         <div class="prose">
           <p>
             Echoes of Elarion is a town-builder and defense game. You lay out your own village
-            around the Heart — the world tree at its centre — place and upgrade its
+            around the Heart &mdash; the world tree at its centre &mdash; place and upgrade its
             buildings, walls and towers, keep the builder, training and research queues turning,
             and defend it when the waves come. Between defenses you range out across the Realm
             Map to raid what the dark has taken.
           </p>
           <p>
-            The Echoes are the awakened essences of the people the Heart once guarded. Each
-            returns with a calling of its own, and you decide what each one tends — match
-            an Echo to its calling and it gives back more.
+            The Echoes are the awakened essences of the people the Heart once guarded.
+            <strong>Six of them</strong> wake across a run &mdash; Aldwin, Elowen, Corvin, Bran,
+            Doran and Maren &mdash; and each returns with a calling of its own. You decide what
+            each one tends: match an Echo to its calling and it gives back more, but the choice
+            stays yours and is never locked.
           </p>
+          <!-- SIX: counted from the EchoRosterCatalog table in
+               Assets/_Modules/Village/Harvest/EchoRosterCatalog.cs (entries Order 1..6),
+               read at source 2026-09-07. Not a marketing number. Recount before changing
+               it; never round it up. -->
+          <p>
+            Under the realm there are the dungeons. <strong>Six of them</strong> open through a
+            portal in the 2026-09-07 build, plus one crossroads that is not a dungeon, and the rough
+            stones you carry back out are what the Jeweler turns into rings of power.
+          </p>
+          <!-- SIX: the 'portal-gated' entries in api/_lib/dungeon-manifest.json, read at
+               source 2026-09-07 (dg_starter_loop, dg_sunken_vault, dg_bonecrypt,
+               dg_ember_deep, dg_folks_granary, dg_healers_cottage). That manifest is the
+               repo's reachability contract, asserted in both directions: a Unity regression
+               proves it equals the set a player can actually reach, and
+               test/dungeon-status.manifest.test.js proves every entry has a database row.
+               dg_hollow_roads is the seventh entry and is marked 'not-gated' - the Rootways
+               is a crossroads, which is why the sentence says so instead of saying seven.
+
+               DELIBERATELY ABSENT FROM THIS PAGE: a number of raid camps. Camps are
+               generated at runtime by CampSystem, not authored in a data file, so no honest
+               figure exists to quote and an invented one would be a lie in front of the
+               people this page is written for. -->
         </div>
       </div>
       <figure class="about-art">
-        <img src="/assets/title-screen-b-web.jpg" alt="Title art — the Heart of Elarion, a glowing world tree" width="900" height="1178" loading="lazy" decoding="async">
+        <img src="/assets/title-screen-b-web.jpg" alt="Title art &mdash; the Heart of Elarion, a glowing world tree" width="900" height="1178" loading="lazy" decoding="async">
       </figure>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       THE UPDATE SECTION.
+
+       Sourced line-by-line from publishing/RELEASE_NOTES_2026-09-07.md (its
+       Fixed / New / Balance blocks), which carries a commit for every claim in
+       its "Where each line is proven" table.
+
+       IT IS VERSION-STAMPED ON PURPOSE, and the wording avoids "now live".
+       At the time of writing the build on the store was the 2026-08-17 release
+       and the 2026-09-07 build was a submission candidate
+       (publishing/PROMO_LAUNCH_PLAN_2026-09-07.md s6 says so in as many words).
+       A dated heading is true before AND after the update ships; "now live"
+       would have been false for however long the review took.
+
+       NOT CLAIMED HERE, deliberately: cloud save reliability. The release notes
+       record that the offline save queue failed to drain six times in a row on
+       the owner's device (WO-1587) and explicitly do not promise cloud sync.
+       Do not add a sync claim to this page until that ticket closes.
+       ===================================================================== -->
+  <section class="wrap section" id="update">
+    <div class="section__label">The 2026-09-07 update</div>
+    <h2 class="section__title">What changed this week</h2>
+    <p class="section__intro">Built by one studio and patched daily. Every line below ships with the commit that made it.</p>
+    <ul class="pillars">
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">I</span>
+        <h3>Sign in once</h3>
+        <p>The game remembers you for the day. Your wallet is asked for only when you buy something or redeem a code &mdash; never just to open the game.</p>
+      </li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">II</span>
+        <h3>Manage, rebuilt</h3>
+        <p>Nine pages that fill the screen, buildings as picture cards, a research tree, a queue drawer for what is building, training and researching, and a way out of every page.</p>
+      </li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">III</span>
+        <h3>Raids that read</h3>
+        <p>Every camp says what it pays before you commit. Raiders take jobs &mdash; a front line, skirmishers, breakers and support &mdash; and dying no longer ends the raid: your army fights on.</p>
+      </li>
+      <li class="pillar">
+        <span class="pillar__num" aria-hidden="true">IV</span>
+        <h3>Time, not gold</h3>
+        <p>Training and upgrading troops costs time; gold only skips a wait or hires reinforcements. Stone has replaced Food across the realm and is mined at the new Quarry.</p>
+      </li>
+    </ul>
+    <div class="prose prose--spaced">
+      <p>
+        Echoes of Elarion is built and shipped by one studio, and it is patched daily. If the game
+        does not do what the screen says it will, the flag button in the corner captures the frame
+        and the recent diagnostic trace and sends it straight to the team, so a defect arrives as
+        evidence instead of a description. Cloud saves are keyed to your wallet address and a
+        wallet-keyed save needs a signature from that wallet over a single-use challenge, so nobody
+        else can write to your town; guests get a backup too, under an opaque device-derived
+        identifier. Packs are paid in SKR through your own wallet, which shows the token, the exact
+        amount, the network and the recipient before you approve anything, and the dApp Store takes
+        no cut &mdash; on a one-person budget that is the difference between a hobby and a roadmap.
+        SKR is Solana Mobile's token, not ours: we have never minted a token and never will, and
+        there is no airdrop, no trading, no secondary market and no cash-out. Everything you buy is
+        non-transferable, stays inside your account, and is never needed to finish the game.
+      </p>
     </div>
   </section>
 
@@ -134,14 +226,14 @@
     <h2 class="section__title">Battle-worn. Still standing.</h2>
     <p class="section__intro">The Realm answers with steel, faith, fire, and a quiet bow.</p>
     <figure class="party-banner">
-      <img src="/assets/battle-worn-heroes-web.jpg" alt="Battle-worn heroes — warrior, cleric, mage, and ranger standing together" width="900" height="1350" decoding="async">
+      <img src="/assets/battle-worn-heroes-web.jpg" alt="Battle-worn heroes &mdash; warrior, cleric, mage, and ranger standing together" width="900" height="1350" decoding="async">
     </figure>
     <h3 class="heroes-subhead">Three who answer the call</h3>
     <p class="section__intro section__intro--tight">Choose your front line. Each brings a different edge to the night.</p>
     <ul class="heroes">
       <li class="hero-card">
         <div class="hero-card__art">
-          <img src="/assets/grom-web.jpg" alt="Grom, Knight — armored warrior with a lion-crest shield" width="800" height="1066" decoding="async">
+          <img src="/assets/grom-web.jpg" alt="Grom, Knight &mdash; armored warrior with a lion-crest shield" width="800" height="1066" decoding="async">
         </div>
         <div class="hero-card__body">
           <h3>Grom</h3>
@@ -151,7 +243,7 @@
       </li>
       <li class="hero-card">
         <div class="hero-card__art">
-          <img src="/assets/thrain-web.jpg" alt="Thrain, Black Mage — dark-robed sorcerer with a crystal staff" width="800" height="1066" decoding="async">
+          <img src="/assets/thrain-web.jpg" alt="Thrain, Black Mage &mdash; dark-robed sorcerer with a crystal staff" width="800" height="1066" decoding="async">
         </div>
         <div class="hero-card__body">
           <h3>Thrain</h3>
@@ -161,7 +253,7 @@
       </li>
       <li class="hero-card">
         <div class="hero-card__art">
-          <img src="/assets/sylas-web.jpg" alt="Sylas, Ranger — elven archer in a leaf-cloak" width="800" height="1066" decoding="async">
+          <img src="/assets/sylas-web.jpg" alt="Sylas, Ranger &mdash; elven archer in a leaf-cloak" width="800" height="1066" decoding="async">
         </div>
         <div class="hero-card__body">
           <h3>Sylas</h3>
@@ -203,9 +295,9 @@
   <section class="wrap section section--gameplay" id="gameplay">
     <div class="section__label">Gameplay</div>
     <h2 class="section__title">Hold the line</h2>
-    <p class="section__intro">Defend the Heart when the waves come — towers, heroes, and the village walls under fire.</p>
+    <p class="section__intro">Defend the Heart when the waves come &mdash; towers, heroes, and the village walls under fire.</p>
     <figure class="gameplay-shot">
-      <img src="/assets/gameplay-hold-the-line-web.jpg" width="1600" height="900" alt="Hold The Line battle — Grom and allies defending the Heart of Elarion as enemies attack the walls" loading="lazy" decoding="async">
+      <img src="/assets/gameplay-hold-the-line-web.jpg" width="1600" height="900" alt="Hold The Line battle &mdash; Grom and allies defending the Heart of Elarion as enemies attack the walls" loading="lazy" decoding="async">
       <figcaption>In-game defense at the Heart of Elarion</figcaption>
     </figure>
   </section>
@@ -213,7 +305,7 @@
   <section class="wrap section section--get" id="get-the-app">
     <div class="get-panel">
       <div class="get-panel__badge">
-        <img src="/assets/key-art-web.jpg" alt="Defenders of the Realm: Echoes of Elarion — armored knight and dragon key art" width="220" height="220" decoding="async">
+        <img src="/assets/key-art-web.jpg" alt="Defenders of the Realm: Echoes of Elarion &mdash; armored knight and dragon key art" width="220" height="220" decoding="async">
       </div>
       <div class="get-panel__copy">
         <div class="section__label">Get it</div>
@@ -221,11 +313,28 @@
         <p>
           Echoes of Elarion is live on the Solana dApp Store, which ships on Solana Mobile devices.
           On a Seeker, tap the button. On desktop, scan the code with your Seeker to open the listing.
+          There is no web page for the listing to link to &mdash; the store is the store &mdash; so the
+          deep link and the code below are the only two doors to it.
+        </p>
+        <!-- Deliberately says nothing about how the browser build compares to the
+             Android one. The WebGL deploy was HELD on 2026-09-07
+             (publishing/RELEASE_NOTES_2026-09-07.md), so "the same game" would be an
+             unproven claim about a build nobody here measured. -->
+        <p>
+          No Seeker? The game also runs in your browser, with nothing to install.
         </p>
         <div class="get-panel__actions">
+          <!-- KEEP THIS DEEP LINK AND THE QR EXACTLY AS THEY ARE. The scheme +
+               package id are the store's only public address (site/README.md,
+               docs/SOLANA_STORE_LISTING.md: there is no https listing host). -->
           <a class="btn btn--gold" href="solanadappstore://details?id=com.denellestudios.echoesofelarion">
             Open in dApp Store
           </a>
+          <!-- The WebGL build lives on its OWN production surface. This site owns the
+               root of echoes-of-elarion.vercel.app; defenders-webgl.vercel.app is aliased
+               to the Unity shell. Both are registered in tools/web-ship.ps1, which is the
+               one place those hosts are written down. -->
+          <a class="btn btn--ghost" href="https://defenders-webgl.vercel.app/">Play in your browser</a>
           <a class="btn btn--ghost" href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Join Discord</a>
         </div>
         <p class="get-panel__pkg"><code>com.denellestudios.echoesofelarion</code></p>
@@ -242,7 +351,7 @@
     <div class="support-card">
       <div class="section__label">Support</div>
       <h2 class="section__title">We are listening</h2>
-      <p>Questions, bug reports, or data requests — write the studio.</p>
+      <p>Questions, bug reports, or data requests &mdash; write the studio.</p>
       <p class="support-card__mail">
         <a href="mailto:support.eoa@icloud.com">support.eoa@icloud.com</a>
       </p>

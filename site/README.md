@@ -46,10 +46,38 @@ python3 -m http.server 8765 --directory /workspace/eoa-site
 # open http://127.0.0.1:8765/
 ```
 
-## Deploy (owner only — separate Vercel project)
+## Deploy — through `tools/web-ship.ps1`, not by hand (2026-09-07)
 
-This directory is its own Vercel project (`echoes-of-elarion`), **not** the WebGL/`api` project.
-Deploy from **inside** this directory so only these files upload:
+This directory is its own Vercel project (`echoes-of-elarion`), **not** the WebGL/`api` project,
+and `vercel deploy` uploads the **current directory** — so it must be deployed from *inside* here.
+That is no longer a thing a person is asked to remember: `tools/web-ship.ps1` carries the surface in
+its registry with `DeployRoot = 'site'` and `Payload = 'site'`, sets the working directory itself,
+moves `echoes-of-elarion.vercel.app` onto the new deployment, and then **proves** the served
+`index.html` still carries the brand and the `solanadappstore://` deep link before it emits
+`WEB_PARITY_OK`.
+
+```powershell
+powershell -NoProfile -File tools\web-ship.ps1 -DryRun   # prints the plan, ships nothing
+powershell -NoProfile -File tools\web-ship.ps1           # deploy + alias + verify
+```
+
+**Why the automation exists:** on 2026-09-02 a deploy of the repo root went to this project id and
+replaced this landing site with the Unity WebGL shell. Every gate went green, and the store listing's
+`/privacy` and `/terms` 404ed until a Solana dApp Store reviewer rejected the app on 2026-09-03. The
+content assertion above is the detector that was missing — the game shell cannot contain a
+`solanadappstore://` URL.
+
+**The two surfaces, and which serves what:**
+
+| Domain | Payload | Source |
+|---|---|---|
+| `echoes-of-elarion.vercel.app` | marketing site | this directory |
+| `defenders-webgl.vercel.app` | the WebGL game | `Builds/WebGL` |
+
+The site links to the browser build with a **Play in your browser** button in the hero and in the
+Get-it panel. The dApp Store deep link and the QR are unchanged and stay the primary call to action.
+
+Manual fallback, if the script cannot run:
 
 ```powershell
 cd <repoRoot>\site

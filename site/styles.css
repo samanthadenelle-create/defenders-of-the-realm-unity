@@ -952,6 +952,10 @@ body > footer.wrap nav a:hover { color: var(--gold); }
 }
 
 
+/* Update section: the reviewer paragraph sits under the four pillar cards. */
+.prose--spaced { margin-top: 28px; }
+.prose--spaced p { max-width: var(--measure); }
+
 /* Gameplay capture */
 .section--gameplay .gameplay-shot {
   margin: 1.5rem 0 0;
