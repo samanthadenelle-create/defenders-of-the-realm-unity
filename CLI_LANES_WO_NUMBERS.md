@@ -187,7 +187,19 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-seventh pass): main line next free = **1533**.
+> ## RECONCILED 2026-09-06 (CLI, ninety-eighth pass): main line next free = **1534**.
+> *(api lane minted **1533** - "The owner account bypasses promo guards (per-player limit, redemption cap,
+> cooldowns)", from the owner ruling of 20:45: *"im the one account that should have no guards"*, after her
+> own account was refused LINK01 on device with "You have reached the promo code limit for this account".
+> One `isOwnerIdentity(playerId)` helper in a NEW `api/_lib/owner-identity.js`, keyed on the SINGLE existing
+> owner-wallet authority (`purchase-catalog.MAINNET_CANARY_OWNER`) - never a second list, and NOT a new env
+> var. `api/promo/redeem.js` skips step 4 (max_redemptions early-out) and step 5 (per_player_limit) for that
+> proven wallet, and carries the same bypass into the atomic claim predicate where the cap actually lives.
+> The redemption row is still recorded and the grant is still audit-logged with `mode: 'owner-bypass'`.
+> Guests and every other wallet are unchanged. `api/_lib/wallet-auth.js` deliberately NOT touched - it
+> carries another lane's uncommitted work. Bumped 1533 -> 1534 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-seventh pass): main line next free = **1533**.
 > *(api/web lane minted **1532** - "Command centre: a read-only SKU catalog view with contents and rail
 > parity", from the owner's 20:52 ask *"can we add a list in command center of All SKU's and contents"*.
 > A new `?view=skus` on `api/admin/stats.js` plus a SKUs tab on the console: every pack from the canonical

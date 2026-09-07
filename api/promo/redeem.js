@@ -84,6 +84,13 @@
 //             counted only on grants that are actually about to be paid. See step 5b.
 //   * audit — every redemption row carries `ip_hash`, so a farm is one GROUP BY away
 //             and the rows are still there to claw back from.
+//   * owner — WO-1533: the PROVEN owner wallet (_lib/owner-identity.js, keyed on the
+//             single existing owner authority purchase-catalog.MAINNET_CANARY_OWNER)
+//             is exempt from max_redemptions AND per_player_limit — she authors these
+//             codes and the rails were stopping the operator testing her own campaign.
+//             NOT exempt from expiry, bound_wallet, the zero-reward backstops, or
+//             step 3 + UNIQUE(code, player_id). Never reachable on the guest rail.
+//             The grant is still recorded AND audited (`mode: 'owner-bypass'`).
 //
 // ⛔ SCOPED TO THIS ROUTE. The wallet-only rule stands everywhere else — purchases,
 //    saves, entitlements, referral claim. Nothing outside this file was weakened.
@@ -130,6 +137,11 @@ const { logAuthReject, logApiEvent, hashIp } = require('../_lib/audit');
 // refusal code. The POLICY (how many, over how long, and that this rail fails
 // CLOSED) stays here, where the rail's reasoning is; only the mechanism is shared.
 const { reserveIpBudget } = require('../_lib/ip-budget');
+// WO-1533: the OWNER account is exempt from the ANTI-ABUSE gates on this route.
+// "Who is the owner" is asked in exactly one place and answered from the single
+// existing owner-wallet authority (purchase-catalog.MAINNET_CANARY_OWNER) - see
+// _lib/owner-identity.js. It ANSWERS an identity question; it never authenticates.
+const { isOwnerIdentity } = require('../_lib/owner-identity');
 
 // ── THE IP BUDGET (WO-1440) ──────────────────────────────────────────────────
 // The one signal a client cannot choose. GUEST RAIL ONLY.
@@ -301,6 +313,40 @@ async function handler(req, res) {
         return quietFail(res, status, auth.code, ref);
     }
 
+    // ── THE OWNER EXEMPTION (WO-1533) ────────────────────────────────────────
+    // Owner ruling 2026-09-06 20:45, verbatim: "im the one account that should have
+    // no guards" - after her own account was refused LINK01 on device with
+    // "You have reached the promo code limit for this account" (PLAYER_LIMIT_REACHED,
+    // step 5 below). She AUTHORS these codes; the anti-abuse rails were stopping the
+    // operator from testing her own campaign, which is the one thing they must not do.
+    //
+    // ⛔ `auth.unproven !== true` IS LOAD-BEARING AND MUST NEVER BE DROPPED. `playerId`
+    // is a value from the request body. It is trustworthy HERE and only here because it
+    // has already been through authenticatePromoRedeem - an ed25519 signature over the
+    // exact bytes plus a single-use nonce, or a server-issued session. A GUEST result is
+    // marked `unproven: true` and its id is CHOSEN BY THE CLIENT, so a guest could simply
+    // type the owner's address into `playerId`. Without this half, the bypass is open to
+    // anyone who can read purchase-catalog.js. Same reasoning as the bound_wallet check
+    // at 1b: never compare against a claimed identity.
+    //
+    // ⛔ WHAT IT EXEMPTS: max_redemptions (step 4 AND, crucially, the atomic claim
+    //    predicate at step 6 where the cap ACTUALLY lives - WO-1440 moved it there, so a
+    //    bypass wired only into step 4 would still refuse her) and per_player_limit
+    //    (step 5). Cooldowns need no branch: the only rate-shaped gates reachable from
+    //    this file (the step-5b IP budget, wallet-auth.touchGuestRate) are GUEST-ONLY,
+    //    so a proven wallet never meets one. Verified, not assumed.
+    //
+    // ⛔ WHAT IT DOES NOT EXEMPT, so "no guards" is not over-read: an inactive or missing
+    //    code, expiry, a bound_wallet belonging to someone else, the REFUSED-UNBURNED
+    //    zero-reward/pack backstops (those protect her FROM a burn), and step 3 +
+    //    UNIQUE(code, player_id) - she still redeems each individual code ONCE, because
+    //    the ledger row IS the record of the grant and a grant with no record is worse
+    //    than a refusal. To re-test one code, delete the row or author a new code.
+    //
+    // ⛔ AND IT IS LOUDER, NOT QUIETER: the redemption row is written exactly as for
+    //    anyone else, plus an audit event carrying `mode: 'owner-bypass'` (step 7).
+    const ownerBypass = auth.unproven !== true && isOwnerIdentity(playerId);
+
     try {
         // ── 1. Look the code up in the catalog ────────────────────────────────
         const codeRows = await sql`
@@ -431,7 +477,10 @@ async function handler(req, res) {
         //   what stopped anyone measuring it. On a code that pays real currency that
         //   race is real money, so the authority moved into the single statement that
         //   claims the ordinal. Never restore a bare count-then-insert here.
-        if (promo.max_redemptions != null) {
+        // WO-1533: `!ownerBypass` - the owner is not subject to a campaign cap. Skipping
+        // this alone would change nothing; the matching skip in the claim predicate below
+        // is the one that does the work.
+        if (!ownerBypass && promo.max_redemptions != null) {
             const countRows = await sql`
                 SELECT COUNT(*)::int AS n FROM promo_redemptions WHERE code = ${code}
             `;
@@ -441,7 +490,8 @@ async function handler(req, res) {
         }
 
         // ── 5. Per-player cap on DISTINCT codes redeemed ─────────────────────
-        if (promo.per_player_limit != null) {
+        // WO-1533: THIS is the gate that refused the owner on device.
+        if (!ownerBypass && promo.per_player_limit != null) {
             const distinctRows = await sql`
                 SELECT COUNT(DISTINCT code)::int AS n
                 FROM promo_redemptions
@@ -534,7 +584,10 @@ async function handler(req, res) {
                           FROM packs AS p
                          WHERE pc.code = ${code}
                            -- THE global cap, enforced where it is atomic (WO-1440).
-                           AND (pc.max_redemptions IS NULL OR pc.redemption_count < pc.max_redemptions)
+                           -- WO-1533: the owner is exempt from the cap, here too.
+                           AND (${ownerBypass}::boolean
+                                OR pc.max_redemptions IS NULL
+                                OR pc.redemption_count < pc.max_redemptions)
                            AND p.sku = CASE WHEN pc.redemption_count + 1 <= pc.tier1_limit
                                             THEN pc.tier1_pack_sku ELSE pc.tier2_pack_sku END
                            AND p.active = TRUE
@@ -561,7 +614,9 @@ async function handler(req, res) {
                     // or the atomic cap predicate refused the claim. Disambiguate before
                     // answering — telling a player "reward unavailable" when the truth is
                     // "the campaign is finished" sends them back to retry forever.
-                    if (await capReached(sql, code, promo.max_redemptions)) {
+                    // WO-1533: for the owner the cap can never be the reason a claim
+                    // was lost, so do not answer ALREADY_REDEEMED - it is a fault.
+                    if (!ownerBypass && await capReached(sql, code, promo.max_redemptions)) {
                         return res.status(200).json({ success: false, error: 'ALREADY_REDEEMED' });
                     }
                     console.error('[promo/redeem] REFUSED-UNBURNED tiered pack missing, inactive, or empty.');
@@ -583,7 +638,10 @@ async function handler(req, res) {
                            SET redemption_count = redemption_count + 1
                          WHERE code = ${code}
                            -- THE global cap, enforced where it is atomic (WO-1440).
-                           AND (max_redemptions IS NULL OR redemption_count < max_redemptions)
+                           -- WO-1533: the owner is exempt from the cap, here too.
+                           AND (${ownerBypass}::boolean
+                                OR max_redemptions IS NULL
+                                OR redemption_count < max_redemptions)
                          RETURNING redemption_count, tier1_limit, reward_crystals, reward_coins,
                                    tier2_reward_crystals, tier2_reward_coins
                     ), recorded AS (
@@ -600,7 +658,8 @@ async function handler(req, res) {
                     )
                     SELECT crystals, coins FROM recorded
                 `;
-                if (tierRows.length === 0 && await capReached(sql, code, promo.max_redemptions)) {
+                if (!ownerBypass && tierRows.length === 0 &&
+                    await capReached(sql, code, promo.max_redemptions)) {
                     // The claim was refused by the cap predicate, not by a fault. This is
                     // the ordinary end of a campaign, so answer it as one — and never as
                     // the 500 the throw below would have produced.
@@ -619,7 +678,10 @@ async function handler(req, res) {
                            SET redemption_count = redemption_count + 1
                          WHERE code = ${code}
                            -- THE global cap, enforced where it is atomic (WO-1440).
-                           AND (max_redemptions IS NULL OR redemption_count < max_redemptions)
+                           -- WO-1533: the owner is exempt from the cap, here too.
+                           AND (${ownerBypass}::boolean
+                                OR max_redemptions IS NULL
+                                OR redemption_count < max_redemptions)
                          RETURNING redemption_count
                     ), selected AS (
                         SELECT p.sku, p.contents, c.redemption_count
@@ -643,7 +705,9 @@ async function handler(req, res) {
                     SELECT crystals, coins, pack_sku, contents FROM recorded
                 `;
                 if (packRows.length !== 1) {
-                    if (await capReached(sql, code, promo.max_redemptions)) {
+                    // WO-1533: for the owner the cap can never be the reason a claim
+                    // was lost, so do not answer ALREADY_REDEEMED - it is a fault.
+                    if (!ownerBypass && await capReached(sql, code, promo.max_redemptions)) {
                         return res.status(200).json({ success: false, error: 'ALREADY_REDEEMED' });
                     }
                     console.error('[promo/redeem] REFUSED-UNBURNED pack missing, inactive, or empty.');
@@ -664,7 +728,10 @@ async function handler(req, res) {
                         UPDATE promo_codes
                            SET redemption_count = redemption_count + 1
                          WHERE code = ${code}
-                           AND (max_redemptions IS NULL OR redemption_count < max_redemptions)
+                           -- WO-1533: the owner is exempt from the cap, here too.
+                           AND (${ownerBypass}::boolean
+                                OR max_redemptions IS NULL
+                                OR redemption_count < max_redemptions)
                          RETURNING redemption_count
                     ), recorded AS (
                         INSERT INTO promo_redemptions
@@ -677,7 +744,15 @@ async function handler(req, res) {
                     SELECT crystals, coins FROM recorded
                 `;
                 if (plainRows.length !== 1) {
-                    // The only way to lose the claim here is the cap predicate.
+                    // The only way to lose the claim here is the cap predicate...
+                    // ...unless the cap was bypassed (WO-1533), in which case the predicate
+                    // could not have refused and this is a FAULT. Answering ALREADY_REDEEMED
+                    // would tell the owner her good code was spent; REWARD_UNAVAILABLE is
+                    // unburned and retryable, which is the truthful answer here.
+                    if (ownerBypass) {
+                        console.error('[promo/redeem] owner-bypass claim returned no row - fault, not the cap.');
+                        return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
+                    }
                     return res.status(200).json({ success: false, error: 'ALREADY_REDEEMED' });
                 }
             }
@@ -695,6 +770,19 @@ async function handler(req, res) {
         // now carries ip_hash; this adds the same facts to the queryable event stream
         // beside the auth rejects, so "who took this campaign" is one read on either
         // side. Never throws — a failed audit must not fail a grant that already landed.
+        // WO-1533: a BYPASSED grant is the one that most needs a record. It skipped the
+        // cap and the per-player limit, so "how many did the owner take, and when" must be
+        // answerable from the same event stream as everything else — never only from the
+        // ledger. Never throws, for the same reason as the guest line below.
+        if (ownerBypass) {
+            await logApiEvent(sql, playerId, 'promo_owner_bypass_redeem', {
+                ref: ref, code: code, mode: 'owner-bypass',
+                crystals: crystals, coins: coins,
+                packSku: grantedPackSku || null,
+                skipped: ['max_redemptions', 'per_player_limit'],
+            });
+        }
+
         if (auth.unproven === true) {
             await logApiEvent(sql, playerId, 'promo_guest_redeem', {
                 ref: ref, code: code, ipHash: ipHash,
