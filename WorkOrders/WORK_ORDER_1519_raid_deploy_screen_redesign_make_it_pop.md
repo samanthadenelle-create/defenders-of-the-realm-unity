@@ -45,9 +45,32 @@ Ask her about behaviour, never about palettes.
 4. **SPOILS as three icon+number chips** (wood, iron, gold) using the resource sprites - cap-aware and
    repeat-aware per WO-1461, so the number shown is the number that will bank.
 5. Difficulty = the WORD plus the diamonds. The coloured pill is retired (hue-only meaning).
-6. The Echo line fits, or is trimmed at a CLAUSE boundary, via `FitSingleLine`. The quote is optional.
+6. **The ECHO GUIDE block and its CHANGE button LEAVE the deploy screen entirely** (owner ruling 20:24 -
+   see section 2B). This supersedes the earlier "fit or trim the Echo line" direction.
 7. **BEGIN ASSAULT is the single gold primary** at the kit's primary size; EDIT ARMY is a secondary.
 8. No empty black band: derive both column heights from their CONTENT, not fixed heights.
+
+## 2B. THE ECHO GUIDE LEAVES THIS SCREEN (owner ruling, 2026-09-06 20:24)
+
+She asked, of the block in the frame:
+
+> "what is the Echo Guide even bringing to the table?"
+
+Told that by her OWN 2026-09-04 scope fence (WO-1380: **no stat, no yield, no combat effect** - narrative
+only) it brings one memory line, she ruled:
+
+> "Remove it from the deploy screen."
+
+So the `ECHO GUIDE` block and its `CHANGE` button come off `RaidDeployScreen`. That is one surface removed,
+not a feature cut:
+
+- `EchoGuideService` and the 24 memory lines **STAY**.
+- The Echo still escorts and speaks in the world via `EchoWorldPresence` - still the single appearance owner.
+- Guide SELECTION survives and can live on the Echoes screen instead.
+- `EchoGuideMemoryRegression`'s scope fence is **UNTOUCHED** - do not weaken it to make the removal easier.
+
+A dated section recording this is appended to `WORK_ORDER_1380_echo_guides_and_memory_lines.md`; that WO's
+status is deliberately NOT flipped.
 
 ## 3. WHAT NOT TO DO
 - Do not pick hues. Take the kit's existing roles; if a distinction needs a second channel, use shape, weight
@@ -61,4 +84,6 @@ Ask her about behaviour, never about palettes.
 - [ ] A GREYSCALE copy of that PNG still reads - every distinction survives without hue.
 - [ ] `RaidSelectionLayoutRegression` sibling case: no overlap, every text inside its box, backdrop present.
 - [ ] The spoils chips match what actually banks (shared with WO-1461's acceptance).
+- [ ] A SOURCE-SHAPE case that FAILS if the deploy screen composes any Echo Guide block; `EchoGuideService`,
+      the 24 lines and `EchoGuideMemoryRegression`'s scope fence all still present and green.
 - [ ] `REGRESSION_OK n/n` on a fresh log.

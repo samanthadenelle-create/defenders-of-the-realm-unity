@@ -92,3 +92,24 @@ available, the line ships without it and still works.
 - [ ] No second Echo spawner; `EchoWorldPresence` remains the single appearance owner
 - [ ] The player-name question answered in writing, either way
 - [ ] Registered in `DataRegression`; `REGRESSION_OK n/n suites` on a fresh log
+
+---
+
+## APPENDED 2026-09-06 - the DEPLOY-SCREEN surface is retired by owner ruling (status NOT changed)
+
+Owner ruling 2026-09-06 20:24. Looking at the raid deploy screen she asked what the Echo Guide was bringing
+to the table; told that by her own 2026-09-04 scope fence (this WO: **no stat, no yield, no combat effect** -
+one narrative memory line) the answer is a line of text, she ruled: **"Remove it from the deploy screen."**
+
+**What this retires:** the `ECHO GUIDE` block and its `CHANGE` button on `RaidDeployScreen`. Carried out
+under **WO-1519** (raid deploy redesign).
+
+**What it does NOT retire - this WO's substance stands:**
+- `EchoGuideService` and the 24 memory lines STAY.
+- The Echo still escorts the player and speaks in the world via `EchoWorldPresence` - still the single
+  appearance owner.
+- Guide SELECTION survives; it can live on the Echoes screen rather than the deploy modal.
+- `EchoGuideMemoryRegression`'s scope fence is UNTOUCHED.
+
+The ruling removes one SURFACE, not the feature. Status is deliberately left as it was; this section is the
+record, per CLAUDE.md sec.15 (frozen bodies get a dated banner, not a rewrite).
