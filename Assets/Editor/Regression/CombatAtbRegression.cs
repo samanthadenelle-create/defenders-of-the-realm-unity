@@ -60,6 +60,7 @@ namespace DeNelle.Editor
                 CheckSynthesizedStatDivergence(byDesign, log); // H (fail-by-design)
                 CheckSynthesizerVsCatalog(failures, log);     // H2 (F18/F46/F47)
                 CheckEnemyScaleTracePresent(failures, log);   // H3 (WO-1530)
+                CheckGarrisonStatSsot(failures, log);         // H4 (WO-1535)
                 NoteKnownHardcodes(log);                   // I (documented skips)
             }
             catch (Exception ex)
@@ -668,33 +669,51 @@ namespace DeNelle.Editor
                 }
             }
 
-            // --- F47: the WildlandsRoster fallback vs the catalog it CLAIMS to mirror ---
-            // Its own comment promises "IDENTICAL numbers to the enemies.json orc-raider
-            // entry, so a missing/unreadable catalog can NEVER reintroduce the stat
-            // divergence". BaseDef's `default:` branch IS that fallback, so probing with an
-            // unknown id returns it - a real join, not a source-text assertion.
-            DeNelle.Village.EnemyDef fallback = null;
-            try { fallback = DeNelle.Village.WildlandsRoster.BaseDef("__audit_probe_unknown_id__"); }
+            // --- F47: CLOSED BY DELETION (WO-1535), and this probe now guards the closure ---
+            // F47 was: WildlandsRoster's code fallback promised "IDENTICAL numbers to the
+            // enemies.json orc-raider entry, so a missing catalog can NEVER reintroduce the
+            // divergence" - and had already drifted from it (XpReward 22 vs the catalog's 24).
+            // The finding was never that the copy needed fixing; a hand-maintained mirror of a
+            // live table is duplicated state and drifts again (CLAUDE.md sec.2 / sec.5 / sec.16).
+            // WO-1535 DELETED the mirror. What BaseDef returns for an unresolvable id is now ONE
+            // shared EMERGENCY SENTINEL that is deliberately nothing's stats.
+            //
+            // ⛔ THIS ASSERTS THE SENTINEL SHAPE, NOT AN Xp COMPARISON. If someone reinstates a
+            //    per-id fallback, the probe stops looking like the sentinel and fails here -
+            //    which is the whole guard. The old comparison would have gone quietly
+            //    meaningless the moment the mirror it compared against ceased to exist.
+            DeNelle.Village.EnemyDef probe = null;
+            try { probe = DeNelle.Village.WildlandsRoster.BaseDef("__audit_probe_unknown_id__"); }
             catch (Exception ex)
             { failures.Add($"[synth-vs-catalog] WildlandsRoster.BaseDef probe threw {ex.GetType().Name}"); }
 
-            DeNelle.Village.EnemyDef orc;
-            if (fallback != null && bySlug.TryGetValue("orc-raider", out orc))
+            if (probe == null)
             {
-                if (Mathf.Abs(fallback.XpReward - orc.XpReward) > 0.01f)
-                {
-                    FlowTrace.Warn("CombatAtb", $"fallback XpReward={fallback.XpReward} catalog={orc.XpReward}");
-                    log.AppendLine($"  [synth-vs-catalog] FALLBACK DIVERGENCE (F47): WildlandsRoster's orc-raider " +
-                                   $"fallback pays XpReward={fallback.XpReward} but enemies.json says {orc.XpReward}. " +
-                                   "The fallback's own comment promises the numbers are IDENTICAL so a catalog read " +
-                                   "failure can never reintroduce divergence - it does. Hp matches " +
-                                   $"({fallback.Hp:0.#}), so this is a single-field drift that silently under-pays " +
-                                   "every Wildlands kill whenever the catalog fails to load.");
-                }
-                else
-                {
-                    log.AppendLine("  [synth-vs-catalog] WildlandsRoster fallback matches enemies.json orc-raider (F47 clear)");
-                }
+                // Never null: CampDefenseWave.cs:296 / CampGuards.cs:212 / EnemyOutpost.cs:935 /
+                // RegionMobSpawner.cs:574 all dereference BaseDef's result unguarded.
+                failures.Add("[synth-vs-catalog] WildlandsRoster.BaseDef returned NULL for an unknown id. Four spawners " +
+                             "dereference this result without a null check (CampDefenseWave/CampGuards/EnemyOutpost/" +
+                             "RegionMobSpawner) - this is four NullReferenceExceptions at spawn, not a missing stat.");
+            }
+            else if (Mathf.Abs(probe.Hp - DeNelle.Village.WildlandsRoster.SentinelHp) > 0.01f)
+            {
+                DeNelle.Village.EnemyDef orc;
+                bool looksLikeOrc = bySlug.TryGetValue("orc-raider", out orc) && orc != null &&
+                                    Mathf.Abs(probe.Hp - orc.Hp) <= 0.5f;
+                FlowTrace.Fail("CombatAtb", $"BaseDef unknown-id probe Hp={probe.Hp} (sentinel={DeNelle.Village.WildlandsRoster.SentinelHp})");
+                failures.Add($"[synth-vs-catalog] F47 REOPENED: WildlandsRoster.BaseDef('__audit_probe_unknown_id__') " +
+                             $"returned Hp {probe.Hp:0.#} (id '{probe.Id}'), not the emergency sentinel " +
+                             $"{DeNelle.Village.WildlandsRoster.SentinelHp:0.#}. A per-id code fallback has been " +
+                             "reinstated - that is the duplicate stat table WO-1535 deleted, and it will drift from " +
+                             "enemies.json exactly as the last one did." +
+                             (looksLikeOrc ? " It currently returns ORC-RAIDER's stats for an unknown id, which is the " +
+                                             "original defect: every unauthored enemy silently becomes an orc raider." : ""));
+            }
+            else
+            {
+                log.AppendLine($"  [synth-vs-catalog] F47 CLOSED: BaseDef's per-id code mirror is gone; an unresolvable " +
+                               $"id returns the emergency sentinel (hp={probe.Hp:0.#}, id echoes the request as " +
+                               $"'{probe.Id}') and FlowTrace.Fail names it. No table left to drift.");
             }
 
             FlowTrace.Step("CombatAtb", "synth-vs-catalog joined " + bySlug.Count + " catalog row(s)");
@@ -745,6 +764,269 @@ namespace DeNelle.Editor
                 else
                     log.AppendLine($"  [enemy-scale-trace] Assets/{kv.Key}: {hits} site(s) OK (>= {kv.Value})");
             }
+        }
+
+        // =====================================================================
+        //  H4. WO-1535 — THE GARRISON STAT-TABLE SSOT ORACLE.
+        //
+        //  H compares two synthesizers against each other; H2 joins TribeManager
+        //  against the catalog. NEITHER of them asks the question this ticket exists
+        //  for: does the RAID GARRISON path — the one that builds every defender the
+        //  player fights in a raid — read the authored table, or a code literal?
+        //  It did not: 12 of 13 ids were hardcoded in GarrisonStatBlocks.BuildTypedDef,
+        //  and the audit's own numbers show the drift (raid Berserker 260 Hp against
+        //  the authored 117).
+        //
+        //  THE ASSERTION. For every id WildlandsRoster.Owns(), the def BuildTypedDef
+        //  actually hands EnemyFactory must equal the enemies.json row times that
+        //  path's declared CONTEXT folds, on ALL SIX scalars — hp, moveSpeed,
+        //  contactDamage, attackInterval, height, xpReward. Six, not just Hp: a
+        //  damage-only hardcode sails straight through an Hp check, which is how
+        //  orc-shaman's 9-vs-3 would have survived.
+        //
+        //  THE FOLDS ARE ASSERTED, NOT DIVIDED OUT. Multiplicative stats are compared
+        //  as row * fold == built, so the oracle also proves the fold is honest — an
+        //  extra hidden multiplier fails here instead of hiding inside a division.
+        //    every id : GlobalDifficultyMult (BuildGenericDef)
+        //    troll    : additionally the BuildTrollDef threat-2 template scale (1.20),
+        //               and XpReward = row + threat*2 rather than row.
+        //  Non-multiplicative stats (moveSpeed / attackInterval / height) fold by 1.
+        //
+        //  RED ON HEAD, BY CONSTRUCTION: before this ticket BuildTypedDef("orc-berserker")
+        //  returned Hp 260*1.2 = 312 while the row says 117*1.2 = 140.4 — a failure on
+        //  the first id. Re-hardcode ANY migrated id and this goes red again, which is
+        //  the acceptance criterion ("a fourth copy can never reappear silently").
+        //
+        //  PINNED IDS ARE LOGGED, NOT FAILED — a DATED RATCHET, the same shape as
+        //  KnownSpawnContextViolations above. Each carries a recorded reason and an
+        //  owner ruling it is waiting on; a pin is a debt that stays visible on every
+        //  run, not a silent skip. ⛔ A NEW hardcode is NOT covered by the pin: the
+        //  ratchet is keyed by id, so adding a literal for any OWNED id hard-fails.
+        // =====================================================================
+
+        /// <summary>
+        /// DATED, RATCHETED garrison ids that still resolve from code (2026-09-07,
+        /// WO-1535). Each maps to the owner ruling it is waiting on. Entries here are
+        /// LOGGED; anything not here must resolve from enemies.json or it FAILS.
+        /// </summary>
+        private static readonly Dictionary<string, string> KnownGarrisonHardcodes =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["necromancer"] =
+                    "ID COLLISION, not stat drift - enemies.json's row is the boss:true / spawn:[wave] / 1700 Hp " +
+                    "'Alduin's Necromancer'; the garrison wants a 300 Hp camp elite. Migrating would put a 2040 Hp " +
+                    "boss (1700 x GlobalDifficultyMult) into an ordinary raid garrison. Same ruling already recorded " +
+                    "at KnownSpawnContextViolations. OWNER RULING NEEDED: give the camp elite its own id + row.",
+                ["caveman"] =
+                    "NO enemies.json row (audit F46) AND the three code tables disagree ~3x - GarrisonStatBlocks 220 Hp " +
+                    "vs RegionMobSpawner/CampDefenseWave 70. Seeding either PICKS a balance winner, which WO-1535 sec.3 " +
+                    "forbids. docs/enemy-codex.md sec.2.10 has only an unratified ATB-scale anchor. OWNER RULING NEEDED.",
+                ["feral-wolf"] =
+                    "NO enemies.json row (audit F46) - GarrisonStatBlocks 90 Hp vs RegionMobSpawner/CampDefenseWave 42. " +
+                    "docs/enemy-codex.md sec.2.11 has only an unratified ATB-scale anchor. OWNER RULING NEEDED.",
+                ["tiefling-cultist"] =
+                    "NO enemies.json row (audit F46) - GarrisonStatBlocks 130 Hp vs RegionMobSpawner/CampDefenseWave 80. " +
+                    "docs/enemy-codex.md sec.2.12 has only an unratified ATB-scale anchor. OWNER RULING NEEDED.",
+            };
+
+        /// <summary>The full set of ids GarrisonStatBlocks.BuildTypedDef switches on. Every
+        /// one must EITHER resolve from enemies.json OR be a named, dated pin above.</summary>
+        private static readonly string[] GarrisonRecipeIds =
+        {
+            "troll", "orc-berserker", "orc-shaman", "orc-necromancer", "orc-raider",
+            "hollow-walker", "hollow-warrior", "hollow-rogue", "hollow-acolyte",
+            "necromancer", "caveman", "feral-wolf", "tiefling-cultist",
+        };
+
+        private static void CheckGarrisonStatSsot(List<string> failures, StringBuilder log)
+        {
+            using var _ = FlowTrace.Enter("CombatAtb", "CheckGarrisonStatSsot");
+
+            // --- the SSOT ---
+            DeNelle.Village.EnemyCatalog catalog = null;
+            string json = DeNelle.Core.CanonicalJson.Read(DeNelle.Village.WaveDataLoader.EnemiesRelativePath);
+            if (!string.IsNullOrEmpty(json))
+            {
+                try { catalog = JsonConvert.DeserializeObject<DeNelle.Village.EnemyCatalog>(json); }
+                catch (Exception ex)
+                { failures.Add($"[garrison-ssot] enemies.json parse error: {ex.Message}"); return; }
+            }
+            if (catalog?.Enemies == null || catalog.Enemies.Count == 0)
+            {
+                failures.Add("[garrison-ssot] enemies.json produced 0 EnemyDef objects - the garrison SSOT cannot be joined. " +
+                             "This oracle cannot reach its subject, which is a FAILURE and not a skip.");
+                return;
+            }
+
+            var bySlug = new Dictionary<string, DeNelle.Village.EnemyDef>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in catalog.Enemies)
+                if (e != null && !string.IsNullOrEmpty(e.Id)) bySlug[e.Id] = e;
+
+            float global = DeNelle.Village.World.Camps.GarrisonStatBlocks.GlobalDifficultyMult;
+            if (global <= 0f)
+            {
+                failures.Add($"[garrison-ssot] GlobalDifficultyMult is {global} (<= 0) - the fold cannot be asserted.");
+                return;
+            }
+
+            // (A) THE LIST CANNOT GO STALE. GarrisonRecipeIds restates BuildTypedDef's switch
+            //     keys, so a 14th `case "new-id":` carrying a fresh literal would be invisible
+            //     to every assertion below - the exact "a fourth copy reappears silently"
+            //     failure this ticket closes. Read the source and demand the two agree.
+            //     (Source-text, like H3: BuildTypedDef's switch is not enumerable at runtime.)
+            string gsbPath = System.IO.Path.Combine(Application.dataPath,
+                "_Modules/Village/World/Camps/GarrisonStatBlocks.cs");
+            if (!System.IO.File.Exists(gsbPath))
+            {
+                failures.Add("[garrison-ssot] source not found: Assets/_Modules/Village/World/Camps/GarrisonStatBlocks.cs " +
+                             "(moved or renamed) - the recipe-id list cannot be proven complete.");
+            }
+            else
+            {
+                string src = System.IO.File.ReadAllText(gsbPath);
+                int from = src.IndexOf("public static EnemyDef BuildTypedDef(", StringComparison.Ordinal);
+                if (from < 0)
+                {
+                    failures.Add("[garrison-ssot] BuildTypedDef not found in GarrisonStatBlocks.cs (renamed?) - this " +
+                                 "oracle cannot reach its subject, which is a FAILURE and not a skip.");
+                }
+                else
+                {
+                    var declared = new HashSet<string>(GarrisonRecipeIds, StringComparer.OrdinalIgnoreCase);
+                    var found = new List<string>();
+                    // Scan only the method body: stop at the next method declaration after it.
+                    int stop = src.IndexOf("private static EnemyDef FromTable(", from, StringComparison.Ordinal);
+                    if (stop < 0) stop = src.Length;
+                    int at = from;
+                    while ((at = src.IndexOf("case \"", at, StringComparison.Ordinal)) >= 0 && at < stop)
+                    {
+                        int s = at + 6;
+                        int e = src.IndexOf('"', s);
+                        if (e < 0) break;
+                        string caseId = src.Substring(s, e - s);
+                        found.Add(caseId);
+                        if (!declared.Contains(caseId))
+                            failures.Add($"[garrison-ssot] BuildTypedDef has `case \"{caseId}\":` but that id is NOT in " +
+                                         "GarrisonRecipeIds, so NOTHING here asserts where its stats come from. A garrison " +
+                                         "stat block was added outside the SSOT - add the id to GarrisonRecipeIds, then " +
+                                         "either author its enemies.json row (and Owns() it) or pin it in " +
+                                         "KnownGarrisonHardcodes with the reason and the ruling it awaits.");
+                        at = e + 1;
+                    }
+                    foreach (string id in GarrisonRecipeIds)
+                        if (!found.Contains(id, StringComparer.OrdinalIgnoreCase))
+                            failures.Add($"[garrison-ssot] GarrisonRecipeIds lists '{id}' but BuildTypedDef has no " +
+                                         $"`case \"{id}\":` - the oracle is asserting an id the builder no longer serves.");
+                    log.AppendLine($"  [garrison-ssot] BuildTypedDef switch: {found.Count} case id(s), all accounted for in " +
+                                   "GarrisonRecipeIds");
+                }
+            }
+
+            // (B) The roster's own promise. Owns() is what BaseDef/BuildTypedDef trust; if it
+            //     claims an id this oracle never iterates, that id resolves from the table with
+            //     nothing checking it.
+            foreach (string owned in DeNelle.Village.WildlandsRoster.OwnedIdList)
+                if (!GarrisonRecipeIds.Contains(owned, StringComparer.OrdinalIgnoreCase))
+                    failures.Add($"[garrison-ssot] WildlandsRoster.Owns('{owned}') is true but the id is not in " +
+                                 "GarrisonRecipeIds - it resolves from enemies.json with no oracle joining it.");
+
+            int migrated = 0, pinned = 0;
+
+            foreach (string id in GarrisonRecipeIds)
+            {
+                bool owned = DeNelle.Village.WildlandsRoster.Owns(id);
+                bool isPinned = KnownGarrisonHardcodes.ContainsKey(id);
+
+                // (0) Every recipe id is EITHER owned by the roster OR a named pin. A new id
+                //     that is neither has been added with no decision recorded either way.
+                if (!owned && !isPinned)
+                {
+                    FlowTrace.Fail("CombatAtb", "garrison id neither owned nor pinned: " + id);
+                    failures.Add($"[garrison-ssot] recipe id '{id}' is neither owned by WildlandsRoster (resolves from " +
+                                 "enemies.json) nor a dated entry in KnownGarrisonHardcodes. A garrison stat block was " +
+                                 "added with no SSOT decision recorded - add the enemies.json row and Owns() it, or pin " +
+                                 "it here with the reason and the ruling it awaits.");
+                    continue;
+                }
+                if (owned && isPinned)
+                {
+                    failures.Add($"[garrison-ssot] recipe id '{id}' is BOTH roster-owned and pinned as a hardcode - " +
+                                 "the two lists contradict each other; remove the pin now that the row is authored.");
+                    continue;
+                }
+
+                if (isPinned)
+                {
+                    pinned++;
+                    bool hasRow = bySlug.ContainsKey(id);
+                    log.AppendLine($"  [garrison-ssot] PINNED HARDCODE '{id}' (catalog row {(hasRow ? "EXISTS" : "ABSENT")}): " +
+                                   KnownGarrisonHardcodes[id]);
+                    continue;
+                }
+
+                // (1) An owned id MUST have a row. Owns() promising a table that is not there
+                //     is how the emergency sentinel would silently become the stat block.
+                DeNelle.Village.EnemyDef row;
+                if (!bySlug.TryGetValue(id, out row) || row == null)
+                {
+                    FlowTrace.Fail("CombatAtb", "owned garrison id has no catalog row: " + id);
+                    failures.Add($"[garrison-ssot] '{id}' is WildlandsRoster.Owns() but has NO enemies.json row - " +
+                                 "BaseDef falls through to the emergency sentinel, so this enemy's real stats are " +
+                                 $"WildlandsRoster.SentinelHp={DeNelle.Village.WildlandsRoster.SentinelHp:0.#}, not anything authored.");
+                    continue;
+                }
+
+                // (2) The def the player actually meets, straight off the live builder.
+                DeNelle.Village.EnemyDef built;
+                try { built = DeNelle.Village.World.Camps.GarrisonStatBlocks.BuildTypedDef(id, 0); }
+                catch (Exception ex)
+                { failures.Add($"[garrison-ssot] BuildTypedDef('{id}') threw {ex.GetType().Name}: {ex.Message}"); continue; }
+                if (built == null)
+                { failures.Add($"[garrison-ssot] BuildTypedDef('{id}') returned null."); continue; }
+
+                // (3) The DECLARED context folds for this id. Asserted as row*fold==built so a
+                //     hidden extra multiplier fails here rather than hiding inside a division.
+                //     troll routes through BuildTrollDef(2), which layers its threat template
+                //     scale (1 + 0.10*2) on top of GlobalDifficultyMult and pays row+threat*2 XP.
+                bool isTroll = string.Equals(id, "troll", StringComparison.OrdinalIgnoreCase);
+                float statFold = isTroll ? global * (1f + 0.10f * 2f) : global;
+                int expectedXp = isTroll ? row.XpReward + 2 * 2 : row.XpReward;
+
+                int before = failures.Count;
+                Compare(failures, id, "hp",             built.Hp,             row.Hp * statFold,          0.01f);
+                Compare(failures, id, "contactDamage",  built.ContactDamage,  row.ContactDamage * statFold, 0.01f);
+                Compare(failures, id, "moveSpeed",      built.MoveSpeed,      row.MoveSpeed,              0.005f);
+                Compare(failures, id, "attackInterval", built.AttackInterval, row.AttackInterval,         0.005f);
+                Compare(failures, id, "height",         built.Height,         row.Height,                 0.005f);
+                Compare(failures, id, "xpReward",       built.XpReward,       expectedXp,                 0.5f);
+
+                if (failures.Count == before)
+                {
+                    migrated++;
+                    log.AppendLine($"  [garrison-ssot] '{id}' resolves from enemies.json OK " +
+                                   $"(row hp={row.Hp:0.#} dmg={row.ContactDamage:0.##} x fold {statFold:0.###} " +
+                                   $"= built hp={built.Hp:0.#} dmg={built.ContactDamage:0.##})");
+                }
+            }
+
+            log.AppendLine($"  [garrison-ssot] {migrated}/{GarrisonRecipeIds.Length} garrison recipe ids resolve from " +
+                           $"enemies.json; {pinned} PINNED awaiting an owner content ruling (see the lines above). " +
+                           "WO-1535: the pins are debt kept visible, not passes.");
+            FlowTrace.Step("CombatAtb", $"garrison-ssot migrated={migrated} pinned={pinned}");
+        }
+
+        /// <summary>One scalar of the garrison SSOT join. Named failure, both numbers, and
+        /// what the divergence means - never a bare "expected X got Y".</summary>
+        private static void Compare(List<string> failures, string id, string field,
+                                    float built, float expected, float tol)
+        {
+            if (Mathf.Abs(built - expected) <= tol) return;
+            FlowTrace.Fail("CombatAtb", $"garrison-ssot {id}.{field} built={built} expected={expected}");
+            failures.Add($"[garrison-ssot] '{id}' {field}: GarrisonStatBlocks.BuildTypedDef builds {built:0.###} but " +
+                         $"enemies.json x the declared context fold gives {expected:0.###}. The raid garrison path is " +
+                         "reading a CODE literal, not the authored table - that is a second stat table for one id, and " +
+                         "it is what WO-1535 removed. Point this id at WildlandsRoster.BaseDef, or (if the divergence " +
+                         "is deliberate) record it in KnownGarrisonHardcodes with the reason and the ruling it awaits.");
         }
 
         private static void CheckSynthesizedStatDivergence(List<string> byDesign, StringBuilder log)
