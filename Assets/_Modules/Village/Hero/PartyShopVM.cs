@@ -84,9 +84,28 @@ namespace DeNelle.Village.Hero
         public readonly string IconRole;
         /// <summary>Item id (the View resolves the catalog sprite from this when IconPath is null).</summary>
         public readonly string IconName;
+        /// <summary>
+        /// WO-1584 - the row's AUTHORED art category (materials.json `category`: metal / herb /
+        /// crystal / cloth / ...), or null for rows that are not materials. This is the missing
+        /// third argument of the ONE material-art seam the repo already owns,
+        /// <c>ItemIconCatalog.ForMaterial(id, iconPath, category)</c> (added by F8-641 precisely so a
+        /// material never borrows a potion's art). The store View could not call it because the VM
+        /// carried no category, so every material fell through
+        /// <c>ForConsumable</c> to the ROLE glyph - the white "*" over "Iron Scrap x43" on the
+        /// owner's 2026-09-07 Seeker frame. The VM produces the key; the View resolves it. Adding a
+        /// second resolver in the View would be the banned fix.
+        /// </summary>
+        public readonly string IconCategory;
+        /// <summary>
+        /// The row's AUTHORED ASCII glyph (materials.json / consumables `glyph`), or null. Used by
+        /// the View ONLY when no sprite resolves - an authored "=" for Iron Scrap says more than the
+        /// generic role "*", and it is data, not a View guess.
+        /// </summary>
+        public readonly string Glyph;
 
         public PartyShopDetail(string stats, string delta, string description,
-                               string iconPath, string iconRole, string iconName)
+                               string iconPath, string iconRole, string iconName,
+                               string iconCategory = null, string glyph = null)
         {
             Stats = stats;
             Delta = delta;
@@ -94,6 +113,8 @@ namespace DeNelle.Village.Hero
             IconPath = iconPath;
             IconRole = iconRole;
             IconName = iconName;
+            IconCategory = iconCategory;
+            Glyph = glyph;
         }
     }
 
@@ -194,6 +215,10 @@ namespace DeNelle.Village.Hero
         // The per-row action keyed by item id (armed on rebuild), plus the detail payload per id.
         private readonly Dictionary<string, Action> _rowActions = new Dictionary<string, Action>();
         private readonly Dictionary<string, PartyShopDetail> _rowDetails = new Dictionary<string, PartyShopDetail>();
+        // WO-1584: the goods/jeweler SELL facts the detail column reads back (BuildSpecs) - the
+        // coins this stack pays and how many are held. Armed on the same rebuild as the row.
+        private readonly Dictionary<string, int> _rowSellCoins = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _rowOwned = new Dictionary<string, int>();
 
         private readonly List<ItemVM> _items = new List<ItemVM>();
         private readonly List<(string id, GearKind kind)> _currentStock = new List<(string id, GearKind kind)>();
@@ -561,7 +586,22 @@ namespace DeNelle.Village.Hero
         {
             if (string.IsNullOrEmpty(id)) return;
             SelectedId = id;
+            // WO-1584 §12: SelectedId is the ONE truth for both the detail column and the row
+            // highlight. Logging it here means a capture that shows the detail naming one item
+            // while another row is lit can be settled from the trace instead of re-theorized.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("PartyShop",
+                $"SELECT id='{id}' tab={_tab} rows={_items.Count} rowIndex={IndexOfRow(id)}");
             Raise();
+        }
+
+        /// <summary>Index of a row id in the built list, or -1. Used by the selection trace and by
+        /// the View to scroll the SELECTED row into view (WO-1584).</summary>
+        public int IndexOfRow(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return -1;
+            for (int i = 0; i < _items.Count; i++)
+                if (string.Equals(_items[i].Id, id, StringComparison.Ordinal)) return i;
+            return -1;
         }
 
         /// <summary>
@@ -737,6 +777,8 @@ namespace DeNelle.Village.Hero
             _items.Clear();
             _rowActions.Clear();
             _rowDetails.Clear();
+            _rowSellCoins.Clear();
+            _rowOwned.Clear();
             _currentStock.Clear();
             _availableTypes.Clear();
             // WO-860 B4: the footer describes THIS shelf, so it starts cleared every rebuild.
@@ -1066,9 +1108,10 @@ namespace DeNelle.Village.Hero
                            (string.IsNullOrEmpty(def.EffectRaw) ? "" : "   " + def.EffectRaw) +
                            (owned > 0 ? "   (owned " + owned + ")" : "");
             _rowDetails[id] = new PartyShopDetail(stats, "", DescribeConsumable(def),
-                def.IconPath, IconRolePotion, id);
+                def.IconPath, IconRolePotion, id, iconCategory: null, glyph: def.Glyph);
             _rowActions[id] = () => BuyGoods(id, name, cost);
-            _items.Add(new ItemVM(id, name, IconRolePotion, id, price, "gold", affordable));
+            _items.Add(new ItemVM(id, name, IconRolePotion, id, price, "gold", affordable,
+                                  iconPath: def.IconPath));
             _currentStock.Add((id, GearKind.Potion));
         }
 
@@ -1085,10 +1128,18 @@ namespace DeNelle.Village.Hero
             string stats = Cap(def.Category ?? "material") + (owned > 0 ? "   (owned " + owned + ")" : "");
             string desc = iconRole == IconRoleGem
                 ? "A cut stone for the jeweler's bench - fuel for ring and amulet work."
-                : "A crafting ingredient for the workshop's recipes.";
-            _rowDetails[id] = new PartyShopDetail(stats, "", desc, def.IconPath, iconRole, id);
+                : DescribeMaterial(def);
+            // WO-1584: the BUY shelf carries the SAME art keys as the SELL shelf. The Market's
+            // buy tab glyphed for exactly the same reason the sell tab did.
+            _rowDetails[id] = new PartyShopDetail(stats, "", desc, def.IconPath, iconRole, id,
+                                                  iconCategory: def.Category, glyph: def.Glyph);
             _rowActions[id] = () => BuyGoods(id, name, cost);
-            _items.Add(new ItemVM(id, name, iconRole, id, price, "gold", affordable));
+            _items.Add(new ItemVM(id, name, iconRole, id, price, "gold", affordable,
+                                  iconPath: def.IconPath));
+            DeNelle.Core.Diagnostics.FlowTrace.Step("PartyShop",
+                $"BUY material row id='{id}' label='{name}' role='{iconRole}' " +
+                $"iconPath='{(string.IsNullOrEmpty(def.IconPath) ? "<none>" : def.IconPath)}' " +
+                $"category='{(string.IsNullOrEmpty(def.Category) ? "<none>" : def.Category)}'");
             _currentStock.Add((id, stockKind));
         }
 
@@ -1202,7 +1253,13 @@ namespace DeNelle.Village.Hero
                     cDef != null ? cDef.DisplayName : mDef.DisplayName,
                     cDef != null ? cDef.IconPath : mDef.IconPath,
                     cDef != null ? IconRolePotion : IconRoleMaterial,
-                    kv.Value, price);
+                    kv.Value, price,
+                    // WO-1584: the art CATEGORY + authored GLYPH travel with the row. A consumable
+                    // has no material category (the View keeps the potion keyword mapper for it);
+                    // a material's category IS the seam argument ForMaterial needs.
+                    iconCategory: cDef != null ? null : mDef.Category,
+                    glyph: cDef != null ? cDef.Glyph : mDef.Glyph,
+                    description: cDef != null ? DescribeConsumable(cDef) : DescribeMaterial(mDef));
             }
 
             Status = _items.Count == 0
@@ -1235,7 +1292,9 @@ namespace DeNelle.Village.Hero
                 var mDef = DeNelle.Village.Items.MaterialCatalog.Find(id);
                 if (mDef == null || !VendorStockResolver.IsGem(mDef)) continue;
                 AddSellGoodsRow(id, mDef.DisplayName, mDef.IconPath, IconRoleGem,
-                    kv.Value, VendorStockResolver.PriceFor(mDef));
+                    kv.Value, VendorStockResolver.PriceFor(mDef),
+                    iconCategory: mDef.Category, glyph: mDef.Glyph,
+                    description: DescribeMaterial(mDef));
             }
 
             Status = _items.Count == 0
@@ -1243,15 +1302,82 @@ namespace DeNelle.Village.Hero
                 : "Tap an item to SELL it for coins.";
         }
 
+        // WO-1584. ONE producer for a goods/jeweler sell row: label, art keys (iconPath + the
+        // authored CATEGORY + the authored GLYPH), the detail copy and the sell value all leave
+        // here together, so the View has everything it needs and never re-derives any of it.
+        //
+        // ⛔ NO ROW WITHOUT A LABEL. A row whose display name AND id are both empty cannot be read,
+        // cannot be tapped meaningfully and paints as the blank plate the owner reported - so it is
+        // FAILED and SKIPPED here (§12: never a silent blank), not shipped to the View to paint.
         private void AddSellGoodsRow(string id, string displayName, string iconPath, string iconRole,
-                                     int owned, int buyPrice)
+                                     int owned, int buyPrice,
+                                     string iconCategory = null, string glyph = null,
+                                     string description = null)
         {
-            string name = (string.IsNullOrEmpty(displayName) ? id : displayName) + " x" + owned;
+            string label = string.IsNullOrEmpty(displayName) ? id : displayName;
+            if (string.IsNullOrEmpty(label))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("PartyShop",
+                    $"SELL row SKIPPED: an inventory entry (role='{iconRole}', owned={owned}) has NO " +
+                    "display name AND no id - it would paint as an unreadable blank plate.");
+                return;
+            }
+
+            string name = label + " x" + owned;
             var refund = new ResourceCost(coins: System.Math.Max(1, RoundToInt(buyPrice * 0.5f)));
-            _rowDetails[id] = new PartyShopDetail("Owned " + owned, "", "From your pack.", iconPath, iconRole, id);
+
+            string stats = string.IsNullOrEmpty(iconCategory)
+                ? "Owned " + owned
+                : Cap(iconCategory) + "   Owned " + owned;
+            string desc = string.IsNullOrEmpty(description) ? "From your pack." : description;
+
+            _rowDetails[id] = new PartyShopDetail(stats, "", desc, iconPath, iconRole, id,
+                                                  iconCategory, glyph);
+            _rowSellCoins[id] = refund.Coins;
+            _rowOwned[id] = owned;
+
             string idCopy = id; var refundCopy = refund;
             _rowActions[id] = () => SellGoods(idCopy, refundCopy);
-            _items.Add(new ItemVM(id, name, iconRole, id, refund.Coins, "gold", true));
+            // The row VM carries the SAME art key as the detail - one producer, two consumers.
+            _items.Add(new ItemVM(id, name, iconRole, id, refund.Coins, "gold", true,
+                                  iconPath: iconPath));
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("PartyShop",
+                $"SELL row id='{id}' label='{name}' role='{iconRole}' " +
+                $"iconPath='{(string.IsNullOrEmpty(iconPath) ? "<none>" : iconPath)}' " +
+                $"category='{(string.IsNullOrEmpty(iconCategory) ? "<none>" : iconCategory)}' " +
+                $"sell={refund.Coins}g owned={owned}");
+        }
+
+        /// <summary>
+        /// WO-1584 - the one-line "what is this" for a crafting material. Prefers the AUTHORED
+        /// flavour (materials.json `flavor`, WO-1042 - narrative copy is data, never a call site),
+        /// and otherwise says what the CATEGORY is for. Same shape as
+        /// <see cref="DescribeConsumable"/>, which has always worked this way.
+        /// </summary>
+        private static string DescribeMaterial(DeNelle.Village.Items.MaterialDef def)
+        {
+            if (def == null) return "";
+            if (!string.IsNullOrEmpty(def.Flavor)) return def.Flavor;
+            switch ((def.Category ?? "").ToLowerInvariant())
+            {
+                case "herb":
+                case "petal":
+                case "fungus":  return "A gathered ingredient for the workshop's brews.";
+                case "crystal":
+                case "gem":     return "A cut stone - fuel for jewelry and enchanting work.";
+                case "metal":
+                case "ore":
+                case "ingot":   return "Salvaged metal the forge can work back into gear.";
+                case "stone":   return "Worked stone for the heavier bench recipes.";
+                case "cloth":   return "Scrap fabric - bindings, wrappings and padding.";
+                case "wood":    return "Seasoned timber for hafts, shafts and frames.";
+                case "liquid":  return "A bottled reagent for the brewing bench.";
+                case "bone":    return "Bone stock for the coarser reagents.";
+                case "dust":
+                case "resin":   return "A fine reagent the workshop measures by the pinch.";
+                default:        return "A crafting ingredient for the workshop's recipes.";
+            }
         }
 
         private void SellGoods(string id, ResourceCost refund)
@@ -1635,7 +1761,25 @@ namespace DeNelle.Village.Hero
                 return list;
             }
 
-            return list;   // craftable / non-gear row - no stat block
+            // WO-1584 - NON-GEAR rows used to return an EMPTY list here, which is why the owner's
+            // 2026-09-07 Seeker frame showed a detail column holding only a name and "From your
+            // pack." for a stack worth 2 gold. A material/consumable has real facts to read out:
+            // what it is, how many are held, and what the counter pays for one. Ruling 29 (the
+            // screen is filled, with context) applies to the detail column too.
+            if (_rowDetails.TryGetValue(id, out var goods))
+            {
+                if (!string.IsNullOrEmpty(goods.IconCategory))
+                    list.Add(new PartyShopSpec("Category", Cap(goods.IconCategory), "", 0));
+                else if (goods.IconRole == IconRolePotion)
+                    list.Add(new PartyShopSpec("Category", "Consumable", "", 0));
+
+                if (_rowOwned.TryGetValue(id, out int held) && held > 0)
+                    list.Add(new PartyShopSpec("In pack", held.ToString(), "", 0));
+
+                if (_tab == PartyShopTab.Sell && _rowSellCoins.TryGetValue(id, out int coins))
+                    list.Add(new PartyShopSpec("Sells for", coins + " Gold", "", 0));
+            }
+            return list;   // craftable rows still carry no stat block
         }
 
         /// <summary>WO-808: the owned instance's gear level (1 baseline). VM-side state read —

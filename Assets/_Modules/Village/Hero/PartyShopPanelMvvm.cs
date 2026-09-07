@@ -65,6 +65,8 @@ namespace DeNelle.Village.Hero
         private GameObject _categoryBar;
         private GameObject _typeBar;
         private RectTransform _scrollContent;
+        // WO-1584: the live scroll seam, kept so the SELECTED row can be scrolled into view.
+        private ElarionUiKit.ScrollZoneHandle _scrollZone;
         private TMPro.TextMeshProUGUI _headerLabel;
         private TMPro.TextMeshProUGUI _memberLabel;
 
@@ -345,8 +347,13 @@ namespace DeNelle.Village.Hero
             HighlightTab(_vm.Tab);
             UpdateCategoryBar();
             RebuildTypeBar();
+            // WO-1584: the filter/party bands are bound ABOVE (they hide per vendor layout), so the
+            // two columns claim the freed height BEFORE the list is built - FinalizeScroll's layout
+            // rebuild then measures the final viewport, not the stale one.
+            ReseatColumns();
             RebuildList();
             HighlightSelectedRow();
+            ScrollSelectedIntoView();
             RenderPreview();
             RenderActionBar();
         }
@@ -794,9 +801,28 @@ namespace DeNelle.Village.Hero
             int wantCount = _vm.Items.Count;
             var listRoot = BuildScrollContent();
 
+            // WO-1584 - NO ROW WITHOUT A LABEL. A row whose Name is empty paints as a bare plate the
+            // player cannot read (the owner's 2026-09-07 frame). The VM already refuses to emit one;
+            // this is the View's half of the same law, so a future producer cannot reintroduce it
+            // silently. Dropped rows are FAILED by name (§12) and `wantCount` deliberately stays the
+            // VM's count, so the "wanted N built M" seam below still reports the loss honestly.
+            var paintable = new List<ItemVM>(_vm.Items.Count);
+            for (int i = 0; i < _vm.Items.Count; i++)
+            {
+                var it = _vm.Items[i];
+                if (string.IsNullOrEmpty(it.Name))
+                {
+                    FlowTrace.Fail("Store",
+                        $"PartyShop row {i} id='{(string.IsNullOrEmpty(it.Id) ? "<none>" : it.Id)}' has an EMPTY " +
+                        "label - SKIPPED rather than painted as an unreadable blank plate.");
+                    continue;
+                }
+                paintable.Add(it);
+            }
+
             // Guard EACH row so one bad ItemVM is logged + skipped, never aborting the whole list
             // (the "blank party-shop tab" class, WO-412/406).
-            var (built, failed) = Guard.TryEach("Store", "build party-shop row", _vm.Items,
+            var (built, failed) = Guard.TryEach("Store", "build party-shop row", paintable,
                 item => CreateRow(listRoot, item));
 
             // STOCKED-N COMMIT SEAM: rows offered vs built - splits data-empty from built-but-broken.
@@ -883,6 +909,127 @@ namespace DeNelle.Village.Hero
         // Two lines of FontMicro plus breathing room — the authored footer copy is a sentence.
         private const float FooterNoteHeightPx = 64f;
 
+        // =====================================================================
+        // WO-1584 - ADAPTIVE COLUMN BAND (the real cause of the "blank first row"
+        // and of the highlight disagreeing with the detail column).
+        // ---------------------------------------------------------------------
+        // The list column was pinned at body-y 0.36-0.525 - 16.5% of the body. Measured against
+        // the owner's 2026-09-07 Seeker frame (2670x1200; CanvasScaler 1080x1920 match 0.5 ->
+        // scale 1.243; the frame's inner body reads ~930 device px ~= 748 canvas units) that band
+        // is ~123 canvas units, while the TWO rows the sell list built need
+        // 2*RowHeightPx(56) + RowGapPx(4) + 2*ListBasePadPx(4) = 124. Content exceeded the
+        // viewport by about ONE UNIT, so the mask clipped a row down to the bottom-edge sliver the
+        // owner read as an empty row - and the SELECTED row (Iron Scrap, which the detail column
+        // correctly named) was the one outside the viewport. `git log -L` names the change:
+        // 486cd7b17 (2026-09-01) took the band from 0.23-0.645 to 0.36-0.525 while raising the
+        // action buttons to 0.22-0.38.
+        //
+        // The fix is not a bigger constant - it is that the band is not a constant. On a GOODS or
+        // JEWELER vendor the party bar, member header, BUY/SELL strip, category bar and type bar
+        // are ALL hidden (the Market is a counter, not a paper-doll), so the top ~35% of the panel
+        // is dead black while the list suffocates. Each column now claims the height that is
+        // actually free above it, measured from which bands are ACTIVE - never from the layout
+        // enum, because the tab strip follows TabsLocked and the type bar follows the live chip
+        // count. A gear vendor with every band up lands on the same band it has today, so this
+        // cannot regress the Forge/Armorer.
+        private const float ColumnBottomY = 0.36f;   // clears the action row (buttons top 0.38 draws over)
+        private const float ColumnTopCeil = 0.88f;   // under the wallet chip (0.905)
+        private const float BandGapY      = 0.015f;
+
+        private void ReseatColumns()
+        {
+            // Bands that sit over the LEFT (list) column, with the body-y each one occupies down to.
+            float listTop = LowestActiveBandBottom(
+                (_partyBar, 0.74f),
+                (_memberLabel != null ? _memberLabel.gameObject : null, 0.685f),
+                (_categoryBar, 0.605f),
+                (_typeBar, 0.535f));
+
+            // Bands that sit over the RIGHT (preview) column: only the party bar (full width) and
+            // the BUY/SELL strip (x 0.64-0.96) reach it - the category/type bars are left-half only.
+            float previewTop = LowestActiveBandBottom(
+                (_partyBar, 0.74f),
+                (_tabBar, 0.675f));
+
+            SeatBand(_contentRoot != null ? _contentRoot.GetComponent<RectTransform>() : null,
+                     0.04f, 0.52f, listTop, "list");
+            SeatBand(_previewRoot != null ? _previewRoot.GetComponent<RectTransform>() : null,
+                     0.54f, 0.96f, previewTop, "preview");
+        }
+
+        // The bottom edge of the LOWEST band that is currently active, minus a breathing gap;
+        // ColumnTopCeil when every band is hidden. Reads activeSelf, never the vendor layout.
+        private static float LowestActiveBandBottom(params (GameObject go, float bottomY)[] bands)
+        {
+            float lowest = float.MaxValue;
+            for (int i = 0; i < bands.Length; i++)
+            {
+                var go = bands[i].go;
+                if (go == null || !go.activeSelf) continue;
+                if (bands[i].bottomY < lowest) lowest = bands[i].bottomY;
+            }
+            if (lowest == float.MaxValue) return ColumnTopCeil;
+            return Mathf.Clamp(lowest - BandGapY, ColumnBottomY + 0.05f, ColumnTopCeil);
+        }
+
+        private static void SeatBand(RectTransform rt, float x0, float x1, float topY, string tag)
+        {
+            if (rt == null) return;
+            var min = new Vector2(x0, ColumnBottomY);
+            var max = new Vector2(x1, topY);
+            if (rt.anchorMin == min && rt.anchorMax == max) return;
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            FlowTrace.Step("Store",
+                $"PartyShop reseat {tag} column -> body-y {ColumnBottomY:0.###}..{topY:0.###} " +
+                $"({(topY - ColumnBottomY) * 100f:0.#}% of body).");
+        }
+
+        // WO-1584 - the VM's SelectedId is the ONE truth for the highlight (HighlightSelectedRow
+        // already reads only it, and always has). What broke was that the lit row could sit OUTSIDE
+        // the viewport, so the player saw a detail column naming an item no visible row was lit for.
+        // A taller band makes that rare; scrolling the selected row into view makes it impossible,
+        // whatever the row count. No-op when the content fits.
+        private void ScrollSelectedIntoView()
+        {
+            if (_vm == null || _scrollZone == null || _scrollZone.scroll == null) return;
+            var content = _scrollZone.content;
+            var viewport = _scrollZone.viewport;
+            if (content == null || viewport == null) return;
+
+            string sel = _vm.SelectedId;
+            if (string.IsNullOrEmpty(sel)) return;
+
+            RectTransform target = null;
+            for (int i = 0; i < content.childCount; i++)
+            {
+                var child = content.GetChild(i);
+                if (child == null) continue;
+                if (child.name == "BuyRow_" + sel || child.name == "SellRow_" + sel)
+                { target = child as RectTransform; break; }
+            }
+            if (target == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            float contentH = content.rect.height;
+            float viewH = viewport.rect.height;
+            if (contentH <= viewH + 1f)
+            {
+                FlowTrace.Step("Store",
+                    $"PartyShop selected row '{sel}' is in view (content {contentH:0.#} <= viewport {viewH:0.#}).");
+                return;   // everything fits; nothing can be off-screen
+            }
+
+            // Content is top-pivoted: the row's distance below the content top, centred in the view.
+            float rowTop = -target.anchoredPosition.y + target.rect.height * target.pivot.y;
+            float want = Mathf.Clamp(rowTop - (viewH - target.rect.height) * 0.5f, 0f, contentH - viewH);
+            float normalized = 1f - (want / Mathf.Max(1f, contentH - viewH));
+            _scrollZone.scroll.verticalNormalizedPosition = Mathf.Clamp01(normalized);
+            FlowTrace.Step("Store",
+                $"PartyShop scrolled SELECTED row '{sel}' into view (content {contentH:0.#} > viewport {viewH:0.#}, " +
+                $"normalized {_scrollZone.scroll.verticalNormalizedPosition:0.###}).");
+        }
+
         private void HighlightSelectedRow()
         {
             if (_vm == null) return;
@@ -929,6 +1076,7 @@ namespace DeNelle.Village.Hero
             // scroll zone (§1.14 MakeScrollZone) — vertical-only, clamped (no elastic), masked,
             // auto-hiding scrollbar. One call; the hand-rolled viewport plumbing is gone.
             var zone = ElarionUiKit.MakeScrollZone(_contentRoot.transform, RowGapPx, ListBasePadPx);
+            _scrollZone = zone;
             _scrollContent = zone.content;
             return zone.content.transform;
         }
@@ -1396,7 +1544,11 @@ namespace DeNelle.Village.Hero
             {
                 if (_previewSprite != null) _previewSprite.color = new Color(0f, 0f, 0f, 0f);
                 if (_previewGlyph != null)
-                    _previewGlyph.text = GlyphForRole(detail.IconRole);
+                    // WO-1584: the row's OWN authored glyph when the catalog gave it one
+                    // ("=" for Iron Scrap), else the coarse role glyph. Data before guess.
+                    _previewGlyph.text = !string.IsNullOrEmpty(detail.Glyph)
+                        ? detail.Glyph
+                        : GlyphForRole(detail.IconRole);
             }
         }
 
@@ -1636,6 +1788,29 @@ namespace DeNelle.Village.Hero
                 return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
 
             string iconPath = detail.HasValue ? detail.Value.IconPath : null;
+            string category = detail.HasValue ? detail.Value.IconCategory : null;
+
+            // WO-1584 - MATERIALS AND GEMS GO THROUGH THE MATERIAL SEAM, NOT THE POTION MAPPER.
+            // ItemIconCatalog.ForMaterial(id, iconPath, category) has existed since F8-641 for
+            // exactly this question (authored icon first, then a mat_* sheet sprite chosen by the
+            // row's authored CATEGORY, never the potion keyword mapper - "HealthHerb" / "Iron
+            // Scrap" / "Oil Flask" all keyword-match potion rows). This screen never called it:
+            // every material fell to ForConsumable and, missing there, to the role glyph. That is
+            // the white "*" over "Iron Scrap x43" on the owner's 2026-09-07 Seeker frame
+            // (IronScrap authors iconPath "" and category "metal", so ForMaterial resolves
+            // mat_ore). ONE producer (the VM's iconPath+category), ONE resolver (ForMaterial) -
+            // a second resolver here is the banned fix.
+            if (role == PartyShopVM.IconRoleMaterial || role == PartyShopVM.IconRoleGem)
+            {
+                var mat = ItemIconCatalog.ForMaterial(item.Id, iconPath, category);
+                if (mat != null) return mat;
+                FlowTrace.Warn("Store",
+                    $"ART MISS id='{item.Id}' role='{role}' iconPath='{(string.IsNullOrEmpty(iconPath) ? "<none>" : iconPath)}' " +
+                    $"category='{(string.IsNullOrEmpty(category) ? "<none>" : category)}' -> ForMaterial resolved NO sprite; " +
+                    "the row falls back to its authored glyph. This id is an ART ASK, not a code bug.");
+                return null;
+            }
+
             if (!string.IsNullOrEmpty(iconPath))
             {
                 var s = Resources.Load<Sprite>(iconPath);
@@ -1644,7 +1819,12 @@ namespace DeNelle.Village.Hero
             // Catalog art by def (sprite-first, the same source the legacy details pane used).
             // WO-598 goods/jeweler bands: try the sliced item-icon art by id/name; a miss
             // returns null so the caller draws the role glyph (never a wrong sword icon).
-            return ItemIconCatalog.ForConsumable(item.Id, item.Name);
+            var consumable = ItemIconCatalog.ForConsumable(item.Id, item.Name);
+            if (consumable == null)
+                FlowTrace.Warn("Store",
+                    $"ART MISS id='{item.Id}' role='{(string.IsNullOrEmpty(role) ? "<none>" : role)}' " +
+                    $"iconPath='{(string.IsNullOrEmpty(iconPath) ? "<none>" : iconPath)}' -> glyph fallback.");
+            return consumable;
         }
 
         private static Color DeltaColor(string delta)
@@ -1737,6 +1917,7 @@ namespace DeNelle.Village.Hero
         private void ClearContent()
         {
             _scrollContent = null;
+            _scrollZone = null;
             if (_contentRoot == null) return;
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
@@ -1794,6 +1975,7 @@ namespace DeNelle.Village.Hero
             _categoryBar = null;
             _typeBar = null;
             _scrollContent = null;
+            _scrollZone = null;
             _rowPlates.Clear();
             PanelManager.NotifyClosed(_panelHandle);
         }
