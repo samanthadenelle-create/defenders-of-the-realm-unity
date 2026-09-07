@@ -125,6 +125,11 @@ const { neon } = require('@neondatabase/serverless');
 const { AuthCode, authenticatePromoRedeem, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
 const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
 const { logAuthReject, logApiEvent, hashIp } = require('../_lib/audit');
+// WO-1456: the UPSERT below used to live in THIS file. It moved to _lib/ip-budget.js
+// the moment /api/auth/nonce needed the same gate — one limiter, one table, one
+// refusal code. The POLICY (how many, over how long, and that this rail fails
+// CLOSED) stays here, where the rail's reasoning is; only the mechanism is shared.
+const { reserveIpBudget } = require('../_lib/ip-budget');
 
 // ── THE IP BUDGET (WO-1440) ──────────────────────────────────────────────────
 // The one signal a client cannot choose. GUEST RAIL ONLY.
@@ -153,58 +158,15 @@ const { logAuthReject, logApiEvent, hashIp } = require('../_lib/audit');
 const PROMO_IP_WINDOW_SECONDS = 24 * 60 * 60;
 const PROMO_IP_MAX_GRANTS_PER_WINDOW = 20;
 
-/**
- * Reserve one unit of this (IP, code) budget, atomically, in a single UPSERT —
- * the same shape wallet-auth.touchGuestRate uses, for the same reason: two
- * statements would race exactly where the money is.
- *
- * ⛔ FAILS CLOSED, and that is a DELIBERATE DIVERGENCE from touchGuestRate, which
- *    fails OPEN. That helper guards saves — "we could not check" must never cost a
- *    player their progress, and the rail it protects grants nothing. This one is the
- *    last non-forgeable gate in front of a payout, so an unreadable table must
- *    resolve to "do not pay", never to "go ahead". Availability there, correctness
- *    here — the same split api/admin/ops.js draws against _lib/maintenance.js.
- *    The refusal does NOT consume the code, so the player can retry once it is fixed.
- *
- * @returns {Promise<{ok:boolean, error?:string, grants?:number, degraded?:boolean}>}
- */
-async function reserveIpBudget(sql, ipHash, code) {
-    // No IP at all (a runtime that forwarded no header). Refuse rather than pay an
-    // unattributable guest: this is the only abuse signal on this rail, and a caller
-    // who can suppress it would otherwise get an unlimited one.
-    if (!ipHash) {
-        console.error('[promo/redeem] REFUSED-UNBURNED guest redeem with no resolvable caller IP.');
-        return { ok: false, error: 'RATE_LIMITED', degraded: true };
-    }
-    try {
-        const rows = await sql`
-            INSERT INTO promo_ip_budget (ip_hash, code, window_started_at, grants, total_grants, last_grant_at)
-            VALUES (${ipHash}, ${code}, NOW(), 1, 1, NOW())
-            ON CONFLICT (ip_hash, code) DO UPDATE SET
-                window_started_at = CASE
-                    WHEN promo_ip_budget.window_started_at < NOW() - (${PROMO_IP_WINDOW_SECONDS} * INTERVAL '1 second')
-                    THEN NOW() ELSE promo_ip_budget.window_started_at END,
-                grants = CASE
-                    WHEN promo_ip_budget.window_started_at < NOW() - (${PROMO_IP_WINDOW_SECONDS} * INTERVAL '1 second')
-                    THEN 1 ELSE promo_ip_budget.grants + 1 END,
-                total_grants = promo_ip_budget.total_grants + 1,
-                last_grant_at = NOW()
-            RETURNING grants, total_grants
-        `;
-        const grants = rows && rows[0] ? Number(rows[0].grants) : 1;
-        if (grants > PROMO_IP_MAX_GRANTS_PER_WINDOW) {
-            return { ok: false, error: 'RATE_LIMITED', grants: grants };
-        }
-        return { ok: true, grants: grants };
-    } catch (err) {
-        // LOUD: this is the abuse gate itself failing on a value-granting route.
-        console.error(
-            '[promo/redeem] IP BUDGET UNAVAILABLE — refusing the guest grant (fail-closed). ' +
-            'Apply api/migrations/20260906_0019_promo_guest_redeem_ip_budget.sql. Cause: ' + (err && err.message)
-        );
-        return { ok: false, error: 'REWARD_UNAVAILABLE', degraded: true };
-    }
-}
+// ⛔ THE MECHANISM IS SHARED (_lib/ip-budget.js); THE POLICY ABOVE IS THIS RAIL'S OWN.
+//    The UPSERT that used to sit here moved out in WO-1456 when /api/auth/nonce needed
+//    the same gate. This rail passes failClosed:true — it is the last non-forgeable gate
+//    in front of a PAYOUT, so an unreadable table or an unattributable caller must
+//    resolve to "do not pay", never to "go ahead", a DELIBERATE DIVERGENCE from
+//    wallet-auth.touchGuestRate (which guards saves and fails OPEN, because "we could
+//    not check" must never cost a player their progress). Availability there,
+//    correctness here — the same split api/admin/ops.js draws against _lib/maintenance.js.
+//    The refusal does NOT consume the code, so the player can retry once it is fixed.
 
 /**
  * Did a lost claim lose to the CAP, or to a fault?
@@ -524,7 +486,12 @@ async function handler(req, res) {
         // the error it corrects.
         const ipHash = hashIp(req);
         if (auth.unproven === true) {
-            const budget = await reserveIpBudget(sql, ipHash, code);
+            const budget = await reserveIpBudget(sql, ipHash, code, {
+                windowSeconds: PROMO_IP_WINDOW_SECONDS,
+                maxPerWindow: PROMO_IP_MAX_GRANTS_PER_WINDOW,
+                failClosed: true,
+                label: 'promo/redeem',
+            });
             if (!budget.ok) {
                 await logApiEvent(sql, playerId, 'promo_guest_ip_budget_refused', {
                     ref: ref, code: code, ipHash: ipHash,

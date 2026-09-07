@@ -87,6 +87,55 @@ const RESERVED_KEYS = new Set([
 const GUARDED_BALANCES = ['crystals', 'food', 'coins', 'voidshards', 'stone', 'iron', 'wood'];
 const NESTED_BALANCES  = ['crystals', 'food', 'coins'];   // the ResourceBalance struct's own fields
 
+// ── SCHEMA VERSION IS MONOTONIC (WO-1457) ────────────────────────────────────
+// It was not. The upsert wrote `schema_version = EXCLUDED.schema_version` and an
+// ABSENT version defaulted to 10, so an old build, a replayed request, or a payload
+// that simply omitted the field stamped the row back to 10 *while writing
+// current-shaped state*. SaveSchema.CurrentVersion is 38. The next load then runs
+// the wrong migration chain over data that is not shaped for it — a corruption that
+// happens at LOAD time, far from the save that caused it.
+//
+// Two independent defences, because either alone is a near-miss:
+//   1. judgeSchemaVersion REFUSES the request, so a stale client is VISIBLE (a
+//      named code in the response and an audit row) instead of quietly winning.
+//   2. GREATEST() on the upsert, so the stored version cannot regress even if some
+//      future path reaches the SQL without passing the judgement.
+// Refusal codes are local to this route rather than added to wallet-auth's AuthCode:
+// these are not authentication outcomes, and AuthCode is another lane's file.
+const SaveCode = {
+    SCHEMA_VERSION_MISSING:   'SCHEMA_VERSION_MISSING',   // absent or unparseable — a malformed payload
+    SCHEMA_VERSION_DOWNGRADE: 'SCHEMA_VERSION_DOWNGRADE', // older than what is stored — a stale client
+};
+
+/**
+ * Decide whether an incoming save may write at the version it declares.
+ *
+ * Pure and exported so the four cases that matter (absent / downgrade / equal /
+ * upgrade) are provable without a database — see test/game.save.schema-version.test.js.
+ *
+ * ⚠ AN ABSENT VERSION IS A MALFORMED PAYLOAD, NOT A v10 PAYLOAD. Defaulting was
+ *   the original bug: it invented a fact about state it had never inspected.
+ * ⚠ NO STORED VERSION (a first save, or a prior-state read that failed) accepts
+ *   whatever is declared. There is nothing to regress FROM, and a save must never
+ *   be lost because the guard could not read its comparison.
+ *
+ * @param {*} incoming  body.SchemaVersion ?? body.schemaVersion
+ * @param {*} stored    schema_version on the existing row, or null/NaN if unknown
+ * @returns {{ok:true, version:number} | {ok:false, code:string, incoming:*, stored:*}}
+ */
+function judgeSchemaVersion(incoming, stored) {
+    const v = typeof incoming === 'number' ? incoming
+            : (typeof incoming === 'string' && incoming.trim() !== '' ? Number(incoming) : NaN);
+    if (!Number.isInteger(v) || v <= 0) {
+        return { ok: false, code: SaveCode.SCHEMA_VERSION_MISSING, incoming: incoming, stored: stored };
+    }
+    const s = Number(stored);
+    if (Number.isFinite(s) && v < s) {
+        return { ok: false, code: SaveCode.SCHEMA_VERSION_DOWNGRADE, incoming: v, stored: s };
+    }
+    return { ok: true, version: v };
+}
+
 async function handler(req, res) {
     if (applyCors(req, res, 'POST, OPTIONS')) return;
 
@@ -269,12 +318,19 @@ async function handler(req, res) {
     // convention, do not invent a parallel one — guest_rate_limit.last_seen is the
     // other user of the name and means the same thing).
     let priorSeenMs = null;
+    // WO-1457: read on the EXISTING query. The stored version is a column this
+    // statement already had to visit; a second round trip for it, on the hottest
+    // endpoint in the game, would be the wrong trade. Stays null when the read
+    // fails, which the judgement reads as "nothing to regress from".
+    let priorSchemaVersion = null;
     try {
         const priorRows = await sql`
-            SELECT game_state, updated_at FROM player_data WHERE player_id = ${playerId} LIMIT 1
+            SELECT game_state, updated_at, schema_version FROM player_data WHERE player_id = ${playerId} LIMIT 1
         `;
         if (priorRows.length > 0) {
             if (priorRows[0].game_state) prior = priorRows[0].game_state;
+            const sv = Number(priorRows[0].schema_version);
+            if (Number.isFinite(sv)) priorSchemaVersion = sv;
             // The Neon HTTP driver returns TIMESTAMPTZ as a Date OR an ISO string
             // depending on the column/driver path; handle both, and treat an
             // unparseable value as "no anchor" rather than as the epoch (which would
@@ -288,6 +344,21 @@ async function handler(req, res) {
         // (the bounds checks below still apply).
         console.warn('[save] prior-state read failed, skipping rollback guards:', err.message);
     }
+
+    // ── WO-1457 — the version may not go BACKWARDS, and may not be invented ──
+    // Judged BEFORE the guards and the write: a refused save must leave the row
+    // exactly as it was, not half-applied at the old version.
+    const versionJudgement = judgeSchemaVersion(schemaVersion, priorSchemaVersion);
+    if (!versionJudgement.ok) {
+        console.warn('[save] schema version refused:', JSON.stringify(versionJudgement));
+        await logApiEvent(sql, playerId, 'save_schema_version_refused', {
+            ref: ref, mode: auth.mode, code: versionJudgement.code,
+            incoming: versionJudgement.incoming ?? null,
+            stored: versionJudgement.stored ?? null,
+        });
+        return quietFail(res, 400, versionJudgement.code, ref);
+    }
+    const acceptedSchemaVersion = versionJudgement.version;
 
     const rejects = applyGuards(delta, prior);
 
@@ -329,14 +400,16 @@ async function handler(req, res) {
             INSERT INTO player_data (player_id, schema_version, game_state, trust, updated_at)
             VALUES (
                 ${playerId},
-                ${schemaVersion ?? 10},
+                ${acceptedSchemaVersion},
                 ${JSON.stringify(delta)}::jsonb,
                 ${auth.mode},
                 NOW()
             )
             ON CONFLICT (player_id) DO UPDATE
             SET
-                schema_version = EXCLUDED.schema_version,
+                -- WO-1457: the belt to judgeSchemaVersion's braces. The row's version
+                -- can only ever climb, whatever reaches this statement.
+                schema_version = GREATEST(player_data.schema_version, EXCLUDED.schema_version),
                 game_state     = player_data.game_state || EXCLUDED.game_state,
                 trust          = EXCLUDED.trust,
                 updated_at     = NOW()
@@ -755,6 +828,9 @@ module.exports.config = { api: { bodyParser: false } };
 
 // WO-1128: exported so a harness can drive the reconciliation without a database.
 module.exports.reconcileAccrual = reconcileAccrual;
+// WO-1457 — exported for test/game.save.schema-version.test.js. Pure, no DB.
+module.exports.judgeSchemaVersion = judgeSchemaVersion;
+module.exports.SaveCode = SaveCode;
 
 // =============================================================================
 //  WO-1128 §6.7 — RUNNABLE SELF-TEST:  node api/game/save.js
