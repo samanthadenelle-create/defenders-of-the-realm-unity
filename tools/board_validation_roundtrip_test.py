@@ -452,20 +452,20 @@ def main() -> int:
     print("stage 9 - RED proof: four mutations of the close pass, each must be caught")
     src = open(os.path.join(TOOLS, "board_close_pass.py"), encoding="utf-8").read()
     # ANCHORS INCLUDE THEIR TRAILING NEWLINE, deliberately. board_close_pass.py now holds
-    # the BOUNCE as well, and it tests the same predicates ('if bucket != "Fixed":') with a
+    # the BOUNCE as well, and it tests the same predicates ('if bucket not in OWNER_JUDGED:') with a
     # trailing rule comment - so a bare substring anchor matches TWICE and the mutation is
     # skipped. A skipped mutation is a RED proof that proves nothing, which is worse than a
     # failing one because it reports as a warning rather than a wrong answer.
     MUTANTS = [
         ([('if verdict != "Pass" or not validated:', 'if verdict != "Pass":')],
          "rule 1 - drop the 'validated' signal"),
-        ([('if bucket != "Fixed":\n', 'if bucket not in ("Fixed", "Ready", "Done"):\n')],
+        ([('if bucket not in OWNER_JUDGED:\n', 'if bucket not in ("Fixed", "Verify", "Ready", "Done"):\n')],
          "rule 2 - let a non-FIXED ticket close"),
         # Rule 3 needs BOTH edits: the already-Closed early return is what protects a
         # closed ticket, and the Fixed check would catch it afterwards. Removing one and
         # not the other proves nothing, so this mutant removes the pair.
         ([('if bucket == "Closed":\n', 'if bucket == "NeverMatches":\n'),
-          ('if bucket != "Fixed":\n', 'if bucket not in ("Fixed", "Closed"):\n')],
+          ('if bucket not in OWNER_JUDGED:\n', 'if bucket not in ("Fixed", "Verify", "Closed"):\n')],
          "rule 3 - re-stamp a ticket that is already CLOSED"),
         ([('return f"{head}. PRIOR STATUS: {prior}"', 'return head')],
          "rule 4 - throw away the existing status body"),
@@ -503,8 +503,8 @@ def main() -> int:
         ([('    return f"{head}. Bounced from Fixed. PRIOR STATUS: {prior}"',
            '    return head')],
          "B4 - throw away the existing status body"),
-        ([('        if bucket != "Fixed":                               # B2',
-           '        if bucket not in ("Fixed", "Done"):                 # B2')],
+        ([('        if bucket not in OWNER_JUDGED:                      # B2',
+           '        if bucket not in ("Fixed", "Verify", "Done"):       # B2')],
          "B2 - let a DONE ticket be bounced by a felt-test verdict"),
         ([('        note_s, applied = sanitize_note(state.get("note"))   # B5/B6 - empty is fine',
            '        note_s, applied = sanitize_note(state.get("note"))\n'

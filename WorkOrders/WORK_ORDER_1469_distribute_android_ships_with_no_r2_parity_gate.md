@@ -1,6 +1,6 @@
 # WO-1469: distribute-android.ps1 ships to Firebase testers with NO R2 parity gate
 
-**Status:** FIXED - 2026-09-06: distribute-android.ps1 calls tools/r2-ship.ps1 and requires a FRESH R2_PARITY_OK before firebase distribute (also with -Build:$false); PARSE_OK
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:34, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: distribute-android.ps1 calls tools/r2-ship.ps1 and requires a FRESH R2_PARITY_OK before firebase distribute (also with -Build:$false); PARSE_OK
 **Silo:** `distribute-android.ps1` (repo root). Tooling only.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1469 -> 1470 in the same edit).

@@ -1,6 +1,6 @@
 # WORK ORDER 1368 - Manage/Queues builds ZERO queue rows: no Finish Now, no Watch Ad, on the money path
 
-**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Manage/Queues with a job running on the device and confirm the queue rows render with Finish Now (charges crystals) and Watch Ad. PRIOR STATUS: READY TO IMPLEMENT - ⛔ **THE ORIGINAL DIAGNOSIS BELOW IS REFUTED. READ §0 FIRST.**
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:06:00, build 2026.09.07.359076). PRIOR STATUS: FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Manage/Queues with a job running on the device and confirm the queue rows render with Finish Now (charges crystals) and Watch Ad. PRIOR STATUS: READY TO IMPLEMENT - ⛔ **THE ORIGINAL DIAGNOSIS BELOW IS REFUTED. READ §0 FIRST.**
 **Silo / Lane:** Village/UI Manage - `ManageScreenPanel` / `ManageScreenVM` / `Core/Jobs`
 **Type:** EXISTING system, REGRESSION (it worked earlier the same morning)
 **Minted:** 2026-09-04 (CLI), live from her device while she played

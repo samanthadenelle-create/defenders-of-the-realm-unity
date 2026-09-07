@@ -1,6 +1,6 @@
 # WO-1453: the wallet SIGNATURE rail 500s on promo redeem - raw_body_unavailable_bodyparser_active
 
-**Status:** FIXED - 2026-09-06: redeem.js and save.js verify against reconstructed bytes (sha256 of the payload is bound into the signed message, so a wrong reconstruction fails closed as 401); the auth-reject detail is tagged bytes=reconstructed via the one shared http.js helper; 401/401 node tests. Follow-up: api/referral/claim.js still carries the old 500 guard. Deploy HELD behind WO-1446.
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:05:57, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: redeem.js and save.js verify against reconstructed bytes (sha256 of the payload is bound into the signed message, so a wrong reconstruction fails closed as 401); the auth-reject detail is tagged bytes=reconstructed via the one shared http.js helper; 401/401 node tests. Follow-up: api/referral/claim.js still carries the old 500 guard. Deploy HELD behind WO-1446.
 **Silo:** `api/promo/redeem.js` + `api/_lib/http.js` (+ audit `api/game/save.js` for the same guard).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1453 -> 1454 in the same edit). WO-1440's RESULT explicitly deferred

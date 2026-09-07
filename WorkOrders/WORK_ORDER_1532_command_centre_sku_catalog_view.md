@@ -1,6 +1,6 @@
 # WO-1532 - Command centre: a read-only SKU catalog view with contents and rail parity
 
-**Status:** FIXED - 2026-09-06: GET /api/admin/stats?view=skus behind ADMIN_DASH_KEY, SKUs tab on the console, generated catalog pinned by a drift test, 23/23; deploy HELD behind WO-1446
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:37, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: GET /api/admin/stats?view=skus behind ADMIN_DASH_KEY, SKUs tab on the console, generated catalog pinned by a drift test, 23/23; deploy HELD behind WO-1446
 **Minted:** 2026-09-06 (CLI lane, api/web silo)
 **Silo:** Monetization/Backend (api/ + test/ only - no Unity, no .cs)
 **Owner ask, verbatim (2026-09-06 20:52):** "can we add a list in command center of All SKU's and contents"

@@ -1,6 +1,6 @@
 # WORK ORDER 1258 - DB-driven promo packs (Neon packs table + one APK for inline contents)
 
-**Status:** FIXED — CODE + NODE + UNITY + LIVE NEON PARITY PASS; VERCEL/APK SOFT-OPEN OWED
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:42, build 2026.09.07.359076). PRIOR STATUS: FIXED — CODE + NODE + UNITY + LIVE NEON PARITY PASS; VERCEL/APK SOFT-OPEN OWED
 **Minted:** 2026-08-28 (Grok/docs seat). Consumes banner **1258**; this mint bumps the main line to **1259**.
 **Lane:** Monetization / live-ops. Neon `packs` + `api/promo/redeem.js` + **ONE APK** so the client applies server `contents` without `PackCatalog.Find`.
 **Priority:** Follow-up to **WO-1256** (weekend crystals/coins two-tier). Do not block 1256. Do not ship welcome-500/welcome-100 until this APK is live.

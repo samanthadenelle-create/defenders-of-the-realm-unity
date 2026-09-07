@@ -61,6 +61,7 @@ MARKER
 from __future__ import annotations
 
 import datetime
+import glob
 import os
 import re
 import sys
@@ -78,6 +79,15 @@ _STATUS_LINE = re.compile(r"(?m)^(\*\*Status:\*\*[ \t]*)(.+)$")
 
 # The escape hatch is deliberately INVERTED: the close runs by default and a caller must
 # opt OUT. An opt-IN flag would restore the exact hole this module closes.
+# The OWNER'S QUEUE - the two buckets a sign-off may act on. Fixed = on her device, owed the
+# FELT test. Verify = built, owed her LOOK at a device frame beside its mockup panel (ruling 29,
+# 2026-09-07). Both are closed by HER Pass and bounced by HER Fail / Needs Work, and by nothing
+# else. Until 2026-09-07 the panel listed only Fixed rows and this pass accepted only Fixed, so
+# the fifteen Manage screens she walked on the device had no checkbox and no way to close -
+# she said so in chat ("the 15 verify ... THose I verified"). READY / SPEC / BLOCKED / DONE stay
+# ineligible: a stale mark can never close what never reached her.
+OWNER_JUDGED = ("Fixed", "Verify")
+
 def close_disabled() -> bool:
     return (os.environ.get("EOA_BOARD_CLOSE") or "").strip() in ("0", "false", "no", "off")
 
@@ -135,6 +145,23 @@ def write_status(path: str, new_status: str) -> bool:
     return True
 
 
+def resolve_ticket(wo_dir: str, name: str) -> str:
+    """Resolve a validation's filename to the ticket on disk.
+
+    The record is keyed by BASENAME (owner_validations.py), and the board discovers tickets
+    RECURSIVELY (board_build.py: `**/*.md`, added for WorkOrders/ManageRedesign/WO-2001_*.md).
+    Until 2026-09-07 this pass joined wo_dir + name flat, so the owner's Pass on WO-2003 /
+    2005 / 2011 / 2017 was reported MISSING and BOARD_CLOSE_FAIL'd while the files sat one
+    folder down. Flat first (the common case, and what the tests fixture); then exactly one
+    recursive lookup by basename. Returns "" when nothing matches.
+    """
+    flat = os.path.join(wo_dir, name)
+    if os.path.isfile(flat):
+        return flat
+    hits = sorted(glob.glob(os.path.join(wo_dir, "**", name), recursive=True))
+    return hits[0] if hits else ""
+
+
 def close_pass(entries=None, wo_dir=None, today=None):
     """Apply the close pass. Returns a result dict; raises nothing on ordinary data.
 
@@ -159,9 +186,9 @@ def close_pass(entries=None, wo_dir=None, today=None):
             res["held"].append(
                 (name, f"verdict={verdict or 'blank'} validated={'yes' if validated else 'no'}"))
             continue
-        path = os.path.join(wo_dir, name)
+        path = resolve_ticket(wo_dir, name)
         # ── RULE 7: a mark naming a missing file is REPORTED ─────────────────────
-        if not os.path.isfile(path):
+        if not path:
             res["missing"].append(name)
             continue
         prior = read_status(path)
@@ -170,9 +197,9 @@ def close_pass(entries=None, wo_dir=None, today=None):
         if bucket == "Closed":
             res["already"].append(name)
             continue
-        # ── RULE 2: only a FIXED ticket is eligible ──────────────────────────────
-        if bucket != "Fixed":
-            res["held"].append((name, f"not Fixed (bucket={bucket}) - a sign-off cannot "
+        # ── RULE 2: only a ticket in the OWNER'S QUEUE (Fixed / Verify) is eligible ──
+        if bucket not in OWNER_JUDGED:
+            res["held"].append((name, f"not Fixed/Verify (bucket={bucket}) - a sign-off cannot "
                                       f"close a ticket that never reached the device"))
             continue
         if write_status(path, stamp_for(state, today, prior)):
@@ -356,8 +383,8 @@ def bounce_pass(entries=None, wo_dir=None, today=None):
         # the same rows twice would bury the bounces in the noise.
         if verdict not in BOUNCE_VERDICTS:
             continue
-        path = os.path.join(wo_dir, name)
-        if not os.path.isfile(path):                        # B7
+        path = resolve_ticket(wo_dir, name)
+        if not path:                                        # B7
             res["missing"].append(name)
             continue
         prior = read_status(path)
@@ -365,7 +392,7 @@ def bounce_pass(entries=None, wo_dir=None, today=None):
         if bucket == "Ready":                               # B3 - already bounced
             res["already"].append(name)
             continue
-        if bucket != "Fixed":                               # B2
+        if bucket not in OWNER_JUDGED:                      # B2
             res["held"].append((name, f"not Fixed (bucket={bucket}) - a felt-test verdict "
                                       f"cannot re-open a ticket that is not on her device"))
             continue

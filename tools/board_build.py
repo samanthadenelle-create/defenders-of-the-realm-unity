@@ -165,11 +165,12 @@ def classify_status(status_text, has_result, is_wo=True):
     # board rows were sitting in the finished buckets on that claim - ten leading
     # IMPLEMENTED, two leading FIXED - and Done is the one bucket nobody re-opens.
     #
-    # Fixed could not carry these: Fixed means "on her device, awaiting the FELT test", and
-    # board_close_pass.py closes a Fixed ticket the moment a Pass lands in the validation
-    # record. These are a different debt - a PIXEL comparison the owner has not made yet -
-    # and they must be ineligible for that close, which they are, because the closer reads
-    # eligibility through this function and "Verify" is not "Fixed".
+    # Fixed could not carry these: Fixed means "on her device, awaiting the FELT test". These
+    # are a different debt - a PIXEL comparison the owner has not made yet. Both are HER queue:
+    # since 2026-09-07 the validation panel lists Verify rows beside Fixed rows and
+    # board_close_pass.OWNER_JUDGED closes either on her Pass (and bounces either on her Fail)
+    # - her match IS the close for a Verify row, and nothing else is. (Before that day the
+    # panel listed Fixed only, so she walked all fifteen on the device and had no box to tick.)
     #
     # !! TESTED ON THE LEADING PHRASE, AND IT MUST STAY IN THIS BLOCK, ABOVE THE SUBSTRING
     # FALLBACK. The status these tickets carry keeps its own history inline - "AWAITING OWNER
@@ -883,7 +884,11 @@ def build_html(rows):
         -(r.get("ui") or 0),
         -(r["num"] or 0)))
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
-    fixed_rows = [r for r in rows_sorted if r["bucket"] == "Fixed" and r["is_wo"]]
+    # The owner validation panel lists HER QUEUE: Fixed (owed the felt test) AND Verify (owed
+    # her look at a device frame beside its mockup panel - ruling 29). Until 2026-09-07 this
+    # read Fixed only, so the fifteen Verify rows had no checkbox: she walked them on the device
+    # and could not mark one. board_close_pass.OWNER_JUDGED is the same pair - one authority.
+    fixed_rows = [r for r in rows_sorted if r["bucket"] in ("Fixed", "Verify") and r["is_wo"]]
     validation_groups = []
     disk_done = 0
     for area in OWNER_AREAS:

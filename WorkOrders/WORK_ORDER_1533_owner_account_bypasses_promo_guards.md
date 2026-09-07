@@ -1,6 +1,6 @@
 # WO-1533 - The owner account bypasses promo guards (per-player limit, redemption cap, cooldowns)
 
-**Status:** FIXED - 2026-09-06: owner identity (MAINNET_CANARY_OWNER) bypasses per-player limit and redemption cap inside all four claim statements, still records + audits mode=owner-bypass; 11/11; UNPROVEN that the device redeems under that wallet (one SELECT on promo_redemptions closes it); deploy HELD behind WO-1446
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:05:59, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: owner identity (MAINNET_CANARY_OWNER) bypasses per-player limit and redemption cap inside all four claim statements, still records + audits mode=owner-bypass; 11/11; UNPROVEN that the device redeems under that wallet (one SELECT on promo_redemptions closes it); deploy HELD behind WO-1446
 **Silo:** api / backend (Node, Vercel serverless). No Unity, no scene, no client code.
 **Minted:** 2026-09-06 (CLI_LANES_WO_NUMBERS.md, ninety-eighth pass; 1533 -> 1534 in the same edit)
 **Owner ruling, verbatim (2026-09-06 20:45):** "im the one account that should have no guards"

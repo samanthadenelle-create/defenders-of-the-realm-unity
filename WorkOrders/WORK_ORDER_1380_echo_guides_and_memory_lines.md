@@ -1,6 +1,6 @@
 # WORK ORDER 1380 - Echo Guides, and the memory lines
 
-**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:31, build 2026.09.07.359076). PRIOR STATUS: FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
 **Silo / Lane:** Echoes / raid entry - `EchoWorldPresence` voice + Guide selection
 **Type:** NEW BEHAVIOUR on an EXISTING system, owner-ruled creative direction
 **Minted:** 2026-09-04 (CLI)

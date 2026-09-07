@@ -1,6 +1,6 @@
 # WO-1491: Manage copy artifacts, a text-arrow back button, CLOSE on five panels the mockup does not, and a dead contract field
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 1-9 (chrome: back arrow, CLOSE, header) not yet passed (2026-09-07); code landed in the wave-four commit, gated 440/441. The owner walked all nine Manage screens on build 358872 beside MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-07, uncommitted, awaiting the gate + a fresh Manage capture. The)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 1-9 (chrome: back arrow, CLOSE, header) not yet passed (2026-09-07); code landed in the wave-four commit, gated 440/441. The owner walked all nine Manage screens on build 358872 beside MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-07, uncommitted, awaiting the gate + a fresh Manage capture. The)*
 chrome half (back-arrow sprite, CLOSE on the hub only, the "MANAGE - BUILD" spelling) landed at
 source; see `WORK_ORDER_1491_manage_copy_artifacts_and_a_dead_contract_field.RESULT.md`.
 ⛔ **Two items are deliberately NOT done and the RESULT says why:** `ProgressText` is COMPOSED as of

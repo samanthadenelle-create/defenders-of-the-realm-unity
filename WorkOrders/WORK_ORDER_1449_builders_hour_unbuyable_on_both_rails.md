@@ -1,6 +1,6 @@
 # WO-1449: the builders-hour pack is unbuyable on BOTH rails and two node suites fail at HEAD
 
-**Status:** FIXED - 2026-09-06: builders-hour mirrored into USD_ANCHORS + google-play PRODUCT_TYPES (consumable) + GooglePlayProductCatalog; node --test 345/345 green; needs a vercel --prod (HELD behind WO-1446)
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:00:42, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: builders-hour mirrored into USD_ANCHORS + google-play PRODUCT_TYPES (consumable) + GooglePlayProductCatalog; node --test 345/345 green; needs a vercel --prod (HELD behind WO-1446)
 **Silo:** `api/_lib/purchase-catalog.js` + `Assets/_Modules/Wallet/GooglePlayProductCatalog.cs` + the two node
 suites. Reopens the shipped half of WO-1388 (CLOSED 2026-09-06).
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

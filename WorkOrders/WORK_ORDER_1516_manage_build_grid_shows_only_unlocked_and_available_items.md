@@ -1,6 +1,6 @@
 # WO-1516: the Manage BUILD grid shows only structures that are unlocked and available to the player
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 2 (BUILDINGS grid) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 2 (BUILDINGS grid) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
 **Silo:** Manage 2000-block - `ManageScreenVM` build inventory + `ManageWorkspacePanel` grid (WO-2006 / 2007).
 **LANDS AFTER** the WO-1405 lane commits - `ManageScreenVM.cs` is being gated tonight.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner

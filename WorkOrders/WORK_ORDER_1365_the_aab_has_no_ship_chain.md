@@ -1,6 +1,6 @@
 # WORK ORDER 1365 - The AAB has no ship chain: no wrapper, no R2 push, no size guard
 
-**Status:** FIXED - implemented in da9694c86 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: none on the device - this is a build chain; the machine evidence is google-play-aab-build.ps1 (repo root) emitting AAB_SIZE_OK (Builds/aab-status.txt: AAB_SIZE_OK 469202267) and calling tools/r2-ship.ps1 at :316. Gap: no captured RED for "no fresh R2 push FAILS".
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:00:41, build 2026.09.07.359076). PRIOR STATUS: FIXED - implemented in da9694c86 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: none on the device - this is a build chain; the machine evidence is google-play-aab-build.ps1 (repo root) emitting AAB_SIZE_OK (Builds/aab-status.txt: AAB_SIZE_OK 469202267) and calling tools/r2-ship.ps1 at :316. Gap: no captured RED for "no fresh R2 push FAILS".
 **Silo / Lane:** Release engineering / build chain - `tools/*.ps1`, `Assets/Editor/AndroidBuild.cs`
 **Type:** EXISTING lane, missing gates
 **Minted:** 2026-09-04 (CLI)

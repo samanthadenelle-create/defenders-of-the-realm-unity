@@ -1,6 +1,6 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: win an arena round with a GEAR DROP (5-row spoils) on the device and judge the crest/stars/time narrative strip side by side - no band squashed. Gap: only WaveClear PNGs exist under Builds/ui-capture/, no arena EndState capture.
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:03:11, build 2026.09.07.359076). PRIOR STATUS: FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: win an arena round with a GEAR DROP (5-row spoils) on the device and judge the crest/stars/time narrative strip side by side - no band squashed. Gap: only WaveClear PNGs exist under Builds/ui-capture/, no arena EndState capture.
 PRIOR STATUS: READY TO IMPLEMENT - REOPENED 2026-09-04. **P1: a GEAR DROP tips the arena victory panel
 past its screen-height clamp and squashes every band to 93.3%.** ⛔ **The "renders empty" escalation
 is WITHDRAWN - see §0a. The lead over-read the owner's words; the body was never proven empty.** Was

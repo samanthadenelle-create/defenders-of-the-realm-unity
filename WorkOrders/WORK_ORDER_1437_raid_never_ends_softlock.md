@@ -1,6 +1,6 @@
 # WO-1437: P0 SOFTLOCK - the raid never terminates. Win condition met, clock frozen, respawn re-enters the raid.
 
-**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `5bc5025f5` (see RESULT). Was P0: the player could not leave a won raid by any path except RETREAT.
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:03:08, build 2026.09.07.359076). PRIOR STATUS: FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `5bc5025f5` (see RESULT). Was P0: the player could not leave a won raid by any path except RETREAT.
 **Silo:** raid session lifecycle (`RaidDeployController`, `HeroDeathEndState`/`EndStateView`, the raid
 clock). Disjoint from WO-1436 (HUD posture/teardown) and WO-1435 (rail geometry).
 **Source:** owner felt-test 2026-09-06 on build **2026.09.06.358161**, verbatim:

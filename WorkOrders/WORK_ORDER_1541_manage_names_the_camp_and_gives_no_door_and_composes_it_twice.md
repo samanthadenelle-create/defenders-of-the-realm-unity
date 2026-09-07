@@ -1,6 +1,6 @@
 # WO-1541: Manage names the camp you are training for, renders it as a label, and composes that copy in a second producer
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 1 (MANAGE hub) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 1 (MANAGE hub) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
 <!-- was: READY TO IMPLEMENT (owner: "Named camp + door."), then IN PROGRESS with the DOOR BLOCKED
      on a seat ruling. Both are CLOSED by the 4.1 ruling below - the door is built. -->
 

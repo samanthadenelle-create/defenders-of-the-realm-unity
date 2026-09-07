@@ -1,6 +1,6 @@
 # WO-1517: the train/army screens never say the queue is full, the army is full, or whether a troop can be upgraded
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 5 (TROOP DETAIL), 6 (TROOP DETAIL locked) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 5 (TROOP DETAIL), 6 (TROOP DETAIL locked) not yet passed (2026-09-07); code landed uncommitted in the working tree. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: IMPLEMENTED - 2026-09-06 uncommitted, awaiting gate)*
 **Silo:** Manage 2000-block - `ManageScreenVM` army/troop VMs + `ManageWorkspacePanel` troop detail
 (WO-2008 / 2009).
 **LANDS AFTER** tonight's `ManageScreenVM.cs` commit (the WO-1405 lane).

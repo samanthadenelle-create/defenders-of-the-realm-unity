@@ -1,6 +1,6 @@
 # WO-1443: Manage/Army - three stacked headings become one, empty troop portraits, and 40% dead space
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 4 (TROOPS 3x3 grid) not yet passed (2026-09-07); code landed 32659c0f6 + 949e848a0. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` + `949e848a0`; re-verified at source and)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 4 (TROOPS 3x3 grid) not yet passed (2026-09-07); code landed 32659c0f6 + 949e848a0. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` + `949e848a0`; re-verified at source and)*
 against a fresh capture 2026-09-06 (see section 7). No further code change required; owner felt-verify closes it.
 The one defect found while verifying (section 7B, the unpainted QUEUE face count) is minted as WO-1444.
 **Silo:** `ManageScreenPanel` / `ManageScreenVM` + `ManageArt`. **⚠ A concurrent lane owns

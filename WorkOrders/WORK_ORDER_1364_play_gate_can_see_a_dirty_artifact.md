@@ -1,6 +1,6 @@
 # WORK ORDER 1364 - Make the Play artifact gate able to SEE a dirty artifact
 
-**Status:** FIXED - implemented in 6979fb961 + 61d19a23b (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: none on the device - this is a gate; the proof is the RED on a real AAB (Builds/wo1367-aab.log:37493 PLAY_ARTIFACT_DIRTY / :37507 PLAY_ARTIFACT_REJECTED). The green-artifact proof waits on WO-1366 + WO-1377.
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:00:41, build 2026.09.07.359076). PRIOR STATUS: FIXED - implemented in 6979fb961 + 61d19a23b (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: none on the device - this is a gate; the proof is the RED on a real AAB (Builds/wo1367-aab.log:37493 PLAY_ARTIFACT_DIRTY / :37507 PLAY_ARTIFACT_REJECTED). The green-artifact proof waits on WO-1366 + WO-1377.
 **Silo / Lane:** Release engineering / gates - `Assets/Editor/Regression/` + `tools/android/`
 **Type:** EXISTING gate, structural blind spot
 **Minted:** 2026-09-04 (CLI)

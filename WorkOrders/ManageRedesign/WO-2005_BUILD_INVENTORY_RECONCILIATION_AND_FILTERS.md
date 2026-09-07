@@ -11,7 +11,7 @@
 > and the five surviving filters are live. CIVIC's five rows were re-homed by what each building does
 > (`BuildFilter.cs:59-73`), not dropped.
 
-**Status:** FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) - the CIVIC/six-filter acceptance is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6); see banner. *(was: READY)*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:38, build 2026.09.07.359076). PRIOR STATUS: FIXED (commit a6bbc523d; COMPILE_GATE_OK, REGRESSION_OK 400/400 suites, CATALOG_FALLBACK_GEN_OK) - the CIVIC/six-filter acceptance is SUPERSEDED 2026-09-06 by the owner's hub mockup (implemented in 32659c0f6); see banner. *(was: READY)*
 
 **Priority:** P0  
 **Depends on:** WO-2002

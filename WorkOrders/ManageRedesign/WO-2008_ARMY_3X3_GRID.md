@@ -1,6 +1,6 @@
 # WO-2008 — Replace Troop Rail With 3×3 ARMY Grid
 
-**Status:** AWAITING OWNER MATCH - device frame vs mockup panel 4 (TROOPS 3x3 grid) not yet passed (2026-09-07); code landed bb51b8b9c. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:15:00, build 2026.09.07.359076) - "owner in chat 2026-09-07 09:1x, verbatim: 'the 15 verify are the new screen UI work correct? THose I verified' - the board panel listed Fixed rows only, so t...". PRIOR STATUS: AWAITING OWNER MATCH - device frame vs mockup panel 4 (TROOPS 3x3 grid) not yet passed (2026-09-07); code landed bb51b8b9c. The owner walked all nine Manage screens on build 358872 beside docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png and none matched; headless capture is evidence, never the verdict. *(was: DONE - landed in bb51b8b9c (verified 2026-09-06))*
 
 **Priority:** P0  
 **Depends on:** WO-2002

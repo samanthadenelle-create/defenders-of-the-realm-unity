@@ -1,6 +1,6 @@
 # WO-1420: the wallet's silent reauthorize was REFUSED in 0.1s and the game reported a 30s TIMEOUT
 
-**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` (see RESULT); minted 2026-09-06 00:55 (CLI) from F8 device capture seq 4683 on build 2026.09.06.357453
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:05:56, build 2026.09.07.359076). PRIOR STATUS: FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` (see RESULT); minted 2026-09-06 00:55 (CLI) from F8 device capture seq 4683 on build 2026.09.06.357453
 **Silo:** Wallet (DeNelle.Wallet) - boot auto-resume + Connect error attribution
 **Source capture:** `logs/f8-inbox/capture-device-20260906-004946-seq4683.md` (kind=error, scene=Title, device SM02G4061955851)
 **Player-felt:** none visible - the title screen fell back to the `Connect Wallet` corner button as designed. The defect is

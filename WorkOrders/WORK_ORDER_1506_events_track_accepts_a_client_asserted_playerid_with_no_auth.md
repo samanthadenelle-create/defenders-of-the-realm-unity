@@ -1,6 +1,6 @@
 # WO-1506: /api/events/track accepts a client-asserted playerId with no auth and no rate limit
 
-**Status:** FIXED - 2026-09-06: identity bound from X-Session / X-Guest-Id, else tagged unverified; shared IP budget (fail-open); 12 tests; client headers (EventTracker.cs:293) and ANALYTICS_EXCLUDED_PLAYER_IDS=unverified are the follow-ups named in the file header
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:07:35, build 2026.09.07.359076). PRIOR STATUS: FIXED - 2026-09-06: identity bound from X-Session / X-Guest-Id, else tagged unverified; shared IP budget (fail-open); 12 tests; client headers (EventTracker.cs:293) and ANALYTICS_EXCLUDED_PLAYER_IDS=unverified are the follow-ups named in the file header
 **Silo:** `api/events/track.js`. (WO-686 webtrace ingestion hardening is CLOSED and does not cover this route.)
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1506 -> 1507 in the same edit).

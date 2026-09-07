@@ -1,6 +1,6 @@
 # WO-1441: the wallet session is NEVER established - cloud saves are failing and the promo cannot be redeemed
 
-**Status:** FIXED - device-proven 2026-09-07 00:41 on build 2026.09.07.358872 (mint at connect, save 2xx, offline queue drained; see RESULT section 5). Owner felt-verify + close still hers. (was: FIXED - ON THE SEEKER 2026.09.07.358574 - client landed in `32659c0f6`; device proof of mint/save/drain still owed (see RESULT))
+**Status:** CLOSED 2026-09-07 - owner felt-test PASS (validated 2026-09-07T14:05:57, build 2026.09.07.359076). PRIOR STATUS: FIXED - device-proven 2026-09-07 00:41 on build 2026.09.07.358872 (mint at connect, save 2xx, offline queue drained; see RESULT section 5). Owner felt-verify + close still hers. (was: FIXED - ON THE SEEKER 2026.09.07.358574 - client landed in `32659c0f6`; device proof of mint/save/drain still owed (see RESULT))
 > ## SUPERSEDED FOR THE BOOT PATH by owner ruling 2026-09-07 (see WO-1583). Status FIXED STANDS.
 > Owner, verbatim, 2026-09-07 08:5x: ***"everytime i play now im forced to authenticate ... I would
 > think the authentication would only be needed for purchases (and codes)"***.
