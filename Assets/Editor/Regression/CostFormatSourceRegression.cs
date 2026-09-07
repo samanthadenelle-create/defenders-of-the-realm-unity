@@ -65,7 +65,7 @@ namespace DeNelle.Editor.Regression
                 reason = "cost-format-source: " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 11 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry; " + ElarionMedievalPngCount + " ElarionMedieval png carry a LIVE Android override (overridden+crunch+<=2048+Compressed)";
+            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 11 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; " + CurrencyKindCount + " CurrencyKinds resolve owner-ruled art via ConceptIdFor (Food->stone); no reverse parse/direct registry; " + ElarionMedievalPngCount + " ElarionMedieval png carry a LIVE Android override that actually compresses (overridden+<=2048+Compressed+(crunch|explicit ASTC), no Automatic-on-non-mod-4 RGBA32 fallback)";
             return true;
         }
 
@@ -147,6 +147,45 @@ namespace DeNelle.Editor.Regression
         // which crunch does not apply to - green-looking and inert, the same class as the
         // `overridden: 0` bug above. All 36 Android blocks were rewritten to match the other 37
         // verbatim (2048 / textureFormat -1 Automatic / Compressed / crunch 1 / overridden 1).
+        //
+        // ⛔ RE-POINTED 2026-09-07 (WO-1485). THE PARAGRAPH ABOVE IS KEPT BECAUSE IT IS THE RECORD
+        // OF A FIX THAT MADE THINGS WORSE, AND THE PIN IT LEFT BEHIND WAS ENFORCING THE DEFECT.
+        //
+        // "crunch 1 + textureFormat -1 Automatic" is NOT universally the right Android block, and
+        // requiring it flatly - which the `!android.crunchedCompression` line below did - forced the
+        // single most expensive import bug in the project onto 34 files:
+        //
+        //   Android format Automatic + crunched compression falls back to UNCOMPRESSED RGBA32
+        //   whenever the POST-CLAMP dimensions are not BOTH multiples of 4.
+        //
+        // Measured from the build report's own bytes-per-pixel (Builds/aab-build.log:32705, the
+        // "Used Assets ... sorted by uncompressed size" table), across 977 shipped textures, with no
+        // exception in either direction:
+        //
+        //   Automatic + crunch, dims %4 == 0   n=37   median 0.195 B/px
+        //   Automatic + crunch, dims %4 != 0   n=34   median 4.001 B/px   <-- raw RGBA32
+        //   explicit ASTC,      dims %4 == 0   n=555  median 0.461 B/px
+        //   explicit ASTC,      dims %4 != 0   n=120  median 0.458 B/px   <-- unaffected
+        //
+        // That cost 177.2 MB - 23.9% of the entire 740 MB texture budget - on files that DID carry a
+        // correct-looking override. `card-frame-empty.png` is 1774x887 and shipped at 6.0 MB = 4.0
+        // B/px. The 2048 clamp is half the trap: `button-normal-empty.png` is 2172x724, both source
+        // edges ARE multiples of 4, and it still lands on 2048x683.
+        //
+        // The 36 Manage PNGs survived that rewrite only by luck: they are 512x512 / 256x256, so
+        // crunch genuinely applies to them (measured 0.15-0.22 B/px). The 2026-09-06 note above
+        // reads their EXPLICIT ASTC as the bug; it was the safer of the two settings, and the
+        // rewrite to Automatic+crunch was the regression - it simply had no cost at those sizes.
+        //
+        // ⚠ THE RULING (WO-1485): crunch and an explicit ASTC format are BOTH legitimate. Which one
+        // is correct depends on the post-clamp dimensions, so the pin asserts the PROPERTY, not one
+        // named setting: the override must be live, and it must actually compress. Bare Automatic on
+        // a non-multiple-of-4 texture is the one banned state.
+        //
+        // The mod-4 arithmetic is NOT re-implemented here. It is called from
+        // TextureImportBudgetRegression.ClassifyAsset, which owns it - a second copy of the rule in
+        // this file is precisely the duplicated state that produced the stale WO block (CLAUDE.md
+        // §2) and the retired dependency table (§5). One rule, one owner, two callers.
         private const string ElarionMedievalRoot = "Assets/Resources/UI/ElarionMedieval";
         private const int ElarionMedievalPngCount = 73;
 
@@ -181,8 +220,19 @@ namespace DeNelle.Editor.Regression
                     failures.Add(rel + " exceeds the 2048px Android ceiling (" + android.maxTextureSize + ")");
                 if (android.textureCompression != TextureImporterCompression.Compressed)
                     failures.Add(rel + " Android texture compression is " + android.textureCompression + ", not Compressed");
-                if (!android.crunchedCompression)
-                    failures.Add(rel + " Android override lost crunch compression");
+                // The override must actually COMPRESS. Two ways to get there, and the mod-4 rule
+                // decides which one this texture is allowed to use.
+                bool explicitFormat = android.format != TextureImporterFormat.Automatic;
+                if (!android.crunchedCompression && !explicitFormat)
+                    failures.Add(rel + " Android override neither crunches nor names an explicit format - " +
+                                 "it is Automatic with crunch off, which compresses nothing");
+
+                var verdict = TextureImportBudgetRegression.ClassifyAsset(rel, android);
+                if (verdict == TextureImportBudgetRegression.Verdict.Rgba32Fallback)
+                    failures.Add(rel + " ships UNCOMPRESSED RGBA32 on Android: format Automatic + crunch " +
+                                 "falls back to raw whenever the post-clamp dimensions are not both multiples " +
+                                 "of 4 (WO-1485, 177.2 MB). Name an explicit ASTC format in the Android block " +
+                                 "(textureFormat: 48 keeps UI crisp) and clear crunchedCompression.");
             }
         }
 

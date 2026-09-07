@@ -121,6 +121,21 @@ namespace DeNelle.Editor.Regression
             "Assets/_Modules/Village/NPCs/StoryCompanionInjector.cs",
             "Assets/_Modules/Village/Catalog/CatalogBootstrap.cs",
             "Assets/_Modules/Core/TreeOfLifeMaterialFixer.cs",
+            // ADDED 2026-09-07 (WO-1485), NOT enemy art, and NOT a call site at all — the strongest
+            // form of this section's existing reason. TextureImportBudgetRegression carries two
+            // FROZEN PATH LEDGERS (the no-Android-override debt and the duplicate-content debt).
+            // Seven of its rows name structure/prop art that happens to share the "_basecolor"
+            // vocabulary — Models/Cathedral, Models/CastleGate, StructureContent's watchtowers,
+            // Tree_Of_Life and the healing-caravan wagon. None is enemy art, so EnemyArtPaths does
+            // not and should not own their names. Its ONE genuinely enemy-art row (the Skeleton_Healer
+            // .fbm diffuse) does ask EnemyArtPaths, for both the sidecar folder and the stem.
+            // ⛔ These rows are DATA, not paths that resolve: a frozen ledger entry is a key compared
+            // against what a scan finds on disk. Re-pointing it would make the key stop matching, which
+            // is the opposite of the migration this ratchet exists to drive. And the token was NOT
+            // broken in half to dodge the lint — this file's own header records that workaround as the
+            // banned one (the 2026-08-25 CaptureProvenanceRegression incident), so it is listed here
+            // in the open instead.
+            "Assets/Editor/Regression/TextureImportBudgetRegression.cs",
         };
 
         /// <summary>The naming tokens EnemyArtPaths owns. See its header for the four conventions.</summary>
