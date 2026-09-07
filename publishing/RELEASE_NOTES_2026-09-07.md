@@ -44,7 +44,11 @@ Character count of the block above: 456 (limit 500), measured 2026-09-07. ASCII 
 > could never be finished now can. Starting a new game no longer inherits the
 > last save's welcome-back rewards, and the welcome-back screen now claims
 > exactly what was banked while you were away. Every Manage page has an exit
-> button, and picking up a placed structure to move it works again.
+> button, and picking up a placed structure to move it works again. Starting a
+> new game no longer fights your cloud save: the new town is the town the cloud
+> keeps. Rebalancing your army for a raid no longer asks for gold. The store's
+> sell screen shows what you are selling. The attacks report no longer draws its
+> map over its own words.
 
 ### New
 
@@ -58,7 +62,10 @@ Character count of the block above: 456 (limit 500), measured 2026-09-07. ASCII 
 > Realm Map and the Season Track, the Wardrobe is reachable, and the Night
 > Market has a permanent spot on the HUD. Structures show wear from the first
 > hit, so you can see what needs repair before you pay for it. Dungeon doors
-> look like doors.
+> look like doors. Pulling a Rough Stone from a dungeon is a full-screen moment.
+> Opening a chest tells you what you found. Dying in a raid no longer ends it:
+> your army fights on, capped at two stars. Raiders now take jobs - a front line,
+> skirmishers, breakers and support - instead of everyone running at the wall.
 
 ### Balance
 
@@ -66,7 +73,9 @@ Character count of the block above: 456 (limit 500), measured 2026-09-07. ASCII 
 > and upgrading troops costs time, not gold: gold is only spent to skip the wait
 > or to hire reinforcements. Quest rewards now scale with where and how hard the
 > quest is. Storage buildings were rescaled and now show their capped capacity,
-> and income is held rather than burned when a store is full.
+> and income is held rather than burned when a store is full. Raid garrison
+> enemies now use their authored stats: the orc necromancer hits harder, the
+> shaman and acolyte softer, berserkers and walkers fall faster.
 
 Word count of the three quoted blocks: 333 (measured 2026-09-07). ASCII verified - no em dash, no
 ellipsis character, no smart quotes.
@@ -124,7 +133,23 @@ screenshots + icon, `publishing/media/` still empty), the orc caster art
 
 ---
 
-## Build identity - STORE APK, measured 2026-09-07 09:27 from the artifact
+## Build identity - STORE APK (afternoon), measured 2026-09-07 13:3x from the artifact
+
+This SUPERSEDES the 09:26 store APK (`2026.09.07.359419`) recorded below it: the afternoon wave
+(commits 70812668e..cdc3ac66d, gate COMPILE_GATE_OK cg-wave10h + REGRESSION_OK 454/454 reg-wave10d)
+carries everything the New/Fixed/Balance text above now says. The 09:26 file is not the candidate.
+
+- Source: branch `feat/synty-art-retheme`, pushed to origin 13:19 (65d5a7eae..157b17604); code head 157b17604, tester stamp commit cdc3ac66d
+- Store APK: `Builds/Android/DefendersOfTheRealm.apk`, 462,887,951 bytes, written 13:28:58 (`APK_OK 13:29:21`, Builds/overnight-apk-status.txt)
+- Built WITHOUT the tester define: `[apk] STORE-shaped build (no TESTER_BUILD define) - defines: ''` (Builds/apk-store-0907pm.console.log)
+- `aapt2 dump badging`: `package: name='com.denellestudios.echoesofelarion' versionCode='359664' versionName='2026.09.07.359664'`, `native-code: 'arm64-v8a'`
+- SHA-256: `D11BCB0C31D9128FBA30BDE135D1F69BC681031A617D07DA00992F21BAED25AA`
+- `apksigner verify -v --print-certs`: `Verifies`; certificate SHA-256 `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443` (same key as every prior build)
+- R2 parity: `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=276` 13:29:36
+- Tester twin on the Seeker: `2026.09.07.359651` (TESTER_BUILD), installed 13:19, distributed to Firebase testers 13:22 - a DIFFERENT file from the store candidate
+- AAB / Windows exe / WebGL: building behind it in one chain (recorded below when their markers land)
+
+## (superseded) Build identity - STORE APK, measured 2026-09-07 09:27 from the artifact
 
 - Source commit: `05de2d23a` code (branch `feat/synty-art-retheme`); the minted stamp is committed after the build, tree otherwise clean of Assets changes
 - Store APK: `Builds/Android/DefendersOfTheRealm.apk`, 491,599,615 bytes, written 09:26:01 (`APK_OK 09:26:39`, Builds/overnight-apk-status.txt)

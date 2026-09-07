@@ -187,7 +187,10 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-twenty-sixth pass): main line next free = **1600**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-twenty-seventh pass): main line next free = **1605**.
+> *(CLI minted **1600** Jeweler modal on the Title after START NEW, **1601** skills tree frame band, **1602** new-town ground reads as water then haze, **1603** retreat battle-lock held by PursuitBattleProbe (regression of 1337, F8 4701/4702), **1604** biome road drop lands in the wrong region (F8 4703) - the owner's first run on 359651. Bumped 1600 -> 1605 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-twenty-sixth pass): main line next free = **1600**.
 > *(CLI minted **1599** Command Center SKU dropdown - owner 12:5x. Bumped 1599 -> 1600 in this SAME edit.)*
 > *(CLI minted **1598** cloud save sanity guard rejects a legitimate new game (177 save_sanity_reject rows; owner's row 901 -> 36 crystals rejected 11x) - from the Command Center event table 2026-09-07 11:4x. Bumped 1598 -> 1599 in this SAME edit.)*
 > *(CLI minted **1597** Manage hub: HEART chip only for an upgrade, ghost CLOSE, cards fill the band - owner 10:2x "its the only one wrong". Bumped 1597 -> 1598 in this SAME edit.)*
@@ -2313,7 +2316,14 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## ⚠ RECONCILED 2026-08-26 (UI seat): UI seat next free = **1084**.
+> ## ⚠ RECONCILED 2026-09-07 (Grok/UI seat): UI seat next free = **1088**.
+> *(Grok/UI seat minted **WO-1084 through WO-1087** from four Seeker phone Screenshots (not F8) and bumped 1084 -> 1088 in this SAME edit.
+> **1084** = YOU DIED is a giant green fill with combat HUD still live at 0 HP (\logs/device/seeker-shots/Screenshot_20260907-132616.png\).
+> **1085** = world renders as black void / blue strip only (\Screenshot_20260907-132324.png\).
+> **1086** = Ashwood Hollow roads drop shows Ashwood UI but lands at the castle/Elarion (\Screenshot_20260907-132930.png\).
+> **1087** = Title TAP TO CONTINUE with Session Expired / forced sign-in after play (\Screenshot_20260907-133243.png\).)*
+>
+> ### superseded: RECONCILED 2026-08-26 (UI seat): UI seat next free = **1084**.
 > *(UI-seat lane minted **WO-1083** and bumped 1083 -> 1084 in this SAME edit. **WO-1083** = HERO
 > SELECT REBUILT AS A TOP ROTATING CAROUSEL with the details/specs strip BELOW it and the CTA in
 > an exclusive bottom band — from the courier handoff `tmp/HANDOFF_TO_UI_hero_select_layout.md`
