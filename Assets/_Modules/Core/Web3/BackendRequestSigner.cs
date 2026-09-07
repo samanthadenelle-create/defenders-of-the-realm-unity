@@ -304,6 +304,12 @@ namespace DeNelle.Core.Web3
         //
         //  with "MintSessionAsync" appearing ZERO times in 76 MB of that day's captures.
         //
+        //  ⛔ AND THE 09-06 RULING BELOW IS ITSELF SUPERSEDED (2026-09-07, WO-1583): AUTO-RESUME NO
+        //  LONGER MINTS. One handshake on EVERY launch is the thing the owner objected to. Boot now
+        //  calls TryResumeSessionWithoutSigningAsync - reuse or renew, never sign. WarmUpSessionAsync
+        //  still stays deleted: this is not a route back to a no-op warm-up, it is a method that
+        //  actually does the free half of the work and SAYS SO in the log.
+        //
         //  ⭐ OWNER RULING 2026-09-06 REVERSED WO-1211: auto-resume now MINTS - one handshake on
         //  boot. Auto-resume shows no connect prompt of its own, so that handshake is the only
         //  wallet sheet of the session, under her stated two-prompt shape rather than over it.
@@ -322,9 +328,12 @@ namespace DeNelle.Core.Web3
         /// call on every connect path and needs no "already warmed" variant.
         /// <para>
         /// ⛔ WO-1441: this had ZERO CALL SITES from the day it was written until 2026-09-06. It is
-        /// now called from BOTH connect paths — <c>WalletSkinBootstrap.ConnectForLoginAsync</c> (the
-        /// login surface AND boot auto-resume) and <c>WalletSkinBootstrap.ConnectAsync</c> (the SKR
-        /// corner button). If you ever find this uncalled again, cloud save is dark for every wallet holder
+        /// now called from both EXPLICIT connect paths — <c>WalletSkinBootstrap.ConnectForLoginAsync</c>
+        /// when <c>explicitConnect</c> is true (the login-surface tap) and
+        /// <c>WalletSkinBootstrap.ConnectAsync</c> (the SKR corner button).
+        /// ⛔ NOT from boot auto-resume any more — owner ruling 2026-09-07, WO-1583: boot never signs
+        /// and takes <see cref="TryResumeSessionWithoutSigningAsync"/> instead.
+        /// If you ever find this uncalled again, cloud save is dark for every wallet holder
         /// who has not bought a pack or redeemed a promo. A regression pins the call site
         /// (BackendSaveAuthRegression).
         /// </para>
@@ -348,6 +357,64 @@ namespace DeNelle.Core.Web3
                 return UniTask.FromResult(true);
             }
             return MintSessionAsync(wallet, "explicit-connect", "explicit-connect");
+        }
+
+        /// <summary>
+        /// WO-1583 (owner ruling 2026-09-07): the SIGNATURE-FREE half of the connect handshake.
+        /// Reuses a live session, renews an expired one over the wire, and otherwise gives up
+        /// QUIETLY - it never calls MintSessionAsync, so it can NEVER raise a wallet SignMessage
+        /// sheet. This is what the BOOT / auto-resume path calls.
+        /// <para>
+        /// Owner, verbatim: <i>"everytime i play now im forced to authenticate ... I would think the
+        /// authentication would only be needed for purchases (and codes)"</i>. WO-1441 had made both
+        /// connect paths mint, which fixed cloud save by charging the player a wallet sheet on every
+        /// single launch. That trade is reversed here: boot never signs.
+        /// </para>
+        /// <para>
+        /// ⛔ AND IT WILL USUALLY RETURN FALSE ON A COLD BOOT - THAT IS THE HONEST, ACCEPTED COST,
+        /// NOT A BUG. The session is three in-memory statics and is DELIBERATELY never written to
+        /// disk (see the WO-1157 note at the top of this file: it is a bearer credential, and
+        /// PlayerPrefs on Android is readable by a backup). A fresh process therefore holds no
+        /// token, so <c>SessionUsable</c> is false, <c>SessionGapWhy</c> is <c>missing</c>, and
+        /// there is nothing for <see cref="TryRenewSessionAsync"/> to present. Cloud save then
+        /// queues offline (GameStateService.EnqueueOffline) until a purchase, a promo redeem, or an
+        /// explicit Connect tap mints - at which point the queue drains in one upload.
+        /// The only way to get BOTH no boot sheet AND cloud save at boot is a sealed persisted
+        /// token (the MwaSessionStore AES-GCM shape). That is a separate ruling, not this lane.
+        /// </para>
+        /// </summary>
+        public static async UniTask<bool> TryResumeSessionWithoutSigningAsync(string wallet)
+        {
+            if (string.IsNullOrEmpty(wallet)) return false;
+
+            if (SessionUsable(wallet))
+            {
+                FlowTrace.Step("Wallet",
+                    "boot never signs (ruling 2026-09-07) - a live backend session was already held " +
+                    "in memory, so this reconnect reused it and showed no wallet sheet. scene=" +
+                    CurrentSceneName());
+                return true;
+            }
+
+            string why = SessionGapWhy(wallet);
+            if (why == "expired" && await TryRenewSessionAsync(wallet, "boot-resume"))
+            {
+                FlowTrace.Step("Wallet",
+                    "boot never signs (ruling 2026-09-07) - the expired backend session was RENEWED " +
+                    "over the wire with no signature, so cloud save continues and no wallet sheet " +
+                    "was shown. scene=" + CurrentSceneName());
+                return true;
+            }
+
+            FlowTrace.Step("Wallet",
+                "boot never signs (ruling 2026-09-07) - the wallet reauthorize restored IDENTITY " +
+                "without a signature, and no wallet sheet was shown ON PURPOSE. There is no backend " +
+                "session to reuse (why=" + why + "; the token is memory-only by design, so a fresh " +
+                "process always starts without one) and nothing to renew. This is EXPECTED, not a " +
+                "failure: cloud saves queue offline until a purchase, a promo code, or an explicit " +
+                "Connect tap mints a session - the queue then drains in one upload. scene=" +
+                CurrentSceneName());
+            return false;
         }
 
         /// <summary>Attach proof already available in memory without minting or signing.</summary>
@@ -404,12 +471,20 @@ namespace DeNelle.Core.Web3
                 // was GameStateService's LogError two lines later ("[Sync] Wallet cloud SAVE
                 // aborted"), which names the effect and not the cause. Warn, and say plainly what
                 // WOULD mint - "waiting" implied something was coming, and for a save nothing ever is.
+                // WO-1583 (ruling 2026-09-07): why=missing on this route is now the NORMAL state for
+                // most of a session, not a defect report. Boot no longer signs, so nothing mints
+                // until the player buys, redeems a code, or taps Connect. The old text called
+                // why=missing "NEVER MINTED" in the tone of an outage, which under the new ruling
+                // would send the next triage after working code (CLAUDE.md section 11B).
                 FlowTrace.Warn("Wallet",
                     $"authed call has no live session and this route may NOT mint (no SignMessage here). " +
                     $"why={why} scene={scene} caller={caller}. " +
-                    "It will keep failing until a mint happens elsewhere: an explicit Connect tap, " +
-                    "a purchase (any /api/purchases route), or a promo redeem. why=missing means NEVER MINTED; " +
-                    "why=expired means the 15-minute server TTL lapsed and nothing renews it.");
+                    "EXPECTED under the 2026-09-07 ruling: the session is minted only by a purchase " +
+                    "(any /api/purchases route), a promo redeem, or an explicit Connect tap - never at boot. " +
+                    "The caller must fail closed and queue; the queue drains once a session exists. " +
+                    "why=missing means no token is held at all (memory-only credential, so a fresh process " +
+                    "starts this way); why=expired means the 15-minute server TTL lapsed and the " +
+                    "signature-free renewal did not restore it.");
                 return false;
             }
 

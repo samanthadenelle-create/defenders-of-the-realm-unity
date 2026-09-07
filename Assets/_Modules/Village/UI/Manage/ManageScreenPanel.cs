@@ -125,6 +125,28 @@ namespace DeNelle.Village.UI
         private const float WorkspaceHeaderY0 = 0.838f;
         private const float WorkspaceHeaderY1 = 0.962f;
 
+        // ⭐ THE CONSTANT EXIT'S GEOMETRY - owner ruling 2026-09-07: "on all the manage screens
+        // there is no way to exit. can we add a const exit button top right".
+        // ⛔ THREE NUMBERS, AND EVERY SEAT ON THE RIGHT OF THE CHROME ROW IS DERIVED FROM THEM.
+        // The X owns the right end of the header band; the QUEUE pill is pinned exactly
+        // ManageExitGapPx to its left (SeatQueuePillLeftOfExit). Neither is typed twice, so the
+        // two can never drift into each other the way this screen's coordinates already have
+        // nine times over (see SizeQueuePillToLabel's note).
+        /// <summary>The exit square's side, in reference px. AUTHORED AT THE TOUCH FLOOR, exactly
+        /// as the queue overlay's own X is (BuildQueueDrawer's ClosePx) - not a fraction of a band
+        /// whose height varies, and nothing for ClampMinTouch to have to rescue.</summary>
+        private const float ManageExitPx = ElarionUiKit.MinTouchPx;
+        /// <summary>The gutter between the X and the QUEUE pill. Same number as BandGapPx, said
+        /// separately because it guards a HORIZONTAL neighbour rather than a band.</summary>
+        private const float ManageExitGapPx = 12f;
+        /// <summary>⛔ THE CHROME ROW'S RIGHT EDGE, AS A FRACTION OF THE PANEL - the ONE place it is
+        /// written. FrameCore's body zone is content x 0.055-0.945 (ElarionUiKit.cs:458) and an
+        /// alpha walk over Assets/Resources/RpgUi/frame/frame_core.png puts the interior's edge at
+        /// x 0.950 at this height, so 0.945 is inside the art with margin. `ManageHeaderActions`
+        /// and the exit BOTH read this, because a control seated past the border is drawn over the
+        /// frame or clipped by it - the defect that cost the QUEUE pill four coordinate rounds.</summary>
+        private const float ManageChromeRightX = 0.945f;
+
         private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
         private const float CloseGapY = 0.020f;     // body floor clears the Close box by this much
         /// <summary>
@@ -532,6 +554,21 @@ namespace DeNelle.Village.UI
         private GameObject _drawerHide;
         /// <summary>The shared kit CLOSE. WO-1491: visible on the HUB only (mockup panel 1).</summary>
         private Button _chromeClose;
+        /// <summary>
+        /// ⭐ THE CONSTANT EXIT. Owner ruling 2026-09-07, verbatim: <i>"on all the manage screens
+        /// there is no way to exit. can we add a const exit button top right"</i>.
+        /// <para>⛔ IT IS NOT A CHILD OF <c>_tabsHost</c>, AND THAT IS THE WHOLE POINT.
+        /// <see cref="ApplyDrawerPlacement"/> does <c>_tabsHost.gameObject.SetActive(!chromeHidden)</c>
+        /// while the queue overlay is up, so anything seated in that row is GONE on panel 8 - the
+        /// one screen the owner reached with no way back to town. This control is a direct child of
+        /// <c>chrome.content</c>, built last so it is the top sibling, and NOTHING ever deactivates
+        /// it. "Constant" is a state guarantee, not a coordinate.</para>
+        /// <para>⛔ ONE ROUTE, NOT A SECOND CLOSE PATH: it is handed the SAME <c>Action</c> instance
+        /// that <see cref="ElarionUiKit.BuildObsidianPanel"/> takes as its <c>onClose</c> and that
+        /// the scrim takes as its tap-out - see <c>exitRoute</c> in BuildChrome. The hub's CLOSE and
+        /// this X cannot diverge because there is only one delegate.</para>
+        /// </summary>
+        private Button _manageExit;
         /// <summary>Panel 8's tab row zone - fixed chrome above the list, never a scroll row.</summary>
         private RectTransform _drawerTabs;
         /// <summary>Panel 8's title band. The X is a CHILD of this, so it cannot leave the overlay.</summary>
@@ -1194,6 +1231,7 @@ namespace DeNelle.Village.UI
             _wellPx = _listBandTopPx = _listBandPx = 0f;
             _railPinned = false;
             _tabsHost = null;
+            _manageExit = null;
             for (int i = 0; i < _stripCells.Length; i++) _stripCells[i] = null;
             _stripHost = null;
             for (int i = 0; i < _launcherSummaries.Length; i++) _launcherSummaries[i] = null;
@@ -1222,7 +1260,14 @@ namespace DeNelle.Village.UI
             _ui = ElarionUiKit.BuildModalCanvas("ManageScreenUI", 31200);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
-            ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
+            // ⛔ ONE EXIT ROUTE OUT OF MANAGE, HELD AS ONE DELEGATE INSTANCE, AND EVERY DOOR TAKES
+            // IT. The scrim's tap-out, the kit chrome's CLOSE (the hub's drawn exit) and the
+            // constant top-right X (owner ruling 2026-09-07) are all handed THIS `exitRoute`. A
+            // second `Close` method group written at a second call site is a second close path in
+            // everything but name - it can be re-pointed on its own, and then the hub and the X
+            // leave Manage differently. The ruling asked for one route; this is how it stays one.
+            Action exitRoute = Close;
+            ElarionUiKit.Scrim(_ui.transform, onTapClose: () => exitRoute());
 
             // ⛔ THE PANEL IS DELIBERATELY NEAR-FULL-BLEED, AND THAT IS A CAPACITY DECISION.
             // Owner mockup docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png: the GRID dominates every
@@ -1277,7 +1322,10 @@ namespace DeNelle.Village.UI
                 // fixture pins, with 1% of headroom on each axis.
                 new Vector2(ManagePanelInsetF, ManagePanelInsetF),
                 new Vector2(1f - ManagePanelInsetF, 1f - ManagePanelInsetF),
-                Close, frameName: RpgUiCatalog.FrameCore);
+                // ⛔ THE SAME `exitRoute` INSTANCE THE SCRIM AND THE CONSTANT X TAKE. This is what
+                // makes "the X leaves Manage the way the hub's CLOSE does" true by construction
+                // rather than by two call sites happening to name the same method today.
+                exitRoute, frameName: RpgUiCatalog.FrameCore);
             if (chrome == null)
             {
                 FlowTrace.Fail("Manage", "BuildObsidianPanel returned no chrome — the screen has no host.");
@@ -1475,8 +1523,11 @@ namespace DeNelle.Village.UI
             // Anchoring the ROW to the body zone makes every child's fraction a fraction of the
             // usable content, which is what those fractions were always meant to be - and it lines
             // the back arrow up with the grid's left edge for free.
+            // ⛔ THE RIGHT EDGE IS ManageChromeRightX, NOT A REPEATED 0.945f. The constant exit is
+            // seated against the same number on chrome.content, so the row and the X share one
+            // edge by construction instead of by two literals agreeing today.
             _tabsHost = MakeZone(chrome.content.transform, "ManageHeaderActions",
-                new Vector2(0.055f, WorkspaceHeaderY0), new Vector2(0.945f, WorkspaceHeaderY1));
+                new Vector2(0.055f, WorkspaceHeaderY0), new Vector2(ManageChromeRightX, WorkspaceHeaderY1));
             BuildTabs();
 
             // WO-1393: the drawer band is seated from these three numbers (ApplyDrawerPlacement).
@@ -1525,6 +1576,118 @@ namespace DeNelle.Village.UI
             // is cleared every paint is a control that exists for exactly one frame.
             // It is now rebuilt with its siblings, which is what the heart face and the queue pill
             // already did and why they survived.
+
+            // ⭐ AND THE CONSTANT EXIT, BUILT LAST SO IT IS THE TOP SIBLING OF chrome.content.
+            // Owner ruling 2026-09-07: "on all the manage screens there is no way to exit. can we
+            // add a const exit button top right".
+            BuildConstantExit(chrome, exitRoute);
+        }
+
+        /// <summary>
+        /// ⭐ THE ONE EXIT FROM MANAGE, TOP-RIGHT, ON EVERY SCREEN. Owner ruling 2026-09-07,
+        /// verbatim: <i>"on all the manage screens there is no way to exit. can we add a const exit
+        /// button top right"</i>.
+        ///
+        /// <para>⛔ THIS SUPERSEDES THE WO-1491 PASS FOR THE TOP-RIGHT SEAT, AND ONLY FOR IT. That
+        /// pass read the mockup sheet correctly - CLOSE is drawn on panel 1 alone - and stood the
+        /// shared bottom CLOSE down on the other seven screens
+        /// (<see cref="ApplyScreenVisibility"/>, which is UNTOUCHED). What the sheet did not carry
+        /// was that the back arrow walks the model's screen graph and therefore never LEAVES
+        /// Manage: on BUILD / ARMY / RESEARCH, on a detail card, on the research tree and on the
+        /// queue overlay, the player had no route back to town at all. The arrow navigates WITHIN
+        /// Manage; this X exits it. Two controls, two jobs, and the hub keeps its drawn CLOSE.</para>
+        ///
+        /// <para>⛔ ONE ROUTE. <paramref name="exitRoute"/> is the SAME <c>Action</c> instance the
+        /// kit was handed as <c>onClose</c> (so it is literally what the hub's CLOSE invokes) and
+        /// the scrim was handed as its tap-out. There is no second close path to keep in step.</para>
+        ///
+        /// <para>⛔ PARENTED TO <c>chrome.content</c>, NOT TO <c>_tabsHost</c>. Two reasons and
+        /// either alone is enough: (1) <see cref="ApplyDrawerPlacement"/> deactivates the whole
+        /// chrome row under the queue overlay, so a child of it is absent on panel 8 - the exact
+        /// screen the ruling names; (2) <see cref="BuildTabs"/> DESTROYS every child of the row on
+        /// entry, which is how the back arrow vanished for a round (see BuildChrome's note). A
+        /// control that must be constant cannot live in a host that is cleared and hidden.</para>
+        ///
+        /// <para>⛔ AUTHORED IN PX AT THE TOUCH FLOOR, pinned to the row's right edge with pivot 1 -
+        /// the same construction the queue overlay's X uses (BuildQueueDrawer's ClosePx) and for
+        /// the same reason: <c>chrome.content.rect</c> is ZERO on the frame this runs, so any
+        /// fraction derived from it would be a guess, and a fraction of a band whose height varies
+        /// cannot promise a px floor anyway.</para>
+        ///
+        /// <para>⚠ THE TITLE. <c>TitleLocalX0/X1</c> are NOT moved. DERIVED, NOT CAPTURED: the pill
+        /// keeps its measured width and its right edge moves left by exactly
+        /// <c>ManageExitPx + ManageExitGapPx</c> = 124 ref px = 0.060 of the reference panel width
+        /// (2062px, from ManageMockupConformanceRegression's RefWellWidthPx 1835 / 0.89). The pill's
+        /// LEFT edge therefore moves from content 0.764 to 0.749 while the title's right edge stays
+        /// at content 0.675 - clearance narrows from 0.089 to 0.074 of the panel and no overlap
+        /// opens. Pulling the title in as well would narrow a rect whose longest breadcrumb
+        /// ("MANAGE - RESEARCH - SCHOOL") is already recorded UNVERIFIED, so the smaller change is
+        /// the honest one. MANAGE_EXIT_RECT prints the answer beside MANAGE_QUEUE_PILL_RECT and
+        /// MANAGE_TITLE_RECT so the next capture NAMES it instead of anyone theorising.</para>
+        /// </summary>
+        private void BuildConstantExit(ElarionUiKit.PanelChrome chrome, Action exitRoute)
+        {
+            if (chrome == null || chrome.content == null || exitRoute == null)
+            {
+                FlowTrace.Fail("Manage", "MANAGE_EXIT not built - no chrome content or no route. " +
+                    "Every Manage screen is now without a way back to town, which is the exact " +
+                    "defect the 2026-09-07 ruling closes.");
+                return;
+            }
+
+            var exit = ElarionUiKit.BuildObsidianButton(chrome.content.transform, "X",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                // A first seat only - the px pin below is authoritative. Anchors are collapsed to
+                // the row's right edge at the header band's mid-height so sizeDelta means pixels.
+                new Vector2(ManageChromeRightX, WorkspaceHeaderY0),
+                new Vector2(ManageChromeRightX, WorkspaceHeaderY1),
+                () => exitRoute());
+            if (exit == null)
+            {
+                FlowTrace.Fail("Manage", "MANAGE_EXIT BuildObsidianButton returned null - the " +
+                    "constant top-right exit does not exist on any Manage screen.");
+                return;
+            }
+            exit.gameObject.name = "ManageConstantExit";
+            _manageExit = exit;
+
+            var rt = (RectTransform)exit.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(ManageChromeRightX,
+                0.5f * (WorkspaceHeaderY0 + WorkspaceHeaderY1));
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(ManageExitPx, ManageExitPx);
+            rt.anchoredPosition = Vector2.zero;
+            ElarionUiKit.ClampMinTouch(exit);
+
+            var glyph = exit.GetComponentInChildren<TMP_Text>(true);
+            if (glyph != null)
+            {
+                // ASCII "X", never a multiplication-sign glyph - this project's fonts render
+                // non-ASCII as tofu (the same rule that keeps BACK an arrow SPRITE rather than a
+                // character, and that the queue overlay's own X already obeys).
+                glyph.text = "X";
+                glyph.raycastTarget = false;
+            }
+
+            FlowTrace.Step("Manage", "MANAGE_EXIT built: constant top-right exit at " +
+                ManageExitPx.ToString("0") + "px, right edge x=" +
+                ManageChromeRightX.ToString("0.###") + " of the panel, band " +
+                WorkspaceHeaderY0.ToString("0.###") + ".." + WorkspaceHeaderY1.ToString("0.###") +
+                "; QUEUE seats " + ManageExitGapPx.ToString("0") +
+                "px to its left. Route = the panel chrome's own onClose.");
+
+            // ⛔ PRINT THE RECT, DO NOT REASON ABOUT IT. This screen has twice ended a multi-round
+            // coordinate hunt by printing a rectangle (MANAGE_QUEUE_PILL_RECT, MANAGE_TITLE_RECT)
+            // after several rounds of theorising about one. Same units - world corners - so the
+            // three lines can be compared to each other directly in any capture.
+            Canvas.ForceUpdateCanvases();
+            var exitCorners = new Vector3[4];
+            rt.GetWorldCorners(exitCorners);
+            FlowTrace.Step("Manage", "MANAGE_EXIT_RECT world x " +
+                exitCorners[0].x.ToString("0.#") + ".." + exitCorners[2].x.ToString("0.#") +
+                " y " + exitCorners[0].y.ToString("0.#") + ".." + exitCorners[2].y.ToString("0.#") +
+                " | size " + rt.rect.width.ToString("0") + "x" + rt.rect.height.ToString("0") +
+                "px | floor " + ElarionUiKit.MinTouchPx.ToString("0") + "px");
         }
 
         // =====================================================================
@@ -1610,6 +1773,16 @@ namespace DeNelle.Village.UI
             // ElarionUiKit.BuildObsidianPanel's `withClose` is the per-panel lever for surfaces
             // that never show a close at all; this is the same ruling applied per SCREEN.
             if (_chromeClose != null) _chromeClose.gameObject.SetActive(_hubShowing);
+            // ⭐ AND THE CONSTANT EXIT IS RE-ASSERTED ON, UNCONDITIONALLY, ON EVERY SCREEN.
+            // Owner ruling 2026-09-07: "on all the manage screens there is no way to exit. can we
+            // add a const exit button top right".
+            // ⛔ THIS IS NOT THE SAME CONTROL AS _chromeClose AND MUST NEVER BE GATED LIKE IT. The
+            // line above keeps the mockup's drawn CLOSE on panel 1 alone (WO-1491, unchanged); this
+            // line is the ruling that supersedes it for the TOP-RIGHT seat, because the back arrow
+            // walks WITHIN Manage and never leaves it. If this ever becomes conditional, the
+            // BUILD / ARMY / RESEARCH grids, the detail cards, the research tree and the queue
+            // overlay all lose their only route back to town again.
+            if (_manageExit != null) _manageExit.gameObject.SetActive(true);
         }
 
         private void ShowWorkspace()
@@ -2696,6 +2869,12 @@ namespace DeNelle.Village.UI
             // back: this runs on open AND on close (ToggleQueueDrawer -> Render), so the row is
             // restored by the same line that hid it. The X and the scrim both close the overlay.
             bool chromeHidden = _queueDrawerOpen && !band;
+            // ⛔ AND THIS IS EXACTLY WHY THE CONSTANT EXIT IS NOT A CHILD OF THIS ROW.
+            // Owner ruling 2026-09-07 requires a top-right exit on EVERY Manage screen, the queue
+            // overlay included - and this line takes the whole row down on that very screen. The X
+            // is built onto chrome.content instead (BuildConstantExit), so it survives this hide
+            // with the back arrow and the pill correctly going away underneath it. Do NOT "tidy"
+            // it into _tabsHost.
             if (_tabsHost != null) _tabsHost.gameObject.SetActive(!chromeHidden);
             // ⛔ AND THE BREADCRUMB TITLE WITH IT, BECAUSE IT IS NOT IN THAT ROW.
             // MEASURED AT SOURCE: `_workspaceTitle = chrome.title` - it belongs to the KIT FRAME's
@@ -2982,6 +3161,13 @@ namespace DeNelle.Village.UI
             if (_queueDrawerToggle != null)
             {
                 _queueDrawerToggle.gameObject.name = "ManageQueueDrawerToggle";
+                // ⭐ RE-SEATED IMMEDIATELY, BEFORE ANYTHING ELSE TOUCHES IT (owner ruling
+                // 2026-09-07). The authored 0.72-0.95 fractions above are now a FALLBACK ONLY: the
+                // constant exit owns the right end of this row, so the pill is pinned by px to the
+                // exit's left edge instead. Done HERE as well as in SizeQueuePillToLabel because
+                // that method early-returns while `rowW < 1f` (no layout yet) - and on that path
+                // the authored 0.95 would leave the pill sitting UNDER the X.
+                SeatQueuePillLeftOfExit(QueuePillFallbackPx);
                 // WO-1393: visible whether the drawer is open or closed - a second tap closes it.
                 SyncQueueToggleFace();
                 ElarionUiKit.ClampMinTouch(_queueDrawerToggle);
@@ -3067,7 +3253,11 @@ namespace DeNelle.Village.UI
             Canvas.ForceUpdateCanvases();
 
             float rowW = _tabsHost.rect.width;
-            if (rowW < 1f) return;                       // no layout yet: leave the authored seat
+            // No layout yet. The seat BuildTabs already applied stands - and since 2026-09-07 that
+            // is SeatQueuePillLeftOfExit(QueuePillFallbackPx), an OFFSET from the constant exit
+            // rather than the old 0.95-of-the-row fraction, so this path can no longer leave the
+            // pill sitting under the X.
+            if (rowW < 1f) return;
 
             // What the word actually needs at the size it is being rendered at.
             float wordPx = label.GetPreferredValues(label.text).x;
@@ -3084,13 +3274,11 @@ namespace DeNelle.Village.UI
             float maxPx = rowW * 0.60f;                          // never let it swallow the row
             float finalPx = Mathf.Clamp(wantPx, 160f, maxPx);
 
-            // Right edge pinned at 0.95 of the row - inside the frame's measured interior - and the
-            // pill grows leftwards from there.
-            pillRt.anchorMin = new Vector2(0.95f, 0f);
-            pillRt.anchorMax = new Vector2(0.95f, 1f);
-            pillRt.pivot = new Vector2(1f, 0.5f);
-            pillRt.sizeDelta = new Vector2(finalPx, 0f);
-            pillRt.anchoredPosition = Vector2.zero;
+            // ⭐ THE RIGHT EDGE IS NO LONGER 0.95 OF THE ROW - IT IS THE CONSTANT EXIT'S LEFT EDGE.
+            // Owner ruling 2026-09-07 puts a permanent X at the top right of every Manage screen,
+            // and the pill sits immediately to its left. SeatQueuePillLeftOfExit is the ONE writer
+            // of that seat; the offset is derived from ManageExitPx + ManageExitGapPx, never typed.
+            SeatQueuePillLeftOfExit(finalPx);
 
             // The word yields the badge's corner rather than being centred under it. Done on the
             // LABEL's own rect so the button art is untouched - the kit centres the label across the
@@ -3102,11 +3290,52 @@ namespace DeNelle.Village.UI
                 lrt.anchorMax = new Vector2(Mathf.Clamp01(lrt.anchorMax.x - reserve), lrt.anchorMax.y);
             }
 
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_PILL_EXITGAP right edge is the exit's left edge " +
+                "minus " + ManageExitGapPx.ToString("0") + "px (exit " + ManageExitPx.ToString("0") +
+                "px at panel x " + ManageChromeRightX.ToString("0.###") + ")");
             FlowTrace.Step("Manage", "MANAGE_QUEUE_PILL_FIT word='" + label.text + "' needs " +
                 wordPx.ToString("0") + "px | chrome " + chromePx.ToString("0") +
                 "px | badge " + badgePx.ToString("0") + "px | pill set to " +
                 finalPx.ToString("0") + "px (was " + pillRt.rect.width.ToString("0") +
                 ", row " + rowW.ToString("0") + "px)");
+        }
+
+        /// <summary>The pill's width before its own word has been measured. 281 ref px is the value
+        /// MANAGE_QUEUE_PILL_RECT printed for "QUEUE" plus its badge, so the fallback seat is the
+        /// measured one rather than a guess; SizeQueuePillToLabel replaces it the moment a layout
+        /// pass exists.</summary>
+        private const float QueuePillFallbackPx = 281f;
+
+        /// <summary>
+        /// ⛔ THE ONE WRITER OF THE QUEUE PILL'S SEAT, and it seats the pill RELATIVE TO THE
+        /// CONSTANT EXIT rather than to a fraction of the row.
+        ///
+        /// <para>Owner ruling 2026-09-07 gives the top-right corner of every Manage screen to the
+        /// exit X. The pill's right edge is therefore the exit's LEFT edge less
+        /// <see cref="ManageExitGapPx"/>, i.e. <c>ManageExitPx + ManageExitGapPx</c> left of the
+        /// chrome row's right edge - which is where the exit's right edge is pinned
+        /// (<see cref="ManageChromeRightX"/>, shared by both). Two controls, one number, no
+        /// possible disagreement.</para>
+        ///
+        /// <para>⛔ WHY AN OFFSET AND NOT A FRACTION. A fraction of the row would have to be
+        /// recomputed from <c>rowW</c>, and <c>rowW</c> is ZERO on the creation frame - which is
+        /// the early-return SizeQueuePillToLabel already carries. An anchored offset in px is the
+        /// same number before and after layout, so the fallback seat and the measured seat agree
+        /// by construction. This file has paid for the fraction-of-a-varying-rect mistake on the
+        /// pill (nine rounds), on the overlay's X (71.8x57.7 against a 112 floor) and on the drawer
+        /// band estimate (719px against a rendered 475px). Not a fourth time.</para>
+        /// </summary>
+        private void SeatQueuePillLeftOfExit(float widthPx)
+        {
+            if (_queueDrawerToggle == null) return;
+            var pillRt = _queueDrawerToggle.transform as RectTransform;
+            if (pillRt == null) return;
+
+            pillRt.anchorMin = new Vector2(1f, 0f);
+            pillRt.anchorMax = new Vector2(1f, 1f);
+            pillRt.pivot = new Vector2(1f, 0.5f);
+            pillRt.sizeDelta = new Vector2(Mathf.Max(160f, widthPx), 0f);
+            pillRt.anchoredPosition = new Vector2(-(ManageExitPx + ManageExitGapPx), 0f);
         }
 
         /// <summary>

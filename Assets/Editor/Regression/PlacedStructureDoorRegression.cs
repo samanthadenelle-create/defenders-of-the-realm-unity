@@ -35,6 +35,29 @@
 //   C5  BuildModeController subscribes OnManagePlacedRequested, and the handler
 //       BeginManagePlaced exists and lands on the EXISTING selection seam
 //       (CancelArmed + ClearSelection) rather than minting a second one.
+//   C6  THE DOOR IS NOT STOMPED BY ITS OWN DISARM (added WO-1581, 2026-09-07).
+//       C6a: BuildPaletteUI.Collapse closes the collection browser, before its
+//       '_canvas == null' early return. C6b: BeginManagePlaced calls Collapse
+//       AFTER CancelArmed.
+//
+// !! WHY C6 HAD TO BE ADDED, AND WHAT IT SAYS ABOUT C1..C5. On 2026-09-07 the owner
+// reported "manage buildings doesnt do anything" against build 2026.09.07.359076,
+// and the tester had asked several times where MOVE went. C1..C5 were ALL GREEN.
+// They were also all true: every link in the chain existed and fired. The device
+// log shows the card's own trace line landing exactly as designed --
+//   08:28:00.191  Manage Placed card TAPPED - closing the browser ...
+//   08:28:00.193  Navigation: closed workspace 'Build Collections' to world
+//   08:28:00.194  PanelManager: 'Build Collections' opened and verified visible
+//   08:28:00.210  Build: ManagePlaced ENTERED ... 28 bodies are selectable
+// -- and then the catalog stood back up over it, because CancelArmed ends in
+// _palette.Expand() and WO-1273 had redefined Expand() to Show() a MODAL workspace.
+// The same one-frame stomp buried the verb row on the ordinary select path too
+// (08:28:02.424 SELECTS 'lumberyard' -> 08:28:02.429 'Build Collections' opened).
+// So a door can be perfectly wired and still be dead, because something ELSE
+// re-covers it a frame later. A chain oracle proves the chain; it cannot prove the
+// panel at the end of the chain is the thing on screen. C6 pins the one seam that
+// decides that, and the lesson generalises: when a suite is green and the player
+// says the feature does nothing, suspect what runs AFTER the last link.
 //
 // ⛔ IT DOES NOT PROVE THE TAP LANDS AT RUNTIME. It is source-text analysis, like
 // PanelDoorRegression: it proves the chain is wired end to end and that no link
@@ -222,6 +245,58 @@ namespace DeNelle.Editor
                                  "The door must hand the session to the EXISTING selection state; a handler that " +
                                  "skips them is either leaking a half-armed CREATE entry into EDIT, or has grown a " +
                                  "second answer to \"what is selected\" -- this repo's dominant failure mode.");
+
+                // -- C6b: ...AND IS NOT STOMPED BY THAT SEAM. --
+                // CancelArmed ends in _palette.Expand(). Since WO-1273 Expand() means "Show()
+                // the modal collection browser", so the seam C5c mandates ALSO re-opens the
+                // catalog. The door therefore has to collapse it back, AFTER CancelArmed has
+                // had its say -- ordering is the whole assertion, so this compares indices
+                // rather than merely looking for the call.
+                int iCancel   = handler.IndexOf("CancelArmed", StringComparison.Ordinal);
+                int iCollapse = handler.IndexOf("Collapse", StringComparison.Ordinal);
+                if (iCollapse > iCancel && iCancel >= 0)
+                    log.AppendLine("[C6b] BeginManagePlaced collapses the shop AFTER CancelArmed re-expanded it -- OK");
+                else
+                    failures.Add(Tag + " C6b: BeginManagePlaced does not Collapse the palette after CancelArmed. " +
+                                 "CancelArmed ends in _palette.Expand(), which since WO-1273 RE-OPENS the modal " +
+                                 "Build Collections browser -- so the card's own Close() is undone in the same " +
+                                 "frame and the player sees the catalog again. That is exactly the 2026-09-07 " +
+                                 "report \"manage buildings doesnt do anything\" (device log 08:28:00.191 TAPPED " +
+                                 "-> 08:28:00.194 'Build Collections' opened). Order matters: a Collapse placed " +
+                                 "BEFORE CancelArmed is overwritten by it and is not a fix.");
+            }
+
+            // -- C6a: Collapse is the INVERSE of Expand, or the verbs are unreachable --
+            // This is the seam, and it guards MORE than the door: BuildModeController.
+            // SelectStructure relies on the same Collapse to get the catalog off the
+            // Move/Upgrade/Sell panel it just raised. When it stopped doing that, tapping a
+            // placed structure rendered the verb row and buried it under the catalog one
+            // frame later (device log 08:28:02.424 SELECTS 'lumberyard' -> 08:28:02.429
+            // 'Build Collections' opened and verified visible), which is the tester's
+            // repeated "I cannot find MOVE". A green C1..C5 chain proves nothing if the
+            // panel at the end of it is covered.
+            string collapse = ExtractMethodBody(palette, "Collapse");
+            if (collapse == null)
+            {
+                failures.Add(Tag + " C6a: " + PaletteRel + " declares no Collapse method.");
+            }
+            else
+            {
+                int iBrowser = collapse.IndexOf("_collectionBrowser", StringComparison.Ordinal);
+                int iGuard   = collapse.IndexOf("_canvas == null", StringComparison.Ordinal);
+                if (iBrowser < 0)
+                    failures.Add(Tag + " C6a: BuildPaletteUI.Collapse never touches _collectionBrowser. Expand() " +
+                                 "OPENS that modal workspace (WO-1273); a Collapse that only hides legacy _canvas " +
+                                 "chrome leaves the catalog standing over BuildSelectionUI, so MOVE / UPGRADE / " +
+                                 "SELL are rendered and unreachable.");
+                else if (iGuard >= 0 && iBrowser > iGuard)
+                    failures.Add(Tag + " C6a: BuildPaletteUI.Collapse closes the browser only AFTER its " +
+                                 "'_canvas == null' early return. The legacy dock canvas is built lazily and " +
+                                 "Show() deactivates it, so that guard can skip the one line that still matters. " +
+                                 "Close the browser BEFORE the guard.");
+                else
+                    log.AppendLine("[C6a] " + PaletteRel + " Collapse closes the collection browser before the " +
+                                   "_canvas guard -- Expand/Collapse are symmetric again -- OK");
             }
         }
 

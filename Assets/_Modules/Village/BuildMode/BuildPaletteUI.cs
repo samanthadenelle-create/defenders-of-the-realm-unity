@@ -630,6 +630,44 @@ namespace DeNelle.Village
 
         public void Collapse(string armedDisplayName)
         {
+            // =================================================================
+            //  WO-1581 - COLLAPSE MUST CLOSE WHAT EXPAND OPENS. THIS IS THE FIX.
+            //
+            //  WO-1273 redefined Expand(): it no longer restores a dock carousel, it
+            //  calls Show(), which OPENS the full-screen modal BuildCollectionBrowser
+            //  and takes a PLAYER-OWNED WorldHold (timeScale 0). Collapse was NOT
+            //  updated to match - it went on hiding legacy _canvas chrome and never
+            //  touched _collectionBrowser. The pair stopped being symmetric, and every
+            //  EDIT-side caller paid for it:
+            //
+            //    * BuildModeController.SelectStructure calls CancelArmed() (which calls
+            //      Expand) and then Collapse(label) "so the two do not fight". After
+            //      WO-1273 the Collapse no longer wins, so tapping a placed structure
+            //      re-opened the CATALOG on top of the Move/Upgrade/Sell panel the
+            //      player had just asked for. Device log, build 2026.09.07.359076:
+            //        08:28:02.424  tap-select: hit - SELECTS 'lumberyard'
+            //        08:28:02.429  PanelManager: 'Build Collections' opened and verified visible
+            //      The tester's "I cannot find MOVE" is that pair of lines: the MOVE /
+            //      CANCEL row was rendered, then buried under the catalog frame.
+            //    * BuildModeController.BeginManagePlaced (the WO-2006 ruling-25 door)
+            //      had no Collapse at all, so the card closed the browser and CancelArmed
+            //      re-opened it in the SAME frame - "manage buildings doesnt do anything".
+            //
+            //  The browser close goes BEFORE the `_canvas == null` guard on purpose: the
+            //  legacy dock canvas is built lazily and Show() deactivates it, so a guard
+            //  that returns first would silently skip the only line that still matters.
+            //  Guarded on IsOpen so the Arm path - where Done() has already closed the
+            //  browser - does not emit a second close / a second WorldHold release.
+            // =================================================================
+            if (_collectionBrowser != null && _collectionBrowser.IsOpen)
+            {
+                FlowTrace.Step("BuildPalette",
+                    "collapse: CLOSING the collection browser (WO-1273 made Expand open a modal " +
+                    "workspace; Collapse is its inverse). Without this the catalog stands over " +
+                    "the selection panel and MOVE/UPGRADE/SELL are unreachable.");
+                _collectionBrowser.Close();
+            }
+
             if (_canvas == null) return;
             FlowTrace.Step("BuildHud", $"Collapse refs: topBar={_topBarGo!=null} tray={_trayGo!=null} crystals={_crystalsRowGo!=null}");
             if (_topBarGo != null) _topBarGo.SetActive(false);

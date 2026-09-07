@@ -1,6 +1,30 @@
 # WO-1441: the wallet session is NEVER established - cloud saves are failing and the promo cannot be redeemed
 
 **Status:** FIXED - device-proven 2026-09-07 00:41 on build 2026.09.07.358872 (mint at connect, save 2xx, offline queue drained; see RESULT section 5). Owner felt-verify + close still hers. (was: FIXED - ON THE SEEKER 2026.09.07.358574 - client landed in `32659c0f6`; device proof of mint/save/drain still owed (see RESULT))
+> ## SUPERSEDED FOR THE BOOT PATH by owner ruling 2026-09-07 (see WO-1583). Status FIXED STANDS.
+> Owner, verbatim, 2026-09-07 08:5x: ***"everytime i play now im forced to authenticate ... I would
+> think the authentication would only be needed for purchases (and codes)"***.
+>
+> This ticket's fix made **both** connect paths call `MintSessionForExplicitConnectAsync`, which mints
+> by raising an MWA `SignMessage` sheet. On the boot / auto-resume path that is a wallet sheet on
+> **every single launch** - proven by this ticket's own §5 device evidence
+> (`MintSessionAsync held why=explicit-connect scene=Title caller=explicit-connect`, 00:41:34.254,
+> with no player action). Everything in §1-§4 below remains TRUE and the diagnosis stands; what is
+> reversed is only **who may mint**.
+>
+> **The ruling, as implemented in WO-1583:**
+> - **BOOT / auto-resume NEVER signs.** The wallet reauthorize restores identity with no signature;
+>   the session is reused or renewed if one is held, and otherwise the game simply runs.
+> - **A signature is requested only on a purchase, a promo-code redeem, or an EXPLICIT Connect tap.**
+> - With no session, cloud saves **queue offline** (this ticket's `EnqueueOffline` /
+>   `FlushOfflineQueue`) and **drain in one upload** the moment a session is minted.
+>
+> ⚠ **The cost is accepted and must stay visible:** the session token is memory-only by design
+> (`BackendRequestSigner.cs:58-68`), so a cold boot restores nothing and a wallet holder has no cloud
+> save until they buy, redeem, or tap Connect. That is this ticket's own §4.3 "missing lifecycle",
+> reinstated deliberately with the queue as the safety net. Buying back cloud-save-at-boot **without**
+> a sheet needs a sealed persisted token (the `MwaSessionStore` AES-GCM shape) - a separate ruling.
+
 **Silo:** `DeNelle.Core.Web3` (`BackendRequestSigner`) + `DeNelle.Wallet`
 (`WalletService`, `NightMarketSharedCardSession`). Disjoint from WO-1440 (server-side `api/`) and from
 the raid tickets.

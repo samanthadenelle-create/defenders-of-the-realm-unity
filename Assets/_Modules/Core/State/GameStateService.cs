@@ -2659,6 +2659,40 @@ namespace DeNelle.Core.State
         /// documented as a retry MARKER, not a body.
         /// </para>
         /// </summary>
+        // WO-1583 (owner ruling 2026-09-07): boot no longer mints a backend session, so a wallet
+        // holder legitimately has NO session for most of a play session. This refusal was a
+        // Debug.LogError, which the F8 BreakCaptureHarness treats as a CAPTURE - so under the new
+        // ruling every ordinary save would have raised an error flag and rewoken the triage seat
+        // (CLAUDE.md section 14) for behaviour that is now expected. It is a WARN, latched to ONCE
+        // per identity-gap episode, and it says plainly what happens next. It is NOT silenced: the
+        // first occurrence always speaks, and FlushOfflineQueue's DRAINED / drain FAILED lines still
+        // prove the other end (section 12 - never strip instrumentation, flag it down instead).
+        private bool _saveAuthAbortAnnounced;
+
+        private void ReportSaveAuthAborted(bool guestSave)
+        {
+            if (_saveAuthAbortAnnounced)
+            {
+                FlowTrace.Step("Sync", "session absent, save queued (repeat).");
+                return;
+            }
+            _saveAuthAbortAnnounced = true;
+
+            if (guestSave)
+                FlowTrace.Warn("Sync",
+                    "session absent, save queued - GUEST cloud SAVE aborted because the guest proof " +
+                    "was unavailable (fail-closed). The delta is re-queued offline and the local save " +
+                    "is unaffected. Further occurrences are logged at Step until identity returns.");
+            else
+                FlowTrace.Warn("Sync",
+                    "session absent, save queued - WALLET cloud SAVE aborted fail-closed because there " +
+                    "is no live backend session. EXPECTED under the 2026-09-07 ruling: boot never signs, " +
+                    "so a session exists only after a purchase, a promo code redeem, or an explicit " +
+                    "Connect tap. Progress is safe in the local save and the delta is queued; the queue " +
+                    "drains in ONE upload the moment a session is minted. Further occurrences are " +
+                    "logged at Step until identity returns.");
+        }
+
         private async UniTask<bool> SendCurrentSnapshot()
         {
             byte[] body;
@@ -2695,9 +2729,7 @@ namespace DeNelle.Core.State
             bool guestSave = DeNelle.Core.Web3.BackendRequestSigner.IsGuestIdentity(_state.BoundWallet);
             if (!await DeNelle.Core.Web3.BackendRequestSigner.TryAttachAsync(req, _state.BoundWallet, body))
             {
-                Debug.LogError(guestSave
-                    ? "[Sync] Guest cloud SAVE aborted - guest proof unavailable. Delta re-queued offline."
-                    : "[Sync] Wallet cloud SAVE aborted - shared authentication unavailable (fail-closed). Delta re-queued offline.");
+                ReportSaveAuthAborted(guestSave);
                 return false;
             }
 
@@ -3161,6 +3193,9 @@ namespace DeNelle.Core.State
                 // the measurement - grep it after identity returns.
                 // WO-1455: the queue is empty, so re-arm the depth warning for the next crossing.
                 _offlineQueueDepthWarned = false;
+                // WO-1583: identity is back and the backlog is gone, so the next gap is a NEW
+                // episode and must speak at Warn again rather than hide behind the old latch.
+                _saveAuthAbortAnnounced = false;
 
                 FlowTrace.Step("Sync",
                     $"offline queue DRAINED - {mine.Count} queued marker(s) cleared by ONE successful " +

@@ -1,5 +1,5 @@
 // =============================================================================
-// WalletConnectFailureAttributionRegression — WO-1420 + WO-1441
+// WalletConnectFailureAttributionRegression — WO-1420 + WO-1441 + WO-1583
 // -----------------------------------------------------------------------------
 // Two defects in one seam, both of which reported the WRONG CAUSE and so cost a
 // triage its opening move. This oracle pins the corrections.
@@ -104,6 +104,24 @@ namespace DeNelle.Editor.Regression
                 if (!bootstrap.Contains("MintSessionForExplicitConnectAsync"))
                     failures.Add("no connect-time mint is wired - a wallet holder who never buys a pack has " +
                                  "no session and every cloud save refuses fail-closed (WO-1441)");
+
+                // ── WO-1583 (owner ruling 2026-09-07): ...BUT NEVER AT BOOT ────────────
+                // Owner, verbatim: "everytime i play now im forced to authenticate ... I would think
+                // the authentication would only be needed for purchases (and codes)". WO-1441 wired
+                // the mint onto BOTH connect paths, so auto-resume raised a wallet SignMessage sheet
+                // on every launch. The mint stays (the line above); what changed is WHO may reach it.
+                // ⚠ THE TWO PINS ABOVE AND BELOW ARE IN TENSION ON PURPOSE - a mint must exist and
+                // must NOT be reachable from boot. Satisfying either alone is a shipped defect.
+                if (!bootstrap.Contains("explicitConnect"))
+                    failures.Add("the boot-vs-tap distinction is gone from WalletSkinBootstrap - auto-resume " +
+                                 "and the player's Connect tap share one body, so boot signs again on every " +
+                                 "launch (WO-1583)");
+                if (!bootstrap.Contains("TryResumeSessionWithoutSigningAsync"))
+                    failures.Add("boot no longer takes the signature-free resume - it must reuse or renew a " +
+                                 "session, never mint one (WO-1583)");
+                if (!signer.Contains("boot never signs (ruling 2026-09-07)"))
+                    failures.Add("the boot trace no longer says IN WORDS why no wallet sheet was shown - the " +
+                                 "owner's next device log cannot prove the ruling is in effect (WO-1583)");
                 if (signer.Contains("first authenticated action will mint"))
                     failures.Add("the retired claim that any authed call mints is back in BackendRequestSigner - " +
                                  "cloud SAVE passes allowMint:false and cannot mint (WO-1441)");

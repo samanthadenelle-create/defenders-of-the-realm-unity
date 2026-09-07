@@ -187,7 +187,47 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-fourteenth pass): main line next free = **1579**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-eighteenth pass): main line next free = **1584**.
+> *(Owner ruling lane off her 08:5x message - *"everytime i play now im forced to authenticate ... I
+> would think the authentication would only be needed for purchases (and codes)"*. Minted **WO-1583**;
+> bumped 1583 -> 1584 in this SAME edit. **1583** = wallet signature ONLY for purchases and codes;
+> boot never signs. SUPERSEDES WO-1441's mint-at-connect for the BOOT path only: auto-resume now
+> passes `explicitConnect:false` and takes a new signature-free
+> `BackendRequestSigner.TryResumeSessionWithoutSigningAsync` (reuse or renew, never mint), while the
+> SKR corner button, the login-surface tap, `/api/purchases/*` and `PromoCodeService` keep the mint.
+> With no session, cloud saves queue offline and drain in one upload once one exists; the fail-closed
+> refusal was demoted from `Debug.LogError` to a latched `FlowTrace.Warn` because under this ruling it
+> would otherwise fire an F8 capture on every ordinary save.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-seventeenth pass): main line next free = **1583**.
+> *(Diagnose-then-fix lane off the owner's 08:3x report on build 2026.09.07.359076 - *"manage
+> buildings doesnt do anything"* - plus the coordinator's MOVE priority. Minted **WO-1581**; bumped
+> 1581 -> 1582 in this SAME edit, then **reconciled to 1583**: a parallel lane had already landed
+> `WorkOrders/WORK_ORDER_1582_sheathed_equip_trace_fills_logcat.md` on disk, so 1582 was taken before
+> this row was written. Resolved first-on-disk-and-referenced-wins - 1582 stays with that lane.
+> **WO-1581 is uncontested** (no 1581 file existed when it was minted).
+> **1581** (P1) = the Build Collections "Manage Placed" card and the
+> ordinary tap-a-structure select were BOTH being stomped one frame after they fired:
+> `BuildModeController.BeginManagePlaced` -> `CancelArmed()` -> `_palette.Expand()`, and WO-1273 had
+> redefined `Expand()` to `Show()` the MODAL browser, so the catalog re-opened over the door and over
+> `BuildSelectionUI`. That is why the tester could not find MOVE - the verb row rendered and was
+> buried (logcat 08:28:02.424 SELECTS 'lumberyard' -> 08:28:02.429 'Build Collections' opened).
+> Fixed at the seam: `Collapse()` is now the inverse of `Expand()`. The MOVE chain itself was
+> CORRECT and is unchanged - it had simply never carried a single FlowTrace line, so no device log
+> could tell "unreachable" from "refused"; it is now instrumented end to end.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-fifteenth pass): main line next free = **1581**.
+> *(Mint lane off owner Seeker F8 seq 4690-4698 (build 2026.09.07.359076) minted **1579, 1580**.
+> Bumped 1579 -> 1581 in this SAME edit. 1579 (P1) = a 'purchase' WorldHold sat outstanding
+> 7869.3s past its 180.0s ceiling (seq 4690) while the MWA sign leg awaited with no timeout
+> (TargetedLocalAssociationScenario.cs:383-393) - the world froze at 0.00 for the whole wallet
+> round trip, which returned 'authorization request failed' 19s AFTER the watchdog force-released
+> (seq 4691-4693). 1580 (P3) = RepairAvailabilityProbe.cs:222 emits its SURFACES line via
+> FlowTrace.Fail in RaidBase_* scenes where no repair surface is the DESIGNED state (seq 4698), so
+> every raid mints an error capture. seq 4694-4697 wallet connect timeouts = WO-1420-class
+> attribution working, no ticket.)*
+>
+> ### superseded: RECONCILED 2026-09-07 (CLI, hundred-and-fourteenth pass): main line next free = **1579**.
 > *(Web ship chain ordering + alias + legal-pages lane minted **1576, 1577, 1578**. Bumped 1576 -> 1579
 > in this SAME edit. 1576 = R2 parity gate blocks content build when target state is missing (step 2
 > should trigger rebuild on missing built-state, not die). 1577 = web-ship aliases public domain to

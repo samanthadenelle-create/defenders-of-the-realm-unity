@@ -59,6 +59,27 @@ not.
    **Anything under 95% on any axis is a FAIL, whatever the headless capture says.**
 6. Everything in sections 2-6 below still stands. This ruling does not replace the loop; it names who
    closes it.
+7. ⛔ **CRITERION: EVERY MANAGE SCREEN HAS AN EXIT, TOP RIGHT.** Owner ruling **2026-09-07 08:3x**,
+   verbatim: ***"on all the manage screens there is no way to exit. can we add a const exit button
+   top right"***. A screen FAILS this criterion if the hub, the BUILD / ARMY / RESEARCH grids, a
+   detail card, the research tree or the queue overlay is on and there is no exit control in the
+   top-right corner of the header band. It is judged on **every** frame, like criterion zero.
+
+   ⚠ **THIS IS THE ONE PLACE A TEXT RULING OUTRANKS THE MOCKUP, AND IT IS NOT AN EXCEPTION TO 3.0c.**
+   The sheet draws CLOSE on panel 1 alone, and WO-1491 built exactly that, on the stated premise that
+   the other panels *"have the back door"*. They do not: the back arrow walks the model's **screen
+   graph** - it navigates **within** Manage and never leaves it. So the picture and the ruling are not
+   in disagreement about a look; the picture cannot draw a **route**, and the owner walked the build
+   and found the route missing. **The mockup still wins on everything it draws.**
+
+   **The shape, so no one re-derives it:** an `X` at `MinTouchPx` (112 ref px), pinned to the chrome
+   row's right edge inside the frame art, vertically centred in the header band, with the **QUEUE
+   pill immediately to its left** and the **title still centred**. **The back arrow stays** - arrow
+   navigates within Manage, X leaves it. Tapping the X takes the **same route** the hub's drawn CLOSE
+   takes (one delegate, one route). The hub keeps its drawn bottom CLOSE as well; **that gives the hub
+   two exits and it is a known contradiction with WO-1491's own "two exits teach neither"** - flagged
+   for the owner in `WORK_ORDER_1491_*.md` §5, deliberately not resolved by inference.
+   Pinned by `ManageMockupConformanceRegression.CheckConstantExit`.
 
 ### CURRENT STATE - the owner's walk of device build 358872, 2026-09-07 00:47-01:04
 
@@ -185,6 +206,13 @@ the divergence here, and let her overrule it if she cares.
   band. Owner, 2026-09-06, saying the same thing in words: *"the queuing doesn't deserve a place here or
   maybe it should be something small up with like the previous next back kind of buttons - I don't think
   it deserves its own lane."* **The mockup had said it since 09:26 that morning.**
+- ⛔ **A CONSTANT EXIT `X` AT TOP-RIGHT, ON EVERY SCREEN** - owner ruling 2026-09-07 08:3x, see the
+  ACCEPTANCE block's criterion 7 above for the verbatim words and the reasoning. It owns the right end
+  of the chrome row (`ManageChromeRightX`), at `MinTouchPx`, with the **QUEUE pill seated immediately
+  to its left** (`ManageExitGapPx` gutter). The mockup does not draw it; it is the one text ruling that
+  outranks the sheet, because the sheet cannot draw a route and the back arrow never leaves Manage.
+  Present on the **queue overlay** too, which is why it is NOT a child of the chrome row (that row is
+  deactivated under the overlay).
 - **No `HEART L<n>` chip anywhere in the mockup.** (It currently survives as the only door to the Heart
   surface - see 3d.)
 - Selected tile carries a **gold border**. Locked carries a **padlock** and stays selectable.

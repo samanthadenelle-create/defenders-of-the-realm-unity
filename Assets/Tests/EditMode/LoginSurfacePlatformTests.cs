@@ -151,7 +151,15 @@ namespace DeNelle.Tests.EditMode
         {
             string src = ReadSource("_Modules", "Wallet", "WalletSkinBootstrap.cs");
 
-            int register = src.IndexOf("LoginWalletBridge.ConnectHandler = ConnectForLoginAsync", StringComparison.Ordinal);
+            // WO-1583 (owner ruling 2026-09-07): the registration is now a LAMBDA, because the login
+            // surface's Connect Wallet is a player TAP and may mint the backend session, while boot
+            // auto-resume reaches the same method with explicitConnect:false and never signs. This
+            // assertion used to pin the bare `= ConnectForLoginAsync` literal, which the lambda
+            // breaks - so it pins the REGISTRATION and, below, the ruling's argument.
+            int register = src.IndexOf("LoginWalletBridge.ConnectHandler =", StringComparison.Ordinal);
+            StringAssert.Contains("LoginWalletBridge.ConnectHandler = () => ConnectForLoginAsync(explicitConnect: true)", src,
+                "the login-surface handler must register as an EXPLICIT connect - it is a player tap, " +
+                "and only an explicit connect may raise a wallet signature (WO-1583)");
             int skinGate = src.IndexOf("if (!CurrencySkinResolver.IsSkr) return;", StringComparison.Ordinal);
             Assert.GreaterOrEqual(register, 0, "WalletSkinBootstrap must register the login connect handler");
             Assert.GreaterOrEqual(skinGate, 0, "the SKR skin gate must remain for the corner-button path");

@@ -2449,6 +2449,26 @@ namespace DeNelle.Village
             CancelArmed();     // a half-armed CREATE entry must not survive into EDIT
             ClearSelection();  // start from no selection; the player's tap chooses
 
+            // WO-1581 - THE DOOR WAS BEING STOMPED BY ITS OWN DISARM.
+            //
+            // CancelArmed() ends in _palette.Expand(), and since WO-1273 Expand() means
+            // "Show() the modal BuildCollectionBrowser", not "restore a dock carousel".
+            // So the card's Close() was undone one line later, in the SAME frame, and the
+            // toast below was announced UNDER a re-opened full-screen catalog holding a
+            // timeScale-0 WorldHold. Device log, build 2026.09.07.359076:
+            //   08:28:00.191  Manage Placed card TAPPED - closing the browser ...
+            //   08:28:00.193  Navigation: closed workspace 'Build Collections' to world
+            //   08:28:00.194  PanelManager: 'Build Collections' opened and verified visible
+            //   08:28:00.210  kit toast -> 'Tap a building or wall to move, upgrade or sell it.'
+            // The owner tapped it twice (00.191, 00.972), saw the catalog both times, and
+            // reported "manage buildings doesnt do anything". The door was never dead - it
+            // was overwritten.
+            //
+            // Collapse is the INVERSE of Expand and is the same seam SelectStructure already
+            // uses "AFTER CancelArmed has had its say" (:2504). Ordering is load-bearing:
+            // this must run after CancelArmed, never before it.
+            _palette?.Collapse(null);
+
             int placed = FindObjectsByType<PlacedStructure>(FindObjectsSortMode.None).Length;
 
             if (placed <= 0)
@@ -2468,6 +2488,7 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Build",
                 $"ManagePlaced ENTERED (ruling §25 door): armed cleared, selection cleared, " +
+                $"the shop CancelArmed re-expanded was COLLAPSED (WO-1581), and " +
                 $"{placed} live PlacedStructure bodies are selectable. The next world tap routes " +
                 "through the EXISTING UpdateSelectLoop/TryTapSelectAt -> SelectStructure -> " +
                 "BuildSelectionUI (Move/Upgrade/Sell). No new selection state was created.");
@@ -2502,6 +2523,16 @@ namespace DeNelle.Village
             string selLabel = selEntry != null && !string.IsNullOrEmpty(selEntry.displayName)
                 ? selEntry.displayName : ps.itemId;
             _palette?.Collapse(selLabel);
+
+            // WO-1581 sec.12 - the step the device log was missing. Selection ALREADY worked
+            // (08:28:02.424 "tap-select: hit - SELECTS 'lumberyard'"); what no line said was
+            // that the catalog re-opened over the panel one frame later (08:28:02.429), which
+            // is why the tester reported MOVE as missing. Now the collapse is stated with the
+            // selection, so the next capture shows the verb row standing alone.
+            FlowTrace.Step("BuildMove",
+                $"SELECTED id='{ps.itemId}' cell=({ps.gridCell.x},{ps.gridCell.y}) level={ps.level} -> " +
+                "BuildSelectionUI is up with MOVE / UPGRADE / SELL / CANCEL, and the collection " +
+                "browser was collapsed so nothing covers it. MOVE is now ONE TAP away.");
         }
 
         /// <summary>
@@ -2897,11 +2928,26 @@ namespace DeNelle.Village
         /// </summary>
         private void BeginMoveSelected()
         {
-            if (_selected == null) return;
+            // WO-1581 sec.12 - the MOVE chain carried NO FlowTrace at all: begin/commit/cancel
+            // spoke only through Debug.Log/LogWarning, so a device log could not tell
+            // "MOVE was never reachable" from "MOVE ran and refused". The tester has asked
+            // for MOVE several times; every step below now names itself.
+            if (_selected == null)
+            {
+                FlowTrace.Warn("BuildMove",
+                    "MOVE requested with NOTHING selected - ignored. BuildSelectionUI raises " +
+                    "OnMoveRequested only while a structure is selected, so reaching this means " +
+                    "the selection was dropped between the tap and the callback.");
+                return;
+            }
             var entry = CatalogRegistry.Get(_selected.itemId);
             if (entry == null)
             {
-                Debug.LogWarning($"[BuildMode] Cannot move '{_selected.itemId}' — not in registry.");
+                FlowTrace.Fail("BuildMove",
+                    $"MOVE REFUSED for '{_selected.itemId}': no CatalogRegistry entry, so the ghost " +
+                    "cannot be seeded. The structure stays put and its cells stay occupied. This is " +
+                    "a catalog gap, not a placement failure.");
+                Debug.LogWarning($"[BuildMode] Cannot move '{_selected.itemId}' - not in registry.");
                 return;
             }
 
@@ -2924,6 +2970,14 @@ namespace DeNelle.Village
 
             _movingSelected = true;
             _selectionUi?.Hide();
+
+            FlowTrace.Step("BuildMove",
+                $"MOVE BEGUN id='{_selected.itemId}' origin cell=({_moveOriginCell.x},{_moveOriginCell.y}) " +
+                $"footprint=({_selected.footprint.x}x{_selected.footprint.y}) yawEighths={_armedYawEighths} " +
+                $"level={_selected.level}. Origin cells FREED so the piece cannot block its own " +
+                "re-placement; ghost seeded at the current spot. MOVE IS FREE and preserves level " +
+                "(WO-1445 / ruling 25) - no wallet call happens on this path at all. The next legal " +
+                "confirm routes to CommitMove.");
             // Fold "Placing: <name>" into the HUD intent bar for the move loop too, so the
             // collapsed shop needs no summary panel (the palette stays hidden during a move).
             _hud?.SetPlacingLabel(entry != null && !string.IsNullOrEmpty(entry.displayName)
@@ -2938,7 +2992,14 @@ namespace DeNelle.Village
         private void CommitMove(Vector2Int cell, Vector2Int footprint, Vector3 snapped, bool wallMounted = false)
         {
             if (!_movingSelected) return;   // one commit per BeginMoveSelected gesture (WO-F8 move fix)
-            if (_selected == null) { CancelMove(); return; }
+            if (_selected == null)
+            {
+                FlowTrace.Fail("BuildMove",
+                    "MOVE COMMIT ABORTED: the selection vanished mid-gesture. CancelMove re-occupies " +
+                    "the ORIGIN cells, so the grid is left consistent and nothing is stranded.");
+                CancelMove();
+                return;
+            }
 
             _grid?.Occupy(cell, footprint, _selected.itemId);
 
@@ -2979,6 +3040,14 @@ namespace DeNelle.Village
 
             Debug.Log($"[BuildMode] Moved '{_selected.itemId}' to cell ({cell.x},{cell.y}) yaw {ArmedYawDegrees:F0}° (free).");
 
+            FlowTrace.Step("BuildMove",
+                $"MOVE COMMITTED id='{_selected.itemId}' ({oldCell.x},{oldCell.y}) -> ({cell.x},{cell.y}) " +
+                $"yaw={ArmedYawDegrees:F0}deg wallMounted={wallMounted} worldY={snapped.y:F2} " +
+                $"level={_selected.level} (PRESERVED). New cells OCCUPIED, origin cells were freed at " +
+                "BeginMoveSelected and stay free; UpdateLayoutEntry re-keyed the persisted BaseLayout " +
+                "row from the old cell to the new one, and any in-flight build/upgrade job was " +
+                "repointed to the new cell-derived key. COST: zero - MOVE is free by ruling.");
+
             _movingSelected = false;
             _ghost?.Hide();
 
@@ -2989,10 +3058,17 @@ namespace DeNelle.Village
         /// <summary>Abort an in-progress move: re-occupy the origin cells, keep it put.</summary>
         private void CancelMove()
         {
+            bool was = _movingSelected;
             _movingSelected = false;
             _ghost?.Hide();
             if (_selected != null)
                 _grid?.Occupy(_moveOriginCell, _selected.footprint, _selected.itemId);
+            if (was)
+                FlowTrace.Step("BuildMove",
+                    $"MOVE CANCELLED id='{(_selected != null ? _selected.itemId : "<null>")}' - origin cells " +
+                    $"({_moveOriginCell.x},{_moveOriginCell.y}) RE-OCCUPIED, the piece never moved and nothing " +
+                    "was charged. A cancel that failed to re-occupy would leave a hole another structure " +
+                    "could be dropped into, so the re-occupy is the load-bearing half of this method.");
         }
 
         /// <summary>

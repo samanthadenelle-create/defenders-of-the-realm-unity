@@ -67,7 +67,10 @@ namespace DeNelle.Wallet
             // every skin - identity binding on the login path is never left to the
             // optional skin config (skin.json bindIdentityOnAuth). Registered BEFORE
             // the skin gate so the bridge always has a handler.
-            LoginWalletBridge.ConnectHandler = ConnectForLoginAsync;
+            // WO-1583: the login surface's Connect Wallet is a PLAYER TAP, so it is an explicit
+            // connect and may mint the backend session. Boot auto-resume reaches the same method
+            // with explicitConnect:false and never signs. The lambda is the whole distinction.
+            LoginWalletBridge.ConnectHandler = () => ConnectForLoginAsync(explicitConnect: true);
             FlowTrace.Step("Wallet", "login wallet-connect handler registered (LoginWalletBridge, skin-independent).");
 
             TryAutoResumeAsync().Forget();
@@ -134,6 +137,28 @@ namespace DeNelle.Wallet
             AuthOutcome outcome = default;
             try
             {
+                // ⛔ SUPERSEDED 2026-09-07 (WO-1583). THE RULING BELOW IS HISTORY; BOOT NEVER SIGNS.
+                // Owner, verbatim: "everytime i play now im forced to authenticate ... I would think
+                // the authentication would only be needed for purchases (and codes)". The 09-06
+                // arithmetic below was right that auto-resume adds only ONE sheet - and one sheet on
+                // EVERY launch is still the thing she is objecting to. So this call now passes
+                // explicitConnect:false and takes the signature-free path
+                // (BackendRequestSigner.TryResumeSessionWithoutSigningAsync).
+                //
+                // ⚠ THE COST IS ACCEPTED AND MUST STAY LEGIBLE: the backend session is memory-only by
+                // design, so a cold boot restores no token and a wallet holder has NO cloud save until
+                // a purchase, a promo redeem, or an explicit Connect tap mints one. Saves are NOT
+                // lost - they queue offline (GameStateService.EnqueueOffline) and drain in one upload
+                // the moment a session exists. Buying back cloud-save-at-boot without a sheet needs a
+                // SEALED PERSISTED token (the MwaSessionStore AES-GCM shape); that is a separate
+                // ruling, deliberately not smuggled in here.
+                //
+                // ⚠ THE explicitConnect FLAG IS BACK, AND IT IS NOW LIVE STATE. The 09-06 note below
+                // deleted it as "a parameter every caller sets identically". Under this ruling the
+                // callers DIFFER - boot passes false, the login tap passes true - so the flag is the
+                // distinction itself, not dead state. Do not re-collapse it.
+                //
+                // --- history, kept verbatim because its reasoning is still instructive ---
                 // ⭐ OWNER RULING 2026-09-06 (WO-1441): AUTO-RESUME MINTS. ONE HANDSHAKE ON BOOT.
                 //
                 // ⛔ THIS DELIBERATELY REVERSES WO-1211, WHICH FORBADE MINTING HERE. That rule is not
@@ -167,7 +192,8 @@ namespace DeNelle.Wallet
                 // parameter every caller sets identically is dead state that rots (CLAUDE.md §5,
                 // §2). The distinction lives in this comment, where it belongs, not in an argument
                 // nothing varies.
-                outcome = await ConnectForLoginAsync();
+                // --- end history ---
+                outcome = await ConnectForLoginAsync(explicitConnect: false);
             }
             catch (Exception ex)
             {
@@ -300,7 +326,12 @@ namespace DeNelle.Wallet
         /// AuthOutcome shape (UserId = wallet address) so the panel continues
         /// identically to a successful email sign-in.
         /// </summary>
-        private static async Task<AuthOutcome> ConnectForLoginAsync()
+        /// <param name="explicitConnect">
+        /// TRUE only when a PLAYER TAPPED Connect on the login surface. FALSE for the boot
+        /// auto-resume. WO-1583 (ruling 2026-09-07): only an explicit connect may mint the backend
+        /// session, because minting is the one thing here that raises a wallet SignMessage sheet.
+        /// </param>
+        private static async Task<AuthOutcome> ConnectForLoginAsync(bool explicitConnect)
         {
             if (_connecting)
             {
@@ -352,10 +383,10 @@ namespace DeNelle.Wallet
                 // HERE. So a returning player - the common case, and the case the owner is in - got a
                 // silent reconnect and no handshake at all, exactly as before the fix.
                 //
-                // ⚠ THIS IS THE SHARED PATH: auto-resume AND the login surface both land here, so
-                // minting here covers every route a connect can arrive by. The mint is idempotent
-                // (a usable session makes it a no-op), so the copy in ConnectAsync is harmless
-                // rather than a second owner.
+                // ⚠ THIS IS THE SHARED PATH: auto-resume AND the login surface both land here, which
+                // is exactly WHY the explicitConnect flag exists (WO-1583) - the two callers want
+                // different things from the same body. The mint is idempotent (a usable session makes
+                // it a no-op), so the copy in ConnectAsync is harmless rather than a second owner.
                 //
                 // ⛔ WO-1441 — WARMING UP WAS NEVER ENOUGH, AND SAYING IT WAS COST A DAY OF SAVES.
                 // This called WarmUpSessionAsync and the comment claimed "the first authed call mints
@@ -366,13 +397,17 @@ namespace DeNelle.Wallet
                 // connect OK at 12:50:06.956, warm-up deferred at .960, first why=missing at 12:50:11.556,
                 // and "MintSessionAsync" appears ZERO times in 76 MB of that day's captures.
                 //
-                // MINTS UNCONDITIONALLY, per the owner's 2026-09-06 ruling recorded at
-                // TryAutoResumeAsync above (it reverses WO-1211's "boot never signs"). Both callers
-                // want the handshake; see that comment for why one boot sheet is the right trade and
-                // why the first-run player still sees nothing.
+                // ⛔ NO LONGER UNCONDITIONAL - WO-1583, owner ruling 2026-09-07. The 09-06 ruling
+                // recorded at TryAutoResumeAsync minted here on BOTH callers, which charged the
+                // player a wallet sheet on every launch. Only an explicit tap mints now; boot takes
+                // the signature-free path and, when there is nothing to reuse or renew, simply says
+                // so and lets cloud saves queue offline.
                 try
                 {
-                    await BackendRequestSigner.MintSessionForExplicitConnectAsync(account.Address);
+                    if (explicitConnect)
+                        await BackendRequestSigner.MintSessionForExplicitConnectAsync(account.Address);
+                    else
+                        await BackendRequestSigner.TryResumeSessionWithoutSigningAsync(account.Address);
                 }
                 catch (Exception warmEx)
                 {
@@ -380,9 +415,9 @@ namespace DeNelle.Wallet
                     // mint leaves exactly the state we were already in, and the purchase path still
                     // mints on demand at the till.
                     FlowTrace.Warn("Wallet",
-                        $"session mint threw on the login path ({warmEx.GetType().Name}) - connect " +
-                        "itself stands, but cloud SAVE will refuse fail-closed until a session exists. " +
-                        warmEx.Message);
+                        $"session {(explicitConnect ? "mint" : "resume")} threw on the login path " +
+                        $"({warmEx.GetType().Name}) - connect itself stands, but cloud SAVE will refuse " +
+                        "fail-closed and queue offline until a session exists. " + warmEx.Message);
                 }
 
                 return new AuthOutcome { Success = true, UserId = account.Address, Email = string.Empty, Error = string.Empty };

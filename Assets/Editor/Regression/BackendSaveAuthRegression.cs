@@ -41,6 +41,17 @@ namespace DeNelle.Editor.Regression
                 if (!Regex.IsMatch(save, @"!await\s+DeNelle\.Core\.Web3\.BackendRequestSigner\.TryAttachAsync\s*\([^;]+?\)\s*\)\s*\{[^{}]*?return\s+false\s*;", RegexOptions.Singleline))
                     failures.Add("failed shared save auth is not structurally bound to refusal/requeue");
 
+                // ⛔ "BOOT NEVER SIGNS" IS BACK — OWNER RULING 2026-09-07 (WO-1583), NARROWER THAN
+                // WO-1211's. Owner, verbatim: "everytime i play now im forced to authenticate ... I
+                // would think the authentication would only be needed for purchases (and codes)".
+                // WO-1441's fix (the retired note below) made BOTH connect paths mint, which bought
+                // cloud save at the price of a wallet sheet on every launch. The rule now:
+                //   * BOOT / auto-resume NEVER mints and NEVER signs.
+                //   * A purchase route, a promo redeem, an explicit Connect tap MAY mint.
+                //   * With no session, saves queue offline and drain once one exists.
+                // Pinned by BEHAVIOUR below (call sites and the gate), never by prose - that lesson
+                // from the retired block still stands and is the reason this is written as code pins.
+                //
                 // ⛔ WO-1211's "BOOT NEVER SIGNS" PIN IS RETIRED — OWNER RULING 2026-09-06 (WO-1441).
                 // This block used to Reject MintSessionAsync/SignMessageBase58 inside
                 // WarmUpSessionAsync, and Require the literal "first authenticated action will mint".
@@ -68,12 +79,62 @@ namespace DeNelle.Editor.Regression
                 // its body - a body-only oracle passes perfectly on code nothing runs.
                 string bootstrap = Strip(File.ReadAllText(BootstrapPath));
                 if (Regex.Matches(bootstrap, @"BackendRequestSigner\.MintSessionForExplicitConnectAsync").Count < 2)
-                    failures.Add("the session mint is not wired on BOTH connect paths (corner button + " +
-                                 "login/auto-resume) - a wallet holder who never buys a pack gets no " +
-                                 "session and every cloud save refuses fail-closed (WO-1441)");
+                    failures.Add("the session mint is not wired on BOTH EXPLICIT connect paths (the SKR " +
+                                 "corner button and the login-surface tap) - a wallet holder who never " +
+                                 "buys a pack gets no session and every cloud save refuses fail-closed " +
+                                 "(WO-1441, re-pointed by WO-1583)");
                 Reject(failures, bootstrap, "WarmUpSessionAsync",
                     "the deleted no-op warm-up is back on a connect path - it does not mint, so the " +
                     "path that adopts it silently loses cloud save (WO-1441)");
+
+                // ⛔ WO-1583 — THE BOOT PATH MUST NOT SIGN. Three pins, because each on its own is
+                // satisfiable by code that still pops a sheet at launch.
+                string autoResume = Method(bootstrap, "TryAutoResumeAsync");
+                Reject(failures, autoResume, "MintSessionForExplicitConnectAsync",
+                    "boot auto-resume mints the backend session again - that is a wallet SignMessage " +
+                    "sheet on EVERY launch, which is the exact complaint the 2026-09-07 ruling answers " +
+                    "(WO-1583)");
+                Require(failures, autoResume, "explicitConnect: false",
+                    "boot auto-resume no longer declares itself a NON-explicit connect - without that " +
+                    "argument the shared login path mints and boot signs again (WO-1583)");
+
+                string loginConnect = Method(bootstrap, "ConnectForLoginAsync");
+                Require(failures, loginConnect, "TryResumeSessionWithoutSigningAsync",
+                    "the boot branch of the shared connect path no longer takes the signature-free " +
+                    "resume - it must reuse or renew a session, never mint one (WO-1583)");
+                int gateAt = loginConnect.IndexOf("if (explicitConnect)", StringComparison.Ordinal);
+                int mintAt = loginConnect.IndexOf("MintSessionForExplicitConnectAsync", StringComparison.Ordinal);
+                if (gateAt < 0 || mintAt < 0 || gateAt > mintAt)
+                    failures.Add("the mint on the shared connect path is no longer gated behind " +
+                                 "explicitConnect - auto-resume and the player's tap take the same " +
+                                 "branch, so boot raises a wallet sheet again (WO-1583)");
+
+                // The signature-free entry itself must never reach the minter, or the gate above is
+                // decorative: boot would call a method whose name promises no signature and get one.
+                string resume = Method(signer, "TryResumeSessionWithoutSigningAsync");
+                Reject(failures, resume, "MintSessionAsync",
+                    "the signature-free boot resume calls the minter - it would raise a wallet sheet " +
+                    "from the one path that promises never to (WO-1583)");
+                Require(failures, resume, "TryRenewSessionAsync",
+                    "the signature-free boot resume no longer renews an expired session - it would " +
+                    "give up while a free renewal was available (WO-1583)");
+                Require(failures, resume, "boot never signs (ruling 2026-09-07)",
+                    "the boot trace no longer states IN WORDS why no wallet sheet was shown - the " +
+                    "owner's device log must be able to prove the ruling is in effect (WO-1583)");
+
+                // ⛔ AND THE REFUSAL MUST NOT BE AN ERROR. With boot not minting, a session-less save
+                // is now the NORMAL state; a Debug.LogError there fires an F8 capture on every save
+                // and rewakes the triage seat for expected behaviour (CLAUDE.md section 14).
+                string abort = Method(state, "ReportSaveAuthAborted");
+                Reject(failures, abort, "Debug.LogError",
+                    "the session-less save refusal is an ERROR again - under the 2026-09-07 ruling that " +
+                    "raises an F8 capture on every ordinary save (WO-1583)");
+                Require(failures, abort, "session absent, save queued",
+                    "the session-less save refusal no longer names what actually happens to the delta " +
+                    "(WO-1583)");
+                Require(failures, abort, "_saveAuthAbortAnnounced",
+                    "the refusal is no longer latched per episode - it would flood the log once per " +
+                    "save attempt for a whole session (WO-1583)");
 
                 // ⛔ WO-1454 — A TRANSIENT 5xx MUST NOT DESTROY A STILL-VALID SESSION. The renewal
                 // used to call ClearSession() on ANY non-Success result, so one 500/503/timeout

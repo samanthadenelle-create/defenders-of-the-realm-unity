@@ -57,13 +57,14 @@ namespace DeNelle.Editor
                 CheckResearchPicker(vm, failures);
                 CheckResearchTree(workspace, vm, projection, contract, failures);
                 CheckChrome(panel, vm, failures);
+                CheckConstantExit(panel, failures);
                 CheckCaptureFrame(capture, failures);
                 CheckMeasuredGeometry(panel, workspace, vm, failures);
             }
 
             reason = failures.Count == 0
-                ? "MANAGE_MOCKUP_OK 9 cases (full screen, hub, tiles, detail, research picker, " +
-                  "research tree, chrome, capture frame, measured geometry)"
+                ? "MANAGE_MOCKUP_OK 10 cases (full screen, hub, tiles, detail, research picker, " +
+                  "research tree, chrome, constant exit, capture frame, measured geometry)"
                 : string.Join("\n", failures.ToArray());
             return failures.Count == 0;
         }
@@ -521,6 +522,147 @@ namespace DeNelle.Editor
             if (Has(vm, "\"MANAGE / \" +"))
                 failures.Add("[chrome-title-spelling] a \"MANAGE / \" literal is back in ManageScreenVM. Three " +
                              "typed separators is how the next re-spelling lands on two of them.");
+        }
+
+        // ── THE CONSTANT EXIT - owner ruling 2026-09-07 ──────────────────────
+        /// <summary>
+        /// ⭐ EVERY MANAGE SCREEN HAS A WAY OUT, TOP RIGHT. Owner ruling 2026-09-07, verbatim:
+        /// <i>"on all the manage screens there is no way to exit. can we add a const exit button
+        /// top right"</i>.
+        ///
+        /// <para>⛔ THIS CASE AND <see cref="CheckChrome"/>'s [chrome-close-on-hub-only] DEFEND TWO
+        /// DIFFERENT CONTROLS AND DO NOT FIGHT. The kit's drawn bottom CLOSE
+        /// (<c>_chromeClose</c>) stays HUB-ONLY, exactly as the mockup sheet draws it and as
+        /// WO-1491 ruled; the case above still pins that. What WO-1491 could not see is that the
+        /// back arrow walks the model's screen graph and therefore never LEAVES Manage - so the
+        /// grids, the detail cards, the research tree and the queue overlay had no route back to
+        /// town at all. The top-right X is that route, on every screen, and it is a SEPARATE
+        /// control with a SEPARATE field. Anyone who "unifies" the two re-opens one of the two
+        /// defects.</para>
+        ///
+        /// <para>⛔ WHY THE PARENT IS PINNED. <c>ApplyDrawerPlacement</c> deactivates
+        /// <c>_tabsHost</c> under the queue overlay and <c>BuildTabs</c> destroys every child of it
+        /// on entry - the second of which already made the back arrow vanish for a round. A
+        /// "constant" control seated in that row is neither constant nor present on panel 8, so the
+        /// parent is part of the ruling, not an implementation detail.</para>
+        ///
+        /// <para>⚠ THIS SUITE IS A SOURCE ORACLE, NOT A RENDERER. "Does not overlap the QUEUE pill"
+        /// is therefore pinned as the DERIVATION - the pill is offset from the exit by
+        /// <c>ManageExitPx + ManageExitGapPx</c> through one writer, with a POSITIVE gap - rather
+        /// than as a measured rect. The rect itself is printed by MANAGE_EXIT_RECT beside
+        /// MANAGE_QUEUE_PILL_RECT, and the frames remain the picture's judge.</para>
+        /// </summary>
+        private static void CheckConstantExit(string panel, List<string> failures)
+        {
+            // (a) IT EXISTS, AND IT IS BUILT IN THE CHROME - i.e. once per open, for every screen.
+            // RED RECIPE: delete the BuildConstantExit call from BuildChrome.
+            if (!Has(panel, "BuildConstantExit(chrome, exitRoute)"))
+                failures.Add("[manage-exit-exists] Manage has no constant exit. The owner's 2026-09-07 " +
+                             "ruling is that every Manage screen carries one top right; without this call " +
+                             "the BUILD / ARMY / RESEARCH grids, the detail cards, the research tree and " +
+                             "the queue overlay have no route back to town, because the back arrow " +
+                             "navigates WITHIN Manage and never leaves it.");
+
+            // (b) ONE ROUTE. The exit, the kit chrome's onClose (the hub's CLOSE) and the scrim all
+            // take the SAME delegate instance. RED RECIPE: pass `Close` at any one of the three
+            // call sites instead of `exitRoute`.
+            if (!Has(panel, "Action exitRoute = Close;"))
+                failures.Add("[manage-exit-one-route] the single exit delegate is gone. The X must leave " +
+                             "Manage by the SAME route the hub's CLOSE does - one Action instance handed " +
+                             "to BuildObsidianPanel, to the scrim and to the exit - not a second `Close` " +
+                             "method group per call site, which can be re-pointed on its own.");
+            if (!Has(panel, "exitRoute, frameName: RpgUiCatalog.FrameCore"))
+                failures.Add("[manage-exit-one-route] the panel chrome no longer takes `exitRoute` as its " +
+                             "onClose, so the hub's CLOSE and the constant X are two paths again.");
+
+            // (c) IT IS NOT IN THE CHROME ROW. RED RECIPE: re-parent it to _tabsHost.
+            if (!Has(panel, "ElarionUiKit.BuildObsidianButton(chrome.content.transform, \"X\""))
+                failures.Add("[manage-exit-parent] the constant exit is not built onto chrome.content. " +
+                             "ApplyDrawerPlacement deactivates _tabsHost under the queue overlay and " +
+                             "BuildTabs destroys every child of it on entry - a control seated there is " +
+                             "absent on panel 8 and lives for one frame everywhere else.");
+
+            // (d) IT IS NEVER GATED. RED RECIPE: make the SetActive conditional on _hubShowing.
+            if (!Has(panel, "_manageExit.gameObject.SetActive(true)"))
+                failures.Add("[manage-exit-constant] the exit is no longer asserted ON unconditionally in " +
+                             "ApplyScreenVisibility. \"Const\" is a state guarantee: the moment this is " +
+                             "gated on a screen the ruling is undone for that screen.");
+            if (Has(panel, "_manageExit.gameObject.SetActive(_hubShowing)"))
+                failures.Add("[manage-exit-constant] the exit is gated on _hubShowing - it has been " +
+                             "confused with _chromeClose. The bottom CLOSE is the HUB's alone (WO-1491, " +
+                             "the case above); the top-right X is EVERY screen's (2026-09-07). They are " +
+                             "two controls and two rulings.");
+
+            // (e) AT THE TOUCH FLOOR. RED RECIPE: ManageExitPx = 72f.
+            float exitPx = ParseConstF(panel, "ManageExitPx");
+            if (float.IsNaN(exitPx))
+                failures.Add("[manage-exit-floor] ManageExitPx could not be read - the exit's size is not " +
+                             "a named constant, so nothing can pin it at the touch floor.");
+            else if (exitPx < ElarionUiKit.MinTouchPx)
+                failures.Add("[manage-exit-floor] the exit is " + exitPx.ToString("0") + "px against the " +
+                             ElarionUiKit.MinTouchPx.ToString("0") + "px MinTouchPx floor. This screen has " +
+                             "already shipped a close control at 71.8x57.7 - authored at the floor in px, " +
+                             "never a fraction of a band whose height varies.");
+
+            // (f) INSIDE THE HEADER BAND, at its mid-height, against the row's own right edge.
+            // RED RECIPE: seat it on a typed 0.9f or outside WorkspaceHeaderY0..Y1.
+            if (!Has(panel, "0.5f * (WorkspaceHeaderY0 + WorkspaceHeaderY1)"))
+                failures.Add("[manage-exit-band] the exit is not vertically centred in the chrome band " +
+                             "(WorkspaceHeaderY0..WorkspaceHeaderY1). Seated outside it, it lands on the " +
+                             "frame's ornate top border - measured at v 0.966 on frame_core.png - which is " +
+                             "the defect the band's own constants were re-cut to end.");
+            if (!Has(panel, "private const float ManageChromeRightX"))
+                failures.Add("[manage-exit-band] ManageChromeRightX is gone, so the chrome row's right edge " +
+                             "is a repeated literal again and the row and the exit can drift apart.");
+            if (!Has(panel, "new Vector2(ManageChromeRightX, WorkspaceHeaderY1)"))
+                failures.Add("[manage-exit-band] ManageHeaderActions no longer reads ManageChromeRightX for " +
+                             "its right edge - the pill's row and the exit must share ONE number, or " +
+                             "\"immediately to its left\" stops being derivable.");
+
+            // ⛔ AND THE BAND MUST ACTUALLY CONTAIN IT - THE ARITHMETIC, NOT THE TOKEN.
+            // The exit is a FIXED px square; the band it sits in is a FRACTION of the panel. Those
+            // are different units, and "centred on the band" is not "inside the band": the moment
+            // (WorkspaceHeaderY1 - WorkspaceHeaderY0) * panelPx drops under ManageExitPx, the
+            // square's top crosses 0.962 into the frame's ornate border - measured on
+            // frame_core.png at v 0.966 - which is the defect those two constants were re-cut to
+            // end. The overlay's own X escaped this only because DrawerTitleOverlayPx is px-authored
+            // to exactly seat a MinTouchPx square; this band is not, so it is checked here.
+            // ⚠ AGAINST RefPanelPx, the ONE stated reference surface this section's header derives -
+            // a ratio measured against "whatever the device gives" is not measurable in an EditMode
+            // suite at all. At RefPanelPx the band is ~115px and a 112px box clears by ~1.5px a side.
+            float bandY0 = ParseConstF(panel, "WorkspaceHeaderY0");
+            float bandY1 = ParseConstF(panel, "WorkspaceHeaderY1");
+            if (!float.IsNaN(bandY0) && !float.IsNaN(bandY1) && !float.IsNaN(exitPx))
+            {
+                float bandPx = (bandY1 - bandY0) * RefPanelPx;
+                if (bandPx < exitPx)
+                    failures.Add("[manage-exit-band] the chrome band is " + bandPx.ToString("0.#") +
+                                 "px at the reference panel (" + RefPanelPx.ToString("0") +
+                                 "px) and the exit is " + exitPx.ToString("0") + "px - the square is " +
+                                 "TALLER THAN THE BAND, so its top crosses WorkspaceHeaderY1 onto the " +
+                                 "frame's border art (interior edge measured at v 0.966). Either the " +
+                                 "band grows or the exit is re-seated; shrinking the exit is not an " +
+                                 "option, it is authored AT MinTouchPx.");
+            }
+
+            // (g) THE QUEUE PILL CLEARS IT, BY DERIVATION FROM ONE WRITER.
+            // RED RECIPE: restore `pillRt.anchorMin = new Vector2(0.95f, 0f);` in SizeQueuePillToLabel.
+            if (!Has(panel, "pillRt.anchoredPosition = new Vector2(-(ManageExitPx + ManageExitGapPx), 0f)"))
+                failures.Add("[manage-exit-clears-queue] the QUEUE pill is not offset from the exit by " +
+                             "ManageExitPx + ManageExitGapPx. Seated on its old 0.95-of-the-row fraction " +
+                             "it sits UNDER the X - the BUTTON OVER TEXT class of failure this screen has " +
+                             "already paid for twice.");
+            if (!Has(panel, "SeatQueuePillLeftOfExit(QueuePillFallbackPx)"))
+                failures.Add("[manage-exit-clears-queue] the pill's FALLBACK seat is not re-pinned at " +
+                             "construction. SizeQueuePillToLabel early-returns while rowW < 1f (no layout " +
+                             "yet), and on that path the authored fraction would leave the pill under the " +
+                             "exit - the two-writer defect this file records on the drawer bands.");
+            float gapPx = ParseConstF(panel, "ManageExitGapPx");
+            if (float.IsNaN(gapPx) || gapPx <= 0f)
+                failures.Add("[manage-exit-clears-queue] ManageExitGapPx is missing or not positive (" +
+                             (float.IsNaN(gapPx) ? "unreadable" : gapPx.ToString("0")) + "). A zero gutter " +
+                             "makes the pill and the exit touch, and two adjacent tap targets with no " +
+                             "gutter is a mis-tap, not a layout.");
         }
 
         // =====================================================================
