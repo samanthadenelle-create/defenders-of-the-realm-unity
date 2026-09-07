@@ -1237,7 +1237,10 @@ namespace DeNelle.Village
                     // chasingHero to pulse ReportPursuit — report directly too (keyed per rep, same
                     // as Enemy.cs) so the A4.5 window + the pursuit battle-probe (combat inputs live
                     // while pursued) can never miss this producer. Pulse self-expires (PursuitTtl).
-                    DeNelle.Core.HudModel.PostureSignals.ReportPursuit(_enemy.GetInstanceID());
+                    // WO-1603: tagged so a stuck battle-lock names THIS producer instead of naming
+                    // PursuitBattleProbe, which only reads the ring. One of three stamp sites.
+                    DeNelle.Core.HudModel.PostureSignals.ReportPursuit(
+                        _enemy.GetInstanceID(), "OverworldEncounterSpawner/rep-chase");
                 }
                 else
                 {

@@ -237,7 +237,10 @@ namespace DeNelle.Village
                     // when the chase ends by ANY path (leash, death, despawn, scene swap),
                     // so the HUD's hostile(prebattle) posture can never stick on.
                     if (mob.Aggroed || playerInRange)
-                        DeNelle.Core.HudModel.PostureSignals.ReportPursuit(mob.Enemy.GetInstanceID());
+                        // WO-1603: tagged so a stuck battle-lock names THIS producer instead of
+                        // naming PursuitBattleProbe, which only reads the ring. One of three.
+                        DeNelle.Core.HudModel.PostureSignals.ReportPursuit(
+                            mob.Enemy.GetInstanceID(), "RegionMobSpawner/aggro-loop");
 
                     if (!mob.Aggroed)
                     {

@@ -189,6 +189,10 @@ namespace DeNelle.Core.Combat
         public static void Release(string context)
         {
             string before = BattleLock.DescribeHolders();
+            // WO-1603 — WHO WAS PULSING AT THE MOMENT THE BATTLE ENDED, and how stale each pulse
+            // was. Captured BEFORE the clear below, because after it there is nothing left to name.
+            // One line per battle end (not per stamp), so it costs nothing on the frame path.
+            string pursuitBefore = PostureSignals.DescribePursuits();
 
             // THE MISSING COMBAT-END CLEAR. See the file header: PostureSignals.ClearPursuits is
             // documented for exactly this moment and, before WO-1233, only a SCENE LOAD ever
@@ -207,7 +211,10 @@ namespace DeNelle.Core.Combat
                 $"unwind(s) run. battle-lock holders before=[{before}] after=[{after}], " +
                 $"timeScale={Time.timeScale:F2}. " +
                 "An 'after' that is not 'none' is a LIVE holder, not a leak: pursuit re-reports every " +
-                "aggro tick, so a chaser that is still chasing legitimately re-raises the lock here.");
+                "aggro tick, so a chaser that is still chasing legitimately re-raises the lock here. " +
+                $"PURSUIT PULSES at battle end: [{pursuitBefore}]; after the clear: " +
+                $"[{PostureSignals.DescribePursuits()}] (WO-1603 - each entry names its PRODUCER and " +
+                "the age of its last stamp, so the reader never has to infer the pulser from the probe).");
         }
 
         /// <summary>Test/QA reset — drops every registered unwind. Never called by gameplay.</summary>

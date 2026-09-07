@@ -63,8 +63,15 @@ namespace DeNelle.Core.Combat
             if (active != _wasActive)
             {
                 _wasActive = active;
+                // WO-1603 — EDGE-ONLY, AND IT NAMES THE PULSER. This probe is only the READER of
+                // the pursuit ring, yet F8 seq 4701/4702 reported it as the battle-lock HOLDER and
+                // the capture went no further, because nothing in the message pointed past the
+                // messenger. The transition trace now renders the ring's owner tags + stamp ages.
+                // It stays on the TRANSITION (a steady state still logs nothing), so this cannot
+                // become the per-frame firehose CLAUDE.md §12 forbids on an aggro path.
                 FlowTrace.Step("Combat", active
-                    ? "pursuit battle-probe RAISED (PursuitActive) -> combat inputs live during chase."
+                    ? "pursuit battle-probe RAISED (PursuitActive) -> combat inputs live during chase. " +
+                      $"Pulsed by: {PostureSignals.DescribePursuits()}"
                     : "pursuit battle-probe CLEARED (pursuit pulses expired) -> battle-lock released.");
             }
             return active;

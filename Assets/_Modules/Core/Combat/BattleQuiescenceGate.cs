@@ -75,6 +75,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.HudModel;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Core.Combat
@@ -201,10 +202,18 @@ namespace DeNelle.Core.Combat
                     // said who held the lock — the holder had to be reconstructed from a HUD line in
                     // a neighbouring log. This is a strengthening of the message, never a narrowing:
                     // the finding fires on exactly the same condition it always did.
+                    // WO-1603: the PURSUIT ring is APPENDED for the same reason WO-1233 appended
+                    // the holder. Seq 4701 named PursuitBattleProbe.Probe — which is the READER of
+                    // the pulse, never its producer — so the capture identified a messenger and
+                    // stopped. PostureSignals.DescribePursuits names each live pulse's OWNER and
+                    // its AGE, which is what tells a LIVE chase (age ~0, re-stamped this frame)
+                    // apart from a latched pulse riding out its TTL. Appended, never narrowed: the
+                    // finding fires on exactly the condition it always did.
                     failures.Add("battle-lock: still HELD after the battle ended. Combat input stays " +
                                  "suppressed and the HUD cannot return to its town context. " +
                                  $"HOLDER(S): {BattleLock.DescribeHolders()} (of {BattleLock.ProbeCount} " +
-                                 $"registered: {BattleLock.DescribeAll()}).");
+                                 $"registered: {BattleLock.DescribeAll()}). " +
+                                 $"PURSUIT PULSES: {PostureSignals.DescribePursuits()}.");
             });
 
             // 3. modal — the Echo-modal FTUE cascade was exactly this, and it is invisible until a
@@ -338,6 +347,11 @@ namespace DeNelle.Core.Combat
             if (BattleLock.IsInBattle())
             {
                 string stuckHolders = BattleLock.DescribeHolders();
+                // WO-1603: what the ring held at the INSTANT of the heal, before Release clears it.
+                // Compared against the post-heal reading below, this is the whole discriminator —
+                // an owner present in BOTH lines re-stamped inside one frame and is therefore a
+                // live producer, not a leftover the clear failed to reach.
+                string pursuitBefore = PostureSignals.DescribePursuits();
                 Guard.Try(Sys, "self-heal: re-drive the battle-session exit",
                     () => BattleSessionEnd.Release($"quiescence self-heal: {context}"));
 
@@ -357,7 +371,13 @@ namespace DeNelle.Core.Combat
                         $"battle-lock STILL HELD after the self-heal ({context}): [{BattleLock.DescribeHolders()}] " +
                         $"(was [{stuckHolders}]). A holder that survives a full session release is either a " +
                         "LIVE chase re-pulsing every aggro tick, or an owner whose probe is latched true with " +
-                        "no battle behind it. Read the holder name: it is the owner to fix.");
+                        "no battle behind it. Read the holder name: it is the owner to fix. " +
+                        // WO-1603 — AND THIS PAIR ANSWERS WHICH OF THE TWO IT IS. The session release
+                        // above zeroed the pursuit ring; anything in AFTER was stamped in the single
+                        // frame since, by a producer that is still running. Its owner tag is the
+                        // pulser this sentence has been asking the reader to name since WO-1233.
+                        $"PURSUIT PULSES before the heal: {pursuitBefore}; after (re-stamped within one " +
+                        $"frame of a full ClearPursuits): {PostureSignals.DescribePursuits()}.");
             }
 
             // =================================================================

@@ -38,32 +38,100 @@ namespace DeNelle.Core.HudModel
 
         // ── Pursuit / engagement window (A4.5) ───────────────────────────────
 
-        // Small fixed ring of (key, lastReport) pairs — no allocation per pulse.
+        // Small fixed ring of (key, lastReport, owner) triples — no allocation per pulse.
         private const int MaxTracked = 12;
-        private static readonly int[] _pursuitKeys = new int[MaxTracked];
-        private static readonly float[] _pursuitAt = new float[MaxTracked];
+        private static readonly int[]    _pursuitKeys   = new int[MaxTracked];
+        private static readonly float[]  _pursuitAt     = new float[MaxTracked];
+        private static readonly string[] _pursuitOwners = new string[MaxTracked];
         private static int _pursuitCount;
+
+        /// <summary>Owner tag stored for a stamp that named none. See <see cref="DescribePursuits"/>.</summary>
+        public const string UnnamedPursuitOwner = "unnamed";
+
+        // =====================================================================
+        //  WO-1603 — NAME THE PULSER. THE RING NOW CARRIES ITS OWNER.
+        // ---------------------------------------------------------------------
+        //  The ring used to record (key, lastReport) only, and the key is an
+        //  INSTANCE ID — a number that identifies nothing once the body is gone.
+        //  That is why F8 seq 4701/4702 could say the battle-lock was HELD by
+        //  PursuitBattleProbe.Probe and could not say WHO was stamping the pulse
+        //  the probe reads. Three producers call ReportPursuit —
+        //  Enemy.DriveNav (two DIFFERENT branches, see below),
+        //  OverworldEncounterSpawner's rep chase and RegionMobSpawner's aggro
+        //  loop — and the captured message narrowed it to none of them.
+        //
+        //  ⚠ THE OWNER IS RECORDED, NOT LOGGED PER STAMP. ReportPursuit runs
+        //  EVERY aggro tick per chaser; a FlowTrace line at each stamp would be a
+        //  per-frame firehose that evicts the boot window out of the device
+        //  logcat ring and destroys the very evidence it was added to collect
+        //  (CLAUDE.md §12; memory `logcat-ring-buffer-destroys-evidence`). The
+        //  existing trace stays EDGE-ONLY — first add of a key — and now carries
+        //  the owner; DescribePursuits() renders the whole ring on demand, and is
+        //  called only at battle end and on a quiescence FAIL.
+        // =====================================================================
 
         /// <summary>
         /// Report that the enemy identified by <paramref name="key"/> (instance id) is
         /// actively pursuing the hero RIGHT NOW. Call every aggro tick — the report
         /// self-expires after <see cref="PursuitTtl"/> so no explicit clear is needed.
         /// </summary>
-        public static void ReportPursuit(int key)
+        /// <param name="owner">
+        /// WHO is stamping, as a short stable tag ("Enemy.DriveNav/aggro"). Rendered by
+        /// <see cref="DescribePursuits"/> so a stuck battle-lock names its pulser instead of
+        /// naming the probe that merely reads it. Null keeps the old anonymous behaviour.
+        /// </param>
+        public static void ReportPursuit(int key, string owner)
         {
             float now = Time.unscaledTime;
             for (int i = 0; i < _pursuitCount; i++)
             {
                 if (_pursuitKeys[i] != key) continue;
                 _pursuitAt[i] = now;
+                // A key can change hands (an id reused by a pooled body): keep the LATEST
+                // honest tag rather than the one that opened the entry.
+                if (!string.IsNullOrEmpty(owner)) _pursuitOwners[i] = owner;
                 return;
             }
             Prune(now);
             if (_pursuitCount >= MaxTracked) return;   // ring full — window is already open
-            _pursuitKeys[_pursuitCount] = key;
-            _pursuitAt[_pursuitCount] = now;
+            _pursuitKeys[_pursuitCount]   = key;
+            _pursuitAt[_pursuitCount]     = now;
+            _pursuitOwners[_pursuitCount] = string.IsNullOrEmpty(owner) ? UnnamedPursuitOwner : owner;
             _pursuitCount++;
-            FlowTrace.Step("HudKit", $"pursuit reported (key={key}, live={_pursuitCount})");
+            FlowTrace.Step("HudKit",
+                $"pursuit reported (key={key}, owner={_pursuitOwners[_pursuitCount - 1]}, live={_pursuitCount})");
+        }
+
+        /// <summary>Anonymous overload — kept so no caller breaks; prefer the tagged one.</summary>
+        public static void ReportPursuit(int key) => ReportPursuit(key, null);
+
+        /// <summary>Number of live (un-expired) pursuit pulses. Prunes as it reads.</summary>
+        public static int PursuitCount
+        {
+            get { Prune(Time.unscaledTime); return _pursuitCount; }
+        }
+
+        /// <summary>
+        /// Every live pulse as "key=&lt;id&gt; owner='&lt;tag&gt;' age=&lt;s&gt;", or "none".
+        /// The AGE is the half that tells a LIVE chase (age ≈ 0, re-stamped this frame) apart
+        /// from a latched pulse riding out its TTL (age approaching <see cref="PursuitTtl"/>) —
+        /// the two shapes the quiescence gate's own message asks the reader to distinguish.
+        /// Allocates: call it at battle end / on a failure, never per frame.
+        /// </summary>
+        public static string DescribePursuits()
+        {
+            float now = Time.unscaledTime;
+            Prune(now);
+            if (_pursuitCount == 0) return "none";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < _pursuitCount; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append("key=").Append(_pursuitKeys[i])
+                  .Append(" owner='").Append(_pursuitOwners[i] ?? UnnamedPursuitOwner)
+                  .Append("' age=").Append((now - _pursuitAt[i]).ToString("F2")).Append('s');
+            }
+            return sb.ToString();
         }
 
         /// <summary>True while at least one un-expired pursuit report is live —
@@ -84,8 +152,9 @@ namespace DeNelle.Core.HudModel
             {
                 if (now - _pursuitAt[i] <= PursuitTtl) continue;
                 _pursuitCount--;
-                _pursuitKeys[i] = _pursuitKeys[_pursuitCount];
-                _pursuitAt[i] = _pursuitAt[_pursuitCount];
+                _pursuitKeys[i]   = _pursuitKeys[_pursuitCount];
+                _pursuitAt[i]     = _pursuitAt[_pursuitCount];
+                _pursuitOwners[i] = _pursuitOwners[_pursuitCount];
             }
         }
 
@@ -97,10 +166,13 @@ namespace DeNelle.Core.HudModel
             for (int i = _pursuitCount - 1; i >= 0; i--)
             {
                 if (_pursuitKeys[i] != key) continue;
+                string revokedOwner = _pursuitOwners[i] ?? UnnamedPursuitOwner;
                 _pursuitCount--;
-                _pursuitKeys[i] = _pursuitKeys[_pursuitCount];
-                _pursuitAt[i] = _pursuitAt[_pursuitCount];
-                FlowTrace.Step("HudKit", $"pursuit revoked (key={key}, live={_pursuitCount})");
+                _pursuitKeys[i]   = _pursuitKeys[_pursuitCount];
+                _pursuitAt[i]     = _pursuitAt[_pursuitCount];
+                _pursuitOwners[i] = _pursuitOwners[_pursuitCount];
+                FlowTrace.Step("HudKit",
+                    $"pursuit revoked (key={key}, owner={revokedOwner}, live={_pursuitCount})");
                 return;
             }
         }
@@ -109,8 +181,13 @@ namespace DeNelle.Core.HudModel
         public static void ClearPursuits()
         {
             if (_pursuitCount == 0) return;
+            // Name what is being dropped: the ONE line that says which owners a battle-end
+            // clear actually took down, so a holder that comes back is visibly a RE-STAMP
+            // rather than something this clear missed.
+            string dropped = DescribePursuits();
             _pursuitCount = 0;
-            FlowTrace.Step("HudKit", "pursuit cleared (posture -> peaceful)");
+            for (int i = 0; i < MaxTracked; i++) _pursuitOwners[i] = null;
+            FlowTrace.Step("HudKit", $"pursuit cleared (posture -> peaceful); dropped: {dropped}");
         }
 
         // ── Postbattle / end-state (A4.6 — the decision node owns the screen) ─

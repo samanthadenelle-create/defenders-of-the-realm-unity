@@ -1592,6 +1592,12 @@ namespace DeNelle.Village
             //   4. _heart                  — default Heart-march.
             Vector3 destPos;
             bool chasingHero = false;
+            // WO-1603: WHICH of the two chase paths set the flag. The pursuit pulse is stamped
+            // from ONE site below but reached from TWO branches with DIFFERENT guarantees (the
+            // hero-aggro branch refuses a dead hero, the brain-override branch cannot see one),
+            // and a capture that cannot tell them apart cannot name the pulser. Tagged, not
+            // logged: the tag rides the ring and is rendered on demand.
+            string chaseVia = null;
             if (_brainPositionOverride.HasValue)
             {
                 destPos = _brainPositionOverride.Value;
@@ -1625,12 +1631,14 @@ namespace DeNelle.Village
                         Vector3.Dot(selfToHero.normalized, selfToDest.normalized) > 0.5f;
 
                     chasingHero = overrideOnHero || (nearHero && destHeroward);
+                    if (chasingHero) chaseVia = "Enemy.DriveNav/brain";
                 }
             }
             else if (TryGetHeroAggroDestination(out Vector3 heroDest))
             {
                 destPos = heroDest;
                 chasingHero = true;
+                chaseVia = "Enemy.DriveNav/aggro";
             }
             else if (_brainTarget != null && _brainTarget.gameObject.activeInHierarchy)
             {
@@ -1679,8 +1687,69 @@ namespace DeNelle.Village
             // A4.5 engagement window too. The report self-expires after PostureSignals.PursuitTtl
             // (1.5 s) once the chase ends by ANY path (leash / death / despawn / out-of-range),
             // giving a built-in linger so the prebattle posture never flickers or sticks on.
+            //
+            // =================================================================================
+            // ⛔ WO-1603 — A BODY STANDING OVER A CORPSE IS NOT PURSUING THE PLAYER.
+            // ---------------------------------------------------------------------------------
+            // THE ASYMMETRY, INSIDE THIS ONE METHOD, IS THE DEFECT. The hero-aggro branch that
+            // sets chaseVia="Enemy.DriveNav/aggro" already refuses a dead hero at source —
+            // TryGetHeroAggroDestination: "The hero may have died (HeroHealth.IsAlive false) —
+            // don't chase a downed/invulnerable hero" (Enemy.cs, ~:1731). The BRAIN-OVERRIDE
+            // branch has no such test and cannot acquire one from here: EnemyBrain scores the
+            // hero as a candidate on `!= null && activeInHierarchy` with NO IsAlive gate
+            // (EnemyBrain.ConsiderCandidate(_heroTransform, …, HeroHpFraction(), …) at
+            // EnemyBrain.cs:1596, FindHighestThreatTarget at :1604-1612, and the _heroOnlyTarget
+            // validity test at :1458-1470), and a DEAD hero reports Fraction 0 — which the
+            // low-HP weight reads as the single most attractive target on the field. So the
+            // brain keeps steering onto the body, DriveNav reads overrideOnHero, and this line
+            // re-stamps the pursuit pulse EVERY FRAME, for as long as the hero stays down.
+            //
+            // That is precisely the shape F8 seq 4702 could not name:
+            //     "battle-lock STILL HELD after the self-heal (retreat): [PursuitBattleProbe.Probe]
+            //      … either a LIVE chase re-pulsing every aggro tick, or an owner whose probe is
+            //      latched true with no battle behind it."
+            // The self-heal had just run a full ClearPursuits and the lock was back inside ONE
+            // frame — which only a live producer can do — while "retreat" is the context
+            // BattleArena.Resolve passes for EVERY won==false outcome, the hero's own death
+            // included (BattleArena.cs:2228 "hero down - loss." -> Resolve(false)).
+            //
+            // ⚠ WHY THE GUARD IS ON THE STAMP AND NOT ON THE STEERING. Whether defenders should
+            // keep mobbing a downed hero is a COMBAT-FEEL question and it belongs to WO-1526's
+            // own watch item ("EnemyBrain has no dead-hero check, defenders may keep mobbing the
+            // body", commit 2b3d8e9af) — not to this ticket, and not to this file. What is not a
+            // question is the SIGNAL: PursuitActive exists to keep the hero's combat inputs live
+            // while she is being chased (F8-46, owner OPTION A). A hero who is DOWN has no inputs
+            // to serve, so a pulse stamped over her corpse buys nothing and costs a stuck
+            // battle-lock — suppressed combat input and a HUD that cannot return to town.
+            //
+            // ⚠ AND IT CANNOT SUPPRESS A REAL CHASE. The predicate is the hero's own IsAlive, the
+            // same one the sibling branch uses; a live hero being chased stamps exactly as before,
+            // and a null HeroHealth (test scenes / headless) counts as ALIVE — the same
+            // conservative reading BattleArena's own outcome arbitration takes (BattleArena.cs:
+            // "bool heroAlive = hh == null || hh.IsAlive;"). Nothing here narrows
+            // PursuitBattleProbe, forces BattleLock false, or adds a release call.
+            // =================================================================================
             if (chasingHero)
-                DeNelle.Core.HudModel.PostureSignals.ReportPursuit(GetInstanceID());
+            {
+                var chasedHero = HeroHealth.Instance;
+                bool heroAliveToChase = chasedHero == null || chasedHero.IsAlive;
+                if (heroAliveToChase)
+                {
+                    DeNelle.Core.HudModel.PostureSignals.ReportPursuit(GetInstanceID(), chaseVia);
+                }
+                else
+                {
+                    // Stand this body's own claim down the moment the hero goes down, rather than
+                    // letting the last stamp ride out PursuitTtl — the gate judges a retreat at
+                    // SettleSeconds (0.75 s), which is INSIDE that 1.5 s window (WO-1337's
+                    // arithmetic, same numbers). Idempotent: RevokePursuit no-ops on an absent key.
+                    DeNelle.Core.HudModel.PostureSignals.RevokePursuit(GetInstanceID());
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAggro", $"deadchase-{_enemyId}", 5f,
+                        $"{_enemyId}: still steered at the hero via {chaseVia} while HeroHealth.IsAlive=false - " +
+                        "pursuit pulse NOT stamped and this body's own claim revoked (WO-1603). The steering " +
+                        "itself belongs to EnemyBrain (WO-1526 watch item), not to the battle-lock signal.");
+                }
+            }
 
             // DEF-56: throttle SetDestination — only re-path when the timer expires
             // OR the destination has moved significantly. This cuts NavMesh CPU by

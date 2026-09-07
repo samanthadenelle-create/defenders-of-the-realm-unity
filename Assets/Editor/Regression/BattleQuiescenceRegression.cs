@@ -93,6 +93,14 @@ namespace DeNelle.Editor
                 RetreatClosesEveryPanelHandle(failures, log);
                 RetreatWaitsOutItsOwnDefeatBanner(failures, log);
 
+                // WO-1603 — the WO-1337 regression. The holder name reached the capture and the
+                // PULSER never did, so these four make the producer nameable and pin the one
+                // producer that could stamp with no battle behind it: a chase over a dead hero.
+                PursuitPulseNamesItsProducer(failures, log);
+                RetreatAfterHeroDeathStopsThePulse(failures, log);
+                RetreatDuringARaidNamesEachPulserSeparately(failures, log);
+                EveryPursuitProducerNamesItselfAtSource(failures, log);
+
                 // WO-1353 — the world clock has ONE owner and every step into slow pairs with a
                 // step out. Four invariants, pinned as invariants rather than as instances.
                 WorldClockHasExactlyOneWriter(failures, log);
@@ -139,7 +147,12 @@ namespace DeNelle.Editor
                      "(battle win/loss/retreat/scene-change, death, victory) releases, an overrun " +
                      "hold self-releases and reports, the 2026-09-03 capture (timeScale 0.28 with " +
                      "zero holds) is corrected and NAMED while a live 0.28 hold is left alone, and " +
-                     "the quiescence gate still OBSERVES rather than writing the clock (WO-1353).";
+                     "the quiescence gate still OBSERVES rather than writing the clock (WO-1353); " +
+                     "and every pursuit pulse NAMES ITS PRODUCER and the age of its last stamp, at " +
+                     "all three stamp sites and in both the gate finding and the session release, so " +
+                     "a one-frame re-latch after a full ClearPursuits reads as the LIVE producer it " +
+                     "is - while a chase steered at a hero who is DOWN stamps nothing and a genuine " +
+                     "chaser still holds the lock (WO-1603, the WO-1337 regression).";
             Debug.Log(log + MarkerOk);
             return true;
         }
@@ -1776,6 +1789,336 @@ namespace DeNelle.Editor
                 DeNelle.Core.UI.WorldHold.ResetForTests();
                 Time.timeScale = saved > 0f ? saved : 1f;
             }
+        }
+
+        // =====================================================================
+        //  WO-1603 — NAME THE PULSER, AND STOP THE ONE PULSE WITH NO BATTLE BEHIND IT
+        // ---------------------------------------------------------------------
+        //  CAPTURED DEFECT (device SM02G4061955851, build 2026.09.07.359651,
+        //  scene Main_Castle_Overworld, F8 seq 4701/4702 — a REGRESSION of WO-1337,
+        //  which the owner had passed on 358574 the same morning):
+        //
+        //    seq 4701  BATTLE_QUIESCENCE_FAIL (retreat) - 1 invariant(s) NOT restored:
+        //              - battle-lock: still HELD … HOLDER(S): PursuitBattleProbe.Probe
+        //    seq 4702  battle-lock STILL HELD after the self-heal (retreat):
+        //              [PursuitBattleProbe.Probe] (was [PursuitBattleProbe.Probe]).
+        //
+        //  ⭐ THE MOST IMPORTANT FACT IN THESE TWO LINES IS THE ONE-FRAME RE-LATCH.
+        //  The self-heal runs BattleSessionEnd.Release, which calls ClearPursuits and
+        //  ZEROES the ring; the gate then waits exactly one frame and re-reads. A ring
+        //  that is empty cannot refill from a stale entry, so the lock could only be
+        //  back because a producer STAMPED AGAIN in that frame. This is a LIVE pulse
+        //  from a running owner — categorically NOT the WO-1337 shape (a destroyed
+        //  body's last pulse riding out PursuitTtl), and the WO-1337 fix is intact:
+        //  DespawnRevokesPursuitAtSource above still passes.
+        //
+        //  And the capture still could not say WHO. PursuitBattleProbe is the READER of
+        //  the ring; the producers are Enemy.DriveNav (via two different branches),
+        //  OverworldEncounterSpawner's rep chase and RegionMobSpawner's aggro loop. The
+        //  ring recorded (key, lastReport) — an instance id that identifies nothing once
+        //  the body is gone. It now records the OWNER TAG and the STAMP AGE too.
+        //
+        //  ⚠ WHAT THESE CASES DO NOT CLAIM. They do not assert which producer held the
+        //  lock on the owner's device — no log names it and no fleet run was made here.
+        //  They pin (a) that the next capture WILL name it, and (b) the one producer
+        //  provable from source to stamp with no battle behind it: a chase steered at a
+        //  hero who is DOWN. "retreat" is the context BattleArena.Resolve passes for
+        //  EVERY won==false outcome, the hero's own death included.
+        // =====================================================================
+
+        /// <summary>
+        /// Behavioural, over the real Core statics. The ring must carry each pulse's PRODUCER
+        /// and the AGE of its last stamp, and the gate's battle-lock finding must carry both —
+        /// appended to the WO-1233 holder sentence, never in place of it.
+        /// </summary>
+        private static void PursuitPulseNamesItsProducer(List<string> failures, StringBuilder log)
+        {
+            const int    chaser = 41603;
+            const string owner  = "wo1603-suite/producer";
+            Func<bool> pursuitProbe = () => PostureSignals.PursuitActive;   // PursuitBattleProbe.Probe
+
+            Time.timeScale = 1f;
+            PostureSignals.ClearPursuits();
+            BattleLock.RegisterProbe(pursuitProbe);
+            try
+            {
+                PostureSignals.ReportPursuit(chaser, owner);
+
+                string described = PostureSignals.DescribePursuits();
+                if (!described.Contains(owner))
+                    failures.Add("[wo1603] PostureSignals.DescribePursuits does not name the PRODUCER of a " +
+                                 "live pulse (got: '" + described + "'). The pursuit key is an INSTANCE ID, " +
+                                 "which identifies nothing once the body is gone - that is why F8 seq 4701 " +
+                                 "could name PursuitBattleProbe.Probe (the reader) and not the pulser.");
+                else if (!described.Contains("key=" + chaser) || !described.Contains("age="))
+                    failures.Add("[wo1603] DescribePursuits names the producer but drops the key or the stamp " +
+                                 "AGE (got: '" + described + "'). The age is what separates a LIVE chase " +
+                                 "(age ~0, re-stamped this frame) from a latched pulse riding out PursuitTtl - " +
+                                 "the two shapes the gate's own message asks the reader to tell apart.");
+                else
+                    log.AppendLine("  [wo1603] a live pulse names its producer, its key and its stamp age");
+
+                var found = BattleQuiescenceGate.Evaluate(rewardScreenOpen: false);
+                string lockFinding = found.FirstOrDefault(f => f.StartsWith("battle-lock:"));
+                if (lockFinding == null)
+                {
+                    failures.Add("[wo1603] a live pursuit pulse did NOT produce a battle-lock finding. Either " +
+                                 "PursuitBattleProbe's source changed or the probe was narrowed - re-derive " +
+                                 "this case from a fresh capture before trusting anything below it.");
+                }
+                else if (!lockFinding.Contains("HOLDER(S):"))
+                {
+                    failures.Add("[wo1603] the battle-lock finding lost its WO-1233 HOLDER(S) clause. These " +
+                                 "additions APPEND; a strengthening that drops the previous strengthening is a " +
+                                 "regression of the ticket it came from.");
+                }
+                else if (!lockFinding.Contains("PURSUIT PULSES") || !lockFinding.Contains(owner))
+                {
+                    failures.Add("[wo1603] the battle-lock finding names its HOLDER but not the PULSER behind " +
+                                 "it (got: '" + lockFinding + "'). Seq 4701 is exactly this message, and it " +
+                                 "cost a whole ticket because PursuitBattleProbe only READS the ring.");
+                }
+                else
+                {
+                    log.AppendLine("  [wo1603] the battle-lock finding names the holder AND the producers pulsing it");
+                }
+            }
+            finally
+            {
+                BattleLock.UnregisterProbe(pursuitProbe);
+                PostureSignals.ClearPursuits();
+                Time.timeScale = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Behavioural. Reproduces seq 4702 EXACTLY — a full session release, then a re-stamp
+        /// inside the same frame — and requires the description to expose it as a live producer
+        /// rather than as a leftover the clear failed to reach. Then the contract: the producer
+        /// that stands its own claim down (the hero went down, so the chase is not pursuit any
+        /// more) releases the lock immediately, without anything forcing BattleLock false.
+        /// </summary>
+        private static void RetreatAfterHeroDeathStopsThePulse(List<string> failures, StringBuilder log)
+        {
+            const int    deadChaser = 41604;
+            const string owner      = "Enemy.DriveNav/brain";   // the branch with no dead-hero test
+            Func<bool> pursuitProbe = () => PostureSignals.PursuitActive;
+
+            Time.timeScale = 1f;
+            PostureSignals.ClearPursuits();
+            BattleLock.RegisterProbe(pursuitProbe);
+            try
+            {
+                PostureSignals.ReportPursuit(deadChaser, owner);   // chasing while the hero still stood
+                BattleSessionEnd.Release("retreat");               // the hero died -> Resolve(false)
+
+                if (BattleLock.IsInBattle())
+                {
+                    failures.Add("[wo1603] BattleSessionEnd.Release left the pursuit ring holding the " +
+                                 "battle-lock. ClearPursuits is the ONE clear on that path (WO-1233); if it " +
+                                 "no longer empties the ring, every case below is testing the wrong thing.");
+                    return;
+                }
+                log.AppendLine("  [wo1603] the session release empties the pursuit ring (the self-heal's own door)");
+
+                // THE DEFECT. The brain keeps steering onto the body, so DriveNav re-stamps within
+                // one frame of the clear - seq 4702 verbatim.
+                PostureSignals.ReportPursuit(deadChaser, owner);
+                if (!BattleLock.IsInBattle())
+                {
+                    failures.Add("[wo1603] the DEFECT STATE no longer reproduces: a pulse stamped one frame " +
+                                 "after a full ClearPursuits is not holding the battle-lock. Seq 4702 is that " +
+                                 "state; if it cannot be built, this case cannot prove the cure.");
+                    return;
+                }
+
+                string relatched = PostureSignals.DescribePursuits();
+                if (!relatched.Contains(owner) || PostureSignals.PursuitCount != 1)
+                    failures.Add("[wo1603] the re-latched pulse is not reported as ONE named live producer " +
+                                 "(count=" + PostureSignals.PursuitCount + ", described: '" + relatched + "'). " +
+                                 "A holder that survives a full session release is a LIVE producer by " +
+                                 "construction, and the capture must say which one.");
+                else
+                    log.AppendLine("  [wo1603] a one-frame re-latch reports exactly one LIVE producer, by name (seq 4702)");
+
+                // THE CONTRACT. The producer itself stops - a body steered at a DOWN hero is not
+                // pursuing anyone - and revokes its own claim. Nothing force-clears BattleLock.
+                PostureSignals.RevokePursuit(deadChaser);
+                if (BattleLock.IsInBattle())
+                    failures.Add("[wo1603] the producer revoked its own pursuit claim and the battle-lock is " +
+                                 "STILL HELD by [" + BattleLock.DescribeHolders() + "]. A retreat then leaves " +
+                                 "combat input suppressed and the HUD pinned out of town - seq 4701 verbatim.");
+                else
+                    log.AppendLine("  [wo1603] the producer standing its own claim down releases the lock at once");
+            }
+            finally
+            {
+                BattleLock.UnregisterProbe(pursuitProbe);
+                PostureSignals.ClearPursuits();
+                Time.timeScale = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Behavioural. A retreat out of a RAID has more than one pulser on the field (the garrison
+        /// the hero disengaged from, plus whatever is chasing back home), and attribution is only
+        /// worth anything if it survives that: the release must drop BOTH, and a re-stamp by ONE
+        /// must name that one and not the other.
+        /// </summary>
+        private static void RetreatDuringARaidNamesEachPulserSeparately(List<string> failures, StringBuilder log)
+        {
+            const int    garrison = 41605;
+            const int    roamer   = 41606;
+            const string garrisonOwner = "Enemy.DriveNav/aggro";
+            const string roamerOwner   = "RegionMobSpawner/aggro-loop";
+            Func<bool> pursuitProbe = () => PostureSignals.PursuitActive;
+
+            Time.timeScale = 1f;
+            PostureSignals.ClearPursuits();
+            BattleLock.RegisterProbe(pursuitProbe);
+            try
+            {
+                PostureSignals.ReportPursuit(garrison, garrisonOwner);
+                PostureSignals.ReportPursuit(roamer,   roamerOwner);
+
+                string both = PostureSignals.DescribePursuits();
+                if (!both.Contains(garrisonOwner) || !both.Contains(roamerOwner) || PostureSignals.PursuitCount != 2)
+                    failures.Add("[wo1603] two producers pulsing are not both named (count=" +
+                                 PostureSignals.PursuitCount + ", described: '" + both + "'). Attribution that " +
+                                 "collapses the moment there is more than one chaser is no attribution at all.");
+                else
+                    log.AppendLine("  [wo1603] two simultaneous producers are named separately");
+
+                BattleSessionEnd.Release("retreat");
+                if (PostureSignals.PursuitCount != 0)
+                    failures.Add("[wo1603] the retreat release left " + PostureSignals.PursuitCount +
+                                 " pursuit pulse(s) live: " + PostureSignals.DescribePursuits() +
+                                 ". The release clears the WHOLE ring; a partial clear is a new defect.");
+
+                // ONE of them is still on the field and re-stamps. The other is gone. The capture
+                // must point at the one that is actually pulsing.
+                PostureSignals.ReportPursuit(roamer, roamerOwner);
+                string after = PostureSignals.DescribePursuits();
+                if (!after.Contains(roamerOwner) || after.Contains(garrisonOwner))
+                    failures.Add("[wo1603] after a retreat with ONE producer still pulsing, the description " +
+                                 "does not point at exactly that one (described: '" + after + "'). Naming the " +
+                                 "wrong owner costs more than naming none - it sends the fix to a file that " +
+                                 "is behaving.");
+                else if (!BattleLock.IsInBattle())
+                    failures.Add("[wo1603] a genuinely live chaser re-stamping after the retreat did NOT hold " +
+                                 "the battle-lock. That is the FORBIDDEN cure (F8-46 owner OPTION A): combat " +
+                                 "input must stay live while the hero is really being chased.");
+                else
+                    log.AppendLine("  [wo1603] a live chaser still holds the lock, and only IT is named");
+            }
+            finally
+            {
+                BattleLock.UnregisterProbe(pursuitProbe);
+                PostureSignals.ClearPursuits();
+                Time.timeScale = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Source-lint on the WIRING — the behavioural cases prove the seam, only this proves the
+        /// real producers reach it. Three files stamp the pursuit ring; a stamp that names no owner
+        /// is the anonymous ring seq 4701 could not read, one producer at a time.
+        /// </summary>
+        private static void EveryPursuitProducerNamesItselfAtSource(List<string> failures, StringBuilder log)
+        {
+            // ── 1. every stamp site carries a producer tag ────────────────────
+            var producers = new (string path, string tag)[]
+            {
+                // ⚠ Match the CALL, not the bare identifier 'chaseVia'. The tag is read in more
+                //   than one place in DriveNav, so a rule on the name alone stays GREEN against a
+                //   stamp that dropped the argument - proven by mutation while this case was
+                //   being written, the same trap WO-1337's probe-intact rule fell into.
+                ("Assets/_Modules/Village/Enemies/Enemy.cs",                     "ReportPursuit(GetInstanceID(), chaseVia)"),
+                ("Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs", "OverworldEncounterSpawner/rep-chase"),
+                ("Assets/_Modules/Village/World/RegionMobSpawner.cs",            "RegionMobSpawner/aggro-loop"),
+            };
+            foreach (var (path, tag) in producers)
+            {
+                string src = ReadCode(path);
+                if (src == null)
+                {
+                    failures.Add("[wo1603-wiring] " + path + " is MISSING - a pursuit producer cannot be verified.");
+                    continue;
+                }
+                if (!src.Contains("PostureSignals.ReportPursuit"))
+                {
+                    failures.Add("[wo1603-wiring] " + path + " no longer stamps the pursuit ring at all. If a " +
+                                 "producer is deliberately retired, retire its row here in the same change - a " +
+                                 "silent one leaves the next reader hunting a fourth pulser that does not exist.");
+                    continue;
+                }
+                if (!src.Contains(tag))
+                    failures.Add("[wo1603-wiring] " + path + " stamps the pursuit ring WITHOUT naming itself " +
+                                 "(expected the owner tag '" + tag + "'). An anonymous stamp is exactly what F8 " +
+                                 "seq 4701/4702 hit: the holder was PursuitBattleProbe.Probe, which only reads " +
+                                 "the ring, and the capture had nothing pointing past it.");
+                else
+                    log.AppendLine("  [wo1603-wiring] " + Path.GetFileName(path) + " names itself when it pulses");
+            }
+
+            // ── 2. the two Enemy chase branches, and the asymmetry between them ──
+            string enemy = ReadCode("Assets/_Modules/Village/Enemies/Enemy.cs");
+            if (enemy != null)
+            {
+                // The hero-aggro branch has refused a dead hero since DEF-224. It is the SIBLING
+                // guarantee that makes the brain branch's missing test a defect rather than a
+                // design choice, so its loss must fail here too.
+                if (!enemy.Contains("if (heroHealth != null && !heroHealth.IsAlive)"))
+                    failures.Add("[wo1603-wiring] Enemy.TryGetHeroAggroDestination no longer refuses a DEAD " +
+                                 "hero. That refusal is the sibling of the guard below; with it gone the " +
+                                 "brain branch's guard reads as an arbitrary special case instead of the " +
+                                 "restoration of symmetry it is.");
+                else
+                    log.AppendLine("  [wo1603-wiring] the hero-aggro chase branch still refuses a dead hero");
+
+                // ⛔ THE FIX. A pulse stamped over a corpse holds the battle-lock with no battle
+                //    behind it: the hero is DOWN, she has no combat inputs for PursuitActive to
+                //    keep live, and the gate judges a retreat 0.75 s in (WO-1337's arithmetic).
+                if (!enemy.Contains("bool heroAliveToChase = chasedHero == null || chasedHero.IsAlive;"))
+                    failures.Add("[wo1603-wiring] Enemy.DriveNav stamps the pursuit pulse without testing that " +
+                                 "the hero is ALIVE. EnemyBrain scores the hero on '!= null && " +
+                                 "activeInHierarchy' with no IsAlive gate and a dead hero reports Fraction 0 - " +
+                                 "which the low-HP weight reads as the MOST attractive target on the field - so " +
+                                 "the brain keeps steering onto the body and this line re-stamps every frame " +
+                                 "for as long as she stays down. That is the seq 4702 one-frame re-latch.");
+                else
+                    log.AppendLine("  [wo1603-wiring] the brain chase branch no longer pulses over a downed hero");
+
+                // ⛔ AND THE CURE MUST NOT BE A FORCED CLEAR. A null HeroHealth (headless / test
+                //    scenes) counts as ALIVE, the same conservative reading BattleArena's own
+                //    outcome arbitration takes. Narrowing this to "no pulse unless a HeroHealth
+                //    exists" would kill pursuit in every scene that has none.
+                if (enemy.Contains("BattleLock.SetInBattle(false)") || enemy.Contains("ClearPursuits()"))
+                    failures.Add("[wo1603-wiring] Enemy.cs force-clears the battle window rather than standing " +
+                                 "its own claim down. Forbidden by WO-1337: one body may only ever revoke its " +
+                                 "OWN key, and no producer may write BattleLock.");
+            }
+
+            // ── 3. the gate and the session end must SURFACE the tags ──────────
+            string gate = ReadCode("Assets/_Modules/Core/Combat/BattleQuiescenceGate.cs");
+            if (gate == null)
+                failures.Add("[wo1603-wiring] BattleQuiescenceGate.cs is MISSING.");
+            else if (!gate.Contains("PostureSignals.DescribePursuits()"))
+                failures.Add("[wo1603-wiring] the quiescence gate no longer renders the pursuit ring. The " +
+                             "battle-lock finding then names PursuitBattleProbe.Probe and stops - seq 4701, " +
+                             "unactionable by construction, which is the whole reason WO-1603 exists.");
+            else
+                log.AppendLine("  [wo1603-wiring] the gate's battle-lock finding renders the pursuit ring");
+
+            string sessionEnd = ReadCode("Assets/_Modules/Core/Combat/BattleSessionEnd.cs");
+            if (sessionEnd == null)
+                failures.Add("[wo1603-wiring] BattleSessionEnd.cs is MISSING.");
+            else if (!sessionEnd.Contains("PostureSignals.DescribePursuits()"))
+                failures.Add("[wo1603-wiring] BattleSessionEnd.Release no longer logs WHO was pulsing at battle " +
+                             "end. That line is the before-half of the pair: without it a holder reported after " +
+                             "the release cannot be shown to be a re-stamp rather than a missed clear.");
+            else
+                log.AppendLine("  [wo1603-wiring] the battle-session release logs its pursuit ring before and after");
         }
 
         /// <summary>Standalone entry point (run-unity-method).</summary>
