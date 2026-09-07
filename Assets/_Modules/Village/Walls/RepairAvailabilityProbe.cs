@@ -46,6 +46,11 @@
 // If BOTH read absent while a structure burns, the player genuinely has no
 // repair affordance anywhere and the trace proves it in one line.
 //
+// ⚠ SEVERITY IS SCENE-CLASS DEPENDENT (WO-1580, 2026-09-07). That both-absent
+// line is a FAIL (error level, F8-capturing) everywhere EXCEPT an enemy raid
+// base (HubScenes.IsRaid), where "no repair surface" is the authored state and
+// the SAME information is reported at Step level. See EmitSurfaceLine.
+//
 // Instrumented [Flow:RepairProbe]. Null-safe + Guard-wrapped throughout; a throw
 // in a diagnostic must never break a play session.
 // =============================================================================
@@ -208,9 +213,10 @@ namespace DeNelle.Village
             var repair = FindAnyObjectByType<WallRepairController>();
             var hub = FindAnyObjectByType<HubRepairAffordance>();
             var wave = FindAnyObjectByType<WaveManager>();
+            string sceneName = SceneManager.GetActiveScene().name;
 
             string line =
-                $"SURFACES scene='{SceneManager.GetActiveScene().name}' " +
+                $"SURFACES scene='{sceneName}' " +
                 $"WallRepairController={(repair == null ? "ABSENT" : (repair.enabled ? "present+ENABLED" : "present+DISABLED(no tap-to-select)"))} " +
                 $"HubRepairAffordance={(hub == null ? "ABSENT" : "present:" + hub.DiagnosticState)} " +
                 $"WaveManager={(wave == null ? "none(pure hub)" : wave.Phase.ToString())}";
@@ -218,12 +224,51 @@ namespace DeNelle.Village
             if (line == _lastSurfaceLine) return;
             _lastSurfaceLine = line;
 
-            if (repair == null && hub == null)
-                FlowTrace.Fail("RepairProbe",
-                    $"{line} -> NO repair surface exists in this scene at all while a structure burns. " +
-                    "The player has no way to repair anything here.");
-            else
+            EmitSurfaceLine(sceneName, repair == null && hub == null, line);
+        }
+
+        /// <summary>
+        /// SEVERITY DECISION for the surfaces line, split out of <see cref="ReportSurfaces"/>
+        /// so it is decidable from a scene NAME alone and can be driven headless
+        /// (RepairProbeSeverityRegression). Nothing about the line's content changed.
+        ///
+        /// <para>WO-1580 (owner Seeker session 2026-09-07, F8 seq 4698, scene
+        /// <c>RaidBase_fortified_garrison</c>): the both-absent branch used to call
+        /// <c>FlowTrace.Fail</c> unconditionally, which publishes at ERROR level, which is
+        /// exactly what the F8 harness captures — so every raid with a burning structure
+        /// minted an error capture. Inside an enemy RAID BASE the player is there to DESTROY
+        /// structures; no repair surface is the AUTHORED state, not a defect. Anywhere else
+        /// the absence still IS a defect and this probe exists to shout about it, so the
+        /// <c>Fail</c> text is unchanged for every other scene class.</para>
+        ///
+        /// <para>⛔ SCOPED TO <see cref="DeNelle.Core.HubScenes.IsRaid"/> ONLY, deliberately.
+        /// <c>Garrison_*</c> / <c>Outpost*</c> are NOT IsRaid, and HubScenes.cs:143-152
+        /// records that whether they are committed assaults is an owner question nobody has
+        /// asked. The capture proves exactly one scene class; widening this to
+        /// <c>IsEnemyOutpost</c> or <c>IsDungeon</c> would silence a defect nothing has
+        /// ruled on. Read that comment before touching this line.</para>
+        /// </summary>
+        public static void EmitSurfaceLine(string sceneName, bool noSurfaceAtAll, string line)
+        {
+            if (!noSurfaceAtAll)
+            {
                 FlowTrace.Step("RepairProbe", line);
+                return;
+            }
+
+            if (DeNelle.Core.HubScenes.IsRaid(sceneName))
+            {
+                FlowTrace.Step("RepairProbe",
+                    $"{line} -> NO repair surface exists in this scene at all while a structure burns. " +
+                    "expected: no repair surface is authored for a raid base — the player is here to " +
+                    "destroy enemy structures, not to repair them. Reported at Step level (WO-1580) so " +
+                    "a designed absence does not mint an error capture.");
+                return;
+            }
+
+            FlowTrace.Fail("RepairProbe",
+                $"{line} -> NO repair surface exists in this scene at all while a structure burns. " +
+                "The player has no way to repair anything here.");
         }
 
         // ── Collection ──────────────────────────────────────────────────────────
