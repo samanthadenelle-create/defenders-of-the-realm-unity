@@ -282,6 +282,53 @@ Append one line per round: date, what changed, which frames were opened, what th
     `ManageFilters/ObsBtn_*` resolves **110.4 px** against `ElarionUiKit.MinTouchPx` **112** (checklist
     3c), and `ManageActivity/Label` overflows its ZoneBacking by 3.7 px. Do not relax the gate.
 
+- **2026-09-07 - round 25 (the first round judged against a FRESH headless capture).** Frames opened:
+  all nine the lead named under `Builds/ui-capture/ManageFlow_*_2670x1200.png`, beside
+  `docs/mockups/manage/MANAGE_MOCKUP_8_SCREENS.png`, plus `Builds/cap-manage-wave4.log`.
+  **Nothing is ticked in section 3 - this round is a lane's fixes, not a comparison that passed.**
+  What the comparison found, and what it cost to find:
+  - **ONE measurement moved every screen.** `bodyFloor` reserved the shared CLOSE band on all of
+    them while `ApplyScreenVisibility` renders CLOSE on the **hub alone** (WO-1491). ~150 ref px held
+    for a button that is not drawn - the grid's missing second row and three of the queue's five
+    rows, both. Well 580px -> 758px; the hub re-takes the band inside its own host, from the
+    measured reclaim rather than a second typed constant.
+  - **`geometry=44 touch=47` reduce to TWO causes, and both are the same species.** A control sized
+    as a FRACTION of a height that is a MEASUREMENT cannot promise a px floor: 0.88 x the queue row's
+    112px floor is 98.6 (forty controls), and the HEART chip's 0.70-0.83 band was typed against a
+    card band that had since become derived, so it sat inside all three cards (the other seven).
+    This screen has now paid for that species five times by its own comments' count.
+  - **`UI_CAPTURE_FIDELITY_DEGRADED 16/16` was an INSTRUMENT defect, and it named itself.** The
+    reason string was `ReportFidelity`'s fallback - "the aspect-divergence proof did not run" -
+    because neither Manage capture entry point ever called `ProveGeometryMoves`, while five other
+    bodies do. Same class as WO-1444: **the instrument was reporting on a check it never made.**
+    ⛔ **What that proves is that `16/16` carried NO information about the frames - NOT that the
+    proof passes.** Both entry points now run it; whether the next log reads
+    `UI_CAPTURE_FIDELITY_OK` is that log's to say.
+  - Every fix is source-level and **UNPROVEN** - no Unity run was in that lane's scope. The evidence
+    is the next `MANAGE_FLOW_MAP_OK`; the acceptance is still section 1's, and it is the owner's.
+  - Full per-panel record with file:line: `WorkOrders/WORK_ORDER_1567_*.md` section 4b.
+
+- **2026-09-07 - round 26 (judged against the round-25 gate).** `Builds/cap-manage-wave5.log`:
+  `COMPILE_GATE_OK`, `REGRESSION 440/441` (art ask only), **`UI_CAPTURE_FIDELITY_OK 16/16`** - the
+  missing `ProveGeometryMoves` call WAS the whole degraded marker - and `geometry 44 -> 6, touch
+  47 -> 0`. Still nothing ticked in section 3. What this round found:
+  - **The six remaining failures were CAUSED by round 25's own fix, and reading the oracle before
+    editing is what stopped a second wrong one.** Raising the drawer to the well's ceiling put its
+    pivot-0 header 112px ABOVE the body's black plate. The obvious repair - extend the drawer's own
+    plate - would NOT have satisfied RULE 1: `ZoneBodyAbove` walks to the ancestor named
+    `Zone_Body` and takes THAT zone's backing, not the nearest one. The band had to come back
+    inside, and **it cost the fifth queue row** (614px -> 502px of list). That is written into the
+    constant, the WARN and the regression rather than engineered around.
+  - **A "clean log" is not evidence of a healthy screen.** Queue row 1 had no icon and nothing was
+    logged, because the row asked for no art at all: a TOWER resolves its name through
+    `CatalogRegistry`, so `building` was null and the thumbnail key - guarded on `building != null` -
+    came out empty. An empty key never reaches the loader for the loader to announce a miss. The
+    label and the thumbnail are the same lookup and are now resolved by the same branches.
+  - **Round 25's grid centring changed nothing, and the reason was one line away from the fix.**
+    `viewportPx` fell back to the whole BAND, so `bandH - viewportPx` was 0 and the branch could
+    never fire. A fix that is present in the source and inert is worse than an absent one.
+  - Per-item record with file:line: `WorkOrders/WORK_ORDER_1567_*.md` section 4c.
+
 ## 7. QUEUED BEHIND THIS LOOP - do not fold in, do not lose
 
 Raised by the owner mid-loop and deliberately NOT absorbed, because she asked for the nine mockup

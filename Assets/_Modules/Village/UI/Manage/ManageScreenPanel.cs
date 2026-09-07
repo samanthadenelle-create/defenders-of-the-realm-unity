@@ -127,6 +127,12 @@ namespace DeNelle.Village.UI
 
         private const float CloseBandY0 = 0.050f;   // ElarionUiKit's DefaultCloseZone.y (the Close band)
         private const float CloseGapY = 0.020f;     // body floor clears the Close box by this much
+        /// <summary>
+        /// ⭐ THE BODY WELL'S FLOOR ON A NON-HUB SCREEN (WO-1567 round 25). The obsidian frame's own
+        /// inner edge and nothing more - CLOSE is not rendered on these screens (WO-1491), so its
+        /// band is not reserved on them either. See the geometry pass for the measured reclaim.
+        /// </summary>
+        private const float WorkspaceBodyFloorY = 0.020f;
         private const float RowCtrlY0 = 0.06f;      // 0.88 * RowHeightPx = 116px >= MinTouchPx (112),
         private const float RowCtrlY1 = 0.94f;      // so an in-row button is never GROWN out of its row
 
@@ -405,6 +411,14 @@ namespace DeNelle.Village.UI
         /// the player asked for a screen; see ShowLauncher.</summary>
         private ManageNavEntry _hubNav;
         private RectTransform _launcherGrid;
+        /// <summary>The HEART chip's floor inside the hub host, MEASURED by BuildLauncher off the
+        /// same host height the card band is derived from - so the chip's band and the cards' band
+        /// can never be computed against two different rects (which is exactly how the chip ended
+        /// up sitting inside all three cards).</summary>
+        private float _hubHeartY0 = 0.85f;
+        /// <summary>The host height the pair above was derived from, kept so BuildHubHeartDoor can
+        /// state the chip's resolved px in the trace rather than assert them.</summary>
+        private float _hubHeartHostH;
 
         /// <summary>
         /// ⭐ THE MANAGE PANEL FILLS THE SCREEN. Owner ruling 2026-09-07 01:14, verbatim:
@@ -423,8 +437,22 @@ namespace DeNelle.Village.UI
         // and "keep the title band" without saying so, and that reserved a DIFFERENT number of
         // pixels on every surface height. Stating the reservation in px and dividing by the
         // measured host makes it the same on all of them, and makes the intent readable.
-        /// <summary>The MANAGE title's band at the top of the hub, plus nothing else.</summary>
-        private const float HubTitleBandPx = 96f;
+        /// <summary>
+        /// The band at the TOP of the hub host. ⛔ IT IS NOT THE MANAGE TITLE'S - the title lives in
+        /// the frame's own chrome row, ABOVE this host entirely, so reserving 96px for it here was a
+        /// DOUBLE reservation and it is one of the two reasons the cards rendered small (measured on
+        /// Builds/ui-capture/ManageFlow_BUILD_hub_2670x1200.png: three ~245x270 plates in an
+        /// otherwise empty full-bleed well).
+        /// <para>⭐ IT IS THE HEART CHIP'S BAND NOW, and it is authored AT
+        /// <see cref="ElarionUiKit.MinTouchPx"/> rather than at a typed number. The chip used to be
+        /// seated at 0.70-0.83 of the host - which resolved 440.5x75.4 ref px, 36.6px UNDER the
+        /// touch floor, INSIDE the card band, and produced all seven of the non-queue geometry and
+        /// touch failures on Builds/cap-manage-wave4.log (one SUB-TOUCH-FLOOR BAND, three BUTTONS
+        /// OVERLAP and three BUTTON OVER TEXT, every one of them naming ManageHeartFace against a
+        /// ManageCard_*). A header band is the mockup's own answer: panel 1's top strip is chrome,
+        /// and nothing there touches a card.</para>
+        /// </summary>
+        private const float HubTitleBandPx = ElarionUiKit.MinTouchPx;
         /// <summary>The bottom CLOSE button's band. It is shared chrome, so the cards must clear it.</summary>
         private const float HubCloseBandPx = 140f;
         /// <summary>The gutter between the cards and each of those bands - never zero, so no two
@@ -441,9 +469,30 @@ namespace DeNelle.Village.UI
         /// and keeps the drawn shape at any well height.
         /// </summary>
         private const float HubCardAspect = 145f / 160f;
-        /// <summary>The art well's share of the card's height - the top block in panel 1, above the
-        /// name and the description.</summary>
-        private const float HubArtWellF = 0.46f;
+        /// <summary>
+        /// The art well's share of the card's height - the top block in panel 1, above the name and
+        /// the description.
+        /// <para>⭐ 0.65, MEASURED OFF THE SHEET (WO-1567 round 25). In mockup panel 1 the
+        /// illustration occupies roughly the top two thirds of each card and the name plus its
+        /// two-line description share the bottom third; 0.46 gave the picture less than half and
+        /// left the copy a band it could not use. The title and description bands below are
+        /// DERIVED from this constant, so raising it moves all three together.</para>
+        /// </summary>
+        private const float HubArtWellF = 0.60f;
+        /// <summary>The card's NAME band, as a fraction of the card. One line at the deck's 36px
+        /// face with room above and below it.</summary>
+        private const float HubTitleBandF = 0.15f;
+        /// <summary>
+        /// The card's DESCRIPTION band, as a fraction of the card.
+        /// <para>⛔ SIZED FOR TWO LINES AT <see cref="ElarionUi.FontFloorMobile"/> (30), WHICH IS
+        /// THE WHOLE POINT. The owner's device capture ellipsised all three descriptions and the
+        /// headless frame truncated them mid-word ("upgrade your to", "manage your tr", "powerful
+        /// advan"): FitBlock had a band it could not seat two floor-height lines in, so it cut. At
+        /// the hub's card height this resolves to ~80 ref px - two 30px lines plus leading - and
+        /// <see cref="BuildLauncher"/> WARNS in px if the card ever gets too short to honour it,
+        /// rather than silently cutting the one sentence that says what the card does.</para>
+        /// </summary>
+        private const float HubDescBandF = 0.19f;
         // WO-2001 - the three-tab workspace. It owns the WHOLE body well (the largest well this
         // chrome can offer) because the redesign's grid + selection band stack does not fit the
         // 533/542/612px wells the rail path was authored against; see ManageWorkspacePanel's
@@ -515,7 +564,26 @@ namespace DeNelle.Village.UI
         //   list 175px (1 row)  ->  reclaiming 132px  ->  307px (2 rows)
         // The title is now an OVERLAY label pinned at the drawer's top - legible exactly where it
         // already is, costing the rows nothing. A band is for a control that sits IN it.
-        private const float DrawerTitlePx = 0f;
+        /// <para>⭐ WO-1567 ROUND 26 - IT TAKES A BAND AGAIN, AND THE OVERLAY SEAT IS RETIRED.
+        /// ⛔ THE MEASURED REASON, off Builds/cap-manage-wave5.log, on all three *_queue frames:
+        /// <c>TEXT OFF PLATE ... 'Drawer_Header/Label' ("QUEUE") overflows its layout.body
+        /// ZoneBacking by 112 ref px -- text y 313.2..425.2 vs plate y -444.8..313.2</c>, and the
+        /// same for the X's label. Round 25 raised <see cref="DrawerOverlayY1"/> to 1.0 and stood
+        /// the chrome row down, so the pivot-0 overlay grew the header 112px ABOVE the well - which
+        /// is off the body's black plate, the founding-Echo-card defect the oracle is named for.
+        /// <para>⛔ AND EXTENDING THE DRAWER'S OWN PLATE OVER THAT BAND DOES NOT SATISFY IT. READ
+        /// THE RULE: <c>UICaptureLaunch.ZoneBodyAbove</c> walks to the ancestor literally named
+        /// <c>Zone_Body</c> and <c>PlateOf</c> takes THAT zone's ZoneBacking child - not the nearest
+        /// plate. A drawer-owned plate 112px tall in the chrome band is still outside the body's.
+        /// The only conforming seat is INSIDE the body, so the band comes out of the list.</para>
+        /// <para>⚠ THE COST IS ONE ROW, STATED NOT HIDDEN: the list goes 614px -> 502px and the
+        /// overlay seats FOUR whole rows where mockup panel 8 draws five. Five need a 612px list and
+        /// the body well is 758px against 256px of the mockup's own chrome (title 112 + tabs 128 +
+        /// gaps 16). Nothing here shrinks a row under the touch floor to manufacture the fifth, and
+        /// SeatQueueListToWholeRows still WARNs the shortfall in px.</para>
+        /// <para>The band is <see cref="DrawerTitleOverlayPx"/> - the same number, because the thing
+        /// it must seat has not changed: the word QUEUE beside a MinTouchPx X.</para></para>
+        private const float DrawerTitlePx = DrawerTitleOverlayPx;
         /// <summary>The title's own height, drawn ABOVE the drawer's ceiling (SeatDrawerTitleOverlay).
         /// <para>⭐ WO-1488 - IT NOW HOLDS THE X AS WELL, so it is sized to the TOUCH FLOOR rather
         /// than to a line of text. It was 56px, which cleared the ~24px TMP cull floor for the word
@@ -525,15 +593,42 @@ namespace DeNelle.Village.UI
         /// MinTouchPx(112) square with a 2px gutter, and it is what the drawer's ceiling
         /// (DrawerOverlayY1) is authored to leave free above itself. It is NOT part of the band
         /// sum - it is drawn above the ceiling and costs the rows nothing.</para></summary>
-        private const float DrawerTitleOverlayPx = 116f;
+        /// <para>⭐ WO-1567 ROUND 25 - 112, WHICH IS <see cref="ElarionUiKit.MinTouchPx"/> EXACTLY,
+        /// AND THAT IS THE WHOLE CONSTRAINT ON IT. The row exists to seat a MinTouchPx X beside the
+        /// word QUEUE; 116 was four px of margin over that floor. Its band is now the CHROME ROW's
+        /// (WorkspaceHeaderY0..Y1 = 0.124 of the panel = ~115 ref px at the reference surface),
+        /// which the overlay stands down while it is up - so the row must FIT that band, and 116
+        /// does not. Nothing here is under a floor: the X is authored at 112 and the zone is 112.</para>
+        private const float DrawerTitleOverlayPx = ElarionUiKit.MinTouchPx;
 
         // 132, not 120: the band's tab faces fill it, so they are 132px >= MinTouchPx (112),
         // authored not clamped.
         // ⚠ WO-1488: this band NO LONGER HOLDS THE X (it moved to the title overlay, see
         // DrawerTitleOverlayPx). The size stays 132 because that is what the FACES need; the
         // "larger than the 120px X it contains" reason is retired, not the number.
-        private const float DrawerTabsPx = 132f;
-        private const float DrawerBandGapPx = 12f;
+        // ⭐ WO-1567 ROUND 25 - 128, AND THE FOUR PIXELS ARE SPENT ON A ROW, NOT SAVED FOR NEATNESS.
+        // ⛔ IT IS STILL ABOVE THE TOUCH FLOOR AND THAT IS THE ONLY CONSTRAINT ON IT: 128 >=
+        // ElarionUiKit.MinTouchPx (112) with 16px of margin, and a tab face inset to the standard
+        // 0.88 of its band still resolves 112.6px. Below 128 it would stop clearing the floor with
+        // that inset, so this is the bottom of the range, not an arbitrary trim.
+        private const float DrawerTabsPx = 128f;
+        // ⭐ WO-1567 ROUND 25 - 8, FOR THE SAME REASON, AND THE ARITHMETIC IS WRITTEN OUT BELOW.
+        // ⛔ THIS IS A GUTTER BETWEEN BANDS, NOT A CONTROL: it has no touch floor and nothing is
+        // typeset in it. It is read TWICE by SetDrawerBands (title->tabs, tabs->list), so the pair
+        // costs 2x. The five-row budget, at the Seeker target and with the CLOSE band reclaimed:
+        //   well               758px   (0.838 - 0.020 of a 927px panel; see the geometry pass)
+        //   drawer             758px   (DrawerOverlayY0..Y1 = 0..1)
+        //   - plate inset        0px   (flat plate + GoldPerimeter; it was 96 x 2 = 192)
+        //   - title              0px   (DrawerTitlePx; the word is drawn ABOVE the ceiling)
+        //   - tabs             128px
+        //   - gaps              16px   (2 x this constant)
+        //   = list             614px
+        // and five rows need 5 x MinTouchPx + 4 x spacing(8) + padding(20) = 612px. 614 >= 612.
+        // ⚠ IT CLEARS BY 2px, AND THAT IS STATED RATHER THAN RELIED ON. SeatQueueListToWholeRows
+        // still DERIVES the count from the measured band and still WARNS in px when it seats fewer
+        // than five - nothing here asserts five, and no row is ever shrunk under the touch floor to
+        // manufacture one. If a future surface gives the well less, the screen honestly seats four.
+        private const float DrawerBandGapPx = 8f;
 
         // =====================================================================
         //  WO-1488 — THE FULL-BODY OVERLAY'S OWN RECT, AUTHORED ONCE.
@@ -570,8 +665,21 @@ namespace DeNelle.Village.UI
         // drawer's raycast eats. WO-1491 now HIDES that CLOSE on every non-hub screen, which
         // removes the collision but not the reason: the panel's frame art is down there, and a
         // plate drawn over a frame border reads as a rendering fault.
+        // ⭐ WO-1567 ROUND 25 - THE CEILING IS THE WELL'S CEILING, AND THE TITLE ROW MOVES ONTO
+        // THE CHROME BAND THE OVERLAY HIDES.
+        // ⛔ THE 0.79 ABOVE IS SUPERSEDED, AND ITS REASONING IS KEPT because only its ARITHMETIC
+        // changed: the title row and the X still need ~122px, and they still sit ABOVE the drawer's
+        // ceiling. What changed is WHERE that room comes from. Mockup panel 8 draws the queue as a
+        // FULL modal - QUEUE centred, an X top-right, three tabs, five numbered rows - and it draws
+        // NO back arrow and NO queue pill, because the overlay IS the queue. So the chrome row is
+        // hidden while the overlay is up (ApplyDrawerPlacement) and the title row takes its band,
+        // instead of the rows paying 21% of the well for it.
+        // MEASURED, off Builds/cap-manage-wave4.log: at 0.79 of a 580px well the drawer resolved
+        // 458px, its chrome took 252px (plate inset 96x2 + tabs 132 + gaps 24) and the list got
+        // 206px - ONE whole row where the mockup draws five, with the harness saying in its own
+        // words that five rows need a 612px list band.
         private const float DrawerOverlayY0 = 0f;
-        private const float DrawerOverlayY1 = 0.79f;
+        private const float DrawerOverlayY1 = 1f;
 
         /// <summary>
         /// ⭐ HOW MANY QUEUE ROWS THE MOCKUP ASKS TO SEE AT REST. Panel 8 draws FIVE numbered rows.
@@ -595,6 +703,50 @@ namespace DeNelle.Village.UI
         private float _queueRowPx = RowHeightPx;
 
         /// <summary>
+        /// ⭐ THE PIXELS THE BODY WELL GAVE BACK when it stopped reserving the shared CLOSE band on
+        /// screens that do not draw one (WO-1567 round 25). The HUB - the ONE screen that renders
+        /// CLOSE - re-takes exactly this much inside its own host, so the reservation lives in one
+        /// place and follows <c>ElarionUiKit.CanonCtaHeight</c> instead of a second typed constant.
+        /// <para>⚠ MEASURED IN THE GEOMETRY PASS, not authored: it is a function of the panel's
+        /// resolved height, which is a function of the target. A const here would be right on one
+        /// surface and wrong on every other.</para>
+        /// </summary>
+        private float _hubCloseReservePx;
+
+        /// <summary>
+        /// ⭐ THE CONTROL BAND INSIDE ONE QUEUE ROW, as fractions of <see cref="_queueRowPx"/>.
+        ///
+        /// <para>⛔ THIS IS THE WHOLE OF THE 40 SUB-TOUCH-FLOOR FAILURES ON
+        /// Builds/cap-manage-wave4.log, and the arithmetic is exact. Every queue verb was authored
+        /// at <see cref="RowCtrlY0"/>..<see cref="RowCtrlY1"/> = 0.88 of the row, whose own comment
+        /// reasons from <see cref="RowHeightPx"/> (132): 0.88 x 132 = 116 >= MinTouchPx. But WO-1488
+        /// made the row a MEASUREMENT clamped into [MinTouchPx, RowHeightPx], and in a short well it
+        /// sits AT the floor - so 0.88 x 112 = <b>98.6</b>, the number on all forty lines
+        /// (`ObsBtn_SPEED UP` 372.5x98.6, `ObsBtn_CANCEL` 516.4x98.6, `ObsBtn_Move up` 249.7x98.6).
+        /// A fraction of a MEASURED height cannot promise a px floor - the identical mistake the
+        /// detail CTA made at 104.1px and the queue X made at 57.7px, and the identical cure: take
+        /// the px first, then convert to the fraction THIS row needs.</para>
+        ///
+        /// <para>⛔ AND THE ROW IS NOT GROWN TO SUIT. Raising the row to 128 so 0.88 clears the floor
+        /// would spend ~80px of the list band and cost a visible row, which is the budget mockup
+        /// panel 8's five rows are already short of. At the floor the control simply takes the WHOLE
+        /// row (inset 0); above it, it keeps the authored 0.88 breathing room. Both are >= 112 by
+        /// construction.</para>
+        /// </summary>
+        private float QueueCtrlY0
+        {
+            get
+            {
+                float row = Mathf.Max(1f, _queueRowPx);
+                float want = Mathf.Max(ElarionUiKit.MinTouchPx, row * (RowCtrlY1 - RowCtrlY0));
+                if (want >= row) return 0f;
+                return Mathf.Clamp01((row - want) * 0.5f / row);
+            }
+        }
+
+        private float QueueCtrlY1 { get { return 1f - QueueCtrlY0; } }
+
+        /// <summary>
         /// ⭐ WO-1488 — THE ROW BAND IS DERIVED FROM THE PLATE, NOT FROM THE DRAWER'S RECT.
         /// <para>THE DEFECT: <c>_drawerListY0</c> was <c>gap</c> — 12px above the drawer's rect
         /// floor — while the plate the player SEES is <c>frames/content-panel</c> drawn SLICED, and
@@ -610,7 +762,16 @@ namespace DeNelle.Village.UI
         /// <para>The value is a FALLBACK. <see cref="ResolveDrawerBands"/> re-reads it from the
         /// live sprite so a re-authored frame moves it without a code edit.</para>
         /// </summary>
-        private const float DrawerPlateInsetPx = 96f;
+        /// <para>⭐ WO-1567 ROUND 25 - 0, BECAUSE THE OVERLAY NO LONGER PAINTS A 9-SLICED FRAME.
+        /// ⛔ THE REASONING ABOVE IS UNCHANGED AND STILL BINDING - a row must never overhang the
+        /// art the player sees - but the ART changed: the overlay is a FLAT plate with a drawn
+        /// GoldPerimeter (BuildQueueDrawer), which is what mockup panel 8 shows and which has no
+        /// border to stay inside of. This value is only the FALLBACK
+        /// <see cref="ResolveDrawerBands"/> uses before it has measured a sprite, and it measures a
+        /// null sprite as 0 - so a stale 96 here would reserve 192px for a frame nothing draws,
+        /// which is exactly the 206px list band on Builds/cap-manage-wave4.log. Re-point a
+        /// SLICED plate and ResolveDrawerBands reads its real border back with no edit here.</para>
+        private const float DrawerPlateInsetPx = 0f;
 
         /// <summary>The measured plate inset in reference px — 0 in band mode, where the drawer
         /// paints a FLAT plate with no sprite and therefore no frame art to stay inside of.</summary>
@@ -711,7 +872,15 @@ namespace DeNelle.Village.UI
             if (_drawerHeader == null) return;
             _drawerHeader.anchorMin = new Vector2(0.03f, 1f);
             _drawerHeader.anchorMax = new Vector2(0.97f, 1f);
-            _drawerHeader.pivot = new Vector2(0.5f, 0f);      // grow UPWARD out of the drawer
+            // ⭐ WO-1567 ROUND 26 - PIVOT 1, SO IT GROWS **DOWNWARD** INTO THE DRAWER.
+            // ⛔ IT USED TO BE PIVOT 0 (grow UPWARD, out of the drawer) and that is the whole of
+            // Builds/cap-manage-wave5.log's six remaining geometry failures: once
+            // DrawerOverlayY1 reached 1.0, "upward out of the drawer" became "off the body's black
+            // plate", which RULE 1 [text-off-plate] fails by name and by 112 ref px exactly. The
+            // zone still has a REAL rect of DrawerTitleOverlayPx - which is the property this
+            // method exists for, since TMP culls a line whose rect cannot seat its font floor - it
+            // simply takes that rect from the list now, and DrawerTitlePx is no longer 0 to match.
+            _drawerHeader.pivot = new Vector2(0.5f, 1f);
             _drawerHeader.sizeDelta = new Vector2(0f, DrawerTitleOverlayPx);
             _drawerHeader.anchoredPosition = Vector2.zero;
         }
@@ -1161,7 +1330,26 @@ namespace DeNelle.Village.UI
             // dead space between the list and the Close — reclaim it by dropping the body floor
             // straight onto the Close band + a gap. That is the whole of band 5's arithmetic.
             float closeBandTop = CloseBandY0 + ElarionUiKit.CanonCtaHeight / panelPx;
-            float bodyFloor = closeBandTop + CloseGapY;
+            // ⭐ WO-1567 ROUND 25 - THE CLOSE BAND IS RECLAIMED ON EVERY NON-HUB SCREEN.
+            // ⛔ CLOSE IS THE HUB'S ALONE (WO-1491, ApplyScreenVisibility) - it is SetActive(false)
+            // on BUILD, ARMY, RESEARCH, every detail screen and the queue overlay. The body floor
+            // nevertheless kept reserving its whole band on all of them, so ~150 reference px of
+            // the well was held for a button that is not rendered. MEASURED on
+            // Builds/cap-manage-wave4.log: the workspace well resolved 580px, the grid took all of
+            // it, and both the 5x2 tile band and the queue overlay were short by exactly that
+            // reservation - the grid painted its two rows into the TOP HALF of the well
+            // (ManageFlow_BUILD_gridtop_2670x1200.png) and the drawer seated ONE row of five.
+            // The floor is now the frame's own inner edge; the HUB re-takes the reservation INSIDE
+            // its own host (BuildLauncher), which is the one screen that draws CLOSE.
+            float bodyFloor = WorkspaceBodyFloorY;
+            // ⚠ DERIVED, NEVER TYPED. The hub's bottom reservation is the band this floor just gave
+            // up, in px, so the two can never disagree: raise CanonCtaHeight or CloseBandY0 and the
+            // hub's cards move with the button instead of overprinting it.
+            _hubCloseReservePx = Mathf.Max(0f, (closeBandTop + CloseGapY - bodyFloor) * panelPx);
+            FlowTrace.Step("Manage", "MANAGE_CLOSE_BAND reclaimed " + _hubCloseReservePx.ToString("0") +
+                "px for every non-hub screen (body floor " + bodyFloor.ToString("0.###") +
+                " instead of " + (closeBandTop + CloseGapY).ToString("0.###") +
+                ") - the hub re-reserves it inside ManageCategoryLauncher, where CLOSE actually renders");
 
             RectTransform bodyRt = chrome.layout != null ? chrome.layout.body : null;
             float bodyTop = bodyRt != null ? bodyRt.anchorMax.y : 0.835f;
@@ -1627,9 +1815,19 @@ namespace DeNelle.Village.UI
                     "the title and CLOSE reservations cannot be honoured");
                 hostH = 1f;
             }
-            float bottomF = Mathf.Clamp01((HubCloseBandPx + HubBandGapPx) / hostH);
+            // ⭐ WO-1567 ROUND 25 - THE CLOSE RESERVATION IS THE MEASURED ONE, NOT A TYPED GUESS.
+            // The body well no longer holds the shared CLOSE band (it is hidden on every other
+            // screen - see the geometry pass), so the HUB, which is the one screen that renders
+            // CLOSE, takes it back here. _hubCloseReservePx is the exact number of px the floor
+            // gave up, so a change to CanonCtaHeight or CloseBandY0 moves the cards WITH the button.
+            // HubCloseBandPx stays as the FLOOR: it is what the band needs even if the measured
+            // reclaim came back small (a fallback frame with no layout, for instance).
+            float closeReserve = Mathf.Max(HubCloseBandPx, _hubCloseReservePx);
+            float bottomF = Mathf.Clamp01((closeReserve + HubBandGapPx) / hostH);
             float topF = Mathf.Clamp01(1f - (HubTitleBandPx + HubBandGapPx) / hostH);
             if (topF <= bottomF) { bottomF = 0.05f; topF = 0.95f; }
+            _hubHeartY0 = Mathf.Clamp01(1f - HubTitleBandPx / hostH);
+            _hubHeartHostH = hostH;
             grid.anchorMin = new Vector2(HubSideInsetF, bottomF);
             grid.anchorMax = new Vector2(1f - HubSideInsetF, topF);
             grid.offsetMin = grid.offsetMax = Vector2.zero;
@@ -1657,10 +1855,30 @@ namespace DeNelle.Village.UI
             float cellW = Mathf.Min(width / 3f, height * HubCardAspect);
             layout.cellSize = new Vector2(cellW, height);
             layout.childAlignment = TextAnchor.MiddleCenter;
-            FlowTrace.Step("Manage", "hub card band " + grid.rect.width.ToString("0") + "x" +
+            // ⭐ THE FILL FRACTION IS REPORTED, so "the cards fill the well" is a number and not a
+            // claim (CAPTURE_LOOP_GOAL's criterion zero, applied one level down from the panel).
+            float cardsPx = 3f * cellW + layout.spacing.x * 2f + layout.padding.horizontal;
+            float fillW = cardsPx / Mathf.Max(1f, _launcherHost.rect.width);
+            float fillH = height / Mathf.Max(1f, hostH);
+            FlowTrace.Step("Manage", "MANAGE_HUB_CARDS band " + grid.rect.width.ToString("0") + "x" +
                 grid.rect.height.ToString("0") + "px -> cell " + cellW.ToString("0") + "x" +
                 height.ToString("0") + "px (aspect " + (cellW / Mathf.Max(1f, height)).ToString("0.##") +
-                ", mockup " + HubCardAspect.ToString("0.##") + ")");
+                ", mockup " + HubCardAspect.ToString("0.##") + ") filling " +
+                fillW.ToString("0.##") + " of the host's width and " + fillH.ToString("0.##") +
+                " of its height; close reserve " + closeReserve.ToString("0") + "px, heart band " +
+                HubTitleBandPx.ToString("0") + "px");
+            // ⛔ THE DESCRIPTION'S BAND IS CHECKED IN PX, NOT ASSUMED. Two lines at
+            // ElarionUi.FontFloorMobile is the floor FitBlock cannot go under; if the card is too
+            // short to hold them the sentence is CUT, which is the exact defect on the owner's
+            // capture and on ManageFlow_BUILD_hub_2670x1200.png. Saying so beats cutting silently.
+            float descPx = height * HubDescBandF;
+            if (descPx < 2f * ElarionUi.FontFloorMobile)
+                FlowTrace.Warn("Manage", "the hub card is " + height.ToString("0") + "px, so its " +
+                    "description band is " + descPx.ToString("0") + "px - under the " +
+                    (2f * ElarionUi.FontFloorMobile).ToString("0") + "px two lines at " +
+                    "ElarionUi.FontFloorMobile need. FitBlock will TRUNCATE the sentence rather " +
+                    "than go sub-legible; the CARD has to grow, and nothing here will shrink text " +
+                    "to hide it");
         }
 
         private void RenderLauncherCards()
@@ -1777,7 +1995,7 @@ namespace DeNelle.Village.UI
                     // The title sits directly under the art well - see HubArtWellF. The band is
                     // 0.16 of the card, which at the hub's card height clears the TMP cull floor
                     // with room to spare.
-                    rt.anchorMin = new Vector2(0.04f, 1f - HubArtWellF - 0.18f);
+                    rt.anchorMin = new Vector2(0.04f, 1f - HubArtWellF - 0.02f - HubTitleBandF);
                     rt.anchorMax = new Vector2(0.96f, 1f - HubArtWellF - 0.02f);
                     rt.offsetMin = rt.offsetMax = Vector2.zero;
                     face.fontSize = 36f;
@@ -1795,7 +2013,7 @@ namespace DeNelle.Village.UI
                 // floor - so if it still cannot fit, the card is too small and something says so
                 // rather than the sentence quietly disappearing.
                 var description = ElarionUiKit.Label(card.transform, purpose,
-                    0.04f, 1f - HubArtWellF - 0.20f,
+                    0.02f, 0.02f + HubDescBandF,
                     available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                     (int)ElarionUi.FontLabel, TextAlignmentOptions.Top, 0.06f, 0.94f);
                 // Floor = the kit's readable MOBILE floor, ceiling a little above it so a short
@@ -1837,10 +2055,20 @@ namespace DeNelle.Village.UI
         /// tried and both rejected: the retired landscape strips letterbox to two thirds black
         /// inside a tall card, and a bare text card gives the eye nothing to land on. A drawn
         /// FRAME with an empty centre reads as "a picture belongs here", which is exactly true.</para>
-        /// <para>⚠ The frame sprite is the tile frame, reused - it is a border with a hollow-enough
-        /// centre and it is already delivered. Nothing here loads a hub key: LoadSprite would log a
-        /// miss per card per rebuild, and the single art-ask line in RenderLauncherCards says it
-        /// once, by key, which is the useful form.</para>
+        /// <para>⚠ THE FRAME IS DRAWN, NOT A SPRITE - corrected 2026-09-07 (WO-1567 round 25). This
+        /// note used to say "the frame sprite is the tile frame, reused ... a border with a
+        /// hollow-enough centre", and that was the defect: MEASURED,
+        /// Assets/Resources/UI/ElarionMedieval/Manage/frame-tile.png.meta declares
+        /// <c>spriteBorder: {x: 0, y: 0, z: 0, w: 0}</c>, so it is NOT 9-sliced - painted
+        /// preserveAspect into a non-square well it collapsed to a centred square a fraction of the
+        /// well's width, which is the "tiny square floating above the plate" on
+        /// Builds/ui-capture/ManageFlow_BUILD_hub_2670x1200.png, and Image.Type.Sliced would have
+        /// had no border to slice. A flat plate plus <c>ElarionUiKit.GoldPerimeter</c> fills the
+        /// zone exactly at any card aspect and is the same border cue the grid tile and the list row
+        /// already use for selection.</para>
+        /// <para>Nothing here loads a hub key: LoadSprite would log a miss per card per rebuild, and
+        /// the single art-ask line in RenderLauncherCards says it once, by key, which is the useful
+        /// form.</para>
         /// </summary>
         private static void BuildHubArtWell(Transform card)
         {
@@ -1848,15 +2076,27 @@ namespace DeNelle.Village.UI
             var wellGo = new GameObject("HubArtWell", typeof(RectTransform), typeof(Image));
             var rt = (RectTransform)wellGo.transform;
             rt.SetParent(card, false);
-            rt.anchorMin = new Vector2(0.08f, 1f - HubArtWellF);
-            rt.anchorMax = new Vector2(0.92f, 0.94f);
+            // ⭐ THE WELL FILLS THE TOP OF THE CARD (WO-1567 round 25). It ran 0.54..0.94 of the
+            // card at 8% side inset and painted frame-tile at preserveAspect TRUE - and that pair
+            // is the "tiny square floating ABOVE the plate" on
+            // Builds/ui-capture/ManageFlow_BUILD_hub_2670x1200.png. MEASURED, not inferred:
+            // frame-tile.png.meta declares `spriteBorder: {x:0, y:0, z:0, w:0}`, so the sprite is
+            // NOT 9-sliced; preserveAspect on a square sprite in a non-square zone therefore
+            // collapses it to a centred square a fraction of the well's width, and Image.Type.Sliced
+            // would not help either because there is no border to slice.
+            // ⛔ SO THE FRAME IS DRAWN, NOT STRETCHED. A flat well plus ElarionUiKit.GoldPerimeter
+            // fills the zone EXACTLY at any card aspect - the same border treatment the grid tile
+            // and the list row already use for selection, so it reads as one system.
+            rt.anchorMin = new Vector2(0.05f, 1f - HubArtWellF);
+            rt.anchorMax = new Vector2(0.95f, 0.97f);
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             var img = wellGo.GetComponent<Image>();
-            img.sprite = Resources.Load<Sprite>(ManageArt.FrameTile);
+            img.sprite = null;
             img.type = Image.Type.Simple;
-            img.preserveAspect = true;
-            img.color = new Color(1f, 1f, 1f, 0.55f);   // present, but never louder than the title
+            img.preserveAspect = false;
+            img.color = new Color(0.04f, 0.035f, 0.03f, 0.85f);
             img.raycastTarget = false;                   // the CARD is the tap target, not the well
+            ElarionUiKit.GoldPerimeter(rt);
         }
 
         private void BuildLauncherSummaries()
@@ -2273,10 +2513,27 @@ namespace DeNelle.Village.UI
             // ResolveDrawerBands re-runs it against the measured height, which is authoritative.)
             SetDrawerBands((DrawerOverlayY1 - DrawerOverlayY0) * _wellPx);
             drawer.offsetMin = drawer.offsetMax = Vector2.zero;
+            // ⭐ WO-1567 ROUND 25 - A FLAT PLATE WITH A DRAWN GOLD PERIMETER, NOT THE 9-SLICED
+            // content-panel FRAME.
+            // ⛔ THE FRAME WAS COSTING THE ROWS 192 REFERENCE PIXELS AND IT IS THE SINGLE BIGGEST
+            // ITEM IN THE QUEUE'S BUDGET. MEASURED on Builds/cap-manage-wave4.log:
+            //   MANAGE_QUEUE_PLATE sprite=content-panel inset=96px
+            //   MANAGE_QUEUE_BANDS drawer=458px title=0 tabs=132 plateInset=96 list=206px
+            // ResolveDrawerBands reads the inset off the LIVE sprite's 9-slice border and bounds the
+            // rows inside it - correctly, because a row drawn over that border reads as a rendering
+            // fault. So the border is the thing to change, not the bound: 96px at the top and 96 at
+            // the bottom of a 458px overlay is 42% of it spent on frame art.
+            // ⛔ AND IT IS ALSO WHAT THE MOCKUP DRAWS. Panel 8's queue overlay is a plain dark
+            // rectangle with a THIN gold outline - not the ornate carved frame the other panels use.
+            // GoldPerimeter is the kit's own thin border, already the selection cue on the grid
+            // tile and the list row, so the overlay reads as part of one system.
+            // ⚠ ResolveDrawerBands needs no change: it already answers `sprite == null` with an
+            // inset of 0, and it MEASURES rather than assuming, so this is the one edit.
             var drawerImage = _queueDrawer.GetComponent<Image>();
-            drawerImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
-            drawerImage.type = Image.Type.Sliced;
-            drawerImage.color = Color.white;
+            drawerImage.sprite = null;
+            drawerImage.type = Image.Type.Simple;
+            drawerImage.color = new Color(0.05f, 0.045f, 0.035f, 0.985f);
+            ElarionUiKit.GoldPerimeter(drawer);
 
             // ⛔ THE OVERLAY'S HEADER IS A CENTRED "QUEUE" AND AN X. THERE IS NO 'HIDE' BUTTON.
             //
@@ -2424,6 +2681,33 @@ namespace DeNelle.Village.UI
             // condition, which is where the two shapes were always chosen between.
             bool band = _queueDrawerOpen && DrawerInBandMode && !WorkspaceActive;
             _drawerBandMode = band;
+
+            // ⭐ WO-1567 ROUND 25 - THE SHARED CHROME ROW STANDS DOWN UNDER THE FULL OVERLAY.
+            // ⛔ TWO REASONS, AND EITHER ALONE IS ENOUGH.
+            //  1. THE MOCKUP. Panel 8 draws the queue as a full modal with its OWN title and X, and
+            //     with NO back arrow and NO queue pill - the overlay IS the queue, so a pill that
+            //     opens it and an arrow that leaves the screen under it are both wrong there.
+            //  2. THE GEOMETRY. DrawerOverlayY1 is now 1.0, and the title row is drawn ABOVE the
+            //     drawer's ceiling by SeatDrawerTitleOverlay (pivot 0, 116px). That band is the
+            //     chrome row's (WorkspaceHeaderY0..Y1). Leaving both up would overprint the word
+            //     QUEUE on the back arrow and the pill - the BUTTON OVER TEXT class of failure this
+            //     screen has already paid for twice.
+            // ⚠ SET FROM THE STATE, NEVER TOGGLED. A one-way hide is how a control never comes
+            // back: this runs on open AND on close (ToggleQueueDrawer -> Render), so the row is
+            // restored by the same line that hid it. The X and the scrim both close the overlay.
+            bool chromeHidden = _queueDrawerOpen && !band;
+            if (_tabsHost != null) _tabsHost.gameObject.SetActive(!chromeHidden);
+            // ⛔ AND THE BREADCRUMB TITLE WITH IT, BECAUSE IT IS NOT IN THAT ROW.
+            // MEASURED AT SOURCE: `_workspaceTitle = chrome.title` - it belongs to the KIT FRAME's
+            // Zone_Header (ElarionUiKit authors that zone at y 0.900-0.972), not to
+            // ManageHeaderActions, so hiding the row alone would leave "MANAGE - BUILD" behind. The
+            // overlay's own title band is DrawerTitleOverlayPx (116px) drawn ABOVE the drawer's
+            // ceiling, which at DrawerOverlayY1 = 1.0 lands at roughly y 0.838-0.963 of the panel -
+            // straight through it. That is the BUTTON OVER TEXT class of failure this screen has
+            // already paid for twice, and it would have been introduced by the same edit that
+            // bought the rows their band.
+            // ⚠ It is also what the mockup draws: panel 8 has ONE heading, and it is the word QUEUE.
+            if (_workspaceTitle != null) _workspaceTitle.gameObject.SetActive(!chromeHidden);
             if (_workspaceHost != null) _workspaceHost.gameObject.SetActive(WorkspaceActive && !_queueDrawerOpen);
 
             // The TRAINING NOW band (and its extra rows) is the line's MIRROR; the drawer
@@ -2522,11 +2806,17 @@ namespace DeNelle.Village.UI
                 drawer.anchorMax = new Vector2(0.998f, DrawerOverlayY1);
                 drawer.pivot = new Vector2(0.5f, 0.5f);
                 drawer.offsetMin = drawer.offsetMax = Vector2.zero;
-                if (image != null && image.sprite == null)
+                // ⛔ DO NOT RE-POINT THIS AT content-panel. This branch used to restore the sliced
+                // frame whenever the sprite was null - which is exactly the state BuildQueueDrawer
+                // now authors deliberately - so it would have put the 96px 9-slice inset back on
+                // the very next layout pass and silently taken 192px off the list band again. The
+                // overlay's plate is FLAT with a drawn GoldPerimeter (see BuildQueueDrawer for the
+                // measurement and the mockup reason); band mode paints its own flat plate above.
+                if (image != null)
                 {
-                    image.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
-                    image.type = Image.Type.Sliced;
-                    image.color = Color.white;
+                    image.sprite = null;
+                    image.type = Image.Type.Simple;
+                    image.color = new Color(0.05f, 0.045f, 0.035f, 0.985f);
                 }
             }
         }
@@ -3002,16 +3292,28 @@ namespace DeNelle.Village.UI
                 if (child == null || child.name != "ManageHeartFace") continue;
                 if (Application.isPlaying) Destroy(child.gameObject); else DestroyImmediate(child.gameObject);
             }
+            // ⭐ WO-1567 ROUND 25 - THE CHIP IS IN THE HUB'S HEADER BAND, AT THE TOUCH FLOOR.
+            // ⛔ THE SEAT IT REPLACES IS THE CAUSE OF SEVEN OF THE ELEVEN NON-QUEUE ORACLE FAILURES.
+            // MEASURED on Builds/cap-manage-wave4.log, every line naming this object:
+            //   SUB-TOUCH-FLOOR BAND 'ManageHeartFace' resolves 440.5x75.4 ref px -- 36.6 px UNDER
+            //     ElarionUiKit.MinTouchPx (112)
+            //   BUTTONS OVERLAP  ManageCard_BUILD / _ARMY / _RESEARCH each share 74.9x39.9 (ARMY
+            //     242.7x39.9) ref px with it -- two tap targets in one place
+            //   BUTTON OVER TEXT the same three cards cover its "HEART L4" label
+            // The old comment reasoned the band was "under the card grid (which ends at 0.695)".
+            // That number went stale the moment the band became derived: with a ~583px host the
+            // cards ran 0.281..0.794, so 0.70..0.83 was INSIDE them. The cure is not a smaller chip
+            // - it is the hub's own band arithmetic, exactly as that comment said, and this is it.
+            // ⚠ THE BAND IS MEASURED, NOT TYPED: _hubHeartY0 is 1 - MinTouchPx/hostH, computed by
+            // BuildLauncher off the SAME host height the card band's topF is computed from, so the
+            // two rects are complements by construction and cannot drift apart again.
+            // ⛔ AND IT STAYS ON THE HUB. HeartSurfaceRegression:118-139 pins that the door is
+            // BuildHubHeartDoor's, named ManageHeartFace, and is NOT in the chrome row - the mockup
+            // keeps that row for the back arrow, the centred title and the queue pill.
             var heart = ElarionUiKit.BuildObsidianButton(_launcherHost,
                 "HEART L" + DeNelle.Village.Buildings.Progression.HeartProgression.Level,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                // Under the card grid (which ends at 0.695) and above the shared CLOSE band.
-                // 0.38-0.62 of a ~1218px host is ~292px wide; 0.70-0.82 of a ~583px host is ~70px...
-                // NOT ENOUGH, so the band is 0.70-0.83 => ~76px. ⚠ ClampMinTouch is left to raise it
-                // to the 112px floor here, and that is stated rather than hidden: the hub's vertical
-                // budget between the cards and CLOSE is genuinely under one touch target, and the
-                // right fix is the hub's own band arithmetic, not a silently short button.
-                new Vector2(0.38f, 0.70f), new Vector2(0.62f, 0.83f), OpenHeartSurface);
+                new Vector2(0.02f, _hubHeartY0), new Vector2(0.24f, 1f), OpenHeartSurface);
             if (heart == null)
             {
                 FlowTrace.Fail("Manage", "the HEART face failed to build - the direct route to " +
@@ -3021,6 +3323,10 @@ namespace DeNelle.Village.UI
             heart.gameObject.name = "ManageHeartFace";
             MedievalUiSkin.ApplyButton(heart, false);
             ElarionUiKit.ClampMinTouch(heart);
+            FlowTrace.Step("Manage", "MANAGE_HUB_HEART band " + _hubHeartY0.ToString("0.###") +
+                "..1.0 of a " + _hubHeartHostH.ToString("0") + "px host = " +
+                ((1f - _hubHeartY0) * _hubHeartHostH).ToString("0") + "px tall (floor " +
+                ElarionUiKit.MinTouchPx.ToString("0") + ") - the header band, clear of every card");
         }
 
         /// <summary>Open the Heart surface. Closes Manage first (PanelManager holds one exclusive
@@ -5448,14 +5754,20 @@ namespace DeNelle.Village.UI
         /// <para>⚠ The ORDER is unchanged - Ad, Cancel, Move up - so the destructive control is
         /// still never adjacent to the primary slot (the WO-1058 rule).</para>
         /// </summary>
+        /// <param name="y0">The row's control band FLOOR. Passed in rather than read off
+        /// <see cref="RowCtrlY0"/> because the QUEUE row's height is a MEASUREMENT, not
+        /// <see cref="RowHeightPx"/> - see <see cref="QueueCtrlY0"/> for the 98.6px failure that
+        /// the fixed fraction produced on forty controls.</param>
+        /// <param name="y1">The band's ceiling, the mirror of <paramref name="y0"/>.</param>
         private static void WordSlot(int index, int count, float x0, float span,
+                                     float y0, float y1,
                                      out Vector2 aMin, out Vector2 aMax)
         {
             if (count < 1) count = 1;
             float w = (span - ClusterGapX * (count - 1)) / count;
             float x = x0 + index * (w + ClusterGapX);
-            aMin = new Vector2(x, RowCtrlY0);
-            aMax = new Vector2(x + w, RowCtrlY1);
+            aMin = new Vector2(x, y0);
+            aMax = new Vector2(x + w, y1);
         }
 
         private void AddSectionHeader(string text)
@@ -5735,7 +6047,14 @@ namespace DeNelle.Village.UI
             float chrome = padTop + padBottom;
             if (have < chrome + _queueRowPx) return;       // less than one row: nothing to trim to
 
-            int whole = Mathf.FloorToInt((have - chrome + spacing) / pitch);
+            // ⚠ THE EPSILON IS LOAD-BEARING. `_queueRowPx` is derived from `have` by the very
+            // division this floor inverts, so when the band is sized for exactly N rows the ratio
+            // lands ON N - and float returns 4.9999997 as readily as 5.0000002. Without it a band
+            // authored to seat five seats four, and the shortfall WARN below fires on a screen that
+            // had the room. One ULP, not padding: `have` is a measured rect, so a real shortfall is
+            // always larger than this by orders of magnitude.
+            const float QueueRowFitEpsilon = 0.001f;
+            int whole = Mathf.FloorToInt((have - chrome + spacing) / pitch + QueueRowFitEpsilon);
             if (whole < 1) return;
             float want = chrome + whole * _queueRowPx + (whole - 1) * spacing;
             if (whole < QueueRowsVisibleTarget)
@@ -5768,6 +6087,17 @@ namespace DeNelle.Village.UI
             // ⭐ WO-1488: the MEASURED row height, not the authored constant. See _queueRowPx.
             var row = MakeRowHost("QueueRow", _queueRowPx);
             ApplyRowSurface(row);
+
+            // ⭐ WO-1567 ROUND 25 - THE CONTROL BAND IS DERIVED FROM THIS ROW'S MEASURED HEIGHT.
+            // Read ONCE per row so every verb on it shares one band; see QueueCtrlY0 for the
+            // captured 98.6px failure the fixed 0.88 fraction produced on forty controls.
+            float ctrlY0 = QueueCtrlY0, ctrlY1 = QueueCtrlY1;
+            FlowTrace.Once("Manage", "queue-row-ctrl-band",
+                "MANAGE_QUEUE_CTRL row=" + _queueRowPx.ToString("0") + "px -> control band " +
+                ctrlY0.ToString("0.###") + ".." + ctrlY1.ToString("0.###") + " = " +
+                ((ctrlY1 - ctrlY0) * _queueRowPx).ToString("0") + "px (floor " +
+                ElarionUiKit.MinTouchPx.ToString("0") + "). The fraction follows the MEASURED row; " +
+                "the row is never grown to suit the fraction, because that costs a visible row.");
 
             // A stack CHILD is indented so the parent/child relationship reads structurally, not
             // by colour — the expanded items visibly belong to the xN header above them.
@@ -5890,7 +6220,7 @@ namespace DeNelle.Village.UI
                 string key = r.StackKey;
                 var expand = ElarionUiKit.BuildObsidianButton(row, r.Expanded ? "Collapse" : "Expand x" + r.StackCount,
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
+                    new Vector2(PrimaryX0, ctrlY0), new Vector2(PrimaryX1, ctrlY1),
                     () => _vm?.ToggleStack(key));
                 ElarionUiKit.ClampMinTouch(expand);
                 return;
@@ -5924,7 +6254,7 @@ namespace DeNelle.Village.UI
                 string finishVerb = string.IsNullOrEmpty(r.FinishVerbText) ? "Finish Now" : r.FinishVerbText;
                 var fin = BuildTwoLineCta(row, finishVerb, r.FinishCostText,
                     r.CanAffordFinish ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
+                    new Vector2(PrimaryX0, ctrlY0), new Vector2(PrimaryX1, ctrlY1),
                     () => { _vm?.FinishNow(channel, jobId); FlushNotice(); });
                 ElarionUiKit.ClampMinTouch(fin);
             }
@@ -5965,8 +6295,8 @@ namespace DeNelle.Village.UI
             {
                 // FIRST in the cluster, as the WO-1058 order requires (Ad, Cancel, Move up), and
                 // exactly AdChipWidthX wide - see that constant for the width and the ad ruling.
-                slotMin = new Vector2(ClusterX0, RowCtrlY0);
-                slotMax = new Vector2(ClusterX0 + AdChipWidthX, RowCtrlY1);
+                slotMin = new Vector2(ClusterX0, ctrlY0);
+                slotMax = new Vector2(ClusterX0 + AdChipWidthX, ctrlY1);
                 var ad = ElarionUiKit.BuildObsidianButton(row, "Ad",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
                     slotMin, slotMax,
@@ -5980,7 +6310,7 @@ namespace DeNelle.Village.UI
                 // never has to infer it from a colour or a number that appears after the fact.
                 // WO-1058 moved the BOX, not the promise: same Red face, same refund line, and it
                 // is now the FURTHEST control from the primary slot instead of sitting inside it.
-                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, out slotMin, out slotMax);
+                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, ctrlY0, ctrlY1, out slotMin, out slotMax);
                 // ⭐ THE FULL WORD, IN CAPS, like every other verb the mockup draws on this
                 // overlay. It read "CANC..." on the owner's device because six letters were being
                 // asked to fit a slot sized for two; the slot is the thing that changed.
@@ -6019,7 +6349,7 @@ namespace DeNelle.Village.UI
             if (r.CanBumpUp)
             {
                 int idx = r.PendingIndex;
-                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, out slotMin, out slotMax);
+                WordSlot(wordIdx++, wordCount, wordX0, wordSpan, ctrlY0, ctrlY1, out slotMin, out slotMax);
                 var up = ElarionUiKit.BuildObsidianButton(row, "Move up",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                     slotMin, slotMax,
@@ -6046,6 +6376,14 @@ namespace DeNelle.Village.UI
         //   cost 0.06-0.46 -> 0.40 * 116 = 46.4px, holding a 32px line box (~37px)   OK
         // 99.8px of the 116 is spent, leaving ~16px of air top and bottom. The button's own touch
         // floor is unaffected: 116 >= MinTouchPx (112), so ClampMinTouch never grows it.
+        // ⚠ RE-CHECKED AT THE OTHER END OF THE RANGE (WO-1567 round 25). A QUEUE row sits at the
+        // MinTouchPx floor, where QueueCtrlY0 gives the control the WHOLE row - so the box is 112px,
+        // not 116, and these two bands resolve 4px tighter:
+        //   verb 0.46 * 112 = 51.5px, holding a 42px line box   OK
+        //   cost 0.40 * 112 = 44.8px, holding a 32px line box   OK
+        // Both stay far above the ~24px band under which TMP culls a line outright, so the touch
+        // fix costs the two-line CTA nothing it needed. Stated rather than assumed, because the
+        // paragraph above reasons from 116 and 116 is no longer the only box this method is given.
         private const float CtaVerbY0 = 0.50f, CtaVerbY1 = 0.96f;
         private const float CtaSubY0  = 0.06f, CtaSubY1  = 0.46f;
 

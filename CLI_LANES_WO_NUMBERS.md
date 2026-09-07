@@ -187,9 +187,15 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-ninth pass): main line next free = **1573**.
-> *(Edit-only fix lane minted **1572** = BUILD COLLECTIONS ROOT HIDES FOUR CATEGORIES BECAUSE BAKED
-> TWINS COUNT AS BUILT. Bumped 1572 -> 1573 in this SAME edit. The other half of 1571: that lane
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-tenth pass): main line next free = **1575**.
+> *(Manage pass-three lane minted **1573** and **1574** = QUEUE PILL ON MANAGE HUB OPENS NOTHING +
+> TROOP PORTRAITS CARRY BAKED GILT RING. Bumped 1573 -> 1575 in this SAME edit. The other half of the
+> pass-three handback. 1573: drawer is child of Zone_Body, which ApplyScreenVisibility sets inactive
+> while hub is up, blocking drawer interaction - mount above body or re-parent on open. 1574: portraits
+> are 1254x1254 medallions with baked ring; detail card zone crops non-square workaround waiting for
+> rectangular art (nine troop ids, owner action). Also: earlier edit-only fix lane minted **1572** =
+> BUILD COLLECTIONS ROOT HIDES FOUR CATEGORIES BECAUSE BAKED TWINS COUNT AS BUILT. Bumped 1572 -> 1573
+> in that earlier edit. The other half of 1571: that lane
 > re-pointed the Manage BUILD door, then found the root itself was EMPTIED, not authored short.
 > `card-collections.json` authors SEVEN active build collections; the owner's frame
 > `Logs/device/screens/owner-screen-20260907-005742.png` shows THREE.

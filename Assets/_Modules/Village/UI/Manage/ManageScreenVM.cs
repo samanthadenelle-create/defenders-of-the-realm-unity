@@ -897,11 +897,26 @@ namespace DeNelle.Village.UI
             // which must never block on data readiness). The honest path is ADDED here rather than
             // its behaviour repurposed underneath them.
             string label = ObsidianQueueHud.FormatJobTarget(job);
+            // ⭐ WO-1567 ROUND 26 - THE THUMBNAIL'S IDENTITY IS RESOLVED BESIDE THE LABEL'S,
+            // BY THE SAME BRANCHES, BECAUSE THEY ARE THE SAME QUESTION.
+            // ⛔ THIS IS THE MEASURED DEFECT: on every *_queue frame, row 1 ("Archer Tower -
+            // Level 2") carries NO icon while rows 2 and 4 do. The asymmetry is exactly the
+            // two-catalog split the block below already documents. A TOWER is not in
+            // BuildingTierCatalog - it lives in CatalogRegistry - so `building` is null for it,
+            // the LABEL is resolved correctly by the structures-catalog branch, and the
+            // PortraitKey (composed further down, guarded on `building != null`) came out EMPTY.
+            // Nothing logged, because nothing was missing: the art exists and the BUILD grid tile
+            // paints it from this very id (ComposeBuildTiles -> ManageArt.BuildingPortraitKey).
+            // The row simply never asked for it.
+            // ⚠ ONE KEY PRODUCER, UNCHANGED. This carries the ID that won; ManageArt still composes
+            // the key. Canon 9 holds - the View is handed a key, and no second spelling is minted.
+            string portraitId = null;
             if (building != null)
             {
                 string name = Ascii(!string.IsNullOrWhiteSpace(building.DisplayName)
                     ? building.DisplayName : buildingId);
                 label = job.TargetTier > 0 ? name + " - Level " + job.TargetTier : name;
+                portraitId = buildingId;
             }
             else if (channel == ChannelId.Builder && !string.IsNullOrEmpty(buildingId))
             {
@@ -926,6 +941,9 @@ namespace DeNelle.Village.UI
                     label = job.TargetTier > 0
                         ? structureName + " - Level " + job.TargetTier
                         : structureName;
+                    // The SAME id the BUILD grid's tile paints from - see the note above the
+                    // `portraitId` declaration for the measured row-1-has-no-icon defect.
+                    portraitId = catalogId;
                 }
                 else
                 {
@@ -956,6 +974,17 @@ namespace DeNelle.Village.UI
             // grammar - "tower_ground_archer" and "barracks-train:footman:7" both trip this. The
             // row still paints; the failure is traced rather than silently prettified, which is
             // exactly what PrettyJobLabel's title-casing used to do.
+            // ⛔ A BUILDER ROW WITH NO THUMBNAIL IDENTITY IS SAID OUT LOUD. The previous silence is
+            // why row 1 lost its icon for a whole capture round with nothing in the log: an empty
+            // key never reaches ManageArt, so ManageArt could not announce a miss, and the row
+            // simply drew no picture. A gap nobody names is a gap nobody closes (CLAUDE.md 12).
+            if (channel == ChannelId.Builder && string.IsNullOrEmpty(portraitId))
+                FlowTrace.Once("Manage", "queue-thumb-miss:" + (job.StructureId ?? "<null>"),
+                    "queue row for Builder job '" + job.StructureId + "' resolved no portrait " +
+                    "identity from either catalog, so mockup panel 8's row thumbnail is absent. " +
+                    "The LABEL may still be correct - these are two different lookups - so check " +
+                    "the id against BuildingTierCatalog and CatalogRegistry, not the row's text.");
+
             if (label.IndexOf('_') >= 0 || label.IndexOf(':') >= 0)
                 FlowTrace.Fail("Manage", "queue row label '" + label + "' carries id grammar for job '" +
                     job.StructureId + "' (channel " + channel + ") - the player is reading an " +
@@ -977,8 +1006,14 @@ namespace DeNelle.Village.UI
                 // WO-1488 s2: the thumbnail key, from the ONE producer. Level 1 is the base sheet;
                 // ManageArt.LoadSprite already falls back tier -> base, so a tier the art wave has
                 // not drawn paints the building rather than a blank.
-                PortraitKey = building != null && !string.IsNullOrEmpty(buildingId)
-                    ? ManageArt.BuildingPortraitKey(buildingId, 1) : string.Empty,
+                // ⭐ WO-1567 ROUND 26 - OFF `portraitId`, WHICH BOTH CATALOG BRANCHES SET.
+                // ⛔ IT READ `building != null ? BuildingPortraitKey(buildingId, 1) : ""`, and that
+                // guard is the row-1-has-no-icon defect: a TOWER resolves its NAME through
+                // CatalogRegistry and its `building` is null, so every tower and wall row - the
+                // most common Builder job there is - asked for no art at all while its neighbours
+                // did. See the `portraitId` note above the label branches.
+                PortraitKey = !string.IsNullOrEmpty(portraitId)
+                    ? ManageArt.BuildingPortraitKey(portraitId, 1) : string.Empty,
                 Queued = queued,
                 PendingIndex = pendingIndex,
                 IsStackChild = isChild,

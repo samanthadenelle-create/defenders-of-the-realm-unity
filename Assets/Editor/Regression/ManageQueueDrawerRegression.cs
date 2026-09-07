@@ -57,6 +57,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using DeNelle.Village;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Editor.Regression
 {
@@ -420,6 +421,11 @@ namespace DeNelle.Editor.Regression
             {
                 float tabsPx = ConstOf(panel, "DrawerTabsPx");
                 float titlePx = ConstOf(panel, "DrawerTitlePx");
+                // ⚠ DECLARED HERE, IN THIS CASE'S OWN SCOPE. The round-26 title pin below reached
+                // for a `minTouch` that belongs to [rows-inside-the-plate]'s block further down -
+                // CS0103, and a red gate. Two cases in one method do not share locals; each reads
+                // what it asserts on.
+                const float minTouch = ElarionUiKit.MinTouchPx;
                 if (tabsPx < 0f || titlePx < 0f)
                     failures.Add("[drawer-clear-of-card] could not read DrawerTabsPx / DrawerTitlePx off the " +
                                  "source - a scoped assertion that cannot find its scope FAILS, never passes");
@@ -438,12 +444,33 @@ namespace DeNelle.Editor.Regression
                     // and TWO. The title is now an overlay above the ceiling (consuming no band,
                     // DrawerTitlePx = 0) and the X moved into the column the tab row already leaves
                     // free at TabsRightStop.
-                    if (titlePx > 0f)
-                        failures.Add("[drawer-clear-of-card] the queue title has taken a band again (" +
-                                     titlePx + "px). It renders ABOVE the drawer's ceiling, so a band " +
-                                     "reserved for it inside the overlay holds nothing and costs the list a " +
-                                     "whole row. Keep DrawerTitlePx at 0 and seat it with " +
-                                     "SeatDrawerTitleOverlay");
+                    // ⛔ RE-POINTED 2026-09-07 (WO-1567 round 26), WITH THE RULING, AND THE REASON
+                    // ABOVE IS KEPT BECAUSE IT WAS TRUE OF THE SHAPE IT DESCRIBED. It read
+                    //     if (titlePx > 0f) ... "Keep DrawerTitlePx at 0"
+                    // which was correct only while the drawer's ceiling left room INSIDE THE WELL
+                    // for the header to be drawn above it. Round 25 raised DrawerOverlayY1 to 1.0,
+                    // and Builds/cap-manage-wave5.log then failed all three *_queue frames:
+                    //   TEXT OFF PLATE 'Drawer_Header/Label' ("QUEUE") overflows its layout.body
+                    //   ZoneBacking by 112 ref px -- text y 313.2..425.2 vs plate y -444.8..313.2
+                    // i.e. the header had grown off the body's black plate - RULE 1, the
+                    // founding-Echo-card defect. Extending the DRAWER's plate does not answer it:
+                    // UICaptureLaunch.ZoneBodyAbove walks to the ancestor named Zone_Body and
+                    // PlateOf takes THAT zone's backing, not the nearest one.
+                    // ⭐ SO THE PIN INVERTS: the title band must be REAL and INSIDE the drawer.
+                    // What it always defended is unchanged - the word QUEUE and a MinTouchPx X both
+                    // need a rect they fit in, because TMP culls a line whose rect cannot seat its
+                    // font floor, and a zero-height zone deletes the word rather than freeing space.
+                    if (titlePx < minTouch)
+                        failures.Add("[drawer-clear-of-card] the queue title band is " + titlePx +
+                                     "px, under ElarionUiKit.MinTouchPx (" + minTouch + "). It carries the " +
+                                     "word QUEUE and the overlay's X; at 0 it was drawn ABOVE the drawer, " +
+                                     "which since DrawerOverlayY1 = 1.0 means off the body's black plate - " +
+                                     "six TEXT OFF PLATE failures on Builds/cap-manage-wave5.log, 112px each");
+                    if (!panel.Contains("_drawerHeader.pivot = new Vector2(0.5f, 1f);"))
+                        failures.Add("[drawer-clear-of-card] the title zone grows UPWARD out of the drawer " +
+                                     "again (pivot 0). With the overlay reaching the well's ceiling that puts " +
+                                     "the header off the body plate. It must grow DOWNWARD into the band " +
+                                     "DrawerTitlePx now reserves for it.");
                     // ⛔ RE-POINTED 2026-09-06 (WO-1488), WITH THE RULING, AND THE REASON IS KEPT
                     // SO IT IS NOT MOVED BACK. It read
                     //     if (tabsPx <= 120f) ... "must be LARGER than the 120px X it now contains"
@@ -562,8 +589,20 @@ namespace DeNelle.Editor.Regression
             //   * restore `FitSingleLine(state, 0f, QueueLineFontPx)` (the 30px kit floor, which
             //     is what ellipsised "11m 0s left (0% do...")
             {
-                const float wellPx = 579f;               // MEASURED: r24 drawer=475px / 0.82 span
-                const float minTouch = 112f;             // ElarionUiKit.MinTouchPx
+                // ⭐ WO-1567 ROUND 25 - RE-MEASURED, BECAUSE THE WELL GREW. It was 579 ("r24
+                // drawer=475px / 0.82 span"), and that reading was correct for a well that still
+                // reserved the shared CLOSE band on every screen. WO-1567 round 25 reclaimed it:
+                // CLOSE is rendered on the HUB ALONE (WO-1491), so the body floor is now the
+                // frame's own inner edge and the well is
+                //   (WorkspaceHeaderY0 0.838 - WorkspaceBodyFloorY 0.020) x 927 = 758 ref px
+                // where 927 is the reference panel height the r24 log itself pins:
+                //   580 = (0.838 - 0.050 - 0.020) x panelPx - CanonCtaHeight(132) -> panelPx = 927.
+                // ⚠ A YARDSTICK, NOT A CLAIM ABOUT EVERY DEVICE - the RATIOS below are the pin.
+                const float wellPx = 758f;
+                // ⚠ THE FLOOR ITSELF, NOT A COPY OF IT. This read `112f` with the real name in a
+                // trailing comment, which is the duplicated state CLAUDE.md keeps paying for - and
+                // this file already has the `using` for it.
+                const float minTouch = ElarionUiKit.MinTouchPx;
                 float y0 = ConstOf(panel, "DrawerOverlayY0"), y1 = ConstOf(panel, "DrawerOverlayY1");
                 float inset = ConstOf(panel, "DrawerPlateInsetPx");
                 float overlay = ConstOf(panel, "DrawerTitleOverlayPx");
@@ -571,8 +610,13 @@ namespace DeNelle.Editor.Regression
                 float bandGap = ConstOf(panel, "DrawerBandGapPx");
                 float rowPx = ConstOf(panel, "RowHeightPx");
                 float stateFloor = ConstOf(panel, "QueueStateFontFloorPx");
+                // ⚠ READ IN THIS SCOPE TOO. The round-26 band sum below reached for the `titlePx`
+                // that belongs to [drawer-clear-of-card]'s block above (CS0103). It is the SAME
+                // ConstOf read - which resolves DrawerTitlePx through its DrawerTitleOverlayPx
+                // alias - so the two cases agree by construction rather than by a shared local.
+                float titlePx = ConstOf(panel, "DrawerTitlePx");
                 if (y0 < 0f || y1 < 0f || inset < 0f || overlay < 0f || tabsBand < 0f ||
-                    bandGap < 0f || rowPx < 0f || stateFloor < 0f)
+                    bandGap < 0f || rowPx < 0f || stateFloor < 0f || titlePx < 0f)
                     failures.Add("[rows-inside-the-plate] could not read the overlay's rect / plate / timer " +
                                  "constants off the source - a scoped assertion that cannot find its scope " +
                                  "FAILS, it never passes vacuously");
@@ -580,18 +624,59 @@ namespace DeNelle.Editor.Regression
                 {
                     float drawerPx = (y1 - y0) * wellPx;
                     // floor = the plate's inner edge; ceiling = the tab row's underside.
-                    float listPx = drawerPx - inset - tabsBand - 2f * bandGap;
+                    // ⭐ WO-1567 ROUND 26 - THE TITLE BAND IS PART OF THE SUM NOW. It was omitted
+                    // here because DrawerTitlePx was 0 and the header was drawn above the ceiling;
+                    // it is inside the drawer since the TEXT OFF PLATE failures, so a sum that
+                    // leaves it out over-reports the list by a whole row.
+                    float listPx = drawerPx - inset - titlePx - tabsBand - 2f * bandGap;
                     if (listPx < rowPx + 20f)
                         failures.Add("[rows-inside-the-plate] the overlay's list band is " + listPx +
                                      "px INSIDE THE PLATE at well=" + wellPx + " - under the " + (rowPx + 20f) +
                                      "px one row plus scroll padding needs, so not one row is fully visible at " +
                                      "rest. Grow the overlay; never push the band back over the frame art");
-                    float overlayRoom = (1f - y1) * wellPx;
-                    if (overlayRoom < overlay)
-                        failures.Add("[rows-inside-the-plate] the drawer's ceiling (" + y1 + ") leaves " +
-                                     overlayRoom + "px above it for a " + overlay + "px title overlay - the X " +
-                                     "spills out of the panel, or slides back into the tab strip where the " +
-                                     "capture caught it reading as a fourth tab");
+                    // ⭐ WO-1567 ROUND 25 - RE-POINTED WITH THE RULING, NOT RELAXED. WHAT THIS CASE
+                    // DEFENDS IS UNCHANGED: the title overlay must have a real band to render in,
+                    // or the X slides back into the tab strip (where the capture caught it reading
+                    // as a fourth tab) or spills off the panel. What changed is WHERE that band
+                    // comes from. It used to be the slice of the WELL the ceiling left free, which
+                    // cost the rows 21% of the overlay; the overlay now reaches the well's ceiling
+                    // (DrawerOverlayY1 = 1) and its title takes the SHARED CHROME ROW's band -
+                    // WorkspaceHeaderY0..Y1 - which ApplyDrawerPlacement stands down while the
+                    // overlay is up. That is also what mockup panel 8 draws: one heading, the word
+                    // QUEUE, with no back arrow and no queue pill beside it.
+                    // ⛔ SO THE ROOM IS THE SUM OF BOTH, AND THE STANDDOWN IS PART OF THE PIN. A
+                    // ceiling of 1.0 WITHOUT the chrome hidden would print QUEUE straight through
+                    // "MANAGE - BUILD" and the queue pill - the BUTTON OVER TEXT failure this
+                    // screen has already paid for twice - so the two are asserted together.
+                    // ⛔ RE-POINTED AGAIN 2026-09-07 (WO-1567 round 26). This used to assert that
+                    // the ceiling left ROOM ABOVE ITSELF for the title, because the title was drawn
+                    // there. It is drawn INSIDE now (TEXT OFF PLATE, six failures on
+                    // Builds/cap-manage-wave5.log), so "room above the ceiling" is the wrong
+                    // question and asking it would forbid the fix. What the case still defends is
+                    // the same thing in the new shape: the header must have a real rect that seats
+                    // a MinTouchPx X, and it must NOT reach above the body's black plate.
+                    if (overlay > titlePx + 0.5f)
+                        failures.Add("[rows-inside-the-plate] the title zone is " + overlay +
+                                     "px but only " + titlePx + "px is reserved for it inside the drawer, so " +
+                                     "it overhangs the tab row beneath - or, at a 1.0 ceiling, the body plate " +
+                                     "above. DrawerTitlePx and DrawerTitleOverlayPx are the same band and " +
+                                     "must stay the same number");
+                    if (y1 > 1.001f)
+                        failures.Add("[rows-inside-the-plate] the overlay's ceiling (" + y1 + ") reaches ABOVE " +
+                                     "the well. Every row and the header would then be measured against a " +
+                                     "layout.body ZoneBacking they no longer sit on - RULE 1 [text-off-plate], " +
+                                     "which is what the round-25 pivot-0 header failed by 112px on all three " +
+                                     "*_queue frames");
+                    if (y1 > 0.999f &&
+                        (!panel.Contains("bool chromeHidden = _queueDrawerOpen && !band;") ||
+                         !panel.Contains("_tabsHost.gameObject.SetActive(!chromeHidden)") ||
+                         !panel.Contains("_workspaceTitle.gameObject.SetActive(!chromeHidden)")))
+                        failures.Add("[rows-inside-the-plate] the overlay reaches the well's ceiling but the " +
+                                     "shared chrome no longer stands down under it. Its title band is then " +
+                                     "the SAME band as the back arrow, the breadcrumb title and the queue " +
+                                     "pill - and the breadcrumb is not even in ManageHeaderActions (it is " +
+                                     "chrome.title, in the kit frame's Zone_Header), so hiding the row alone " +
+                                     "is not enough. Both writers, or neither.");
                     if (overlay < minTouch)
                         failures.Add("[rows-inside-the-plate] the title overlay is " + overlay +
                                      "px and cannot seat a MinTouchPx (" + minTouch + ") X. That is the exact " +
@@ -675,13 +760,39 @@ namespace DeNelle.Editor.Regression
         /// arithmetic is replayed from the LIVE constants, never from a copy in this file - the same
         /// stance Const() takes for the band px, and the reason this suite can compare two seats
         /// without knowing either number.</summary>
-        private static float ConstOf(string src, string name)
+        /// <summary>
+        /// The value of a named const in the source, or -1 when it cannot be read (every caller
+        /// treats -1 as a FAILURE, never as a pass - a scoped assertion that cannot find its scope
+        /// must not pass vacuously).
+        /// <para>⭐ WO-1567 ROUND 25 - IT ALSO RESOLVES A CONST AUTHORED AS ANOTHER CONST. Two of
+        /// these bands are now written <c>= ElarionUiKit.MinTouchPx;</c> rather than as a copied
+        /// 112f, which is the right way round: the band's ONLY constraint is the touch floor, so it
+        /// should follow the floor rather than restate it. Without this arm the numeric regex would
+        /// miss them and this suite would report "could not read" on the very authoring style the
+        /// repo's duplicated-state rule asks for.</para>
+        /// </summary>
+        private static float ConstOf(string src, string name) { return ConstOf(src, name, 0); }
+
+        private static float ConstOf(string src, string name, int depth)
         {
+            if (depth > 3) return -1f;                   // an alias cycle is a miss, never a hang
             var m = System.Text.RegularExpressions.Regex.Match(src,
                 @"\b" + name + @"\s*=\s*([0-9]+(?:\.[0-9]+)?)f");
-            return m.Success && float.TryParse(m.Groups[1].Value,
-                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
-                out float v) ? v : -1f;
+            if (m.Success && float.TryParse(m.Groups[1].Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float v))
+                return v;
+            if (System.Text.RegularExpressions.Regex.IsMatch(src,
+                    @"\b" + name + @"\s*=\s*ElarionUiKit\.MinTouchPx\s*;"))
+                return ElarionUiKit.MinTouchPx;
+            // ⭐ ONE HOP TO A NAMED CONST. DrawerTitlePx is authored `= DrawerTitleOverlayPx;`
+            // deliberately - the title BAND and the title ZONE must be the same number, and the way
+            // to guarantee that is to have one number, not two that agree today.
+            var alias = System.Text.RegularExpressions.Regex.Match(src,
+                @"\b" + name + @"\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*;");
+            if (alias.Success && !string.Equals(alias.Groups[1].Value, name, StringComparison.Ordinal))
+                return ConstOf(src, alias.Groups[1].Value, depth + 1);
+            return -1f;
         }
 
         private static int Count(string src, string needle)

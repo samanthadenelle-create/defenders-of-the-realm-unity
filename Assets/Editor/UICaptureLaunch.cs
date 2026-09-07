@@ -6997,6 +6997,13 @@ namespace DeNelle.Editor
                                       "_" + LandscapeTargets[t].Tag + ".png");
             BeginCaptureLedger("MANAGE_OPERATIONAL", expectedFiles, RetiredManageOperationalFrames());
 
+            // ⛔ THE SAME OMISSION AS THE FLOW MAP'S, FIXED IN THE SAME BREATH. Both Manage entry
+            // points reported fidelity WITHOUT ever running the aspect-divergence proof, so both
+            // could only ever print UI_CAPTURE_FIDELITY_DEGRADED n/n with the fallback reason "the
+            // aspect-divergence proof did not run". Leaving one of the pair unfixed is how a lane
+            // spends the next round re-diagnosing a defect it already closed.
+            ProveGeometryMoves();
+
             int count = 0;
             using (new ManageLastTabPin())
                 for (int s = 0; s < shots.Length; s++)
@@ -7804,6 +7811,20 @@ namespace DeNelle.Editor
             _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
             _flowInventory.Clear();
             _flowStateNotes.Clear();
+
+            // ⛔ THE ASPECT-DIVERGENCE PROOF, WHICH THIS ENTRY POINT HAD NEVER RUN. This is the
+            // whole of `UI_CAPTURE_FIDELITY_DEGRADED 16/16` on Builds/cap-manage-wave4.log, and the
+            // marker quoted its own cause verbatim: "Reason: the aspect-divergence proof did not
+            // run" - which is ReportFidelity's FALLBACK string, printed when `_geoMoveFailure` is
+            // null because nothing ever attempted the proof. Five other capture bodies call it
+            // (lines 571, 648, 670, 2068, 2600); this one did not, so `_geoMoveProof` was still null
+            // at ReportFidelity and it degraded all sixteen builds on a proof that was never asked
+            // for. ⚠ THAT IS A HARNESS DEFECT, NOT A LAYOUT ONE: no Manage panel reads Screen.*
+            // (verified by grep over Assets/_Modules/Core/Manage and .../Village/UI/Manage - zero
+            // hits), so every zone in these frames already resolves through the kit surface the
+            // scope moves. The frames were target-accurate; the run simply could not say so.
+            // It runs BEFORE the sweep so a failing proof is on the log above the frames it judges.
+            ProveGeometryMoves();
 
             var plan = BuildManageFlowPlan();
             int expected = plan.Length;   // DERIVED from the plan. Never a constant beside it.

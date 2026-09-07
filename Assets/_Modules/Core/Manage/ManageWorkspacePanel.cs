@@ -584,6 +584,10 @@ namespace DeNelle.Core.Manage
             // moved the frame off the full-cell rect.
             // A wider cell also un-truncates the names ("Siege Catap...", "Echo Legio..."), which was
             // a second symptom of the same cause and not a font problem.
+            // ⭐ ONE NAME FOR THE LIST SHAPE, read by the width clamp, the height ceiling and the
+            // row factory alike. `columns == 1` was being spelled out at each of those sites and
+            // the width clamp was the one that did not get the exemption.
+            bool asRowShape = columns == 1;
             float cellW = (bandW - (columns - 1) * TileGapPx) / columns;
             float cellH = (bandH - (rows - 1) * TileGapPx) / rows;
             // ⭐ THE CELL KEEPS THE MOCKUP'S SHAPE EVEN IN A VERY WIDE BAND (owner ruling
@@ -595,7 +599,18 @@ namespace DeNelle.Core.Manage
             // BAR (round 4 measured 793x134, 5.9:1, and it was rejected then for the same reason).
             // The reclaimed width becomes an even margin either side - which is what the mockup
             // draws - rather than being poured into the tiles.
-            float cellWCap = cellH * MaxTileAspect;
+            // ⛔ THE WIDTH CLAMP IS FOR A GRID, NOT FOR THE LIST SHAPE. A single-column screen is
+            // mockup panel 7's research tree, whose cell is a full-width ROW - icon, name, benefit,
+            // a padlock line and a status column - and clamping THAT to 2.3x its height turns a
+            // 1064px row into a 316px one and ellipsises every string in it.
+            // MEASURED on Builds/cap-manage-wave4.log, the Cathedral tree:
+            //   MANAGE_LIST_PAINTING ... side=580px in a 1835x580px well - the rows take x 0.42..1.0
+            //   grid cell width clamped from 1064px to 316px (2.3:1 against a 137px cell)
+            // and the frame (ManageFlow_RESEARCH_school_2670x1200.png) reads "Arcane Bas...",
+            // "RESE...", "QUEU...". The rows were given the right band and then thrown 70% of it
+            // away one line later. Same exemption the HEIGHT ceiling below already carries, and for
+            // the same reason: columns == 1 is a different shape, not a narrow grid.
+            float cellWCap = asRowShape ? float.MaxValue : cellH * MaxTileAspect;
             if (cellW > cellWCap)
             {
                 FlowTrace.Step("Manage", "grid cell width clamped from " + cellW.ToString("0") +
@@ -618,8 +633,21 @@ namespace DeNelle.Core.Manage
             // ⛔ AND ONLY ON A REAL GRID. columns == 1 is the LIST shape (mockup panel 7's research
             // tree, BuildListRow), where the cell is a full-width ROW and letting its height chase
             // its width would make one row as tall as the band is wide.
-            float cellCeiling = (rows == 1 && columns > 1)
-                ? Mathf.Max(MaxTileHeightPx, cellW) : MaxTileHeightPx;
+            // ⭐ WO-1567 ROUND 25 - THE CEILING IS THE CELL'S OWN WIDTH ON **EVERY** REAL GRID, NOT
+            // ONLY ON A ONE-ROW ONE. THIS IS THE TILE-SIZE DEFECT, AND IT IS ARITHMETIC:
+            // MaxTileHeightPx is 190, so a 5x2 BUILD grid in a 580px band painted 2 x 190 + 10 =
+            // 390px of tiles and left 190px of the well black -
+            // Builds/ui-capture/ManageFlow_BUILD_gridtop_2670x1200.png shows exactly that, the grid
+            // sitting in the TOP HALF of an otherwise empty full-bleed panel, and ARMY the same.
+            // ⛔ AND THE 190 CAP CANNOT BE THE ANSWER ON A MULTI-ROW GRID EITHER, because `cellH`
+            // is ALREADY `(bandH - gaps) / rows` - the authored rows fit the band BY CONSTRUCTION.
+            // A second, absolute ceiling on top of that can only ever make them smaller than the
+            // band they were divided out of. It was written to stop a WIDE cell from making one row
+            // taller than the whole band; the cell's own WIDTH does that job exactly and keeps the
+            // mockup's shape - a tile is never taller than it is wide - at any band height.
+            // ⛔ STILL NOT ON THE LIST SHAPE. columns == 1 is mockup panel 7's full-width ROW, where
+            // letting the height chase the width would make one row as tall as the band is wide.
+            float cellCeiling = asRowShape ? MaxTileHeightPx : Mathf.Max(MaxTileHeightPx, cellW);
             cellH = Mathf.Min(cellH, cellCeiling);
             float cell = cellH;   // the vertical governor: text bands and the touch floor read this
             if (cellW < 1f || cellH < 1f)
@@ -651,19 +679,43 @@ namespace DeNelle.Core.Manage
             // carries an explicit count of what is off-screen. The grid still scrolls - this adds
             // the WORDS that were missing, it does not replace the gesture. Nothing is shrunk:
             // the strip is only drawn when it clears MinTextBandPx on its own.
-            int wholeRows = Mathf.Max(1, Mathf.FloorToInt((bandH + TileGapPx) / (cell + TileGapPx)));
+            // ⚠ THE EPSILON IS LOAD-BEARING, NOT DEFENSIVE PADDING. `cell` is derived from `bandH`
+            // by the very division this floor then inverts, so in exact arithmetic the ratio IS
+            // `rows` - and in float it lands on 2.9999997 as readily as on 3.0000002. Without it,
+            // an ARMY grid whose three rows fit the band by construction seats TWO of them and
+            // reports the third as hidden, which then draws a "+3 MORE" strip over a band that had
+            // the room all along. One ULP is not a rounding preference here; it is the difference
+            // between the authored grid and a wrong one.
+            const float RowFitEpsilon = 0.001f;
+            int wholeRows = Mathf.Max(1, Mathf.FloorToInt(
+                (bandH + TileGapPx) / (cell + TileGapPx) + RowFitEpsilon));
             float rowsPx = wholeRows * cell + (wholeRows - 1) * TileGapPx;
             float gridW = columns * cellW + (columns - 1) * TileGapPx;
             int shown = wholeRows * columns;
-            int hidden = tiles.Count - shown;
+            int hidden = Mathf.Max(0, tiles.Count - shown);
             float leftoverPx = bandH - rowsPx - TileGapPx;
             bool overflowStrip = hidden > 0 && leftoverPx >= MinTextBandPx && bandH > 1f;
-            float viewportPx = overflowStrip ? rowsPx : bandH;
+            // ⭐ WO-1567 ROUND 26 - THE VIEWPORT IS THE ROWS THAT EXIST, NOT THE ROWS THAT FIT.
+            // ⛔ THIS IS WHY THE ROUND-25 CENTRING DID NOTHING. `viewportPx` fell back to the WHOLE
+            // BAND whenever the overflow strip was not drawn, so for the research picker - ONE row
+            // of five in a 758px band - the viewport was 758px, `bandH - viewportPx` was 0, and the
+            // centring branch could never fire. The row then sat at the top of a full-height
+            // viewport, which is exactly the frame: tiles at the top, dead well beneath. The band
+            // was right and the surplus was real; the viewport was measuring the wrong thing.
+            int contentRows = Mathf.Max(1, Mathf.CeilToInt(tiles.Count / (float)columns));
+            int seatedRows = Mathf.Min(wholeRows, contentRows);
+            float seatedPx = seatedRows * cell + (seatedRows - 1) * TileGapPx;
+            float viewportPx = overflowStrip ? rowsPx : Mathf.Min(bandH, seatedPx);
 
             FlowTrace.Step("Manage", "MANAGE_GRID tiles=" + tiles.Count + " want=" + columns + "x" + rows +
                 " cell=" + cell.ToString("0") + "px band=" + bandW.ToString("0") + "x" +
                 bandH.ToString("0") + " rowsFit=" + wholeRows + " shown=" + shown +
-                " hidden=" + hidden + " gridW=" + gridW.ToString("0"));
+                " hidden=" + hidden + " gridW=" + gridW.ToString("0") +
+                // ⭐ THE FILL FRACTIONS, so "the tiles fill the band" is a measurement and not a
+                // claim. fillH is the one that was wrong: 390/580 = 0.67 on BUILD before the
+                // ceiling was re-derived from the cell's own width.
+                " fillW=" + (gridW / Mathf.Max(1f, bandW)).ToString("0.##") +
+                " fillH=" + (rowsPx / Mathf.Max(1f, bandH)).ToString("0.##"));
             // ⚠ TWO DIFFERENT THINGS, AND THE OLD MESSAGE CONFLATED THEM.
             // It called ANY off-screen tile a "WELL SHORTFALL", which made the BUILD screen report
             // a failure while it was doing exactly what the mockup asks: panel 2 draws TEN tiles,
@@ -686,6 +738,21 @@ namespace DeNelle.Core.Manage
             // FULL BAND WIDTH, top-anchored, sized to WHOLE rows. The cell width is the band divided
             // by the authored columns, so the grid meets both edges by construction - there is no
             // centring step and no leftover margin to explain.
+            // ⭐ WO-1567 ROUND 25 - A GRID THAT FITS IS CENTRED IN ITS BAND; A GRID THAT SCROLLS
+            // STAYS TOP-ANCHORED.
+            // ⛔ THE DEAD WELL UNDERNEATH IS THE DEFECT THIS CLOSES. The research picker is FIVE
+            // tiles in ONE row, and a square tile can never be taller than the width five of them
+            // have to share - so with the band 730px tall and the tile 359px square there is 371px
+            // the grid cannot use however the cell is sized. MEASURED on
+            // Builds/cap-manage-wave4.log: `RESEARCH: ... columns=5 rows=1 viewport=580px
+            // content=359px`, and the owner's own frame reads "2x2 of short wide tiles with a dead
+            // well beneath". Top-anchoring put every one of those spare pixels in ONE black slab
+            // under the tiles; centring splits it above and below, which is what mockup panel 6
+            // draws. Nothing is resized to hide the shortfall - the numbers are unchanged and the
+            // MANAGE_GRID line still reports them.
+            // ⛔ ONLY WHEN NOTHING IS HIDDEN. A scrolling grid must start at its FIRST row, and a
+            // centred viewport would open it half a row down.
+            bool centreInBand = hidden <= 0 && bandH - viewportPx > 1f;
             var scrollRt = scrollGo.GetComponent<RectTransform>();
             scrollRt.anchorMin = new Vector2(0f, 1f);
             scrollRt.anchorMax = new Vector2(1f, 1f);
@@ -693,7 +760,14 @@ namespace DeNelle.Core.Manage
             scrollRt.offsetMin = new Vector2(0f, 0f);
             scrollRt.offsetMax = new Vector2(0f, 0f);
             scrollRt.sizeDelta = new Vector2(0f, viewportPx);
-            scrollRt.anchoredPosition = Vector2.zero;
+            scrollRt.anchoredPosition = centreInBand
+                ? new Vector2(0f, -(bandH - viewportPx) * 0.5f)
+                : Vector2.zero;
+            if (centreInBand)
+                FlowTrace.Step("Manage", "MANAGE_GRID_CENTRED viewport " + viewportPx.ToString("0") +
+                    "px in a " + bandH.ToString("0") + "px band - " +
+                    (bandH - viewportPx).ToString("0") + "px of surplus split above and below " +
+                    "instead of left as a dead slab under the tiles");
             var backing = scrollGo.GetComponent<Image>();
             backing.color = new Color(0f, 0f, 0f, 0.001f);   // raycast surface for the drag, visually inert
 
@@ -733,7 +807,7 @@ namespace DeNelle.Core.Manage
             // right - not a stack of square cards with names under them. The MODEL says which by
             // asking for a single column (ManageScreenVM sets GridColumns 1 for
             // ManageScreenKind.ResearchPerks); the View never infers a layout from an id or a tab.
-            bool asRows = columns == 1;
+            bool asRows = asRowShape;
             // ⭐ WO-1563 FOLLOW-UP - THE STATE WORD IS SIZED FOR THE LONGEST WORD ON THIS GRID.
             // MEASURED in Builds/ui-capture/ManageFlow_BUILD_gridtop_2670x1200.png: Ballista,
             // Wooden Palisade, Crystal Mine and Cathedral of Magic all read "QUEUE FU..." - the
@@ -761,8 +835,8 @@ namespace DeNelle.Core.Manage
             float stateFontPx = ResolveStateWordFont(widestState, cellW);
             for (int i = 0; i < tiles.Count; i++)
             {
-                if (asRows) BuildListRow(contentRt, tiles[i], cellH);
-                else BuildTile(contentRt, tiles[i], cellH, stateFontPx);
+                if (asRows) BuildListRow(contentRt, tiles[i], cellH, cellW);
+                else BuildTile(contentRt, tiles[i], cellH, cellW, stateFontPx);
             }
 
             // The honest overflow line. It exists ONLY while the well is too short to seat the
@@ -803,7 +877,13 @@ namespace DeNelle.Core.Manage
         /// the file the panel-8 lane is editing. FLAGGED FOR SEQUENCING rather than edited, so two
         /// lanes do not write the same contract in the same hour.</para>
         /// </summary>
-        private void BuildListRow(RectTransform parent, ManageTileVM tile, float rowH)
+        /// <param name="rowW">The row's own width in px, handed down from the band the grid
+        /// resolved. ⛔ PASSED, NOT READ BACK: `parent.rect.width` is 0 on the frame these rows are
+        /// built (no layout pass has run), and a zero here would size the icon zone against a rect
+        /// that does not exist - the identical trap the drawer's 719px-vs-475px estimate fell into.
+        /// It exists so the ICON ZONE CAN BE SQUARE: the medallion art is square, and a square
+        /// sprite painted preserveAspect-false into a 94x140 zone is a stretched medallion.</param>
+        private void BuildListRow(RectTransform parent, ManageTileVM tile, float rowH, float rowW)
         {
             if (tile == null) return;
 
@@ -828,7 +908,19 @@ namespace DeNelle.Core.Manage
             // typesets that name two columns to the right; the owner's capture shows the baked
             // words leaking out from under every medallion. ManageArt owns both the test and the
             // rect (IsCaptionedPerkIcon / PerkIconU0..V1) - the View asks, it does not decide.
-            var iconZone = Zone(row, "RowIcon", new Vector2(0.012f, 0.10f), new Vector2(0.10f, 0.90f));
+            // ⭐ SQUARE, DERIVED FROM THE ROW'S OWN RECT. The zone is 0.80 of the row's HEIGHT, so
+            // its width fraction is that many px over the row's WIDTH. At the research tree's
+            // 1064x175 row that is 140x140 instead of the 94x140 a typed 0.10 gave, and the
+            // medallion stops being stretched. Clamped so a very wide row cannot make the icon a
+            // hairline and a very narrow one cannot let it eat the name column.
+            const float RowIconHeightF = 0.80f;
+            float iconX1 = 0.012f + Mathf.Clamp(
+                (rowH * RowIconHeightF) / Mathf.Max(1f, rowW), 0.04f, 0.22f);
+            var iconZone = Zone(row, "RowIcon", new Vector2(0.012f, 0.10f), new Vector2(iconX1, 0.90f));
+            // Every text column on this row starts CLEAR of whatever width the icon just took.
+            // It was a typed 0.12 against a typed 0.10 icon; once the icon is derived, a typed text
+            // origin is a collision waiting for the first row shape that widens it.
+            float textX0 = iconX1 + 0.02f;
             if (ManageArt.IsCaptionedPerkIcon(tile.PortraitKey))
                 CroppedIcon(iconZone, tile.PortraitKey,
                     ManageArt.PerkIconU0, ManageArt.PerkIconU1,
@@ -845,11 +937,19 @@ namespace DeNelle.Core.Manage
 
             // NAME on top, EFFECT under it. Both bands are stated in px against the row height so
             // neither can fall under the MinTextBandPx cull floor without saying so.
+            // ⭐ WO-1567 ROUND 26 - THE EFFECT BAND IS TWO LINES DEEP. It was one, and the frame
+            // shows what that cost: "Unlocks the Healing Fountain - restores the Hear..." -
+            // FitSingleLine ellipsised the only sentence that says what the perk DOES. The band
+            // grows downward into the row's own padding (0.08 / 0.33 instead of 0.10 / 0.35) and
+            // the fit below is FitBlock, which WRAPS and truncates rather than ellipsising.
             float nameY0 = hasRequirement ? 0.63f : 0.50f, nameY1 = hasRequirement ? 0.97f : 0.92f;
-            float effectY0 = hasRequirement ? 0.35f : 0.10f, effectY1 = hasRequirement ? 0.61f : 0.46f;
+            float effectY0 = hasRequirement ? 0.33f : 0.08f, effectY1 = hasRequirement ? 0.61f : 0.48f;
             float namePx = rowH * (nameY1 - nameY0), effectPx = rowH * (effectY1 - effectY0);
             float reqPx = hasRequirement ? rowH * 0.28f : 0f;
-            if (namePx < MinTextBandPx || effectPx < MinTextBandPx ||
+            // ⭐ THE EFFECT BAND IS JUDGED AGAINST **TWO** LINES (WO-1567 round 26), because that is
+            // what it now typesets. Judging a two-line band against the one-line cull floor is how a
+            // band that wraps to one-and-a-bit lines passes the check and truncates on screen.
+            if (namePx < MinTextBandPx || effectPx < 2f * ElarionUiKit.FontHardFloor ||
                 (hasRequirement && reqPx < MinTextBandPx))
                 FlowTrace.Warn("Manage", "list row is " + rowH.ToString("0") + "px - its name band (" +
                     namePx.ToString("0") + "px), effect band (" + effectPx.ToString("0") +
@@ -858,13 +958,24 @@ namespace DeNelle.Core.Manage
 
             var name = ElarionUiKit.Label(row, tile.Title ?? string.Empty, nameY0, nameY1,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                0.12f, 0.60f, bold: true);
+                textX0, 0.60f, bold: true);
             ElarionUiKit.FitSingleLine(name, 22f, 30f);
 
             var effect = ElarionUiKit.Label(row, tile.Subtitle ?? string.Empty, effectY0, effectY1,
-                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                0.12f, 0.60f);
-            ElarionUiKit.FitSingleLine(effect, 18f, 26f);
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TextAlignmentOptions.TopLeft,
+                textX0, 0.60f);
+            // ⭐ WO-1567 ROUND 26 - FitBlock, NEVER FitSingleLine. MEASURED on the round-25 frame:
+            // "Unlocks the Healing Fountain - restores the Hear..." - a single line ellipsised on
+            // the perk whose benefit is the longest, which is exactly the perk a player most needs
+            // the sentence for. FitBlock WRAPS and, when a sentence genuinely will not fit,
+            // TRUNCATES visibly at the end of a line instead of substituting three dots that look
+            // deliberate (the same choice the hub card's description made, for the same reason).
+            // ⚠ THE FLOOR IS ElarionUiKit.FontHardFloor (20), NOT the 30 kit FontFloor, and that is
+            // stated rather than hidden: two lines must fit the band this row can give - 0.28 of a
+            // 175px tree row is ~49px on a locked row - and FitBlock clamps anything under 20 back
+            // up, so 20 is the real bottom of the range either way. It is above MinTextBandPx (28)
+            // per LINE only because the band holds two of them; a shorter row warns above.
+            ElarionUiKit.FitBlock(effect, ElarionUiKit.FontHardFloor, 26f);
 
             if (hasRequirement)
             {
@@ -874,11 +985,11 @@ namespace DeNelle.Core.Manage
                 // records the exact captured string).
                 // ⛔ SHAPE, NOT HUE. The padlock is a second, non-colour channel for "locked" - the
                 // owner is red/green colourblind, so the word and the glyph both have to carry it.
-                PaintSprite(row, "RowRequirementLock", new Vector2(0.115f, 0.04f),
-                    new Vector2(0.155f, 0.30f), ManageArt.IconPadlock);
+                PaintSprite(row, "RowRequirementLock", new Vector2(textX0 - 0.005f, 0.04f),
+                    new Vector2(textX0 + 0.035f, 0.30f), ManageArt.IconPadlock);
                 var need = ElarionUiKit.Label(row, tile.RequirementText, 0.04f, 0.30f,
                     ElarionUi.Gold, ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                    0.165f, 0.60f);
+                    textX0 + 0.045f, 0.60f);
                 ElarionUiKit.FitSingleLine(need, 18f, 26f);
                 // ⚠ THE WO-1518 DOOR AFFORDANCE IS NOT REPEATED HERE. The word that tells the
                 // player the row is tappable ("LOCKED - TAP") is composed model-side onto StateText
@@ -929,7 +1040,7 @@ namespace DeNelle.Core.Manage
 
             // A running row keeps its bar, same as a tile.
             if (tile.Progress01.HasValue)
-                ProgressBar(row, tile.Progress01.Value, 0.02f, 0.07f, 0.12f, 0.60f);
+                ProgressBar(row, tile.Progress01.Value, 0.02f, 0.07f, textX0, 0.60f);
 
             ElarionUiKit.ClampMinTouch(press);
         }
@@ -1046,7 +1157,12 @@ namespace DeNelle.Core.Manage
             return string.IsNullOrEmpty(tile.StateWord) ? tile.StateText : tile.StateWord;
         }
 
-        private void BuildTile(RectTransform parent, ManageTileVM tile, float cellH, float stateFontPx = 26f)
+        /// <param name="cellW">The cell's width in px, handed down from the band the grid resolved.
+        /// ⛔ PASSED, NOT READ BACK - the cell rect is 0 on the frame the tile is built. It exists
+        /// so the portrait's fit mode is decided by ARITHMETIC (see SquarePortrait) instead of by a
+        /// guess about the cell's shape.</param>
+        private void BuildTile(RectTransform parent, ManageTileVM tile, float cellH, float cellW,
+                               float stateFontPx = 26f)
         {
             if (tile == null) return;
 
@@ -1119,13 +1235,26 @@ namespace DeNelle.Core.Manage
             // ⛔ THE ZONE NOW SPANS THE CELL'S FULL WIDTH. TilePort* insets survive only as the
             // FRAME's rect (layers 2 and 3): a frame is drawn art with its own margins, and the
             // picture is not.
-            var portZone = Zone(cell, "TilePortrait",
-                new Vector2(0f, TilePortY0), new Vector2(1f, 1f));
+            // ⭐ WO-1567 ROUND 26 - THE ZONE IS THE WHOLE CELL, AND THE TEXT BANDS RIDE OVER IT.
+            // ⛔ IT RAN y TilePortY0..1 (0.26..1), which on a now-SQUARE 359px BUILD cell is a
+            // 359x266 zone - and a square sprite envelope-fitted into it is scaled to 359x359 and
+            // cropped by 93px, split top and bottom. That is the measured defect: Archer Tower,
+            // Ballista and Cathedral of Magic all lose their ROOFS. The zone was reserving the
+            // bottom quarter for a name strip that already carries its OWN dark plate and is
+            // painted LATER (see the name strip below and LAYER 7's state plate) - so it can sit
+            // ON the art, which is what mockup panel 2 draws.
+            var portZone = Zone(cell, "TilePortrait", Vector2.zero, Vector2.one);
             // Locked tiles are DIMMED - panel 4 draws them darker than the unlocked ones. It is a
             // luminance multiply, never a hue change (the owner is red/green colourblind), and it
             // is never the only cue: the tile still carries the word LOCKED and the padlock.
+            // ⭐ AND IT IS FITTED BY WIDTH, ANCHORED TO THE BOTTOM, WHENEVER THE WHOLE SUBJECT
+            // THEN FITS - the zone's px are handed in so that decision is arithmetic and needs no
+            // layout pass. On a square BUILD cell a square building fills the tile with NOTHING
+            // cropped; when the cell is wide (ARMY's 2.3:1) the width fit would be 566px tall in a
+            // 246px cell and bottom-anchoring would cut the troops' HEADS, so it falls back to the
+            // envelope crop that already reads correctly there. See SquarePortrait.
             SquarePortrait(portZone, tile.PortraitKey,
-                tile.VisualState == ManageTileVisualState.Locked);
+                tile.VisualState == ManageTileVisualState.Locked, cellW, cellH);
 
             // LAYER 4a - the HOLLOW state frames, over the art. frame-locked and frame-max are the
             // only two of the four with an alpha-0 centre (measured, see this method's summary), so
@@ -1350,9 +1479,32 @@ namespace DeNelle.Core.Manage
             // transparency checkerboard baked into their RGB, so any transparent margin shows it.
             // 0.42 replaces 0.38 because the ring's inset is gone and the card can spend the width
             // on the picture the mockup makes the focus of the screen.
-            float artFrac = Mathf.Min(0.42f, (cardH * 0.92f) / Mathf.Max(1f, cardW));
+            // ⭐ WO-1567 ROUND 25 - THE ART FILLS THE LEFT COLUMN'S FULL HEIGHT, AND THAT IS WHAT
+            // FINALLY REMOVES THE RING.
+            // ⛔ THE RING IS BAKED INTO THE ART, NOT DRAWN BY THIS CODE. MEASURED, by opening the
+            // file: Assets/Resources/RpgUi/troop/troop-footman.png is a 1254x1254 medallion - a
+            // gilt circle with fleur-de-lis corner ornaments PAINTED INTO THE PNG, on transparency.
+            // So WO-1567 panel row 5's "apply the square treatment" could not work by swapping the
+            // portrait call: SquarePortrait was ALREADY in use here, and it is why
+            // Builds/ui-capture/ManageFlow_ARMY_max_2670x1200.png still shows a disc in a ring while
+            // ManageFlow_ARMY_gridtop_2670x1200.png - the SAME art through the SAME method - shows
+            // clean square portraits with no ring at all.
+            // ⛔ THE DIFFERENCE IS THE ZONE'S ASPECT, AND IT IS THE WHOLE MECHANISM. SquarePortrait
+            // envelope-fits (AspectRatioFitter.EnvelopeParent) inside a RectMask2D: a SQUARE sprite
+            // in a SQUARE zone is a 1:1 fit that crops NOTHING, so the ring survives; the same
+            // sprite in a NON-square zone is scaled to cover and the ring is cropped away, which is
+            // exactly what the grid's 2.3:1 tiles do. `artFrac` was pinned to `cardH * 0.92 / cardW`
+            // for the express purpose of keeping the zone square, so it was holding the ring in.
+            // ⚠ THE TRANSPARENT-MARGIN WORRY THE OLD NOTE RECORDS IS ANSWERED BY THE SAME MOVE.
+            // Its concern was that a non-square zone leaves transparent margin inside the portrait
+            // rect, where the delivered PNGs carry a checkerboard baked into their RGB. That is true
+            // of preserveAspect, which INSETS; envelope-cropping OVERFLOWS, so the transparent
+            // corners are the first thing cut. Cropping is strictly safer here, not riskier.
+            // ⛔ AND IT IS WHAT THE MOCKUP DRAWS. Panels 3, 5 and 6 all put a big rectangular block
+            // of art down the card's left side, floor to ceiling - not a disc floating in a square.
+            float artFrac = Mathf.Min(0.34f, Mathf.Max(0.24f, (cardH * 0.78f) / Mathf.Max(1f, cardW)));
             var portrait = Zone(band, "SelPortrait",
-                new Vector2(0.02f, 0.04f), new Vector2(0.02f + artFrac, 0.96f));
+                new Vector2(0.015f, 0.02f), new Vector2(0.015f + artFrac, 0.98f));
             // ⛔ NEVER DIMMED HERE, EVEN WHEN LOCKED. Mockup panel 6 (OUTRIDER, locked) draws the
             // art at FULL brightness - the dim on a grid tile is a scanning cue for "not yours
             // yet" across nine peers, and this screen has one subject. Dimming it would make the
@@ -1360,7 +1512,9 @@ namespace DeNelle.Core.Manage
             SquarePortrait(portrait, sel.PortraitKey, dim: false);
 
             const float RightX1 = 0.98f;
-            float rightX0 = Mathf.Min(0.60f, 0.02f + artFrac + 0.04f);
+            // Tracks the portrait's own left inset (0.015) so the text column can never start
+            // INSIDE the art - the two used to be authored from two different origins.
+            float rightX0 = Mathf.Min(0.60f, 0.015f + artFrac + 0.035f);
 
             // ---- the column FLOWS: level, description, stats, costs, why, then the CTA ----
             // ⛔ THE CTA IS NOT PINNED TO THE BOTTOM. It was, and the capture showed the result:
@@ -1805,7 +1959,26 @@ namespace DeNelle.Core.Manage
         /// has already announced the miss by key, and an empty framed well reads as "art pending"
         /// where a warm-tan oval read as a rendering bug (WO-1567 section 5 item 3).</para>
         /// </summary>
-        private void SquarePortrait(RectTransform zone, string key, bool dim)
+        /// <param name="zoneWpx">The zone's width in px, or 0 when the caller cannot supply it.</param>
+        /// <param name="zoneHpx">The zone's height in px, or 0 when the caller cannot supply it.
+        /// <para>⭐ WO-1567 ROUND 26 - WHEN BOTH ARE GIVEN AND THE SPRITE FITS THE ZONE'S WIDTH
+        /// WITHOUT EXCEEDING ITS HEIGHT, THE ART IS FITTED BY **WIDTH** AND ANCHORED TO THE
+        /// **BOTTOM** instead of envelope-cropped. That shows the WHOLE subject, which is what
+        /// mockup panel 2 draws and what the envelope crop was taking away: on a square 359px BUILD
+        /// cell a square building was scaled to cover a 359x266 zone and lost 93px, split top and
+        /// bottom - Archer Tower, Ballista and Cathedral of Magic all rendered without their roofs.
+        /// A building sits on the ground, so any surplus belongs ABOVE it, never split around it.</para>
+        /// <para>⛔ IT FALLS BACK TO THE ENVELOPE CROP THE MOMENT THE WIDTH FIT WOULD OVERFLOW, AND
+        /// THAT IS NOT DEFENSIVE PADDING. ARMY's cell is 2.3:1 (566x246): a width fit of square art
+        /// is 566px tall there, and bottom-anchoring it inside a 246px mask cuts 320px off the
+        /// TOP - i.e. the troops' heads. The envelope crop already reads correctly on that shape
+        /// (ManageFlow_ARMY_gridtop_2670x1200.png), so the rule is "show the whole subject when the
+        /// cell can hold it", not "always fit by width".</para>
+        /// <para>⚠ ARITHMETIC, NOT A RECT READ. Both dimensions are handed in by the caller because
+        /// the zone's own rect is 0 on the frame the tile is built - the trap that has already cost
+        /// this screen a build-time estimate out by 1.5x.</para></param>
+        private void SquarePortrait(RectTransform zone, string key, bool dim,
+                                    float zoneWpx = 0f, float zoneHpx = 0f)
         {
             if (zone == null) return;
             var sprite = ManageArt.LoadSprite(key);
@@ -1816,9 +1989,6 @@ namespace DeNelle.Core.Manage
             var artGo = new GameObject("PortraitSquare", typeof(RectTransform), typeof(Image));
             artGo.transform.SetParent(zone, false);
             var rt = (RectTransform)artGo.transform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = rt.offsetMax = Vector2.zero;
 
             var img = artGo.GetComponent<Image>();
             img.sprite = sprite;
@@ -1829,11 +1999,32 @@ namespace DeNelle.Core.Manage
             img.color = dim ? new Color(0.42f, 0.42f, 0.42f, 1f) : Color.white;
 
             float w = sprite.rect.width, h = sprite.rect.height;
+            float aspect = h > 0.01f ? w / h : 1f;
+            bool widthToBottom = zoneWpx > 1f && zoneHpx > 1f && (zoneWpx / aspect) <= zoneHpx + 0.5f;
+
+            if (widthToBottom)
+            {
+                // Stretch across the zone's width, pinned to its FLOOR; the fitter sets the height
+                // from that width, so the picture grows upward and the surplus is a margin above it.
+                rt.anchorMin = new Vector2(0f, 0f);
+                rt.anchorMax = new Vector2(1f, 0f);
+                rt.pivot = new Vector2(0.5f, 0f);
+                rt.offsetMin = rt.offsetMax = Vector2.zero;
+                rt.anchoredPosition = Vector2.zero;
+                var fitW = artGo.AddComponent<AspectRatioFitter>();
+                fitW.aspectMode = AspectRatioFitter.AspectMode.WidthControlsHeight;
+                fitW.aspectRatio = aspect;
+                return;
+            }
+
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
             if (h > 0.01f)
             {
                 var fit = artGo.AddComponent<AspectRatioFitter>();
                 fit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-                fit.aspectRatio = w / h;
+                fit.aspectRatio = aspect;
             }
         }
 
