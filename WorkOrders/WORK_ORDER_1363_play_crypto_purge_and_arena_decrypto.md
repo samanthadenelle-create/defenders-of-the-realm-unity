@@ -13,7 +13,7 @@
 > save fields all stay. What leaves is SKR - the currency it wagers and every SKR literal in it.
 > **The wager denomination is an OWNER DESIGN CALL and is recorded in §PART 3 below.**
 
-**Status:** FIXED - implemented in 6979fb961 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Title and the Store/Stake panels on the device and confirm no SKR/Solana copy is visible; the artifact-clean AAB box stays open on WO-1366 + WO-1377 (canon-strings.json "Solana" residue still goes RED, wo1367-aab.log:37493).
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:53:06, build 2026.09.07.358574). PRIOR STATUS: FIXED - implemented in 6979fb961 (2026-09-04), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: open Title and the Store/Stake panels on the device and confirm no SKR/Solana copy is visible; the artifact-clean AAB box stays open on WO-1366 + WO-1377 (canon-strings.json "Solana" residue still goes RED, wo1367-aab.log:37493).
 **Silo / Lane:** Release engineering / Play variant - `DeNelle.Core` UI + `DeNelle.Village/Arena`
 **Type:** EXISTING system, incomplete exclusion
 **Minted:** 2026-09-04 (CLI), on owner rulings

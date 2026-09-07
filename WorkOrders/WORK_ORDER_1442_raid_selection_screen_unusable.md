@@ -1,6 +1,6 @@
 # WO-1442: the RAIDS selection screen is hard to use - a stray bar covers card one, card three is clipped, world text bleeds through
 
-**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` (see RESULT); post-fix PNG still owed
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:50:58, build 2026.09.07.358574). PRIOR STATUS: FIXED - ON THE SEEKER 2026.09.07.358574 - landed in `32659c0f6` (see RESULT); post-fix PNG still owed
 **Silo:** `RaidSelectionScreen` + its card rows. Disjoint from the raid lifecycle (WO-1437, landed), the
 HUD posture work (WO-1436, landed) and the wallet lanes.
 **Source:** owner felt-test 2026-09-06 on build **2026.09.06.358245** (the raid-fix build), verbatim:

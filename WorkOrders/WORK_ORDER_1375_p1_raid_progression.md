@@ -1,6 +1,6 @@
 # WORK ORDER 1375 - P1: give raids progression
 
-**Status:** FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:51:56, build 2026.09.07.358574). PRIOR STATUS: FIXED - in build 2026.09.05.355872, installed on the Seeker 2026-09-04 22:22 (versionCode 355872); its regression suite(s) green on the same tree. Awaiting owner felt-test.
 **Silo / Lane:** Economy / raid ladder + Season Pass hooks
 **Type:** NEW BEHAVIOUR on existing systems, owner-ruled
 **Minted:** 2026-09-04 (CLI)

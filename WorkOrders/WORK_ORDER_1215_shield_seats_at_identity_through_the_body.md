@@ -126,7 +126,11 @@ to what she saw. Matches PROD-019 s0b: *"THE SEAT IS NOT THE DEFECT."*
 2. The `registryProbe` START/SCENELOAD lines now print `ShieldWithItemLogic[…]` and
    `ShieldWithItemLogic@sheathed[…]` — the row the starter shield actually uses. They previously
    printed only `shield_A`, the **tripo** shield the default hero never wears.
-Both pinned by new `Require` tokens in `AttachmentOffsetRegression.Case…` tripwire-wiring.
+Both pinned by new `Require` tokens in `AttachmentOffsetRegression.Case2_TripwireWiringLint`.
+
+**Build she tested: UNPROVABLE from the repo.** No APK, `logs/apk-build*.log` or version stamp dates
+to 2026-09-03 (newest build artefacts: `logs/apk-build.log` 08-08, `Builds/r2-parity.log` 09-06); the
+oldest post-bounce device log is 09-04 build `2026.09.04.354315`. Stated, not inferred.
 
 **THE CAPTURE THAT CLOSES THIS (name it when asking her):** with a hero holding a shield, on a build
 whose version stamp is in the same log —

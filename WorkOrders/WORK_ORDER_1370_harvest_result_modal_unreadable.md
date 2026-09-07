@@ -1,6 +1,6 @@
 # WORK ORDER 1370 - The HARVEST RESULT modal does not say what 3000 is, or that anything was lost
 
-**Status:** FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: harvest into a full store on the device and read the result modal - resource name and figure on one line, the word "lost" present; wording is the owner's to approve.
+**Status:** CLOSED 2026-09-06 - owner felt-test PASS (validated 2026-09-07T00:53:18, build 2026.09.07.358574). PRIOR STATUS: FIXED - implemented in f6540db88 (2026-09-04 12:47), on the Seeker in build 2026.09.05.355872; RCA re-verified 2026-09-04 (see the appended block). Awaiting owner felt-test: harvest into a full store on the device and read the result modal - resource name and figure on one line, the word "lost" present; wording is the owner's to approve.
 **Silo / Lane:** Core/UI - `Assets/_Modules/Core/UI/HarvestOverflowModal.cs` (copy + layout only)
 **Type:** EXISTING system, legibility defect
 **Minted:** 2026-09-04 (CLI), from her screen mid-playtest
