@@ -100,7 +100,9 @@ read at source this session. Nothing here supersedes the Gate A staleness banner
   Both exceed the live `2026.08.17.328845` / `328845`.
 - **Package (unchanged):** `com.denellestudios.echoesofelarion`.
 - **Release notes for this build:** `publishing/RELEASE_NOTES_2026-09-07.md`
-  (drafted 2026-09-06, awaiting owner approval).
+  (rewritten 2026-09-07 for the store APK `2026.09.07.359419`, awaiting owner approval; its
+  "Build identity" block IS the measured Gate A record for that APK - SHA-256, badging,
+  signer, define absence, R2 parity - read it there rather than from the STALE block below).
 - **R2 hosted content — GREEN and it postdates the stamp.**
   `Builds/r2-parity.log` (2026-09-06 20:24, UTF-16) ends
   `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=271`, preceded by
@@ -132,6 +134,13 @@ read at source this session. Nothing here supersedes the Gate A staleness banner
   against whichever binary actually ships.
 
 ## Gate A — final build identity and provenance
+
+> **RE-RECORDED 2026-09-07 09:27 against the store APK `2026.09.07.359419`** (source `05de2d23a`, no
+> `TESTER_BUILD`): every identity value is in `publishing/RELEASE_NOTES_2026-09-07.md` -> "Build
+> identity", measured from the artifact in one pass. The banner and values below are the 09-03 record,
+> kept for history. Still open there and still open now: the live-release certificate match (never
+> captured; the in-place update over the live store build is the proof), and the Gate A "pushed" item
+> (nothing is pushed until the owner says so).
 
 > ## STALE 2026-09-03 - THE IDENTITY FIELDS BELOW DESCRIBE THE WRONG APK. DO NOT SUBMIT AGAINST THEM.
 >

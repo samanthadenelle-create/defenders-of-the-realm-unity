@@ -187,7 +187,8 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-07 (CLI, hundred-and-nineteenth pass): main line next free = **1587**.
+> ## RECONCILED 2026-09-07 (CLI, hundred-and-twentieth pass): main line next free = **1588**.
+> *(CLI minted **1587** offline queue drain fails 6x while the session renews, no why= line - from the owner's device log 2026-09-07 08:01-08:29. Bumped 1587 -> 1588 in this SAME edit.)*
 > *(CLI minted **1584** store sell screen blank icon/row/selection, **1585** attacks report plate overlap, **1586** army rebalance demands gold after the WO-1387 ruling - all from the owner's Seeker screenshots and words 2026-09-07 morning. Bumped 1584 -> 1587 in this SAME edit.)*
 > *(Owner ruling lane off her 08:5x message - *"everytime i play now im forced to authenticate ... I
 > would think the authentication would only be needed for purchases (and codes)"*. Minted **WO-1583**;

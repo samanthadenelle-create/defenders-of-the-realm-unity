@@ -58,7 +58,7 @@ Character count of the block above: 456 (limit 500), measured 2026-09-07. ASCII 
 > Realm Map and the Season Track, the Wardrobe is reachable, and the Night
 > Market has a permanent spot on the HUD. Structures show wear from the first
 > hit, so you can see what needs repair before you pay for it. Dungeon doors
-> look like doors. Ogres now show up as ogres.
+> look like doors.
 
 ### Balance
 
@@ -78,6 +78,7 @@ ellipsis character, no smart quotes.
 | Claim | Commit |
 |---|---|
 | Sign in once; sessions renew without a signature for 12 h (`auth_sessions.signed_at`) | `77e8e8941` |
+| ...and that commit IS the live production api: Vercel production deployment `dpl_ALgUwPLzzhh2bF4EnN36uQ9vobtr`, sha `77e8e8941`, state READY (read 2026-09-07 09:2x); on the owner's Seeker the log reads `RenewSessionAsync held - session extended with NO wallet prompt` at 08:15:31 and 08:29:39 | measured |
 | Boot never signs; wallet only for purchases and codes (owner ruling 2026-09-07) | `55d3a7c56` |
 | Wallet session established at connect, save 2xx, offline queue drained | `c6fd7d686` |
 | Wallet signature rail no longer 500s on save/redeem | `0f35490ad` |
@@ -102,7 +103,6 @@ ellipsis character, no smart quotes.
 | Night Market permanent HUD door | `bcecb5991`, `d836d2f15` |
 | Structures show wear from the first point of damage | `dabfeecf2`, `a055da803` |
 | Dungeon doors look like doors | `c0c30f715` |
-| Ogre renders its model (was a capsule) | `cd57a1c1e` |
 | Food -> Stone across the realm | `a11899d58`, `5625f9af8` |
 | Quarry pays Stone | `9a9e65c8a` |
 | Training costs time only; gold skips the clock / hires reinforcements | `65d5a7eae` |
@@ -115,6 +115,8 @@ are paid for in gold"*. That is the state the owner reversed on 2026-09-04
 (WO-1387, closed on her Pass 2026-09-07T00:49): training and upgrades cost time,
 gold only skips. The line above says what ships.
 
+**Known and NOT fixed in this build (WO-1587):** on the owner's Seeker the offline save queue failed to drain six times in a row while the session renewed fine; the local save is safe, the cloud copy falls behind. The notes do not promise cloud sync.
+
 **Not claimed, deliberately:** the store update media (four landscape
 screenshots + icon, `publishing/media/` still empty), the orc caster art
 (stand-in sheet), the three hub card paintings and rectangular troop portraits
@@ -122,11 +124,14 @@ screenshots + icon, `publishing/media/` still empty), the orc caster art
 
 ---
 
-## Build identity (filled when the store-shaped APK lands)
+## Build identity - STORE APK, measured 2026-09-07 09:27 from the artifact
 
-- Source commit: `05de2d23a` (branch `feat/synty-art-retheme`)
-- Store APK: `BUILD PENDING` - `overnight-apk-build.ps1` WITHOUT `-Tester`
-- `versionName` / `versionCode`: `BUILD PENDING`
-- SHA-256: `BUILD PENDING`
-- AAB: `BUILD PENDING` - `google-play-aab-build.ps1` from the same commit
-- R2 parity on the APK's catalog: `BUILD PENDING`
+- Source commit: `05de2d23a` code (branch `feat/synty-art-retheme`); the minted stamp is committed after the build, tree otherwise clean of Assets changes
+- Store APK: `Builds/Android/DefendersOfTheRealm.apk`, 491,599,615 bytes, written 09:26:01 (`APK_OK 09:26:39`, Builds/overnight-apk-status.txt)
+- Built WITHOUT the tester define: `[apk] STORE-shaped build (no TESTER_BUILD define) - defines: ''` (Builds/apk-store-0907.console.log); `scriptingDefineSymbols` empty in ProjectSettings.asset
+- `aapt2 dump badging`: `package: name='com.denellestudios.echoesofelarion' versionCode='359419' versionName='2026.09.07.359419'`, `minSdkVersion:'26'`, `targetSdkVersion:'36'`, `native-code: 'arm64-v8a'`, label `Echoes of Elarion`
+- SHA-256: `3662D1D7845F7F460ADAF20831C4A207B8C8D81C1A21A3F04617B9CB1D0243A0`
+- `apksigner verify -v`: `Verifies`, v2 scheme true; Signer #1 DN `CN=DeNelle Studios, OU=Games, O=DeNelle Studios, L=NA, ST=NA, C=US`; certificate SHA-256 `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443` (same certificate as the 2026-09-03 candidate recorded in SUBMIT_CHECKLIST Gate A)
+- R2 parity on this build's catalog: `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=276` 09:26:55
+- AAB: `google-play-aab-build.ps1` started 09:27:15 from the same tree (`AAB_SIGNING_PREFLIGHT_OK keystore='dotr-release.keystore' alias='dotr'`); its own stamp and size are recorded in Builds/aab-status.txt when it lands - a SEPARATE identity row, never collapsed into the APK's
+- NOT pushed to the git remote (owner's word only); the tester build on the Seeker (`2026.09.07.359405`, TESTER_BUILD) is a different file from this one
