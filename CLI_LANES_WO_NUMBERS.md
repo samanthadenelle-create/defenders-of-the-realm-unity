@@ -187,7 +187,53 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-eighth pass): main line next free = **1534**.
+> ## RECONCILED 2026-09-06 (CLI, hundredth pass): main line next free = **1537**.
+> *(audit fleet minted **1535** and **1536** - two enemy-data gaps. **1535:** 12 of 13 raid garrison ids
+> hardcode their stats in `GarrisonStatBlocks.BuildTypedDef:116-141` while the town path reads `enemies.json`
+> only, so there are THREE tables per id and they have diverged (raid Berserker 260/13 vs an authored 117/10).
+> `orc-raider` was already migrated to `WildlandsRoster.BaseDef:126-135` with its divergence oracle
+> (`CombatAtbRegression` Check H), so the pattern and the guard both exist - migrate the plumbing, but change
+> NO number until **1530** records the scaling formula. **1536:** `enemies.json:400` gives `ogre` the
+> `modelKey` "OgreMage", which was never imported, so every ogre has silently worn a stand-in body
+> (device 13:26:13.885); `EnemyArtCoverageRegression` is red on it and is also one of the seven unregistered
+> suites from **1496**, which is why it never said so.
+> **BOTH DRAFTED AS 1532/1533 AND RENUMBERED IN THIS SAME EDIT:** the command-centre SKU lane and the
+> owner-promo-bypass lane held those numbers on disk AND on the banner first. First-on-disk-and-referenced
+> wins. Bumped 1535 -> 1537 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-ninth pass): main line next free = **1535**.
+> *(CLI minted **1534** from the owner's ask *"can you review the manage sections and the raid UX screens
+> and make better"* (follow-up *"read only detailed WO"* - nothing was edited, the WO is the deliverable).
+> A read-only two-agent review + a CLI verification pass on every claim. TWO parts.
+> **PART A - the raid loop never closes:** six seams where the game should report an outcome or offer a
+> route and does not, or contradicts itself. Retreat and clock-expiry show NO result screen at all
+> (`RaidDeployController.DoRetreat` :752-763; the file's only `EndStateVM` hit is a COMMENT at :290) -
+> P0, and it is the exit a new player is most likely to hit. The victory screen auto-routes home on a
+> 12s timer with no cancel (`EndStateView.cs:2771` - no `StopCoroutine` in the file), carrying the
+> bank-overflow caveat with it. `LOCKED - needs Army 9` is display-only: `armyWord` is read at
+> `RaidSelectionScreen.cs:993/996-999/1023` and NOWHERE else, so the door opens and `BEGIN ASSAULT` is
+> live. Manage names the camp you are training for and renders it as a LABEL, not a button
+> (`ManageScreenPanel.cs:3950`) - and composes that copy in a SECOND producer beside
+> `JourneyDeckSubtitleVM.cs:22`. Plus: victory never announces ladder progress
+> (`ResolveUnlockLine` returns null unconditionally, and its named owner WO-1375 is CLOSED); a cleared
+> camp is indistinguishable on the grid (`RaidClaimService` appears in the selection VM as COMMENTS ONLY).
+> **PART B - the Manage record disagrees with the Manage screen:** a later owner mockup reversed the tab
+> IA to a hub (LEGITIMATE) and NOTHING RECORDED IT, so three tickets certify a superseded design -
+> WO-2001 DONE-verified on *"one tap from each other"* while `ManageWorkspacePanel.cs:412` says
+> *"THERE IS NO TAB ROW AT ALL ANY MORE"*; **WO-2005's RESULT claims "6 filters implemented ... CIVIC"
+> while `BuildFilter.cs:87-90` ships five and `:59` forbids CIVIC by name**; WO-2006 DONE on ">=12 tiles"
+> against an authored 5x2=10. The tab reversal is visible in two frames three hours apart (14:41 has the
+> row, 18:39 does not). Same rot in `OWNER_RULINGS_LOCKED.md:7` + `00_MANAGE_REDESIGN_CANON.md:19,61`
+> with no §15 STALE banner - which made this very review derive FOUR false defects, all recorded refuted
+> in the WO's §C so the next seat does not re-find them. Plus five uncovered Manage UX defects (grid tiles
+> discard the `StateText` the model composes - the colourblind angle, unticketed anywhere; the research
+> picker orphans a fifth school across 60% dead well; the queue drawer prints `Tower Ground Archer -> L2`;
+> the Catapult is described as "a defensive tower" by a type-level fallback).
+> File `WorkOrders/WORK_ORDER_1534_the_raid_loop_never_closes_and_manage_cannot_reach_it.md`, READY.
+> Four owner design calls are left OPEN and unanswered on purpose (WO §D). Bumped 1534 -> 1535 in this
+> SAME edit.)*
+>
+> ### superseded: main line next free = **1534**.
 > *(api lane minted **1533** - "The owner account bypasses promo guards (per-player limit, redemption cap,
 > cooldowns)", from the owner ruling of 20:45: *"im the one account that should have no guards"*, after her
 > own account was refused LINK01 on device with "You have reached the promo code limit for this account".
