@@ -1791,10 +1791,25 @@ namespace DeNelle.Village.UI
         /// </summary>
         private void ApplyScreenVisibility()
         {
-            if (_launcherHost != null) _launcherHost.gameObject.SetActive(_hubShowing);
+            // ⭐ WO-1573 - THE QUEUE OVERLAY IS A THIRD SCREEN, NOT A WORKSPACE DECORATION.
+            // The hub's cards stand down under it for the same reason the workspace host does: the
+            // overlay carries DESTRUCTIVE and PAID verbs, and a card grid left actionable beneath an
+            // opaque modal is a mis-tap surface (the WO-1368 ruling, applied to the hub).
+            if (_launcherHost != null) _launcherHost.gameObject.SetActive(_hubShowing && !_queueDrawerOpen);
             // The WELL is the workspace host's PARENT. It must follow the same state, or the host's
             // own flag is meaningless - that is exactly what produced content=0px.
-            if (_operationalWell != null) _operationalWell.gameObject.SetActive(!_hubShowing);
+            // ⛔ ...AND IT IS THE QUEUE OVERLAY'S PARENT TOO. `BuildQueueDrawer(well)` parents
+            // ManageQueueDrawer to THIS transform, so `!_hubShowing` alone held the overlay's whole
+            // ancestor chain inactive on the hub. That is WO-1573 exactly: the pill IS live on the
+            // hub (`_tabsHost` hangs off chrome.content, a SIBLING of the well, and nothing here
+            // hides it), so the tap fired ToggleQueueDrawer, the flag flipped, `SetActive(true)`
+            // landed on a child of an inactive parent - and the player saw nothing happen.
+            // ⚠ THE SAME DEAD-SUBTREE FAULT THIS METHOD'S OWN HEADER RECORDS, one screen over: a
+            // SetActive(true) on a child of an inactive parent changes nothing on screen and runs no
+            // layout. The cure is the same one - the well is re-asserted with everything it CONTAINS,
+            // and this stays the single writer of that flag.
+            if (_operationalWell != null)
+                _operationalWell.gameObject.SetActive(!_hubShowing || _queueDrawerOpen);
             if (_workspaceHost != null)
                 _workspaceHost.gameObject.SetActive(!_hubShowing && !_queueDrawerOpen);
             // BACK belongs to the workspace: the hub is the root and CLOSE is its way out.
@@ -1808,6 +1823,16 @@ namespace DeNelle.Village.UI
             // inside it, so a `withClose: false` at construction would delete the hub's exit too.
             // ElarionUiKit.BuildObsidianPanel's `withClose` is the per-panel lever for surfaces
             // that never show a close at all; this is the same ruling applied per SCREEN.
+            // ⚠ WO-1573 DELIBERATELY LEFT THIS LINE ALONE, and the reason is worth the sentence.
+            // Now that QUEUE opens from the hub, the shared CLOSE is on screen underneath the
+            // overlay - the state the paragraph above calls out ("on the queue overlay the shared
+            // CLOSE sat under the drawer's own X"). It is COVERED rather than merely overdrawn:
+            // BuildQueueDrawer seats the overlay down to DrawerOverlayY0 = -0.25 of the well
+            // expressly so it spans the Close band, and the drawer carries an opaque Image, so it
+            // eats the raycast. If a capture ever shows CLOSE readable or tappable on the queue
+            // overlay, gate it here - but that would be a NEW measurement, and
+            // ManageMockupConformanceRegression.cs:718 pins this line's exact text, so the two
+            // changes belong in one edit with that suite's owner.
             if (_chromeClose != null) _chromeClose.gameObject.SetActive(_hubShowing);
             // ⭐ AND THE CONSTANT EXIT IS RE-ASSERTED ON, UNCONDITIONALLY, ON EVERY SCREEN.
             // Owner ruling 2026-09-07: "on all the manage screens there is no way to exit. can we
@@ -3191,6 +3216,17 @@ namespace DeNelle.Village.UI
         private void ToggleQueueDrawer()
         {
             _queueDrawerOpen = !_queueDrawerOpen;
+            // ⭐ WO-1573 - THE ANCESTOR CHAIN IS RE-ASSERTED BEFORE THE DRAWER IS ACTIVATED.
+            // ApplyScreenVisibility is the SINGLE writer of `_operationalWell` (this method must
+            // never SetActive that well itself - two writers deciding one flag by last-write-wins
+            // is the defect that method's header records), and the well now follows
+            // `!_hubShowing || _queueDrawerOpen`. Calling it HERE, before the SetActive below,
+            // means the drawer is switched on inside a LIVE hierarchy - which is the precondition
+            // for the measurement further down: ResolveDrawerBands (reached from
+            // ApplyDrawerPlacement) calls Canvas.ForceUpdateCanvases and then early-returns on
+            // `drawerPx < 1f`, and a rect under an inactive ancestor resolves to ZERO however many
+            // canvas updates are forced at it. Activate first and the band table means pixels.
+            ApplyScreenVisibility();
             if (_queueDrawer != null) _queueDrawer.SetActive(_queueDrawerOpen);
             // WO-1389: the real OPEN QUEUE tap is the completion of the TRAINING NOW beat. Only
             // the OPENING edge raises (closing teaches nothing). Guarded: a bus subscriber must
@@ -3216,6 +3252,30 @@ namespace DeNelle.Village.UI
             FlowTrace.Step("Manage", "queue drawer " + (_queueDrawerOpen ? "expanded" : "collapsed") +
                 " (rows " + (_queueDrawerOpen ? (_vm != null ? _vm.QueueRows.Count : 0) : 0) + ")" +
                 (_queueDrawerOpen ? (_drawerBandMode ? " as a band under the Troops workspace" : " full-body") : ""));
+
+            // ⛔ WO-1573 - THE LINE THAT NAMES THE DEAD STEP, AND IT IS PERMANENT (CLAUDE.md 12).
+            // The trace above says the drawer "expanded" from the flag ALONE, which is exactly what
+            // it said while the player saw nothing: the flag flipped, SetActive(true) landed, and
+            // the overlay was still invisible because an ANCESTOR was off. `activeSelf` was true and
+            // `activeInHierarchy` was false, and no line printed the difference - so the door read
+            // as working in every log.
+            // ⚠ activeInHierarchy IS THE MEASUREMENT. Print the screen state beside it so the next
+            // capture says WHICH ancestor, instead of leaving anyone to reason about a subtree they
+            // cannot see. Same discipline as MANAGE_QUEUE_PILL_RECT, which ended nine rounds of
+            // coordinate theories with one printed rectangle.
+            FlowTrace.Step("Manage", "MANAGE_QUEUE_DOOR open=" + _queueDrawerOpen +
+                " hub=" + _hubShowing +
+                " drawer.activeSelf=" + (_queueDrawer != null && _queueDrawer.activeSelf) +
+                " drawer.activeInHierarchy=" + (_queueDrawer != null && _queueDrawer.activeInHierarchy) +
+                " well.activeSelf=" + (_operationalWell != null && _operationalWell.gameObject.activeSelf) +
+                " launcher.activeSelf=" + (_launcherHost != null && _launcherHost.gameObject.activeSelf) +
+                " pill.activeInHierarchy=" +
+                    (_queueDrawerToggle != null && _queueDrawerToggle.gameObject.activeInHierarchy));
+            if (_queueDrawerOpen && _queueDrawer != null && !_queueDrawer.activeInHierarchy)
+                FlowTrace.Fail("Manage", "MANAGE_QUEUE_DOOR the queue overlay is open but an ANCESTOR " +
+                    "is inactive - it renders nothing and accepts no input (hub=" + _hubShowing +
+                    ", well.activeSelf=" +
+                    (_operationalWell != null && _operationalWell.gameObject.activeSelf) + ")");
         }
 
         private void BuildNotice(RectTransform band)

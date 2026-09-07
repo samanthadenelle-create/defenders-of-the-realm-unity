@@ -49,6 +49,13 @@
 //   6 [ad-comment-true]   the in-file claim about the ad flag / ad SDK is not the false
 //                         one that shipped (it sent a reader chasing a flag already on).
 //   7 [townsfolk-paths]   unchanged: early villagers teach the exact Build/Manage paths.
+//  12 [door-opens-on-the-hub] WO-1573: the QUEUE pill on the HUB fires ToggleQueueDrawer, but
+//                         ManageQueueDrawer is a child of the operational well and the well was
+//                         held inactive whenever the hub was up - SetActive(true) on a child of an
+//                         inactive parent, so the door opened nothing while the trace still read
+//                         "queue drawer expanded". The well now follows the overlay too, the hub's
+//                         cards stand down under it, and MANAGE_QUEUE_DOOR prints
+//                         activeInHierarchy so the dead-ancestor state can never read as open.
 //
 // Markers: MANAGE_QUEUE_DRAWER_OK / MANAGE_QUEUE_DRAWER_FAIL.
 // =============================================================================
@@ -713,6 +720,82 @@ namespace DeNelle.Editor.Regression
                                  "constants by BOTH writers. BuildQueueDrawer authored -0.25..0.99 and " +
                                  "ApplyDrawerPlacement 0.02..0.84, and the r24 log carries both drawer heights " +
                                  "(719px and 475px) - one rect, two numbers, and the estimate described neither");
+            }
+
+            // ── 12 [door-opens-on-the-hub] — WO-1573 (2026-09-07) ───────────────────────────────
+            // ⛔ THE PILL FIRED AND THE PLAYER SAW NOTHING, AND EVERY LOG SAID IT WORKED.
+            //
+            // PROVEN AT SOURCE (ManageScreenPanel.cs, read 2026-09-07):
+            //   * `BuildQueueDrawer(well)` parents ManageQueueDrawer to `well`, and `well` is
+            //     `_operationalWell` (`_operationalWell = well;` in the same build method).
+            //   * `ApplyScreenVisibility` held that well at `SetActive(!_hubShowing)`.
+            //   * the QUEUE pill is built on `_tabsHost`, which hangs off `chrome.content` - a
+            //     SIBLING of the well - and NOTHING deactivates it on the hub.
+            // So on the hub the pill was live, `ToggleQueueDrawer` ran, `_queueDrawerOpen` flipped
+            // and `_queueDrawer.SetActive(true)` landed on a CHILD OF AN INACTIVE PARENT. Nothing
+            // rendered, nothing was tappable, and the existing trace still printed
+            // "queue drawer expanded" because it reads the FLAG.
+            //
+            // ⚠ THIS IS THE DEAD-SUBTREE FAULT ApplyScreenVisibility'S OWN HEADER ALREADY RECORDS
+            // (`content=0px`: ShowLauncher deactivated the WELL and RenderWorkspace re-activated
+            // only the HOST). It was fixed for the workspace host and left open for the overlay,
+            // because until the hub could open the queue nobody had walked that path. One flag,
+            // one writer - and the writer must re-assert the well with EVERYTHING it contains.
+            //
+            // RED mutations this case catches:
+            //   - restore `_operationalWell.gameObject.SetActive(!_hubShowing);`
+            //   - drop the `ApplyScreenVisibility()` call from ToggleQueueDrawer
+            //   - leave the hub's card grid up under the overlay
+            //   - have ToggleQueueDrawer SetActive the well itself (a second writer)
+            string visibility = Body(panel, "private void ApplyScreenVisibility()", "private void ShowWorkspace()");
+            if (visibility == null)
+                failures.Add("[door-opens-on-the-hub] could not locate ApplyScreenVisibility's body - the scoped " +
+                             "assertion cannot be evaluated, so it FAILS rather than passing vacuously");
+            else
+            {
+                if (!visibility.Contains("SetActive(!_hubShowing || _queueDrawerOpen)"))
+                    failures.Add("[door-opens-on-the-hub] ⛔ ApplyScreenVisibility does not keep the operational well " +
+                                 "alive while the queue overlay is open. ManageQueueDrawer is a CHILD of that well, so " +
+                                 "the QUEUE pill on the hub flips the flag, activates the drawer inside an inactive " +
+                                 "ancestor, and opens NOTHING - while the trace still reports 'queue drawer expanded' " +
+                                 "(WO-1573)");
+                if (!visibility.Contains("_launcherHost.gameObject.SetActive(_hubShowing && !_queueDrawerOpen)"))
+                    failures.Add("[door-opens-on-the-hub] the hub's card grid is left active under the queue overlay - " +
+                                 "an opaque modal carrying DESTRUCTIVE and PAID verbs over a live card grid is the " +
+                                 "WO-1368 mis-tap surface, on the hub this time");
+                // ⚠ NOT PINNED HERE: the hub's shared CLOSE. It stays `SetActive(_hubShowing)` and
+                // is COVERED by the overlay rather than gated (DrawerOverlayY0 = -0.25 of the well
+                // spans the Close band, and the drawer's opaque Image eats the raycast). Its exact
+                // text is pinned by ManageMockupConformanceRegression.cs:718, so gating it is that
+                // suite's edit, not this one's - and it needs a capture first.
+            }
+            if (!panel.Contains("drawer.SetParent(well, false)"))
+                failures.Add("[door-opens-on-the-hub] the queue drawer is no longer parented to the operational well - " +
+                             "the ancestor this case guards has moved, so re-derive the fix before deleting the case");
+            if (toggle == null)
+                failures.Add("[door-opens-on-the-hub] could not locate ToggleQueueDrawer's body - reported as a FAILURE");
+            else
+            {
+                if (!toggle.Contains("ApplyScreenVisibility();"))
+                    failures.Add("[door-opens-on-the-hub] ToggleQueueDrawer does not re-assert the screen's visibility, " +
+                                 "so the overlay is switched on inside whatever hierarchy the previous screen left " +
+                                 "behind - and on the hub that hierarchy is inactive");
+                if (toggle.Contains("_operationalWell.gameObject.SetActive"))
+                    failures.Add("[door-opens-on-the-hub] ToggleQueueDrawer writes the well's active flag directly. " +
+                                 "ApplyScreenVisibility is the SINGLE writer of that flag - two writers deciding one " +
+                                 "piece of state by last-write-wins is the whole defect this screen already paid for");
+                if (toggle.IndexOf("ApplyScreenVisibility();", StringComparison.Ordinal) >
+                    toggle.IndexOf("_queueDrawer.SetActive(_queueDrawerOpen)", StringComparison.Ordinal))
+                    failures.Add("[door-opens-on-the-hub] the drawer is activated BEFORE its ancestors are re-asserted, " +
+                                 "so the layout pass ApplyDrawerPlacement and RenderQueueDrawer both measure against " +
+                                 "never runs on the opening frame");
+                // The instrument, pinned. `activeSelf` was true throughout the defect; only
+                // `activeInHierarchy` tells the two states apart, and CLAUDE.md 12 forbids
+                // removing the trace once a system has been stabilised by it.
+                if (!toggle.Contains("MANAGE_QUEUE_DOOR") || !toggle.Contains("activeInHierarchy"))
+                    failures.Add("[door-opens-on-the-hub] the MANAGE_QUEUE_DOOR trace (or its activeInHierarchy " +
+                                 "measurement) is gone. Without it a dead-ancestor overlay reads as 'expanded' in " +
+                                 "every log, which is how this defect survived being captured");
             }
 
             reason = failures.Count == 0
