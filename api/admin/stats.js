@@ -62,6 +62,12 @@
 //   GET /api/admin/stats?view=command[&days=N]  (WO-1281 Command Center decision
 //                                                surface - sales, retention,
 //                                                progression, churn, session length)
+//   GET /api/admin/stats?view=skus              (WO-1532 the SKU catalog: every
+//                                                pack, its contents, and whether
+//                                                the two purchase rails can
+//                                                actually sell it. NO DATABASE -
+//                                                dispatched before neon() is
+//                                                ever called.)
 //
 // ── ⛔ TWO PURCHASE VIEWS, AND THEY ARE NOT INTERCHANGEABLE ──────────────────
 //   ?view=economy   — CLIENT-REPORTED INTENT. Aggregates the purchase_completed
@@ -101,6 +107,11 @@ const { AREAS: MAINTENANCE_AREAS } = require('../_lib/maintenance');
 // than silently omitting it. A SKU absent from a sales table is indistinguishable
 // from a SKU that does not exist, and those are very different findings.
 const { USD_ANCHORS } = require('../_lib/purchase-catalog');
+
+// WO-1532. The canonical pack catalog, joined against the two purchase rails.
+// Imported rather than re-read: the join lives in one place and this file only
+// routes to it. It opens no database connection - see the ?view=skus block.
+const skuCatalog = require('../_lib/sku-catalog');
 
 // Constant-time key check. Hashing both sides first makes timingSafeEqual
 // usable on unequal lengths without leaking length information.
@@ -317,6 +328,37 @@ module.exports = async (req, res) => {
     const days = clampLimit(q.days, 30, 180);   // analysis window, hard-capped
     const now = new Date();
     const meta = { view: view, generated_at: now.toISOString(), window_days: days };
+
+    // =========================================================================
+    // ================================================================== skus
+    // WO-1532. THE CATALOG, NOT THE TELEMETRY. Owner ask 2026-09-06 20:52:
+    // "can we add a list in command center of All SKU's and contents".
+    //
+    // ⛔ DISPATCHED HERE, ABOVE `const sql = neon(...)`, ON PURPOSE. This view
+    // answers from files the deployment already carries; it has no rows to read.
+    // Returning before the client is constructed makes "this view never touches
+    // the database" a STRUCTURAL fact rather than a claim in a comment - it runs
+    // green with DATABASE_URL unset, which is how test/admin.skus.view.test.js
+    // proves it. A future statement added below would fail there loudly instead
+    // of quietly making a catalog page depend on Neon being up.
+    //
+    // ⚠ IT IS STILL BEHIND THE READ GATE. The auth block above has already run;
+    // this is not a public endpoint. The catalog is not a secret, but the shape
+    // of what is unsellable is operator information.
+    //
+    // The join, the parity columns and the reverse direction all live in
+    // api/_lib/sku-catalog.js. Nothing about the catalog is decided here: this
+    // block is a route, not a second opinion.
+    // =========================================================================
+    if (view === 'skus') {
+        const built = skuCatalog.build();
+        return res.status(200).json(Object.assign(meta, built, {
+            // window_days means nothing to a catalog. Saying so beats leaving a
+            // number on screen that looks like it filtered something.
+            window_days: null,
+            window_note: 'A catalog has no time window. ?days= is ignored by this view.',
+        }));
+    }
 
     try {
         const sql = neon(process.env.DATABASE_URL);

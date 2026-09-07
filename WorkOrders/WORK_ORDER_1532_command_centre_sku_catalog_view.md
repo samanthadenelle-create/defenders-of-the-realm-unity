@@ -1,6 +1,6 @@
 # WO-1532 - Command centre: a read-only SKU catalog view with contents and rail parity
 
-**Status:** DONE
+**Status:** FIXED - 2026-09-06: GET /api/admin/stats?view=skus behind ADMIN_DASH_KEY, SKUs tab on the console, generated catalog pinned by a drift test, 23/23; deploy HELD behind WO-1446
 **Minted:** 2026-09-06 (CLI lane, api/web silo)
 **Silo:** Monetization/Backend (api/ + test/ only - no Unity, no .cs)
 **Owner ask, verbatim (2026-09-06 20:52):** "can we add a list in command center of All SKU's and contents"
@@ -116,5 +116,10 @@ as a nested list, and the WORD `MISSING` on any parity gap.
 
 ---
 
-**RESULT (2026-09-06):** implemented as specified. RED first (5 failing assertions on the
-missing view), then GREEN. `node --test test/` summary recorded in the RESULT file.
+**RESULT (2026-09-06):** implemented as specified. RED first - **7 failing cases**, measured on
+the run, not estimated - then GREEN: 23/23 on the new file and 424/424 across the whole suite.
+Full detail in `WORK_ORDER_1532_command_centre_sku_catalog_view.RESULT.md`.
+
+**Renumbering note:** drafted as WO-1531 and moved to 1532 in the same edit. The F8 device-bridge
+P0 took 1531 on disk AND in the ninety-sixth-pass banner block while this ticket was being
+written; first-on-disk-and-referenced wins. Banner bumped 1532 -> 1533.

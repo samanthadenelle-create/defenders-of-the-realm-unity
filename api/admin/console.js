@@ -25,6 +25,10 @@
 //   READ  -> GET  /api/admin/stats?view=overview    (players and telemetry)
 //            GET  /api/admin/stats?view=purchases   (money, server-settled)
 //            GET  /api/admin/stats?view=ops         (toggles, promos, issues)
+//            GET  /api/admin/stats?view=skus        (WO-1532 the SKU catalog:
+//                                                    every pack, its contents,
+//                                                    and whether either purchase
+//                                                    rail can actually sell it)
 //   WRITE -> POST /api/admin/ops                    (second key, four actions)
 // The read endpoints cannot write. Nothing this page does can change that,
 // which is the point of putting the boundary there instead of here.
@@ -120,6 +124,12 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   .state{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:2px 8px;
     font-size:12px;font-weight:700;letter-spacing:.04em}
   .state.on{border-color:var(--accent);color:var(--accent)}
+  /* WO-1532. The WORD carries the meaning; this rule only makes it louder. The
+     owner is red/green colourblind, so MISSING must still read as MISSING with
+     every colour stripped out - hence the weight and the border, not just a hue. */
+  .state.bad{border-color:var(--accent);color:var(--accent);font-weight:700}
+  .sku-contents{margin:0;padding-left:18px;font-size:13px;line-height:1.5}
+  .sku-contents li{margin:2px 0}
   .alert{border-color:var(--accent)}
   .alert h2{color:var(--accent)}
   .toggle{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;background:var(--panel2)}
@@ -227,6 +237,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     <button data-tab="money" aria-pressed="false">Money</button>
     <button data-tab="issues" aria-pressed="false">Player issues</button>
     <button data-tab="promos" aria-pressed="false">Promos</button>
+    <button data-tab="skus" aria-pressed="false">SKUs</button>
     <button data-tab="board" aria-pressed="false">Tickets</button>
   </nav>
   <div class="wrap" id="body"></div>
@@ -256,8 +267,15 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   // this variable and nowhere else: this page deliberately stores NOTHING in any
   // browser-side store (the key rule, see the file header), and an accordion is
   // not a reason to open that door.
+  // WO-1532. skus holds the SKU catalog view. It is FETCHED like every other
+  // read and deliberately NOT inlined at serve time the way MANIFEST is: the
+  // canonical packs.json carries non-ASCII in its authoring notes, and this page
+  // is pinned 7-bit ASCII end to end (WO-1244 rule 6). skusErr is tracked apart
+  // from skus for the same reason tunReadOk is: a failed read rendered as an
+  // empty catalog would say "we sell nothing", which is a confident lie.
   var state = { tab:'command', days:30, open:'sales', tools:false,
                 overview:null, ops:null, money:null, command:null, err:null,
+                skus:null, skusErr:null,
                 // WO-1328. tun holds the LIVE override table exactly as the game
                 // reads it. tunReadOk is tracked separately and on purpose: an
                 // unreadable table also answers with no values, and rendering that
@@ -347,7 +365,9 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       getJson('/api/admin/stats?view=ops&days=' + d),
       getJson('/api/admin/stats?view=purchases&days=' + d),
       getJson('/api/admin/stats?view=command&days=' + d),
-      loadTunables()
+      loadTunables(),
+      // WO-1532. No &days: a catalog has no time window, and the server says so.
+      getJson('/api/admin/stats?view=skus')
     ]).then(function(res){
       state.err = null;
       state.overview = res[0].status === 200 ? res[0].body : null;
@@ -358,6 +378,11 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       // so one dead block never blanks the page and never renders as a zero.
       if (!state.command) state.commandErr = (res[3].body && res[3].body.error) || ('HTTP ' + res[3].status);
       else state.commandErr = null;
+      // WO-1532. Same discipline: the catalog either read or it did not, and the
+      // tab says which. It never renders an empty table as "nothing is for sale".
+      if (res[5] && res[5].status === 200){ state.skus = res[5].body; state.skusErr = null; }
+      else { state.skus = null;
+             state.skusErr = (res[5] && res[5].body && res[5].body.error) || ('HTTP ' + (res[5] ? res[5].status : '?')); }
       if (!state.overview) state.err = 'player metrics failed: ' + esc((res[0].body && res[0].body.error) || res[0].status);
       else if (!state.ops) state.err = 'ops read failed: ' + esc((res[1].body && res[1].body.error) || res[1].status);
       $('stamp').textContent = 'read ' + new Date().toISOString().replace('T',' ').slice(0,16);
@@ -1194,6 +1219,130 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     return h;
   }
 
+  // ---- WO-1532 THE SKU CATALOG -------------------------------------------
+  // Owner ask 2026-09-06: "can we add a list in command center of All SKU's and
+  // contents". One row per authored pack, in authored order, contents nested
+  // underneath it, and the two rail-parity columns computed on the SERVER.
+  //
+  // !! THE STATE IS A WORD. A pack the store cannot sell reads MISSING, in
+  // capitals, in the cell. The red class on it is DECORATION - the owner is
+  // red/green colourblind, so nothing here may depend on telling hues apart.
+  //
+  // !! AND A GAP IS EXPLAINED, NOT JUST FLAGGED. "MISSING" alone sends someone
+  // grepping; the sentence under the table names the file the row is missing
+  // from and what a player experiences because of it.
+  function skuWord(present){
+    return present ? '<span class="state">yes</span>'
+                   : '<span class="state bad">MISSING</span>';
+  }
+  function skuContents(c){
+    if (!c || c.is_empty) return '<span class="none">grants nothing</span>';
+    var h = '<ul class="sku-contents">';
+    (c.economy || []).forEach(function(e){
+      h += '<li><strong>' + esc(e.resource) + '</strong> ' + n(e.amount) + '</li>';
+    });
+    (c.cosmetics || []).forEach(function(id){
+      h += '<li>cosmetic <code>' + esc(id) + '</code></li>';
+    });
+    (c.convenience || []).forEach(function(v){
+      h += '<li>convenience <code>' + esc(v.kind) + '</code>' +
+           (v.count === null || v.count === undefined ? '' : ' x' + esc(v.count)) +
+           (v.description ? ' - ' + esc(v.description) : '') + '</li>';
+    });
+    return h + '</ul>';
+  }
+  function renderSkus(){
+    if (state.skusErr){
+      return '<div class="card"><h2>SKUs</h2>' +
+        '<p class="msg bad">COULD NOT READ the SKU catalog (' + esc(state.skusErr) + '). ' +
+        'No table is shown: an empty catalog rendered here would read as "we sell nothing", ' +
+        'which is a very different fact.</p></div>';
+    }
+    var d = state.skus;
+    if (!d || !d.packs) return '<div class="card"><p class="none">The SKU catalog is unavailable.</p></div>';
+    var c = d.counts || {};
+
+    var h = '<div class="card"><h2>Every SKU, and what it grants</h2>' +
+      '<div class="tiles">' +
+        tile('Packs', esc(n(c.packs))) +
+        tile('On the shelf', esc(n(c.on_shelf)), 'storeVisible') +
+        tile('Sellable', esc(n(c.sellable)), 'anchored AND visible') +
+        tile('With a gap', esc(n(c.with_parity_gap)), 'cannot be sold as authored') +
+      '</div>' +
+      '<p class="note">Read from the canonical <code>packs.json</code> the game ships, joined ' +
+      'against the two purchase rails. <strong>USD anchor</strong> is the server price ladder ' +
+      '(<code>api/_lib/purchase-catalog.js</code>): with no row there the server issues no quote, ' +
+      'so the wallet rail cannot sell the pack however the card looks - that exact failure has ' +
+      'shipped before. <strong>Play type</strong> is <code>api/_lib/google-play-purchases.js</code>: ' +
+      'with no row there Google Play billing refuses the SKU. Nothing on this tab writes anything.</p>';
+
+    h += '<div class="scroll"><table><tr><th>SKU</th><th>Name</th><th>Tier</th><th>Section</th>' +
+         '<th>Shelf</th><th>USD</th><th>USDC</th><th>SOL</th><th>SKR</th>' +
+         '<th>USD anchor</th><th>Play type</th><th>Sellable</th><th>Contents</th></tr>';
+    d.packs.forEach(function(p){
+      h += '<tr><td><code>' + esc(p.sku) + '</code>' +
+           (p.founder_only ? '<br><span class="state">founder only</span>' : '') +
+           (p.promo_grant_only ? '<br><span class="state">promo grant only</span>' : '') +
+           '</td>' +
+           '<td>' + esc(p.name) + (p.tagline ? '<br><span class="note">' + esc(p.tagline) + '</span>' : '') + '</td>' +
+           '<td>' + esc(n(p.tier)) + '</td>' +
+           '<td>' + esc(p.band || p.section || '-') + '</td>' +
+           '<td>' + (p.store_visible ? 'visible' : 'hidden') + '</td>' +
+           '<td>' + usd(p.pricing.usd) + '</td>' +
+           '<td>' + esc(n(p.pricing.usdc)) + '</td>' +
+           '<td>' + esc(n(p.pricing.sol)) + '</td>' +
+           '<td>' + esc(n(p.pricing.skr)) + '</td>' +
+           '<td>' + skuWord(p.usd_anchor_present) +
+             (p.usd_anchor_present ? ' ' + usd(p.usd_anchor) : '') + '</td>' +
+           '<td>' + (p.play_product_type_present
+                      ? esc(p.play_product_type)
+                      : '<span class="state bad">MISSING</span>') + '</td>' +
+           '<td>' + (p.sellable ? '<span class="state">yes</span>' : '<span class="state">no</span>') +
+             '<br><span class="note">' + esc(p.sellable_reason) + '</span></td>' +
+           '<td>' + skuContents(p.contents) + '</td></tr>';
+      if (p.parity_gaps && p.parity_gaps.length){
+        h += '<tr><td colspan="13"><span class="state bad">MISSING</span> ' +
+             esc(p.parity_gaps.join(' | ')) + '</td></tr>';
+      }
+    });
+    h += '</table></div></div>';
+
+    // The reverse direction. A list called "All SKUs" that quietly omitted a
+    // priced product would be the same defect in a new coat, so anything the
+    // rails know about and the pack file does not is named here.
+    h += '<div class="card"><h2>Priced, but not a pack</h2>';
+    var orph = d.anchors_without_pack || [];
+    if (!orph.length) h += '<p class="none">Nothing. Every priced SKU is an authored pack.</p>';
+    else {
+      h += '<p class="note">These carry a server price but are not rows in <code>packs.json</code>. ' +
+           'That is not automatically wrong - the Monthly Ledger cards are authored in ' +
+           '<code>battle_monthly.json</code>, and the mainnet canary is a proof-of-rail, not a sale - ' +
+           'but they are named rather than dropped, because a missing row is invisible by nature.</p>' +
+           '<div class="scroll"><table><tr><th>SKU</th><th>USD anchor</th></tr>';
+      orph.forEach(function(o){
+        h += '<tr><td><code>' + esc(o.sku) + '</code></td><td>' + usd(o.usd_anchor) + '</td></tr>';
+      });
+      h += '</table></div>';
+    }
+    var pt = d.product_types_without_pack || [];
+    if (pt.length){
+      h += '<p class="note">Google Play also knows a product type for these non-pack SKUs:</p>' +
+           '<div class="scroll"><table><tr><th>SKU</th><th>Play type</th></tr>';
+      pt.forEach(function(o){
+        h += '<tr><td><code>' + esc(o.sku) + '</code></td><td>' + esc(o.play_product_type) + '</td></tr>';
+      });
+      h += '</table></div>';
+    }
+    h += '</div>';
+
+    h += '<div class="card"><h2>How to read this</h2><ul class="sku-contents">';
+    (d.notes || []).forEach(function(t){ h += '<li>' + esc(t) + '</li>'; });
+    h += '</ul><p class="note">Catalog version ' + esc(n(d.catalog_version)) + '. ' +
+         esc(d.currency_disclaimer || '') + ' Changing a price or a grant is an edit to ' +
+         '<code>packs.json</code> and the server ladder, never a control on this page.</p></div>';
+    return h;
+  }
+
   function renderBoard(){
     return '<div class="card"><h2>Tickets</h2>' +
       '<p class="note">There are TWO ticket systems and they are deliberately not merged.</p>' +
@@ -1217,6 +1366,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
        : state.tab === 'money' ? renderMoney()
        : state.tab === 'issues' ? renderIssues()
        : state.tab === 'promos' ? renderPromos()
+       : state.tab === 'skus' ? renderSkus()
        : renderBoard();
     $('body').innerHTML = h;
   }
