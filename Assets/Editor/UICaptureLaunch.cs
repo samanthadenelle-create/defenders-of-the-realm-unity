@@ -1783,6 +1783,93 @@ namespace DeNelle.Editor
             else Debug.LogError("JEWEL_POLISH_CONFIRM_CAPTURE_FAIL " + count + "/3");
         }
 
+        /// <summary>
+        /// WO-1600 - the JEWELER DISCOVERED card, which had NEVER been shot.
+        /// <para>The owner's device frame (Logs/device/seeker-shots/Screenshot_20260907-132324.png,
+        /// build 2026.09.07.359651) is the only picture that has ever existed of this modal, and it
+        /// showed the copy sitting outside the plate and OPEN CRAFTING: JEWELER printed on top of the
+        /// modal's own CLOSE. A card with no capture entry is a card whose layout is proven by the
+        /// owner's eyes, which is the arrangement §14 exists to end. Marker
+        /// <c>JEWELER_DISCOVERY_CAPTURE_OK 3/3</c>; the Seeker's real 2670x1200 surface is one of the
+        /// three targets, so the acceptance ("body inside the plate at 2670x1200") is judged on the
+        /// PNG this writes.</para>
+        /// </summary>
+        public static void RunJewelerDiscoveryCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("JewelerDiscovery", CaptureJewelerDiscoveryOnce);
+            if (count == 3) Debug.Log("JEWELER_DISCOVERY_CAPTURE_OK 3/3");
+            else Debug.LogError("JEWELER_DISCOVERY_CAPTURE_FAIL " + count + "/3");
+        }
+
+        private static int CaptureJewelerDiscoveryOnce(CaptureTarget target)
+        {
+            GameObject host = null, stateHost = null, eventSystem = null, canvas = null;
+            GameStateService priorState = null;
+            GameState stateFixture = null;
+            Component ftue = null;
+            try
+            {
+                PanelManager.CloseAll();
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    eventSystem = new GameObject("~UICapEventSystem");
+                    eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                Type type = ResolveType("DeNelle.Village.Crafting.JewelerDiscoveryFtue");
+                if (type == null) throw new TypeLoadException("DeNelle.Village.Crafting.JewelerDiscoveryFtue");
+
+                // The SAME earned-history fixture the registered Jeweler panel shot uses: the card's
+                // gate is JewelerProgression.IsUnlocked = HasEverAcquired(RoughStoneId).
+                priorState = GameStateService.Instance;
+                stateFixture = ScriptableObject.CreateInstance<GameState>();
+                stateFixture.MarkEverAcquired(DungeonExclusiveItems.RoughStoneId);
+                stateHost = new GameObject("~UICapJewelerDiscoveryState");
+                if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), stateFixture))
+                    throw new InvalidOperationException("Jeweler discovery progression fixture unavailable");
+
+                host = new GameObject("~UICapJewelerDiscovery");
+                ftue = host.AddComponent(type);
+                // Present(), NOT TryPresent(). WO-1600's gate admits the card only in a home hub
+                // with a chosen hero, and the capture scene is neither - so TryPresent would
+                // correctly refuse and this entry would shoot nothing. Present() is the build step
+                // that gate guards; shooting it proves the card the player actually gets in town,
+                // without the capture having to defeat (or silently re-implement) the gate.
+                InvokePrivate(ftue, "Present");
+                var modal = GetPrivateFieldValue(ftue, "_modal") as ElarionUiKit.ObsidianModal;
+                canvas = modal != null ? modal.canvas : null;
+                if (canvas == null) throw new InvalidOperationException("Jeweler discovery built no canvas");
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(canvas,
+                    OutDir + "JewelerDiscovery_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] JewelerDiscovery capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                // ORDER MATTERS: tear the canvas down with DestroyImmediate FIRST, then Close().
+                // Close() calls UnityEngine.Object.Destroy, which is deferred and ERRORS in edit
+                // mode ("Destroy may not be called from edit mode") - a predictable red line in a
+                // gate log that a reader would then have to rule out by hand. With the canvas
+                // already gone Close() skips that branch and still does the work only it can:
+                // dispose the WorldHold and notify PanelManager.
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (ftue != null) InvokePrivate(ftue, "Close");
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                if (stateHost != null)
+                {
+                    RestoreCaptureState(priorState);
+                    UnityEngine.Object.DestroyImmediate(stateHost);
+                }
+                if (stateFixture != null) UnityEngine.Object.DestroyImmediate(stateFixture);
+                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+                PanelManager.CloseAll();
+            }
+        }
+
         /// <summary>Focused two-state proof for normal loading and first-run connection recovery.</summary>
         public static void RunLoadingOverlayCaptureHeadless()
         {
@@ -2372,9 +2459,91 @@ namespace DeNelle.Editor
         {
             Directory.CreateDirectory(OutDir);
             int count = CaptureHeroSkillTree() +
+                ForEachTarget("HeroSkillTreeLv2", CaptureHeroSkillTreeLv2Once) +
                 ForEachTarget("HeroSkillTreeStates", CaptureHeroSkillTreeStatesOnce);
-            if (count == 9) Debug.Log("HERO_SKILL_TREE_CAPTURE_OK 9/9");
-            else Debug.LogError("HERO_SKILL_TREE_CAPTURE_FAIL " + count + "/9");
+            // WO-1601: 12, not 9 - the Lv2 one-point board joins the proof. The owner's defect
+            // frame (Screenshot_20260907-132616.png) is a BRAND NEW hero, and that is the tree at
+            // its SMALLEST population; the 999-Wisdom states fixture below could never photograph
+            // it, so the clipped-edge board had no headless evidence at all.
+            if (count == 12) Debug.Log("HERO_SKILL_TREE_CAPTURE_OK 12/12");
+            else Debug.LogError("HERO_SKILL_TREE_CAPTURE_FAIL " + count + "/12");
+        }
+
+        /// <summary>
+        /// WO-1601 - THE LV2, ONE-POINT BOARD: the tree exactly as a new hero meets it.
+        ///
+        /// The owner's defect frame is a fresh hero ("WISDOM 2 - next point at Level 3"), and at
+        /// that population the calm frontier is a handful of seats spread over the full lane
+        /// axis - which is precisely the board whose outer medallions the mask sliced, and the
+        /// board the graph-well bezel painted a band across. Every existing Skills capture opens
+        /// on either the ambient save or a 999-Wisdom fixture, so neither could see it.
+        ///
+        /// Reversible, exactly like the states fixture: the talent PlayerPref is cleared and
+        /// restored, the Wisdom service is a temporary object, and a live service means SKIP
+        /// rather than clobber.
+        /// </summary>
+        private static int CaptureHeroSkillTreeLv2Once(CaptureTarget target)
+        {
+            const string pref = DeNelle.Core.State.GameStateService.TalentPrefKey;
+            bool hadPref = PlayerPrefs.HasKey(pref);
+            string oldPref = hadPref ? PlayerPrefs.GetString(pref) : null;
+            GameObject eventSystem = null, serviceGo = null, heroGo = null, hostGo = null, canvasGo = null;
+            HeroSkillTreePanelMvvm panel = null;
+            int saved = 0;
+            try
+            {
+                if (WisdomCurrencyService.Instance != null)
+                {
+                    Debug.LogWarning("[UICap-HL] live Wisdom service present; Lv2 skill-tree fixture skipped.");
+                    return 0;
+                }
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    eventSystem = new GameObject("~UICapEventSystem");
+                    eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                PlayerPrefs.DeleteKey(pref);            // nothing unlocked - a brand new hero
+                serviceGo = new GameObject("~UICapWisdomLv2");
+                var wisdom = serviceGo.AddComponent<WisdomCurrencyService>();
+                wisdom.ResetForNewGame();
+                wisdom.Grant(2);                        // the owner's frame reads WISDOM 2
+
+                heroGo = new GameObject("~UICapSkillHeroLv2");
+                heroGo.tag = "Player";
+                heroGo.AddComponent<AssignableSkillBar>();
+
+                hostGo = new GameObject("~UICapHeroSkillTreeLv2");
+                panel = hostGo.AddComponent<HeroSkillTreePanelMvvm>();
+                panel.Open();
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HeroSkillTreePanelMvvm._ui null after Lv2 Open -- skipped.");
+                    return 0;
+                }
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "HeroSkillTree_Lv2_" + target.Tag + ".png", target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] hero skill tree Lv2 capture threw: " + e);
+            }
+            finally
+            {
+                if (panel != null)
+                {
+                    var handle = GetPrivateFieldValue(panel, "_panelHandle") as PanelHandle;
+                    if (handle != null) PanelManager.NotifyClosed(handle);
+                }
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (heroGo != null) UnityEngine.Object.DestroyImmediate(heroGo);
+                if (serviceGo != null) UnityEngine.Object.DestroyImmediate(serviceGo);
+                if (hadPref) PlayerPrefs.SetString(pref, oldPref); else PlayerPrefs.DeleteKey(pref);
+                PlayerPrefs.Save();
+                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+            }
+            return saved;
         }
 
         private static int CaptureHeroSkillTreeStatesOnce(CaptureTarget target)

@@ -69,11 +69,27 @@
 //                   that the band constants add up. Mutation that reds it: pin the hint
 //                   `PinBandFromTop(hint, QuickSwapHintBandPx + BandGapPx, QuickSwapHintBandPx)`
 //                   (the hint drops into the slot band).
+//   9 [bezel-art]   WO-1601. An ART oracle: it decodes the PNG named by
+//                   HeroSkillTreePanelMvvm.BezelFrameResource and asserts painted alpha exists
+//                   inside ALL FOUR of its 9-slice border strips. card-frame-empty's top and
+//                   bottom 96 px strips are 100% transparent (painted rows 165..713 of 887), so
+//                   Image.Type.Sliced put its rails ~10%/89% INTO the rect -- the gold band the
+//                   owner photographed straight across the talent tree, and, on the 172 px shelf
+//                   bezel, no edge at all. Mutation that reds it: point BezelFrameResource back
+//                   at "UI/ElarionMedieval/frames/card-frame-empty".
+//  10 [fit]         WO-1601. Runs the two shipped statics -- SolveGraphLatticePx then
+//                   ResolveGraphFitScale -- over the Lv2 board (seven lanes, two ranks) at the
+//                   MEASURED device well and asserts nothing overhangs the rest window sideways
+//                   and nothing overhangs it downward by half a plate. Mutation that reds it:
+//                   delete the `_graphContent.localScale = new Vector3(fitScale, ...)` line, or
+//                   make ResolveGraphFitScale return 1f -- 85 px / 85 px of overhang, which is
+//                   the sliced 0/1 medallions in Screenshot_20260907-132616.png.
 //
 // Standalone: run-unity-method DeNelle.Editor.Regression.SkillsPanelLayoutRegression.RunAll
 // =============================================================================
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -112,6 +128,22 @@ namespace DeNelle.Editor.Regression
         private const float RefBodyWidthPx = 1695f;
         private const float RefBodyHeightPx = 493f;
 
+        // ── THE GRAPH WELL ON THE OWNER'S DEVICE (WO-1601) ────────────────────────
+        // MEASURED off Logs/device/seeker-shots/Screenshot_20260907-132616.png (Seeker
+        // 2670x1200; canvas 1080x1920 match 0.5 -> scale 1.243 -> 2148x965 units), not derived
+        // from the reference body above - the two disagree and the frame is the ground truth:
+        //   * the loadout shelf plate reads x 310..2359, y 816..1014 device px. It is the view's
+        //     own 0.02..0.98 x QuickSwapRailPx(160) rect, so the workspace is 2134 device px
+        //     wide (1717 ref px) starting at device x 267.
+        //   * the well's floor is the workspace floor + GraphWellFloorPx(182) = device y 805,
+        //     which is exactly where the frame cuts the bottom medallions.
+        //   * its ceiling is the workspace top (device y 240, fixed by the WISDOM chip's gold
+        //     edge at 247 = top + BodyPadPx) + WisdomBandPx + BandGapPx.
+        // -> 1705 x 395 REFERENCE px. Re-measure from a fresh frame if the chrome moves; do not
+        //    "tidy" these into a formula, because the formula is what disagreed.
+        private const float DeviceWellWpx = 1705f;
+        private const float DeviceWellHpx = 395f;
+
         public static void RunAll()
         {
             if (Run(out string reason)) Debug.Log("SKILLS_PANEL_LAYOUT_OK - " + reason);
@@ -133,6 +165,8 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "popup", () => Case6_SpendPopup(failures, notes));
                 Case(failures, "rail", () => Case7_QuickSwapRail(failures, notes));
                 Case(failures, "elevation", () => Case8_Elevation(failures, notes));
+                Case(failures, "bezel-art", () => Case9_BezelArt(failures, notes));
+                Case(failures, "fit", () => Case10_GraphFit(failures, notes));
             }
             catch (Exception ex)
             {
@@ -149,7 +183,10 @@ namespace DeNelle.Editor.Regression
                          "ASCII-only description inside a frame that encloses it (WO-1342), and the " +
                          "quick-swap slots and their hint are disjoint bands measured on the real builder " +
                          "(WO-1401), and the screen carries a three-tier ELEVATION LADDER whose steps are " +
-                         "measured in Rec.709 luma so depth survives a greyscale capture (WO-1522)" + noteStr;
+                         "measured in Rec.709 luma so depth survives a greyscale capture (WO-1522), and the " +
+                         "bezel sprite paints inside all four of its own 9-slice border strips so a frame can " +
+                         "never draw a band ACROSS what it frames, and the solved board is fitted into its " +
+                         "well so no medallion is sliced at the mask edge (WO-1601)" + noteStr;
                 return true;
             }
             reason = "skills-panel-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -1465,9 +1502,329 @@ namespace DeNelle.Editor.Regression
                       ", floor " + (step * 2f).ToString("0.000") + ")");
         }
 
+        // =====================================================================
+        //  CASE 9 - WO-1601 [bezel-art]: THE FRAME SPRITE'S ART MUST REACH ITS OWN
+        //  9-SLICE BORDER, or a "bezel" paints a band across whatever it frames.
+        // =====================================================================
+        /// <summary>
+        /// Owner frame Logs/device/seeker-shots/Screenshot_20260907-132616.png (Seeker
+        /// 2026.09.07.359651): a full-width ornate gold band drawn straight across the middle of
+        /// the talent tree, over the ARCANE BOLT node and its connectors - and, on the same
+        /// screen, the loadout shelf carrying NO gold edge at all.
+        ///
+        /// ONE CAUSE, and it is a property of the ART, not of any rect:
+        ///   card-frame-empty.png is 1774x887, spriteBorder {96,96,96,96}, and its PAINTED alpha
+        ///   bounding box is rows 165..713 / cols 16..1757. The top 96-row slice (0..96) and the
+        ///   bottom one (791..887) are therefore 100% TRANSPARENT. Image.Type.Sliced pins those
+        ///   two empty strips to the rect's edges and STRETCHES the middle, so the only rows that
+        ///   carry the horizontal rails land at (165-96)/695 = 9.9% and (713-96)/695 = 88.8% INTO
+        ///   the rect. Over the graph well (device 306..812 px) that predicts rails at 452 / 663;
+        ///   the owner's frame measures 449 / 655. Over the 172 px shelf bezel the 192 px of
+        ///   border does not fit, Unity shrinks both strips, the middle slice collapses to zero
+        ///   and the rails are not drawn at all - the missing shelf edge, same cause.
+        ///
+        /// No rect can fix it (the rail is 96 + 0.099*(H-192) from the top for every H), so the
+        /// law is on the SPRITE: whatever <c>HeroSkillTreePanelMvvm.BezelFrameResource</c> names
+        /// must carry painted pixels inside all four of its border strips. This case loads that
+        /// PNG's bytes and re-measures them, so it tracks the art rather than a copy of it.
+        ///
+        /// RED FIRST: point BezelFrameResource back at
+        /// "UI/ElarionMedieval/frames/card-frame-empty" and the TOP and BOTTOM strip assertions
+        /// fail with 165 and 713 named.
+        /// </summary>
+        private static void Case9_BezelArt(List<string> failures, List<string> notes)
+        {
+            const string tag = "[bezel-art]";
+            Type view = FindType(ViewType);
+            if (view == null) { failures.Add(tag + " HeroSkillTreePanelMvvm type not found"); return; }
+
+            string res = ConstString(view, "BezelFrameResource", failures, tag);
+            if (string.IsNullOrEmpty(res)) return;
+
+            // The builder must go through the const, and must not have kept the retired sprite.
+            string src = ReadText(ViewSrc, failures, tag);
+            if (src == null) return;
+            string code = StripComments(src);
+            if (code.IndexOf("Resources.Load<Sprite>(BezelFrameResource)", StringComparison.Ordinal) < 0)
+                failures.Add(tag + " BuildElevationPlate no longer loads BezelFrameResource - a literal " +
+                             "sprite path there is a second copy of this decision, and this case would be " +
+                             "measuring the wrong file");
+            if (code.IndexOf("card-frame-empty", StringComparison.Ordinal) >= 0)
+                failures.Add(tag + " the Skills panel names card-frame-empty again - its 96 px slice strips " +
+                             "are fully transparent (painted rows 165..713 of 887), so slicing it paints a " +
+                             "band ACROSS whatever it is supposed to frame (WO-1601)");
+
+            string png = "Assets/Resources/" + res + ".png";
+            if (!File.Exists(png))
+            {
+                failures.Add(tag + " " + png + " does not exist - the bezel would silently ship with no edge");
+                return;
+            }
+
+            Vector4 border = SpriteBorderFromMeta(png + ".meta", failures, tag);
+            if (border.x <= 0f && border.y <= 0f && border.z <= 0f && border.w <= 0f)
+            {
+                failures.Add(tag + " " + res + " has NO 9-slice border - Image.Type.Sliced then simply " +
+                             "stretches the whole sprite, so the frame art distorts with the rect");
+                return;
+            }
+
+            int w, h, r0, r1, c0, c1;
+            if (!PaintedAlphaBox(png, out w, out h, out r0, out r1, out c0, out c1))
+            {
+                failures.Add(tag + " could not decode " + png + " - the art oracle cannot certify the bezel");
+                return;
+            }
+
+            // Unity's border is {left, bottom, right, top}; PNG row 0 is the TOP row.
+            int bl = Mathf.RoundToInt(border.x), bb = Mathf.RoundToInt(border.y);
+            int br = Mathf.RoundToInt(border.z), bt = Mathf.RoundToInt(border.w);
+            if (r0 >= bt)
+                failures.Add(tag + " " + res + ": the TOP " + bt + " px slice is empty - painted art starts " +
+                             "at row " + r0 + ". Sliced pins that empty strip to the rect's top edge and the " +
+                             "first painted row lands " + ((r0 - bt) * 100 / Mathf.Max(1, h - bt - bb)) +
+                             "% INTO the rect - a band across the content, never an edge (WO-1601)");
+            if (r1 < h - bb)
+                failures.Add(tag + " " + res + ": the BOTTOM " + bb + " px slice is empty - painted art ends " +
+                             "at row " + r1 + " of " + h + ". The lower rail draws inside the rect instead of " +
+                             "on its floor");
+            if (c0 >= bl)
+                failures.Add(tag + " " + res + ": the LEFT " + bl + " px slice is empty (art starts at col " +
+                             c0 + ") - the left rail draws inside the rect");
+            if (c1 < w - br)
+                failures.Add(tag + " " + res + ": the RIGHT " + br + " px slice is empty (art ends at col " +
+                             c1 + " of " + w + ") - the right rail draws inside the rect");
+
+            // ...and the two rects this sprite is actually asked to frame. The shelf bezel is the
+            // SHORT one and it is where the border-shrink collapse bit: state its numbers.
+            float railPx = ConstFloat(view, "QuickSwapRailPx", failures, tag);
+            float inflate = ConstFloat(view, "WellBezelInsetPx", failures, tag);
+            float shelfBezelH = railPx + inflate * 2f;
+            if (bt + bb > shelfBezelH + 0.5f)
+                notes.Add("bezel border " + (bt + bb) + " px > shelf bezel height " +
+                          shelfBezelH.ToString("F0") + " px, so Unity shrinks both strips to " +
+                          (shelfBezelH * 0.5f).ToString("F0") + " px each and the middle slice collapses - " +
+                          "legal ONLY because " + res + " paints inside its border strips (rows " + r0 +
+                          ".." + r1 + "), which is exactly what this case pins");
+
+            notes.Add("bezel art " + res + " " + w + "x" + h + " border L" + bl + " B" + bb + " R" + br +
+                      " T" + bt + ", painted rows " + r0 + ".." + r1 + " cols " + c0 + ".." + c1);
+        }
+
+        /// <summary>The painted (alpha &gt; 8) bounding box of a PNG on disk, decoded from its
+        /// BYTES so it never depends on an importer setting (isReadable) that a future re-import
+        /// could flip. Rows are top-down, matching the file.</summary>
+        private static bool PaintedAlphaBox(string path, out int w, out int h,
+                                            out int rowMin, out int rowMax, out int colMin, out int colMax)
+        {
+            w = h = 0; rowMin = colMin = int.MaxValue; rowMax = colMax = -1;
+            Texture2D tex = null;
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(path);
+                tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!tex.LoadImage(bytes, false)) return false;
+                w = tex.width; h = tex.height;
+                var px = tex.GetPixels32();
+                // GetPixels32 is BOTTOM-UP; convert to file rows so the numbers in the failure
+                // text match what an image tool reports.
+                for (int y = 0; y < h; y++)
+                {
+                    int fileRow = h - 1 - y;
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (px[y * w + x].a <= 8) continue;
+                        if (fileRow < rowMin) rowMin = fileRow;
+                        if (fileRow > rowMax) rowMax = fileRow;
+                        if (x < colMin) colMin = x;
+                        if (x > colMax) colMax = x;
+                    }
+                }
+                return rowMax >= 0;
+            }
+            catch { return false; }
+            finally { if (tex != null) UnityEngine.Object.DestroyImmediate(tex); }
+        }
+
+        /// <summary>spriteBorder {left, bottom, right, top} read straight out of the .meta - the
+        /// authority on how Unity will slice the art.</summary>
+        private static Vector4 SpriteBorderFromMeta(string metaPath, List<string> failures, string tag)
+        {
+            try
+            {
+                if (!File.Exists(metaPath))
+                {
+                    failures.Add(tag + " no .meta at " + metaPath + " - the slice border is unknown");
+                    return Vector4.zero;
+                }
+                var m = Regex.Match(File.ReadAllText(metaPath),
+                    @"spriteBorder:\s*\{x:\s*([\d.]+),\s*y:\s*([\d.]+),\s*z:\s*([\d.]+),\s*w:\s*([\d.]+)\}");
+                if (!m.Success) return Vector4.zero;
+                return new Vector4(
+                    float.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
+                    float.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
+                    float.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture),
+                    float.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture));
+            }
+            catch { return Vector4.zero; }
+        }
+
+        // =====================================================================
+        //  CASE 10 - WO-1601 [fit]: THE SOLVED BOARD FITS THE WELL IT IS DRAWN IN
+        // =====================================================================
+        /// <summary>
+        /// Second half of the owner's frame: the 0/1 medallions at BOTH ends of the tree are cut
+        /// in half by the RectMask2D. Measured against the shipped solver at the device's well
+        /// (see the consts below): a Lv2 board solves seven columns at MinColPitchPx into a
+        /// 1915 px content rect inside a 1705 px well, so the seventh plate spans 1654..1790 and
+        /// the mask cuts it at 1705. The second row is halved the same way.
+        ///
+        /// The fix is a uniform fit scale on the content (never a re-solve - SolveGraphLatticePx
+        /// owns pitch and [grid] pins its laws), floored where a plate would stop being a legal
+        /// tap target. This case runs BOTH shipped functions and measures the rest window.
+        ///
+        /// RED FIRST: delete the _graphContent.localScale assignment in RebuildTracks (or make
+        /// ResolveGraphFitScale return 1f) and (b) fails with the right column 85 px outside the
+        /// rest window and the bottom row 85 px below it.
+        /// </summary>
+        private static void Case10_GraphFit(List<string> failures, List<string> notes)
+        {
+            const string tag = "[fit]";
+            Type view = FindType(ViewType);
+            if (view == null) { failures.Add(tag + " HeroSkillTreePanelMvvm type not found"); return; }
+
+            float nodeSize = ConstFloat(view, "NodeSizePx", failures, tag);
+            float minTouch = ConstFloat(FindType(KitType), "MinTouchPx", failures, tag);
+            float floorScale = ConstFloat(view, "MinGraphFitScale", failures, tag);
+            float graphPad = ConstFloat(view, "GraphPadPx", failures, tag);
+            float rankBand = ConstFloat(view, "RankBandPx", failures, tag);
+            float clearPx = ConstFloat(view, "PlateClearPx", failures, tag);
+            if (nodeSize <= 0f || minTouch <= 0f || floorScale <= 0f) return;
+
+            // (a) THE LAW ITSELF. The floor is a DERIVATION, not a taste: below it a node plate
+            //     renders under the kit touch floor and the board stops being tappable.
+            if (Mathf.Abs(floorScale - minTouch / nodeSize) > 0.0005f)
+                failures.Add(tag + " MinGraphFitScale=" + floorScale.ToString("F4") + " is not MinTouchPx/" +
+                             "NodeSizePx (" + (minTouch / nodeSize).ToString("F4") + ") - the fit floor has " +
+                             "become a literal and can drift below the tap-target law");
+
+            var fitFn = view.GetMethod("ResolveGraphFitScale", BindingFlags.Public | BindingFlags.Static);
+            var solver = view.GetMethod("SolveGraphLatticePx", BindingFlags.Public | BindingFlags.Static);
+            if (fitFn == null || solver == null)
+            {
+                failures.Add(tag + " ResolveGraphFitScale / SolveGraphLatticePx are not both public statics - " +
+                             "this oracle can no longer run what ships; re-point it rather than deleting it");
+                return;
+            }
+            Func<float, float, float, float, float> fit = (cw, ch, ww, wh) =>
+                (float)fitFn.Invoke(null, new object[] { cw, ch, ww, wh });
+
+            if (Mathf.Abs(fit(100f, 100f, 4000f, 4000f) - 1f) > 0.0001f)
+                failures.Add(tag + " a board SMALLER than the well is being scaled - the solver already " +
+                             "centres it; blowing it up would break the pitch law it just solved");
+            if (fit(4000f, 4000f, 100f, 100f) < floorScale - 0.0001f)
+                failures.Add(tag + " the fit scale went below MinGraphFitScale - a node plate would render " +
+                             "under MinTouchPx and stop being a legal tap target");
+
+            // The View must actually APPLY it, and clamp the scroll against the SCALED window.
+            string code = StripComments(ReadText(ViewSrc, failures, tag) ?? "");
+            if (!Regex.IsMatch(code, @"_graphContent\.localScale\s*=\s*new\s+Vector3\s*\(\s*fitScale"))
+                failures.Add(tag + " RebuildTracks no longer scales the graph content by the fit - the " +
+                             "board is back to overflowing its mask at the rest position (WO-1601)");
+            if (!Regex.IsMatch(code, @"contentH\s*-\s*viewH") || !Regex.IsMatch(code, @"contentW\s*-\s*viewW"))
+                failures.Add(tag + " the scroll clamp no longer uses the SCALED rest window (viewW/viewH) - " +
+                             "at fit < 1 it would let the board scroll past its own end");
+
+            // (b) THE MEASURED BOARD. A Lv2 hero, the tree at its smallest population and the
+            //     shape the owner's frame carries: seven lanes, two ranks. Norm magnitudes are
+            //     what the solver clusters on (ColClusterNorm/RowClusterNorm = 0.055), so 1/6
+            //     apart is seven distinct columns and 0/1 is two distinct rows.
+            const int lanes = 7;
+            var norms = new float[lanes * 2];
+            for (int i = 0; i < lanes; i++)
+            {
+                norms[i * 2] = i / (float)(lanes - 1);
+                norms[i * 2 + 1] = i % 2;
+            }
+            float boxW = DeviceWellWpx - graphPad * 2f;
+            float boxH = DeviceWellHpx - graphPad * 2f - rankBand;
+            float[] px;
+            try { px = (float[])solver.Invoke(null, new object[] { norms, boxW, boxH }); }
+            catch (Exception ex)
+            {
+                failures.Add(tag + " SolveGraphLatticePx THREW " + ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+            if (px == null || px.Length != norms.Length) { failures.Add(tag + " solver returned nothing"); return; }
+
+            float maxX = 0f, maxY = 0f, minX = float.MaxValue, minY = float.MaxValue;
+            for (int i = 0; i < lanes; i++)
+            {
+                maxX = Mathf.Max(maxX, px[i * 2]); minX = Mathf.Min(minX, px[i * 2]);
+                maxY = Mathf.Max(maxY, px[i * 2 + 1]); minY = Mathf.Min(minY, px[i * 2 + 1]);
+            }
+            // RebuildTracks' own content sizing, replayed.
+            float contentW = Mathf.Max(maxX + minX, maxX + clearPx * 0.5f + graphPad);
+            float contentH = Mathf.Max(maxY + minY, maxY + clearPx * 0.5f + graphPad + rankBand);
+            float s = fit(contentW, contentH, DeviceWellWpx, DeviceWellHpx);
+            float viewW = DeviceWellWpx / s, viewH = DeviceWellHpx / s;
+            float half = nodeSize * 0.5f;
+
+            float worstRight = 0f, worstBottom = 0f, rawRight = 0f, rawBottom = 0f;
+            for (int i = 0; i < lanes; i++)
+            {
+                worstRight = Mathf.Max(worstRight, (px[i * 2] + half) - viewW);
+                worstBottom = Mathf.Max(worstBottom, (px[i * 2 + 1] + half) - viewH);
+                rawRight = Mathf.Max(rawRight, (px[i * 2] + half) - DeviceWellWpx);
+                rawBottom = Mathf.Max(rawBottom, (px[i * 2 + 1] + half) - DeviceWellHpx);
+            }
+
+            // The frame's LEFT/RIGHT defect - "0/1 medallions half outside the panel" - must be
+            // gone outright. Nothing is allowed to hang off the side of the board at rest.
+            if (worstRight > 0.5f)
+                failures.Add(tag + " after the fit a plate still overhangs the rest window by " +
+                             worstRight.ToString("F0") + " px on the RIGHT (well " + DeviceWellWpx.ToString("F0") +
+                             " px, board " + contentW.ToString("F0") + " px, scale " + s.ToString("F3") +
+                             ") - that is the sliced medallion in Screenshot_20260907-132616.png");
+
+            // Vertically the touch floor can still bind (two ranks at MinRowPitchPx need more
+            // room than this well has). What may NEVER happen again is a plate reading as HALF a
+            // medallion: the overhang has to stay under half a plate, so what the mask cuts is
+            // the plate's margin, not its face.
+            if (worstBottom > half - 0.5f)
+                failures.Add(tag + " after the fit the bottom rank overhangs the rest window by " +
+                             worstBottom.ToString("F0") + " px - half a plate is " + half.ToString("F0") +
+                             " px, so the player is looking at a sliced medallion again, not a scroll cue");
+
+            // ...and the fit has to be doing WORK. Equal numbers mean the scale was never applied.
+            if (worstRight >= rawRight - 0.5f && worstBottom >= rawBottom - 0.5f && (rawRight > 0.5f || rawBottom > 0.5f))
+                failures.Add(tag + " the fit changed nothing: overhang is still " + rawRight.ToString("F0") +
+                             "/" + rawBottom.ToString("F0") + " px - ResolveGraphFitScale is being computed " +
+                             "and thrown away");
+
+            notes.Add("fit scale " + s.ToString("F3") + " (floor " + floorScale.ToString("F3") + ") on a " +
+                      contentW.ToString("F0") + "x" + contentH.ToString("F0") + " Lv2 board in a " +
+                      DeviceWellWpx.ToString("F0") + "x" + DeviceWellHpx.ToString("F0") + " well: overhang " +
+                      rawRight.ToString("F0") + "/" + rawBottom.ToString("F0") + " px -> " +
+                      worstRight.ToString("F0") + "/" + worstBottom.ToString("F0") + " px");
+        }
+
         /// <summary>Rec.709 relative luminance - what a greyscale capture of the screen shows.
         /// The ONLY depth measure this owner can read, so it is the one the case asserts on.</summary>
         private static float Luma(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+        /// <summary>Read a public static string const. A missing one is a FAILURE, never "".</summary>
+        private static string ConstString(Type t, string name, List<string> failures, string tag)
+        {
+            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (f == null)
+            {
+                failures.Add(tag + " " + t.Name + "." + name + " does not exist - re-point this oracle " +
+                             "rather than deleting the guard");
+                return null;
+            }
+            return f.GetValue(null) as string;
+        }
 
         /// <summary>Read a public static Color field. A MISSING surface is a FAILURE, never a
         /// default: a black default would silently satisfy the "recessed" half of the ladder.</summary>

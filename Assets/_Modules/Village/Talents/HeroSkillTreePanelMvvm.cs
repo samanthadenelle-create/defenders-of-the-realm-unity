@@ -529,6 +529,75 @@ namespace DeNelle.Village.Talents
         /// plate it frames. An edge is what turns a dark rectangle into a recess.</summary>
         public const float WellBezelInsetPx = 6f;
 
+        // ---------------------------------------------------------------------
+        // WO-1601 (a) THE BEZEL ART. Owner frame
+        // Logs/device/seeker-shots/Screenshot_20260907-132616.png read a full-width ornate
+        // gold band drawn STRAIGHT ACROSS the middle of the tree, over ARCANE BOLT and its
+        // connectors, while the loadout shelf below carried NO edge at all. Two symptoms,
+        // ONE cause, and it is a property of the ART, measured from the file - not a guess:
+        //
+        //   card-frame-empty.png is 1774x887 with spriteBorder {96,96,96,96}. Its PAINTED
+        //   alpha bounding box is rows 165..713 and cols 16..1757. So:
+        //     * the TOP 96-row slice (rows 0..96) is 100% TRANSPARENT - 165 > 96;
+        //     * the BOTTOM 96-row slice (rows 791..887) is 100% TRANSPARENT - 713 < 791.
+        //   Image.Type.Sliced draws those two strips at the rect's top and bottom edges and
+        //   STRETCHES everything between them. The only rows that carry the horizontal rails
+        //   therefore land INSIDE the rect, at (165-96)/695 = 9.9% and (713-96)/695 = 88.8%
+        //   of the stretched middle. Over the graph well that is a band across the nodes;
+        //   over the 172 px shelf bezel the 192 px of border cannot fit at all, Unity shrinks
+        //   both strips to 86 px, the middle slice collapses to ZERO height and the rails are
+        //   not drawn at all. Predicted rails for the device well (306.5..812.5 device px):
+        //   452 / 663; MEASURED in the owner's frame: 449 / 655. That is the proof.
+        //
+        //   NO RECT CAN FIX IT: the painted top rail sits at 96 + 0.099*(H-192) from the rect
+        //   top for every H, so it is never nearer than 96 px to the edge it is meant to be.
+        //
+        // THE FIX IS THE SPRITE. Of the six frames in Resources/UI/ElarionMedieval/frames,
+        // modal-frame-16x9.png (1672x941, border 96) is the ONLY one whose painted alpha
+        // actually occupies all four border strips - rows 0..927, cols 11..1660 - so its
+        // 9-slice corners and rails land ON the rect edge at any height, including the 172 px
+        // shelf (Unity's proportional border shrink still draws real art there). It is the
+        // same shell art MedievalUiSkin.ApplyShell hangs on every non-compact panel, so it is
+        // already resident; it is hollow (alpha 0 interior), so it still frames without
+        // covering. card-frame-empty is NOT edited: PlayerDeckWorkspace.cs:206 and
+        // DefenseReportPanel.cs:853 still use it, and TextureImportBudgetRegression pins its
+        // dimensions.
+        //
+        // STOP: this is a PUBLIC const because SkillsPanelLayoutRegression [bezel-art] loads
+        // THIS path's PNG and re-measures the alpha strips. Never inline the string.
+        public const string BezelFrameResource = "UI/ElarionMedieval/frames/modal-frame-16x9";
+
+        // ---------------------------------------------------------------------
+        // WO-1601 (b) FIT THE BOARD INTO THE WELL. Same frame: the 0/1 medallions at both
+        // ends of the tree were sliced by the RectMask2D. Measured from the shipped solver at
+        // 2670x1200 (well 1705x395 ref px, seven solved columns at MinColPitchPx):
+        //   contentW = 1915 ref px against a 1705 px well -> the seventh column's plate spans
+        //   1654..1790 and the mask cuts it at 1705 (device x 2394; the frame's cut reads at
+        //   2404). contentH = 633 against 395 -> the second row is halved.
+        // The board is SCALED to fit instead of being left to overflow at the rest position.
+        // Scale, not a re-solve: SolveGraphLatticePx owns pitch and its laws are pinned by
+        // [grid]; nothing here may move a centre.
+        // ---------------------------------------------------------------------
+
+        /// <summary>How far the board may shrink before a node stops being a legal tap target.
+        /// The plate is <see cref="NodeSizePx"/> and the kit floor is MinTouchPx, so this is the
+        /// ONE derivation - never a literal. Past it the remainder is reached by scrolling
+        /// (WO-896: "sparse graph + scroll is the product").</summary>
+        public const float MinGraphFitScale = ElarionUiKit.MinTouchPx / NodeSizePx;   // 112/136
+
+        /// <summary>WO-1601. The board's fit scale: uniform, never above 1 (a board smaller than
+        /// the well is never blown up - the solver already centres it), never below
+        /// <see cref="MinGraphFitScale"/>. Pure and public so SkillsPanelLayoutRegression [fit]
+        /// runs the SHIPPED function rather than a copy of the arithmetic.</summary>
+        public static float ResolveGraphFitScale(float contentW, float contentH,
+                                                 float wellW, float wellH)
+        {
+            if (contentW <= 1f || contentH <= 1f || wellW <= 1f || wellH <= 1f) return 1f;
+            float s = Mathf.Min(wellW / contentW, wellH / contentH);
+            if (float.IsNaN(s) || float.IsInfinity(s)) return 1f;
+            return Mathf.Clamp(s, MinGraphFitScale, 1f);
+        }
+
         // ── The only FRACTIONS left in the layout: the column split and the in-tile text
         // insets. Both are WIDTHS, never a text band's height -- the class of failure the
         // fixed-pixel law exists to stop is a band too short for its own line box.
@@ -999,12 +1068,25 @@ namespace DeNelle.Village.Talents
             // black half on the right". The floor keeps a half plate + pad even at minX == half.
             float contentW = Mathf.Max(maxX + minX, maxX + PlateClearPx * 0.5f + pad);
             float contentH = Mathf.Max(maxY + minY, maxY + PlateClearPx * 0.5f + pad + RankBandPx);
-            // ...and never NARROWER than the well. The content rect is top-left anchored and
+            // WO-1601 - FIT THE SOLVED BOARD INTO THE WELL BEFORE ANYTHING ELSE READS IT.
+            // The solver seats every centre inside its box; the CONTENT rect that carries them
+            // is still wider and taller than the mask (measured 1915x633 against a 1705x395 well
+            // at 2670x1200), and a top-left rest position then hands the player a half plate at
+            // the right edge and a half row at the floor. Scale is the one lever that does not
+            // move a centre - SolveGraphLatticePx keeps its pitch laws ([grid] pins them).
+            float fitScale = ResolveGraphFitScale(contentW, contentH, wellW, wellH);
+            _graphContent.localScale = new Vector3(fitScale, fitScale, 1f);
+            // The window the mask shows, expressed in CONTENT units: at fit < 1 the well reveals
+            // MORE content than its own px size, and every containment/scroll number below has to
+            // be in the same space as the centres or it certifies the wrong rectangle.
+            float viewW = wellW > 1f ? wellW / fitScale : contentW;
+            float viewH = wellH > 1f ? wellH / fitScale : contentH;
+            // ...and never NARROWER than that window. The content rect is top-left anchored and
             // pivoted, so a board smaller than the viewport would rest flush LEFT and leave the
             // remainder as dead black on the right - the defect verbatim. Filling the well means
             // the solver's own centring is what the player sees.
-            if (wellW > 1f) contentW = Mathf.Max(contentW, wellW);
-            if (wellH > 1f) contentH = Mathf.Max(contentH, wellH);
+            if (wellW > 1f) contentW = Mathf.Max(contentW, viewW);
+            if (wellH > 1f) contentH = Mathf.Max(contentH, viewH);
             _graphContent.sizeDelta = new Vector2(contentW, contentH);
 
             // Connectors FIRST so opaque plates draw over their ends.
@@ -1089,8 +1171,11 @@ namespace DeNelle.Village.Talents
             // no-prerequisite base rank after the rotation. A kept scroll is only ever a
             // within-board tap; the FIRST draw of a board (a fresh Open, or a different tree)
             // must rest at that corner, never mid-content. _lastLayoutSig is null exactly then.
-            float maxDown = wellH > 1f ? Mathf.Max(0f, contentH - wellH) : 0f;
-            float maxRight = wellW > 1f ? Mathf.Max(0f, contentW - wellW) : 0f;
+            // WO-1601: clamp against the SCALED window, not the raw well px - at fit < 1 the raw
+            // well px is a smaller rectangle than the mask actually reveals, so clamping to it
+            // would let the board scroll past its own end and re-open a dead margin.
+            float maxDown = wellH > 1f ? Mathf.Max(0f, contentH - viewH) : 0f;
+            float maxRight = wellW > 1f ? Mathf.Max(0f, contentW - viewW) : 0f;
             if (string.IsNullOrEmpty(_lastLayoutSig)) keptScroll = Vector2.zero;
             _graphContent.anchoredPosition = new Vector2(
                 Mathf.Clamp(keptScroll.x, -maxRight, 0f),
@@ -1160,7 +1245,125 @@ namespace DeNelle.Village.Talents
                     rightMargin < clearHalf - 0.5f || bottomMargin < clearHalf - 0.5f)
                     FlowTrace.Fail("SkillTree", "CLIPPED: " + insets);
                 else FlowTrace.Step("SkillTree", insets);
+
+                // WO-1601 sec.12 - THE FIT, AND WHAT IT STILL DOES NOT COVER, as a number on
+                // every draw. The margin probe above measures the CONTENT rect; this one
+                // measures the REST WINDOW the mask actually reveals, which is the rectangle the
+                // owner's frame disagreed with. Reported per axis so a partial fix cannot read
+                // as a whole one.
+                float plateHalf = NodePlateSizePx(false) * 0.5f;
+                float focusHalf = NodePlateSizePx(true) * 0.5f;
+                int outRight = 0, outBottom = 0;
+                float worstRight = 0f, worstBottom = 0f;
+                foreach (var c in centers)
+                {
+                    float h = string.Equals(focusId, c.Key, StringComparison.Ordinal) ? focusHalf : plateHalf;
+                    float overR = (c.Value.x + h) - viewW;
+                    float overB = (c.Value.y + h) - viewH;
+                    if (overR > 0.5f) { outRight++; worstRight = Mathf.Max(worstRight, overR); }
+                    if (overB > 0.5f) { outBottom++; worstBottom = Mathf.Max(worstBottom, overB); }
+                }
+                string fitLine = "graph fit: scale=" + fitScale.ToString("F3") + " (floor " +
+                                 MinGraphFitScale.ToString("F3") + ", = MinTouchPx/NodeSizePx), well " +
+                                 wellW.ToString("F0") + "x" + wellH.ToString("F0") + " -> rest window " +
+                                 viewW.ToString("F0") + "x" + viewH.ToString("F0") + " content px over a " +
+                                 contentW.ToString("F0") + "x" + contentH.ToString("F0") + " board; plates " +
+                                 "outside the rest window: right=" + outRight + " (worst " +
+                                 worstRight.ToString("F0") + "px) bottom=" + outBottom + " (worst " +
+                                 worstBottom.ToString("F0") + "px); scrollable " +
+                                 maxRight.ToString("F0") + "x" + maxDown.ToString("F0") + " px";
+                if (outRight > 0 || outBottom > 0) FlowTrace.Warn("SkillTree", fitLine);
+                else FlowTrace.Step("SkillTree", fitLine);
+
+                TraceLayoutRects();
             }
+        }
+
+        /// <summary>
+        /// WO-1601 sec.12 - NAME EVERY RECT THE PANEL BUILT, ONCE PER LAYOUT CHANGE.
+        ///
+        /// The band across the tree was owned by a rect nobody could name from the screenshot:
+        /// GraphWellBezel's rect was correct and its ART was not. So this walks the live UI and
+        /// states, for every RectTransform: its path, its rect in CANVAS space, and - for any
+        /// Image - the sprite, the draw type and, when Sliced, whether the 9-slice border can
+        /// even land on the rect's edges. That last line is the one that would have named this
+        /// defect on the first read instead of after a pixel forensic pass.
+        ///
+        /// Change-gated by the caller (_lastLayoutSig), so it emits on a shape change and never
+        /// once per Render. Never on a frame path - CLAUDE.md sec.12 forbids per-frame Step.
+        /// </summary>
+        private void TraceLayoutRects()
+        {
+            if (_ui == null) return;
+            Guard.Try("SkillTree", "trace layout rects", () =>
+            {
+                Canvas.ForceUpdateCanvases();
+                var root = _ui.GetComponent<RectTransform>();
+                if (root == null) return;
+                var rects = _ui.GetComponentsInChildren<RectTransform>(true);
+                FlowTrace.Step("SkillTree", "layout: " + rects.Length + " rect(s) under " + _ui.name +
+                                            " - dumping every one (WO-1601)");
+                for (int i = 0; i < rects.Length; i++)
+                {
+                    var rt = rects[i];
+                    if (rt == null) continue;
+                    var r = RectInRoot(rt, root);
+                    string line = "layout rect '" + PathUnder(rt, _ui.transform) + "' x " +
+                                  r.xMin.ToString("F0") + ".." + r.xMax.ToString("F0") + " y " +
+                                  r.yMin.ToString("F0") + ".." + r.yMax.ToString("F0") +
+                                  " (" + r.width.ToString("F0") + "x" + r.height.ToString("F0") + ")";
+                    var img = rt.GetComponent<Image>();
+                    if (img != null && img.sprite != null)
+                    {
+                        Vector4 b = img.sprite.border;
+                        line += " img=" + img.sprite.name + " type=" + img.type +
+                                " border L" + b.x.ToString("F0") + " B" + b.y.ToString("F0") +
+                                " R" + b.z.ToString("F0") + " T" + b.w.ToString("F0");
+                        if (img.type == Image.Type.Sliced && (b.x + b.z > 0f || b.y + b.w > 0f))
+                        {
+                            float mul = Mathf.Max(0.0001f, img.pixelsPerUnitMultiplier);
+                            float bh = (b.y + b.w) / mul, bw = (b.x + b.z) / mul;
+                            if (bh > r.height + 0.5f || bw > r.width + 0.5f)
+                                FlowTrace.Warn("SkillTree", "layout: '" + rt.name + "' is Sliced with " +
+                                    bw.ToString("F0") + "x" + bh.ToString("F0") + " px of border inside a " +
+                                    r.width.ToString("F0") + "x" + r.height.ToString("F0") + " rect - Unity " +
+                                    "shrinks the strips and the middle slice collapses, so any art that " +
+                                    "lives in the MIDDLE of the sprite is not drawn at all");
+                            else
+                                line += " sliceMiddle=" + (r.width - bw).ToString("F0") + "x" +
+                                        (r.height - bh).ToString("F0") + "px";
+                        }
+                    }
+                    FlowTrace.Step("SkillTree", line);
+                }
+            });
+        }
+
+        /// <summary>A rect in its canvas root's local space - the one comparable frame for two
+        /// rects that hang off different parents.</summary>
+        private static Rect RectInRoot(RectTransform rt, RectTransform root)
+        {
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners);
+            float xMin = float.MaxValue, yMin = float.MaxValue, xMax = float.MinValue, yMax = float.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 p = root.InverseTransformPoint(corners[i]);
+                xMin = Mathf.Min(xMin, p.x); xMax = Mathf.Max(xMax, p.x);
+                yMin = Mathf.Min(yMin, p.y); yMax = Mathf.Max(yMax, p.y);
+            }
+            return new Rect(xMin, yMin, xMax - xMin, yMax - yMin);
+        }
+
+        /// <summary>Slash-separated path from <paramref name="stopAt"/> - a bare name is
+        /// ambiguous the moment two surfaces share one (every node carries a "NamePlate").</summary>
+        private static string PathUnder(Transform t, Transform stopAt)
+        {
+            string path = t.name;
+            var p = t.parent;
+            int guard = 0;
+            while (p != null && p != stopAt && guard++ < 16) { path = p.name + "/" + path; p = p.parent; }
+            return path;
         }
 
         /// <summary>
@@ -2525,19 +2728,34 @@ namespace DeNelle.Village.Talents
             var img = go.GetComponent<Image>();
             if (bezel)
             {
-                var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
+                // WO-1601: BezelFrameResource, never a literal - card-frame-empty's 96 px slice
+                // strips are fully transparent (painted rows 165..713 of 887), so slicing it
+                // paints its rails ~10% and ~89% INTO the rect instead of on its edges. See the
+                // const's proof block. Every bezel on this screen goes through this one branch.
+                var frame = Resources.Load<Sprite>(BezelFrameResource);
                 if (frame != null)
                 {
                     img.sprite = frame;
                     img.type = Image.Type.Sliced;
                     img.color = Color.white;
+                    // §12: state the slice arithmetic that decides whether the border can land on
+                    // the edge at all. b*2 > rect means Unity shrinks both strips and the middle
+                    // collapses; that is how the shelf bezel went missing while the well bezel
+                    // drew a band across the nodes.
+                    Vector4 b = frame.border;
+                    FlowTrace.Step("SkillTree", "bezel '" + name + "': sprite=" + BezelFrameResource +
+                        " " + frame.rect.width.ToString("F0") + "x" + frame.rect.height.ToString("F0") +
+                        " border L" + b.x.ToString("F0") + " B" + b.y.ToString("F0") +
+                        " R" + b.z.ToString("F0") + " T" + b.w.ToString("F0") +
+                        ", Sliced, inflate " + inflatePx.ToString("F0") + " px around " +
+                        (host != null ? host.name : "<null>"));
                 }
                 else
                 {
                     // No art: say so rather than painting a white slab over the graph.
-                    FlowTrace.Warn("SkillTree", "WO-1522: card-frame-empty did not load - the graph " +
-                                                "well ships with NO edge, so it reads as one flat black " +
-                                                "rectangle again.");
+                    FlowTrace.Warn("SkillTree", "WO-1522/1601: " + BezelFrameResource + " did not load - '" +
+                                                name + "' ships with NO edge, so its surface reads as one " +
+                                                "flat black rectangle again.");
                     go.SetActive(false);
                 }
             }
