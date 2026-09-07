@@ -187,7 +187,12 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-fourth pass): main line next free = **1445**.
+> ## RECONCILED 2026-09-06 (CLI, ninety-fifth pass): main line next free = **1446**.
+> *(CLI minted **1445** - `OfflineHarvestService.Grant` banks the clamped amount and discards the remainder,
+> the one path that still burns after WO-1434's "recoverable, not burned" law. Found while re-verifying 1434.
+> Bumped 1445 -> 1446 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-fourth pass): main line next free = **1445**.
 > *(CLI minted **1444** - the Manage QUEUE face count is composed by the VM (`FaceCountText`) and painted by
 > nobody; found while re-verifying WO-1443 at source. SPEC pending an owner ruling because the two fixes
 > contradict each other and the screen as rendered matches her mockup. Bumped 1444 -> 1445 in this SAME edit.)*

@@ -344,6 +344,22 @@ Two generations coexist deliberately:
   `HarvestTargetWeights` (largest-remainder, exact pool); Wood/Iron/Food+Crystals bank via
   `EconomyService.GrantSpendable(..., crystals:)`, Gold via `EconomyService.AddCoins`.
   Founding-echo teaching one-shot `FoundingTaughtKey`.
+  **WO-1434 (2026-09-06) — the split is now a PURE function, and the silo can be PREDICTED
+  without dumping.** `ReadHarvestWeights(out wW,wI,wF,wG,wC)` (assignment weights + the
+  defensive classic split when nothing is assigned) and `SplitPool(pool, w…)` (largest-
+  remainder, sums to EXACTLY the pool) were extracted out of `DumpSilos`, which now calls
+  them; `PredictDumpSplit()` returns what a dump would route right now (all-zero, never
+  null, when there is no service/state/pool); `ShareWood/ShareIron/ShareFood/ShareGold/
+  ShareCrystals = 0..4` index that array; the instance property `SiloAtCap`
+  (`Silo >= SiloCapacity - 0.5`) is the "the Echoes have STOPPED gathering" fact the return
+  screen must say in words (`FOUNDATIONAL_RULINGS.md` §7). ⛔ **Do NOT re-inline the
+  apportionment into `DumpSilos`** — two copies of the split is exactly the defect WO-1434
+  cured (the return screen and the tap must read one producer).
+  ⚠ **`DumpSilos` does NOT burn its overflow** — it settles `s.SiloResources -=
+  bankedFromSilo` (the APPLIED basket, WO-1392), so what the bank refuses stays in the silo.
+  The `[Flow:Bank] BANK FULL … LOST N` warn is the BANK saying it *refused* the units; both
+  live callers retain. Any copy telling the player silo units were lost is a defect
+  (pinned: `HarvestResultCopyRegression` `[silo-never-burns]`).
 - **EchoBonusCalculator.cs** — the ONE place the curve lives (WO-738/830);
   `AggregateHarvestMultiplier()` = count × (1 + per-echo [base + affinity-match + level]
   + running PAIR bonuses + 6-set + **hidden tri-synergy** when ALL pairs run — the tri term
@@ -401,6 +417,46 @@ WorkerManager (363) + Worker/NodeFillIndicator/WorkerManagerBootstrap — the WO
 system, **retired for V1**: `UseOfflineCatchUp` off and `ClickToDispatch` disabled by
 EchoWorkforceBootstrap so it never banks the same nodes (EchoService header :32-34);
 OuterWorld-gated anyway. HarvestSourceRegistry (31).
+
+**WO-1434 (2026-09-06) — the return screen is ONE row per resource, from EVERY producer.**
+Proven from the owner's device (build 358161): the popup drew 3 of 5 aggregated rows and put
+a reward's `+` on amounts that banked zero — she tapped COLLECT on 42,782 and got 0.
+- `OfflineHarvestResult` gained a **fifth axis**: `OfflineSiloLine` / `SiloPending` /
+  `SiloTotal` / `SiloAtCap` / `HasSiloNews`, and **`HasSummaryContent` now carries the silo
+  term** (`Total>0 || HasMendNews || HasJobNews || HasCollectorNews || HasSiloNews`). Without
+  it a town with idle nodes, empty collectors and a FULL silo got no screen at all.
+- `OfflineHarvestService.AttachSiloPending` (private, Guard-wrapped, called from the claim
+  path) reads `EchoService.PredictDumpSplit()` — **it never dumps**; COLLECT still routes to
+  `CollectorStatusGate.RequestCollectAll`, which is what calls `DumpSilos`.
+- **`BuildReturnRows(result)`** (live: headroom from `ResourceCollectorService.HeadroomFor`)
+  and **`BuildReturnRows(result, Func<HarvestResource,int> headroom)`** (PURE, the oracle
+  seam) merge BOTH producers per resource in `ResourceCollectorService.RailOrder` and return
+  `ReturnRow { Resource, Word, FromCollectors, FromSilo, Pending, Headroom, Banks, Waits,
+  NothingBanks }`. Copy helpers: `ReturnRowLabel` (the `+` number is ALWAYS `Banks`, never
+  `Pending`), `ReturnRowDestiny`, `ReturnFooterLine`, `SiloStalledLine`.
+- ⛔ **RETIRED: `PredictCollectWaits` / `CollectWaitLine` / `WelcomeBackPopup.AddCollectWaitRows`
+  and the string `"Storage nearly full - N <res> will wait"`.** They were a SECOND list under
+  the rows restating each row's own integer — the owner's "way too much here". The destiny is
+  now the row's right-hand column (`AddPlateRow(..., valueSplit: 0.46f)` for a sentence).
+- Oracles: `OfflineHarvestRegression` case 4 `[one-row-per-resource]` /
+  `[no-gain-without-headroom]` + case 5 `[every-producer-rendered]` (both pins MOVED with the
+  copy, rulings in-file), and `HarvestResultCopyRegression` `[silo-never-burns]` (the old
+  "were not added to storage" assertion was **inverted** — it had been false since WO-1392).
+- **Settled by capture, do NOT re-litigate** (the measurements are the owner's 2026-09-06 save
+  and live in `WorkOrders/WORK_ORDER_1434_…md` §8 — read them there, never copy them here):
+  the hidden rows were the ECHO SILO, not the offline haul; nothing burns on either producer;
+  the "a built silo contributes nothing to the stone ceiling" hypothesis is **KILLED**. What is
+  true of the CODE: `silo` (displayName **Stoneyard**) authors `repo.storageResource = "stone"`
+  + `storageCapacity 1000` (`structures-catalog.json:1500-1515`), `TownBankCapacity.MaxOf` =
+  base + `storageCapacity` over BUILT containers of that resource, and `everBuiltStructureIds`
+  is **monotonic — it is not a placement record**, so a silo appearing there proves nothing
+  about the cap. Read the placed set (`StructureSingleton.HasPlacedInstance` /
+  `BaseLayout`) before ever calling a cap wrong.
+- **Balance is UNRESOLVED and is the owner's call.** Three capacity systems are sized against
+  different bases with nothing reconciling them: collectors (hours of production), the Echo silo
+  (`SiloCapHours x rate`), the town bank (the container ladder). The recommendation — make one
+  derive from the other — is recorded in WO-1434 §8 and was **not implemented**; raising the
+  ladder alone re-opens the WO-1128 §3.5 clock-forge bound in proportion.
 
 ---
 
