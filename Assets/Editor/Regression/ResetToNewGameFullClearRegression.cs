@@ -67,6 +67,15 @@
 //                       this case pins the event, the raise, and both ends of every
 //                       subscription.
 //
+//   7 [discovery-carriers] WO-1600. EverAcquiredItemIds and SeenTutorials - the two
+//                       collections EVERY one-time discovery FTUE reads - are cleared
+//                       to FRESH EMPTY collections, which Case 1 (assignment only)
+//                       cannot tell from a reused or filtered list. GREEN ON ARRIVAL:
+//                       WO-1600 was raised as a reset leak and the reset was innocent
+//                       (the card was raised at boot, on the Title, from the previous
+//                       save, 21 s before START NEW). This case pins the carriers so
+//                       the suspicion cannot become true later.
+//
 // Markers: RESET_FULL_CLEAR_OK / RESET_FULL_CLEAR_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.ResetToNewGameFullClearRegression.RunAll
 // Covenant contract Run(out reason) is DataRegression-shaped; wiring into
@@ -139,6 +148,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "field-coverage",  () => Case1_FieldCoverage(body, failures, notes));
                     Case(failures, "zone-reseed",     () => Case2_ZoneReseed(body, StripComments(src), failures));
                     Case(failures, "settlement-wipe", () => Case3_SettlementWipe(body, failures));
+                    Case(failures, "discovery-carriers", () => Case7_DiscoveryCarriersWipe(body, failures));
                     Case(failures, "talent-prefs-clear", () => Case5_TalentPrefsClear(body, failures));
                     Case(failures, "live-progression-wipe", () => Case6_LiveProgressionWipe(body, failures));
                 }
@@ -154,8 +164,10 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "RESET FULL CLEAR OK - every persisted GameState field is assigned by " +
                          "ResetToNewGame or is a named carve-out, the zone graph is force-RESEEDED " +
-                         "rather than backfilled, settlements are cleared to a fresh empty list, and " +
-                         "the EditMode fixture still proves all of it behaviourally" + noteStr;
+                         "rather than backfilled, settlements are cleared to a fresh empty list, the " +
+                         "discovery carriers (EverAcquiredItemIds + SeenTutorials) are cleared to fresh " +
+                         "empty collections, and the EditMode fixture still proves all of it " +
+                         "behaviourally" + noteStr;
                 return true;
             }
             reason = "reset-full-clear FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -261,6 +273,40 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[settlement-wipe] ResetToNewGame does not clear Settlements to a FRESH EMPTY " +
                              "list - a New Game keeps the previous save's claimed nodes and any live 3-day " +
                              "razed lockout, which forbids building on sites the new player has never seen");
+        }
+
+        // =====================================================================
+        //  CASE 7 - WO-1600: the two carriers a discovery FTUE is evidence of
+        // ---------------------------------------------------------------------
+        //  ⚠ GREEN ON ARRIVAL, AND THAT IS THE HONEST LABEL. Unlike Cases 1-3
+        //  this case does not close a defect: WO-1600 was raised as a reset leak
+        //  ("JEWELER DISCOVERED fires after START NEW") and the reset turned out
+        //  to be INNOCENT: the owner's frame still shows CONTINUE / START NEW /
+        //  PLAY INTRO behind the card, so it was raised at BOOT, on the Title,
+        //  from the PREVIOUS save - before any reset could run. The fix landed in
+        //  the FTUE's scene gate, not here.
+        //
+        //  It is still worth a case, for one specific reason: Case 1 only proves
+        //  each field is ASSIGNED. `EverAcquiredItemIds` and `SeenTutorials` are
+        //  the two carriers EVERY one-time discovery reads
+        //  (JewelerProgression.IsUnlocked is HasEverAcquired(RoughStoneId); every
+        //  FTUE's completion is a SeenTutorials key), so an assignment to
+        //  anything but a FRESH EMPTY collection - a reuse of the prior list, a
+        //  filtered copy, a "keep the tutorials the player has already read"
+        //  convenience - would re-open the class of defect the ticket suspected
+        //  while leaving Case 1 green.
+        // =====================================================================
+        private static void Case7_DiscoveryCarriersWipe(string body, List<string> failures)
+        {
+            if (!Regex.IsMatch(body, @"\bs\.EverAcquiredItemIds\s*=\s*new\s+List<\s*string\s*>\s*\(\s*\)\s*;"))
+                failures.Add("[discovery-carriers] ResetToNewGame does not clear EverAcquiredItemIds to a " +
+                             "FRESH EMPTY list - that list IS every one-time item-discovery unlock " +
+                             "(JewelerProgression.IsUnlocked = HasEverAcquired(RoughStoneId)), so a New " +
+                             "Game would open already 'having found' the rare stone it has never earned");
+            if (!Regex.IsMatch(body, @"\bs\.SeenTutorials\s*=\s*new\s+SerializableDict<\s*string\s*,\s*bool\s*>\s*\(\s*\)\s*;"))
+                failures.Add("[discovery-carriers] ResetToNewGame does not clear SeenTutorials to a FRESH " +
+                             "EMPTY dictionary - every FTUE's completion flag lives there, so a New Game " +
+                             "would inherit 'already seen' for beats the new player has never been shown");
         }
 
         // =====================================================================
