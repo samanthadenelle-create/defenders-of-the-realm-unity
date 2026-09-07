@@ -96,14 +96,40 @@ const NESTED_BALANCES  = ['crystals', 'food', 'coins'];   // the ResourceBalance
 // happens at LOAD time, far from the save that caused it.
 //
 // Two independent defences, because either alone is a near-miss:
-//   1. judgeSchemaVersion REFUSES the request, so a stale client is VISIBLE (a
-//      named code in the response and an audit row) instead of quietly winning.
+//   1. judgeSchemaVersion judges the declared version, so a stale client is VISIBLE
+//      (a named code in the response and an audit row) instead of quietly winning.
 //   2. GREATEST() on the upsert, so the stored version cannot regress even if some
 //      future path reaches the SQL without passing the judgement.
 // Refusal codes are local to this route rather than added to wallet-auth's AuthCode:
 // these are not authentication outcomes, and AuthCode is another lane's file.
+//
+// ⛔ THE ABSENT ARM IS RETIRED AND REPLACED (2026-09-07, P0 field outage).
+// WO-1457's ruling was, verbatim: *"AN ABSENT VERSION IS A MALFORMED PAYLOAD"* — and
+// it therefore returned 400 SCHEMA_VERSION_MISSING. That was CORRECT for the client
+// of the future and WRONG for the client in the field. The shipped Android build does
+// not send the field at all (GameStateService built the POST body without it; the fix
+// exists in the working tree and reaches players only with the NEXT build, while the
+// store build of 2026-08-17 and every tester APK omit it forever). So from the moment
+// this deployed, EVERY save from EVERY device in the field was refused:
+//   09-07 07:49 local — saves landing;  09-07 07:53 — 400 {"ok":false,
+//   "code":"SCHEMA_VERSION_MISSING"} on every POST, cloud save down for everyone.
+// A guard that refuses 100% of real traffic is not a guard, it is an outage.
+//
+// THE CORRECTED RULING, stated honestly:
+//   absent/unparseable = "UNKNOWN — DO NOT TOUCH THE VERSION."   (never "malformed,
+//   drop the save"; and still never "v10", which was the original invention.)
+// So an absent version now ACCEPTS the write, leaves schema_version exactly as it is
+// (see the version-less upsert below), and stays VISIBLE — `schemaVersionNote:
+// 'SCHEMA_VERSION_ABSENT'` in the 200 body plus the same audit row the refusal wrote.
+// The DOWNGRADE refusal and the GREATEST() clamp are UNCHANGED: a client that names
+// an OLDER version has told us something, and that claim is still refused.
 const SaveCode = {
-    SCHEMA_VERSION_MISSING:   'SCHEMA_VERSION_MISSING',   // absent or unparseable — a malformed payload
+    // ⚠ RETIRED as an OUTCOME (2026-09-07) — nothing returns this any more; see above.
+    // The constant stays because the CLIENT still mirrors the string
+    // (Assets/Editor/Regression/SyncDrainReasonRegression.cs + GameStateService), and
+    // deleting the name here would only hide that the two sides now disagree.
+    SCHEMA_VERSION_MISSING:   'SCHEMA_VERSION_MISSING',
+    SCHEMA_VERSION_ABSENT:    'SCHEMA_VERSION_ABSENT',   // absent/unparseable — ACCEPTED, version untouched
     SCHEMA_VERSION_DOWNGRADE: 'SCHEMA_VERSION_DOWNGRADE', // older than what is stored — a stale client
 };
 
@@ -113,21 +139,29 @@ const SaveCode = {
  * Pure and exported so the four cases that matter (absent / downgrade / equal /
  * upgrade) are provable without a database — see test/game.save.schema-version.test.js.
  *
- * ⚠ AN ABSENT VERSION IS A MALFORMED PAYLOAD, NOT A v10 PAYLOAD. Defaulting was
- *   the original bug: it invented a fact about state it had never inspected.
+ * ⚠ AN ABSENT VERSION IS NOT A v10 PAYLOAD (defaulting invented a fact about state it
+ *   had never inspected) AND IT IS NOT A DROPPED SAVE EITHER (refusing it took cloud
+ *   save down for every client in the field — see the block above). It is UNKNOWN:
+ *   accept the write, touch nothing, and say so out loud. `ok:true, version:null`.
  * ⚠ NO STORED VERSION (a first save, or a prior-state read that failed) accepts
  *   whatever is declared. There is nothing to regress FROM, and a save must never
  *   be lost because the guard could not read its comparison.
  *
  * @param {*} incoming  body.SchemaVersion ?? body.schemaVersion
  * @param {*} stored    schema_version on the existing row, or null/NaN if unknown
- * @returns {{ok:true, version:number} | {ok:false, code:string, incoming:*, stored:*}}
+ * @returns {{ok:true, version:number|null, note?:string, incoming?:*, stored?:*}
+ *          | {ok:false, code:string, incoming:*, stored:*}}
+ *          `version:null` means DO NOT WRITE A VERSION — not "write zero/ten".
  */
 function judgeSchemaVersion(incoming, stored) {
     const v = typeof incoming === 'number' ? incoming
             : (typeof incoming === 'string' && incoming.trim() !== '' ? Number(incoming) : NaN);
     if (!Number.isInteger(v) || v <= 0) {
-        return { ok: false, code: SaveCode.SCHEMA_VERSION_MISSING, incoming: incoming, stored: stored };
+        return {
+            ok: true, version: null,
+            note: SaveCode.SCHEMA_VERSION_ABSENT,
+            incoming: incoming, stored: stored,
+        };
     }
     const s = Number(stored);
     if (Number.isFinite(s) && v < s) {
@@ -357,7 +391,20 @@ async function handler(req, res) {
         });
         return quietFail(res, 400, versionJudgement.code, ref);
     }
-    const acceptedSchemaVersion = versionJudgement.version;
+    const acceptedSchemaVersion = versionJudgement.version;   // null => write no version at all
+    // 2026-09-07: the absence is ACCEPTED but never SILENT. Same audit row the refusal
+    // wrote, under an honest event name — writing 'save_schema_version_refused' for a
+    // save we just accepted would be the exact class of lie CLAUDE.md §11B forbids.
+    const schemaVersionNote = versionJudgement.note || null;
+    if (schemaVersionNote) {
+        console.warn('[save] schema version absent — accepting, version left untouched:',
+                     JSON.stringify({ incoming: versionJudgement.incoming ?? null, stored: priorSchemaVersion }));
+        await logApiEvent(sql, playerId, 'save_schema_version_absent', {
+            ref: ref, mode: auth.mode, code: schemaVersionNote,
+            incoming: versionJudgement.incoming ?? null,
+            stored: versionJudgement.stored ?? null,
+        });
+    }
 
     const rejects = applyGuards(delta, prior);
 
@@ -384,7 +431,11 @@ async function handler(req, res) {
     }
 
     if (Object.keys(delta).length === 0) {
-        return res.status(200).json({ ok: true, success: true, serverNowMs: Date.now(), note: 'all fields rejected by guards', rejects, ref });
+        return res.status(200).json({
+            ok: true, success: true, serverNowMs: Date.now(),
+            note: 'all fields rejected by guards', rejects, ref,
+            schemaVersionNote: schemaVersionNote || undefined,
+        });
     }
 
     // ── Upsert into Neon ───────────────────────────────────────────────────
@@ -395,24 +446,56 @@ async function handler(req, res) {
         // not send instead of nulling it.
         // The ::jsonb cast is required — Neon's HTTP driver sends parameters as
         // strings.
-        await sql`
-            INSERT INTO player_data (player_id, schema_version, game_state, trust, updated_at)
-            VALUES (
-                ${playerId},
-                ${acceptedSchemaVersion},
-                ${JSON.stringify(delta)}::jsonb,
-                ${auth.mode},
-                NOW()
-            )
-            ON CONFLICT (player_id) DO UPDATE
-            SET
-                -- WO-1457: the belt to judgeSchemaVersion's braces. The row's version
-                -- can only ever climb, whatever reaches this statement.
-                schema_version = GREATEST(player_data.schema_version, EXCLUDED.schema_version),
-                game_state     = player_data.game_state || EXCLUDED.game_state,
-                trust          = EXCLUDED.trust,
-                updated_at     = NOW()
-        `;
+        //
+        // TWO STATEMENTS, AND THE SECOND ONE IS THE WHOLE POINT (2026-09-07).
+        // When the payload declared no version, `schema_version` is named NOWHERE —
+        // not in the INSERT column list, not in the SET clause — so the stored value
+        // is untouched by construction rather than by a clamp we have to trust.
+        // ⛔ IT CANNOT BE ONE STATEMENT WITH A NULL PARAMETER, even though Postgres'
+        //    GREATEST ignores NULLs and the UPDATE arm would be fine: the column is
+        //    `INTEGER NOT NULL DEFAULT 10` (api/schema.sql:61 and the ALTER at :72),
+        //    so a NULL on the INSERT arm raises a not-null violation — a 500 that
+        //    loses the save of every brand-new player. That is today's outage in a
+        //    new shape, so the version-less INSERT omits the column and lets the
+        //    COLUMN'S OWN DEFAULT stand. A first-ever save from a version-less
+        //    client therefore lands at the DB default; that is a fact the database
+        //    owns, not a version this function invented. (Making it nullable is a
+        //    live migration and the owner's call — deliberately not done here.)
+        if (acceptedSchemaVersion == null) {
+            await sql`
+                INSERT INTO player_data (player_id, game_state, trust, updated_at)
+                VALUES (
+                    ${playerId},
+                    ${JSON.stringify(delta)}::jsonb,
+                    ${auth.mode},
+                    NOW()
+                )
+                ON CONFLICT (player_id) DO UPDATE
+                SET
+                    game_state = player_data.game_state || EXCLUDED.game_state,
+                    trust      = EXCLUDED.trust,
+                    updated_at = NOW()
+            `;
+        } else {
+            await sql`
+                INSERT INTO player_data (player_id, schema_version, game_state, trust, updated_at)
+                VALUES (
+                    ${playerId},
+                    ${acceptedSchemaVersion},
+                    ${JSON.stringify(delta)}::jsonb,
+                    ${auth.mode},
+                    NOW()
+                )
+                ON CONFLICT (player_id) DO UPDATE
+                SET
+                    -- WO-1457: the belt to judgeSchemaVersion's braces. The row's version
+                    -- can only ever climb, whatever reaches this statement.
+                    schema_version = GREATEST(player_data.schema_version, EXCLUDED.schema_version),
+                    game_state     = player_data.game_state || EXCLUDED.game_state,
+                    trust          = EXCLUDED.trust,
+                    updated_at     = NOW()
+            `;
+        }
 
         return res.status(200).json({
             ok: true,
@@ -421,6 +504,10 @@ async function handler(req, res) {
             fields: Object.keys(delta).length,
             bytes: rawBody.length,
             rejects: rejects.length ? rejects : undefined,
+            // 2026-09-07: the save landed, and the client is told the version it did
+            // NOT send. Absent when the payload declared one, so a healthy client sees
+            // nothing new and a version-less one is never invisible.
+            schemaVersionNote: schemaVersionNote || undefined,
             // WO-1128: what the server refused to accept as honestly-accrued, and the
             // two numbers it judged on. Absent when nothing was clamped.
             accrual: accrual.clamps.length ? accrual : undefined,
