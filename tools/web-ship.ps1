@@ -75,15 +75,27 @@
 # This repo's runners exit 0 on refusals and FAILs (CLAUDE.md section 8, memory
 # `gates-report-success-without-proving-it`). `vercel alias set` is no different
 # and is judged the same way: on what `vercel alias ls` reports afterwards,
-# never on the CLI's exit status. Markers, in Builds\web-parity.log:
+# never on the CLI's exit status. Markers, and the log each one lands in - a mode
+# that changes nothing, or that changes something OTHER than production, writes to
+# its OWN log, so a preview or a staging pass can never overwrite the proof of a
+# run that moved production:
 #
-#   WEB_SURFACES_OK      - the registry was listed (-ListSurfaces)
-#   WEB_ALIAS_OK         - one public domain PROVEN to resolve to the new deployment
-#   WEB_ALIAS_FAIL       - an alias did NOT resolve to it; refuses, exit 16
-#   WEB_DEPLOY_OK        - one non-chain production surface was deployed AND aliased
-#   WEB_SHIP_PUSH_OK     - every non-chain production surface was deployed AND aliased
-#   WEB_PARITY_OK        - EVERY public production domain serves identical bytes
-#   WEB_DRYRUN_OK        - -DryRun printed the plan and changed nothing
+#   Builds\web-parity.log            (the default run: deploy + alias + verify)
+#     WEB_SURFACES_OK      - the registry was listed (-ListSurfaces)
+#     WEB_ALIAS_OK         - one public domain PROVEN to resolve to the new deployment
+#     WEB_ALIAS_FAIL       - an alias did NOT resolve to it; refuses, exit 16
+#     WEB_DEPLOY_OK        - one non-chain production surface was deployed AND aliased
+#     WEB_SHIP_PUSH_OK     - every non-chain production surface was deployed AND aliased
+#     WEB_LEGAL_OK         - /privacy and /terms serve the real document on every
+#                            public production domain (scope=production)
+#     WEB_PARITY_OK        - EVERY public production domain serves identical bytes
+#   Builds\web-stage.log             (-StageOnly)
+#     WEB_STAGE_OK         - the legal pages are present in Builds\WebGL
+#   Builds\web-legal-candidate.log   (-VerifyCandidate)
+#     WEB_LEGAL_OK         - the CANDIDATE deployment already serves them
+#                            (scope=candidate), i.e. before it is promoted
+#   Builds\web-parity-dryrun.log     (-DryRun)
+#     WEB_DRYRUN_OK        - -DryRun printed the plan and changed nothing
 #
 # Marker ABSENCE on a fresh log is a FAILURE, not an unknown.
 #
@@ -96,6 +108,8 @@
 # ---------------------------------------------------------------------------
 #   powershell -NoProfile -File tools\web-ship.ps1 -ListSurfaces
 #   powershell -NoProfile -File tools\web-ship.ps1 -DryRun    # prints, ships nothing
+#   powershell -NoProfile -File tools\web-ship.ps1 -StageOnly # legal pages -> Builds\WebGL
+#   powershell -NoProfile -File tools\web-ship.ps1 -VerifyCandidate https://<deployment>.vercel.app
 #   powershell -NoProfile -File tools\web-ship.ps1 -VerifyOnly
 #   powershell -NoProfile -File tools\web-ship.ps1 -VerifyOnly -AgainstLocal Builds\WebGL
 #   powershell -NoProfile -File tools\web-ship.ps1            # deploy + alias + verify
@@ -125,6 +139,16 @@ param(
     # two legal pages present in the payload before it ships.
     [switch]$StageOnly,
 
+    # Assert that ONE not-yet-public deployment already serves the store-compliance
+    # pages, and exit. Takes the deployment URL the release chain just created with
+    # `--skip-domain`. This is the SAME assertion Phase 2 makes against the public
+    # domains, run one step earlier - against the candidate, before it is promoted -
+    # so a payload missing /privacy is caught while it is still not live. It lives
+    # HERE and not in the chain because the chain re-inlining the check is the
+    # duplication CLAUDE.md section 16 forbids (the check drifting is as expensive
+    # as the registry drifting).
+    [string]$VerifyCandidate = '',
+
     # Additionally assert every production domain serves byte-identical
     # index.html and validation-key.txt to this local build directory.
     # Only meaningful immediately after a deploy: a later local rebuild
@@ -147,6 +171,13 @@ $builds = Join-Path $root 'Builds'
 # to overwrite the proof of a run that changed something.
 if ($DryRun) {
     $log = Join-Path $builds 'web-parity-dryrun.log'
+} elseif ($StageOnly) {
+    # A staging pass changes Builds\WebGL, never production. If it wrote to
+    # web-parity.log it would blank the parity proof of the last real ship and
+    # leave a fresh-looking log that says nothing about production.
+    $log = Join-Path $builds 'web-stage.log'
+} elseif (-not [string]::IsNullOrWhiteSpace($VerifyCandidate)) {
+    $log = Join-Path $builds 'web-legal-candidate.log'
 } else {
     $log = Join-Path $builds 'web-parity.log'
 }
@@ -328,6 +359,18 @@ function Get-Public {
     return $result
 }
 
+# The ONE body assertion, shared by the candidate check and the production check.
+# A rewrite that silently falls through to the Unity shell still answers 200, so a
+# status code is not proof; the page's own heading text is. Two callers, one
+# function, deliberately - a second copy of this test would drift exactly like the
+# copy-pasted R2 push+verify pair in CLAUDE.md section 16.
+function Test-LegalBody {
+    param([byte[]]$Bytes, [string]$Expect)
+    if ($null -eq $Bytes -or $Bytes.Length -eq 0) { return $false }
+    $body = [System.Text.Encoding]::UTF8.GetString($Bytes)
+    return ($body -match [regex]::Escape($Expect))
+}
+
 function Read-LocalBytes {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
@@ -476,9 +519,19 @@ if ($production.Count -lt 1) { Deny 'REGISTRY_HAS_NO_PRODUCTION_SURFACE' 20 }
 # THE FIX, and why it is a copy rather than a second project: both production
 # domains serve Builds/WebGL, so the pages have to BE in Builds/WebGL. The
 # repo-root vercel.json rewrites /privacy -> /privacy.html and /terms ->
-# /terms.html. Staging happens HERE, in the one file that already owns web
-# shipping, so it can never drift from the verification below - re-inlining
-# either half into a chain is the duplication CLAUDE.md section 16 forbids.
+# /terms.html (read at source 2026-09-07: vercel.json "rewrites" carries both, and
+# .vercelignore re-includes /Builds/WebGL/** so styles.css rides along). Staging
+# happens HERE, in the one file that already owns web shipping, so it can never
+# drift from the verification below - re-inlining either half into a chain is the
+# duplication CLAUDE.md section 16 forbids.
+#
+# WHEN it happens is the other half of the defect, and it is NOT this file's to
+# choose (WO-1578). Copying the pages during a run that begins after production is
+# already live is too late: build-webgl.ps1 WIPES Builds\WebGL, and the release
+# chain deploys that directory. So tools\command-centre.ps1 calls this file with
+# -StageOnly in the window between its content build and its candidate deploy, and
+# then with -VerifyCandidate before it promotes. Both are calls INTO this file; the
+# chain holds no copy list and no fetch of its own.
 # =============================================================================
 $LegalSources = @(
     [pscustomobject]@{ From = 'site\privacy.html'; To = 'privacy.html' },
@@ -504,7 +557,20 @@ $LegalPages = @(
 # placeholder is the point, because it shows WHERE the parsed value lands.
 # =============================================================================
 if ($DryRun) {
-    Write-Line ("WEB_DRYRUN_PLAN verifyOnly={0} stageOnly={1} parityPath={2}" -f $VerifyOnly, $StageOnly, $ParityPath)
+    Write-Line ("WEB_DRYRUN_PLAN verifyOnly={0} stageOnly={1} verifyCandidate={2} parityPath={3}" -f $VerifyOnly, $StageOnly, (('(none)', $VerifyCandidate)[[int](-not [string]::IsNullOrWhiteSpace($VerifyCandidate))]), $ParityPath)
+
+    # The candidate check is its own mode and returns before anything else, so its
+    # plan is printed first and alone - same shape as the real run below.
+    if (-not [string]::IsNullOrWhiteSpace($VerifyCandidate)) {
+        foreach ($page in $LegalPages) {
+            $outPlan = Join-Path $builds ('vercel-candidate-' + $page.Path.Trim('/') + '.html')
+            Write-Line ("WOULD_RUN vercel curl {0} --deployment {1} --yes -- --silent --show-error --output {2}" -f $page.Path, $VerifyCandidate, $outPlan)
+            Write-Line ("  then ASSERT the body carries '{0}', else WEB_LEGAL_FAIL -> refuse, exit 16, promotion never happens" -f $page.Expect)
+        }
+        Write-Line ("WOULD_EMIT WEB_LEGAL_OK scope=candidate checks={0} log={1}" -f $LegalPages.Count, (Join-Path $builds 'web-legal-candidate.log'))
+        Write-Line 'WEB_DRYRUN_OK mode=VerifyCandidate'
+        exit 0
+    }
 
     if ((-not $VerifyOnly) -or $StageOnly) {
         $stageDirPlan = Join-Path $root 'Builds\WebGL'
@@ -513,6 +579,7 @@ if ($DryRun) {
         }
     }
     if ($StageOnly) {
+        Write-Line ("WOULD_EMIT WEB_STAGE_OK files={0} log={1}" -f (($LegalSources | ForEach-Object { $_.To }) -join ','), (Join-Path $builds 'web-stage.log'))
         Write-Line 'WEB_DRYRUN_OK mode=StageOnly'
         exit 0
     }
@@ -550,6 +617,53 @@ if ($DryRun) {
     }
 
     Write-Line 'WEB_DRYRUN_OK changed=nothing'
+    exit 0
+}
+
+# =============================================================================
+# -VerifyCandidate - PROVE THE PAYLOAD CARRIES THE LEGAL PAGES BEFORE IT IS LIVE.
+#
+# Phase 2 below asks the PUBLIC domains, which is the right question and the wrong
+# moment: by the time it can be asked, the deployment missing /privacy is already
+# the one players get. The release chain creates its production-target candidate
+# with `--skip-domain`, so there is a window in which the exact bytes that will be
+# promoted are reachable and NOT yet public. This mode is that window's check.
+#
+# The candidate has no public domain, so a plain WebClient GET (Get-Public) cannot
+# reach it and deployment protection would answer the SSO page rather than the
+# document. `vercel curl` authenticates with VERCEL_TOKEN and bypasses that; the
+# body is written to a FILE, so CLI prose can never be mistaken for the artifact
+# being asserted.
+#
+# The assertion itself is Test-LegalBody - the same function Phase 2 uses. One
+# check, two moments.
+# =============================================================================
+if (-not [string]::IsNullOrWhiteSpace($VerifyCandidate)) {
+    if ([string]::IsNullOrWhiteSpace($env:VERCEL_TOKEN)) {
+        Deny 'VERCEL_TOKEN_MISSING_FROM_ENVIRONMENT' 20
+    }
+    $candidateChecks = 0
+    foreach ($page in $LegalPages) {
+        $legalKey = $page.Path.Trim('/')
+        $bodyFile = Join-Path $builds ('vercel-candidate-' + $legalKey + '.html')
+        Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue
+        $curlText = Invoke-VercelText @('curl', $page.Path, '--deployment', $VerifyCandidate, '--yes', '--', '--silent', '--show-error', '--output', $bodyFile)
+        $bodyBytes = Read-LocalBytes $bodyFile
+        if ($null -eq $bodyBytes) {
+            Write-Line ("WEB_LEGAL_FAIL scope=candidate deployment={0} path={1} reason=NO_BODY_FETCHED cli={2}" -f $VerifyCandidate, $page.Path, ($curlText -replace '\s+', ' '))
+            Deny ('CANDIDATE_LEGAL_PAGE_UNREACHABLE_' + $legalKey)
+        }
+        if (-not (Test-LegalBody $bodyBytes $page.Expect)) {
+            Write-Line ("WEB_LEGAL_FAIL scope=candidate deployment={0} path={1} bytes={2} reason=EXPECTED_TEXT_ABSENT expect={3} body={4}" -f $VerifyCandidate, $page.Path, $bodyBytes.Length, $page.Expect, $bodyFile)
+            Deny ('CANDIDATE_LEGAL_PAGE_WRONG_DOCUMENT_' + $legalKey)
+        }
+        Write-Line ("WEB_LEGAL scope=candidate deployment={0} path={1} bytes={2} sha={3}" -f $VerifyCandidate, $page.Path, $bodyBytes.Length, (Get-Sha256Hex $bodyBytes))
+        $candidateChecks = $candidateChecks + 1
+    }
+    if ($candidateChecks -lt $LegalPages.Count) {
+        Deny ('CANDIDATE_LEGAL_CHECKS_INCOMPLETE_' + $candidateChecks)
+    }
+    Write-Line ("WEB_LEGAL_OK scope=candidate deployment={0} checks={1} paths={2}" -f $VerifyCandidate, $candidateChecks, (($LegalPages | ForEach-Object { $_.Path }) -join ','))
     exit 0
 }
 
@@ -802,22 +916,21 @@ foreach ($s in $production) {
             Write-Line ("WEB_LEGAL_FAIL name={0} uri={1} error={2}" -f $s.Name, $legalUri, $legalGot.Error)
             Deny ('LEGAL_PAGE_UNREACHABLE_' + $s.Name + '_' + $legalKey)
         }
-        $legalBody = [System.Text.Encoding]::UTF8.GetString($legalGot.Bytes)
-        # A rewrite that silently falls through to the Unity shell would still
-        # be a 200. Require the page's own heading text, so only the real
-        # document passes.
-        if ($legalBody -notmatch [regex]::Escape($page.Expect)) {
-            Write-Line ("WEB_LEGAL_FAIL name={0} uri={1} bytes={2} reason=EXPECTED_TEXT_ABSENT expect={3}" -f $s.Name, $legalUri, $legalGot.Length, $page.Expect)
+        # Same assertion the candidate check makes, from the same function: a
+        # rewrite that silently falls through to the Unity shell would still be a
+        # 200, so only the page's own heading text proves the real document.
+        if (-not (Test-LegalBody $legalGot.Bytes $page.Expect)) {
+            Write-Line ("WEB_LEGAL_FAIL scope=production name={0} uri={1} bytes={2} reason=EXPECTED_TEXT_ABSENT expect={3}" -f $s.Name, $legalUri, $legalGot.Length, $page.Expect)
             Deny ('LEGAL_PAGE_WRONG_DOCUMENT_' + $s.Name + '_' + $legalKey)
         }
-        Write-Line ("WEB_LEGAL name={0} uri={1} bytes={2} sha={3}" -f $s.Name, $legalUri, $legalGot.Length, $legalGot.Hash)
+        Write-Line ("WEB_LEGAL scope=production name={0} uri={1} bytes={2} sha={3}" -f $s.Name, $legalUri, $legalGot.Length, $legalGot.Hash)
         $legalChecks = $legalChecks + 1
     }
 }
 if ($legalChecks -lt ($production.Count * $LegalPages.Count)) {
     Deny ('LEGAL_CHECKS_INCOMPLETE_' + $legalChecks)
 }
-Write-Line ("WEB_LEGAL_OK checks={0} paths={1}" -f $legalChecks, (($LegalPages | ForEach-Object { $_.Path }) -join ','))
+Write-Line ("WEB_LEGAL_OK scope=production checks={0} paths={1}" -f $legalChecks, (($LegalPages | ForEach-Object { $_.Path }) -join ','))
 
 Write-Line ("WEB_PARITY_OK surfaces={0} path={1} sha={2}" -f (($production | ForEach-Object { $_.Name }) -join ','), $ParityPath, $agreedIndex)
 exit 0

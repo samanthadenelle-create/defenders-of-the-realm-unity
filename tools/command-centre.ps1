@@ -261,7 +261,11 @@ if ($DryRun) {
     Write-Run ("WOULD_ASSERT step=5 {0} exists after the build, else REFUSE naming it and the one-liner: {1}" -f $webglStateFile, $webglBuildOneLiner)
     Write-Run 'WOULD_RUN step=2 tools\r2-ship.ps1                                                # the ONE push+verify path; expect R2_PARITY_OK (UTF-16 log)'
     Write-Run '  order note: the build runs BEFORE r2-ship so the content-hashed bundles THIS run built are the ones pushed and verified'
+    Write-Run 'WOULD_RUN step=5 tools\web-ship.ps1 -StageOnly                                    # WO-1578 seam; expect WEB_STAGE_OK (Builds\web-stage.log)'
+    Write-Run '  seam note: build-webgl WIPES Builds\WebGL, so the legal pages are staged AFTER the build and BEFORE the deploy below - the deploy ships that exact tree'
     Write-Run 'WOULD_RUN step=5 vercel deploy --target production --skip-domain --yes            # expect CANDIDATE_URL_CAPTURED + CANDIDATE_CONTENT_MATCH'
+    Write-Run 'WOULD_RUN step=5 tools\web-ship.ps1 -VerifyCandidate <candidate url>              # expect WEB_LEGAL_OK scope=candidate (Builds\web-legal-candidate.log)'
+    Write-Run '  legal note: this refuses BEFORE the promote below, so a payload missing /privacy never reaches production'
     Write-Run 'WOULD_RUN step=6 vercel promote <candidate id> --yes                              # expect PRODUCTION_ALIAS_MATCH'
     Write-Run 'WOULD_RUN step=6 tools\web-ship.ps1 -VerifyOnly -AgainstLocal Builds\WebGL        # expect WEB_PARITY_OK'
     Write-Run 'WOULD_RUN step=7 GET <production>/api/auth/nonce?wallet=<proof wallet>            # expect PRODUCTION_DB_WRITE_OK'
@@ -537,11 +541,22 @@ Write-Run "STEP_2_OK marker=R2_PARITY_OK log=$r2Log"
 # any later (which is what web-ship.ps1 does today, after production is already
 # live) is the WO-1578 defect: production served 404 on /privacy.
 #
-# WO-1578 owns the implementation and is queued after WO-1576. It must not inline
-# a copy list here: tools\web-ship.ps1 already holds $LegalSources as the single
-# registry, and -StageOnly already stages it. Call that, judge its marker on a
-# fresh log, and add nothing to this chain that could drift from it.
+# IMPLEMENTED HERE (WO-1578). This chain inlines NO copy list and NO fetch:
+# tools\web-ship.ps1 holds $LegalSources and $LegalPages as the single registry and
+# Test-LegalBody as the single assertion. This step calls -StageOnly and judges
+# WEB_STAGE_OK on a FRESH log of its own (web-stage.log, not web-parity.log - a
+# staging pass must never be able to blank the parity proof of the last real ship).
+# The matching PROOF that the payload really serves them is -VerifyCandidate,
+# fired against the candidate below BEFORE the promote, so a payload missing
+# /privacy is refused while it is still not live.
 # ---------------------------------------------------------------------------
+$stageLog = Join-Path $builds 'web-stage.log'
+$activeStep = 5; $activeMarker = 'WEB_STAGE_OK'; $activeLog = $stageLog
+$started = Get-Date
+Invoke-Captured {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'web-ship.ps1') -StageOnly
+} (Join-Path $builds 'web-stage-invoke.log') | Out-Null
+Assert-FreshMarker 5 'WEB_STAGE_OK' $stageLog $started
 
 # Step 5: create a production-target CANDIDATE without assigning its domains.
 # This is the explicit design correction to preview promotion: Vercel rebuilds a
@@ -595,6 +610,28 @@ if ($localHash -ne $remoteHash) {
     Refuse 5 'CANDIDATE_CONTENT_MATCH' $candidateProofLog 'INDEX_HASH_MISMATCH'
 }
 Write-Run "STEP_5_OK marker=CANDIDATE_CONTENT_MATCH log=$candidateProofLog id=$candidateId"
+
+# Step 5b (WO-1578): the candidate must ALREADY serve /privacy and /terms.
+#
+# CANDIDATE_CONTENT_MATCH above proves index.html, and index.html was never the
+# thing that was missing. The 2026-09-03 Solana dApp Store rejection was two URLs
+# answering 404 on production; the only gate that ever asked ran AFTER production
+# was live, so the first detector was a store reviewer. The candidate is deployed
+# --skip-domain, so this is the last moment the answer can still be changed for
+# free - a failure here refuses before the promote and production keeps serving
+# the previous, working deployment.
+#
+# The check itself lives in tools\web-ship.ps1 (-VerifyCandidate), which owns the
+# path list and the body assertion; this chain restates neither (CLAUDE.md
+# section 16). Judged by the marker on a fresh log, never by an exit code.
+$candidateLegalLog = Join-Path $builds 'web-legal-candidate.log'
+$activeStep = 5; $activeMarker = 'WEB_LEGAL_OK'; $activeLog = $candidateLegalLog
+$started = Get-Date
+Invoke-Captured {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'web-ship.ps1') `
+        -VerifyCandidate $candidateUrl
+} (Join-Path $builds 'web-legal-candidate-invoke.log') | Out-Null
+Assert-FreshMarker 5 'WEB_LEGAL_OK' $candidateLegalLog $started
 
 # Step 6: promote the exact production-target candidate byte-proven above. The
 # preview-rebuild branch is structurally unreachable because candidateId already

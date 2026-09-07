@@ -1,6 +1,6 @@
 # WO-1578: Production WebGL deployment ships without /privacy and /terms pages
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - the chain stages the legal pages via `web-ship.ps1 -StageOnly` AFTER build-webgl (which wipes Builds/WebGL) and BEFORE the candidate deploy, and verifies /privacy + /terms on the CANDIDATE (`-VerifyCandidate`, WEB_LEGAL_OK scope=candidate) BEFORE promote; web-ship owns $LegalSources as the single registry. PARSE OK + dry runs 2026-09-07. NOTE: the ticket's s2/s3/s4 criteria (build-webgl does the copy; 'do NOT add logic to web-ship.ps1') are SUPERSEDED by the WO-1577 seam ruling - the intent (no production payload without the legal pages) is met. Residual: morning-ship-chain.ps1:194 and overnight-webgl-deploy.ps1:14 bypass the seam. PRIOR STATUS: READY TO IMPLEMENT
 **Minted:** 2026-09-07 (web legal-pages copy fix; number from
 CLI_LANES_WO_NUMBERS.md main-line banner, bumped 1578 -> 1579 in same edit)
 **Silo:** Build / gates (tooling only - no gameplay, no scene, no content)
@@ -19,6 +19,8 @@ The production build chain copies legal pages AFTER the production deployment:
 Result: defenders-of-the-realm-v2 served 404 on /privacy until manual production redeploy.
 
 Evidence: `Builds/vercel-deploy-production.log` (no pages logged); manual PROD redeploy restored them.
+
+> **SUPERSEDED IN SHAPE 2026-09-07 (CLI):** criteria 1-4 below place the copy in build-webgl.ps1 and forbid web-ship logic. The WO-1577 seam put the single legal-page registry in web-ship.ps1; the chain calls `-StageOnly` after the build and `-VerifyCandidate` before promote. Judge by the Status line's markers, not by the literal criteria.
 
 ## 2. Proposal
 
