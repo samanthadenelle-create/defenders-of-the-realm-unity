@@ -33,13 +33,25 @@ param(
     [switch]$Tunables,
     [string]$Key,
     [string]$Value,
-    [switch]$Clear
+    [switch]$Clear,
+    # WO-1576. Print the step order and every decision this run WOULD take, and
+    # change NOTHING - no unity, no python, no node, no vercel, no upload. It is a
+    # preview, never an override: it needs no secret, it writes to its OWN log, and
+    # it can never emit COMMAND_CENTRE_OK. Mirrors tools\web-ship.ps1 -DryRun.
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $builds = Join-Path $root 'Builds'
-$runLog = Join-Path $builds 'command-centre.log'
+# A dry run writes to its OWN log. command-centre.log is the artifact an operator
+# reads to judge a real release, and a preview that changed nothing must not be
+# able to overwrite the record of a run that changed production.
+if ($DryRun) {
+    $runLog = Join-Path $builds 'command-centre-dryrun.log'
+} else {
+    $runLog = Join-Path $builds 'command-centre.log'
+}
 $rollbackFile = Join-Path $builds 'PROD_ROLLBACK.txt'
 $productionHost = ([uri]$ProductionUrl).Host
 
@@ -146,7 +158,117 @@ function Assert-FreshMarker {
     Write-Run "STEP_${Step}_OK marker=$Marker log=$Log"
 }
 
+# =============================================================================
+# WO-1576 - THE ADDRESSABLES BUILT-STATE, AND WHY THE STEP ORDER CHANGED.
+#
+# tools\r2_sync.py --verify-catalog reads, for every target ServerData holds,
+#   Library\com.unity.addressables\aa\<target>\settings.json
+# (r2_sync.py:321-322) and sys.exit()s when it is absent, because that file is
+# the ONLY authority on which catalog the shipped player will ask the CDN for.
+# r2-ship.ps1 catches that as `R2_PARITY_THREW target=<t>` (r2-ship.ps1:209-212)
+# and withholds the aggregate marker.
+#
+# A FAILED WebGL content build DELETES that file (measured 2026-09-07). The chain
+# used to run r2-ship at step 2 and build-webgl at step 5, so the next run refused
+# at step 2 for a missing file the step it never reached would have restored. The
+# refusal named `R2_PARITY_THREW`, i.e. the symptom, and the operator's only way
+# out was to run build-webgl.ps1 by hand, then r2-ship.ps1 by hand, then the chain.
+# A gate whose remedy is "a human remembers two commands" is the exact shape
+# CLAUDE.md section 16 says is not a gate.
+#
+# AND THE ORDER WAS DISHONEST EVEN ON A HEALTHY MACHINE. DeNelle.Editor.
+# AddressablesContentBuild.EnsureBuilt (Assets\Editor\AddressablesContentBuild.cs,
+# read 2026-09-07) calls AddressableAssetSettings.BuildPlayerContent
+# UNCONDITIONALLY - there is no skip-when-already-built branch - and WebGLBuild.cs
+# calls it on every build. Bundle names are CONTENT-HASHED, so the step-5 build
+# re-hashed every WebGL bundle AFTER step 2 had pushed and verified the previous
+# generation. The parity marker was TRUE about bytes the deployed build no longer
+# names. That is occurrence-shape identical to the four incidents catalogued in
+# r2-ship.ps1's header.
+#
+# So the build now runs BEFORE the one r2-ship call, and r2-ship pushes the
+# content that this run actually built. The cheap gates (compile, regression,
+# schema, treasury, rollback id) still run FIRST, so a refusable release still
+# refuses before paying for a 30-60 minute WebGL build.
+#
+# tools\r2-ship.ps1 stays the ONE push+verify path. Nothing here pushes, and
+# nothing here verifies a catalog (CLAUDE.md section 16).
+# =============================================================================
+$webglStateFile = Join-Path $root 'Library\com.unity.addressables\aa\WebGL\settings.json'
+$webglBuildOneLiner = 'powershell -NoProfile -ExecutionPolicy Bypass -File build-webgl.ps1'
+
+function Get-R2ParityCause {
+    # r2-parity.log is UTF-16LE (r2-ship.ps1 writes it with -Encoding Unicode so the
+    # pre-push hook can parse it). Pull the FIRST line that names a real cause so a
+    # refusal reports `R2_PARITY_THREW target=Android ...` instead of a bare
+    # MARKER_ABSENT. r2-ship verifies EVERY target under ServerData, so the target
+    # that failed is the single most useful fact in the refusal line.
+    param([string]$Log)
+    if (-not (Test-Path -LiteralPath $Log)) { return 'PARITY_LOG_MISSING' }
+    try {
+        $text = [System.IO.File]::ReadAllText($Log, [System.Text.Encoding]::Unicode)
+    } catch {
+        return "PARITY_LOG_UNREADABLE_$($_.Exception.GetType().Name)"
+    }
+    foreach ($line in ($text -split "`r?`n")) {
+        if ($line -match 'R2_PARITY_(THREW|FAIL)') {
+            return ($line.Trim() -replace '\s+', '_')
+        }
+    }
+    return 'MARKER_ABSENT'
+}
+
 if ($LibraryOnly) { return }
+
+# =============================================================================
+# WO-1576 - -DryRun. PRINT THE STEP ORDER AND THE DECISIONS, CHANGE NOTHING.
+#
+# Placed after the function library and BEFORE the -Maintenance / -Tunables
+# surfaces and the secret checks, so it runs on any machine with no VERCEL_TOKEN,
+# no DATABASE_URL, no Unity and no network. The one decision it computes is
+# computed the SAME way the real run computes it - a Test-Path on the file
+# r2_sync.py actually reads - because a hand-written plan would be a second copy
+# of state and would drift (CLAUDE.md sections 2, 5 and 16).
+# =============================================================================
+if ($DryRun) {
+    $stateOk = Test-Path -LiteralPath $webglStateFile
+    Write-Run ("COMMAND_CENTRE_DRYRUN_PLAN productionUrl={0} maintenance={1} tunables={2}" -f $ProductionUrl, $Maintenance, $Tunables)
+    Write-Run ("WEBGL_ADDRESSABLES_STATE present={0} file={1}" -f $stateOk, $webglStateFile)
+    if ($Maintenance) {
+        Write-Run 'WOULD_REQUIRE env:DATABASE_URL'
+        Write-Run 'WOULD_RUN node tools\maintenance-toggle.mjs <list|seal|open> - then EXIT; the ship chain is never reached'
+        Write-Run 'COMMAND_CENTRE_DRYRUN_OK mode=Maintenance'
+        exit 0
+    }
+    if ($Tunables) {
+        Write-Run 'WOULD_REQUIRE env:DATABASE_URL'
+        Write-Run 'WOULD_RUN node tools\client-tunables.mjs <list|set|clear> - then EXIT; the ship chain is never reached'
+        Write-Run 'COMMAND_CENTRE_DRYRUN_OK mode=Tunables'
+        exit 0
+    }
+    Write-Run 'WOULD_REQUIRE env:VERCEL_TOKEN env:DATABASE_URL'
+    Write-Run 'WOULD_RUN step=1 run-unity-method.ps1 -Method DeNelle.Editor.CompileGate.Run       # expect COMPILE_GATE_OK'
+    Write-Run 'WOULD_RUN step=1 run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.RunAll # expect REGRESSION_OK <n>/<n> suites'
+    Write-Run 'WOULD_RUN step=3 node tools\schema-parity.mjs                                     # expect SCHEMA_PARITY_OK'
+    Write-Run 'WOULD_RUN step=3 node tools\treasury-verify.mjs <vault> --multisig <multisig>      # expect TREASURY_VERIFY_OK'
+    Write-Run 'WOULD_RUN step=4 vercel inspect <production host> --format=json                   # expect ROLLBACK_ID_CAPTURED'
+    if ($stateOk) {
+        Write-Run 'WOULD_EMIT step=5 (no rebuild-needed marker; the WebGL Addressables built-state is present)'
+    } else {
+        Write-Run ("WOULD_EMIT step=5 R2_PARITY_REBUILD_NEEDED file={0} - the content build below restores it BEFORE parity is judged" -f $webglStateFile)
+    }
+    Write-Run 'WOULD_RUN step=5 build-webgl.ps1                                                  # expect WEBGL_BUILD_OK (index.html + fresh Builds\webgl-build.log)'
+    Write-Run ("WOULD_ASSERT step=5 {0} exists after the build, else REFUSE naming it and the one-liner: {1}" -f $webglStateFile, $webglBuildOneLiner)
+    Write-Run 'WOULD_RUN step=2 tools\r2-ship.ps1                                                # the ONE push+verify path; expect R2_PARITY_OK (UTF-16 log)'
+    Write-Run '  order note: the build runs BEFORE r2-ship so the content-hashed bundles THIS run built are the ones pushed and verified'
+    Write-Run 'WOULD_RUN step=5 vercel deploy --target production --skip-domain --yes            # expect CANDIDATE_URL_CAPTURED + CANDIDATE_CONTENT_MATCH'
+    Write-Run 'WOULD_RUN step=6 vercel promote <candidate id> --yes                              # expect PRODUCTION_ALIAS_MATCH'
+    Write-Run 'WOULD_RUN step=6 tools\web-ship.ps1 -VerifyOnly -AgainstLocal Builds\WebGL        # expect WEB_PARITY_OK'
+    Write-Run 'WOULD_RUN step=7 GET <production>/api/auth/nonce?wallet=<proof wallet>            # expect PRODUCTION_DB_WRITE_OK'
+    Write-Run 'WOULD_RUN step=8 vercel promote <rollback id> --yes  # ONLY if step 7 fails       # expect AUTO_ROLLBACK_COMPLETED'
+    Write-Run 'COMMAND_CENTRE_DRYRUN_OK mode=ShipChain changed=nothing'
+    exit 0
+}
 
 # =============================================================================
 # WO-1243 - THE OPERATOR KILL SWITCHES. Runs and EXITS; the ship chain below is
@@ -296,14 +418,6 @@ $started = Get-Date
     -ExpectMarker 'REGRESSION_OK'
 Assert-FreshMarker 1 'REGRESSION_OK \d+/\d+ suites' $regressionLog $started
 
-# Step 2: every command-centre run ships Builds/WebGL and api/, so it always
-# touches shipped content. r2-ship.ps1 is the sole push/verify authority.
-$r2Log = Join-Path $builds 'r2-parity.log'
-$activeStep = 2; $activeMarker = 'R2_PARITY_OK'; $activeLog = $r2Log
-$started = Get-Date
-& (Join-Path $root 'tools\r2-ship.ps1')
-Assert-FreshMarker 2 'R2_PARITY_OK' $r2Log $started -Utf16
-
 # Step 3: prove the production database shape before uploading another backend.
 $schemaLog = Join-Path $builds 'schema-parity-production.log'
 $activeStep = 3; $activeMarker = 'SCHEMA_PARITY_OK'; $activeLog = $schemaLog
@@ -361,9 +475,18 @@ if ([string]::IsNullOrWhiteSpace($rollbackId)) {
 Set-Content -LiteralPath $rollbackFile -Encoding ascii -Value $rollbackId
 Write-Run "STEP_4_OK marker=ROLLBACK_ID_CAPTURED log=$rollbackFile"
 
-# Build only after all pre-deploy gates pass. build-webgl removes stale output.
+# Build after the CHEAP pre-deploy gates pass and BEFORE R2 parity (WO-1576; the
+# reasoning is written out in full at the top of this file). build-webgl removes
+# stale output and rebuilds Addressables content unconditionally, so it both
+# RESTORES a deleted built-state and re-hashes every bundle - which is exactly why
+# the one r2-ship call below must come after it, never before it.
 $webglLog = Join-Path $builds 'webgl-build.log'
 $activeStep = 5; $activeMarker = 'WEBGL_BUILD_OK'; $activeLog = $webglLog
+if (-not (Test-Path -LiteralPath $webglStateFile)) {
+    # Name the real cause HERE, before anything can refuse on the symptom. This is
+    # the state a failed content build leaves behind; the build below restores it.
+    Write-Run "R2_PARITY_REBUILD_NEEDED file=$webglStateFile reason=NO_BUILT_ADDRESSABLES_STATE_FOR_WebGL action=BUILDING_CONTENT_FIRST"
+}
 $started = Get-Date
 & (Join-Path $root 'build-webgl.ps1')
 if (-not (Test-Path -LiteralPath (Join-Path $builds 'WebGL\index.html'))) {
@@ -372,6 +495,53 @@ if (-not (Test-Path -LiteralPath (Join-Path $builds 'WebGL\index.html'))) {
 if ((Get-Item -LiteralPath $webglLog).LastWriteTime -lt $started.AddSeconds(-2)) {
     Refuse 5 'WEBGL_BUILD_OK' $webglLog 'LOG_STALE_FROM_EARLIER_RUN'
 }
+if (-not (Test-Path -LiteralPath $webglStateFile)) {
+    # The build produced an index.html but no Addressables built-state, so the
+    # parity step below could only ever report the symptom. Refuse HERE, naming the
+    # file and the one command that restores it.
+    Write-Run "STEP_5_FIX missing=$webglStateFile restore_with=$webglBuildOneLiner"
+    Refuse 5 'WEBGL_BUILD_OK' $webglLog 'ADDRESSABLES_STATE_STILL_ABSENT_FOR_WebGL'
+}
+Write-Run "STEP_5_OK marker=WEBGL_BUILD_OK log=$webglLog state=$webglStateFile"
+
+# Step 2: every command-centre run ships Builds/WebGL and api/, so it always
+# touches shipped content. r2-ship.ps1 is the sole push/verify authority - this
+# chain never inlines a push or a verify (CLAUDE.md section 16). It runs AFTER the
+# content build above so the content-hashed bundles it pushes are the ones this
+# run just built, and a missing built-state has already been restored and named.
+$r2Log = Join-Path $builds 'r2-parity.log'
+$activeStep = 2; $activeMarker = 'R2_PARITY_OK'; $activeLog = $r2Log
+$started = Get-Date
+& (Join-Path $root 'tools\r2-ship.ps1')
+if (-not (Test-Path -LiteralPath $r2Log)) {
+    Refuse 2 'R2_PARITY_OK' $r2Log 'LOG_MISSING'
+}
+if ((Get-Item -LiteralPath $r2Log).LastWriteTime -lt $started.AddSeconds(-2)) {
+    Refuse 2 'R2_PARITY_OK' $r2Log 'LOG_STALE_FROM_EARLIER_RUN'
+}
+if ([System.IO.File]::ReadAllText($r2Log, [System.Text.Encoding]::Unicode) -notmatch 'R2_PARITY_OK') {
+    # Report the LINE r2-ship wrote, not a bare MARKER_ABSENT. r2-ship verifies
+    # EVERY target ServerData holds, so which target failed - and why - is the one
+    # fact that turns this refusal into an action.
+    Refuse 2 'R2_PARITY_OK' $r2Log (Get-R2ParityCause $r2Log)
+}
+Write-Run "STEP_2_OK marker=R2_PARITY_OK log=$r2Log"
+
+# ---------------------------------------------------------------------------
+# WO-1578 SEAM - THE LEGAL PAGES BELONG HERE, AND NOWHERE LATER.
+#
+# build-webgl.ps1 WIPES Builds\WebGL (build-webgl.ps1:74-78), and the candidate
+# deploy below hashes Builds\WebGL\index.html and ships that exact tree. So
+# site\privacy.html and site\terms.html must be staged into Builds\WebGL AFTER the
+# build above and BEFORE the deploy below - this line is that seam. Staging them
+# any later (which is what web-ship.ps1 does today, after production is already
+# live) is the WO-1578 defect: production served 404 on /privacy.
+#
+# WO-1578 owns the implementation and is queued after WO-1576. It must not inline
+# a copy list here: tools\web-ship.ps1 already holds $LegalSources as the single
+# registry, and -StageOnly already stages it. Call that, judge its marker on a
+# fresh log, and add nothing to this chain that could drift from it.
+# ---------------------------------------------------------------------------
 
 # Step 5: create a production-target CANDIDATE without assigning its domains.
 # This is the explicit design correction to preview promotion: Vercel rebuilds a
