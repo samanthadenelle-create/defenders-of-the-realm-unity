@@ -442,11 +442,37 @@ namespace DeNelle.Editor.Regression
 
             // The `if (` immediately before the `!` is load-bearing: it is what makes
             // `if (someEscapeHatch && !await ...)` fail this assertion instead of satisfying it.
+            //
+            // ⚠ THE ABORT IS NO LONGER SPELLED `return false` (WO-1587). SendCurrentSnapshot
+            // returns a CATEGORISED SaveAttemptResult, because a bare bool erased the difference
+            // between "no session" and "the server refused the payload" - which is how six 400s
+            // were reported to the owner as an identity problem. THE INVARIANT IS UNCHANGED and
+            // is still pinned structurally; only the token that spells the abort has moved.
+            // `SaveAttemptCategory.AuthAbsent` IS the fail-closed refusal: its call sites re-queue
+            // the marker and never send.
+            //
+            // ⚠ AND THE TEMPERING IS TIGHTENED, NOT RELAXED. The old window forbade an
+            // intervening `return true` because a plain lazy match happily skipped PAST a
+            // fail-OPEN body to an unrelated `return false` further down (proven by mutation).
+            // The same hole now has three mouths, so all three are shut inside the window:
+            //   * `return true`                 - the original fail-open
+            //   * `SaveAttemptResult.Success`   - its successor spelling
+            //   * `SaveAttemptCategory.Ok`      - the same thing written long-hand
+            // `SendWebRequest` is forbidden in the window too, which is what proves the abort is
+            // lexically BEFORE the request is ever sent: a guard that "aborts" after the POST has
+            // gone out is not a guard.
+            const string AuthAbortWindow =
+                @"(?:(?!return\s+true)(?!SaveAttemptResult\.Success)(?!SaveAttemptCategory\.Ok)(?!SendWebRequest)[\s\S]){0,600}?";
+            const string AuthAbortReturn =
+                @"(?:return\s+false|return\s+new\s+SaveAttemptResult\s*\(\s*SaveAttemptCategory\.AuthAbsent)";
             if (!Regex.IsMatch(state, @"if\s*\(\s*!\s*await\s+[\w\.]*BackendRequestSigner\.TryAttachAsync\s*\(" +
-                                      @"(?:(?!return\s+true)[\s\S]){0,600}?return\s+false"))
+                                      AuthAbortWindow + AuthAbortReturn))
                 failures.Add("[real-wallet-gate] the cloud SAVE rail no longer ABORTS on a false from " +
                              "BackendRequestSigner.TryAttachAsync - a save could go out unauthed on the " +
-                             "real rail even though the shared authority refused to vouch for it");
+                             "real rail even though the shared authority refused to vouch for it. The " +
+                             "abort must sit inside the `if (!await ...TryAttachAsync(...))` guard, " +
+                             "before any SendWebRequest, and read `return false` or " +
+                             "`return new SaveAttemptResult(SaveAttemptCategory.AuthAbsent, ...)`");
         }
 
         // =====================================================================

@@ -2627,8 +2627,8 @@ namespace DeNelle.Core.State
                     return;
                 }
 
-                bool ok = await SendCurrentSnapshot();
-                if (ok)
+                var attempt = await SendCurrentSnapshot();
+                if (attempt.Ok)
                     _lastSyncedSnapshot = Snapshot();
                 else
                     EnqueueOffline(delta);
@@ -2693,27 +2693,178 @@ namespace DeNelle.Core.State
                     "logged at Step until identity returns.");
         }
 
-        private async UniTask<bool> SendCurrentSnapshot()
+        // ── WO-1587 — a save failure must NAME ITS OWN CAUSE, in its own words ────────
+        //
+        //  The drain warning used to end "Check the [Flow:Wallet] why= line for the
+        //  identity reason" and point at a system that owned NOTHING here. On the owner's
+        //  device (2026-09-07, build 2026.09.07.359076) six drains failed in a row while
+        //  the wallet session minted and renewed perfectly, and the real cause sat one
+        //  millisecond above each drain line in an UNTAGGED Debug.LogWarning:
+        //      [Sync] Save request threw (400): HTTP/1.1 400 Bad Request
+        //      {"ok":false,"code":"SCHEMA_VERSION_MISSING","ref":"bb0c95eb"}
+        //  Untagged means no [Flow:*] filter and no F8 harvest sees it, so the one line
+        //  that answered the question was invisible to every reader who was told to look
+        //  somewhere else. The categories below exist so the failure reason travels WITH
+        //  the failure, and so the drain line can only claim an identity cause when the
+        //  cause actually was identity.
+
+        /// <summary>What kind of thing stopped a cloud save. The token each value prints
+        /// is the <c>why=</c> value on the failure line — see <see cref="DescribeSaveFailure"/>.</summary>
+        public enum SaveAttemptCategory
+        {
+            /// <summary>The upload landed. Never appears on a failure line.</summary>
+            Ok,
+            /// <summary>The snapshot could not be turned into a body at all (client-side).</summary>
+            Serialize,
+            /// <summary>No usable identity/session, so the request was never sent (fail-closed).
+            /// The ONLY category for which <c>[Flow:Wallet]</c> is the right place to look.</summary>
+            AuthAbsent,
+            /// <summary>The request never produced an HTTP status — DNS, timeout, socket, offline.</summary>
+            Transport,
+            /// <summary>The server answered and REFUSED the payload (4xx). The body head names the code.</summary>
+            HttpClient,
+            /// <summary>The server answered and failed (5xx). Retry is the right response.</summary>
+            HttpServer,
+        }
+
+        /// <summary>The outcome of ONE POST to /api/game/save: enough to explain itself
+        /// without a second log line and without a second system.</summary>
+        public readonly struct SaveAttemptResult
+        {
+            public readonly SaveAttemptCategory Category;
+            /// <summary>HTTP status, or 0 when the request never got one.</summary>
+            public readonly long ResponseCode;
+            /// <summary>Head of the response body (or the exception text) — already trimmed
+            /// and newline-squashed, so it is safe to append to a one-line warning.</summary>
+            public readonly string Detail;
+
+            public SaveAttemptResult(SaveAttemptCategory category, long responseCode, string detail)
+            {
+                Category      = category;
+                ResponseCode  = responseCode;
+                Detail        = detail ?? string.Empty;
+            }
+
+            public bool Ok => Category == SaveAttemptCategory.Ok;
+
+            public static SaveAttemptResult Success => new SaveAttemptResult(SaveAttemptCategory.Ok, 200L, string.Empty);
+        }
+
+        /// <summary>Longest response-body excerpt carried onto a one-line warning. Long enough
+        /// for <c>{"ok":false,"code":"…","ref":"…"}</c>, short enough not to flood the ring buffer
+        /// (memory: logcat-ring-buffer-destroys-evidence).</summary>
+        private const int SaveFailureDetailMaxChars = 160;
+
+        /// <summary>Collapses a response body / exception message to a single safe log fragment.</summary>
+        public static string SquashDetail(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return string.Empty;
+            var sb = new StringBuilder(Math.Min(raw.Length, SaveFailureDetailMaxChars) + 3);
+            for (int i = 0; i < raw.Length && sb.Length < SaveFailureDetailMaxChars; i++)
+            {
+                char c = raw[i];
+                sb.Append(c == '\r' || c == '\n' || c == '\t' ? ' ' : c);
+            }
+            var s = sb.ToString().Trim();
+            if (raw.Length > SaveFailureDetailMaxChars) s += "...";
+            return s;
+        }
+
+        /// <summary>
+        /// The one place a save failure is turned into words. PURE and public so the
+        /// regression can assert the contract directly (WO-1587): EVERY category yields a
+        /// non-empty <c>why=</c> token, and ONLY <see cref="SaveAttemptCategory.AuthAbsent"/>
+        /// sends the reader to <c>[Flow:Wallet]</c>.
+        /// </summary>
+        public static string DescribeSaveFailure(SaveAttemptResult result)
+        {
+            string why;
+            string hint;
+            switch (result.Category)
+            {
+                case SaveAttemptCategory.Ok:
+                    // Never expected on a failure path; still answered honestly rather than blank.
+                    why = "none"; hint = "the upload SUCCEEDED - this line was formatted for a result that did not fail."; break;
+                case SaveAttemptCategory.Serialize:
+                    why = "serialize"; hint = "the snapshot could not be serialized on this device; nothing was sent."; break;
+                case SaveAttemptCategory.AuthAbsent:
+                    why = "auth-absent"; hint = "no live backend session, so the request was never sent (fail-closed). This is the ONE case where the [Flow:Wallet] why= line explains it."; break;
+                case SaveAttemptCategory.Transport:
+                    why = "transport"; hint = "the request never reached an HTTP status (offline, DNS, timeout or socket). Identity is NOT implicated."; break;
+                case SaveAttemptCategory.HttpClient:
+                    why = "http-4xx"; hint = "the SERVER ANSWERED AND REFUSED THE PAYLOAD. The body head above is the server's own code - fix the payload, not the identity."; break;
+                case SaveAttemptCategory.HttpServer:
+                    why = "http-5xx"; hint = "the server errored; the marker is retained and the next attempt retries."; break;
+                default:
+                    why = "unknown"; hint = "unclassified failure - add a category rather than leaving this blank."; break;
+            }
+
+            var body = string.IsNullOrEmpty(result.Detail) ? "<empty>" : result.Detail;
+            return $"why={why} http={result.ResponseCode} body={body} - {hint}";
+        }
+
+        /// <summary>
+        /// Builds the exact bytes POSTed to /api/game/save.
+        /// <para>
+        /// ⛔ <c>schemaVersion</c> IS PART OF THE CONTRACT AND WAS MISSING FOR THE WHOLE
+        /// LIFE OF THIS PATH (WO-1587). <see cref="SaveSchema.PersistedState"/> carries no
+        /// version property — the version lives on the <see cref="SaveSchema.SaveFile"/>
+        /// envelope, which the cloud POST does not use — and the only place the client ever
+        /// set <c>SchemaVersion</c> is <see cref="BuildDeltaPayload"/>, whose object is
+        /// built and then never sent (see <see cref="SendCurrentSnapshot"/>'s honesty note).
+        /// The server tolerated the omission by DEFAULTING to 10 — stamping the row back to 10
+        /// while it wrote current-shaped state — then briefly REFUSED it outright
+        /// (<c>SCHEMA_VERSION_MISSING</c>, 400), which is the outage the owner's device took on
+        /// 2026-09-07: saved fine at 07:49:07, 400'd from 07:53:27 onward in the SAME process,
+        /// six offline-queue drains failing behind it.
+        /// </para>
+        /// <para>
+        /// ⚠ THAT 400 IS RETIRED AND MUST NOT BE RE-ASSERTED (server, same day; read at source
+        /// <c>api/game/save.js:106-171</c>). An absent version now returns <c>ok:true,
+        /// version:null, note:'SCHEMA_VERSION_ABSENT'</c> and leaves the stored column
+        /// untouched; only a DOWNGRADE still refuses. <b>Sending the version is still the fix,
+        /// and for a reason the tolerance does not cover:</b> an omitted version means the row's
+        /// <c>schema_version</c> is never updated, so a row still carrying the invented 10 keeps
+        /// it forever while holding v-current state — and <see cref="ApplyBackendState"/> trusts
+        /// that column on LOAD, running the wrong migration chain. Declaring the version is what
+        /// heals the row. Never make this path depend on the server's tolerance.
+        /// </para>
+        /// <para>
+        /// The value comes from <see cref="SaveSchema.CurrentVersion"/> — the same authority
+        /// as <c>SaveFile.storeVersion</c> and <see cref="BuildDeltaPayload"/>. Never write a
+        /// literal here (CLAUDE.md §8: no copied version numbers).
+        /// </para>
+        /// Public + static so the regression can assert the wire shape without a network.
+        /// </summary>
+        public static byte[] BuildSaveBody(SaveSchema.PersistedState snapshot, string playerId)
+        {
+            // Serialize the full PersistedState under the SAME camelCase keys
+            // LoadFromBackend reads (nested "resources", arrays, …), then add the
+            // backend's required lowercase "playerId". The deployed store is a
+            // merge-upsert, so strip null fields — never null-out a server value
+            // on a partial sync.
+            var jo = JObject.FromObject(snapshot, JsonSerializer.Create(SaveSchema.JsonSettings));
+            foreach (var p in jo.Properties().Where(p => p.Value.Type == JTokenType.Null).ToList())
+                jo.Remove(p.Name);
+            jo["playerId"]      = playerId;
+            jo["schemaVersion"] = SaveSchema.CurrentVersion;
+            return Encoding.UTF8.GetBytes(jo.ToString(Formatting.None));
+        }
+
+        private async UniTask<SaveAttemptResult> SendCurrentSnapshot()
         {
             byte[] body;
             try
             {
-                // Serialize the full PersistedState under the SAME camelCase keys
-                // LoadFromBackend reads (nested "resources", arrays, …), then add the
-                // backend's required lowercase "playerId". The deployed store is a
-                // merge-upsert, so strip null fields — never null-out a server value
-                // on a partial sync.
-                var snapshot = Snapshot();
-                var jo = JObject.FromObject(snapshot, JsonSerializer.Create(SaveSchema.JsonSettings));
-                foreach (var p in jo.Properties().Where(p => p.Value.Type == JTokenType.Null).ToList())
-                    jo.Remove(p.Name);
-                jo["playerId"] = _state.BoundWallet;
-                body = Encoding.UTF8.GetBytes(jo.ToString(Formatting.None));
+                body = BuildSaveBody(Snapshot(), _state.BoundWallet);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Sync] JSON serialize error: {ex.Message}");
-                return false;
+                // §12 - the cause travels with the failure, tagged so [Flow:*] readers and the
+                // F8 harvest both see it. Debug.LogError alone was invisible to every filter.
+                var detail = SquashDetail($"{ex.GetType().Name}: {ex.Message}");
+                FlowTrace.Fail("Sync", $"cloud save NOT SENT - the snapshot could not be serialized. {detail}");
+                return new SaveAttemptResult(SaveAttemptCategory.Serialize, 0L, detail);
             }
 
             using var req = new UnityWebRequest(SaveUrl, "POST")
@@ -2730,21 +2881,33 @@ namespace DeNelle.Core.State
             if (!await DeNelle.Core.Web3.BackendRequestSigner.TryAttachAsync(req, _state.BoundWallet, body))
             {
                 ReportSaveAuthAborted(guestSave);
-                return false;
+                return new SaveAttemptResult(SaveAttemptCategory.AuthAbsent, 0L,
+                    guestSave ? "guest proof unavailable" : "no live backend session");
             }
 
             // WO-769: a non-2xx (e.g. 401 while Neon isn't verifying the Firebase token yet)
             // makes the UniTask awaiter THROW UnityWebRequestException — which previously
             // propagated out and aborted scene navigation (see SceneRouter guard). Catch it
-            // so this always fulfills its bool contract: log + re-queue offline (false).
+            // so this always fulfills its contract: log + re-queue offline.
             try
             {
                 await req.SendWebRequest();
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[Sync] Save request threw ({req.responseCode}): {e.Message} — re-queued offline.");
-                return false;
+                // WO-1587: the response BODY is the answer on this path and it was already
+                // being logged — untagged, so no [Flow:*] filter and no F8 harvest ever saw
+                // it. Prefer the downloaded body over the exception text: the exception text
+                // is where the owner's SCHEMA_VERSION_MISSING was hiding.
+                string raw = req.downloadHandler != null && !string.IsNullOrEmpty(req.downloadHandler.text)
+                    ? req.downloadHandler.text
+                    : e.Message;
+                var detail  = SquashDetail(raw);
+                var thrown  = ClassifyHttp(req.responseCode);
+                FlowTrace.Warn("Sync",
+                    $"cloud save REFUSED - {DescribeSaveFailure(new SaveAttemptResult(thrown, req.responseCode, detail))} " +
+                    "The marker is re-queued; the local save is unaffected.");
+                return new SaveAttemptResult(thrown, req.responseCode, detail);
             }
 
             if (req.result == UnityWebRequest.Result.Success)
@@ -2755,11 +2918,31 @@ namespace DeNelle.Core.State
                 // time-derived gain, the clamp report. Reading it is what makes the offline
                 // number PROVISIONAL rather than final on the device that produced it.
                 ReadSaveResponse(req.downloadHandler != null ? req.downloadHandler.text : null);
-                return true;
+                return SaveAttemptResult.Success;
             }
 
-            Debug.LogWarning($"[Sync] Save failed ({req.responseCode}): {req.error}");
-            return false;
+            {
+                string raw = req.downloadHandler != null && !string.IsNullOrEmpty(req.downloadHandler.text)
+                    ? req.downloadHandler.text
+                    : req.error;
+                var detail   = SquashDetail(raw);
+                var category = ClassifyHttp(req.responseCode);
+                FlowTrace.Warn("Sync",
+                    $"cloud save FAILED - {DescribeSaveFailure(new SaveAttemptResult(category, req.responseCode, detail))} " +
+                    "The marker is re-queued; the local save is unaffected.");
+                return new SaveAttemptResult(category, req.responseCode, detail);
+            }
+        }
+
+        /// <summary>A status of 0 means the request never got an answer — that is TRANSPORT,
+        /// not a server refusal, and conflating the two is how "the server rejected us" gets
+        /// claimed for an aeroplane-mode save.</summary>
+        public static SaveAttemptCategory ClassifyHttp(long responseCode)
+        {
+            if (responseCode <= 0L)   return SaveAttemptCategory.Transport;
+            if (responseCode >= 500L) return SaveAttemptCategory.HttpServer;
+            if (responseCode >= 400L) return SaveAttemptCategory.HttpClient;
+            return SaveAttemptCategory.Transport;
         }
 
         // ── WO-1128 §3.3 — the server's reconciled figure lands on the client ──────
@@ -3102,7 +3285,10 @@ namespace DeNelle.Core.State
                     $"{OfflineQueueMaxDepth}. Only markers SUPERSEDED by a newer one for the SAME identity " +
                     "were dropped - every identity still holds its newest unsent-work flag, and the upload " +
                     "is the current snapshot regardless, so nothing was lost. A queue this deep means saves " +
-                    "have been failing for a long time: read the [Flow:Wallet] why= line.");
+                    // WO-1587: same wrong pointer as the drain line carried. The cause is on the
+                    // drain's own why= token, not in the wallet rail.
+                    "have been failing for a long time: read the why= token on the [Flow:Sync] " +
+                    "'offline queue drain FAILED' line.");
 
             while (kept.Count > OfflineQueueMaxDepth)
             {
@@ -3177,8 +3363,8 @@ namespace DeNelle.Core.State
 
             // ONE upload covers every queued marker for this identity: the snapshot already
             // contains all of their effects.
-            bool ok = await SendCurrentSnapshot();
-            if (ok)
+            var attempt = await SendCurrentSnapshot();
+            if (attempt.Ok)
             {
                 PlayerPrefs.DeleteKey(SyncQueueKey);
                 // The queued work is now on the server; record it so the caller's own
@@ -3209,10 +3395,19 @@ namespace DeNelle.Core.State
 
                 // The other half of the same blindness: a failed drain re-queued in silence, so a
                 // queue that never empties looked exactly like a queue that was never full.
+                //
+                // ⛔ WO-1587: THIS LINE USED TO END "Check the [Flow:Wallet] why= line for the
+                // identity reason" AND THAT SENTENCE WAS WRONG TWICE OVER - it promised a line
+                // that only the mint path ever prints, and it asserted an identity cause the
+                // drain had never established. On the owner's 2026-09-07 device the session
+                // minted and renewed perfectly and all six drains failed on a 400
+                // SCHEMA_VERSION_MISSING. The reason now comes from the attempt itself, and
+                // [Flow:Wallet] is named ONLY when the category really is auth-absent
+                // (DescribeSaveFailure owns that decision - do not re-add a fixed pointer here).
                 FlowTrace.Warn("Sync",
                     $"offline queue drain FAILED - {mine.Count} marker(s) re-queued and RETAINED (never " +
                     "dropped). The player's progress is safe in the local save; it is the cloud copy " +
-                    "that is behind. Check the [Flow:Wallet] why= line for the identity reason.");
+                    $"that is behind. {DescribeSaveFailure(attempt)}");
             }
             PlayerPrefs.Save();
         }

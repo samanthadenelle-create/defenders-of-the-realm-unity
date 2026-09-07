@@ -38,8 +38,15 @@ namespace DeNelle.Editor.Regression
 
                 Require(failures, save, "BackendRequestSigner.TryAttachAsync", "save write bypasses shared auth");
                 Require(failures, save, "BackendRequestSigner.IsGuestIdentity", "save no longer routes guests through shared proof when enforcement is off");
-                if (!Regex.IsMatch(save, @"!await\s+DeNelle\.Core\.Web3\.BackendRequestSigner\.TryAttachAsync\s*\([^;]+?\)\s*\)\s*\{[^{}]*?return\s+false\s*;", RegexOptions.Singleline))
-                    failures.Add("failed shared save auth is not structurally bound to refusal/requeue");
+                // WO-1587 re-pointed the refusal: SendCurrentSnapshot returns a CATEGORISED
+                // SaveAttemptResult instead of a bare bool, so the drain can name its own cause
+                // (the old `return false` erased the difference between "no session" and "the
+                // server refused the payload", which is exactly how six 400s were reported as an
+                // identity problem). The INVARIANT is unchanged and still pinned structurally: a
+                // failed TryAttachAsync must report and refuse INSIDE the same block, never fall
+                // through to the send. AuthAbsent is the categorised form of that refusal.
+                if (!Regex.IsMatch(save, @"!await\s+DeNelle\.Core\.Web3\.BackendRequestSigner\.TryAttachAsync\s*\([^;]+?\)\s*\)\s*\{[^{}]*?ReportSaveAuthAborted[^{}]*?return\s+new\s+SaveAttemptResult\s*\(\s*SaveAttemptCategory\.AuthAbsent", RegexOptions.Singleline))
+                    failures.Add("failed shared save auth is not structurally bound to refusal/requeue (expected ReportSaveAuthAborted + return SaveAttemptCategory.AuthAbsent inside the guard)");
 
                 // ⛔ "BOOT NEVER SIGNS" IS BACK — OWNER RULING 2026-09-07 (WO-1583), NARROWER THAN
                 // WO-1211's. Owner, verbatim: "everytime i play now im forced to authenticate ... I
