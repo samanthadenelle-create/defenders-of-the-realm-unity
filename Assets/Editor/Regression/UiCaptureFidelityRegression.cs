@@ -83,6 +83,16 @@
 //          re-pins the surface would restore the original defect -- one geometry
 //          wearing several filenames -- with every other check in this file green.
 //
+//   RULE 8 [capture-ledger]  A PLANNED FRAME THAT GOES MISSING IS A FAILURE, NOT A
+//          NOTE (WO-1489). CAPTURE_LEDGER_MISSING and CAPTURE_LEDGER_DUPLICATE are
+//          LogErrors, EndCaptureLedger's failure COUNT reaches the run, and
+//          MANAGE_FLOW_MAP_OK is gated on `ledger == 0` -- a ledger that computes
+//          failures and then says OK anyway is worse than none, because it prints
+//          the evidence beside the pass. Also pins the two frames the plan could
+//          not previously SEE (ManageFlowFrame.ActionDetail, .HubHeart) so the
+//          actionable detail screen and the chip-present hub cannot be dropped back
+//          out of the only place the frame set is written down.
+//
 //   RULE 4 [honest-degrade]  When the editor refuses to move Screen, the harness
 //          says so LOUDLY (UI_CAPTURE_FIDELITY_DEGRADED, at error severity). A
 //          scale-only run that reports itself as geometry-accurate is worse than no
@@ -183,6 +193,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "honest-degrade", () => Case4_HonestDegrade(src, failures, notes));
                     Case(failures, "geometry-gate", () => Case5_GeometryGate(src, failures, notes));
                     Case(failures, "aspect-divergence", () => Case7_AspectDivergence(src, failures, notes));
+                    Case(failures, "capture-ledger", () => Case8_CaptureLedger(src, failures, notes));
                 }
 
                 string kit = ReadSource(KitSrc, "kit-surface", failures);
@@ -534,6 +545,72 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  RULE 8 - A PLANNED FRAME THAT GOES MISSING IS A FAILURE, NOT A NOTE (WO-1489)
+        //  ...and the two screens the plan could not previously SEE stay in the plan.
+        //
+        //  WHY IT EXISTS. WO-1489's evidence was two `CAPTURE_LEDGER_MISSING` lines, and its
+        //  fix shape read "the ledger must FAIL on a planned frame that goes missing, rather
+        //  than logging it." Measured at HEAD 2026-09-07 that is ALREADY TRUE -- the ledger
+        //  LogErrors and returns a failure count which gates MANAGE_FLOW_MAP_OK -- so this
+        //  case pins the property rather than implementing it. An invariant that is true and
+        //  unpinned is one refactor away from being a note again, and the difference between
+        //  a FAIL and a note is the difference between a run that stops and a run that ships
+        //  a screen nobody looked at.
+        //
+        //  ⚠ SOURCE LINT, LIKE EVERY OTHER RULE HERE. It proves the wiring is present in the
+        //  text. Whether a run's ledger actually closes clean is MANAGE_FLOW_MAP_OK on a
+        //  fresh log, and whether the frames MATCH is ruling 29 - the owner's eyes on a
+        //  device frame beside its mockup panel. Neither is claimed by this suite.
+        // =====================================================================
+        private static void Case8_CaptureLedger(string src, List<string> failures, List<string> notes)
+        {
+            if (src.IndexOf("CAPTURE_LEDGER_MISSING", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[capture-ledger] the CAPTURE_LEDGER_MISSING finding is gone. The ledger " +
+                             "sweeps every planned frame BEFORE a run, so a frame that is not re-taken " +
+                             "leaves no file at all - and with no finding, a run that photographed four " +
+                             "screens fewer than it planned looks exactly like a clean one.");
+                return;
+            }
+            if (!Regex.IsMatch(src, @"LogError\s*\(\s*""CAPTURE_LEDGER_MISSING"))
+                failures.Add("[capture-ledger] CAPTURE_LEDGER_MISSING is no longer emitted at ERROR " +
+                             "severity - WO-1489's fix shape is verbatim 'the ledger must FAIL on a " +
+                             "planned frame that goes missing, rather than logging it'");
+            if (!Regex.IsMatch(src, @"LogError\s*\(\s*""CAPTURE_LEDGER_DUPLICATE"))
+                failures.Add("[capture-ledger] CAPTURE_LEDGER_DUPLICATE is no longer an ERROR. Two " +
+                             "filenames over one image means the state the second name claims was never " +
+                             "reached, which is a lying frame, not a coincidence.");
+
+            // The count must reach the marker. A ledger that finds failures and does not gate the
+            // OK line is worse than no ledger: it prints the evidence and then says OK anyway.
+            if (!Regex.IsMatch(src, @"int\s+ledger\s*=\s*EndCaptureLedger\s*\(\s*\)"))
+                failures.Add("[capture-ledger] the MANAGE_FLOW_MAP run no longer captures " +
+                             "EndCaptureLedger's failure count, so nothing can gate on it");
+            else if (!Regex.IsMatch(src, @"ledger\s*==\s*0"))
+                failures.Add("[capture-ledger] MANAGE_FLOW_MAP_OK is no longer gated on `ledger == 0`. " +
+                             "The count would then be computed, logged and ignored - the marker would " +
+                             "say OK over a run with missing or duplicate frames.");
+            else
+                notes.Add("ledger failures gate MANAGE_FLOW_MAP_OK");
+
+            // The plan is the only home of the frame set (its own doc says so), so the two screens
+            // WO-1489 was raised about are pinned BY NAME here and nowhere else.
+            RequireAll(src, failures, notes, "capture-ledger", new[]
+            {
+                Pin("ManageFlowFrame.ActionDetail",
+                    "the ACTIONABLE detail frame. Without it the plan shoots only Locked and Max - the " +
+                    "two states that have no action by definition - so ManageWorkspacePanel's " +
+                    "before/after stats, cost row, time and primary verb are never photographed, and " +
+                    "their absence from a Max frame gets re-filed as a defect (WO-1489 did exactly that)"),
+                Pin("ManageFlowFrame.HubHeart",
+                    "the hub WITH its HEART chip. The chip is conditional on " +
+                    "ManageScreenVM.HeartUpgradeAvailable and reserves a MinTouchPx band away from the " +
+                    "card grid, so chip-present and chip-absent are two different layouts; shooting " +
+                    "only one leaves the other's geometry unproven"),
+            });
+        }
+
+        // =====================================================================
         //  helpers
         // =====================================================================
         private sealed class PinSpec
@@ -557,7 +634,11 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[" + tag + "] '" + p.Token + "' no longer appears in " + HarnessSrc +
                              " - that removes " + p.Why);
             }
-            if (ok == pins.Length) notes.Add("geometry rules pinned: " + ok + "/" + pins.Length);
+            // ⚠ THE NOTE NAMES ITS CALLER. It read "geometry rules pinned" unconditionally, which
+            // was true while [geometry-gate] was the only caller and became a lie the moment
+            // [capture-ledger] reused the helper (WO-1489) - a second caller's pins would have been
+            // reported as geometry findings on the same line.
+            if (ok == pins.Length) notes.Add(tag + " rules pinned: " + ok + "/" + pins.Length);
         }
 
         private static string Trim(string s)

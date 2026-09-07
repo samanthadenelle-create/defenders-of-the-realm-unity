@@ -7678,7 +7678,30 @@ namespace DeNelle.Editor
         };
 
         /// <summary>Which frame of the Manage flow a single capture body is shooting.</summary>
-        private enum ManageFlowFrame { Hub, GridTop, GridBottom, QueueDrawer, LockedDetail, MaxDetail, SchoolPerks }
+        // ⭐ WO-1489 ADDS TWO MEMBERS, AND BOTH EXIST BECAUSE A STATE WAS UNPHOTOGRAPHABLE.
+        //
+        //  ActionDetail -- THE DETAIL SCREEN A PLAYER CAN ACT ON. The plan shot only LockedDetail
+        //  and MaxDetail, which are the two states with NO action by definition, so every painter
+        //  in ManageWorkspacePanel that draws a before/after stat pair (:1006-1016), a cost row
+        //  (:1110-1115) and the time/UPGRADE action (:1140-1142) was outside the capture set.
+        //  ⛔ WO-1489 read that absence as a DEFECT in ManageFlow_BUILD_max ("shows NO before/after
+        //  stats, no cost row, no time and no UPGRADE button - although every painter exists").
+        //  It is not: that frame is the forge at Level 4 of 4 (MANAGE_FLOW_STATE BUILD/max ->
+        //  forge state=Max, Builds/cap-manage-wave5c.log 03:20), and a MAX item HAS no next level
+        //  to price. The painters were never reached because the state was correct. The real gap
+        //  is that the actionable screen had no frame at all, and this member is that frame.
+        //
+        //  HubHeart -- THE HUB WITH ITS HEART CHIP UP. ⚠ SEPARATE FROM Hub, NOT A REPLACEMENT FOR
+        //  IT. ManageScreenPanel.BuildHubHeartDoor draws the chip ONLY while
+        //  ManageScreenVM.HeartUpgradeAvailable, i.e. while HeartProgression.State != Max, and the
+        //  fixture sits at VillageTier 4 against an authored maxLevel of 3
+        //  (Assets/Resources/Data/Canonical/heart-progression.json:4 -> VillageTierService.MaxTier
+        //  -> HeartProgression.IsMax), so the Hub frame is permanently the chip-ABSENT hub. That
+        //  frame is worth keeping exactly as it is - mockup panel 1 draws no chip either - so the
+        //  chip-present state gets its own shot with its own fixture tier rather than being
+        //  smuggled into the frame the owner compares against panel 1.
+        private enum ManageFlowFrame
+        { Hub, HubHeart, GridTop, GridBottom, QueueDrawer, ActionDetail, LockedDetail, MaxDetail, SchoolPerks }
 
         /// <summary>One planned shot. The PLAN is the only place the frame set is written down,
         /// and <c>Expected</c> is its Length -- never a constant beside it (CLAUDE.md §2/§5:
@@ -7696,9 +7719,11 @@ namespace DeNelle.Editor
             switch (frame)
             {
                 case ManageFlowFrame.Hub: return "hub";
+                case ManageFlowFrame.HubHeart: return "hubheart";
                 case ManageFlowFrame.GridTop: return "gridtop";
                 case ManageFlowFrame.GridBottom: return "gridbottom";
                 case ManageFlowFrame.QueueDrawer: return "queue";
+                case ManageFlowFrame.ActionDetail: return "action";
                 case ManageFlowFrame.LockedDetail: return "locked";
                 case ManageFlowFrame.MaxDetail: return "max";
                 default: return "school";
@@ -7711,8 +7736,35 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// THE PLAN. Three real tabs x five states, plus the Research school->perks screen that
-        /// replaces the retired hub. Change the flow set HERE and nowhere else.
+        /// The marker's own description of the frame set, DERIVED from the plan it just shot.
+        /// One "TAB(state,state,...)" group per tab, in plan order. Never a typed list: the
+        /// sentence this replaced was a second copy of BuildManageFlowPlan's contents and went
+        /// stale the moment the plan grew (CLAUDE.md §2/§5 - duplicated state).
+        /// </summary>
+        private static string DescribeManageFlowPlan(ManageFlowShot[] plan)
+        {
+            if (plan == null || plan.Length == 0) return "<empty plan>";
+            var order = new List<string>(4);
+            var states = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            for (int i = 0; i < plan.Length; i++)
+            {
+                string tab = ManageScreenVM.TabWordOf(plan[i].Tab);
+                if (!states.TryGetValue(tab, out var list))
+                { list = new List<string>(8); states[tab] = list; order.Add(tab); }
+                list.Add(ManageFlowStateWord(plan[i].Frame));
+            }
+            var parts = new List<string>(order.Count);
+            for (int i = 0; i < order.Count; i++)
+                parts.Add(order[i] + "(" + string.Join(",", states[order[i]].ToArray()) + ")");
+            return string.Join(" + ", parts.ToArray());
+        }
+
+        /// <summary>
+        /// THE PLAN. The three real tabs crossed with every workspace state, plus the two hub
+        /// frames and the Research school->perks screen. Change the flow set HERE and nowhere else.
+        /// ⛔ DO NOT WRITE THE FRAME COUNT INTO A COMMENT, A MARKER OR A DOC. This summary said
+        /// "three real tabs x five states" and was wrong the moment a sixth state was added; the
+        /// count is <c>plan.Length</c> and the marker prints it.
         /// </summary>
         private static ManageFlowShot[] BuildManageFlowPlan()
         {
@@ -7725,9 +7777,9 @@ namespace DeNelle.Editor
             var frames = new[]
             {
                 ManageFlowFrame.GridTop, ManageFlowFrame.GridBottom, ManageFlowFrame.QueueDrawer,
-                ManageFlowFrame.LockedDetail, ManageFlowFrame.MaxDetail,
+                ManageFlowFrame.ActionDetail, ManageFlowFrame.LockedDetail, ManageFlowFrame.MaxDetail,
             };
-            var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 2);
+            var plan = new List<ManageFlowShot>(tabs.Length * frames.Length + 3);
             // (!) THE HUB FRAME IS BACK (WO-1567 panel row 1, 2026-09-07).
             // (!) THE RETIREMENT NOTE ABOVE STATED ITS OWN REVERSAL CONDITION and this is it: the hub
             // was retired because it was UNREACHABLE, "not because a hub is wrong", and it said
@@ -7741,6 +7793,14 @@ namespace DeNelle.Editor
             // Build is used so the frame sorts beside the screen it leads to. The capture body
             // does NOT enter it - entering a tab is precisely what dismisses the hub.
             plan.Add(new ManageFlowShot(DeNelle.Core.Manage.ManageTabId.Build, ManageFlowFrame.Hub));
+            // (!) AND THE SAME HUB WITH THE HEART CHIP UP (WO-1489). Same screen, one fixture
+            // difference (VillageTier below the authored Heart ceiling), and it is a SECOND frame
+            // rather than a change to the one above because the two hubs are different screens to
+            // the owner: panel 1 has no chip, and the chip reserves ElarionUiKit.MinTouchPx of the
+            // hub host away from the card band (ManageScreenPanel._hubHeartY0). Photographing only
+            // one of them leaves the other's geometry unproven, and the chip's seat is the control
+            // that produced seven of the eleven non-queue oracle failures on cap-manage-wave4.log.
+            plan.Add(new ManageFlowShot(DeNelle.Core.Manage.ManageTabId.Build, ManageFlowFrame.HubHeart));
             for (int t = 0; t < tabs.Length; t++)
                 for (int f = 0; f < frames.Length; f++)
                 {
@@ -7852,9 +7912,14 @@ namespace DeNelle.Editor
             ReportTouchOracle();
             if (count == expected && ledger == 0 && _fidelityDegraded == 0 &&
                 _geoFailures.Count == 0 && _touchFailures.Count == 0)
-                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; the hub + 3 destinations x " +
-                          "(grid top, grid bottom, queue, locked, max) + research school; inventory lines=" +
-                          _flowInventory.Count);
+                // ⛔ THE FRAME SET IS DESCRIBED FROM THE PLAN, NOT RETYPED. This line used to read
+                // "the hub + 3 destinations x (grid top, grid bottom, queue, locked, max) +
+                // research school" - a hand-kept list of the very thing BuildManageFlowPlan is
+                // declared to be the only home of, and therefore a stale copy the first time the
+                // set grew (WO-1489 grew it twice in one edit). Deriving it means the marker can
+                // never describe a run it did not do.
+                Debug.Log("MANAGE_FLOW_MAP_OK " + count + " frames; " + DescribeManageFlowPlan(plan) +
+                          "; inventory lines=" + _flowInventory.Count);
             else
                 Debug.LogError("MANAGE_FLOW_MAP_FAIL frames=" + count + "/" + expected + " ledger=" + ledger +
                     " fidelity=" + _fidelityDegraded + " geometry=" + _geoFailures.Count +
@@ -7988,12 +8053,28 @@ namespace DeNelle.Editor
         /// author perks: arcane-tower 4, armorer 3, barracks 3, forge 3, lumbermill 4 = 17 perks;
         /// 'farm' authors none). Returns a THROWAWAY GameState the caller destroys.
         /// </summary>
-        private static GameState BuildManageFlowFixture()
+        private static GameState BuildManageFlowFixture(ManageFlowFrame frame)
         {
             var fixture = ScriptableObject.CreateInstance<GameState>();
             fixture.Onboarded = true;
             fixture.BarracksLevel = 3;      // troops at unlockBarracksTier 1-3 unlocked, 4-6 locked
-            fixture.VillageTier = 4;
+
+            // ⭐ THE HEART TIER IS THE *ONLY* PER-FRAME FIXTURE DIFFERENCE, AND IT IS ONE FRAME'S.
+            // Tier 4 is the fixture's standing value and every other frame keeps it byte-for-byte,
+            // because it is load-bearing well beyond the Heart chip: the BUILD grid's "HEART GATED"
+            // tiles (Lumber Mill on ManageFlow_BUILD_gridbottom) and the deliberately-raised
+            // lumbermill tier-2 RequiresVillageTier=5 gate that supplies the Locked card are both
+            // read against it, so lowering it globally would silently repaint the grids this run
+            // exists to document.
+            // ⛔ AND THE NUMBER IS DERIVED, NOT TYPED. HeartUpgradeAvailable is
+            // `HeartProgression.State != Max`, i.e. VillageTierService.Current < MaxTier, and
+            // MaxTier projects heart-progression.json's authored maxLevel (3 today). One below the
+            // live ceiling is chip-present whatever the owner re-authors that file to; a typed 2
+            // would become chip-ABSENT the day maxLevel drops to 2, and the frame would go on
+            // claiming a chip it no longer shows.
+            fixture.VillageTier = frame == ManageFlowFrame.HubHeart
+                ? Mathf.Max(1, DeNelle.Village.Buildings.Progression.HeartProgression.MaxLevel - 1)
+                : 4;
 
             // ⚠ THE ARCHER AT (3,7) IS LOAD-BEARING. SeedManageCaptureQueue enqueues
             // PlacedUpgradeKey.Compose("tower_ground_archer", 3, 7) on the Builder line; move that
@@ -8117,17 +8198,34 @@ namespace DeNelle.Editor
         /// Returns null when there is none -- the caller then FAILS the frame rather than shooting
         /// a substitute, because a silently-substituted screen is a frame whose filename lies.
         /// </summary>
+        /// <param name="preferLaddered">⭐ WO-1489 - ORDER MATTERS FOR THE ACTIONABLE FRAME AND FOR
+        /// NOTHING ELSE. `Available` covers two very different detail screens: an item ALREADY
+        /// BUILT with a next rung (before/after stats, a cost row, a time and UPGRADE - the screen
+        /// WO-1489 is actually about), and an item NOT BUILT YET (Echo Hollow / Crafting Station /
+        /// Store on ManageFlow_BUILD_gridtop, which wear the same green medallion because
+        /// ManageVmProjection.VisualStateFor's `default:` branch maps every non-badge to Available).
+        /// First-match would shoot whichever the composer happened to order first. The LADDERED one
+        /// is identified by the projection's own marker - it is the only case that emits a
+        /// "LEVEL n" Subtitle (`item.MaxLevel > 0 && item.Level > 0`) - so this reads the VM rather
+        /// than guessing from an id, and it FALLS BACK to first-match so a tab with no laddered
+        /// Available item still shoots its actionable screen instead of failing.</param>
         private static DeNelle.Core.Manage.ManageTileVM FindManageFlowTile(
-            ManageScreenVM vm, DeNelle.Core.Manage.ManageTileVisualState want)
+            ManageScreenVM vm, DeNelle.Core.Manage.ManageTileVisualState want,
+            bool preferLaddered = false)
         {
             var tab = ActiveManageTabVm(vm);
             if (tab == null || tab.Tiles == null) return null;
+            DeNelle.Core.Manage.ManageTileVM first = null;
             for (int i = 0; i < tab.Tiles.Count; i++)
             {
                 var t = tab.Tiles[i];
-                if (t != null && t.VisualState == want) return t;
+                if (t == null || t.VisualState != want) continue;
+                if (!preferLaddered) return t;
+                if (first == null) first = t;
+                if (!string.IsNullOrEmpty(t.Subtitle) &&
+                    t.Subtitle.StartsWith("LEVEL ", StringComparison.Ordinal)) return t;
             }
-            return null;
+            return first;
         }
 
         /// <summary>
@@ -8166,17 +8264,24 @@ namespace DeNelle.Editor
         /// school's perk grid in turn. It re-enters the tab rather than pressing Back between
         /// schools, because Back on a root grid raises CloseRequested and would tear the panel down
         /// mid-capture.</para>
+        ///
+        /// <para>⭐ WO-1489 - IT TAKES THE WANTED STATE, NOT A BOOL. The parameter was
+        /// <c>bool wantLocked</c>, i.e. "Locked, else Max", which is a two-valued encoding of a
+        /// five-valued enum and had no room for the state WO-1489 needs:
+        /// <see cref="DeNelle.Core.Manage.ManageTileVisualState.Available"/>, the one a player can
+        /// act on. Passing the enum means the word in the failure message and the word in the
+        /// filename are both derived from the same value, so they cannot disagree.</para>
         /// </summary>
         private static bool TryNavigateManageFlowDetail(ManageScreenVM vm,
                                                         DeNelle.Core.Manage.ManageTabId tab,
-                                                        bool wantLocked, out string note)
+                                                        DeNelle.Core.Manage.ManageTileVisualState want,
+                                                        string word, out string note)
         {
             note = null;
             if (vm == null) return false;
-            var want = wantLocked
-                ? DeNelle.Core.Manage.ManageTileVisualState.Locked
-                : DeNelle.Core.Manage.ManageTileVisualState.Max;
-            string word = wantLocked ? "locked" : "max";
+            // Only the ACTIONABLE frame cares which Available tile it gets; Locked and Max are
+            // single-shaped states, so ordering there stays exactly as it was.
+            bool preferLaddered = want == DeNelle.Core.Manage.ManageTileVisualState.Available;
 
             // ⚠ BUILD and ARMY are ONE level deep: a grid tile's Activate opens that item's Detail.
             // RESEARCH is TWO (canon 5), and its top-level tiles are SCHOOLS whose Activate opens a
@@ -8184,7 +8289,7 @@ namespace DeNelle.Editor
             // this frame is after. That is why Research skips this branch entirely.
             if (tab != DeNelle.Core.Manage.ManageTabId.Research)
             {
-                var hit = FindManageFlowTile(vm, want);
+                var hit = FindManageFlowTile(vm, want, preferLaddered);
                 if (hit == null) return false;
                 hit.Activate?.Invoke();
                 note = ManageScreenVM.TabWordOf(tab) + "/" + word + " -> " + (hit.Id ?? "<null>") +
@@ -8207,7 +8312,7 @@ namespace DeNelle.Editor
                 string schoolId = school.Id;
                 school.Activate?.Invoke();                                // -> that school's perks
 
-                var perk = FindManageFlowTile(vm, want);
+                var perk = FindManageFlowTile(vm, want, preferLaddered);
                 if (perk == null) continue;
                 perk.Activate?.Invoke();                                  // -> the perk's detail
                 note = "RESEARCH/" + word + " -> " + (schoolId ?? "?") + " / " + (perk.Id ?? "<null>") +
@@ -8329,7 +8434,7 @@ namespace DeNelle.Editor
                     hydratedCatalog = DeNelle.Core.Catalog.CatalogRegistry.Count == 0;
                     HydrateCatalogForCapture();
 
-                    fixture = BuildManageFlowFixture();
+                    fixture = BuildManageFlowFixture(frame);
 
                     // Capture-only presentation fixture: production canon tops out at Village Tier
                     // 3 requirements, so temporarily raise one REAL next-tier gate to give the
@@ -8349,7 +8454,22 @@ namespace DeNelle.Editor
                     if (!InstallCaptureQueue(queueService))
                         throw new InvalidOperationException("BuildTimerService capture seam is unavailable");
                     SeedManageCaptureQueue(queueService);
-                    SeedManageFlowExtraQueue(queueService);
+                    // ⛔ THE ACTIONABLE FRAME GETS A LINE WITH ROOM IN IT, AND THAT IS THE WHOLE
+                    // REASON WO-1489's FOURTH SCREEN WAS UNPHOTOGRAPHABLE. SeedManageFlowExtraQueue
+                    // exists to sit every channel AT the authored depth cap so the queue drawer
+                    // documents a full line - and a full line makes every actionable item
+                    // ManageTileBadge.QueueBlocked, which projects to
+                    // ManageTileVisualState.QueueBlocked (ManageVmProjection.VisualStateFor:65).
+                    // MEASURED, Builds/cap-manage-wave5c.log 03:20: queueRows=5/7/5 on
+                    // Builder/Train/Research, and ManageFlow_BUILD_gridtop reads QUEUE FULL on
+                    // every built tile. So there was no Available tile ANYWHERE to open a detail
+                    // screen on, and no fixture change could have been found by reading the plan.
+                    // ⚠ AND IT MUST STAY SEEDED FOR EVERY OTHER FRAME. Two frames depend on the
+                    // saturation: QueueDrawer documents a line at its cap, and ARMY/max only reads
+                    // Max because the Train line is full - ruling 13 lets Trainable win over Max,
+                    // which this body's own failure message already spells out. Draining the queue
+                    // globally would flip ManageFlow_ARMY_max to Trainable and FAIL the run.
+                    if (frame != ManageFlowFrame.ActionDetail) SeedManageFlowExtraQueue(queueService);
 
                     panelHost = new GameObject("~UICap" + shotName);
                     var panel = panelHost.AddComponent<ManageScreenPanel>();
@@ -8369,12 +8489,39 @@ namespace DeNelle.Editor
                     // tab here would photograph the grid under a filename that claimed the hub,
                     // which is the substitution this capture body refuses to make anywhere else.
                     // ShowLauncher is the panel's OWN door, the one the root BACK press uses.
-                    if (frame == ManageFlowFrame.Hub)
+                    if (frame == ManageFlowFrame.Hub || frame == ManageFlowFrame.HubHeart)
                     {
                         InvokePrivate(panel, "ShowLauncher");
                         if (!(bool)GetPrivateFieldValue(panel, "_hubShowing"))
                             throw new InvalidOperationException(
                                 "ShowLauncher did not raise the hub -- the frame cannot be shot honestly");
+
+                        // ⭐ THE CHIP IS ASSERTED, NOT HOPED FOR. WO-1597 made the HEART face
+                        // conditional on ManageScreenVM.HeartUpgradeAvailable, so "the hub with a
+                        // chip" and "the hub without one" are two screens that differ by a
+                        // MinTouchPx band and are otherwise identical -- exactly the pair a
+                        // filename can lie about. _hubHeartShown is ManageScreenPanel's own single
+                        // answer (its field doc: "THE ONE ANSWER to does the hub draw a HEART
+                        // chip", written by BuildLauncher and read by BuildHubHeartDoor), so the
+                        // frame is judged against the panel's decision rather than re-deriving the
+                        // predicate here and getting a second opinion.
+                        bool chip = (bool)GetPrivateFieldValue(panel, "_hubHeartShown");
+                        bool wantChip = frame == ManageFlowFrame.HubHeart;
+                        if (chip != wantChip)
+                            throw new InvalidOperationException(
+                                "the hub drew " + (chip ? "a" : "NO") + " HEART chip but this frame is " +
+                                ManageFlowStateWord(frame) + ", which needs " +
+                                (wantChip ? "one" : "none") + " -- HeartProgression is Level " +
+                                DeNelle.Village.Buildings.Progression.HeartProgression.Level + " of " +
+                                DeNelle.Village.Buildings.Progression.HeartProgression.MaxLevel +
+                                " (State " + DeNelle.Village.Buildings.Progression.HeartProgression.State +
+                                "). The fixture's VillageTier is the dial; shooting it anyway would " +
+                                "put the other hub under this filename.");
+                        _flowStateNotes.Add(ManageScreenVM.TabWordOf(tab) + "/" +
+                            ManageFlowStateWord(frame) + " -> heart chip=" + chip +
+                            " level=" + DeNelle.Village.Buildings.Progression.HeartProgression.Level +
+                            "/" + DeNelle.Village.Buildings.Progression.HeartProgression.MaxLevel +
+                            " state=" + DeNelle.Village.Buildings.Progression.HeartProgression.State);
                     }
                     else
                     {
@@ -8387,10 +8534,20 @@ namespace DeNelle.Editor
                             "this frame cannot be shot honestly");
                     }
 
-                    if (frame == ManageFlowFrame.LockedDetail || frame == ManageFlowFrame.MaxDetail)
+                    if (frame == ManageFlowFrame.ActionDetail ||
+                        frame == ManageFlowFrame.LockedDetail || frame == ManageFlowFrame.MaxDetail)
                     {
-                        bool wantLocked = frame == ManageFlowFrame.LockedDetail;
-                        if (!TryNavigateManageFlowDetail(vm, tab, wantLocked, out string note))
+                        // The wanted tile state IS the frame. Available is the actionable one -- the
+                        // detail screen that carries a before/after stat pair, a cost row, a time
+                        // and the primary verb -- and it is the state the plan could not reach
+                        // while every line sat at its depth cap (see the seeding note above).
+                        var want =
+                            frame == ManageFlowFrame.ActionDetail
+                                ? DeNelle.Core.Manage.ManageTileVisualState.Available
+                                : frame == ManageFlowFrame.LockedDetail
+                                    ? DeNelle.Core.Manage.ManageTileVisualState.Locked
+                                    : DeNelle.Core.Manage.ManageTileVisualState.Max;
+                        if (!TryNavigateManageFlowDetail(vm, tab, want, state, out string note))
                             throw new InvalidOperationException(
                                 "no " + state + " item reachable on the " + ManageScreenVM.TabWordOf(tab) +
                                 " tab -- the fixture did not produce that state, so this frame cannot be " +
@@ -8398,7 +8555,10 @@ namespace DeNelle.Editor
                                 ". (Known candidates: on ARMY, ManageTileBadge.Max is only reached when " +
                                 "the troop is neither Trainable nor QueueBlocked -- ruling 13 lets those " +
                                 "win -- so a full Train line or an affordable train can mask it. On BUILD, " +
-                                "the active filter decides which items are on screen at all.)");
+                                "the active filter decides which items are on screen at all. For the " +
+                                "'action' frame the usual cause is the OPPOSITE one: a channel at its " +
+                                "depth cap turns every actionable tile QueueBlocked, so this frame is the " +
+                                "one that must NOT be seeded to the cap.)");
                         _flowStateNotes.Add(note);
                     }
                     else if (frame == ManageFlowFrame.SchoolPerks)
