@@ -187,7 +187,12 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-third pass): main line next free = **1444**.
+> ## RECONCILED 2026-09-06 (CLI, ninety-fourth pass): main line next free = **1445**.
+> *(CLI minted **1444** - the Manage QUEUE face count is composed by the VM (`FaceCountText`) and painted by
+> nobody; found while re-verifying WO-1443 at source. SPEC pending an owner ruling because the two fixes
+> contradict each other and the screen as rendered matches her mockup. Bumped 1444 -> 1445 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-third pass): main line next free = **1444**.
 > *(CLI minted **1443** - Manage/Army on build 2026.09.06.358245, from the owner's capture plus THREE
 > rulings given in the same felt-test: (1) *"remove the manage army and sub line replace the manage top"* -
 > three stacked headings become one breadcrumb in the title; (2) *"remove heart level queue"* - the

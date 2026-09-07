@@ -1,6 +1,6 @@
 # WO-1441: the wallet session is NEVER established - cloud saves are failing and the promo cannot be redeemed
 
-**Status:** READY TO IMPLEMENT - **P0. The owner's progress is device-only right now.**
+**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - client landed in `32659c0f6`; device proof of mint/save/drain still owed (see RESULT)
 **Silo:** `DeNelle.Core.Web3` (`BackendRequestSigner`) + `DeNelle.Wallet`
 (`WalletService`, `NightMarketSharedCardSession`). Disjoint from WO-1440 (server-side `api/`) and from
 the raid tickets.
