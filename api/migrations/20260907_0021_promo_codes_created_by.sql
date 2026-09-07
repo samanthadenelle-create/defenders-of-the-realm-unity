@@ -1,0 +1,61 @@
+-- =============================================================================
+-- 20260907_0021_promo_codes_created_by.sql   (Command Center attribution, WO-1244)
+-- -----------------------------------------------------------------------------
+-- ONE additive column. It is the numbered, applyable copy of an ALTER that has
+-- existed ONLY as prose in api/schema.sql (see the "created_by" note under table 3,
+-- api/schema.sql:469-489) and in api/DB_SETUP.md:736. An ALTER written in schema.sql
+-- is a DESCRIPTION of the schema, not a thing that runs against production - the
+-- identical shape that cost two weeks of live wallet logins on
+-- auth_sessions.identity_kind (WO-1440 RESULT 7c) and nearly repeated on
+-- auth_sessions.signed_at (migration 0020).
+--
+-- WHY NOW. api/_lib/ops.js:428-449 INSERTs promo_codes with created_by named, and on
+-- 42703 (undefined column) falls back to the shape WITHOUT it, logging:
+--
+--     [ops] promo_codes.created_by is missing on the deployed database -
+--     Run: ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_by TEXT;
+--
+-- That cascade is deliberate and STAYS (test/command-center.test.js:511 pins it, and
+-- a missing attribution column must never be a reason a promo cannot be authored
+-- during an incident). But the degraded path is only supposed to be a bridge: while
+-- it is the live path, EVERY code authored from the console lands with created_by
+-- NULL and the response says attribution_on_row:false. This file ends the bridge.
+--
+-- The schema.sql note says "There is no migration runner in this repo". There is one
+-- now - tools/run-migrations.mjs (WO-1446) - which is why this column finally gets a
+-- numbered file instead of another sentence asking a human to remember a command.
+--
+-- DO NOT "APPLY" THIS BY RE-RUNNING api/schema.sql. CREATE TABLE IF NOT EXISTS
+-- against an existing promo_codes reports success and changes NOTHING
+-- (memory: idempotent-ddl-hides-a-stale-table). ADD COLUMN IF NOT EXISTS is the only
+-- statement that can add a column to a table that already exists.
+--
+-- ADDITIVE AND IDEMPOTENT. One NULLABLE column on an existing table. Zero DROP /
+-- DELETE / TRUNCATE, no rename, no back-fill, no row touched. Existing codes keep
+-- created_by NULL, which is the correct reading: they were authored before the
+-- column existed, and inventing an operator for them would be a lie in an audit
+-- field. NULLABLE deliberately - a NOT NULL DEFAULT would stamp every historical
+-- code with a fabricated author.
+--
+-- NO INDEX IS ADDED, DELIBERATELY. Nothing in the request path filters on
+-- created_by; it is read back with the row (api/admin/ops.js:328) and used in
+-- after-the-fact review. An index would be dead weight on every promo INSERT. Said
+-- out loud rather than silently skipped.
+--
+-- Apply (owner, DATABASE_URL in env):
+--     node tools/run-migrations.mjs
+-- =============================================================================
+
+-- CREATED_BY (2026-08-27, WO-1244 - the Command Center console).
+--
+-- The operator label that AUTHORED the code. It is ATTRIBUTION ONLY: no gate, no
+-- limit and no player-facing behaviour reads it. The durable history row in
+-- analytics_events (event_name = 'admin_ops_write') carries the operator either way;
+-- this column is what makes the promo_codes row itself answer "who made this" in one
+-- read during a clawback.
+ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_by TEXT;
+
+-- Verify (expect one row, data_type 'text', is_nullable 'YES'):
+--   SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE table_name = 'promo_codes' AND column_name = 'created_by';

@@ -79,11 +79,16 @@ test('listMigrations returns every .sql on disk, in filename order', async () =>
     assert.ok(files.length >= 20, `expected at least 20 migrations, saw ${files.length}`);
 });
 
-test('the WO-1446 migration exists, is last, and carries EXACTLY the schema.sql ALTER', async () => {
+test('the WO-1446 migration exists, sorts after 0019, and carries EXACTLY the schema.sql ALTER', async () => {
     const { listMigrations } = await runner();
     const files = listMigrations(MIGRATIONS_DIR);
     assert.ok(files.includes(NEW_MIGRATION), `${NEW_MIGRATION} must exist - it is the applyable copy`);
-    assert.equal(files[files.length - 1], NEW_MIGRATION, 'it is the newest and must sort last');
+    // It used to assert "sorts LAST", which was a snapshot of the day it was written,
+    // not a property: the next migration authored (0021) made it red while nothing
+    // about 0020 had changed. The real property is its POSITION IN THE ORDER - it must
+    // still come directly after 0019, i.e. nothing was slipped in front of it.
+    assert.equal(files[files.indexOf('20260906_0019_promo_guest_redeem_ip_budget.sql') + 1], NEW_MIGRATION,
+        'it must still apply directly after 0019');
 
     const EXPECTED = 'ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();';
     const body = fs.readFileSync(path.join(MIGRATIONS_DIR, NEW_MIGRATION), 'utf8');
@@ -344,7 +349,15 @@ test('--baseline covers everything up to and including the named file, and nothi
     assert.equal(covered[covered.length - 1], through, 'inclusive of the named file');
     assert.ok(!covered.includes(NEW_MIGRATION),
         'the WO-1446 migration must NOT be baselined - it has never been applied and must really run');
-    assert.equal(covered.length, files.length - 1, 'exactly one file is left for the ordinary run');
+    // Measured against the named file's POSITION, not against the total count: the
+    // count form ("exactly one file is left") silently encoded "0019 is second-to-last"
+    // and went red the moment a later migration was authored, which is not a defect in
+    // baselineSet. What must hold is the cut itself - everything up to and including
+    // the named file is covered, everything after it is left to run.
+    assert.equal(covered.length, files.indexOf(through) + 1,
+        'covered is exactly the prefix through the named file; every later migration still runs');
+    assert.deepEqual(covered, files.slice(0, files.indexOf(through) + 1),
+        'and it is that prefix in order, not merely the same size');
 
     assert.throws(() => baselineSet(files, 'not_a_file.sql'), /not in api\/migrations/,
         'baselining a name that does not exist would silently baseline nothing');
@@ -373,8 +386,22 @@ test('importing the runner does not run it', async () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Strip comments so prose about a column is never mistaken for a column.
+//
+// CRLF FIRST, AND IT IS NOT COSMETIC. api/schema.sql is CRLF on this repo
+// (1953 of 1954 lines, measured 2026-09-07). `/--.*$/` without the `m` flag
+// anchors at end-of-STRING, and `.` does not match `\r`, so on a CRLF line the
+// match `--...` stops one char short of `$` and NOTHING IS STRIPPED. Every
+// trailing `-- comment` then survived into the CREATE TABLE body, and the
+// paren-walk read the token `--` as the column name for that entry: auth_nonces
+// parsed as [nonce, --, --, --, --] and guest_rate_limit as [guest_id, --, ...],
+// so wallet/expires_at/hits/last_seen/total_hits/window_started_at read as
+// orphans while they are plainly declared in the file (and live on prod).
+// The failure was SILENT and one-directional-looking, but it cuts both ways: a
+// commented-out ALTER in a migration would likewise have counted as a real one
+// and hidden a genuine orphan. Normalising line endings fixes both.
 function stripComments(sql) {
-    return sql.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    return sql.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
         .split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
 }
 

@@ -225,6 +225,25 @@ CREATE INDEX IF NOT EXISTS auth_sessions_expires_idx ON auth_sessions (expires_a
 --    2026-08-30). 'google' exists only for the Google Play / AAB artifact.
 ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS identity_kind TEXT NOT NULL DEFAULT 'wallet';
 
+-- SIGNED_AT (2026-09-06, WO-1441 — the renewal cap).
+--
+-- A session may now be exchanged for a fresh one WITHOUT a new wallet signature
+-- (_lib/wallet-auth.renewSession), because a 15-minute TTL with no renewal killed cloud
+-- save mid-session and the save route may not raise a wallet sheet while the player walks.
+-- Renewal ROTATES the token, so `created_at` restarts on every renew and cannot bound the
+-- chain. THIS column is the one that can: it records when the ORIGINAL SIGNATURE happened
+-- and is COPIED FORWARD, unchanged, into every renewed row.
+--
+-- ⛔ IT IS THE ONLY THING STOPPING A SESSION BECOMING A PERMANENT LOGIN. Renewal refuses
+-- past signed_at + SESSION_ABSOLUTE_TTL_SECONDS (12h) and the player signs again. If you
+-- ever find renewal setting this to NOW(), the cap is gone and every leaked-but-renewed
+-- chain lives forever — that is the bug to look for here, not a slow query.
+--
+-- DEFAULT NOW() is correct for pre-existing rows: they were minted by a real signature at
+-- some point at or before now, so treating that as the chain origin can only ever make the
+-- cap STRICTER for them, never looser.
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS auth_nonces (
     nonce      TEXT        PRIMARY KEY,             -- random one-time challenge (base64url, 32 bytes)
     wallet     TEXT        NOT NULL,                -- base58 wallet the nonce was issued to
