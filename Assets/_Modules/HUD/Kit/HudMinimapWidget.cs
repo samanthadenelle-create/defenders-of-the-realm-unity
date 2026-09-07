@@ -294,6 +294,11 @@ namespace DeNelle.HUD.Kit
         // =====================================================================
         private void LateUpdate()
         {
+            // WO-1483: town frame path — the minimap redraw. It runs in an empty town and
+            // touches the scene every poll, so it cannot be assumed cheap.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "HudMinimapWidget.LateUpdate", 4f, 1f);
+
             if (!_built) return;
 
             _pollTimer -= Time.unscaledDeltaTime;

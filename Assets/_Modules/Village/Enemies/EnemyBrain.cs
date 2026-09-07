@@ -829,6 +829,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: the enemy brain is the raid-side sibling (WO-1459). Measured here so
+            // the SAME table separates "empty town floor" from "cost of population" — an
+            // empty town should show this scope with Count=0.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "EnemyBrain.Update", 1f, 1f);
+
             if (_enemy == null || _enemy.IsDead) return;
 
             // GEAR: give a Ranged enemy a VISIBLE bow on its bow (LEFT) hand so a ranger

@@ -449,6 +449,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — auto-acquire scans the scene for targets every
+            // frame even when there is nothing to acquire, which is an empty-town suspect.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "HeroTargetIndicator.Update", 4f, 1f);
+
             // WO-512 manual-lock (DESKTOP): MIDDLE mouse button (center-click) is the dedicated
             // "pull one enemy out" lock — pick the orc under the cursor and EngageLock(it) for the
             // FULL lock-on (camera frames it, Knight faces/strafes it). RIGHT mouse is BLOCK and
@@ -539,6 +544,11 @@ namespace DeNelle.Village
 
         private void LateUpdate()
         {
+            // WO-1483: town frame path — the candidate REBUILD scan lives here, not in Update,
+            // so measuring Update alone would have left the scan unattributed.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "HeroTargetIndicator.LateUpdate", 4f, 1f);
+
             if (Time.time >= _nextScan)
             {
                 _nextScan = Time.time + _scanInterval;

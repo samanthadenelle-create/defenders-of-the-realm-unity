@@ -1343,6 +1343,11 @@ namespace DeNelle.Core
 
             private void Update()
             {
+                // WO-1483: town frame path. 4-arg (accumulating) Measure — see
+                // FlowTrace.cs:293-308. Never the 3-arg form on a per-frame site.
+                using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                    "Perf", "StructureContentWarmer.Host.Update", 4f, 1f);
+
                 if (s_deferred.Count > 0)
                 {
                     _drain.Clear();

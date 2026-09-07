@@ -57,6 +57,11 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void Update()
         {
+            // WO-1483: town frame path — the 0.5s collector publish. The gate is INSIDE the
+            // scope on purpose: the skipped frames are what prove the cadence is real.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "CollectorStatusPublisher.Update", 4f, 1f);
+
             if (Time.unscaledTime < _nextPublishAt) return;
             _nextPublishAt = Time.unscaledTime + PublishIntervalSec;
             Guard.Try("Harvest", "publish collector status", Publish);

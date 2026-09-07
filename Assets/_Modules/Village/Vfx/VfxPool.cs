@@ -471,6 +471,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path, PER-INSTANCE (one live pooled effect each), so the
+            // budget is tighter than a singleton tick — a single pooled VFX costing 1ms is
+            // already pathological. 4-arg accumulating overload (FlowTrace.cs:293-308).
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "VfxPool.Update", 1f, 1f);
+
             if (!_playing) return;
 
             _elapsed += Time.deltaTime;

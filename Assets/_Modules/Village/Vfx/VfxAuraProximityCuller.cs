@@ -250,6 +250,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — this one RANKS every registered aura by distance,
+            // so it is a prime empty-town suspect. 4-arg accumulating overload.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "VfxAuraProximityCuller.Update", 4f, 1f);
+
             _tickTimer -= Time.deltaTime;
 
             Vector3 origin = RankingOrigin();

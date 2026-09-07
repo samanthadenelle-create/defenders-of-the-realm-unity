@@ -468,6 +468,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — the gate itself walks VFXManager occupancy every
+            // frame, so it must be measured alongside what it is gating.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "VfxPerformanceGate.Update", 4f, 1f);
+
             float budgetMs = FrameBudgetMs();
             float frameMs  = Time.unscaledDeltaTime * 1000f;
 

@@ -264,6 +264,11 @@ public sealed class NightTorchLightSystem : MonoBehaviour
 
         private void Update()
         {
+            // WO-1483: town frame path — this ramps EVERY registered torch light each frame.
+            // Realtime lights are a classic empty-town floor cost, so it is measured.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "NightTorchLightSystem.Update", 4f, 1f);
+
             if (_lights.Count == 0 && _heroFill == null) return;
 
             // 0 = full day (lights off), 1 = full night (lights max).

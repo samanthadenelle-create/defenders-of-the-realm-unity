@@ -286,6 +286,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — the hero's attack/input tick, live in an empty town.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "PlayerAttackController.Update", 4f, 1f);
+
             // WO-377: no melee swings / blocks while a Yarn dialogue is on screen (a click
             // on the dialogue box used to fall through to a swing). HeroLocomotion owns the
             // gate. If a block was being held when the dialogue opened, drop it cleanly so

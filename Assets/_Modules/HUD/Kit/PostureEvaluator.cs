@@ -62,6 +62,10 @@ namespace DeNelle.HUD.Kit
 
         private void Update()
         {
+            // WO-1483: town frame path — the HUD posture poll.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "PostureEvaluator.Update", 4f, 1f);
+
             _timer -= Time.unscaledDeltaTime;
             if (_timer > 0f) return;
             _timer = PollInterval;

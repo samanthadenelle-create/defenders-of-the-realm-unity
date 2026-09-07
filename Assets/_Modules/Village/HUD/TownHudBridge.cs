@@ -100,6 +100,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — the town HUD feed tick.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "TownHudBridge.Update", 4f, 1f);
+
             _timer -= Time.deltaTime;
             if (_timer > 0f) return;
             _timer = RefreshInterval;

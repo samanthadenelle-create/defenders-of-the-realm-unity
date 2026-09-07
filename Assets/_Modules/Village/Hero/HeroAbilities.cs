@@ -631,6 +631,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — mana regen + cooldown ticks run every frame in town.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "HeroAbilities.Update", 4f, 1f);
+
             float dt = Time.deltaTime;
 
             // ── mana regen + cooldown ticks (heroAbilities.ts lines 122-126) ──

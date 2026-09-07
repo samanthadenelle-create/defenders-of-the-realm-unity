@@ -78,6 +78,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — Poll ENUMERATES town activity, so its cadence and
+            // its per-poll cost both matter to the empty-town floor.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "TownActivityProbe.Update", 4f, 1f);
+
             _timer -= Time.deltaTime;
             if (_timer > 0f) return;
             _timer = PollInterval;

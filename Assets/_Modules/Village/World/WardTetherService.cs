@@ -122,6 +122,10 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — kindle ticking plus a periodic tether eval.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "WardTetherService.Update", 4f, 1f);
+
             // Drive any in-flight kindles (timeout → light; retreat handled in TickKindle).
             TickKindles();
 

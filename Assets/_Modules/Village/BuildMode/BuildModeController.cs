@@ -734,6 +734,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path — the build/place loop ticks in town whether or not
+            // build mode is armed, so the disarmed cost belongs in the empty-town table.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "BuildModeController.Update", 4f, 1f);
+
             // §12 P0 GATE TRACE (owner 2026-07-07 "armed but zero PlaceConfirm checks"):
             // EVERY early-return between 'armed' and the PlaceConfirm evaluation now
             // self-names, throttled ~1/sec, whenever it BLOCKS while an entry is armed.

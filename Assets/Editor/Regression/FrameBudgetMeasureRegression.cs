@@ -21,8 +21,8 @@
 //                  while the frame path stayed unmeasured - the exact hole WO-1483
 //                  opened with ("only 5 sites repo-wide, NONE on the frame path").
 //   2. [4-arg]     each frame-path scope uses the ACCUMULATING 4-arg overload, not
-//                  the 3-arg one. The 3-arg Scope logs on every Dispose; at seven
-//                  sites x 60 fps that is ~400 lines/sec, which evicts the boot
+//                  the 3-arg one. The 3-arg Scope logs on every Dispose; across the
+//                  Sites table x 60 fps that is >1000 lines/sec, which evicts the boot
 //                  window out of the 256 KiB Android ring (memory:
 //                  logcat-ring-buffer-destroys-evidence). Instrumentation that
 //                  destroys the evidence is worse than none.
@@ -78,6 +78,59 @@ namespace DeNelle.Editor.Regression
             ("Assets/_Modules/Village/Buildings/Progression/ResourceCollectorService.cs",
              "public static List<PendingLine> PendingByResource()",
              "the collector sweep - static, ticked by CollectorStatusPublisher at 0.5s"),
+
+            // --- WO-1483 second pass -------------------------------------------------
+            // The six above named the hero/camera/wave/HUD spine. They cannot account for
+            // 45.1ms on their own, and a table with holes in it attributes the missing ms
+            // to nothing at all - which is how a perf WO turns back into a guess. These
+            // nineteen close the rest of the EMPTY-town frame.
+            //
+            // EVIDENCE, STATED AT ITS ACTUAL TIER (CLAUDE.md sec.11B): what was measured is
+            // (a) none of them is AUTHORED in Main_Castle_Overworld.unity - a scene-GUID grep
+            // returns 0 for every one, because the town is BUILT AT RUNTIME, so a zero there
+            // is not evidence of absence either way - and (b) each has a runtime
+            // AddComponent<T> call site in the tree. That is NOT the same as proving each one
+            // ticks in that scene on a given run; the roll-up's own Count column is what
+            // proves that, per run, and a scope that reports Count=0 is a finding too.
+            ("Assets/_Modules/Core/Addressables/EnemyContentWarmer.cs", "private void Update()",
+             "the enemy addressables pump - drains deferred loads every frame"),
+            ("Assets/_Modules/Core/Addressables/StructureContentWarmer.cs", "private void Update()",
+             "the structure addressables pump - the town's own content path"),
+            ("Assets/_Modules/Village/Vfx/VfxPool.cs", "private void Update()",
+             "the pooled-VFX tick - PER-INSTANCE, one per live effect"),
+            ("Assets/_Modules/Village/Vfx/VfxAuraProximityCuller.cs", "private void Update()",
+             "the aura culler - RANKS every registered aura by distance"),
+            ("Assets/_Modules/Village/Vfx/VfxPerformanceGate.cs", "private void Update()",
+             "the VFX gate - walks VFXManager occupancy every frame"),
+            ("Assets/_Modules/Village/NPCs/AmbientNPC.cs", "private void Update()",
+             "the townsfolk brain - PER-INSTANCE and ticking with zero enemies spawned"),
+            ("Assets/_Modules/Village/Enemies/EnemyBrain.cs", "private void Update()",
+             "the enemy brain - measured so the table SEPARATES empty-town floor from population"),
+            ("Assets/_Modules/Village/Buildings/Progression/CollectorStatusPublisher.cs",
+             "private void Update()", "the 0.5s collector publish tick"),
+            ("Assets/_Modules/Village/HUD/TownHudBridge.cs", "private void Update()",
+             "the town HUD feed tick"),
+            ("Assets/_Modules/HUD/Kit/HudMinimapWidget.cs", "private void LateUpdate()",
+             "the minimap redraw - polls the scene, runs in an empty town"),
+            ("Assets/_Modules/HUD/Kit/PostureEvaluator.cs", "private void Update()",
+             "the HUD posture poll"),
+            ("Assets/_Modules/Village/Enemies/PlayerAttackController.cs", "private void Update()",
+             "the hero attack/input tick"),
+            ("Assets/_Modules/Village/Hero/HeroTargetIndicator.cs", "private void Update()",
+             "auto-acquire - scans for targets every frame even with nothing to acquire"),
+            ("Assets/_Modules/Village/Hero/HeroTargetIndicator.cs", "private void LateUpdate()",
+             "the SAME component's second frame callback - RebuildCandidates lives here, so " +
+             "measuring only its Update would leave the scan unattributed"),
+            ("Assets/_Modules/Village/World/TownActivityProbe.cs", "private void Update()",
+             "the town activity probe - Poll ENUMERATES the town"),
+            ("Assets/_Modules/Environment/NightTorchLightSystem.cs", "private void Update()",
+             "the torch-light ramp - realtime lights are a classic empty-town floor cost"),
+            ("Assets/_Modules/Village/World/WardTetherService.cs", "private void Update()",
+             "kindle ticking plus the periodic tether eval"),
+            ("Assets/_Modules/Village/BuildMode/BuildModeController.cs", "private void Update()",
+             "the place loop - ticks in town whether or not build mode is armed"),
+            ("Assets/_Modules/Village/Hero/HeroAbilities.cs", "private void Update()",
+             "mana regen + cooldown ticks, every frame in town"),
         };
 
         public static bool Run(out string reason)

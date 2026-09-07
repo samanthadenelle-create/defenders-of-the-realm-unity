@@ -273,6 +273,12 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1483: town frame path, PER-INSTANCE — the townsfolk injector spawns many of
+            // these and they tick in an EMPTY town (no enemies needed), which is exactly
+            // WO-1483's case. Tight per-instance budget; the roll-up sums them.
+            using var _perf = DeNelle.Core.Diagnostics.FlowTrace.Measure(
+                "Perf", "AmbientNPC.Update", 1f, 1f);
+
             UpdateShelter();
             if (_shelter != ShelterState.None)
             {
