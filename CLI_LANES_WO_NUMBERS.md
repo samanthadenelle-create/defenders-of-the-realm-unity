@@ -187,7 +187,16 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-fifth pass): main line next free = **1446**.
+> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1518**.
+> *(CLI minted **1446 through 1517** - seventy-two tickets from the read-only audit fleet's eight batches
+> (backend/auth, persistence, raid, HUD, Manage 2000-block, perf, regression harness, ship chain, architecture,
+> art, canon) plus four owner rulings taken tonight (the defense-report door 20:05, Manage BUILD unlocked-only
+> 20:07, train/army state words 20:10, and the placed-structure move door recovered from a commit message).
+> Five are SPEC pending an owner ruling: 1475 loot-vs-harvest burn, 1487 building-portrait art drop, 1504 the
+> Ranger primary, 1509 the orc albedo art drop, 1444's sibling 1516/1517 landing after tonight's VM commit.
+> Minted from the audit fleet; bumped 1446 -> 1518 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-06 (CLI, ninety-fifth pass): main line next free = **1446**.
 > *(CLI minted **1445** - `OfflineHarvestService.Grant` banks the clamped amount and discards the remainder,
 > the one path that still burns after WO-1434's "recoverable, not burned" law. Found while re-verifying 1434.
 > Bumped 1445 -> 1446 in this SAME edit.)*
