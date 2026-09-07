@@ -1,6 +1,6 @@
 # WO-1497: the placed-structure MOVE door shipped under a colliding "WO-1445" and has no ticket of its own
 
-**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 (shipped in `32659c0f6`); this file is the missing record
+**Status:** FIXED - ON THE SEEKER 2026.09.07.358574 - see RESULT
 **Silo:** Village/BuildMode (`BuildCollectionBrowser`, the Manage Placed card). Board hygiene.
 **Source:** read-only audit fleet 2026-09-06 (CLI seat), minted from the banner
 (`CLI_LANES_WO_NUMBERS.md`, main line 1497 -> 1498 in the same edit).

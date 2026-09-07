@@ -187,14 +187,18 @@
 > Filed at `WorkOrders/ManageRedesign/`. It SUPERSEDES WO-1427 and WO-1428. Never renumber a 2000 ticket into
 > the main line.)*
 >
-> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1522**.
-> *(CLI minted **1446 through 1521** - seventy-six tickets from the read-only audit fleet's nine batches
+> ## RECONCILED 2026-09-06 (CLI, ninety-sixth pass): main line next free = **1525**.
+> *(CLI minted **1446 through 1524** - seventy-nine tickets from the read-only audit fleet's nine batches
 > (backend/auth, persistence, raid, HUD, Manage 2000-block, perf, regression harness, ship chain, architecture,
 > art, canon) plus seven owner rulings/asks taken tonight (the defense-report door 20:05, Manage BUILD
 > unlocked-only 20:07, train/army state words and the troop-detail stats 20:10, research SHORT/LOCKED reasons
 > 20:12 + 20:19, the raid-deploy "make it pop" redesign 20:14 + the Echo Guide removal 20:24, the quest/rumor
-> board contradiction 20:18, the P0 raid STAGING AREA + engagement-started clock 20:26, and the
-> placed-structure move door recovered from a commit message).
+> board contradiction 20:18, the P0 raid STAGING AREA + engagement-started clock 20:26, the flat skills/loadout
+> screen + the wardrobe hide 20:23, and the placed-structure move door recovered from a commit message).
+> **1503 was RESCOPED the same day, P0 -> P2:** its premise was FALSE - `CastleHubRoot` has no collider and no
+> damageable component, and the trace was printing the hierarchy root, so eleven "hits on the castle" were
+> correct kills. Left IMPLEMENTED (the melee path now routes through `CombatFactionRules`, the trace names the
+> real target); the 13 inline faction copies it uncovered carried forward as **1524**.
 > Four are SPEC pending an owner ruling or an art drop: 1475 loot-vs-harvest burn, 1487 building portraits,
 > 1504 the Ranger primary, 1509 the orc albedo. The four Manage rulings (1515-1518) land AFTER tonight's
 > `ManageScreenVM.cs` / `HudKitController.cs` commits.
