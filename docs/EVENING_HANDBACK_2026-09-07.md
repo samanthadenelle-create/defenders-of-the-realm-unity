@@ -3,6 +3,10 @@
 **Status:** LIVE for one day. Read this first tomorrow; it supersedes `docs/MORNING_HANDBACK_2026-09-07.md`
 as the newest record (that file stays frozen).
 
+## 0. Branch model (new tonight)
+
+`master` = production, fast-forwarded to f5d39acd1 and tagged `v2026.09.07-store-359722`; `dev` = the working line from the same head; `feat/synty-art-retheme` retired. Tomorrow: `git checkout dev`.
+
 ## 1. The one file you need
 
 **dApp Store submission:** `Builds/Android/store/EchoesOfElarion-store-2026.09.07.359722.apk`
